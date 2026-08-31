@@ -111,12 +111,3 @@ def create_pending_assessment(sender, instance, created, **kwargs):
             exc_info=True,
         )
 
-
-@receiver(post_save, sender="compliance.ComplianceAlert")
-def enqueue_internal-assistant_alert_notification(sender, instance, created, **kwargs):
-    if not created:
-        return
-
-    from compliance.tasks import notify_internal-assistant_compliance_alert
-
-    transaction.on_commit(lambda: notify_internal-assistant_compliance_alert.defer(alert_uuid=str(instance.uuid)))

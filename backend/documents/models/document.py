@@ -56,26 +56,6 @@ class Document(BaseModel):
     # Optional human-supplied note ("first payslip from new employer", etc.)
     note = models.CharField(max_length=255, blank=True)
 
-    # --- internal-assistant Slack delivery metadata (set after internal-assistant posts the
-    # "payslip uploaded" notification to #compliance). Mirrors the same
-    # pattern as ComplianceAlert; idempotency depends on these.
-    slack_channel_id = models.CharField(
-        max_length=32,
-        null=True,
-        blank=True,
-        help_text="Slack channel where internal-assistant posted the upload notification",
-    )
-    slack_thread_ts = models.CharField(
-        max_length=32,
-        null=True,
-        blank=True,
-        help_text="Slack thread timestamp for the internal-assistant upload notification",
-    )
-    internal-assistant_notified_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text="When internal-assistant confirmed Slack delivery for this document",
-    )
 
     class Meta:
         db_table = "documents"

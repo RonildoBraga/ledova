@@ -158,24 +158,6 @@ class ComplianceAlert(BaseModel):
         help_text="When the account action was applied",
     )
 
-    # internal-assistant / Slack notification traceability
-    slack_channel_id = models.CharField(
-        max_length=32,
-        null=True,
-        blank=True,
-        help_text="Slack channel where internal-assistant posted this alert",
-    )
-    slack_thread_ts = models.CharField(
-        max_length=32,
-        null=True,
-        blank=True,
-        help_text="Slack thread timestamp for the internal-assistant alert notification",
-    )
-    internal-assistant_notified_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text="When internal-assistant confirmed Slack delivery for this alert",
-    )
 
     objects = ComplianceAlertManager()
 

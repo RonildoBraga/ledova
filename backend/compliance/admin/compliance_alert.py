@@ -100,7 +100,6 @@ class ComplianceAlertAdmin(admin.ModelAdmin):
         "status_badge",
         "assigned_to",
         "smr_badge",
-        "slack_badge",
         "created_at",
     ]
     list_filter = [
@@ -125,9 +124,6 @@ class ComplianceAlertAdmin(admin.ModelAdmin):
         "monitoring_rule",
         "transaction_link",
         "fiat_transaction_link",
-        "slack_channel_id",
-        "slack_thread_ts",
-        "internal-assistant_notified_at",
     ]
     ordering = ["-created_at"]
     date_hierarchy = "created_at"
@@ -200,16 +196,6 @@ class ComplianceAlertAdmin(admin.ModelAdmin):
             },
         ),
         (
-            "internal-assistant Slack Notification",
-            {
-                "fields": (
-                    "slack_channel_id",
-                    "slack_thread_ts",
-                    "internal-assistant_notified_at",
-                ),
-            },
-        ),
-        (
             "System Information",
             {
                 "fields": ("uuid", "created_at", "updated_at"),
@@ -273,17 +259,6 @@ class ComplianceAlertAdmin(admin.ModelAdmin):
         return "-"
 
     smr_badge.short_description = "SMR"
-
-    def slack_badge(self, obj):
-        """Display internal-assistant Slack delivery status."""
-        if obj.slack_thread_ts:
-            return format_html(
-                '<span style="background-color: #28a745; color: white; padding: 2px 6px; '
-                'border-radius: 4px; font-size: 10px;">Posted</span>'
-            )
-        return "-"
-
-    slack_badge.short_description = "Slack"
 
     def transaction_link(self, obj):
         """Link to related crypto transaction."""
