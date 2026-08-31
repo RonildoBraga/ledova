@@ -41,6 +41,29 @@ export function Home() {
         </div>
       </section>
 
+      <section id="demo" className="border-t border-border-subtle py-24">
+        <div className="mx-auto max-w-5xl px-6">
+          <div className="text-center">
+            <h2 className="text-3xl font-bold text-text-primary">See it in action</h2>
+            <p className="mt-4 text-lg text-text-muted">
+              A one-minute walkthrough of the local development stack: sign-up, onboarding, watch-only wallets, and
+              live market data. Recorded against synthetic data — run it yourself with{' '}
+              <code className="rounded bg-surface-raised px-1.5 py-0.5 text-sm text-brand-light">docker compose up</code>.
+            </p>
+          </div>
+          <video
+            className="mt-12 w-full rounded-2xl border border-border-subtle shadow-2xl"
+            controls
+            preload="none"
+            poster="/demo/ledova-demo-poster.jpg"
+          >
+            <source src="/demo/ledova-demo.mp4" type="video/mp4" />
+            <source src="/demo/ledova-demo.webm" type="video/webm" />
+            Your browser does not support embedded video.
+          </video>
+        </div>
+      </section>
+
       <section className="border-t border-border-subtle bg-surface-raised/50 py-24">
         <div className="mx-auto max-w-6xl px-6">
           <div className="text-center">

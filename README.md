@@ -10,6 +10,10 @@ shared TypeScript packages.
 > ready and must not be used with real funds, securities, companies, identities,
 > wallets, or personal information.
 
+**▶ [Watch a one-minute walkthrough](https://ledova.io/#demo)** of the local
+stack — sign-up, onboarding, watch-only wallets, and market data — or run it
+yourself with the quick start below.
+
 Ledova does not represent a real asset, issuer, reserve, custodian, company
 register, licensed service, or regulated offering. Nothing in this repository
 is legal, financial, or investment advice, and no claim of regulatory
