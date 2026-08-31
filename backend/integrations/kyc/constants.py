@@ -1,0 +1,64 @@
+"""
+KYC/KYT constants used across all identity verification providers.
+
+Centralises magic strings so that webhook handlers, services, models,
+and views all reference a single source of truth.
+"""
+
+# =========================================================================
+# Review Results (provider-agnostic)
+# =========================================================================
+REVIEW_GREEN = "GREEN"
+REVIEW_RED = "RED"
+REVIEW_YELLOW = "YELLOW"
+
+REVIEW_RESULT_CHOICES = [
+    (REVIEW_GREEN, "Approved"),
+    (REVIEW_RED, "Rejected"),
+    (REVIEW_YELLOW, "Retry"),
+]
+
+# =========================================================================
+# Verification Status (provider-agnostic)
+# =========================================================================
+STATUS_INIT = "init"
+STATUS_PENDING = "pending"
+STATUS_QUEUED = "queued"
+STATUS_COMPLETED = "completed"
+STATUS_ON_HOLD = "onHold"
+STATUS_PRECHECKED = "prechecked"
+STATUS_UNUSED = "unused"  # KYCAID: applicant data without a triggered verification
+
+VERIFICATION_STATUS_CHOICES = [
+    (STATUS_INIT, "Initialized"),
+    (STATUS_PENDING, "Pending Review"),
+    (STATUS_QUEUED, "Queued for Review"),
+    (STATUS_COMPLETED, "Review Completed"),
+    (STATUS_ON_HOLD, "On Hold"),
+    (STATUS_PRECHECKED, "Pre-checked"),
+]
+
+# =========================================================================
+# KYC Providers
+# =========================================================================
+PROVIDER_KYCAID = "kycaid"
+PROVIDER_SUMSUB = "sumsub"
+
+KYC_PROVIDER_CHOICES = [
+    (PROVIDER_SUMSUB, "Sumsub"),
+    (PROVIDER_KYCAID, "KYCAID"),
+]
+
+# =========================================================================
+# KYCAID Webhook Event Types
+# =========================================================================
+KYCAID_EVENT_VERIFICATION_COMPLETED = "VERIFICATION_COMPLETED"
+KYCAID_EVENT_VERIFICATION_STATUS_CHANGED = "VERIFICATION_STATUS_CHANGED"
+
+# =========================================================================
+# Sumsub Webhook Event Types
+# =========================================================================
+SUMSUB_EVENT_APPLICANT_CREATED = "applicantCreated"
+SUMSUB_EVENT_APPLICANT_PENDING = "applicantPending"
+SUMSUB_EVENT_APPLICANT_REVIEWED = "applicantReviewed"
+SUMSUB_EVENT_APPLICANT_ON_HOLD = "applicantOnHold"

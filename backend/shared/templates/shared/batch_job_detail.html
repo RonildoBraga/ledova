@@ -1,0 +1,210 @@
+{% extends "admin/base_custom.html" %}
+{% load static %}
+
+{% block title %}Batch Job Detail - {{ job.job_id }}{% endblock %}
+
+{% block extrahead %}
+<style>
+  .progress-bar {
+    height: 20px;
+    background-color: #f0f0f0;
+    border-radius: 5px;
+    margin-bottom: 10px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    text-align: center;
+    color: white;
+    font-weight: bold;
+    line-height: 20px;
+  }
+
+  .scheduled { background-color: #6c757d; }
+  .running { background-color: #17a2b8; }
+  .completed { background-color: #28a745; }
+  .failed { background-color: #dc3545; }
+
+  .status-badge {
+    display: inline-block;
+    padding: 5px 10px;
+    border-radius: 15px;
+    color: white;
+    font-weight: bold;
+  }
+
+  .job-stats {
+    display: flex;
+    justify-content: space-around;
+    margin-bottom: 20px;
+  }
+
+  .stat-box {
+    padding: 15px;
+    border-radius: 5px;
+    text-align: center;
+    flex-grow: 1;
+    margin: 0 5px;
+    color: white;
+  }
+
+  .stat-box h3 {
+    font-size: 1.5em;
+    margin: 0;
+    color: white;
+  }
+
+  .total-items { background-color: #007bff; }
+  .updated-items { background-color: #28a745; }
+  .unchanged-items { background-color: #6c757d; }
+  .error-items { background-color: #dc3545; }
+  .rate-limited-items { background-color: #ffc107; color: black; }
+
+  .batch-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .status-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <div class="batch-header">
+    <h1>Batch Job: {{ job.job_id }}</h1>
+    <div class="status-info">
+      <span class="status-badge {{ job.status }}">{{ job.status|title }}</span>
+      <p>Last updated: {{ current_time|date:"H:i:s" }}</p>
+    </div>
+  </div>
+
+  <div class="module">
+    <h2>Job Details</h2>
+    <table>
+      <tbody>
+        <tr>
+          <th>Job Type:</th>
+          <td>{{ job.job_type }}</td>
+        </tr>
+        <tr>
+          <th>Total Batches:</th>
+          <td>{{ job.total_batches }}</td>
+        </tr>
+        <tr>
+          <th>Total Items:</th>
+          <td>{{ job.total_items }}</td>
+        </tr>
+        <tr>
+          <th>Started At:</th>
+          <td>{{ job.started_at|default:"Not started" }}</td>
+        </tr>
+        <tr>
+          <th>Completed At:</th>
+          <td>{{ job.completed_at|default:"In progress" }}</td>
+        </tr>
+        <tr>
+          <th>Duration:</th>
+          <td>{{ job.duration_minutes|default:0 }} minutes</td>
+        </tr>
+        <tr>
+          <th>Progress:</th>
+          <td>
+            <div class="progress-bar">
+              <div class="progress-fill {{ job.status }}" style="width: {{ job.progress_percentage }}%">
+                {{ job.progress_percentage }}%
+              </div>
+            </div>
+          </td>
+        </tr>
+        {% if processing_rate %}
+        <tr>
+          <th>Processing Rate:</th>
+          <td>{{ processing_rate|floatformat:2 }} items/minute</td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Processing Statistics</h3>
+  <div class="job-stats">
+    <div class="stat-box total-items">
+      <h3>{{ job.total_items }}</h3>
+      <p>Total</p>
+    </div>
+    <div class="stat-box updated-items">
+      <h3>{{ total_updated }}</h3>
+      <p>Updated</p>
+    </div>
+    <div class="stat-box unchanged-items">
+      <h3>{{ total_unchanged }}</h3>
+      <p>Unchanged</p>
+    </div>
+    <div class="stat-box error-items">
+      <h3>{{ total_errors }}</h3>
+      <p>Errors</p>
+    </div>
+    <div class="stat-box rate-limited-items">
+      <h3>{{ total_rate_limited }}</h3>
+      <p>Rate Limited</p>
+    </div>
+  </div>
+
+  <h3>Batch Details</h3>
+  <div class="module">
+    <table>
+      <thead>
+        <tr>
+          <th>Batch</th>
+          <th>Status</th>
+          <th>Items</th>
+          <th>Updated</th>
+          <th>Unchanged</th>
+          <th>Errors</th>
+          <th>Rate Limited</th>
+          <th>Duration</th>
+          <th>Started</th>
+          <th>Completed</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for batch in batches %}
+        <tr>
+          <td>{{ batch.batch_number }}/{{ job.total_batches }}</td>
+          <td>
+            {% if batch.is_complete %}
+            <span class="status-badge completed">Completed</span>
+            {% else %}
+            <span class="status-badge running">In Progress</span>
+            {% endif %}
+          </td>
+          <td>{{ batch.total_items }}</td>
+          <td>{{ batch.updated_items }}</td>
+          <td>{{ batch.unchanged_items }}</td>
+          <td>{{ batch.error_items }}</td>
+          <td>{{ batch.rate_limited_items }}</td>
+          <td>{{ batch.duration_seconds|default:"-"|floatformat:2 }}s</td>
+          <td>{{ batch.started_at|date:"H:i:s" }}</td>
+          <td>{{ batch.completed_at|date:"H:i:s"|default:"In progress" }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="10">No batch details found.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="submit-row">
+    <a href="{% url 'shared:batch_jobs_list' %}" class="button">Back to Job List</a>
+  </div>
+</div>
+{% endblock %}

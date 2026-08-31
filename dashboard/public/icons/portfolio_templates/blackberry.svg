@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="blackberryGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#374151;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#1F2937;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#111827;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="leafGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#10B981;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#059669;stop-opacity:1" />
+    </linearGradient>
+    <radialGradient id="drupeGradient" cx="50%" cy="30%" r="60%">
+      <stop offset="0%" style="stop-color:#6B7280;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#111827;stop-opacity:1" />
+    </radialGradient>
+  </defs>
+  <!-- Blackberry body -->
+  <path d="M 128 85 Q 155 95 150 160 Q 145 195 128 205 Q 111 195 106 160 Q 101 95 128 85 Z" fill="url(#blackberryGradient)" stroke="#111827" stroke-width="2"/>
+
+  <!-- Blackberry leaves -->
+  <path d="M 110 85 Q 108 75 112 70 Q 117 75 120 80" fill="url(#leafGradient)"/>
+  <path d="M 120 80 Q 122 70 127 65 Q 132 70 134 80" fill="url(#leafGradient)"/>
+  <path d="M 134 80 Q 137 70 142 65 Q 147 70 149 80" fill="url(#leafGradient)"/>
+  <path d="M 149 80 Q 151 75 155 70 Q 160 75 158 85" fill="url(#leafGradient)"/>
+
+  <!-- Blackberry drupes (small round segments) -->
+  <!-- Row 1 -->
+  <circle cx="120" cy="105" r="6" fill="url(#drupeGradient)" stroke="#000" stroke-width="0.5"/>
+  <circle cx="136" cy="105" r="6" fill="url(#drupeGradient)" stroke="#000" stroke-width="0.5"/>
+
+  <!-- Row 2 -->
+  <circle cx="115" cy="120" r="6" fill="url(#drupeGradient)" stroke="#000" stroke-width="0.5"/>
+  <circle cx="128" cy="118" r="6" fill="url(#drupeGradient)" stroke="#000" stroke-width="0.5"/>
+  <circle cx="141" cy="120" r="6" fill="url(#drupeGradient)" stroke="#000" stroke-width="0.5"/>
+
+  <!-- Row 3 -->
+  <circle cx="118" cy="135" r="6" fill="url(#drupeGradient)" stroke="#000" stroke-width="0.5"/>
+  <circle cx="138" cy="135" r="6" fill="url(#drupeGradient)" stroke="#000" stroke-width="0.5"/>
+
+  <!-- Row 4 -->
+  <circle cx="115" cy="150" r="6" fill="url(#drupeGradient)" stroke="#000" stroke-width="0.5"/>
+  <circle cx="128" cy="148" r="6" fill="url(#drupeGradient)" stroke="#000" stroke-width="0.5"/>
+  <circle cx="141" cy="150" r="6" fill="url(#drupeGradient)" stroke="#000" stroke-width="0.5"/>
+
+  <!-- Row 5 -->
+  <circle cx="120" cy="165" r="6" fill="url(#drupeGradient)" stroke="#000" stroke-width="0.5"/>
+  <circle cx="136" cy="165" r="6" fill="url(#drupeGradient)" stroke="#000" stroke-width="0.5"/>
+
+  <!-- Row 6 -->
+  <circle cx="128" cy="180" r="6" fill="url(#drupeGradient)" stroke="#000" stroke-width="0.5"/>
+</svg>

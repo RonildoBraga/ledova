@@ -1,0 +1,67 @@
+{% extends "admin/base_custom.html" %}
+{% load i18n admin_urls static %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Home</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_label|capfirst }}</a>
+    &rsaquo; <a href="{% url 'admin:whitelist_whitelistentry_changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+    &rsaquo; <a href="{% url 'admin:whitelist_whitelistentry_change' entry.pk %}">{{ entry.wallet.short_address }}</a>
+    &rsaquo; Add to Blockchain
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="admin-custom-form">
+    <div class="alert alert-info">
+        <strong>Add to Blockchain Whitelist</strong>
+        <p class="mt-1 mb-0">
+            You are about to add this wallet address to the blockchain whitelist.
+            Once whitelisted, this address will be able to receive and hold share tokens.
+        </p>
+    </div>
+
+    <div class="admin-card">
+        <div class="admin-card-header">Whitelist Details</div>
+        <div class="admin-card-body">
+            <table class="admin-table">
+                <tr>
+                    <td class="label-col">Wallet Address</td>
+                    <td class="monospace">{{ entry.wallet.address }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Investor Type</td>
+                    <td>{{ entry.investor_type_display }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Current Status</td>
+                    <td>{{ entry.status_display }}</td>
+                </tr>
+                {% if entry.wallet.user %}
+                <tr>
+                    <td class="label-col">Wallet Owner</td>
+                    <td>{{ entry.wallet.user.email }}</td>
+                </tr>
+                {% endif %}
+            </table>
+        </div>
+    </div>
+
+    <div class="alert alert-warning">
+        <strong>Important:</strong>
+        <ul>
+            <li>This will call the WhitelistRegistry smart contract on the blockchain</li>
+            <li>The transaction may take a few seconds to confirm</li>
+            <li>Once whitelisted, this address can receive share tokens</li>
+        </ul>
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+        <div class="action-row mt-0">
+            <button type="submit" class="btn btn-success">Add to Blockchain</button>
+            <a href="{% url 'admin:whitelist_whitelistentry_change' entry.pk %}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,67 @@
+{% extends "admin/base_custom.html" %}
+{% load i18n admin_urls static %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Home</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_label|capfirst }}</a>
+    &rsaquo; <a href="{% url 'admin:whitelist_whitelistentry_changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+    &rsaquo; <a href="{% url 'admin:whitelist_whitelistentry_change' entry.pk %}">{{ entry.wallet.short_address }}</a>
+    &rsaquo; Remove from Blockchain
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="admin-custom-form">
+    <div class="alert alert-danger">
+        <strong>&#9888; Remove from Blockchain Whitelist</strong>
+        <p class="mt-1 mb-0">
+            You are about to remove this wallet address from the blockchain whitelist.
+            Once removed, this address will no longer be able to receive share tokens.
+        </p>
+    </div>
+
+    <div class="admin-card">
+        <div class="admin-card-header">Whitelist Details</div>
+        <div class="admin-card-body">
+            <table class="admin-table">
+                <tr>
+                    <td class="label-col">Wallet Address</td>
+                    <td class="monospace">{{ entry.wallet.address }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Investor Type</td>
+                    <td>{{ entry.investor_type_display }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Current Status</td>
+                    <td><span class="badge badge-success">{{ entry.status_display }}</span></td>
+                </tr>
+                {% if entry.wallet.user %}
+                <tr>
+                    <td class="label-col">Wallet Owner</td>
+                    <td>{{ entry.wallet.user.email }}</td>
+                </tr>
+                {% endif %}
+            </table>
+        </div>
+    </div>
+
+    <div class="alert alert-warning">
+        <strong>Warning:</strong>
+        <ul>
+            <li>This will remove the address from the WhitelistRegistry smart contract</li>
+            <li>The address will no longer be able to receive share token transfers</li>
+            <li>Existing token balances will remain, but no new tokens can be received</li>
+        </ul>
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+        <div class="action-row mt-0">
+            <button type="submit" class="btn btn-danger">Remove from Blockchain</button>
+            <a href="{% url 'admin:whitelist_whitelistentry_change' entry.pk %}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,13 @@
+node_modules
+.vite
+dist
+coverage
+playwright-report
+test-results
+.git
+.claude
+.env
+.env.*
+*.log
+.DS_Store
+docs

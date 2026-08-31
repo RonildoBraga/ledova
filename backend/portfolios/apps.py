@@ -1,0 +1,10 @@
+from django.apps import AppConfig
+
+
+class PortfoliosConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "portfolios"
+    verbose_name = "4 - Portfolios"
+
+    def ready(self):
+        """Import signals when Django is ready to ensure they're connected"""

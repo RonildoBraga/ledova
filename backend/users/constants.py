@@ -1,0 +1,62 @@
+"""
+Constants for the users app.
+
+AML/CTF Compliance:
+Source-of-funds and intended-use values retained for the experimental workflow.
+"""
+
+# Source of Funds
+SOURCE_OF_FUNDS_EMPLOYMENT_INCOME = "employment_income"
+SOURCE_OF_FUNDS_SAVINGS = "savings"
+SOURCE_OF_FUNDS_INVESTMENT_INCOME = "investment_income"
+SOURCE_OF_FUNDS_SALE_OF_ASSETS = "sale_of_assets"
+SOURCE_OF_FUNDS_INHERITANCE = "inheritance"
+SOURCE_OF_FUNDS_GIFT = "gift"
+SOURCE_OF_FUNDS_OTHER = "other"
+
+SOURCE_OF_FUNDS_CHOICES = [
+    (SOURCE_OF_FUNDS_EMPLOYMENT_INCOME, "Employment income"),
+    (SOURCE_OF_FUNDS_SAVINGS, "Savings"),
+    (SOURCE_OF_FUNDS_INVESTMENT_INCOME, "Investment income"),
+    (SOURCE_OF_FUNDS_SALE_OF_ASSETS, "Sale of assets"),
+    (SOURCE_OF_FUNDS_INHERITANCE, "Inheritance"),
+    (SOURCE_OF_FUNDS_GIFT, "Gift"),
+    (SOURCE_OF_FUNDS_OTHER, "Other"),
+]
+
+# Intended Use
+INTENDED_USE_LONG_TERM = "long_term_investment"
+INTENDED_USE_TRADING = "trading_crypto"
+INTENDED_USE_SAVINGS = "savings"
+INTENDED_USE_OTHER = "other"
+
+INTENDED_USE_CHOICES = [
+    (INTENDED_USE_LONG_TERM, "Long-term investment"),
+    (INTENDED_USE_TRADING, "Trading crypto currencies"),
+    (INTENDED_USE_SAVINGS, "Savings"),
+    (INTENDED_USE_OTHER, "Other"),
+]
+
+# Customer Account Type
+USER_ACCOUNT_TYPE_INDIVIDUAL = "individual"
+USER_ACCOUNT_TYPE_JOINT = "joint"
+
+USER_ACCOUNT_TYPE_CHOICES = [
+    (USER_ACCOUNT_TYPE_INDIVIDUAL, "Individual"),
+    (USER_ACCOUNT_TYPE_JOINT, "Joint"),
+]
+
+# Customer Account Status (AML/CTF compliance)
+ACCOUNT_STATUS_PENDING = "pending"
+ACCOUNT_STATUS_ACTIVE = "active"
+ACCOUNT_STATUS_REJECTED = "rejected"
+ACCOUNT_STATUS_SUSPENDED = "suspended"
+ACCOUNT_STATUS_TERMINATED = "terminated"
+
+ACCOUNT_STATUS_CHOICES = [
+    (ACCOUNT_STATUS_PENDING, "Pending Verification"),
+    (ACCOUNT_STATUS_ACTIVE, "Active"),
+    (ACCOUNT_STATUS_REJECTED, "Rejected"),
+    (ACCOUNT_STATUS_SUSPENDED, "Suspended"),
+    (ACCOUNT_STATUS_TERMINATED, "Terminated"),
+]

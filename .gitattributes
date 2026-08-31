@@ -1,0 +1,33 @@
+# Default behaviour: let git handle text normalisation automatically.
+* text=auto
+
+# Force LF for files that run inside Linux containers / shells.
+# Without this, Windows clients with core.autocrlf=true check these out with
+# CRLF, which breaks `#!/bin/sh` inside Docker images.
+*.sh              text eol=lf
+*.bash            text eol=lf
+Dockerfile*       text eol=lf
+Makefile          text eol=lf
+*.mk              text eol=lf
+*.mjs             text eol=lf
+*.cjs             text eol=lf
+.dockerignore     text eol=lf
+.env.example      text eol=lf
+
+# Shell scripts in .deployment/ directories are always LF — they're the
+# container entrypoints and break silently if they have CRLF.
+**/.deployment/**/*.sh text eol=lf
+
+# Treat common binary formats as binary (no EOL conversion, no diff noise).
+*.png             binary
+*.jpg             binary
+*.jpeg            binary
+*.gif             binary
+*.ico             binary
+*.pdf             binary
+*.zip             binary
+*.gz              binary
+*.woff            binary
+*.woff2           binary
+*.ttf             binary
+*.eot             binary

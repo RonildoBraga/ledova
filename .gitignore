@@ -1,0 +1,88 @@
+# Node modules (root workspace)
+node_modules/
+
+# Separate repositories (not part of monorepo)
+/keystone/
+/learn-contracts/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Thumbnails
+._*
+
+# Files that might appear in the root of a volume
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# Directories potentially created on remote AFP share
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# IDEs
+.idea/
+*.swp
+*.swo
+*~
+
+# Smart contract artifacts
+.deployed-contracts.env
+contracts/artifacts/
+contracts/cache/
+contracts/typechain-types/
+
+# Logs
+*.log
+
+# Environment files (examples remain tracked)
+**/.env
+**/.env.*
+**/*.env
+**/*.env.*
+!**/.env.example
+
+# Temporary files
+tmp/
+temp/
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# EAS CLI stubs (real config is in mobile/)
+/app.json
+/eas.json
+
+# Private keys and credential exports
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/*credentials*.json
+**/application_default_credentials.json
+
+# Database exports and secret-transfer archives
+**/*.dump
+**/*.sql
+**/*.sql.gz
+**/*secret*.zip
+**/*secret*.tar
+**/*secret*.tar.gz
+**/*secret*.tgz
+**/*secret*.7z
+
+# Claude Code — per-developer permission overrides
+.claude/settings.local.json
+
+# Local working dir for ad-hoc GCP url-map edits (not source of truth)
+.gcp-url-map-change/

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/icons/portfolio_templates/ledova.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ledova</title>
+  </head>
+  <body>
+    <script>
+      // Apply saved theme before paint to prevent flash
+      (function () {
+        var t = localStorage.getItem('ledova-theme');
+        if (t === 'light') {
+          document.documentElement.classList.add('theme-light');
+        } else {
+          document.documentElement.classList.add('theme-dark');
+        }
+      })();
+    </script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

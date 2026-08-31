@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="ledovaGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3B82F6;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#2563EB;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1D4ED8;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="leafGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#10B981;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#059669;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Ledova mark -->
+  <path d="M 128 80 Q 160 100 150 160 Q 140 200 128 210 Q 116 200 106 160 Q 96 100 128 80 Z" fill="url(#ledovaGradient)" stroke="#1D4ED8" stroke-width="2"/>
+  <!-- Leaves -->
+  <path d="M 108 80 Q 105 70 110 65 Q 115 70 118 75" fill="url(#leafGradient)"/>
+  <path d="M 118 75 Q 120 65 125 60 Q 130 65 132 75" fill="url(#leafGradient)"/>
+  <path d="M 132 75 Q 135 65 140 60 Q 145 65 148 75" fill="url(#leafGradient)"/>
+  <path d="M 148 75 Q 150 70 155 65 Q 160 70 158 80" fill="url(#leafGradient)"/>
+  <!-- Accent dots -->
+  <ellipse cx="120" cy="110" rx="2" ry="3" fill="#FEF08A" transform="rotate(15 120 110)"/>
+  <ellipse cx="136" cy="115" rx="2" ry="3" fill="#FEF08A" transform="rotate(-10 136 115)"/>
+  <ellipse cx="125" cy="130" rx="2" ry="3" fill="#FEF08A" transform="rotate(20 125 130)"/>
+  <ellipse cx="140" cy="135" rx="2" ry="3" fill="#FEF08A" transform="rotate(-15 140 135)"/>
+  <ellipse cx="115" cy="150" rx="2" ry="3" fill="#FEF08A" transform="rotate(10 115 150)"/>
+  <ellipse cx="135" cy="155" rx="2" ry="3" fill="#FEF08A" transform="rotate(-20 135 155)"/>
+  <ellipse cx="120" cy="170" rx="2" ry="3" fill="#FEF08A" transform="rotate(25 120 170)"/>
+  <ellipse cx="130" cy="180" rx="2" ry="3" fill="#FEF08A" transform="rotate(-5 130 180)"/>
+</svg>

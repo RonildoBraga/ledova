@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Verify Your Email</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #ffffff;
+            color: #f7fafc;
+            line-height: 1.5;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #1A202C;
+        }
+        .header {
+            text-align: center;
+            padding: 20px 0;
+            border-bottom: 1px solid #2d3748;
+        }
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: #f7fafc;
+        }
+        .content {
+            padding: 30px 20px;
+            background-color: #2D3748;
+            border-radius: 8px;
+            margin: 20px 0;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            font-size: 22px;
+            font-weight: 400;
+            margin-bottom: 16px;
+            color: #e2e8f0;
+        }
+        p {
+            margin: 16px 0;
+            color: #cbd5e0;
+            font-weight: 300;
+        }
+        .code-container {
+            background-color: #1A202C;
+            padding: 16px;
+            border-radius: 6px;
+            margin: 20px 0;
+            border: 1px solid #4A5568; /* border-gray-700 */
+            text-align: center;
+        }
+        .code {
+            font-family: monospace;
+            font-size: 18px;
+            letter-spacing: 2px;
+            color: #e2e8f0; /* text-gray-300 */
+        }
+        .footer {
+            text-align: center;
+            padding: 20px 0;
+            font-size: 14px;
+            color: #a0aec0; /* text-gray-500 */
+            border-top: 1px solid #2d3748; /* border-gray-700 */
+            margin-top: 20px;
+        }
+        .small {
+            font-size: 12px;
+            color: #a0aec0; /* text-gray-500 */
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">Ledova</div>
+        </div>
+
+        <div class="content">
+            <h1>Verify Your Email Address</h1>
+            <p>Hello {{ user.email }},</p>
+            <p>Thank you for trying Ledova. To complete the local demo registration, use the verification code below:</p>
+
+            <div class="code-container">
+                <div class="code">{{ token }}</div>
+            </div>
+
+            <p>Enter this code on our verification page to confirm your email address and activate your account.</p>
+
+            <p class="small">If you did not sign up for Ledova, please ignore this email or contact our support team if you have concerns.</p>
+        </div>
+
+        <div class="footer">
+            <p>Ledova experimental reference implementation.</p>
+        </div>
+    </div>
+</body>
+</html>

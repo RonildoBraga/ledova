@@ -1,0 +1,70 @@
+import logging
+
+from rest_framework.decorators import action
+from rest_framework.response import Response
+
+from shared.utils import LoggingContext
+from shared.views import AuthenticatedGenericViewSet
+from tokens.serializers import BroadcastTransferSerializer, PrepareTransferSerializer
+from tokens.services import TransferService
+
+logger = logging.getLogger(__name__)
+
+
+class TradingTransferViewSet(AuthenticatedGenericViewSet):
+
+    throttle_scope = "broadcast"
+
+    @action(detail=False, methods=["post"])
+    def prepare(self, request):
+        serializer = PrepareTransferSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        data = serializer.validated_data
+        transfer_service = TransferService()
+
+        tx_data = transfer_service.prepare_transfer(
+            token=data["token"],
+            from_address=data["from_address"],
+            to_address=data["to_address"],
+            amount=data["amount"],
+        )
+
+        logger.info(
+            f"{LoggingContext.TOKEN_TRANSFER} Prepared transfer: {data['amount']} {data['token'].symbol} "
+            f"from {data['from_address']} to {data['to_address']}"
+        )
+
+        return Response(
+            {
+                "token": {
+                    "uuid": str(data["token"].uuid),
+                    "symbol": data["token"].symbol,
+                    "contract_address": data["token"].contract_address,
+                },
+                "from_address": data["from_address"],
+                "to_address": data["to_address"],
+                "amount": data["amount"],
+                "transaction_data": tx_data,
+            }
+        )
+
+    @action(detail=False, methods=["post"])
+    def broadcast(self, request):
+        serializer = BroadcastTransferSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        data = serializer.validated_data
+        transfer_service = TransferService()
+
+        tx_hash, receipt = transfer_service.broadcast_transfer(data["signed_transaction"])
+
+        logger.info(f"{LoggingContext.TOKEN_TRANSFER} Broadcast transfer: tx={tx_hash}")
+
+        return Response(
+            {
+                "tx_hash": tx_hash,
+                "block_number": receipt.get("blockNumber"),
+                "gas_used": receipt.get("gasUsed"),
+            }
+        )

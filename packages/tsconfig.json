@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    /* Root config is for type-checking only, not compilation */
+    "noEmit": true,
+    "composite": false
+  },
+  "include": ["packages/*/src/**/*", "scripts/**/*"],
+  "exclude": ["node_modules", "dist", "build", "**/node_modules", "**/*.test.*", "**/*.spec.*"],
+  "references": [
+    { "path": "./packages/shared-constants" },
+    { "path": "./packages/shared-types" },
+    { "path": "./packages/shared-utils" },
+    { "path": "./packages/shared-services" }
+  ]
+}

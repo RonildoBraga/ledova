@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3B82F6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1E40AF;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="iconGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FDE047;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FACC15;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Background circle -->
+  <circle cx="128" cy="128" r="120" fill="url(#bgGradient)" stroke="#1E40AF" stroke-width="4"/>
+  <!-- Currency circle dollar icon -->
+  <path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216ZM168,128c0,22.09-17.91,40-40,40v16a8,8,0,0,1-16,0V168H96a8,8,0,0,1,0-16h32c13.23,0,24-10.77,24-24s-10.77-24-24-24H112c-22.09,0-40-17.91-40-40s17.91-40,40-40V8a8,8,0,0,1,16,0V24h16a8,8,0,0,1,0,16H112c-13.23,0-24,10.77-24,24s10.77,24,24,24h16C150.09,88,168,105.91,168,128Z" fill="url(#iconGradient)" stroke="#B45309" stroke-width="1"/>
+</svg>

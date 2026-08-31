@@ -1,0 +1,23 @@
+# Match the repository's validated Node/npm toolchain.
+FROM node:22.15.1-alpine
+
+# Install build dependencies
+RUN apk add --no-cache python3 make g++
+
+RUN npm install -g npm@11.5.2
+
+WORKDIR /usr/src/app
+
+# Copy root workspace files
+COPY package.json package-lock.json ./
+COPY packages ./packages
+COPY dashboard ./dashboard
+
+# Install the locked workspace and compile the local shared packages consumed
+# by the dashboard. npm selects platform-specific optional binaries itself.
+RUN npm ci && npm run build:packages
+
+WORKDIR /usr/src/app/dashboard
+EXPOSE 5174
+
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5174"]

@@ -1,0 +1,75 @@
+{% extends "admin/base_custom.html" %}
+{% load i18n admin_urls static %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_label|capfirst }}</a>
+    &rsaquo; <a href="{% url 'admin:companies_company_changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+    &rsaquo; <a href="{% url 'admin:companies_company_change' company.pk %}">{{ company.name }}</a>
+    &rsaquo; Issue Warning
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="admin-custom-form">
+    <div class="alert alert-warning">
+        <strong>&#9888; Compliance Warning:</strong> You are issuing a compliance warning to <strong>{{ company.name }}</strong> (ACN: {{ company.acn }}).
+        The company will be notified and their status will change to "Compliance Warning".
+    </div>
+
+    <div class="admin-card">
+        <div class="admin-card-header">Company Details</div>
+        <div class="admin-card-body">
+            <table class="admin-table">
+                <tr>
+                    <td class="label-col">Name</td>
+                    <td><strong>{{ company.name }}</strong></td>
+                </tr>
+                <tr>
+                    <td class="label-col">ACN</td>
+                    <td>{{ company.acn }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Email</td>
+                    <td>{{ company.email }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Status</td>
+                    <td>{{ company.get_status_display }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Active Since</td>
+                    <td>{{ company.activated_at|date:"N j, Y, P"|default:"N/A" }}</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <form method="post" class="admin-form">
+        {% csrf_token %}
+        <fieldset>
+            <legend>Warning Details</legend>
+            <div class="form-group">
+                <label for="id_reason" class="required">{{ form.reason.label }}</label>
+                {{ form.reason }}
+                {% if form.reason.help_text %}
+                <p class="help-text">{{ form.reason.help_text }}</p>
+                {% endif %}
+                {% if form.reason.errors %}
+                <ul class="errorlist">
+                    {% for error in form.reason.errors %}
+                    <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+            </div>
+        </fieldset>
+
+        <div class="action-row">
+            <button type="submit" class="btn btn-warning">Issue Warning</button>
+            <a href="{% url 'admin:companies_company_change' company.pk %}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

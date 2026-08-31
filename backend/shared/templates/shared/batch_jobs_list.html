@@ -1,0 +1,149 @@
+{% extends "admin/base_custom.html" %}
+{% load static %}
+
+{% block title %}Batch Update Jobs{% endblock %}
+
+{% block extrahead %}
+<style>
+  .progress-bar {
+    height: 20px;
+    background-color: #f0f0f0;
+    border-radius: 5px;
+    margin-bottom: 10px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    text-align: center;
+    color: white;
+    font-weight: bold;
+    line-height: 20px;
+  }
+
+  .scheduled { background-color: #6c757d; }
+  .running { background-color: #17a2b8; }
+  .completed { background-color: #28a745; }
+  .failed { background-color: #dc3545; }
+
+  .status-badge {
+    display: inline-block;
+    padding: 5px 10px;
+    border-radius: 15px;
+    color: white;
+    font-weight: bold;
+  }
+
+  .job-stats {
+    display: flex;
+    justify-content: space-around;
+    margin-bottom: 20px;
+  }
+
+  .stat-box {
+    padding: 15px;
+    border-radius: 5px;
+    text-align: center;
+    flex-grow: 1;
+    margin: 0 5px;
+    color: white;
+  }
+
+  .stat-box h3 {
+    font-size: 1.5em;
+    margin: 0;
+    color: white;
+  }
+
+  .total-jobs { background-color: #007bff; }
+  .active-jobs { background-color: #17a2b8; }
+  .completed-jobs { background-color: #28a745; }
+  .failed-jobs { background-color: #dc3545; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <h1>Batch Update Jobs</h1>
+
+  <div class="job-stats">
+    <div class="stat-box total-jobs">
+      <h3>{{ paginator.count }}</h3>
+      <p>Total Jobs</p>
+    </div>
+    <div class="stat-box active-jobs">
+      <h3>{{ jobs.filter.status.running|length }}</h3>
+      <p>Active Jobs</p>
+    </div>
+    <div class="stat-box completed-jobs">
+      <h3>{{ jobs.filter.status.completed|length }}</h3>
+      <p>Completed</p>
+    </div>
+    <div class="stat-box failed-jobs">
+      <h3>{{ jobs.filter.status.failed|length }}</h3>
+      <p>Failed</p>
+    </div>
+  </div>
+
+  <div class="module filtered">
+    <table>
+      <thead>
+        <tr>
+          <th>Job ID</th>
+          <th>Type</th>
+          <th>Status</th>
+          <th>Progress</th>
+          <th>Started</th>
+          <th>Completed</th>
+          <th>Duration</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for job in jobs %}
+        <tr>
+          <td><a href="{% url 'shared:batch_job_detail' job.pk %}">{{ job.job_id }}</a></td>
+          <td>{{ job.job_type }}</td>
+          <td>
+            <span class="status-badge {{ job.status }}">{{ job.status|title }}</span>
+          </td>
+          <td>
+            <div class="progress-bar">
+              <div class="progress-fill {{ job.status }}" style="width: {{ job.progress_percentage }}%">
+                {{ job.progress_percentage }}%
+              </div>
+            </div>
+          </td>
+          <td>{{ job.started_at|default:"Not started" }}</td>
+          <td>{{ job.completed_at|default:"In progress" }}</td>
+          <td>{{ job.duration_minutes|default:0 }} min</td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="7">No batch jobs found.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if is_paginated %}
+  <div class="pagination">
+    <span class="step-links">
+      {% if page_obj.has_previous %}
+      <a href="?page=1">&laquo; first</a>
+      <a href="?page={{ page_obj.previous_page_number }}">previous</a>
+      {% endif %}
+
+      <span class="current">
+        Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}.
+      </span>
+
+      {% if page_obj.has_next %}
+      <a href="?page={{ page_obj.next_page_number }}">next</a>
+      <a href="?page={{ page_obj.paginator.num_pages }}">last &raquo;</a>
+      {% endif %}
+    </span>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

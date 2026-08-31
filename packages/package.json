@@ -1,0 +1,53 @@
+{
+  "name": "ledova-shared-packages",
+  "version": "1.0.0",
+  "description": "Ledova shared packages for Ledova platform",
+  "private": true,
+  "type": "module",
+  "packageManager": "npm@11.5.2",
+  "scripts": {
+    "build": "npm run build:shared",
+    "build:shared": "cd packages/shared-constants && npm run build && cd ../shared-types && npm run build && cd ../shared-utils && npm run build && cd ../shared-services && npm run build",
+    "test": "cd packages/shared-constants && npx jest && cd ../shared-types && npx jest --passWithNoTests && cd ../shared-utils && npx jest && cd ../shared-services && npx jest --passWithNoTests",
+    "lint": "cd packages/shared-constants && npx eslint src && cd ../shared-types && npx eslint src && cd ../shared-utils && npx eslint src && cd ../shared-services && npx eslint src",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint:fix": "npm run format && cd packages/shared-constants && npx eslint --fix src && cd ../shared-types && npx eslint --fix src && cd ../shared-utils && npx eslint --fix src && cd ../shared-services && npx eslint --fix src",
+    "typecheck": "cd packages/shared-constants && npx tsc --noEmit && cd ../shared-types && npx tsc --noEmit && cd ../shared-utils && npx tsc --noEmit && cd ../shared-services && npx tsc --noEmit",
+    "clean": "rm -rf packages/shared-constants/dist packages/shared-types/dist packages/shared-utils/dist packages/shared-services/dist",
+    "check-versions": "node scripts/check-dependency-versions.js",
+    "validate:packages": "npm run check-versions && npm run build:shared"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.33.0",
+    "@types/node": "^22.15.3",
+    "eslint": "^9.33.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-import-resolver-typescript": "^4.4.4",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-prettier": "^5.5.4",
+    "prettier": "^3.6.2",
+    "tsx": "^4.0.0",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.39.1"
+  },
+  "engines": {
+    "node": "22.15.1",
+    "npm": "11.5.2"
+  },
+  "keywords": [
+    "typescript",
+    "shared",
+    "portfolio",
+    "react",
+    "react-native"
+  ],
+  "author": "Ledova Team",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@ledova/shared-constants": "file:packages/shared-constants",
+    "@ledova/shared-services": "file:packages/shared-services",
+    "@ledova/shared-types": "file:packages/shared-types",
+    "@ledova/shared-utils": "file:packages/shared-utils"
+  }
+}

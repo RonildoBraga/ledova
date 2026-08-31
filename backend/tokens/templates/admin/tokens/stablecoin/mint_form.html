@@ -1,0 +1,161 @@
+{% extends "admin/base_custom.html" %}
+{% load i18n admin_urls static %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Home</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_label|capfirst }}</a>
+    &rsaquo; <a href="{% url 'admin:tokens_stablecoin_changelist' %}">Stablecoins</a>
+    &rsaquo; <a href="{% url 'admin:tokens_stablecoin_change' stablecoin.pk %}">{{ stablecoin.symbol }}</a>
+    &rsaquo; Mint
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="admin-custom-form admin-custom-form--wide">
+    <div class="alert alert-success">
+        <strong>Mint {{ stablecoin.symbol }}</strong>
+        <p class="mt-1 mb-0">
+            You are about to mint <strong>{{ stablecoin.name }} ({{ stablecoin.symbol }})</strong> to a recipient's wallet.
+        </p>
+    </div>
+
+    <div class="admin-card">
+        <div class="admin-card-header">Stablecoin Information</div>
+        <div class="admin-card-body">
+            <table class="admin-table">
+                <tr>
+                    <td class="label-col">Name</td>
+                    <td>{{ stablecoin.name }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Symbol</td>
+                    <td>{{ stablecoin.symbol }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Contract</td>
+                    <td class="monospace">{{ stablecoin.contract_address }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Current Supply</td>
+                    <td>{{ current_supply }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Minter Status</td>
+                    <td>
+                        {% if is_minter %}
+                        <span class="badge badge-success">Authorized</span>
+                        {% else %}
+                        <span class="badge badge-danger">Not Authorized</span>
+                        {% endif %}
+                    </td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    {% if not is_minter %}
+    <div class="alert alert-danger">
+        <strong>&#9888; Warning:</strong> The platform signer is not authorized as a minter on this contract.
+        Please ensure the signer address is added as a minter before attempting to mint.
+    </div>
+    {% endif %}
+
+    <form method="post" class="admin-form">
+        {% csrf_token %}
+
+        <fieldset>
+            <legend>Recipient Details</legend>
+            <div class="form-group">
+                <label for="id_recipient_address">{{ form.recipient_address.label }}</label>
+                {{ form.recipient_address }}
+                {% if form.recipient_address.help_text %}
+                <p class="help-text">{{ form.recipient_address.help_text }}</p>
+                {% endif %}
+                {% if form.recipient_address.errors %}
+                <p class="error-text">{{ form.recipient_address.errors.0 }}</p>
+                {% endif %}
+            </div>
+            <div class="form-group">
+                <label for="id_recipient_name">{{ form.recipient_name.label }}</label>
+                {{ form.recipient_name }}
+                {% if form.recipient_name.help_text %}
+                <p class="help-text">{{ form.recipient_name.help_text }}</p>
+                {% endif %}
+                {% if form.recipient_name.errors %}
+                <p class="error-text">{{ form.recipient_name.errors.0 }}</p>
+                {% endif %}
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>Mint Amount</legend>
+            <div class="form-group">
+                <label for="id_amount">{{ form.amount.label }}</label>
+                {{ form.amount }}
+                {% if form.amount.help_text %}
+                <p class="help-text">{{ form.amount.help_text }}</p>
+                {% endif %}
+                {% if form.amount.errors %}
+                <p class="error-text">{{ form.amount.errors.0 }}</p>
+                {% endif %}
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>Fiat Deposit Reference</legend>
+            <div class="form-group">
+                <label for="id_deposit_reference">{{ form.deposit_reference.label }}</label>
+                {{ form.deposit_reference }}
+                {% if form.deposit_reference.help_text %}
+                <p class="help-text">{{ form.deposit_reference.help_text }}</p>
+                {% endif %}
+                {% if form.deposit_reference.errors %}
+                <p class="error-text">{{ form.deposit_reference.errors.0 }}</p>
+                {% endif %}
+            </div>
+            <div class="form-group">
+                <label for="id_deposit_date">{{ form.deposit_date.label }}</label>
+                {{ form.deposit_date }}
+                {% if form.deposit_date.help_text %}
+                <p class="help-text">{{ form.deposit_date.help_text }}</p>
+                {% endif %}
+                {% if form.deposit_date.errors %}
+                <p class="error-text">{{ form.deposit_date.errors.0 }}</p>
+                {% endif %}
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>Notes (Optional)</legend>
+            <div class="form-group">
+                {{ form.notes }}
+                {% if form.notes.help_text %}
+                <p class="help-text">{{ form.notes.help_text }}</p>
+                {% endif %}
+            </div>
+        </fieldset>
+
+        <div class="alert alert-warning">
+            <strong>&#9888; Confirmation:</strong>
+            <p class="mt-1 mb-0">
+                By clicking "Mint Tokens", you confirm that:
+            </p>
+            <ul class="mb-0">
+                <li>The fiat deposit has been received and verified</li>
+                <li>The deposit reference is correct and matches the bank statement</li>
+                <li>The recipient address has been verified</li>
+                <li>The amount matches the fiat deposit (less any fees)</li>
+            </ul>
+            <p class="mt-1 mb-0">
+                <strong>Note:</strong> This action will create a blockchain transaction that cannot be undone.
+            </p>
+        </div>
+
+        <div class="action-row mt-0">
+            <button type="submit" class="btn btn-success" {% if not is_minter %}disabled{% endif %}>Mint Tokens</button>
+            <a href="{% url 'admin:tokens_stablecoin_change' stablecoin.pk %}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

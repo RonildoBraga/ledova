@@ -1,0 +1,75 @@
+{% extends "admin/base_custom.html" %}
+{% load i18n admin_urls static %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_label|capfirst }}</a>
+    &rsaquo; <a href="{% url 'admin:companies_directorverification_changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+    &rsaquo; <a href="{% url 'admin:companies_directorverification_change' verification.pk %}">{{ verification.contact.full_name }}</a>
+    &rsaquo; Reject
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="admin-custom-form">
+    <div class="alert alert-warning">
+        <strong>&#9888; Warning:</strong> You are about to reject the identity verification for <strong>{{ verification.contact.full_name }}</strong>.
+        The director will need to resubmit their documents.
+    </div>
+
+    <div class="admin-card">
+        <div class="admin-card-header">Director Details</div>
+        <div class="admin-card-body">
+            <table class="admin-table">
+                <tr>
+                    <td class="label-col">Name</td>
+                    <td><strong>{{ verification.contact.full_name }}</strong></td>
+                </tr>
+                <tr>
+                    <td class="label-col">Company</td>
+                    <td>{{ verification.contact.company.name }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Email</td>
+                    <td>{{ verification.contact.email }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">ID Type</td>
+                    <td>{{ verification.get_identification_type_display|default:"-" }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Submitted</td>
+                    <td>{{ verification.submitted_at|date:"N j, Y, P"|default:"-" }}</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <form method="post" class="admin-form">
+        {% csrf_token %}
+        <fieldset>
+            <legend>Rejection Details</legend>
+            <div class="form-group">
+                <label for="id_reason" class="required">{{ form.reason.label }}</label>
+                {{ form.reason }}
+                {% if form.reason.help_text %}
+                <p class="help-text">{{ form.reason.help_text }}</p>
+                {% endif %}
+                {% if form.reason.errors %}
+                <ul class="errorlist">
+                    {% for error in form.reason.errors %}
+                    <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+            </div>
+        </fieldset>
+
+        <div class="action-row">
+            <button type="submit" class="btn btn-danger">Reject Verification</button>
+            <a href="{% url 'admin:companies_directorverification_change' verification.pk %}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

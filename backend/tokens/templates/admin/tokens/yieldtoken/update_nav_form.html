@@ -1,0 +1,193 @@
+{% extends "admin/base_custom.html" %}
+{% load i18n admin_urls static %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Home</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_label|capfirst }}</a>
+    &rsaquo; <a href="{% url 'admin:tokens_yieldtoken_changelist' %}">Yield Tokens</a>
+    &rsaquo; <a href="{% url 'admin:tokens_yieldtoken_change' yield_token.pk %}">{{ yield_token.symbol }}</a>
+    &rsaquo; Update NAV
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="admin-custom-form admin-custom-form--wide">
+    <div class="alert alert-info">
+        <strong>Update NAV &mdash; {{ yield_token.symbol }}</strong>
+        <p class="mt-1 mb-0">
+            Update the Net Asset Value for <strong>{{ yield_token.name }} ({{ yield_token.symbol }})</strong>
+            using synthetic scenario values for local/testnet evaluation.
+        </p>
+    </div>
+
+    <div class="admin-card">
+        <div class="admin-card-header">Current NAV Information</div>
+        <div class="admin-card-body">
+            <table class="admin-table">
+                <tr>
+                    <td class="label-col">Symbol</td>
+                    <td>{{ yield_token.symbol }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Contract</td>
+                    <td class="monospace">{{ yield_token.contract_address }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Current NAV/Token</td>
+                    <td>
+                        {% if yield_token.nav_per_token %}
+                            ${{ yield_token.nav_per_token }}
+                        {% else %}
+                            <em>Not set</em>
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <td class="label-col">Synthetic Reference Value</td>
+                    <td>
+                        {% if yield_token.total_reserve_value %}
+                            ${{ yield_token.total_reserve_value }}
+                        {% else %}
+                            <em>Not set</em>
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <td class="label-col">Last Updated</td>
+                    <td>{{ yield_token.last_nav_update|default:"Never" }}</td>
+                </tr>
+                {% if nav_info %}
+                <tr>
+                    <td class="label-col">On-Chain NAV/Token</td>
+                    <td class="monospace">${{ nav_info.navPerToken }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">On-Chain Total Supply</td>
+                    <td class="monospace">{{ nav_info.totalSupplyFormatted }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">NAV Updater Status</td>
+                    <td>
+                        {% if is_nav_updater %}
+                        <span class="badge badge-success">Authorized</span>
+                        {% else %}
+                        <span class="badge badge-danger">Not Authorized</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endif %}
+            </table>
+        </div>
+    </div>
+
+    {% if recent_updates %}
+    <div class="admin-card">
+        <div class="admin-card-header">Recent NAV Updates</div>
+        <div class="admin-card-body">
+            <table class="admin-table" style="width: 100%;">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>NAV Change</th>
+                        <th>Synthetic Reference Value</th>
+                        <th>Report Ref</th>
+                        <th>Updated By</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for update in recent_updates %}
+                    <tr>
+                        <td>{{ update.created_at|date:"d M Y H:i" }}</td>
+                        <td>${{ update.old_nav_per_token }} &rarr; ${{ update.new_nav_per_token }}</td>
+                        <td>${{ update.total_reserve_value }}</td>
+                        <td>{{ update.custodian_report_ref|default:"-" }}</td>
+                        <td>{{ update.updated_by }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="post" class="admin-form">
+        {% csrf_token %}
+
+        <fieldset>
+            <legend>New NAV Values</legend>
+            <div class="form-group">
+                <label for="id_nav_per_token">{{ form.nav_per_token.label }}</label>
+                {{ form.nav_per_token }}
+                {% if form.nav_per_token.help_text %}
+                <p class="help-text">{{ form.nav_per_token.help_text }}</p>
+                {% endif %}
+                {% if form.nav_per_token.errors %}
+                <p class="error-text">{{ form.nav_per_token.errors.0 }}</p>
+                {% endif %}
+            </div>
+            <div class="form-group">
+                <label for="id_total_reserve_value">{{ form.total_reserve_value.label }}</label>
+                {{ form.total_reserve_value }}
+                {% if form.total_reserve_value.help_text %}
+                <p class="help-text">{{ form.total_reserve_value.help_text }}</p>
+                {% endif %}
+                {% if form.total_reserve_value.errors %}
+                <p class="error-text">{{ form.total_reserve_value.errors.0 }}</p>
+                {% endif %}
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>Reference</legend>
+            <div class="form-group">
+                <label for="id_custodian_report_ref">{{ form.custodian_report_ref.label }}</label>
+                {{ form.custodian_report_ref }}
+                {% if form.custodian_report_ref.help_text %}
+                <p class="help-text">{{ form.custodian_report_ref.help_text }}</p>
+                {% endif %}
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>On-Chain Execution</legend>
+            <div class="form-group">
+                <label>
+                    {{ form.update_on_chain }}
+                    {{ form.update_on_chain.label }}
+                </label>
+                {% if form.update_on_chain.help_text %}
+                <p class="help-text">{{ form.update_on_chain.help_text }}</p>
+                {% endif %}
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>Notes (Optional)</legend>
+            <div class="form-group">
+                {{ form.notes }}
+                {% if form.notes.help_text %}
+                <p class="help-text">{{ form.notes.help_text }}</p>
+                {% endif %}
+            </div>
+        </fieldset>
+
+        <div class="alert alert-warning">
+            <strong>&#9888; Confirmation:</strong>
+            <p class="mt-1 mb-0">
+                By clicking "Update NAV", you confirm that:
+            </p>
+            <ul class="mb-0">
+                <li>The new NAV values belong to a synthetic local/testnet scenario</li>
+                <li>The reference value is test data and does not describe a real reserve</li>
+                <li>This updates the experimental token value shown in the demo</li>
+            </ul>
+        </div>
+
+        <div class="action-row mt-0">
+            <button type="submit" class="btn btn-primary">Update NAV</button>
+            <a href="{% url 'admin:tokens_yieldtoken_change' yield_token.pk %}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

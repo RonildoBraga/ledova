@@ -1,0 +1,108 @@
+{% extends "admin/base_custom.html" %}
+{% load i18n admin_urls static %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Home</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_label|capfirst }}</a>
+    &rsaquo; <a href="{% url 'admin:tokens_capitalincreaserequest_changelist' %}">Capital increase requests</a>
+    &rsaquo; <a href="{% url 'admin:tokens_capitalincreaserequest_change' capital_increase.pk %}">{{ capital_increase.token.symbol }}</a>
+    &rsaquo; Approve
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="admin-custom-form admin-custom-form--wide">
+    <div class="alert alert-success">
+        <strong>Approve Capital Increase Request</strong>
+        <p class="mt-1 mb-0">
+            You are about to approve a capital increase request for <strong>{{ capital_increase.token.name }} ({{ capital_increase.token.symbol }})</strong>.
+        </p>
+    </div>
+
+    <div class="admin-card">
+        <div class="admin-card-header">Request Details</div>
+        <div class="admin-card-body">
+            <table class="admin-table">
+                <tr>
+                    <td class="label-col">Token</td>
+                    <td>{{ capital_increase.token.name }} ({{ capital_increase.token.symbol }})</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Company</td>
+                    <td>{{ capital_increase.token.company.name }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Additional Shares</td>
+                    <td><strong>+{{ capital_increase.additional_shares }}</strong> shares</td>
+                </tr>
+                <tr>
+                    <td class="label-col">New Authorized Total</td>
+                    <td>{{ capital_increase.new_authorized_total }} shares</td>
+                </tr>
+                {% if capital_increase.dilution_percentage %}
+                <tr>
+                    <td class="label-col">Dilution</td>
+                    <td>{{ capital_increase.dilution_percentage }}%</td>
+                </tr>
+                {% endif %}
+                <tr>
+                    <td class="label-col">Purpose</td>
+                    <td>{{ capital_increase.purpose }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Board Resolution</td>
+                    <td>{{ capital_increase.board_resolution_reference }}</td>
+                </tr>
+                {% if capital_increase.shareholder_approval_reference %}
+                <tr>
+                    <td class="label-col">Shareholder Approval</td>
+                    <td>{{ capital_increase.shareholder_approval_reference }}</td>
+                </tr>
+                {% endif %}
+                <tr>
+                    <td class="label-col">Submitted By</td>
+                    <td>{{ capital_increase.submitted_by.email }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Submitted At</td>
+                    <td>{{ capital_increase.submitted_at }}</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <form method="post" class="admin-form">
+        {% csrf_token %}
+        <fieldset>
+            <legend>Review Notes (Optional)</legend>
+            <div class="form-group">
+                {{ form.notes }}
+                {% if form.notes.help_text %}
+                <p class="help-text">{{ form.notes.help_text }}</p>
+                {% endif %}
+            </div>
+        </fieldset>
+
+        <div class="alert alert-success">
+            <strong>Approval Confirmation:</strong>
+            <p class="mt-1 mb-0">
+                By approving this request, you confirm that:
+            </p>
+            <ul class="mb-0">
+                <li>The capital increase has been properly authorized by the company's board</li>
+                <li>Required shareholder approvals have been obtained (if applicable)</li>
+                <li>The increase complies with company policies and regulations</li>
+            </ul>
+            <p class="mt-1 mb-0">
+                <strong>Note:</strong> After approval, you will need to execute the request to perform the on-chain operations.
+            </p>
+        </div>
+
+        <div class="action-row mt-0">
+            <button type="submit" class="btn btn-success">Approve Request</button>
+            <a href="{% url 'admin:tokens_capitalincreaserequest_change' capital_increase.pk %}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,32 @@
+repos:
+  - repo: https://github.com/psf/black
+    rev: 26.3.1
+    hooks:
+      - id: black
+        args: ["--config", "backend/pyproject.toml"]
+        files: ^backend/
+        exclude: migrations/
+
+  - repo: https://github.com/PyCQA/isort
+    rev: 8.0.1
+    hooks:
+      - id: isort
+        args: ["--settings-path", "backend/pyproject.toml"]
+        files: ^backend/
+        exclude: migrations/
+
+  - repo: https://github.com/PyCQA/flake8
+    rev: 7.3.0
+    hooks:
+      - id: flake8
+        args: ["--config", "backend/.flake8"]
+        files: ^backend/
+        exclude: migrations/
+
+  - repo: https://github.com/PyCQA/autoflake
+    rev: v2.3.3
+    hooks:
+      - id: autoflake
+        args: ["--remove-all-unused-imports", "--recursive", "--in-place", "--exclude=__init__.py"]
+        files: ^backend/
+        exclude: migrations/

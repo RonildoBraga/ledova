@@ -1,0 +1,25 @@
+{
+  "name": "ledova-monorepo",
+  "private": true,
+  "license": "Apache-2.0",
+  "workspaces": [
+    "packages/packages/*",
+    "dashboard"
+  ],
+  "scripts": {
+    "build:packages": "npm run build -w @ledova/shared-constants && npm run build -w @ledova/shared-types && npm run build -w @ledova/shared-utils && npm run build -w @ledova/shared-services",
+    "dev:dashboard": "npm run dev -w dashboard",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "format": "npm run format --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present && npm run type-check -w dashboard"
+  },
+  "packageManager": "npm@11.5.2",
+  "engines": {
+    "node": "22.15.1",
+    "npm": "11.5.2"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.12"
+  }
+}

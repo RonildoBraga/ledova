@@ -1,0 +1,130 @@
+{% extends "admin/base_custom.html" %}
+{% load static %}
+
+{% block title %}Update Prices | {{ opts.verbose_name_plural|capfirst }}{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+    .assets-list {
+        max-height: 300px;
+        overflow-y: auto;
+        border: 1px solid #ddd;
+        padding: 10px;
+        margin: 10px 0;
+        background: #f9f9f9;
+    }
+    .assets-list ul {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+    .assets-list li {
+        padding: 5px 0;
+        border-bottom: 1px solid #eee;
+    }
+    .form-row {
+        margin-bottom: 15px;
+    }
+    .form-row label {
+        display: block;
+        font-weight: bold;
+        margin-bottom: 5px;
+    }
+    .form-row input[type="text"],
+    .form-row input[type="number"] {
+        width: 100%;
+        max-width: 400px;
+        padding: 8px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+    }
+    .form-row .helptext {
+        display: block;
+        font-size: 12px;
+        color: #666;
+        margin-top: 3px;
+    }
+    .submit-row {
+        padding: 15px 0;
+        border-top: 1px solid #ddd;
+        margin-top: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Home</a>
+    &rsaquo; <a href="{% url 'admin:assets_asset_changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+    &rsaquo; Update Prices
+</div>
+{% endblock %}
+
+{% block content %}
+<h1>Update Prices for Selected Assets</h1>
+
+<form action="" method="post">
+    {% csrf_token %}
+
+    <div class="assets-list">
+        <h3>{{ assets|length }} Asset(s) Selected:</h3>
+        <ul>
+        {% for asset in assets %}
+            <li>
+                <strong>{{ asset.symbol }}</strong> - {{ asset.name }}
+                {% if asset.current_price %}
+                    (Current: {{ asset.price_currency }} {{ asset.current_price }})
+                {% else %}
+                    (No price set)
+                {% endif %}
+            </li>
+        {% endfor %}
+        </ul>
+    </div>
+
+    <fieldset class="module">
+        <h2>Price Information</h2>
+
+        <div class="form-row">
+            <label for="id_price">Price: <span class="required">*</span></label>
+            {{ form.price }}
+            {% if form.price.help_text %}
+                <p class="helptext">{{ form.price.help_text }}</p>
+            {% endif %}
+            {% if form.price.errors %}
+                <p class="errornote">{{ form.price.errors }}</p>
+            {% endif %}
+        </div>
+
+        <div class="form-row">
+            <label for="id_currency">Currency:</label>
+            {{ form.currency }}
+            {% if form.currency.help_text %}
+                <p class="helptext">{{ form.currency.help_text }}</p>
+            {% endif %}
+        </div>
+
+        <div class="form-row">
+            <label for="id_create_snapshot">
+                {{ form.create_snapshot }}
+                Create historical snapshot
+            </label>
+            {% if form.create_snapshot.help_text %}
+                <p class="helptext">{{ form.create_snapshot.help_text }}</p>
+            {% endif %}
+        </div>
+    </fieldset>
+
+    <div class="submit-row">
+        <input type="hidden" name="action" value="update_prices">
+        <input type="hidden" name="{{ action_checkbox_name }}" value="{{ assets|length }}">
+        {% for asset in assets %}
+            <input type="hidden" name="{{ action_checkbox_name }}" value="{{ asset.pk }}">
+        {% endfor %}
+
+        <input type="submit" name="apply" value="Update Prices" class="default">
+        <a href="{% url 'admin:assets_asset_changelist' %}" class="button cancel-link">Cancel</a>
+    </div>
+</form>
+{% endblock %}

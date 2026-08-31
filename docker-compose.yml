@@ -1,0 +1,113 @@
+name: ledova
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    env_file:
+      - path: ./backend/.env
+        required: false
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  migrate:
+    build:
+      context: ./backend
+    env_file:
+      - path: ./backend/.env
+        required: false
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_URL: redis://redis:6379/0
+      STORAGE_BACKEND: local
+    command: python manage.py migrate --noinput
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  backend:
+    build:
+      context: ./backend
+    env_file:
+      - path: ./backend/.env
+        required: false
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_URL: redis://redis:6379/0
+      STORAGE_BACKEND: local
+    command: uvicorn ledova_backend.asgi:application --host 0.0.0.0 --port 8000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - media_data:/usr/src/app/media
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    build:
+      context: ./backend
+    env_file:
+      - path: ./backend/.env
+        required: false
+    environment:
+      POSTGRES_HOST: postgres
+      REDIS_URL: redis://redis:6379/0
+      STORAGE_BACKEND: local
+    command: python manage.py procrastinate worker
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - media_data:/usr/src/app/media
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: dashboard/.deployment/Dockerfile.dev
+    env_file:
+      - path: ./dashboard/.env
+        required: false
+    ports:
+      - "127.0.0.1:5174:5174"
+    depends_on:
+      - backend
+
+  marketing:
+    build:
+      context: ./marketing
+      dockerfile: .deployment/Dockerfile.dev
+    env_file:
+      - path: ./marketing/.env
+        required: false
+    ports:
+      - "127.0.0.1:5173:5173"
+
+volumes:
+  media_data:
+  postgres_data:
+  redis_data:

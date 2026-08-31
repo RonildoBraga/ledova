@@ -1,0 +1,57 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Dependencies
+node_modules
+
+# Build outputs
+dist
+dist-ssr
+*.local
+build
+out
+.output
+.nuxt
+.nitro
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Testing
+coverage
+.nyc_output
+playwright-report
+test-results
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Committed env files (public config, no secrets - baked into JS at build time):
+#   .env.production - production URLs, feature flags
+#   .env.development - local dev URLs, feature flags
+
+# TypeScript
+*.tsbuildinfo
+
+# Misc
+.cache
+.temp
+.eslintcache
+.stylelintcache

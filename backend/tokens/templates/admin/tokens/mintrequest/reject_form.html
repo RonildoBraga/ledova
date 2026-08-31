@@ -1,0 +1,106 @@
+{% extends "admin/base_custom.html" %}
+{% load i18n admin_urls static %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Home</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_label|capfirst }}</a>
+    &rsaquo; <a href="{% url 'admin:tokens_mintrequest_changelist' %}">Mint requests</a>
+    &rsaquo; <a href="{% url 'admin:tokens_mintrequest_change' mint_request.pk %}">{{ mint_request.recipient_name }}</a>
+    &rsaquo; Reject
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="admin-custom-form admin-custom-form--wide">
+    <div class="alert alert-danger">
+        <strong>Reject Mint Request</strong>
+        <p class="mt-1 mb-0">
+            You are about to reject the mint request for <strong>{{ mint_request.recipient_name }}</strong>.
+        </p>
+    </div>
+
+    <div class="admin-card">
+        <div class="admin-card-header">Request Details</div>
+        <div class="admin-card-body">
+            <table class="admin-table">
+                <tr>
+                    <td class="label-col">Stablecoin</td>
+                    <td>{{ mint_request.token.name }} ({{ mint_request.token.symbol }})</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Recipient</td>
+                    <td>{{ mint_request.recipient_name }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Address</td>
+                    <td class="monospace">{{ mint_request.recipient_address }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Amount</td>
+                    <td><strong>{{ mint_request.amount_display }}</strong></td>
+                </tr>
+                <tr>
+                    <td class="label-col">Deposit Ref</td>
+                    <td>{{ mint_request.deposit_reference }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Deposit Date</td>
+                    <td>{{ mint_request.deposit_date }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Requested By</td>
+                    <td>{{ mint_request.requested_by.email }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Status</td>
+                    <td>{{ mint_request.get_status_display }}</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    {% if mint_request.notes %}
+    <div class="admin-card">
+        <div class="admin-card-header">Notes</div>
+        <div class="admin-card-body">
+            <p class="mb-0">{{ mint_request.notes }}</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="post" class="admin-form">
+        {% csrf_token %}
+
+        <fieldset>
+            <legend>Rejection Reason</legend>
+            <div class="form-group">
+                {{ form.reason }}
+                {% if form.reason.help_text %}
+                <p class="help-text">{{ form.reason.help_text }}</p>
+                {% endif %}
+                {% if form.reason.errors %}
+                <p class="error-text">{{ form.reason.errors.0 }}</p>
+                {% endif %}
+            </div>
+        </fieldset>
+
+        <div class="alert alert-danger">
+            <strong>&#9888; Warning:</strong>
+            <p class="mt-1 mb-0">
+                Rejecting this request means:
+            </p>
+            <ul class="mb-0">
+                <li>No tokens will be minted to the recipient</li>
+                <li>The fiat deposit will need to be refunded separately</li>
+                <li>This action is recorded in the audit trail</li>
+            </ul>
+        </div>
+
+        <div class="action-row mt-0">
+            <button type="submit" class="btn btn-danger">Reject Request</button>
+            <a href="{% url 'admin:tokens_mintrequest_change' mint_request.pk %}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
