@@ -9,7 +9,7 @@ const NAV_LINKS = [
   { label: 'Contact', path: '/contact' },
 ];
 
-const DASHBOARD_URL = import.meta.env.VITE_LEDOVA_URL || 'http://localhost:5174';
+const GITHUB_URL = 'https://github.com/RonildoBraga/ledova';
 
 export function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -41,10 +41,12 @@ export function Navbar() {
 
         <div className="hidden items-center gap-3 md:flex">
           <a
-            href={`${DASHBOARD_URL}/signin`}
+            href={GITHUB_URL}
+            target="_blank"
+            rel="noreferrer"
             className="rounded-lg px-4 py-2 text-sm font-medium text-text-primary transition-colors hover:text-brand-light"
           >
-            Participant Sign In
+            GitHub
           </a>
           <Link
             to="/contact"
@@ -79,8 +81,13 @@ export function Navbar() {
               </Link>
             ))}
             <div className="mt-2 flex flex-col gap-3 border-t border-border-subtle pt-4">
-              <a href={`${DASHBOARD_URL}/signin`} className="text-center text-sm font-medium text-text-primary">
-                Participant Sign In
+              <a
+                href={GITHUB_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="text-center text-sm font-medium text-text-primary"
+              >
+                GitHub
               </a>
               <Link
                 to="/contact"
