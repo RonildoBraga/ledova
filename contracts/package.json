@@ -10,7 +10,7 @@
     "test:coverage": "hardhat coverage",
     "deploy:testnet": "hardhat run scripts/deploy-all.ts --network baseSepolia",
     "deploy:local:core": "hardhat run scripts/deploy-all.ts --network localhost",
-    "deploy:local:sample-share": "hardhat run scripts/deploy.ts",
+    "deploy:local:sample-share": "hardhat run scripts/deploy.ts --network localhost",
     "deploy:testnet:stablecoin": "hardhat run scripts/deploy-stablecoin.ts --network baseSepolia",
     "deploy:testnet:atomicswap": "hardhat run scripts/deploy-atomicswap.ts --network baseSepolia",
     "clean": "hardhat clean",

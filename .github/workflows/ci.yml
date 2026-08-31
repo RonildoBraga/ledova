@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  javascript:
+    name: Build & test (JS workspaces + contracts)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.15.1
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            contracts/package-lock.json
+            marketing/package-lock.json
+            mobile/package-lock.json
+      - name: Install dependencies
+        run: make install
+      - name: Build packages, dashboard, marketing, contracts
+        run: make build
+      - name: Type-check workspaces
+        run: |
+          npm run typecheck
+          npm --prefix marketing run type-check
+          npm --prefix mobile run type-check
+      - name: Workspace and contract tests
+        run: make test
+
+  backend:
+    name: Django checks & tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+      - name: Django system check
+        run: SECRET_KEY=ci-only STORAGE_BACKEND=local python manage.py check
+      - name: Migration consistency
+        run: SECRET_KEY=ci-only STORAGE_BACKEND=local python manage.py makemigrations --check --dry-run
+      - name: Unit tests (credential-free settings)
+        run: python manage.py test --settings=ledova_backend.settings.test

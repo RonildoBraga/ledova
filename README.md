@@ -50,6 +50,11 @@ Once the containers are ready:
 
 Stop the stack with `docker compose down`.
 
+Sign-up requires an email verification code. The local stack has no email
+provider configured; with `DEBUG=true` (the local default) the code `000000`
+is accepted so the flow can be completed offline. Outside `DEBUG`, a real
+SendGrid configuration is required and the bypass is disabled.
+
 To run the contract suite independently:
 
 ```bash

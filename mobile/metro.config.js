@@ -15,4 +15,14 @@ config.resolver.extraNodeModules = {
   util: require.resolve('util'),
 };
 
+const path = require('path');
+const workspacePackages = path.resolve(__dirname, '../packages');
+
+// Follow the file:../packages/packages/* links so a clean clone can bundle.
+config.watchFolders = [workspacePackages];
+config.resolver.nodeModulesPaths = [
+  path.resolve(__dirname, 'node_modules'),
+  path.resolve(workspacePackages, 'node_modules'),
+];
+
 module.exports = config;

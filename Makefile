@@ -43,7 +43,7 @@ build:
 	$(NPM) --prefix marketing run build
 	$(NPM) --prefix contracts run compile
 
-check:
+check: install-backend
 	$(NPM) run typecheck
 	$(NPM) --prefix marketing run type-check
 	$(NPM) --prefix mobile run type-check
@@ -69,7 +69,7 @@ contracts-test:
 	$(NPM) --prefix contracts test
 
 contracts-deploy-local:
-	$(NPM) --prefix contracts run deploy:local
+	$(NPM) --prefix contracts run deploy:local:core
 
 contracts-deploy-testnet:
 	$(NPM) --prefix contracts run deploy:testnet

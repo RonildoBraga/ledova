@@ -11,6 +11,7 @@ import logging
 import secrets
 import string
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.template.loader import render_to_string
 from django.utils import timezone
@@ -90,8 +91,10 @@ class EmailCodeService:
         Returns:
             bool: True if code is valid, False otherwise
         """
-        # Allow bypass code for development/testing
-        if code == "000000" or (user.email_verification_token and user.email_verification_token == code):
+        # The 000000 bypass only exists so the local stack works without an
+        # email provider; it must never be honoured outside DEBUG.
+        bypass_ok = settings.DEBUG and code == "000000"
+        if bypass_ok or (user.email_verification_token and user.email_verification_token == code):
             user.is_email_verified = True
             user.email_verification_token = None
             user.save(update_fields=["is_email_verified", "email_verification_token"])
