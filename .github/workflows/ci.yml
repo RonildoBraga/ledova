@@ -36,6 +36,9 @@ jobs:
   backend:
     name: Django checks & tests
     runs-on: ubuntu-latest
+    env:
+      SECRET_KEY: ci-only
+      STORAGE_BACKEND: local
     defaults:
       run:
         working-directory: backend
@@ -49,8 +52,8 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
       - name: Django system check
-        run: SECRET_KEY=ci-only STORAGE_BACKEND=local python manage.py check
+        run: python manage.py check
       - name: Migration consistency
-        run: SECRET_KEY=ci-only STORAGE_BACKEND=local python manage.py makemigrations --check --dry-run
+        run: python manage.py makemigrations --check --dry-run
       - name: Unit tests (credential-free settings)
         run: python manage.py test --settings=ledova_backend.settings.test
