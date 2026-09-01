@@ -35,7 +35,7 @@ class WhitelistEntryQuerySet(QuerySet):
         return self
 
     def visible_to_user(self, user):
-        if user.is_superuser or user.is_staff:
+        if user is not None and user.is_authenticated and user.is_staff:
             return self
         return self.none()
 

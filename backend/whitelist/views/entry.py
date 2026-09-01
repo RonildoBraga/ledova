@@ -2,13 +2,12 @@ import csv
 import logging
 
 from django.http import Http404, HttpResponse
-from rest_framework import status
+from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 
 from shared.utils.logging_utils import LoggingContext
-from shared.views import AuthenticatedModelViewSet
 from wallets.models import Wallet
 from whitelist.exceptions import (
     BatchEntriesRequiredException,
@@ -29,16 +28,17 @@ from whitelist.services import WhitelistService
 logger = logging.getLogger(__name__)
 
 
-class WhitelistEntryViewSet(AuthenticatedModelViewSet):
+class WhitelistEntryViewSet(
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
     serializer_class = WhitelistEntrySerializer
+    permission_classes = [IsAdminUser]
     filterset_class = WhitelistEntryFilter
     ordering = ["-created_at"]
     ordering_fields = ["created_at", "status"]
-
-    def get_permissions(self):
-        if self.action in ["add", "remove", "batch_add", "sync"]:
-            return [IsAdminUser()]
-        return super().get_permissions()
+    lookup_field = "uuid"
 
     def get_queryset(self):
         return WhitelistEntry.objects.visible_to_user(self.request.user)
