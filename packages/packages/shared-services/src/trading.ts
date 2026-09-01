@@ -62,6 +62,7 @@ export const getOrderCreateMessage = (apiClient: AxiosInstance, data: CreateOrde
   apiClient.post<CreateOrderMessageResponse>(TRADING_ENDPOINTS.ORDERS.CREATE_MESSAGE, {
     token: data.token,
     order_type: data.orderType.toLowerCase(),
+    wallet_uuid: data.walletUuid,
     wallet_address: data.walletAddress,
     quantity: data.quantity,
     min_quantity: data.minQuantity ?? 0,
@@ -75,6 +76,7 @@ export const createOrder = (apiClient: AxiosInstance, data: SignedCreateOrderReq
   apiClient.post<TransferOrder>(TRADING_ENDPOINTS.ORDERS.CREATE, {
     token: data.token,
     order_type: data.orderType.toLowerCase(),
+    wallet_uuid: data.walletUuid,
     wallet_address: data.walletAddress,
     quantity: data.quantity,
     min_quantity: data.minQuantity ?? 0,

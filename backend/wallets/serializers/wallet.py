@@ -1,10 +1,17 @@
 from django.conf import settings
+from django.db import transaction
 from rest_framework import serializers
 from web3 import Web3
 
 from integrations.blockchain.bitcoin import is_bitcoin_address_valid
-from shared.constants import BLOCKCHAIN_BASE, BLOCKCHAIN_BITCOIN, BLOCKCHAIN_ETHEREUM, SUPPORTED_CHAINS
+from shared.constants import (
+    BLOCKCHAIN_BASE,
+    BLOCKCHAIN_BITCOIN,
+    BLOCKCHAIN_ETHEREUM,
+    SUPPORTED_CHAINS,
+)
 from users.models import UserAccount
+from wallets.constants import WALLET_VERIFICATION_STATUS_VERIFIED
 from wallets.models import Wallet
 
 
@@ -65,7 +72,15 @@ class WalletSerializer(serializers.ModelSerializer):
 
     def get_fields(self):
         fields = super().get_fields()
-        fields["user_account"].queryset = UserAccount.objects.all()
+        # Scope the writable owner FK to the caller's own accounts. With
+        # UserAccount.objects.all() a tenant could assign a wallet into another
+        # tenant's account (mass-assignment); the scoped queryset rejects any
+        # user_account the requester does not own.
+        request = self.context.get("request")
+        if request is not None and request.user.is_authenticated:
+            fields["user_account"].queryset = UserAccount.objects.visible_to_user(request.user)
+        else:
+            fields["user_account"].queryset = UserAccount.objects.none()
         return fields
 
     def validate_address(self, value):
@@ -79,7 +94,28 @@ class WalletSerializer(serializers.ModelSerializer):
 
         return value
 
+    @staticmethod
+    def _verified_identity_change_errors(instance, data):
+        if not instance or instance.verification_status != WALLET_VERIFICATION_STATUS_VERIFIED:
+            return {}
+
+        immutable_changes = {}
+        for field in ("address", "chain", "user_account"):
+            if field not in data:
+                continue
+            current = getattr(instance, field)
+            proposed = data[field]
+            current_value = current.pk if field == "user_account" else current
+            proposed_value = proposed.pk if field == "user_account" else proposed
+            if proposed_value != current_value:
+                immutable_changes[field] = "Verified wallet identity cannot be changed."
+        return immutable_changes
+
     def validate(self, data):
+        immutable_changes = self._verified_identity_change_errors(self.instance, data)
+        if immutable_changes:
+            raise serializers.ValidationError(immutable_changes)
+
         address = data.get("address", getattr(self.instance, "address", None))
         chain = data.get("chain", getattr(self.instance, "chain", None))
         user_account = data.get("user_account", getattr(self.instance, "user_account", None))
@@ -99,3 +135,11 @@ class WalletSerializer(serializers.ModelSerializer):
                 )
 
         return data
+
+    @transaction.atomic
+    def update(self, instance, validated_data):
+        locked_wallet = Wallet.objects.select_for_update(of=("self",)).get(pk=instance.pk)
+        immutable_changes = self._verified_identity_change_errors(locked_wallet, validated_data)
+        if immutable_changes:
+            raise serializers.ValidationError(immutable_changes)
+        return super().update(locked_wallet, validated_data)

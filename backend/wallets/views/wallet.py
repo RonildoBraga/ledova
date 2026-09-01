@@ -1,5 +1,7 @@
 import logging
 
+from django.db import transaction
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import action
@@ -57,8 +59,12 @@ class WalletViewSet(AuthenticatedModelViewSet):
             logger.error(f"{LoggingContext.WALLET_SYNC} Failed to queue sync: {e}")
 
     @action(detail=True, methods=["post"], url_path="request-verification", url_name="request-verification")
+    @transaction.atomic
     def request_verification(self, request, uuid=None):
-        wallet = self.get_object()
+        wallet = get_object_or_404(
+            Wallet.objects.visible_to_user(request.user).select_for_update(of=("self",)),
+            uuid=uuid,
+        )
         challenge = generate_verification_challenge(wallet.address)
 
         wallet.verification_challenge = challenge
@@ -74,8 +80,12 @@ class WalletViewSet(AuthenticatedModelViewSet):
         )
 
     @action(detail=True, methods=["post"], url_path="verify-signature", url_name="verify-signature")
+    @transaction.atomic
     def verify_signature(self, request, uuid=None):
-        wallet = self.get_object()
+        wallet = get_object_or_404(
+            Wallet.objects.visible_to_user(request.user).select_for_update(of=("self",)),
+            uuid=uuid,
+        )
         signature = request.data.get("signature")
 
         if not signature:
