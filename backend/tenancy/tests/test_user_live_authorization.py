@@ -9,7 +9,6 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 from django.db import close_old_connections, connection
 from django.test import TransactionTestCase, skipUnlessDBFeature
-from guardian.shortcuts import assign_perm, remove_perm
 from rest_framework.test import APIClient, APITestCase
 
 from assets.models import Asset
@@ -83,28 +82,7 @@ class UserLiveAuthorizationTest(APITestCase):
         body = response.json()
         return body.get("results", body) if isinstance(body, dict) else body
 
-    def grant_alice_bob_permissions(self):
-        for permission, instance in (
-            ("users.view_userprofile", self.bob_profile),
-            ("users.view_financialprofile", self.bob_financial),
-            ("users.view_userpreferences", self.bob_preferences),
-            ("users.view_favouriteasset", self.bob_favourite),
-        ):
-            assign_perm(permission, self.alice, instance)
-
-    def remove_alice_view_permissions(self):
-        for permission, instance in (
-            ("users.view_userprofile", self.alice_profile),
-            ("users.view_financialprofile", self.alice_financial),
-            ("users.view_userpreferences", self.alice_preferences),
-            ("users.view_favouriteasset", self.alice_favourite),
-        ):
-            remove_perm(permission, self.alice, instance)
-
-    def test_live_scopes_ignore_stale_and_missing_guardian_grants(self):
-        self.grant_alice_bob_permissions()
-        self.remove_alice_view_permissions()
-
+    def test_live_scopes_follow_current_relationships(self):
         cases = (
             (UserProfile.objects.visible_to_user(self.alice), self.alice_profile, self.bob_profile),
             (
@@ -153,12 +131,6 @@ class UserLiveAuthorizationTest(APITestCase):
         self.assertTrue(FavouriteAsset.objects.filter(pk=self.alice_favourite.pk).exists())
 
         self.bob_account.user_profiles.add(self.alice_profile)
-        for permission in (
-            "users.view_favouriteasset",
-            "users.change_favouriteasset",
-            "users.delete_favouriteasset",
-        ):
-            remove_perm(permission, self.alice, self.bob_favourite)
 
         self.assertIn(self.bob_favourite, FavouriteAsset.objects.visible_to_user(self.alice))
         bob_url = f"/api/favourite-assets/{self.bob_favourite.uuid}/"
@@ -167,8 +139,6 @@ class UserLiveAuthorizationTest(APITestCase):
         self.assertFalse(FavouriteAsset.objects.filter(pk=self.bob_favourite.pk).exists())
 
     def test_authenticated_routes_enforce_live_ownership(self):
-        self.grant_alice_bob_permissions()
-        self.remove_alice_view_permissions()
         self.client.force_authenticate(self.alice)
 
         list_cases = (

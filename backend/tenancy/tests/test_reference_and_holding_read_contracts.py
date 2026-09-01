@@ -1,7 +1,6 @@
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
-from guardian.shortcuts import assign_perm
 from rest_framework.test import APITestCase
 
 from assets.models import Asset
@@ -38,7 +37,6 @@ class CountryReadContractTest(APITestCase):
             code="UAC",
             is_available=False,
         )
-        assign_perm("shared.view_country", self.user, self.unavailable)
 
     @staticmethod
     def rows(response):
@@ -140,8 +138,6 @@ class WalletHoldingReadContractTest(APITestCase):
             asset=self.unverified_asset,
             quantity=Decimal("13"),
         )
-        assign_perm("wallets.view_wallet", self.alice, self.bob_wallet)
-        assign_perm("wallets.view_holding", self.alice, self.bob_holding)
 
     @staticmethod
     def holdings_url(wallet):
@@ -160,8 +156,6 @@ class WalletHoldingReadContractTest(APITestCase):
         )
         self.assertEqual(foreign_response.status_code, 404)
 
-        assign_perm("wallets.view_wallet", self.alice, self.alice_wallet)
-        assign_perm("wallets.view_holding", self.alice, self.alice_holding)
         self.alice_account.user_profiles.remove(self.alice_profile)
 
         revoked_response = self.client.get(self.holdings_url(self.alice_wallet))

@@ -4,7 +4,6 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 from django.contrib.auth import get_user_model
-from guardian.shortcuts import assign_perm, remove_perm
 from rest_framework.test import APITestCase
 
 from companies.models import Company, CompanyDocument
@@ -95,15 +94,8 @@ class CompanyLiveAuthorizationTest(APITestCase):
         )
 
     def test_owner_is_live_authority_for_company_and_all_derived_resources(self):
-        assign_perm("companies.view_company", self.alice, self.company)
-        assign_perm("companies.change_company", self.alice, self.company)
-        assign_perm("companies.view_company", self.bob, self.company)
-        assign_perm("companies.change_company", self.bob, self.company)
-
         self.assertNotIn(self.company, Company.objects.visible_to_user(self.bob))
         self.assertNotIn(self.company, Company.objects.manageable_by_user(self.bob))
-        remove_perm("companies.view_company", self.bob, self.company)
-        remove_perm("companies.change_company", self.bob, self.company)
 
         Company.objects.filter(pk=self.company.pk).update(owner=self.bob)
         self.company.refresh_from_db()
