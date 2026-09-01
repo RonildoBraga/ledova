@@ -39,6 +39,17 @@ jobs:
     env:
       SECRET_KEY: ci-only
       STORAGE_BACKEND: local
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: ledova
+          POSTGRES_USER: ledova
+          POSTGRES_PASSWORD: ci-postgres-pw
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 20
     defaults:
       run:
         working-directory: backend
@@ -57,3 +68,11 @@ jobs:
         run: python manage.py makemigrations --check --dry-run
       - name: Unit tests (credential-free settings)
         run: python manage.py test --settings=ledova_backend.settings.test
+      - name: Row-level-security tests (PostgreSQL)
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: '5432'
+          POSTGRES_DB: ledova
+          POSTGRES_USER: ledova
+          POSTGRES_PASSWORD: ci-postgres-pw
+        run: python manage.py test tenancy --settings=ledova_backend.settings.test_postgres --noinput
