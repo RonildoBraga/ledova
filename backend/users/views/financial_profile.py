@@ -1,5 +1,7 @@
 import logging
 
+from django.db import transaction
+
 from shared.views.base import AuthenticatedModelViewSet
 from users.models.financial_profile import FinancialProfile
 from users.serializers.financial_profile import FinancialProfileSerializer
@@ -14,10 +16,17 @@ class FinancialProfileViewSet(AuthenticatedModelViewSet):
     ordering_fields = ["created_at"]
 
     def get_queryset(self):
-        return FinancialProfile.objects.visible_to_user(self.request.user)
+        queryset = FinancialProfile.objects.visible_to_user(self.request.user)
+        if getattr(self, "action", None) in {"update", "partial_update"}:
+            return queryset.select_for_update()
+        return queryset
 
     def perform_create(self, serializer):
         serializer.save(user_profile=self.request.user.userprofile)
 
     def perform_update(self, serializer):
-        serializer.save(user_profile=self.request.user.userprofile)
+        serializer.save()
+
+    @transaction.atomic
+    def update(self, request, *args, **kwargs):
+        return super().update(request, *args, **kwargs)

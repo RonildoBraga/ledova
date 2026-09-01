@@ -19,6 +19,7 @@ class UserAccountSerializer(serializers.ModelSerializer):
         )
         read_only_fields = (
             "uuid",
+            "director",
             "account_number",
             "activation_date",
         )
