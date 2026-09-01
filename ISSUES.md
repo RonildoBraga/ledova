@@ -8,9 +8,10 @@ and independent review before any public multi-user or real-value use.
    queries and mutations are self-scoped, global operator routes require
    explicit admin access, and PostgreSQL RLS activation remains deferred by
    [ADR 0002](backend/docs/adr/0002-rls-tenant-isolation.md).
-2. **Authentication, sessions, and CSRF.** Redesign browser and native token
-   transport, refresh rotation and revocation, password changes, email-code
-   limits, cookie policy, and CSRF enforcement as one coherent protocol.
+2. **Authentication, sessions, and CSRF.** Implement the explicit browser and
+   native transports, stateful sessions, refresh rotation, email challenges,
+   and lifecycle gates accepted in
+   [ADR 0003](backend/docs/adr/0003-authentication-session-protocol.md).
 3. **SSE query JWTs.** Replace event-stream authentication that places bearer
    tokens in URLs, where proxies, browser history, and logs can retain them.
 4. **Signed-intent binding and replay.** Bind every signature to one reviewed
