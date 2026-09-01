@@ -28,7 +28,14 @@ class TransferOrderQuerySet(QuerySet):
 
         from wallets.models import Wallet
 
-        user_addresses = list(Wallet.objects.filter(user=user).values_list("address", flat=True))
+        # A wallet belongs to a UserAccount, which links to auth users through
+        # user_profiles. There is no direct Wallet.user field — the previous
+        # `filter(user=user)` raised FieldError, so this scope never worked.
+        user_addresses = list(
+            Wallet.objects.filter(user_account__user_profiles__user=user)
+            .values_list("address", flat=True)
+            .distinct()
+        )
         if not user_addresses:
             return self.none()
 

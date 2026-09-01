@@ -65,7 +65,15 @@ class WalletSerializer(serializers.ModelSerializer):
 
     def get_fields(self):
         fields = super().get_fields()
-        fields["user_account"].queryset = UserAccount.objects.all()
+        # Scope the writable owner FK to the caller's own accounts. With
+        # UserAccount.objects.all() a tenant could assign a wallet into another
+        # tenant's account (mass-assignment); the scoped queryset rejects any
+        # user_account the requester does not own.
+        request = self.context.get("request")
+        if request is not None and request.user.is_authenticated:
+            fields["user_account"].queryset = UserAccount.objects.visible_to_user(request.user)
+        else:
+            fields["user_account"].queryset = UserAccount.objects.none()
         return fields
 
     def validate_address(self, value):

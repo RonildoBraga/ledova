@@ -1,6 +1,5 @@
 import logging
 
-from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
@@ -47,7 +46,9 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
     throttle_scope = "order_write"
 
     def get_queryset(self):
-        return TransferOrder.objects.with_relations()
+        # Scope to the requesting tenant. Without this, retrieve/list are IDORs:
+        # any authenticated user could read any order by UUID.
+        return TransferOrder.objects.with_relations().visible_to_user(self.request.user)
 
     def get_serializer_class(self):
         if self.action == "create_order":
@@ -90,7 +91,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
 
     @action(detail=True, methods=["post"])
     def cancel(self, request, uuid=None):
-        order = get_object_or_404(TransferOrder, uuid=uuid)
+        order = self.get_object()
 
         TradingOrderService.verify_order_cancel_signature(
             order=order,
@@ -104,7 +105,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
 
     @action(detail=True, methods=["get"], url_path="cancel/message")
     def cancel_message(self, request, uuid=None):
-        order = get_object_or_404(TransferOrder, uuid=uuid)
+        order = self.get_object()
         message_data = TradingOrderService.get_order_cancel_message(order)
         return Response(message_data, status=status.HTTP_200_OK)
 
@@ -130,7 +131,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
         if not wallet_address:
             raise ValidationError({"wallet_address": "This query parameter is required."})
 
-        transfer_order = get_object_or_404(TransferOrder, uuid=uuid)
+        transfer_order = self.get_object()
 
         atomic_swap_service = AtomicSwapService()
 
@@ -158,7 +159,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
 
     @action(detail=True, methods=["post"], url_path="swap/sign")
     def swap_sign(self, request, uuid=None):
-        transfer_order = get_object_or_404(TransferOrder, uuid=uuid)
+        transfer_order = self.get_object()
 
         atomic_swap_service = AtomicSwapService()
 
@@ -190,7 +191,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
         if not wallet_address:
             raise ValidationError({"wallet_address": "This query parameter is required."})
 
-        transfer_order = get_object_or_404(TransferOrder, uuid=uuid)
+        transfer_order = self.get_object()
 
         atomic_swap_service = AtomicSwapService()
 
@@ -228,7 +229,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
         if not wallet_address:
             raise ValidationError({"wallet_address": "This query parameter is required."})
 
-        transfer_order = get_object_or_404(TransferOrder, uuid=uuid)
+        transfer_order = self.get_object()
 
         atomic_swap_service = AtomicSwapService()
 
@@ -274,7 +275,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
 
     @action(detail=True, methods=["post"], url_path="modify/message")
     def modify_message(self, request, uuid=None):
-        order = get_object_or_404(TransferOrder, uuid=uuid)
+        order = self.get_object()
 
         serializer = OrderModificationRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -300,7 +301,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
 
     @action(detail=True, methods=["post"], url_path="modify")
     def modify(self, request, uuid=None):
-        order = get_object_or_404(TransferOrder, uuid=uuid)
+        order = self.get_object()
 
         serializer = OrderModificationExecuteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -338,7 +339,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
 
     @action(detail=True, methods=["get"], url_path="modifications")
     def modifications(self, request, uuid=None):
-        order = get_object_or_404(TransferOrder, uuid=uuid)
+        order = self.get_object()
 
         modification_service = OrderModificationService()
         result = modification_service.get_modification_history(order)
