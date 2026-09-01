@@ -2,7 +2,7 @@ import logging
 
 from rest_framework import status
 from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.response import Response
 
 from shared.utils import LoggingContext
@@ -15,7 +15,7 @@ from tokens.exceptions import (
     TokenBalanceRetrievalException,
 )
 from tokens.filters import TransferOrderFilter
-from tokens.models import TransferOrder
+from tokens.models import SwapOrder, TransferOrder
 from tokens.serializers import (
     OrderModificationExecuteSerializer,
     OrderModificationRequestSerializer,
@@ -33,6 +33,7 @@ from tokens.services import (
     TradingOrderService,
     TransferService,
 )
+from tokens.trading_wallet_access import resolve_verified_evm_wallets
 
 logger = logging.getLogger(__name__)
 
@@ -130,21 +131,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
 
     @action(detail=True, methods=["get"], url_path="swap")
     def swap(self, request, uuid=None):
-        wallet_address = request.query_params.get("wallet_address")
-        if not wallet_address:
-            raise ValidationError({"wallet_address": "This query parameter is required."})
-
-        transfer_order = self.get_object()
-
-        atomic_swap_service = AtomicSwapService()
-
-        swap_order = atomic_swap_service.find_swap_order_by_transfer_order(transfer_order)
-        if not swap_order:
-            raise SwapOrderNotFoundException("No swap order found for this transfer order.")
-
-        role_info = atomic_swap_service.determine_user_role(swap_order, wallet_address)
-        user_role = role_info["role"]
-        has_signed = role_info["has_signed"]
+        atomic_swap_service, swap_order, user_role, has_signed = self._get_authorized_swap_context(request)
 
         if swap_order.is_expired:
             raise SwapExpiredException()
@@ -190,20 +177,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
 
     @action(detail=True, methods=["get"], url_path="swap/approval-status")
     def swap_approval_status(self, request, uuid=None):
-        wallet_address = request.query_params.get("wallet_address")
-        if not wallet_address:
-            raise ValidationError({"wallet_address": "This query parameter is required."})
-
-        transfer_order = self.get_object()
-
-        atomic_swap_service = AtomicSwapService()
-
-        swap_order = atomic_swap_service.find_swap_order_by_transfer_order(transfer_order)
-        if not swap_order:
-            raise SwapOrderNotFoundException("No swap order found for this transfer order.")
-
-        role_info = atomic_swap_service.determine_user_role(swap_order, wallet_address)
-        user_role = role_info["role"]
+        atomic_swap_service, swap_order, user_role, _has_signed = self._get_authorized_swap_context(request)
 
         try:
             allowances = atomic_swap_service.check_swap_allowances(swap_order)
@@ -228,20 +202,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
 
     @action(detail=True, methods=["get"], url_path="swap/approval-data")
     def swap_approval_data(self, request, uuid=None):
-        wallet_address = request.query_params.get("wallet_address")
-        if not wallet_address:
-            raise ValidationError({"wallet_address": "This query parameter is required."})
-
-        transfer_order = self.get_object()
-
-        atomic_swap_service = AtomicSwapService()
-
-        swap_order = atomic_swap_service.find_swap_order_by_transfer_order(transfer_order)
-        if not swap_order:
-            raise SwapOrderNotFoundException("No swap order found for this transfer order.")
-
-        role_info = atomic_swap_service.determine_user_role(swap_order, wallet_address)
-        user_role = role_info["role"]
+        atomic_swap_service, swap_order, user_role, _has_signed = self._get_authorized_swap_context(request)
 
         try:
             allowances = atomic_swap_service.check_swap_allowances(swap_order)
@@ -275,6 +236,44 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
         except Exception as e:
             logger.error(f"{LoggingContext.TOKEN_TRANSFER} Failed to get approval data: {e}")
             raise TokenBalanceRetrievalException()
+
+    def _get_authorized_swap_context(self, request):
+        wallet_address = request.query_params.get("wallet_address")
+        if not wallet_address:
+            raise ValidationError({"wallet_address": "This query parameter is required."})
+
+        authorized_wallets = resolve_verified_evm_wallets(request.user, [wallet_address])
+        transfer_order = self.get_object()
+
+        if (
+            transfer_order.wallet_id not in authorized_wallets.wallet_ids
+            or transfer_order.owner_account_id is None
+            or transfer_order.wallet.user_account_id != transfer_order.owner_account_id
+            or transfer_order.wallet.address.casefold() != transfer_order.wallet_address.casefold()
+        ):
+            raise NotFound("Order not found.")
+
+        swap_order = SwapOrder.objects.for_transfer_order(transfer_order)
+        if not swap_order:
+            raise SwapOrderNotFoundException("No swap order found for this transfer order.")
+
+        if (
+            swap_order.sell_order_id == transfer_order.pk
+            and swap_order.seller_address.casefold() == transfer_order.wallet_address.casefold()
+        ):
+            user_role = "seller"
+            has_signed = swap_order.seller_has_signed
+        elif (
+            swap_order.buy_order_id == transfer_order.pk
+            and swap_order.buyer_address.casefold() == transfer_order.wallet_address.casefold()
+        ):
+            user_role = "buyer"
+            has_signed = swap_order.buyer_has_signed
+        else:
+            raise NotFound("Order not found.")
+
+        atomic_swap_service = AtomicSwapService()
+        return atomic_swap_service, swap_order, user_role, has_signed
 
     @action(detail=True, methods=["post"], url_path="modify/message")
     def modify_message(self, request, uuid=None):

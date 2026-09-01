@@ -6,7 +6,22 @@ from rest_framework import serializers
 from tokens.models import MintRequest, ShareIssuance, SwapOrder
 
 
-class SwapShareTransactionSerializer(serializers.ModelSerializer):
+class AuthorizedWalletContextMixin:
+    def _get_wallet_addresses(self) -> list[str]:
+        return [address.lower() for address in self.context.get("authorized_wallet_addresses", ())]
+
+    def _get_wallet_address(self, obj, *address_fields: str) -> str:
+        authorized_addresses = {
+            address.lower(): address for address in self.context.get("authorized_wallet_addresses", ())
+        }
+        for address_field in address_fields:
+            candidate = getattr(obj, address_field, "")
+            if candidate and candidate.lower() in authorized_addresses:
+                return authorized_addresses[candidate.lower()]
+        return ""
+
+
+class SwapShareTransactionSerializer(AuthorizedWalletContextMixin, serializers.ModelSerializer):
 
     txHash = serializers.CharField(source="tx_hash", read_only=True)
     chain = serializers.SerializerMethodField()
@@ -70,14 +85,13 @@ class SwapShareTransactionSerializer(serializers.ModelSerializer):
         return "0"
 
     def get_wallet(self, obj: SwapOrder) -> str:
-        return self._get_wallet_address()
+        return self._get_wallet_address(obj, "seller_address", "buyer_address")
 
     def get_walletAddress(self, obj: SwapOrder) -> str:
-        return self._get_wallet_address()
+        return self._get_wallet_address(obj, "seller_address", "buyer_address")
 
     def get_orderType(self, obj: SwapOrder) -> str:
-        wallet_addresses = self._get_wallet_addresses()
-        if obj.seller_address.lower() in wallet_addresses:
+        if self._get_wallet_address(obj, "seller_address"):
             return "SELL"
         return "BUY"
 
@@ -93,21 +107,8 @@ class SwapShareTransactionSerializer(serializers.ModelSerializer):
     def get_transactionType(self, obj: SwapOrder) -> str:
         return "trade"
 
-    def _get_wallet_addresses(self) -> list[str]:
-        request = self.context.get("request")
-        if request:
-            addresses = request.query_params.get("wallet_addresses", "")
-            if not addresses:
-                addresses = request.query_params.get("wallet_address", "")
-            return [a.strip().lower() for a in addresses.split(",") if a.strip()]
-        return []
 
-    def _get_wallet_address(self) -> str:
-        addresses = self._get_wallet_addresses()
-        return addresses[0] if addresses else ""
-
-
-class SwapPaymentTransactionSerializer(serializers.ModelSerializer):
+class SwapPaymentTransactionSerializer(AuthorizedWalletContextMixin, serializers.ModelSerializer):
 
     txHash = serializers.CharField(source="tx_hash", read_only=True)
     chain = serializers.SerializerMethodField()
@@ -174,14 +175,13 @@ class SwapPaymentTransactionSerializer(serializers.ModelSerializer):
         return "0"
 
     def get_wallet(self, obj: SwapOrder) -> str:
-        return self._get_wallet_address()
+        return self._get_wallet_address(obj, "buyer_address", "seller_address")
 
     def get_walletAddress(self, obj: SwapOrder) -> str:
-        return self._get_wallet_address()
+        return self._get_wallet_address(obj, "buyer_address", "seller_address")
 
     def get_orderType(self, obj: SwapOrder) -> str:
-        wallet_addresses = self._get_wallet_addresses()
-        if obj.buyer_address.lower() in wallet_addresses:
+        if self._get_wallet_address(obj, "buyer_address"):
             return "PAYMENT_SENT"
         return "PAYMENT_RECEIVED"
 
@@ -194,21 +194,8 @@ class SwapPaymentTransactionSerializer(serializers.ModelSerializer):
     def get_transactionType(self, obj: SwapOrder) -> str:
         return "swap_payment"
 
-    def _get_wallet_addresses(self) -> list[str]:
-        request = self.context.get("request")
-        if request:
-            addresses = request.query_params.get("wallet_addresses", "")
-            if not addresses:
-                addresses = request.query_params.get("wallet_address", "")
-            return [a.strip().lower() for a in addresses.split(",") if a.strip()]
-        return []
 
-    def _get_wallet_address(self) -> str:
-        addresses = self._get_wallet_addresses()
-        return addresses[0] if addresses else ""
-
-
-class MintTransactionSerializer(serializers.ModelSerializer):
+class MintTransactionSerializer(AuthorizedWalletContextMixin, serializers.ModelSerializer):
 
     txHash = serializers.CharField(source="transaction.tx_hash", read_only=True)
     chain = serializers.SerializerMethodField()
@@ -291,10 +278,10 @@ class MintTransactionSerializer(serializers.ModelSerializer):
         return "0"
 
     def get_wallet(self, obj: MintRequest) -> str:
-        return self._get_wallet_address()
+        return self._get_wallet_address(obj, "recipient_address")
 
     def get_walletAddress(self, obj: MintRequest) -> str:
-        return self._get_wallet_address()
+        return self._get_wallet_address(obj, "recipient_address")
 
     def get_orderType(self, obj: MintRequest) -> str:
         return "MINT"
@@ -310,14 +297,8 @@ class MintTransactionSerializer(serializers.ModelSerializer):
             return "stablecoin_mint"
         return "yield_token_mint"
 
-    def _get_wallet_address(self) -> str:
-        request = self.context.get("request")
-        if request:
-            return request.query_params.get("wallet_address", "")
-        return ""
 
-
-class ShareIssuanceTransactionSerializer(serializers.ModelSerializer):
+class ShareIssuanceTransactionSerializer(AuthorizedWalletContextMixin, serializers.ModelSerializer):
 
     txHash = serializers.CharField(source="tx_hash", read_only=True)
     chain = serializers.SerializerMethodField()
@@ -384,10 +365,10 @@ class ShareIssuanceTransactionSerializer(serializers.ModelSerializer):
         return "0"
 
     def get_wallet(self, obj: ShareIssuance) -> str:
-        return self._get_wallet_address()
+        return self._get_wallet_address(obj, "recipient_address")
 
     def get_walletAddress(self, obj: ShareIssuance) -> str:
-        return self._get_wallet_address()
+        return self._get_wallet_address(obj, "recipient_address")
 
     def get_orderType(self, obj: ShareIssuance) -> str:
         return "ISSUANCE"
@@ -400,9 +381,3 @@ class ShareIssuanceTransactionSerializer(serializers.ModelSerializer):
 
     def get_transactionType(self, obj: ShareIssuance) -> str:
         return "token_issuance"
-
-    def _get_wallet_address(self) -> str:
-        request = self.context.get("request")
-        if request:
-            return request.query_params.get("wallet_address", "")
-        return ""

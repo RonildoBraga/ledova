@@ -1,4 +1,4 @@
-from django.db.models import Q, QuerySet
+from django.db.models import F, Q, QuerySet
 
 
 class SwapOrderQuerySet(QuerySet):
@@ -17,6 +17,25 @@ class SwapOrderQuerySet(QuerySet):
                 q |= Q(seller_address__iexact=addr) | Q(buyer_address__iexact=addr)
             return self.filter(q)
         return self
+
+    def for_wallet_ids(self, wallet_ids):
+        """Scope swaps through exact, internally consistent order wallet FKs."""
+        if not wallet_ids:
+            return self.none()
+
+        sell_order_owned = Q(
+            sell_order__wallet_id__in=wallet_ids,
+            sell_order__owner_account_id=F("sell_order__wallet__user_account_id"),
+            sell_order__wallet_address__iexact=F("sell_order__wallet__address"),
+            seller_address__iexact=F("sell_order__wallet_address"),
+        )
+        buy_order_owned = Q(
+            buy_order__wallet_id__in=wallet_ids,
+            buy_order__owner_account_id=F("buy_order__wallet__user_account_id"),
+            buy_order__wallet_address__iexact=F("buy_order__wallet__address"),
+            buyer_address__iexact=F("buy_order__wallet_address"),
+        )
+        return self.filter(sell_order_owned | buy_order_owned)
 
     def filter_by_seller_address(self, seller_address):
         if seller_address:
@@ -81,6 +100,22 @@ class SwapOrderQuerySet(QuerySet):
                 SwapOrderStatus.BUYER_SIGNED,
             ],
         ).with_related()
+
+    def pending_for_wallet_ids(self, wallet_ids):
+        """Return pending swaps tied to the caller's exact wallet rows."""
+        from tokens.models.choices import SwapOrderStatus
+
+        return (
+            self.for_wallet_ids(wallet_ids)
+            .filter(
+                status__in=[
+                    SwapOrderStatus.CREATED,
+                    SwapOrderStatus.SELLER_SIGNED,
+                    SwapOrderStatus.BUYER_SIGNED,
+                ],
+            )
+            .with_related()
+        )
 
     def for_transfer_order(self, order):
         """

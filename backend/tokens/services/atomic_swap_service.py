@@ -505,9 +505,9 @@ class AtomicSwapService:
             publish_trading_event("swap_failed", str(swap_order.share_token.uuid), {"swap_uuid": str(swap_order.uuid)})
             raise SwapExecutionException(user_friendly_msg) from e
 
-    def get_pending_swaps_for_address(self, address: str) -> list[SwapOrder]:
-        checksum = self.chain_client.to_checksum_address(address)
-        return list(SwapOrder.objects.pending_for_address(checksum))
+    def get_pending_swaps_for_wallet_ids(self, wallet_ids):
+        """Return a lazy owner-bound queryset so the API can paginate in SQL."""
+        return SwapOrder.objects.pending_for_wallet_ids(wallet_ids)
 
     def determine_user_role(self, swap_order: SwapOrder, wallet_address: str) -> dict:
         wallet_checksum = self.chain_client.to_checksum_address(wallet_address)

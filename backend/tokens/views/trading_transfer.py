@@ -7,6 +7,7 @@ from shared.utils import LoggingContext
 from shared.views import AuthenticatedGenericViewSet
 from tokens.serializers import BroadcastTransferSerializer, PrepareTransferSerializer
 from tokens.services import TransferService
+from tokens.trading_wallet_access import resolve_verified_evm_wallets
 
 logger = logging.getLogger(__name__)
 
@@ -21,18 +22,21 @@ class TradingTransferViewSet(AuthenticatedGenericViewSet):
         serializer.is_valid(raise_exception=True)
 
         data = serializer.validated_data
+        authorized_wallets = resolve_verified_evm_wallets(request.user, [data["from_address"]])
+        from_address = authorized_wallets.addresses[0]
+
         transfer_service = TransferService()
 
         tx_data = transfer_service.prepare_transfer(
             token=data["token"],
-            from_address=data["from_address"],
+            from_address=from_address,
             to_address=data["to_address"],
             amount=data["amount"],
         )
 
         logger.info(
             f"{LoggingContext.TOKEN_TRANSFER} Prepared transfer: {data['amount']} {data['token'].symbol} "
-            f"from {data['from_address']} to {data['to_address']}"
+            f"from {from_address} to {data['to_address']}"
         )
 
         return Response(
@@ -42,7 +46,7 @@ class TradingTransferViewSet(AuthenticatedGenericViewSet):
                     "symbol": data["token"].symbol,
                     "contract_address": data["token"].contract_address,
                 },
-                "from_address": data["from_address"],
+                "from_address": from_address,
                 "to_address": data["to_address"],
                 "amount": data["amount"],
                 "transaction_data": tx_data,
