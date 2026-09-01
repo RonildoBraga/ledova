@@ -64,8 +64,8 @@ class TransactionQuerySet(QuerySet):
         return self
 
     def visible_to_user(self, user):
-        if user.is_superuser or user.is_staff:
-            return self
+        if user is None or not user.is_authenticated:
+            return self.none()
         return self.filter(wallet__user_account__user_profiles__user=user)
 
     def with_optimized_data(self):
