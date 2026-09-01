@@ -142,11 +142,15 @@ class AuthViewSet(TokenCookieMixin, ViewSet):
         serializer.is_valid(raise_exception=True)
 
         token = serializer.validated_data["token"]
-        email = serializer.validated_data.get("email")
+        email = serializer.validated_data["email"]
 
-        user = User.objects.get(email=email.lower().strip())
+        user = User.objects.filter(email=email).first()
 
-        EmailCodeService.verify(user, token)
+        if user is None or not EmailCodeService.verify(user, token):
+            return Response(
+                {"token": ["Invalid email or verification code."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         jwt_token = TokenService.get_or_create(user, request)
         response_serializer = EmailVerificationSerializer(instance=user)
