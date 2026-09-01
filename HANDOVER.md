@@ -14,20 +14,21 @@ self-scoped customer APIs, and bounded global operator access. PostgreSQL RLS
 activation remains deferred by
 [ADR 0002](backend/docs/adr/0002-rls-tenant-isolation.md).
 
-The verified evidence baseline is commit
-`207977c5165a73254faed56cedddb00ee46ec82b`: 194 credential-free Django tests,
+The authentication audit's first containment is also merged in
+[PR #39](https://github.com/RonildoBraga/ledova/pull/39): invalid verification
+details now fail before session issuance. At merge commit
+`57a109464ca3b3820a289f8b99648bded70fd555`, 199 credential-free Django tests,
 48 PostgreSQL tenancy tests, repository checks, independent review, and
-[post-merge CI](https://github.com/RonildoBraga/ledova/actions/runs/33566150166)
+[post-merge CI](https://github.com/RonildoBraga/ledova/actions/runs/33571636624)
 all passed.
 
 ## Next work
 
-The next dependency-ordered target is
-[Issue #2](https://github.com/RonildoBraga/ledova/issues/2): redesign browser
-and native authentication, sessions, refresh rotation and revocation, password
-changes, email-code limits, cookie policy, and CSRF as one coherent protocol.
-Start with a read-only architecture and call-site audit, then use small focused
-PRs with regressions and independent review.
+Continue [Issue #2](https://github.com/RonildoBraga/ledova/issues/2) by
+implementing
+[ADR 0003](backend/docs/adr/0003-authentication-session-protocol.md) in its
+dependency order. Start with named legacy characterization tests, then use
+small focused PRs with regressions and independent review.
 
 The remaining canonical backlog is [ISSUES.md](ISSUES.md).
 
