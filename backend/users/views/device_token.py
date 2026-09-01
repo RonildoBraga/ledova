@@ -1,6 +1,6 @@
 import logging
 
-from django.db import transaction
+from django.db import IntegrityError
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -34,42 +34,26 @@ class DeviceTokenViewSet(AuthenticatedModelViewSet):
         push_token = serializer.validated_data["push_token"]
         device_type = serializer.validated_data["device_type"]
 
-        with transaction.atomic():
-            existing_token = DeviceToken.objects.filter(push_token=push_token).first()
+        try:
+            device_token, created = DeviceToken.objects.update_or_create(
+                user=request.user,
+                push_token=push_token,
+                defaults={"device_type": device_type, "is_active": True},
+            )
+        except IntegrityError:
+            return Response(
+                {"detail": "Device token registration conflict."},
+                status=status.HTTP_409_CONFLICT,
+            )
 
-            if existing_token:
-                if existing_token.user == request.user:
-                    existing_token.is_active = True
-                    existing_token.device_type = device_type
-                    existing_token.save()
-                    logger.info(f"{LoggingContext.DEVICE_TOKEN} Reactivated token for user {request.user.email}")
-                else:
-                    existing_token.user = request.user
-                    existing_token.is_active = True
-                    existing_token.device_type = device_type
-                    existing_token.save()
-                    logger.info(
-                        f"{LoggingContext.DEVICE_TOKEN} Transferred token from {existing_token.user.email} "
-                        f"to {request.user.email}"
-                    )
+        if created:
+            logger.info(f"{LoggingContext.DEVICE_TOKEN} Registered new token for user {request.user.email}")
+            response_status = status.HTTP_201_CREATED
+        else:
+            logger.info(f"{LoggingContext.DEVICE_TOKEN} Reactivated token for user {request.user.email}")
+            response_status = status.HTTP_200_OK
 
-                return Response(
-                    DeviceTokenSerializer(existing_token).data,
-                    status=status.HTTP_200_OK,
-                )
-            else:
-                device_token = DeviceToken.objects.create(
-                    user=request.user,
-                    push_token=push_token,
-                    device_type=device_type,
-                    is_active=True,
-                )
-                logger.info(f"{LoggingContext.DEVICE_TOKEN} Registered new token for user {request.user.email}")
-
-                return Response(
-                    DeviceTokenSerializer(device_token).data,
-                    status=status.HTTP_201_CREATED,
-                )
+        return Response(DeviceTokenSerializer(device_token).data, status=response_status)
 
     @action(detail=False, methods=["post"], url_path="unregister")
     def unregister_token(self, request):
@@ -78,19 +62,15 @@ class DeviceTokenViewSet(AuthenticatedModelViewSet):
 
         push_token = serializer.validated_data["push_token"]
 
-        try:
-            device_token = DeviceToken.objects.get(
-                user=request.user,
-                push_token=push_token,
-            )
-            device_token.is_active = False
-            device_token.save()
+        deleted_count, _ = DeviceToken.objects.filter(
+            user=request.user,
+            push_token=push_token,
+        ).delete()
+        if deleted_count:
             logger.info(f"{LoggingContext.DEVICE_TOKEN} Unregistered token for user {request.user.email}")
-
             return Response(status=status.HTTP_204_NO_CONTENT)
 
-        except DeviceToken.DoesNotExist:
-            return Response(
-                {"detail": "Token not found or does not belong to this user."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+        return Response(
+            {"detail": "Token not found or does not belong to this user."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
