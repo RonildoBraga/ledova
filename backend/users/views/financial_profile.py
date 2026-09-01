@@ -11,6 +11,7 @@ logger = logging.getLogger("ledova_backend")
 
 class FinancialProfileViewSet(AuthenticatedModelViewSet):
     serializer_class = FinancialProfileSerializer
+    http_method_names = ["get", "post", "put", "patch", "head", "options"]
 
     ordering = ["created_at"]
     ordering_fields = ["created_at"]

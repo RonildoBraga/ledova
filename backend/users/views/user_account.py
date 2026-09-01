@@ -12,6 +12,7 @@ logger = logging.getLogger("ledova_backend")
 
 class UserAccountViewSet(AuthenticatedModelViewSet):
     serializer_class = UserAccountSerializer
+    http_method_names = ["get", "post", "put", "patch", "head", "options"]
 
     ordering = ["-activation_date"]
     ordering_fields = ["activation_date", "created_at"]
