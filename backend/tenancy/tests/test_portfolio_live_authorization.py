@@ -74,6 +74,14 @@ class PortfolioLiveAuthorizationTest(PortfolioFixtureMixin, APITestCase):
         self.assertNotIn(self.alice_snapshot, PortfolioSnapshot.objects.visible_to_user(self.alice))
 
         self.client.force_authenticate(self.alice)
+        self.assertEqual(
+            self.client.get(f"/api/portfolios/{self.alice_portfolio.uuid}/").status_code,
+            404,
+        )
+        self.assertEqual(
+            self.client.get(f"/api/asset-allocations/{self.alice_allocation.uuid}/").status_code,
+            404,
+        )
         preferences_response = self.client.get("/api/user-preferences/")
         self.assertEqual(preferences_response.status_code, 200)
         self.assertIsNone(preferences_response.json()["selectedAccount"])
@@ -243,6 +251,15 @@ class PortfolioEndpointIsolationTest(PortfolioFixtureMixin, APITestCase):
 
     def test_wallet_actions_do_not_reveal_foreign_wallet_existence(self):
         add_url = f"/api/portfolios/{self.alice_portfolio.uuid}/add-wallet/"
+        own_add = self.client.post(add_url, {"walletUuid": str(self.alice_wallet.uuid)}, format="json")
+        self.assertEqual(own_add.status_code, 200)
+        self.assertTrue(self.alice_portfolio.wallets.filter(pk=self.alice_wallet.pk).exists())
+
+        remove_url = f"/api/portfolios/{self.alice_portfolio.uuid}/remove-wallet/"
+        own_remove = self.client.post(remove_url, {"walletUuid": str(self.alice_wallet.uuid)}, format="json")
+        self.assertEqual(own_remove.status_code, 200)
+        self.assertFalse(self.alice_portfolio.wallets.filter(pk=self.alice_wallet.pk).exists())
+
         foreign_add = self.client.post(add_url, {"walletUuid": str(self.bob_wallet.uuid)}, format="json")
         missing_add = self.client.post(add_url, {"walletUuid": str(uuid4())}, format="json")
         self.assertEqual(foreign_add.status_code, 404)
@@ -250,7 +267,6 @@ class PortfolioEndpointIsolationTest(PortfolioFixtureMixin, APITestCase):
         self.assertIn("not found", foreign_add.json()["detail"].lower())
         self.assertIn("not found", missing_add.json()["detail"].lower())
 
-        remove_url = f"/api/portfolios/{self.alice_portfolio.uuid}/remove-wallet/"
         foreign_remove = self.client.post(remove_url, {"walletUuid": str(self.bob_wallet.uuid)}, format="json")
         missing_remove = self.client.post(remove_url, {"walletUuid": str(uuid4())}, format="json")
         self.assertEqual(foreign_remove.status_code, 404)

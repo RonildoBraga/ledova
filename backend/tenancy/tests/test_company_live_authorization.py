@@ -185,6 +185,14 @@ class CompanyEndpointIsolationTest(APITestCase):
             file_size=456,
             mime_type="application/pdf",
         )
+        self.alice_document = CompanyDocument.objects.create(
+            company=self.alice_company,
+            document_type="asic",
+            name="Alice ASIC extract",
+            external_url="https://owner.example.test/alice-asic",
+            file_size=321,
+            mime_type="application/pdf",
+        )
 
     @staticmethod
     def _rows(response):
@@ -220,6 +228,16 @@ class CompanyEndpointIsolationTest(APITestCase):
 
     def test_nested_company_documents_require_access_to_the_parent(self):
         self.client.force_authenticate(self.alice)
+        own_collection_url = f"/api/v1/companies/{self.alice_company.uuid}/documents/"
+        own_collection = self.client.get(own_collection_url)
+        own_detail = self.client.get(f"{own_collection_url}{self.alice_document.uuid}/")
+        self.assertEqual(own_collection.status_code, 200)
+        self.assertEqual(own_detail.status_code, 200)
+        self.assertEqual(
+            {row["uuid"] for row in self._rows(own_collection)},
+            {str(self.alice_document.uuid)},
+        )
+
         collection_url = f"/api/v1/companies/{self.bob_company.uuid}/documents/"
         detail_url = f"{collection_url}{self.bob_document.uuid}/"
 
