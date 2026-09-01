@@ -5,7 +5,6 @@ from portfolios.exceptions import (
     WalletAlreadyInPortfolioException,
     WalletNotFoundException,
     WalletNotInPortfolioException,
-    WalletOwnershipException,
 )
 from portfolios.models.portfolio import Portfolio
 from shared.utils.logging_utils import LoggingContext
@@ -21,16 +20,12 @@ class PortfolioWalletService:
             raise InactivePortfolioException(portfolio.uuid)
 
         try:
-            wallet = Wallet.objects.get(uuid=wallet_uuid)
+            wallet = Wallet.objects.get(
+                uuid=wallet_uuid,
+                user_account=portfolio.user_account,
+            )
         except Wallet.DoesNotExist:
             raise WalletNotFoundException(wallet_uuid)
-
-        if wallet.user_account != portfolio.user_account:
-            logger.warning(
-                f"{LoggingContext.PORTFOLIOS} Attempted to add wallet {wallet_uuid} "
-                f"to portfolio {portfolio.uuid} - ownership mismatch"
-            )
-            raise WalletOwnershipException()
 
         if portfolio.wallets.filter(uuid=wallet.uuid).exists():
             raise WalletAlreadyInPortfolioException()
@@ -47,12 +42,8 @@ class PortfolioWalletService:
         if not portfolio.is_active:
             raise InactivePortfolioException(portfolio.uuid)
 
-        try:
-            wallet = Wallet.objects.get(uuid=wallet_uuid)
-        except Wallet.DoesNotExist:
-            raise WalletNotFoundException(wallet_uuid)
-
-        if not portfolio.wallets.filter(uuid=wallet.uuid).exists():
+        wallet = portfolio.account_wallets().filter(uuid=wallet_uuid).first()
+        if not wallet:
             raise WalletNotInPortfolioException()
 
         portfolio.wallets.remove(wallet)

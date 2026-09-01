@@ -8,7 +8,6 @@ from django.db.models import (
     Value,
     When,
 )
-from guardian.shortcuts import get_objects_for_user
 
 
 class AssetAllocationQuerySet(QuerySet):
@@ -29,7 +28,9 @@ class AssetAllocationQuerySet(QuerySet):
     def visible_to_user(self, user):
         if user.is_superuser or user.is_staff:
             return self
-        return get_objects_for_user(user, "portfolios.view_assetallocation", klass=self)
+        if not user.is_authenticated:
+            return self.none()
+        return self.filter(portfolio__user_account__user_profiles__user=user)
 
     def with_allocation_data(self):
         return self.select_related("portfolio", "asset").filter(asset__is_active=True, percentage__gt=0)

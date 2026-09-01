@@ -106,14 +106,22 @@ class UserProfileViewSet(AuthenticatedModelViewSet):
             pass
 
         if profile:
+            accounts = UserAccount.objects.filter(user_profiles=profile)
+            live_account_ids = set(accounts.values_list("pk", flat=True))
+
             try:
                 preferences = UserPreferences.objects.get(user_profile=profile)
                 export_data["preferences"] = {
                     "selectedPortfolio": (
-                        str(preferences.selected_portfolio.uuid) if preferences.selected_portfolio else None
+                        str(preferences.selected_portfolio.uuid)
+                        if preferences.selected_portfolio
+                        and preferences.selected_portfolio.user_account_id in live_account_ids
+                        else None
                     ),
                     "selectedAccount": (
-                        str(preferences.selected_account.uuid) if preferences.selected_account else None
+                        str(preferences.selected_account.uuid)
+                        if preferences.selected_account_id in live_account_ids
+                        else None
                     ),
                 }
             except UserPreferences.DoesNotExist:
@@ -131,7 +139,6 @@ class UserProfileViewSet(AuthenticatedModelViewSet):
             except FinancialProfile.DoesNotExist:
                 pass
 
-            accounts = UserAccount.objects.filter(user_profiles=profile)
             export_data["accounts"] = [
                 {
                     "uuid": str(account.uuid),

@@ -2,7 +2,6 @@ import logging
 
 from django.db import IntegrityError
 from django.shortcuts import get_object_or_404
-from guardian.shortcuts import get_objects_for_user
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -64,13 +63,7 @@ class ShareTokenViewSet(AuthenticatedModelViewSet):
         if user.is_staff or user.is_superuser:
             return None
 
-        companies = get_objects_for_user(
-            user,
-            "companies.change_company",
-            klass=Company,
-            accept_global_perms=False,
-        )
-        return companies.first()
+        return Company.objects.manageable_by_user(user).first()
 
     def create(self, request, *args, **kwargs):
         from rest_framework.exceptions import PermissionDenied, ValidationError

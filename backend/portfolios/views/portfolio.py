@@ -95,13 +95,13 @@ class PortfolioViewSet(AuthenticatedModelViewSet):
 
     @action(detail=True, methods=["get"], url_path="snapshots")
     def snapshots(self, request, *args, **kwargs):
-        portfolio_uuid = kwargs.get("uuid")
-        portfolio = Portfolio.objects.get(uuid=portfolio_uuid)
+        portfolio = self.get_object()
 
         params = request.query_params
         snapshots = (
             PortfolioSnapshot.objects.visible_to_user(request.user)
             .filter_by_portfolio(portfolio)
+            .with_optimized_data()
             .filter_by_date_range(
                 start_date=params.get("start_date"),
                 end_date=params.get("end_date"),

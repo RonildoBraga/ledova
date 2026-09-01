@@ -35,6 +35,14 @@ logger = logging.getLogger(__name__)
 
 
 class CompanyViewSet(AuthenticatedModelViewSet):
+    manageable_actions = {
+        "destroy",
+        "partial_update",
+        "resubmit",
+        "submit",
+        "update",
+        "withdraw",
+    }
     filterset_class = CompanyFilter
     ordering = ["-created_at"]
     ordering_fields = ["created_at", "name", "status"]
@@ -42,7 +50,7 @@ class CompanyViewSet(AuthenticatedModelViewSet):
     def get_serializer_class(self):
         if self.action == "create":
             return CompanyRegistrationSerializer
-        if self.action == "list":
+        if self.action == "list" or (self.action in ("retrieve", "by_acn") and not self.request.user.is_authenticated):
             return CompanyListSerializer
         if self.action in ["update", "partial_update"]:
             return CompanyUpdateSerializer
@@ -68,7 +76,7 @@ class CompanyViewSet(AuthenticatedModelViewSet):
     def get_queryset(self):
         user = self.request.user
 
-        if self.action in ["update", "partial_update"]:
+        if self.action in self.manageable_actions:
             if user.is_authenticated:
                 return Company.objects.manageable_by_user(user)
             return Company.objects.none()
@@ -118,7 +126,7 @@ class CompanyViewSet(AuthenticatedModelViewSet):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        serializer = CompanyDetailSerializer(company)
+        serializer = self.get_serializer(company)
         return Response(serializer.data)
 
     @action(detail=True, methods=["get"])
