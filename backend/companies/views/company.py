@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 
 
 class CompanyViewSet(AuthenticatedModelViewSet):
+    administrative_actions = {"api_key", "status_update"}
     manageable_actions = {
         "destroy",
         "partial_update",
@@ -76,6 +77,11 @@ class CompanyViewSet(AuthenticatedModelViewSet):
     def get_queryset(self):
         user = self.request.user
 
+        if self.action in self.administrative_actions:
+            if user.is_authenticated and user.is_staff:
+                return Company.objects.all()
+            return Company.objects.none()
+
         if self.action in self.manageable_actions:
             if user.is_authenticated:
                 return Company.objects.manageable_by_user(user)
@@ -112,9 +118,7 @@ class CompanyViewSet(AuthenticatedModelViewSet):
         user = request.user
 
         if user.is_authenticated:
-            queryset = Company.objects.visible_to_user(user)
-            if not user.is_staff:
-                queryset = queryset.active()
+            queryset = Company.objects.visible_to_user(user).active()
         else:
             queryset = Company.objects.active()
 

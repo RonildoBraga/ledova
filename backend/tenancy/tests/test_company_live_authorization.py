@@ -4,6 +4,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AnonymousUser
 from rest_framework.test import APITestCase
 
 from companies.models import Company, CompanyDocument
@@ -140,13 +141,61 @@ class CompanyLiveAuthorizationTest(APITestCase):
         view.request = SimpleNamespace(user=self.bob)
         self.assertEqual(view.get_user_company(), self.company)
 
-    def test_staff_and_superuser_keep_global_visibility(self):
-        for privileged_user in (self.staff, self.superuser):
+    def test_staff_and_superuser_customer_routes_follow_company_ownership(self):
+        for user in (None, AnonymousUser()):
+            with self.subTest(user=user):
+                self.assertFalse(Company.objects.visible_to_user(user).exists())
+                self.assertFalse(Company.objects.manageable_by_user(user).exists())
+                self.assertFalse(CompanyDocument.objects.visible_to_user(user).exists())
+                self.assertFalse(CompanyDocument.objects.manageable_by_user(user).exists())
+
+        for index, privileged_user in enumerate((self.staff, self.superuser), start=4):
+            company = Company.objects.create(
+                owner=privileged_user,
+                name=f"Privileged Company {index}",
+                company_type="pty",
+                acn=str(index) * 9,
+                status="active",
+            )
+            document = CompanyDocument.objects.create(
+                company=company,
+                document_type="asic",
+                name=f"Privileged ASIC {index}",
+                external_url=f"https://private.example.test/privileged-{index}",
+                file_size=123,
+                mime_type="application/pdf",
+            )
+
             with self.subTest(user=privileged_user.email):
-                self.assertIn(self.company, Company.objects.visible_to_user(privileged_user))
-                self.assertIn(self.company, Company.objects.manageable_by_user(privileged_user))
-                self.assertIn(self.document, CompanyDocument.objects.visible_to_user(privileged_user))
-                self.assertIn(self.token, ShareToken.objects.visible_to_user(privileged_user))
+                self.assertEqual(set(Company.objects.visible_to_user(privileged_user)), {company})
+                self.assertEqual(set(Company.objects.manageable_by_user(privileged_user)), {company})
+                self.assertEqual(set(CompanyDocument.objects.visible_to_user(privileged_user)), {document})
+                self.assertEqual(set(CompanyDocument.objects.manageable_by_user(privileged_user)), {document})
+
+                self.client.force_authenticate(privileged_user)
+                list_response = self.client.get("/api/v1/companies/")
+                own_response = self.client.get(f"/api/v1/companies/{company.uuid}/")
+                foreign_response = self.client.get(f"/api/v1/companies/{self.company.uuid}/")
+                foreign_update = self.client.patch(
+                    f"/api/v1/companies/{self.company.uuid}/",
+                    {"name": "Stolen"},
+                    format="json",
+                )
+                own_documents = self.client.get(f"/api/v1/companies/{company.uuid}/documents/")
+                foreign_documents = self.client.get(f"/api/v1/companies/{self.company.uuid}/documents/")
+
+                rows = list_response.json().get("results", list_response.json())
+                self.assertEqual({row["uuid"] for row in rows}, {str(company.uuid)})
+                self.assertEqual(own_response.status_code, 200)
+                self.assertEqual(foreign_response.status_code, 404)
+                self.assertEqual(foreign_update.status_code, 404)
+                self.assertEqual(own_documents.status_code, 200)
+                document_rows = own_documents.json().get("results", own_documents.json())
+                self.assertEqual({row["uuid"] for row in document_rows}, {str(document.uuid)})
+                self.assertEqual(foreign_documents.status_code, 404)
+
+        self.company.refresh_from_db()
+        self.assertEqual(self.company.name, "Alice Holdings Pty Ltd")
 
 
 class CompanyEndpointIsolationTest(APITestCase):
@@ -246,6 +295,20 @@ class CompanyEndpointIsolationTest(APITestCase):
         self.assertTrue(CompanyDocument.objects.filter(pk=self.bob_document.pk).exists())
 
     def test_anonymous_company_detail_and_acn_lookup_are_public_safe(self):
+        inactive_company = Company.objects.create(
+            owner=self.bob,
+            name="Bob Inactive Company",
+            company_type="pty",
+            acn="999999999",
+            status="draft",
+        )
+
+        list_response = self.client.get("/api/v1/companies/")
+        self.assertEqual(list_response.status_code, 200)
+        returned = {row["uuid"] for row in self._rows(list_response)}
+        self.assertIn(str(self.bob_company.uuid), returned)
+        self.assertNotIn(str(inactive_company.uuid), returned)
+
         for url in (
             f"/api/v1/companies/{self.bob_company.uuid}/",
             f"/api/v1/companies/acn/{self.bob_company.acn}/",
@@ -265,3 +328,44 @@ class CompanyEndpointIsolationTest(APITestCase):
                 ):
                     self.assertNotIn(private_field, body)
                 self.assertNotIn(self.bob_document.external_url, str(body))
+
+        for url in (
+            f"/api/v1/companies/{inactive_company.uuid}/",
+            f"/api/v1/companies/acn/{inactive_company.acn}/",
+        ):
+            with self.subTest(url=url):
+                self.assertEqual(self.client.get(url).status_code, 404)
+
+    def test_explicit_admin_actions_keep_global_scope(self):
+        staff = User.objects.create_user(
+            email="company-admin@example.test",
+            password="pw-12345678",
+            is_staff=True,
+        )
+        self.client.force_authenticate(staff)
+
+        api_key_response = self.client.get(f"/api/v1/companies/{self.bob_company.uuid}/api-key/")
+        regenerate_response = self.client.post(f"/api/v1/companies/{self.bob_company.uuid}/api-key/")
+        status_response = self.client.post(
+            f"/api/v1/companies/{self.bob_company.uuid}/status/",
+            {"status": "warning", "reason": "Administrative review"},
+            format="json",
+        )
+
+        self.assertEqual(api_key_response.status_code, 200)
+        self.assertEqual(regenerate_response.status_code, 200)
+        self.assertEqual(status_response.status_code, 200)
+        self.bob_company.refresh_from_db()
+        self.assertEqual(self.bob_company.status, "warning")
+
+        self.client.force_authenticate(self.alice)
+        self.assertEqual(
+            self.client.get(f"/api/v1/companies/{self.bob_company.uuid}/api-key/").status_code,
+            403,
+        )
+
+        self.client.force_authenticate(None)
+        self.assertEqual(
+            self.client.get(f"/api/v1/companies/{self.bob_company.uuid}/api-key/").status_code,
+            401,
+        )
