@@ -9,6 +9,7 @@ from rest_framework.response import Response
 
 from shared.utils.logging_utils import LoggingContext
 from shared.views import AuthenticatedModelViewSet
+from wallets.models import Wallet
 from whitelist.exceptions import (
     BatchEntriesRequiredException,
     BatchSizeLimitExceededException,
@@ -35,7 +36,7 @@ class WhitelistEntryViewSet(AuthenticatedModelViewSet):
     ordering_fields = ["created_at", "status"]
 
     def get_permissions(self):
-        if self.action in ["add", "remove", "batch_add"]:
+        if self.action in ["add", "remove", "batch_add", "sync"]:
             return [IsAdminUser()]
         return super().get_permissions()
 
@@ -46,12 +47,13 @@ class WhitelistEntryViewSet(AuthenticatedModelViewSet):
     def by_address(self, request, address=None):
         address = address.lower()
 
-        try:
-            entry = WhitelistEntry.objects.get(wallet__address__iexact=address)
-        except WhitelistEntry.DoesNotExist:
+        entries = list(
+            self.get_queryset().filter(wallet__address__iexact=address).select_related("wallet").order_by("uuid")[:2]
+        )
+        if len(entries) != 1:
             raise Http404(f"No whitelist entry found for {address}")
 
-        serializer = self.get_serializer(entry)
+        serializer = self.get_serializer(entries[0])
         return Response(serializer.data)
 
     @action(detail=False, methods=["post"])
@@ -110,9 +112,13 @@ class WhitelistEntryViewSet(AuthenticatedModelViewSet):
 
     @action(detail=False, methods=["post"], url_path="sync/(?P<address>[^/.]+)")
     def sync(self, request, address=None):
+        wallet_ids = list(Wallet.objects.filter_by_address(address).order_by("uuid").values_list("uuid", flat=True)[:2])
+        if len(wallet_ids) != 1:
+            raise Http404(f"No unique wallet found for {address}")
+
         service = WhitelistService()
 
-        entry = service.sync_entry(address)
+        entry = service.sync_entry(address, wallet_uuid=wallet_ids[0])
 
         logger.info(f"{LoggingContext.WHITELIST} Synced {address} with on-chain data")
 

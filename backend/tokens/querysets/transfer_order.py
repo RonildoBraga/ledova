@@ -20,11 +20,12 @@ class TransferOrderQuerySet(QuerySet):
         return self
 
     def ownership_bound(self):
-        """Return orders whose immutable tenant snapshot matches their wallet."""
+        """Return orders whose immutable tenant and address snapshots match."""
         return self.filter(
             wallet__isnull=False,
             owner_account__isnull=False,
             wallet__user_account_id=models.F("owner_account_id"),
+            wallet__address__iexact=models.F("wallet_address"),
         )
 
     def visible_to_user(self, user):

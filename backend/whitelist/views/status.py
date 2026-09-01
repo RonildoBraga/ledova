@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class WhitelistStatusView(APIView):
+    """Return bounded eligibility for a sender-owned wallet or transfer recipient."""
 
     permission_classes = [IsAuthenticated]
 
@@ -27,7 +28,7 @@ class WhitelistStatusView(APIView):
                 "can_receive": can_receive,
             }
         except Exception as e:
-            logger.warning(f"Failed to fetch whitelist status for {address}: {e}")
+            logger.warning(f"Failed to fetch whitelist status: {e}")
             data = {
                 "address": address,
                 "is_whitelisted": False,

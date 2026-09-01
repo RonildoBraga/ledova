@@ -5,6 +5,7 @@ from rest_framework.response import Response
 
 from shared.views import AuthenticatedGenericViewSet
 from tokens.services import ShareTokenService
+from tokens.trading_wallet_access import resolve_verified_evm_wallets
 
 
 class TradingWalletViewSet(AuthenticatedGenericViewSet):
@@ -16,7 +17,9 @@ class TradingWalletViewSet(AuthenticatedGenericViewSet):
         if not wallet_address:
             raise ValidationError({"wallet_address": "This query parameter is required."})
 
+        authorized_wallets = resolve_verified_evm_wallets(request.user, [wallet_address])
+
         token_service = ShareTokenService()
-        result = token_service.get_wallet_token_balances(wallet_address)
+        result = token_service.get_wallet_token_balances(authorized_wallets.addresses[0])
 
         return Response(result, status=status.HTTP_200_OK)

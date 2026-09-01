@@ -7,6 +7,7 @@ wallet into another tenant's account.
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from guardian.shortcuts import assign_perm
 from rest_framework import serializers
 from rest_framework.test import APIRequestFactory
 
@@ -98,3 +99,82 @@ class WalletOwnerScopingTest(TestCase):
 
         with self.assertRaises(serializers.ValidationError):
             serializer.save()
+
+
+class LiveMembershipScopingTest(TestCase):
+    def setUp(self):
+        self.alice = User.objects.create_user(email="alice-membership@ex.com", password="pw-12345678")
+        self.profile = UserProfile.objects.create(user=self.alice)
+        self.account = UserAccount.objects.create()
+        self.account.user_profiles.add(self.profile)
+        self.wallet = Wallet.objects.create(
+            user_account=self.account,
+            address="0x" + "a" * 40,
+            chain="ethereum",
+        )
+
+    def _serializer_for(self, user):
+        request = APIRequestFactory().post("/api/wallets/")
+        request.user = user
+        return WalletSerializer(context={"request": request})
+
+    def test_membership_removal_revokes_account_and_wallet_visibility_despite_stale_grants(self):
+        assign_perm("users.view_useraccount", self.alice, self.account)
+        assign_perm("wallets.view_wallet", self.alice, self.wallet)
+
+        self.account.user_profiles.remove(self.profile)
+
+        self.assertNotIn(
+            self.account.uuid,
+            UserAccount.objects.visible_to_user(self.alice).values_list("uuid", flat=True),
+        )
+        self.assertNotIn(
+            self.wallet.uuid,
+            Wallet.objects.visible_to_user(self.alice).values_list("uuid", flat=True),
+        )
+
+    def test_membership_addition_reveals_preexisting_account_wallet(self):
+        preexisting_account = UserAccount.objects.create()
+        preexisting_wallet = Wallet.objects.create(
+            user_account=preexisting_account,
+            address="0x" + "b" * 40,
+            chain="ethereum",
+        )
+
+        preexisting_account.user_profiles.add(self.profile)
+
+        self.assertIn(
+            preexisting_account.uuid,
+            UserAccount.objects.visible_to_user(self.alice).values_list("uuid", flat=True),
+        )
+        self.assertIn(
+            preexisting_wallet.uuid,
+            Wallet.objects.visible_to_user(self.alice).values_list("uuid", flat=True),
+        )
+
+    def test_wallet_serializer_owner_field_excludes_account_after_membership_removal(self):
+        assign_perm("users.view_useraccount", self.alice, self.account)
+        self.account.user_profiles.remove(self.profile)
+
+        queryset = self._serializer_for(self.alice).fields["user_account"].queryset
+
+        self.assertNotIn(self.account.uuid, queryset.values_list("uuid", flat=True))
+
+    def test_staff_and_superuser_keep_global_visibility(self):
+        staff = User.objects.create_user(email="staff-membership@ex.com", password="pw-12345678", is_staff=True)
+        superuser = User.objects.create_user(
+            email="superuser-membership@ex.com",
+            password="pw-12345678",
+            is_superuser=True,
+        )
+
+        for privileged_user in (staff, superuser):
+            with self.subTest(user=privileged_user.email):
+                self.assertIn(
+                    self.account.uuid,
+                    UserAccount.objects.visible_to_user(privileged_user).values_list("uuid", flat=True),
+                )
+                self.assertIn(
+                    self.wallet.uuid,
+                    Wallet.objects.visible_to_user(privileged_user).values_list("uuid", flat=True),
+                )
