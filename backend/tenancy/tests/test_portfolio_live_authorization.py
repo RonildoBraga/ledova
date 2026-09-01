@@ -1,14 +1,18 @@
 """Application-level portfolio isolation through live account membership."""
 
-from datetime import date
+from datetime import date, datetime
+from decimal import Decimal
+from unittest.mock import patch
 from uuid import uuid4
 
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from guardian.shortcuts import assign_perm, remove_perm
 from rest_framework.test import APITestCase
 
 from assets.models import Asset
 from portfolios.models import AssetAllocation, Portfolio, PortfolioSnapshot
+from portfolios.services import PortfolioSyncService
 from users.models import UserAccount, UserPreferences, UserProfile
 from wallets.models import Wallet
 
@@ -281,3 +285,117 @@ class PortfolioEndpointIsolationTest(PortfolioFixtureMixin, APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["walletUuids"], [str(self.alice_wallet.uuid)])
         self.assertEqual(response.json()["walletCount"], 1)
+
+        remove_response = self.client.post(
+            f"/api/portfolios/{self.alice_portfolio.uuid}/remove-wallet/",
+            {"walletUuid": str(self.bob_wallet.uuid)},
+            format="json",
+        )
+        self.assertEqual(remove_response.status_code, 404)
+        self.assertTrue(self.alice_portfolio.wallets.filter(pk=self.bob_wallet.pk).exists())
+
+    def test_legacy_foreign_wallet_snapshot_is_quarantined_from_output(self):
+        self.alice_portfolio.wallets.add(self.alice_wallet, self.bob_wallet)
+        self.alice_snapshot.holdings_data = {
+            "SCOPE": {
+                "asset_uuid": str(self.asset.uuid),
+                "quantity": "17",
+                "wallets": [str(self.bob_wallet.uuid)],
+                "market_value": "1700",
+            }
+        }
+        self.alice_snapshot.total_market_value = Decimal("1700")
+        self.alice_snapshot.save(update_fields=["holdings_data", "total_market_value", "updated_at"])
+
+        safe_snapshot = PortfolioSnapshot.objects.create(
+            portfolio=self.alice_portfolio,
+            snapshot_date=date(2026, 8, 31),
+            snapshot_reason="DAILY",
+            holdings_data={
+                "SCOPE": {
+                    "asset_uuid": str(self.asset.uuid),
+                    "quantity": "2",
+                    "wallets": [str(self.alice_wallet.uuid)],
+                    "market_value": "200",
+                }
+            },
+            total_market_value=Decimal("200"),
+        )
+        # Historical same-account holdings remain safe after a portfolio unlink.
+        self.alice_portfolio.wallets.remove(self.alice_wallet)
+
+        response = self.client.get(f"/api/portfolios/{self.alice_portfolio.uuid}/snapshots/")
+
+        self.assertEqual(response.status_code, 200)
+        rows = {row["uuid"]: row for row in self.rows(response)}
+        contaminated_row = rows[str(self.alice_snapshot.uuid)]
+        self.assertEqual(contaminated_row["holdingsData"], {})
+        self.assertIsNone(contaminated_row["totalMarketValue"])
+        self.assertFalse(contaminated_row["hasValueData"])
+        self.assertNotIn(str(self.bob_wallet.uuid), response.content.decode())
+
+        safe_row = rows[str(safe_snapshot.uuid)]
+        self.assertEqual(safe_row["holdingsData"]["SCOPE"]["quantity"], "2")
+        self.assertEqual(safe_row["holdingsData"]["SCOPE"]["wallets"], [str(self.alice_wallet.uuid)])
+        self.assertEqual(safe_row["totalMarketValue"], "200.000000000000000000")
+        self.assertTrue(safe_row["hasValueData"])
+
+    def test_sync_replaces_untrusted_valued_snapshot_even_when_rebuild_is_empty(self):
+        self.alice_portfolio.wallets.add(self.alice_wallet, self.bob_wallet)
+        self.alice_snapshot.holdings_data = {
+            "SCOPE": {
+                "quantity": "17",
+                "wallets": [str(self.bob_wallet.uuid)],
+            }
+        }
+        self.alice_snapshot.total_market_value = Decimal("1700")
+        self.alice_snapshot.save(update_fields=["holdings_data", "total_market_value", "updated_at"])
+
+        snapshot_at = timezone.make_aware(datetime(2026, 9, 1, 12, 0, 0))
+        with patch.object(PortfolioSyncService, "_aggregate_holdings", return_value=({}, Decimal("0"))) as aggregate:
+            changed = PortfolioSyncService._create_snapshot_for_date(
+                self.alice_portfolio,
+                self.alice_portfolio.account_wallets(),
+                snapshot_at,
+            )
+
+        self.assertTrue(changed)
+        aggregate.assert_called_once()
+        self.alice_snapshot.refresh_from_db()
+        self.assertEqual(self.alice_snapshot.holdings_data, {})
+        self.assertIsNone(self.alice_snapshot.total_market_value)
+
+    def test_daily_sync_preserves_manual_snapshot_on_same_date(self):
+        self.alice_portfolio.wallets.add(self.alice_wallet)
+        manual_snapshot = PortfolioSnapshot.objects.create(
+            portfolio=self.alice_portfolio,
+            snapshot_date=date(2026, 9, 2),
+            snapshot_reason="MANUAL",
+            holdings_data={
+                "SCOPE": {
+                    "quantity": "17",
+                    "wallets": [str(self.bob_wallet.uuid)],
+                }
+            },
+            total_market_value=Decimal("1700"),
+        )
+
+        snapshot_at = timezone.make_aware(datetime(2026, 9, 2, 12, 0, 0))
+        with patch.object(PortfolioSyncService, "_aggregate_holdings", return_value=({}, Decimal("0"))):
+            changed = PortfolioSyncService._create_snapshot_for_date(
+                self.alice_portfolio,
+                self.alice_portfolio.account_wallets(),
+                snapshot_at,
+            )
+
+        self.assertTrue(changed)
+        manual_snapshot.refresh_from_db()
+        self.assertEqual(manual_snapshot.total_market_value, Decimal("1700"))
+        self.assertEqual(manual_snapshot.holdings_data["SCOPE"]["wallets"], [str(self.bob_wallet.uuid)])
+        daily_snapshot = PortfolioSnapshot.objects.get(
+            portfolio=self.alice_portfolio,
+            snapshot_date=date(2026, 9, 2),
+            snapshot_reason="DAILY",
+        )
+        self.assertEqual(daily_snapshot.holdings_data, {})
+        self.assertIsNone(daily_snapshot.total_market_value)

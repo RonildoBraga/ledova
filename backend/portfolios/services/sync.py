@@ -121,16 +121,23 @@ class PortfolioSyncService:
     def _create_snapshot_for_date(portfolio: Portfolio, wallets, snapshot_date: datetime) -> bool:
         snapshot_date_only = snapshot_date.date()
 
-        existing = PortfolioSnapshot.objects.filter_by_portfolio(portfolio).for_date(snapshot_date_only).first()
-        if existing and existing.total_market_value is not None:
+        existing = (
+            PortfolioSnapshot.objects.filter_by_portfolio(portfolio)
+            .daily_snapshots()
+            .for_date(snapshot_date_only)
+            .first()
+        )
+        allowed_wallet_ids = set(portfolio.user_account.wallets.values_list("uuid", flat=True))
+        existing_is_account_scoped = existing and existing.has_account_scoped_holdings(allowed_wallet_ids)
+        if existing and existing.total_market_value is not None and existing_is_account_scoped:
             return False
 
         holdings_data, total_value = PortfolioSyncService._aggregate_holdings(wallets, snapshot_date)
 
         if existing:
-            if total_value > 0:
+            if total_value > 0 or not existing_is_account_scoped:
                 existing.holdings_data = holdings_data
-                existing.total_market_value = total_value
+                existing.total_market_value = total_value if total_value > 0 else None
                 existing.save(update_fields=["holdings_data", "total_market_value", "updated_at"])
                 return True
             return False

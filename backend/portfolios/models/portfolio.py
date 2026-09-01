@@ -1,4 +1,5 @@
 from decimal import Decimal
+from uuid import UUID
 
 from django.db import models
 
@@ -87,6 +88,36 @@ class PortfolioSnapshot(BaseModel):
     @property
     def has_value_data(self) -> bool:
         return self.total_market_value is not None
+
+    def has_account_scoped_holdings(self, allowed_wallet_ids=None) -> bool:
+        """Return whether embedded wallet provenance stays within the portfolio account."""
+        if not isinstance(self.holdings_data, dict):
+            return False
+
+        if not self.holdings_data:
+            return self.total_market_value is None or self.total_market_value == Decimal("0")
+
+        if allowed_wallet_ids is None:
+            allowed_wallet_ids = self.portfolio.user_account.wallets.values_list("uuid", flat=True)
+        allowed_wallet_ids = {str(wallet_id) for wallet_id in allowed_wallet_ids}
+
+        for holding_data in self.holdings_data.values():
+            if not isinstance(holding_data, dict):
+                return False
+
+            wallet_ids = holding_data.get("wallets")
+            if not isinstance(wallet_ids, list) or not wallet_ids:
+                return False
+
+            try:
+                normalized_wallet_ids = {str(UUID(str(wallet_id))) for wallet_id in wallet_ids}
+            except (AttributeError, TypeError, ValueError):
+                return False
+
+            if not normalized_wallet_ids.issubset(allowed_wallet_ids):
+                return False
+
+        return True
 
     def calculate_total_value(self):
         total = Decimal("0")

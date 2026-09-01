@@ -101,6 +101,7 @@ class PortfolioViewSet(AuthenticatedModelViewSet):
         snapshots = (
             PortfolioSnapshot.objects.visible_to_user(request.user)
             .filter_by_portfolio(portfolio)
+            .with_optimized_data()
             .filter_by_date_range(
                 start_date=params.get("start_date"),
                 end_date=params.get("end_date"),

@@ -113,6 +113,28 @@ class PortfolioSnapshotSerializer(serializers.ModelSerializer):
     account_id = serializers.CharField(source="portfolio.user_account.uuid", read_only=True)
     has_value_data = serializers.BooleanField(read_only=True)
 
+    def _has_account_scoped_holdings(self, obj):
+        portfolio_id = obj.portfolio_id
+        if not hasattr(self, "_allowed_wallet_ids_by_portfolio"):
+            self._allowed_wallet_ids_by_portfolio = {}
+
+        if portfolio_id not in self._allowed_wallet_ids_by_portfolio:
+            self._allowed_wallet_ids_by_portfolio[portfolio_id] = set(
+                obj.portfolio.user_account.wallets.values_list("uuid", flat=True)
+            )
+
+        return obj.has_account_scoped_holdings(self._allowed_wallet_ids_by_portfolio[portfolio_id])
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        if not self._has_account_scoped_holdings(instance):
+            # Legacy snapshots may predate account-scoped collection. Keep their
+            # metadata visible, but quarantine all embedded holdings and values.
+            representation["holdings_data"] = {}
+            representation["total_market_value"] = None
+            representation["has_value_data"] = False
+        return representation
+
     class Meta:
         model = PortfolioSnapshot
         fields = (

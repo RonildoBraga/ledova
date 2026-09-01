@@ -42,7 +42,7 @@ class PortfolioWalletService:
         if not portfolio.is_active:
             raise InactivePortfolioException(portfolio.uuid)
 
-        wallet = portfolio.wallets.filter(uuid=wallet_uuid).first()
+        wallet = portfolio.account_wallets().filter(uuid=wallet_uuid).first()
         if not wallet:
             raise WalletNotInPortfolioException()
 
