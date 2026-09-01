@@ -377,7 +377,7 @@ class AtomicSwapService:
 
         from tokens.events import publish_trading_event
 
-        publish_trading_event("swap_signed", str(swap_order.share_token.uuid), {"swap_uuid": str(swap_order.uuid)})
+        publish_trading_event("swap_signed", str(swap_order.share_token.uuid))
 
         if swap_order.is_ready:
             logger.info(f"{LoggingContext.TOKEN_TRANSFER} Both signatures present, executing swap")
@@ -464,9 +464,7 @@ class AtomicSwapService:
 
                 from tokens.events import publish_trading_event
 
-                publish_trading_event(
-                    "swap_completed", str(swap_order.share_token.uuid), {"swap_uuid": str(swap_order.uuid)}
-                )
+                publish_trading_event("swap_completed", str(swap_order.share_token.uuid))
             else:
                 tx_record.mark_reverted("Transaction reverted")
                 swap_order.mark_failed("Transaction reverted")
@@ -474,9 +472,7 @@ class AtomicSwapService:
 
                 from tokens.events import publish_trading_event
 
-                publish_trading_event(
-                    "swap_failed", str(swap_order.share_token.uuid), {"swap_uuid": str(swap_order.uuid)}
-                )
+                publish_trading_event("swap_failed", str(swap_order.share_token.uuid))
 
             return tx_hash
 
@@ -489,7 +485,7 @@ class AtomicSwapService:
 
             from tokens.events import publish_trading_event
 
-            publish_trading_event("swap_failed", str(swap_order.share_token.uuid), {"swap_uuid": str(swap_order.uuid)})
+            publish_trading_event("swap_failed", str(swap_order.share_token.uuid))
             raise SwapExecutionException(user_friendly_msg) from e
         except InsufficientBalanceException:
             raise
@@ -502,7 +498,7 @@ class AtomicSwapService:
 
             from tokens.events import publish_trading_event
 
-            publish_trading_event("swap_failed", str(swap_order.share_token.uuid), {"swap_uuid": str(swap_order.uuid)})
+            publish_trading_event("swap_failed", str(swap_order.share_token.uuid))
             raise SwapExecutionException(user_friendly_msg) from e
 
     def get_pending_swaps_for_wallet_ids(self, wallet_ids):

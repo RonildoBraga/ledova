@@ -7,6 +7,17 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 TRADING_EVENTS_CHANNEL = "trading:events"
+TRADING_EVENT_TYPES = frozenset(
+    {
+        "order_created",
+        "order_cancelled",
+        "order_modified",
+        "order_matched",
+        "swap_signed",
+        "swap_completed",
+        "swap_failed",
+    }
+)
 
 _redis_client = None
 
@@ -18,12 +29,15 @@ def _get_redis_client():
     return _redis_client
 
 
-def publish_trading_event(event_type: str, token_uuid: str, data: dict = None):
-    """Publish a trading event to Redis pub/sub for SSE consumers."""
+def publish_trading_event(event_type: str, token_uuid: str):
+    """Publish an identifier-free cache-invalidation event."""
+    if event_type not in TRADING_EVENT_TYPES:
+        logger.error("Refusing unsupported trading event type")
+        return
+
     payload = {
         "event": event_type,
         "token": str(token_uuid),
-        "data": data or {},
     }
     try:
         client = _get_redis_client()

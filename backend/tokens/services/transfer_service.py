@@ -356,16 +356,11 @@ class TransferService:
 
             from tokens.events import publish_trading_event
 
-            publish_trading_event("order_created", str(token.uuid), {"order_uuid": str(order.uuid)})
-            swap_order = match_result.get("swap_order") if match_result else None
-            publish_trading_event(
-                "order_matched",
-                str(token.uuid),
-                {"swap_uuid": str(swap_order.uuid) if swap_order else None},
-            )
+            publish_trading_event("order_created", str(token.uuid))
+            publish_trading_event("order_matched", str(token.uuid))
             return order, match_result
 
         from tokens.events import publish_trading_event
 
-        publish_trading_event("order_created", str(token.uuid), {"order_uuid": str(order.uuid)})
+        publish_trading_event("order_created", str(token.uuid))
         return order, None
