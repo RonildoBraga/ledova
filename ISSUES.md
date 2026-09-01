@@ -1,12 +1,13 @@
 # Deferred high-risk work
 
 This document records known high-risk work intentionally deferred from the
-experimental local/testnet release. Each area requires implementation, tests,
+experimental local/testnet release. Open areas require implementation, tests,
 and independent review before any public multi-user or real-value use.
 
-1. **Tenant isolation and authorization.** Audit every account, company,
-   portfolio, wallet, order, transaction, and document query so objects cannot
-   be read or mutated across tenants.
+1. **Tenant isolation and authorization — completed 2026-09-02.** Customer
+   queries and mutations are self-scoped, global operator routes require
+   explicit admin access, and PostgreSQL RLS activation remains deferred by
+   [ADR 0002](backend/docs/adr/0002-rls-tenant-isolation.md).
 2. **Authentication, sessions, and CSRF.** Redesign browser and native token
    transport, refresh rotation and revocation, password changes, email-code
    limits, cookie policy, and CSRF enforcement as one coherent protocol.
