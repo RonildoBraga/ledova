@@ -222,11 +222,22 @@ class WhitelistService:
             raise WhitelistOperationFailedException(f"Failed to remove from whitelist: {e}") from e
 
     @transaction.atomic
-    def sync_entry(self, address: str) -> WhitelistEntry:
+    def sync_entry(self, address: str, wallet_uuid=None) -> WhitelistEntry:
         checksum_address = self.chain_client.to_checksum_address(address)
-        info = self.get_investor_info(address)
-        wallet = self._get_or_create_investor_wallet(checksum_address)
 
+        wallets = Wallet.objects.filter_by_address(checksum_address).order_by("uuid")
+        if wallet_uuid is None:
+            wallet_ids = list(wallets.values_list("uuid", flat=True)[:2])
+            if len(wallet_ids) != 1:
+                raise WhitelistOperationFailedException("Unable to resolve a unique wallet.")
+            wallet_uuid = wallet_ids[0]
+
+        try:
+            wallet = wallets.get(uuid=wallet_uuid)
+        except Wallet.DoesNotExist as exc:
+            raise WhitelistOperationFailedException("Unable to resolve the selected wallet.") from exc
+
+        info = self.get_investor_info(address)
         kyc_ts = info["kyc_timestamp"]
         on_chain_ts = datetime.fromtimestamp(kyc_ts, tz=dt_timezone.utc) if kyc_ts else None
 
@@ -249,7 +260,7 @@ class WhitelistService:
 
         for entry in entries:
             try:
-                self.sync_entry(entry.wallet.address)
+                self.sync_entry(entry.wallet.address, wallet_uuid=entry.wallet_id)
                 synced += 1
             except Exception as e:
                 errors.append(f"Failed to sync {entry.wallet.address}: {e}")
@@ -284,7 +295,7 @@ class WhitelistService:
 
         for entry in to_sync:
             try:
-                self.sync_entry(entry.wallet.address)
+                self.sync_entry(entry.wallet.address, wallet_uuid=entry.wallet_id)
             except Exception as e:
                 errors.append(f"Failed to sync {entry.wallet.address}: {e}")
                 logger.error(f"{LoggingContext.WHITELIST} Failed to sync {entry.wallet.address}: {e}")
@@ -296,7 +307,7 @@ class WhitelistService:
                 logger.info(f"{LoggingContext.WHITELIST} Batch added {len(addresses)} addresses (tx={tx_hash})")
                 for entry in to_add:
                     try:
-                        self.sync_entry(entry.wallet.address)
+                        self.sync_entry(entry.wallet.address, wallet_uuid=entry.wallet_id)
                     except Exception as e:
                         errors.append(f"Failed to sync {entry.wallet.address} after add: {e}")
                         logger.error(f"{LoggingContext.WHITELIST} Post-add sync failed for {entry.wallet.address}: {e}")
@@ -324,7 +335,7 @@ class WhitelistService:
                 self.remove_from_whitelist(address=entry.wallet.address, wait_for_receipt=True)
                 removed += 1
             except AddressNotWhitelistedException:
-                self.sync_entry(entry.wallet.address)
+                self.sync_entry(entry.wallet.address, wallet_uuid=entry.wallet_id)
                 removed += 1
             except Exception as e:
                 errors.append(f"Failed to remove {entry.wallet.address}: {e}")
