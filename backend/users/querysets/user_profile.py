@@ -1,5 +1,4 @@
 from django.db.models import QuerySet
-from guardian.shortcuts import get_objects_for_user
 
 
 class UserProfileQuerySet(QuerySet):
@@ -15,6 +14,8 @@ class UserProfileQuerySet(QuerySet):
         return None
 
     def visible_to_user(self, user):
+        if user is None or not user.is_authenticated:
+            return self.none()
         if user.is_superuser or user.is_staff:
             return self
-        return get_objects_for_user(user, "view_userprofile", klass=self)
+        return self.filter(user=user)
