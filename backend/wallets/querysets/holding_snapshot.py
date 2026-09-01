@@ -23,8 +23,8 @@ class HoldingSnapshotQuerySet(QuerySet):
         return queryset
 
     def visible_to_user(self, user):
-        if user.is_superuser or user.is_staff:
-            return self
+        if user is None or not user.is_authenticated:
+            return self.none()
         return self.filter(holding__wallet__user_account__user_profiles__user=user)
 
     def with_optimized_data(self):

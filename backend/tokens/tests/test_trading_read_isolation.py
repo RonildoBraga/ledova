@@ -393,7 +393,9 @@ class TradingReadIsolationTest(APITestCase):
 
     def test_staff_may_read_bounded_address_only_history(self):
         self._create_address_only_history()
-        staff = User.objects.create_user(email="staff@read.test", password="pw-12345678", is_staff=True)
+        staff, _, _ = self._make_tenant("staff@read.test", self.alice_wallet.address)
+        staff.is_staff = True
+        staff.save(update_fields=["is_staff"])
         self.client.force_authenticate(staff)
 
         response = self.client.get(

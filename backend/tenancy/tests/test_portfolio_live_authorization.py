@@ -109,23 +109,69 @@ class PortfolioLiveAuthorizationTest(PortfolioFixtureMixin, APITestCase):
         self.assertIn(bob_allocation, AssetAllocation.objects.visible_to_user(self.alice))
         self.assertIn(bob_snapshot, PortfolioSnapshot.objects.visible_to_user(self.alice))
 
-    def test_staff_and_superuser_keep_global_visibility(self):
-        staff = User.objects.create_user(
-            email="staff@portfolio.example.test",
-            password="pw-12345678",
-            is_staff=True,
-        )
-        superuser = User.objects.create_user(
-            email="super@portfolio.example.test",
-            password="pw-12345678",
-            is_superuser=True,
+    def test_staff_and_superuser_follow_live_membership_scope(self):
+        privilege_cases = (
+            ("staff", {"is_staff": True}),
+            ("super", {"is_superuser": True}),
         )
 
-        for privileged_user in (staff, superuser):
+        for label, privilege in privilege_cases:
+            privileged_user = User.objects.create_user(
+                email=f"{label}@portfolio.example.test",
+                password="pw-12345678",
+                **privilege,
+            )
+            profile = UserProfile.objects.create(user=privileged_user)
+            account = UserAccount.objects.create(account_number=f"ACCOUNT-{label.upper()}")
+            account.user_profiles.add(profile)
+            portfolio = Portfolio.objects.create(user_account=account, name=f"{label.title()} Portfolio")
+            allocation = AssetAllocation.objects.create(
+                portfolio=portfolio,
+                asset=self.asset,
+                percentage="25.00",
+            )
+            snapshot = PortfolioSnapshot.objects.create(
+                portfolio=portfolio,
+                snapshot_date=date(2026, 9, 2),
+                snapshot_reason="DAILY",
+            )
+
             with self.subTest(user=privileged_user.email):
-                self.assertIn(self.alice_portfolio, Portfolio.objects.visible_to_user(privileged_user))
-                self.assertIn(self.alice_allocation, AssetAllocation.objects.visible_to_user(privileged_user))
-                self.assertIn(self.alice_snapshot, PortfolioSnapshot.objects.visible_to_user(privileged_user))
+                self.assertEqual(set(Portfolio.objects.visible_to_user(privileged_user)), {portfolio})
+                self.assertEqual(set(AssetAllocation.objects.visible_to_user(privileged_user)), {allocation})
+                self.assertEqual(set(PortfolioSnapshot.objects.visible_to_user(privileged_user)), {snapshot})
+
+                self.client.force_authenticate(privileged_user)
+                list_response = self.client.get("/api/portfolios/")
+                own_response = self.client.get(f"/api/portfolios/{portfolio.uuid}/")
+                foreign_response = self.client.get(f"/api/portfolios/{self.alice_portfolio.uuid}/")
+                foreign_update = self.client.patch(
+                    f"/api/portfolios/{self.alice_portfolio.uuid}/",
+                    {"name": "Stolen"},
+                    format="json",
+                )
+                allocations_response = self.client.get(f"/api/portfolios/{portfolio.uuid}/allocations/")
+                snapshots_response = self.client.get(f"/api/portfolios/{portfolio.uuid}/snapshots/")
+
+                self.assertEqual(list_response.status_code, 200)
+                self.assertEqual(
+                    {row["uuid"] for row in self.rows(list_response)},
+                    {str(portfolio.uuid)},
+                )
+                self.assertEqual(own_response.status_code, 200)
+                self.assertEqual(foreign_response.status_code, 404)
+                self.assertEqual(foreign_update.status_code, 404)
+                self.assertEqual(
+                    {row["uuid"] for row in self.rows(allocations_response)},
+                    {str(allocation.uuid)},
+                )
+                self.assertEqual(
+                    {row["uuid"] for row in self.rows(snapshots_response)},
+                    {str(snapshot.uuid)},
+                )
+
+        self.alice_portfolio.refresh_from_db()
+        self.assertEqual(self.alice_portfolio.name, "Alice Portfolio")
 
 
 class PortfolioEndpointIsolationTest(PortfolioFixtureMixin, APITestCase):
