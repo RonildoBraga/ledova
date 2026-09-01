@@ -219,23 +219,23 @@ class ModelViewSet(AuthenticatedModelViewSet):
 QuerySets contain only business logic — permission scoping, complex queries, and data optimization. No filtering infrastructure (`filter_fields`, `apply_filters`, `order_by_fields`, `apply_limit`).
 
 ```python
-# app/querysets/model.py
 from django.db.models import QuerySet
-from guardian.shortcuts import get_objects_for_user
 
 class ModelQuerySet(QuerySet):
-    # Permission filters
     def visible_to_user(self, user):
+        if user is None or not user.is_authenticated:
+            return self.none()
         if user.is_superuser or user.is_staff:
             return self
-        return get_objects_for_user(user, "app.view_model", klass=self)
+        return self.filter(user_account__user_profiles__user=user).distinct()
 
     def manageable_by_user(self, user):
+        if user is None or not user.is_authenticated:
+            return self.none()
         if user.is_superuser or user.is_staff:
             return self
-        return get_objects_for_user(user, "app.change_model", klass=self)
+        return self.filter(user_account__user_profiles__user=user).distinct()
 
-    # Business logic
     def active(self):
         return self.filter(is_active=True)
 
@@ -244,7 +244,6 @@ class ModelQuerySet(QuerySet):
             return self
         return self.filter(Q(name__icontains=query) | Q(code__icontains=query))
 
-    # Data optimization
     def with_optimized_data(self):
         return self.select_related("related").prefetch_related("many_related")
 ```
@@ -381,16 +380,14 @@ grep "user@example.com" logs.txt | grep "[AUTH"
 
 ## Signals
 
-Signals handle side effects triggered by model events, primarily **permission assignment** using django-guardian.
+Signals are limited to non-authorization side effects. Authorization is derived from current ownership and membership relationships whenever a query or request runs.
 
 ### Pattern
 
 ```python
-# app/signals/model.py
 import logging
 from django.db.models.signals import post_save
 from django.dispatch import receiver
-from guardian.shortcuts import assign_perm
 
 from shared.utils.logging_utils import LoggingContext
 from app.models import Model
@@ -398,45 +395,35 @@ from app.models import Model
 logger = logging.getLogger("ledova_backend")
 
 @receiver(post_save, sender=Model)
-def assign_model_permissions(sender, instance, created, **kwargs):
-    """Assign permissions when a new model instance is created."""
+def record_model_creation(sender, instance, created, **kwargs):
     if not created:
         return
 
-    logger.info(f"{LoggingContext.PERMISSION_ASSIGNMENT} Assigning permissions for {instance}")
-
-    # Assign object-level permissions to the owner
-    user = instance.get_owner_user()
-    assign_perm("app.view_model", user, instance)
-    assign_perm("app.change_model", user, instance)
-    assign_perm("app.delete_model", user, instance)
+    logger.info(f"{LoggingContext.SYSTEM} Created {instance}")
 ```
 
 ### Common Use Cases
 
 | Use Case | Signal | Example |
 |----------|--------|---------|
-| Permission assignment | `post_save` | Assign view/change/delete perms on creation |
 | Auto-assign relations | `post_save` | Add wallet to user's portfolio |
-| Cascade updates | `m2m_changed` | Update portfolio perms when users added to account |
+| Lifecycle logging | `post_save` | Record model creation |
+| Membership logging | `m2m_changed` | Record users added to an account |
 
 ### M2M Changed Pattern
 
 ```python
 @receiver(m2m_changed, sender=Account.user_profiles.through)
 def account_users_changed(sender, instance, action, pk_set, **kwargs):
-    """Handle users being added/removed from account."""
-    if action == "post_add":
-        for profile in UserProfile.objects.filter(pk__in=pk_set):
-            assign_perm("view_account", profile.user, instance)
+    if action in ("post_add", "post_remove"):
+        logger.info(f"{LoggingContext.ACCOUNTS} Membership changed for {instance}")
 ```
 
 ### Guidelines
 
-- Use signals for **side effects** (permissions, notifications), not business logic
+- Use signals for non-authorization side effects such as notifications and lifecycle logging
+- Derive authorization from current ownership and membership relationships
 - Always check `if created:` for create-only logic
-- Use `LoggingContext.PERMISSION_ASSIGNMENT` for permission logs
-- Wrap in try/except during migrations when permissions may not exist
 - Register signals in `app/signals/__init__.py` and import in `app/apps.py`
 
 ### When to Use Signals vs Services
@@ -444,7 +431,7 @@ def account_users_changed(sender, instance, action, pk_set, **kwargs):
 | Signals | Services |
 |---------|----------|
 | Automatic side effects | Explicit business logic |
-| Permission assignment | Complex validation |
+| Lifecycle logging | Complex validation |
 | Triggered by model save | Called from views |
 | Fire-and-forget | Return values needed |
 
@@ -845,7 +832,7 @@ app/
 1. **Model**: Add to `models/` with `objects = MyQuerySet.as_manager()`
 2. **QuerySet**: Create in `querysets/` with permission and business logic methods
 3. **FilterSet**: Add to `filters.py` with django-filter fields for API filtering
-4. **Signals**: Add permission assignment in `signals/` if needed
+4. **Signals**: Add non-authorization side effects in `signals/` if needed
 5. **Exceptions**: Add domain exceptions to `exceptions.py`
 6. **Service**: Create in `services/` with business logic
 7. **Serializer**: Create in `serializers/` for data transformation
@@ -866,7 +853,7 @@ app/
 - [ ] Logging uses `LoggingContext` prefixes
 - [ ] Related data uses `select_related`/`prefetch_related`
 - [ ] Exceptions have appropriate HTTP status codes
-- [ ] New models have permission signals if user-owned
+- [ ] User-owned models derive authorization from current ownership or membership relationships
 - [ ] Signals check `if created:` for create-only logic
 - [ ] Tasks use `bind=True` and `max_retries` for retry logic
 - [ ] Tasks delegate to services, don't contain business logic

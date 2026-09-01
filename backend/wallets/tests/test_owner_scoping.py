@@ -7,7 +7,6 @@ wallet into another tenant's account.
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
-from guardian.shortcuts import assign_perm
 from rest_framework import serializers
 from rest_framework.test import APIRequestFactory
 
@@ -118,10 +117,7 @@ class LiveMembershipScopingTest(TestCase):
         request.user = user
         return WalletSerializer(context={"request": request})
 
-    def test_membership_removal_revokes_account_and_wallet_visibility_despite_stale_grants(self):
-        assign_perm("users.view_useraccount", self.alice, self.account)
-        assign_perm("wallets.view_wallet", self.alice, self.wallet)
-
+    def test_membership_removal_revokes_account_and_wallet_visibility(self):
         self.account.user_profiles.remove(self.profile)
 
         self.assertNotIn(
@@ -153,7 +149,6 @@ class LiveMembershipScopingTest(TestCase):
         )
 
     def test_wallet_serializer_owner_field_excludes_account_after_membership_removal(self):
-        assign_perm("users.view_useraccount", self.alice, self.account)
         self.account.user_profiles.remove(self.profile)
 
         queryset = self._serializer_for(self.alice).fields["user_account"].queryset

@@ -7,7 +7,6 @@ from uuid import uuid4
 
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from guardian.shortcuts import assign_perm, remove_perm
 from rest_framework.test import APITestCase
 
 from assets.models import Asset
@@ -66,11 +65,7 @@ class PortfolioLiveAuthorizationTest(PortfolioFixtureMixin, APITestCase):
             selected_portfolio=self.alice_portfolio,
         )
 
-    def test_membership_removal_revokes_full_tree_despite_stale_guardian_grants(self):
-        assign_perm("portfolios.view_portfolio", self.alice, self.alice_portfolio)
-        assign_perm("portfolios.view_assetallocation", self.alice, self.alice_allocation)
-        assign_perm("portfolios.view_portfoliosnapshot", self.alice, self.alice_snapshot)
-
+    def test_membership_removal_revokes_full_tree(self):
         self.alice_account.user_profiles.remove(self.alice_profile)
 
         self.assertNotIn(self.alice_portfolio, Portfolio.objects.visible_to_user(self.alice))
@@ -97,9 +92,8 @@ class PortfolioLiveAuthorizationTest(PortfolioFixtureMixin, APITestCase):
         self.assertIsNone(export_response.json()["preferences"]["selectedPortfolio"])
         self.assertEqual(export_response.json()["portfolios"], [])
 
-    def test_reverse_membership_addition_reveals_preexisting_tree_without_grants(self):
+    def test_reverse_membership_addition_reveals_preexisting_tree(self):
         self.alice_profile.user_accounts.add(self.bob_account)
-        remove_perm("portfolios.view_portfolio", self.alice, self.bob_portfolio)
 
         bob_allocation = AssetAllocation.objects.create(
             portfolio=self.bob_portfolio,
@@ -111,9 +105,6 @@ class PortfolioLiveAuthorizationTest(PortfolioFixtureMixin, APITestCase):
             snapshot_date=date(2026, 9, 1),
             snapshot_reason="DAILY",
         )
-        remove_perm("portfolios.view_assetallocation", self.alice, bob_allocation)
-        remove_perm("portfolios.view_portfoliosnapshot", self.alice, bob_snapshot)
-
         self.assertIn(self.bob_portfolio, Portfolio.objects.visible_to_user(self.alice))
         self.assertIn(bob_allocation, AssetAllocation.objects.visible_to_user(self.alice))
         self.assertIn(bob_snapshot, PortfolioSnapshot.objects.visible_to_user(self.alice))

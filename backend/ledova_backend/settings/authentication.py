@@ -9,10 +9,7 @@ from .base import SECRET_KEY
 
 AUTH_USER_MODEL = "authentication.CustomUser"
 
-AUTHENTICATION_BACKENDS = (
-    "django.contrib.auth.backends.ModelBackend",
-    "guardian.backends.ObjectPermissionBackend",
-)
+AUTHENTICATION_BACKENDS = ("django.contrib.auth.backends.ModelBackend",)
 
 AUTH_PASSWORD_VALIDATORS = [
     {
