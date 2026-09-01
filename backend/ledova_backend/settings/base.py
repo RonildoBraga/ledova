@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     "tokens",  # share tokens, P2P trading, stablecoins
     "whitelist",  # on-chain allowlist example
     "feature_flags",
+    "tenancy",  # PostgreSQL row-level-security proof tooling; runtime activation is deferred
     "documents",  # uploaded financial docs + LLM extraction
     "shared",
 ]
