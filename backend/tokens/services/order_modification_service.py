@@ -220,7 +220,7 @@ class OrderModificationService:
 
         from tokens.events import publish_trading_event
 
-        publish_trading_event("order_modified", str(order.token.uuid), {"order_uuid": str(order.uuid)})
+        publish_trading_event("order_modified", str(order.token.uuid))
 
         return order, changes
 
