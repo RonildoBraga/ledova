@@ -2,27 +2,11 @@ import logging
 
 from django.db.models.signals import post_save
 from django.dispatch import receiver
-from guardian.shortcuts import assign_perm
 
 from shared.utils.logging_utils import LoggingContext
 from wallets.models.wallet import Wallet
 
 logger = logging.getLogger("ledova_backend")
-
-
-@receiver(post_save, sender=Wallet)
-def assign_wallet_permissions(sender, instance, created, **kwargs):
-    if not created:
-        return
-
-    logger.info(f"{LoggingContext.WALLETS} Wallet {instance.uuid} saved, assigning permissions to associated users")
-
-    for user_profile in instance.user_account.user_profiles.all():
-        user = user_profile.user
-        logger.info(f"{LoggingContext.WALLETS} Assigning wallet permissions to {user.email}")
-        assign_perm("wallets.view_wallet", user, instance)
-        assign_perm("wallets.change_wallet", user, instance)
-        assign_perm("wallets.delete_wallet", user, instance)
 
 
 @receiver(post_save, sender=Wallet)
