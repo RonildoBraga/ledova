@@ -29,11 +29,8 @@ class TransferOrderQuerySet(QuerySet):
         )
 
     def visible_to_user(self, user):
-        if user is None:
+        if user is None or not user.is_authenticated:
             return self.none()
-
-        if user.is_staff or user.is_superuser:
-            return self
 
         # Authorization is anchored to the exact wallet row selected when the
         # order was created. Address matching is unsafe because public wallet
@@ -48,11 +45,8 @@ class TransferOrderQuerySet(QuerySet):
         )
 
     def for_token_visible_to_user(self, user):
-        if user is None:
+        if user is None or not user.is_authenticated:
             return self.none()
-
-        if user.is_staff or user.is_superuser:
-            return self
 
         from companies.models import Company
 
