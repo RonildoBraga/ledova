@@ -26,7 +26,10 @@ class UserProfileViewSet(AuthenticatedModelViewSet):
     ordering_fields = ["created_at", "full_name"]
 
     def get_queryset(self):
-        return UserProfile.objects.visible_to_user(self.request.user).select_related("citizenship_country")
+        queryset = UserProfile.objects.visible_to_user(self.request.user).select_related("citizenship_country")
+        if getattr(self, "action", None) in {"update", "partial_update"}:
+            return queryset.select_for_update(of=("self",))
+        return queryset
 
     def perform_create(self, serializer):
         logger.info(f"{LoggingContext.USER_PROFILE} Creating user profile")
@@ -34,7 +37,11 @@ class UserProfileViewSet(AuthenticatedModelViewSet):
 
     def perform_update(self, serializer):
         logger.info(f"{LoggingContext.USER_PROFILE} Updating user profile")
-        serializer.save(user=self.request.user)
+        serializer.save()
+
+    @transaction.atomic
+    def update(self, request, *args, **kwargs):
+        return super().update(request, *args, **kwargs)
 
     @action(detail=False, methods=["post"], url_path="delete-account")
     @transaction.atomic
