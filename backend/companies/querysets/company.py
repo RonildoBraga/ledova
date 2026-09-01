@@ -4,16 +4,12 @@ from django.db.models import Q, QuerySet
 class CompanyQuerySet(QuerySet):
 
     def visible_to_user(self, user):
-        if user.is_superuser or user.is_staff:
-            return self
-        if not user.is_authenticated:
+        if user is None or not user.is_authenticated:
             return self.none()
         return self.filter(owner=user)
 
     def manageable_by_user(self, user):
-        if user.is_superuser or user.is_staff:
-            return self
-        if not user.is_authenticated:
+        if user is None or not user.is_authenticated:
             return self.none()
         return self.filter(owner=user)
 
