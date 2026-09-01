@@ -155,7 +155,7 @@ class LiveMembershipScopingTest(TestCase):
 
         self.assertNotIn(self.account.uuid, queryset.values_list("uuid", flat=True))
 
-    def test_staff_and_superuser_keep_global_visibility(self):
+    def test_staff_and_superuser_account_scope_follows_membership(self):
         staff = User.objects.create_user(email="staff-membership@ex.com", password="pw-12345678", is_staff=True)
         superuser = User.objects.create_user(
             email="superuser-membership@ex.com",
@@ -164,12 +164,19 @@ class LiveMembershipScopingTest(TestCase):
         )
 
         for privileged_user in (staff, superuser):
+            profile = UserProfile.objects.create(user=privileged_user)
+            own_account = UserAccount.objects.create()
+            own_account.user_profiles.add(profile)
+
             with self.subTest(user=privileged_user.email):
-                self.assertIn(
+                self.assertNotIn(
                     self.account.uuid,
                     UserAccount.objects.visible_to_user(privileged_user).values_list("uuid", flat=True),
                 )
                 self.assertIn(
-                    self.wallet.uuid,
-                    Wallet.objects.visible_to_user(privileged_user).values_list("uuid", flat=True),
+                    own_account.uuid,
+                    UserAccount.objects.visible_to_user(privileged_user).values_list("uuid", flat=True),
                 )
+                serializer = self._serializer_for(privileged_user)
+                account_ids = set(serializer.fields["user_account"].queryset.values_list("uuid", flat=True))
+                self.assertEqual(account_ids, {own_account.uuid})

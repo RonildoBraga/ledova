@@ -52,6 +52,6 @@ class UserTokenQuerySet(QuerySet):
         return self.filter(is_active=True, expires_at__lt=timezone.now())
 
     def visible_to_user(self, user):
-        if user.is_superuser or user.is_staff:
-            return self
+        if user is None or not user.is_authenticated:
+            return self.none()
         return self.filter(user=user)

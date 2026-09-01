@@ -82,9 +82,19 @@ class CustomUserModelTest(TestCase):
             user_agent="Safari/14.0",
         )
 
+        UserToken.objects.create(
+            user=admin_user,
+            refresh_token="admin_token_012",
+            access_token="admin_access_012",
+            expires_at=timezone.now() + timedelta(days=1),
+            is_active=True,
+            ip_address="192.168.1.4",
+            user_agent="Firefox/91.0",
+        )
+
         # Test filtering by active status
         active_tokens = UserToken.objects.filter_active(True)
-        self.assertEqual(active_tokens.count(), 2)
+        self.assertEqual(active_tokens.count(), 3)
 
         inactive_tokens = UserToken.objects.filter_active(False)
         self.assertEqual(inactive_tokens.count(), 1)
@@ -98,7 +108,8 @@ class CustomUserModelTest(TestCase):
         self.assertEqual(user_tokens.count(), 3)
 
         admin_tokens = UserToken.objects.visible_to_user(admin_user)
-        self.assertEqual(admin_tokens.count(), 3)
+        self.assertEqual(admin_tokens.count(), 1)
+        self.assertFalse(UserToken.objects.visible_to_user(None).exists())
 
         # Test filtering by device info
         ip_filtered = UserToken.objects.filter_by_device_info(ip_address="192.168.1.1")

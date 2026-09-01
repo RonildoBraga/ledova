@@ -191,11 +191,19 @@ class UserLiveAuthorizationTest(APITestCase):
         self.assertEqual(self.bob_preferences.theme, "dark")
         self.assertTrue(FavouriteAsset.objects.filter(pk=self.bob_favourite.pk).exists())
 
-    def test_privileged_updates_preserve_existing_profile_ownership(self):
+    def test_privileged_customer_updates_are_self_scoped(self):
         for label, privileged_user in (
             ("staff", self.staff),
             ("superuser", self.superuser),
         ):
+            own_profile = UserProfile.objects.create(
+                user=privileged_user,
+                full_name=f"{label.title()} owner",
+            )
+            own_financial = FinancialProfile.objects.create(
+                user_profile=own_profile,
+                occupation="Own occupation",
+            )
             target_user = User.objects.create_user(
                 email=f"{label}-target@example.test",
                 password="pw-12345678",
@@ -208,39 +216,48 @@ class UserLiveAuthorizationTest(APITestCase):
                 user_profile=target_profile,
                 occupation="Original occupation",
             )
-            original_privileged_email = privileged_user.email
-            updated_target_email = f"updated-{label}-target@example.test"
             self.client.force_authenticate(privileged_user)
 
-            profile_response = self.client.patch(
+            foreign_profile_response = self.client.patch(
                 f"/api/user-profiles/{target_profile.uuid}/",
-                {
-                    "fullName": f"Updated {label} target",
-                    "email": updated_target_email,
-                },
+                {"fullName": f"Updated {label} target"},
                 format="json",
             )
-            financial_response = self.client.patch(
+            foreign_financial_response = self.client.patch(
                 f"/api/financial-profiles/{target_financial.uuid}/",
                 {"occupation": f"Updated by {label}"},
                 format="json",
             )
+            own_profile_response = self.client.patch(
+                f"/api/user-profiles/{own_profile.uuid}/",
+                {"fullName": f"Updated {label} owner"},
+                format="json",
+            )
+            own_financial_response = self.client.patch(
+                f"/api/financial-profiles/{own_financial.uuid}/",
+                {"occupation": f"Own update by {label}"},
+                format="json",
+            )
 
             with self.subTest(user=label):
-                self.assertEqual(profile_response.status_code, 200)
-                self.assertEqual(financial_response.status_code, 200)
+                self.assertEqual(foreign_profile_response.status_code, 404)
+                self.assertEqual(foreign_financial_response.status_code, 404)
+                self.assertEqual(own_profile_response.status_code, 200)
+                self.assertEqual(own_financial_response.status_code, 200)
 
+                own_profile.refresh_from_db()
+                own_financial.refresh_from_db()
                 target_profile.refresh_from_db()
                 target_financial.refresh_from_db()
-                target_user.refresh_from_db()
-                privileged_user.refresh_from_db()
 
+                self.assertEqual(own_profile.user_id, privileged_user.pk)
+                self.assertEqual(own_profile.full_name, f"Updated {label} owner")
+                self.assertEqual(own_financial.user_profile_id, own_profile.pk)
+                self.assertEqual(own_financial.occupation, f"Own update by {label}")
                 self.assertEqual(target_profile.user_id, target_user.pk)
-                self.assertEqual(target_profile.full_name, f"Updated {label} target")
-                self.assertEqual(target_user.email, updated_target_email)
-                self.assertEqual(privileged_user.email, original_privileged_email)
+                self.assertEqual(target_profile.full_name, f"{label.title()} target")
                 self.assertEqual(target_financial.user_profile_id, target_profile.pk)
-                self.assertEqual(target_financial.occupation, f"Updated by {label}")
+                self.assertEqual(target_financial.occupation, "Original occupation")
 
     def test_account_updates_preserve_membership_and_director(self):
         foreign_user = User.objects.create_user(
@@ -286,25 +303,33 @@ class UserLiveAuthorizationTest(APITestCase):
             expected_members,
         )
 
-        for label, actor, role in (
-            ("member", self.alice, "both"),
-            ("staff", self.staff, "company"),
-            ("superuser", self.superuser, "investor"),
-        ):
+        self.client.force_authenticate(self.alice)
+        member_response = self.client.patch(
+            f"/api/user-accounts/{joint_account.uuid}/",
+            {"role": "both", "director": foreign_profile.pk},
+            format="json",
+        )
+        self.assertEqual(member_response.status_code, 200)
+        joint_account.refresh_from_db()
+        self.assertEqual(joint_account.role, "both")
+        self.assertEqual(joint_account.director_id, self.alice_profile.pk)
+        self.assertEqual(
+            set(joint_account.user_profiles.values_list("pk", flat=True)),
+            expected_members,
+        )
+
+        for label, actor in (("staff", self.staff), ("superuser", self.superuser)):
             self.client.force_authenticate(actor)
             response = self.client.patch(
                 f"/api/user-accounts/{joint_account.uuid}/",
-                {
-                    "role": role,
-                    "director": foreign_profile.pk,
-                },
+                {"role": "company"},
                 format="json",
             )
 
             with self.subTest(user=label):
-                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.status_code, 404)
                 joint_account.refresh_from_db()
-                self.assertEqual(joint_account.role, role)
+                self.assertEqual(joint_account.role, "both")
                 self.assertEqual(joint_account.director_id, self.alice_profile.pk)
                 self.assertEqual(
                     set(joint_account.user_profiles.values_list("pk", flat=True)),
@@ -340,10 +365,11 @@ class UserLiveAuthorizationTest(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self.rows(response), [])
 
-    def test_anonymous_fails_closed_and_privileged_users_keep_global_visibility(self):
+    def test_anonymous_fails_closed_and_privileged_users_are_self_scoped(self):
         anonymous = AnonymousUser()
         managers = (
             UserProfile.objects,
+            UserAccount.objects,
             FinancialProfile.objects,
             UserPreferences.objects,
             FavouriteAsset.objects,
@@ -353,12 +379,43 @@ class UserLiveAuthorizationTest(APITestCase):
                 self.assertFalse(manager.visible_to_user(anonymous).exists())
                 self.assertFalse(manager.visible_to_user(None).exists())
 
-            for privileged_user in (self.staff, self.superuser):
+        for label, privileged_user in (("staff", self.staff), ("superuser", self.superuser)):
+            profile = UserProfile.objects.create(user=privileged_user)
+            account = UserAccount.objects.create(account_number=f"ACCOUNT-{label.upper()}")
+            account.user_profiles.add(profile)
+            financial = FinancialProfile.objects.create(user_profile=profile)
+            preferences = UserPreferences.objects.create(user_profile=profile, selected_account=account)
+            favourite = FavouriteAsset.objects.create(user_account=account, asset=self.asset)
+            expected = (
+                (UserProfile.objects, profile),
+                (UserAccount.objects, account),
+                (FinancialProfile.objects, financial),
+                (UserPreferences.objects, preferences),
+                (FavouriteAsset.objects, favourite),
+            )
+
+            for manager, own_object in expected:
                 with self.subTest(model=manager.model._meta.label, user=privileged_user.email):
+                    self.assertEqual(set(manager.visible_to_user(privileged_user)), {own_object})
+
+            self.client.force_authenticate(privileged_user)
+            for url, own_uuid in (
+                ("/api/user-profiles/", profile.uuid),
+                ("/api/user-accounts/", account.uuid),
+                ("/api/financial-profiles/", financial.uuid),
+                ("/api/favourite-assets/", favourite.uuid),
+            ):
+                with self.subTest(url=url, user=privileged_user.email):
+                    response = self.client.get(url)
+                    self.assertEqual(response.status_code, 200)
                     self.assertEqual(
-                        set(manager.visible_to_user(privileged_user)),
-                        set(manager.all()),
+                        {row["uuid"] for row in self.rows(response)},
+                        {str(own_uuid)},
                     )
+
+            preferences_response = self.client.get("/api/user-preferences/")
+            self.assertEqual(preferences_response.status_code, 200)
+            self.assertEqual(preferences_response.json()["uuid"], str(preferences.uuid))
 
 
 class OwnershipUpdateLockTest(TransactionTestCase):
