@@ -27,6 +27,9 @@ from tokens.models import (
     TransferOrderStatus,
     TransferOrderType,
 )
+from wallets.constants import WALLET_VERIFICATION_STATUS_VERIFIED
+from wallets.models import Wallet
+from wallets.models.wallet import Blockchain
 from whitelist.services import WhitelistService
 
 logger = logging.getLogger(__name__)
@@ -226,7 +229,8 @@ class TransferService:
     def find_matching_order(self, order: TransferOrder) -> Optional[tuple[TransferOrder, int]]:
         if order.order_type == TransferOrderType.BUY:
             qs = (
-                TransferOrder.objects.open_or_partial()
+                TransferOrder.objects.ownership_bound()
+                .open_or_partial()
                 .sell_orders()
                 .filter(
                     token=order.token,
@@ -236,7 +240,8 @@ class TransferService:
             qs = qs.order_by("price_per_share", "created_at")
         else:
             qs = (
-                TransferOrder.objects.open_or_partial()
+                TransferOrder.objects.ownership_bound()
+                .open_or_partial()
                 .buy_orders()
                 .filter(
                     token=order.token,
@@ -245,7 +250,7 @@ class TransferService:
             )
             qs = qs.order_by("-price_per_share", "created_at")
 
-        qs = qs.exclude(wallet_address__iexact=order.wallet_address)
+        qs = qs.exclude(wallet_address__iexact=order.wallet_address).select_for_update(of=("self",))
 
         order_remaining = order.quantity - (order.filled_quantity or 0)
 
@@ -275,29 +280,65 @@ class TransferService:
         self,
         token: ShareToken,
         order_type: TransferOrderType,
+        actor,
+        wallet,
+        owner_account,
         wallet_address: str,
         quantity: int,
         price_per_share,
         min_quantity: int = 0,
     ) -> tuple[TransferOrder, Optional[dict]]:
-        if not self.chain_client.is_valid_address(wallet_address):
+        try:
+            wallet = Wallet.objects.select_for_update(of=("self",)).select_related("user_account").get(pk=wallet.pk)
+        except Wallet.DoesNotExist:
             raise InvalidRecipientAddressException()
 
-        if not self.whitelist_service.is_whitelisted(wallet_address):
-            raise NotWhitelistedException(wallet_address)
+        if wallet.user_account_id != owner_account.pk:
+            raise InvalidRecipientAddressException()
+
+        membership_model = wallet.user_account.user_profiles.through
+        actor_is_current_member = (
+            actor is not None
+            and actor.is_authenticated
+            and membership_model.objects.select_for_update(of=("self",))
+            .filter(
+                useraccount_id=wallet.user_account_id,
+                userprofile__user=actor,
+            )
+            .exists()
+        )
+        if not actor_is_current_member:
+            raise InvalidRecipientAddressException()
+
+        if wallet.verification_status != WALLET_VERIFICATION_STATUS_VERIFIED:
+            raise InvalidRecipientAddressException()
+        if wallet.chain not in (Blockchain.ETHEREUM.value, Blockchain.BASE.value):
+            raise InvalidRecipientAddressException()
+
+        if not self.chain_client.is_valid_address(wallet.address):
+            raise InvalidRecipientAddressException()
+
+        canonical_wallet_address = self.chain_client.to_checksum_address(wallet.address)
+        if canonical_wallet_address != self.chain_client.to_checksum_address(wallet_address):
+            raise InvalidRecipientAddressException()
+
+        if not self.whitelist_service.is_whitelisted(canonical_wallet_address):
+            raise NotWhitelistedException(canonical_wallet_address)
 
         if order_type == TransferOrderType.SELL:
             from tokens.services import ShareTokenService
 
             token_service = ShareTokenService()
-            balance = token_service.get_token_balance(token.contract_address, wallet_address)
+            balance = token_service.get_token_balance(token.contract_address, canonical_wallet_address)
             if balance < quantity:
                 raise InsufficientBalanceException(balance, quantity)
 
         order = TransferOrder.objects.create(
             token=token,
             order_type=order_type,
-            wallet_address=self.chain_client.to_checksum_address(wallet_address),
+            wallet=wallet,
+            owner_account=wallet.user_account,
+            wallet_address=canonical_wallet_address,
             quantity=quantity,
             min_quantity=min_quantity,
             price_per_share=price_per_share,

@@ -22,6 +22,22 @@ class TransferOrder(BaseModel):
         blank=True,
         related_name="transfer_orders",
     )
+    wallet = models.ForeignKey(
+        "wallets.Wallet",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="transfer_orders",
+        help_text="Verified tenant wallet that owns this order. Legacy unbound orders fail closed.",
+    )
+    owner_account = models.ForeignKey(
+        "users.UserAccount",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="transfer_orders",
+        help_text="Immutable tenant snapshot for this order. Legacy unbound orders fail closed.",
+    )
 
     order_type = models.CharField(
         max_length=10,
@@ -103,6 +119,15 @@ class TransferOrder(BaseModel):
             models.Index(fields=["token", "status"]),
             models.Index(fields=["wallet_address"]),
             models.Index(fields=["order_type", "status"]),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(wallet__isnull=True, owner_account__isnull=True)
+                    | models.Q(wallet__isnull=False, owner_account__isnull=False)
+                ),
+                name="transfer_order_ownership_pair",
+            ),
         ]
 
     def __str__(self):

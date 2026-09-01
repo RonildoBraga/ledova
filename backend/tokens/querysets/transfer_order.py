@@ -19,6 +19,14 @@ class TransferOrderQuerySet(QuerySet):
             return self.filter(wallet_address__iexact=address)
         return self
 
+    def ownership_bound(self):
+        """Return orders whose immutable tenant snapshot matches their wallet."""
+        return self.filter(
+            wallet__isnull=False,
+            owner_account__isnull=False,
+            wallet__user_account_id=models.F("owner_account_id"),
+        )
+
     def visible_to_user(self, user):
         if user is None:
             return self.none()
@@ -26,20 +34,17 @@ class TransferOrderQuerySet(QuerySet):
         if user.is_staff or user.is_superuser:
             return self
 
-        from wallets.models import Wallet
-
-        # A wallet belongs to a UserAccount, which links to auth users through
-        # user_profiles. There is no direct Wallet.user field — the previous
-        # `filter(user=user)` raised FieldError, so this scope never worked.
-        user_addresses = list(
-            Wallet.objects.filter(user_account__user_profiles__user=user)
-            .values_list("address", flat=True)
+        # Authorization is anchored to the exact wallet row selected when the
+        # order was created. Address matching is unsafe because public wallet
+        # addresses may be registered under more than one tenant. Legacy rows
+        # without a wallet binding intentionally match nothing.
+        return (
+            self.ownership_bound()
+            .filter(
+                owner_account__user_profiles__user=user,
+            )
             .distinct()
         )
-        if not user_addresses:
-            return self.none()
-
-        return self.filter(wallet_address__in=user_addresses)
 
     def for_token_visible_to_user(self, user):
         if user is None:
@@ -58,7 +63,7 @@ class TransferOrderQuerySet(QuerySet):
             klass=Company,
             accept_global_perms=False,
         )
-        return self.filter(token__company__in=user_companies)
+        return self.ownership_bound().filter(token__company__in=user_companies)
 
     def open(self):
         from tokens.models.choices import TransferOrderStatus
@@ -155,7 +160,7 @@ class TransferOrderQuerySet(QuerySet):
         """
         from tokens.models.choices import TransferOrderStatus, TransferOrderType
 
-        qs = self.filter(
+        qs = self.ownership_bound().filter(
             token=token,
             wallet_address__iexact=wallet_address,
             order_type=TransferOrderType.SELL,
@@ -186,7 +191,7 @@ class TransferOrderQuerySet(QuerySet):
         """
         from tokens.models.choices import TransferOrderType
 
-        qs = self.open().filter(token=token)
+        qs = self.ownership_bound().open().filter(token=token)
 
         if order_type == TransferOrderType.BUY:
             qs = qs.buy_orders().order_by("-price_per_share")
@@ -208,7 +213,7 @@ class TransferOrderQuerySet(QuerySet):
         Returns:
             The best bid TransferOrder or None.
         """
-        return self.open().buy_orders().filter(token=token).order_by("-price_per_share").first()
+        return self.ownership_bound().open().buy_orders().filter(token=token).order_by("-price_per_share").first()
 
     def best_ask(self, token):
         """
@@ -220,13 +225,16 @@ class TransferOrderQuerySet(QuerySet):
         Returns:
             The best ask TransferOrder or None.
         """
-        return self.open().sell_orders().filter(token=token).order_by("price_per_share").first()
+        return self.ownership_bound().open().sell_orders().filter(token=token).order_by("price_per_share").first()
 
     def with_relations(self):
         return self.select_related(
             "token",
             "token__company",
             "payment_token",
+            "wallet",
+            "wallet__user_account",
+            "owner_account",
             "matched_order",
             "signature_request",
         )

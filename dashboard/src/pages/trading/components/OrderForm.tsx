@@ -11,10 +11,9 @@ interface OrderFormProps {
   token: ShareToken;
   orderType: OrderType;
   wallets: WalletType[];
-  defaultWalletAddress: string;
+  defaultWalletUuid?: string;
   getWalletBalance?: (address: string) => string | undefined;
   onSubmit: (data: CreateOrderRequest) => void;
-  onWalletChange?: (address: string) => void;
   onValidationChange?: (isValid: boolean) => void;
 }
 
@@ -24,22 +23,21 @@ export interface OrderFormRef {
 }
 
 export const OrderForm = forwardRef<OrderFormRef, OrderFormProps>(function OrderForm(
-  { token, orderType, wallets, defaultWalletAddress, getWalletBalance, onSubmit, onWalletChange, onValidationChange },
+  { token, orderType, wallets, defaultWalletUuid, getWalletBalance, onSubmit, onValidationChange },
   ref,
 ) {
   const [quantity, setQuantity] = useState('');
   const [minQuantity, setMinQuantity] = useState('');
   const [pricePerShare, setPricePerShare] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [selectedWallet, setSelectedWallet] = useState(defaultWalletAddress);
+  const [selectedWalletUuid, setSelectedWalletUuid] = useState(defaultWalletUuid ?? '');
 
   // Update selected wallet when default changes
   useEffect(() => {
-    if (defaultWalletAddress && !selectedWallet) {
-      setSelectedWallet(defaultWalletAddress);
-      onWalletChange?.(defaultWalletAddress);
+    if (defaultWalletUuid && !selectedWalletUuid) {
+      setSelectedWalletUuid(defaultWalletUuid);
     }
-  }, [defaultWalletAddress, selectedWallet, onWalletChange]);
+  }, [defaultWalletUuid, selectedWalletUuid]);
 
   // Set default price to last traded price
   useEffect(() => {
@@ -54,8 +52,14 @@ export const OrderForm = forwardRef<OrderFormRef, OrderFormProps>(function Order
     return qty * price;
   }, [quantity, pricePerShare]);
 
+  const selectedWallet = useMemo(
+    () => wallets.find((wallet) => wallet.uuid === selectedWalletUuid),
+    [wallets, selectedWalletUuid],
+  );
+
   // Get current wallet's balance for sell orders
-  const currentWalletBalance = getWalletBalance ? getWalletBalance(selectedWallet) : undefined;
+  const currentWalletBalance =
+    selectedWallet && getWalletBalance ? getWalletBalance(selectedWallet.address) : undefined;
 
   const isValid = useMemo(() => {
     const qty = parseFloat(quantity) || 0;
@@ -86,11 +90,13 @@ export const OrderForm = forwardRef<OrderFormRef, OrderFormProps>(function Order
     if (!isValid) return;
 
     const minQty = parseFloat(minQuantity) || 0;
+    if (!selectedWallet) return;
 
     onSubmit({
       token: token.uuid,
       orderType,
-      walletAddress: selectedWallet,
+      walletUuid: selectedWallet.uuid,
+      walletAddress: selectedWallet.address,
       quantity: parseFloat(quantity),
       minQuantity: minQty > 0 ? minQty : undefined,
       pricePerShare,
@@ -129,15 +135,12 @@ export const OrderForm = forwardRef<OrderFormRef, OrderFormProps>(function Order
             </div>
           ) : (
             <select
-              value={selectedWallet}
-              onChange={(e) => {
-                setSelectedWallet(e.target.value);
-                onWalletChange?.(e.target.value);
-              }}
+              value={selectedWalletUuid}
+              onChange={(e) => setSelectedWalletUuid(e.target.value)}
               className="text-sm font-medium text-text-primary bg-transparent border-none focus:outline-none focus:ring-0 text-right cursor-pointer"
             >
               {wallets.map((wallet) => (
-                <option key={wallet.uuid} value={wallet.address}>
+                <option key={wallet.uuid} value={wallet.uuid}>
                   {wallet.name || formatWalletAddressShort(wallet.address)}
                 </option>
               ))}

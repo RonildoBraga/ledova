@@ -7,9 +7,12 @@ wallet into another tenant's account.
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from rest_framework import serializers
 from rest_framework.test import APIRequestFactory
 
 from users.models import UserAccount, UserProfile
+from wallets.constants import WALLET_VERIFICATION_STATUS_VERIFIED
+from wallets.models import Wallet
 from wallets.serializers.wallet import WalletSerializer
 
 User = get_user_model()
@@ -48,3 +51,50 @@ class WalletOwnerScopingTest(TestCase):
         )
         self.assertFalse(serializer.is_valid())
         self.assertIn("user_account", serializer.errors)
+
+    def test_verified_wallet_identity_fields_are_immutable(self):
+        wallet = Wallet.objects.create(
+            user_account=self.alice_account,
+            address="0x" + "a" * 40,
+            chain="ethereum",
+            verification_status=WALLET_VERIFICATION_STATUS_VERIFIED,
+        )
+        second_alice_account = UserAccount.objects.create()
+        second_alice_account.user_profiles.add(self.alice_account.user_profiles.get())
+
+        cases = (
+            ({"address": "0x" + "d" * 40}, "address"),
+            ({"chain": "base"}, "chain"),
+            ({"user_account": str(second_alice_account.uuid)}, "user_account"),
+        )
+        for payload, field in cases:
+            with self.subTest(field=field):
+                serializer = WalletSerializer(
+                    wallet,
+                    data=payload,
+                    partial=True,
+                    context=self._serializer_for(self.alice).context,
+                )
+                self.assertFalse(serializer.is_valid())
+                self.assertIn(field, serializer.errors)
+
+    def test_stale_pending_serializer_cannot_change_newly_verified_identity(self):
+        wallet = Wallet.objects.create(
+            user_account=self.alice_account,
+            address="0x" + "a" * 40,
+            chain="ethereum",
+        )
+        serializer = WalletSerializer(
+            wallet,
+            data={"address": "0x" + "d" * 40},
+            partial=True,
+            context=self._serializer_for(self.alice).context,
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+        Wallet.objects.filter(pk=wallet.pk).update(
+            verification_status=WALLET_VERIFICATION_STATUS_VERIFIED,
+        )
+
+        with self.assertRaises(serializers.ValidationError):
+            serializer.save()

@@ -59,7 +59,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
 
     @action(detail=False, methods=["post"], url_path="create")
     def create_order(self, request):
-        serializer = TransferOrderCreateSerializer(data=request.data)
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
@@ -77,6 +77,9 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
         order, match_result = transfer_service.create_order_and_match(
             token=data["token"],
             order_type=data["order_type"],
+            actor=request.user,
+            wallet=data["wallet"],
+            owner_account=data["owner_account"],
             wallet_address=data["wallet_address"],
             quantity=data["quantity"],
             price_per_share=data["price_per_share"],
@@ -111,7 +114,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
 
     @action(detail=False, methods=["post"], url_path="create/message")
     def create_message(self, request):
-        serializer = TransferOrderCreateSerializer(data=request.data)
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 

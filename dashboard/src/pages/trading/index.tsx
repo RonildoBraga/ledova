@@ -118,8 +118,8 @@ export function TradingPage() {
   // --- Handlers ---
 
   const handleCreateOrder = async (data: CreateOrderRequest): Promise<TransferOrder> => {
-    const signingWallet = wallets.find((w) => w.address.toLowerCase() === data.walletAddress.toLowerCase());
-    setOrderSigningWallet(signingWallet || wallets[0] || null);
+    const signingWallet = wallets.find((w) => w.uuid === data.walletUuid);
+    setOrderSigningWallet(signingWallet || null);
     setPendingOrderData(data);
     setIsOrderSigningOpen(true);
     return {} as TransferOrder;
