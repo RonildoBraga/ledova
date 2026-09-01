@@ -30,6 +30,9 @@ compliance or legal recognition is made.
 | `mobile/` | Experimental Expo application |
 | `packages/` | Shared TypeScript constants, types, services, and utilities |
 
+The current verified checkpoint and next task are recorded in
+[HANDOVER.md](./HANDOVER.md).
+
 ## Quick start
 
 Prerequisites: Docker with Compose and Python 3.13. From the repository root:
