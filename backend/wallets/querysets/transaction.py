@@ -36,32 +36,17 @@ class TransactionQuerySet(QuerySet):
         return queryset
 
     def filter_by_direction(self, direction, wallet_uuid=None):
-        if not direction:
+        if direction not in ("incoming", "outgoing"):
             return self
 
-        if wallet_uuid:
-            from wallets.models import Wallet
-
-            try:
-                wallet = Wallet.objects.only("address").get(uuid=wallet_uuid)
-
-                if direction == "incoming":
-                    return self.filter(to_address__iexact=wallet.address)
-                elif direction == "outgoing":
-                    return self.filter(from_address__iexact=wallet.address)
-            except Wallet.DoesNotExist:
-                return self.none()
-        else:
-            if direction == "incoming":
-                return self.annotate(
-                    wallet_addr_lower=Lower("wallet__address"), to_addr_lower=Lower("to_address")
-                ).filter(to_addr_lower=F("wallet_addr_lower"))
-            elif direction == "outgoing":
-                return self.annotate(
-                    wallet_addr_lower=Lower("wallet__address"), from_addr_lower=Lower("from_address")
-                ).filter(from_addr_lower=F("wallet_addr_lower"))
-
-        return self
+        queryset = self.filter(wallet__uuid=wallet_uuid) if wallet_uuid else self
+        if direction == "incoming":
+            return queryset.annotate(
+                wallet_addr_lower=Lower("wallet__address"), to_addr_lower=Lower("to_address")
+            ).filter(to_addr_lower=F("wallet_addr_lower"))
+        return queryset.annotate(
+            wallet_addr_lower=Lower("wallet__address"), from_addr_lower=Lower("from_address")
+        ).filter(from_addr_lower=F("wallet_addr_lower"))
 
     def visible_to_user(self, user):
         if user is None or not user.is_authenticated:

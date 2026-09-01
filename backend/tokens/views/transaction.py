@@ -35,11 +35,9 @@ class TransactionHistoryViewSet(AuthenticatedListViewSet):
 
         data = TransactionHistoryService.get_transaction_history(
             wallet_ids=authorized_wallets.wallet_ids,
-            wallet_addresses=authorized_wallets.addresses,
             start_date=request.query_params.get("start_date"),
             end_date=request.query_params.get("end_date"),
             transaction_type=request.query_params.get("transaction_type"),
-            include_address_only_history=request.user.is_staff or request.user.is_superuser,
         )
 
         context = {
