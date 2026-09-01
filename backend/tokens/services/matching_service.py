@@ -23,11 +23,15 @@ class MatchingService:
             TransferOrderType.SELL if incoming_order.order_type == TransferOrderType.BUY else TransferOrderType.BUY
         )
 
-        candidates = TransferOrder.objects.filter(
-            token=incoming_order.token,
-            order_type=opposite_type,
-            status__in=[TransferOrderStatus.OPEN, TransferOrderStatus.PARTIALLY_FILLED],
-        ).exclude(wallet_address__iexact=incoming_order.wallet_address)
+        candidates = (
+            TransferOrder.objects.ownership_bound()
+            .filter(
+                token=incoming_order.token,
+                order_type=opposite_type,
+                status__in=[TransferOrderStatus.OPEN, TransferOrderStatus.PARTIALLY_FILLED],
+            )
+            .exclude(wallet_address__iexact=incoming_order.wallet_address)
+        )
 
         if incoming_order.order_type == TransferOrderType.BUY:
             candidates = candidates.filter(price_per_share__lte=incoming_order.price_per_share).order_by(

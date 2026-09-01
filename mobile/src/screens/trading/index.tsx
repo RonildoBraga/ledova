@@ -105,10 +105,10 @@ export function TradingScreen() {
       setShowCreateOrder(false);
       setSigningOrderData(data);
       setSigningOrderSymbol(selectedToken?.symbol);
-      setSigningWallet(findWalletForAddress(data.walletAddress));
+      setSigningWallet(wallets.find((wallet: Wallet) => wallet.uuid === data.walletUuid) || null);
       setShowOrderSigning(true);
     },
-    [selectedToken, findWalletForAddress],
+    [selectedToken, wallets],
   );
 
   const handleCancelOrder = useCallback(

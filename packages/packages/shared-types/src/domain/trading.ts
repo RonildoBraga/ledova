@@ -45,6 +45,7 @@ export interface TransferOrder {
 export interface CreateOrderRequest {
   token: string;
   orderType: OrderType;
+  walletUuid: string;
   walletAddress: string;
   quantity: number;
   minQuantity?: number;

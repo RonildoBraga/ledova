@@ -231,6 +231,7 @@ export function CreateOrderModal({
     onSubmit({
       token: token.uuid,
       orderType,
+      walletUuid: selectedWallet.uuid,
       walletAddress: selectedWallet.address,
       quantity: parseFloat(quantity),
       minQuantity: minQty > 0 ? minQty : undefined,

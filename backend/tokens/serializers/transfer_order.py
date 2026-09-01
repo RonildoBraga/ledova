@@ -1,6 +1,7 @@
 from django.conf import settings
 from eth_account import Account
 from rest_framework import serializers
+from web3 import Web3
 
 from tokens.models import (
     OrderModificationLog,
@@ -9,6 +10,9 @@ from tokens.models import (
     TransferOrder,
     TransferOrderType,
 )
+from wallets.constants import WALLET_VERIFICATION_STATUS_VERIFIED
+from wallets.models import Wallet
+from wallets.models.wallet import Blockchain
 
 
 class TransferOrderListSerializer(serializers.ModelSerializer):
@@ -90,6 +94,7 @@ class TransferOrderDetailSerializer(serializers.ModelSerializer):
 class TransferOrderCreateSerializer(serializers.Serializer):
     token = serializers.UUIDField()
     order_type = serializers.ChoiceField(choices=TransferOrderType.choices)
+    wallet_uuid = serializers.UUIDField(write_only=True)
     wallet_address = serializers.CharField(max_length=42)
     quantity = serializers.IntegerField(min_value=1)
     min_quantity = serializers.IntegerField(
@@ -112,9 +117,9 @@ class TransferOrderCreateSerializer(serializers.Serializer):
         return token
 
     def validate_wallet_address(self, value):
-        if not value.startswith("0x") or len(value) != 42:
+        if not Web3.is_address(value):
             raise serializers.ValidationError("Invalid Ethereum address format")
-        return value
+        return Web3.to_checksum_address(value)
 
     def validate(self, data):
         quantity = data.get("quantity", 0)
@@ -122,6 +127,40 @@ class TransferOrderCreateSerializer(serializers.Serializer):
 
         if min_quantity > quantity:
             raise serializers.ValidationError({"min_quantity": "Minimum quantity cannot exceed total quantity."})
+
+        request = self.context.get("request")
+        if request is None or not request.user.is_authenticated:
+            raise serializers.ValidationError({"wallet_uuid": "An authenticated wallet owner is required."})
+
+        wallet = (
+            Wallet.objects.select_related("user_account")
+            .filter(
+                uuid=data["wallet_uuid"],
+                user_account__user_profiles__user=request.user,
+                verification_status=WALLET_VERIFICATION_STATUS_VERIFIED,
+                chain__in=(Blockchain.ETHEREUM.value, Blockchain.BASE.value),
+            )
+            .distinct()
+            .first()
+        )
+
+        if wallet is None:
+            raise serializers.ValidationError(
+                {"wallet_uuid": "Select a verified EVM wallet from one of your accounts."}
+            )
+
+        if not Web3.is_address(wallet.address):
+            raise serializers.ValidationError({"wallet_uuid": "The selected wallet has an invalid EVM address."})
+
+        canonical_wallet_address = Web3.to_checksum_address(wallet.address)
+        if canonical_wallet_address != data["wallet_address"]:
+            raise serializers.ValidationError(
+                {"wallet_address": "The wallet address does not match the selected wallet."}
+            )
+
+        data["wallet"] = wallet
+        data["owner_account"] = wallet.user_account
+        data["wallet_address"] = canonical_wallet_address
 
         return data
 

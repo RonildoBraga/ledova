@@ -116,7 +116,7 @@ export function PlaceOrderPanel({
               token={token}
               orderType={orderType}
               wallets={availableWallets}
-              defaultWalletAddress={availableWallets[0]?.address}
+              defaultWalletUuid={availableWallets[0]?.uuid}
               onSubmit={handleSubmit}
               onValidationChange={setIsFormValid}
             />
