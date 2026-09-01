@@ -29,7 +29,6 @@ from tokens.models import (
     ShareIssuance,
     ShareToken,
 )
-from whitelist.models import WhitelistEntry
 
 logger = logging.getLogger(__name__)
 
@@ -137,8 +136,6 @@ class CompanyViewSet(AuthenticatedModelViewSet):
     def stats(self, request, uuid=None):
         company = self.get_object()
 
-        total_whitelisted = WhitelistEntry.objects.on_chain().count()
-
         tokens = ShareToken.objects.filter(company=company)
         total_tokens = tokens.filter(status="deployed").count()
 
@@ -163,7 +160,6 @@ class CompanyViewSet(AuthenticatedModelViewSet):
         ).count()
 
         data = {
-            "totalWhitelisted": total_whitelisted,
             "totalTokens": total_tokens,
             "totalShareholders": total_shareholders,
             "pendingActions": pending_capital_increases,
