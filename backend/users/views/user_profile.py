@@ -21,6 +21,7 @@ logger = logging.getLogger("ledova_backend")
 
 class UserProfileViewSet(AuthenticatedModelViewSet):
     serializer_class = UserProfileSerializer
+    http_method_names = ["get", "post", "put", "patch", "head", "options"]
     filterset_class = UserProfileFilter
     ordering = ["-created_at"]
     ordering_fields = ["created_at", "full_name"]
