@@ -3,9 +3,10 @@
 Every tenant-scoped table gets the same policy shape: a row is visible (and
 writable) only when its owning-account column is one of the account UUIDs in
 the per-request session variable ``app.account_ids``. When the variable is
-unset (background jobs connecting as a bypassing role, or an unauthenticated
-request), ``current_setting('app.account_ids', true)`` returns NULL and the
-predicate matches nothing — i.e. the policy fails closed.
+unset on a restricted, non-bypassing connection (for example, an
+unauthenticated request or background job without tenant context),
+``current_setting('app.account_ids', true)`` returns NULL and the predicate
+matches nothing — i.e. the policy fails closed.
 
 The proof role must be a NON-superuser, non-owner role for these policies to
 take effect: PostgreSQL superusers and table owners bypass RLS. Importing this

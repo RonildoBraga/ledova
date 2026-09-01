@@ -16,6 +16,7 @@ from django.test import SimpleTestCase, TransactionTestCase
 from portfolios.models import Portfolio
 from tenancy.policy_sql import (
     CORE_TENANT_TABLES,
+    GUC,
     disable_policy_sql,
     enable_policy_sql,
 )
@@ -143,12 +144,9 @@ class RLSEnforcementTest(TransactionTestCase):
         portfolio = Portfolio.objects.create(user_account=account, name=portfolio_name)
         return account, wallet, portfolio
 
-    def _as_proof_role(self, account_ids=None):
+    def _as_proof_role(self, account_ids):
         self._sql(f"SET ROLE {self.quoted_role}")
-        if account_ids is None:
-            self._sql("RESET app.account_ids")
-        else:
-            self._sql("SET app.account_ids = %s", [account_ids])
+        self._sql("SET app.account_ids = %s", [account_ids])
 
     def _reset_role(self):
         self._sql("RESET ROLE")
@@ -181,11 +179,18 @@ class RLSEnforcementTest(TransactionTestCase):
         self.assertEqual(portfolio_ids, {self.portfolio_a.pk, self.portfolio_b.pk})
 
     def test_unset_and_empty_settings_fail_closed(self):
-        self._as_proof_role()
+        # RESET leaves a custom GUC defined as an empty string in PostgreSQL.
+        # Reconnect so the first assertion exercises a genuinely absent setting.
+        connection.close()
+        self._sql(f"SET ROLE {self.quoted_role}")
+        setting = self._sql("SELECT current_setting(%s, true)", [GUC], fetchone=True)[0]
+        self.assertIsNone(setting)
         self.assertEqual(Wallet.objects.all().count(), 0)
         self.assertEqual(Portfolio.objects.all().count(), 0)
 
         self._sql("SET app.account_ids = ''")
+        setting = self._sql("SELECT current_setting(%s, true)", [GUC], fetchone=True)[0]
+        self.assertEqual(setting, "")
         self.assertEqual(Wallet.objects.all().count(), 0)
         self.assertEqual(Portfolio.objects.all().count(), 0)
 
