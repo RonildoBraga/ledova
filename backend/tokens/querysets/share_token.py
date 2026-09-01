@@ -5,11 +5,8 @@ from django.db.models import QuerySet
 class ShareTokenQuerySet(QuerySet):
 
     def visible_to_user(self, user):
-        if user is None:
+        if user is None or not user.is_authenticated:
             return self.none()
-
-        if user.is_staff or user.is_superuser:
-            return self
 
         from companies.models import Company
 
@@ -17,11 +14,8 @@ class ShareTokenQuerySet(QuerySet):
         return self.filter(company__in=user_companies)
 
     def manageable_by_user(self, user):
-        if user is None:
+        if user is None or not user.is_authenticated:
             return self.none()
-
-        if user.is_staff or user.is_superuser:
-            return self
 
         from companies.models import Company
 
