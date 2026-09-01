@@ -261,11 +261,9 @@ class TradingReadIsolationTest(APITestCase):
         self.assertEqual(response.status_code, 200)
         get_history.assert_called_once_with(
             wallet_ids=(self.bob_wallet.uuid,),
-            wallet_addresses=(Web3.to_checksum_address(self.bob_wallet.address),),
             start_date=None,
             end_date=None,
             transaction_type=None,
-            include_address_only_history=False,
         )
 
     def test_transaction_serializer_ignores_raw_query_addresses(self):
@@ -391,20 +389,27 @@ class TradingReadIsolationTest(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["count"], 0)
 
-    def test_staff_may_read_bounded_address_only_history(self):
+    def test_privileged_address_only_history_is_suppressed(self):
         self._create_address_only_history()
         staff, _, _ = self._make_tenant("staff@read.test", self.alice_wallet.address)
         staff.is_staff = True
         staff.save(update_fields=["is_staff"])
-        self.client.force_authenticate(staff)
+        superuser, _, _ = self._make_tenant("superuser@read.test", self.alice_wallet.address)
+        superuser.is_superuser = True
+        superuser.save(update_fields=["is_superuser"])
 
-        response = self.client.get(
-            "/api/v1/trading/transactions/",
-            {"wallet_addresses": self.alice_wallet.address},
-        )
+        for user in (staff, superuser):
+            self.client.force_authenticate(user)
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["count"], 2)
+            for transaction_type in (None, "stablecoin_mint", "token_issuance"):
+                params = {"wallet_addresses": self.alice_wallet.address}
+                if transaction_type:
+                    params["transaction_type"] = transaction_type
+
+                with self.subTest(user=user.email, transaction_type=transaction_type):
+                    response = self.client.get("/api/v1/trading/transactions/", params)
+                    self.assertEqual(response.status_code, 200)
+                    self.assertEqual(response.data["count"], 0)
 
     @patch("tokens.views.trading_transfer.TransferService")
     def test_transfer_prepare_rejects_foreign_from_address_before_service_construction(self, service_class):
