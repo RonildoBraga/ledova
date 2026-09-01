@@ -27,7 +27,7 @@ class PortfolioSyncService:
         logger.info(f"{LoggingContext.PORTFOLIOS} Syncing portfolio {portfolio.name}")
 
         try:
-            wallets = portfolio.wallets.all()
+            wallets = portfolio.account_wallets()
             if not wallets.exists():
                 return {"status": "success", "snapshots_created": 0}
 

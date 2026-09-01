@@ -26,12 +26,16 @@ class Portfolio(BaseModel):
     def __str__(self):
         return self.name or f"Portfolio for {self.user_account}"
 
+    def account_wallets(self):
+        """Return only wallet links that agree with the portfolio's tenant."""
+        return self.wallets.filter(user_account_id=self.user_account_id)
+
     @property
     def holdings_summary(self):
         from collections import defaultdict
 
         aggregated = defaultdict(Decimal)
-        for wallet in self.wallets.all():
+        for wallet in self.account_wallets():
             for holding in wallet.holdings.filter(asset__is_active=True):
                 aggregated[holding.asset] += holding.quantity
         return dict(aggregated)

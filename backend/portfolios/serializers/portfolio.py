@@ -14,10 +14,10 @@ class PortfolioSerializer(serializers.ModelSerializer):
     wallet_count = serializers.SerializerMethodField()
 
     def get_wallet_uuids(self, obj):
-        return [str(wallet.uuid) for wallet in obj.wallets.all()]
+        return [str(wallet.uuid) for wallet in obj.account_wallets()]
 
     def get_wallet_count(self, obj):
-        return obj.wallets.count()
+        return obj.account_wallets().count()
 
     class Meta:
         model = Portfolio
@@ -100,7 +100,10 @@ class AssetAllocationSerializer(serializers.ModelSerializer):
     def get_fields(self):
         fields = super().get_fields()
         request = self.context.get("request")
-        fields["portfolio"].queryset = Portfolio.objects.visible_to_user(request.user).active()
+        if request is None or not request.user.is_authenticated:
+            fields["portfolio"].queryset = Portfolio.objects.none()
+        else:
+            fields["portfolio"].queryset = Portfolio.objects.visible_to_user(request.user).active()
         fields["asset"].queryset = Asset.objects.all()
         return fields
 

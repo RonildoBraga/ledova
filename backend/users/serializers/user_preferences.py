@@ -81,13 +81,14 @@ class UserPreferencesSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
+        live_account_ids = set(instance.user_profile.user_accounts.values_list("pk", flat=True))
 
-        if instance.selected_account:
+        if instance.selected_account_id in live_account_ids:
             representation["selected_account"] = SelectedAccountSerializer(instance.selected_account).data
         else:
             representation["selected_account"] = None
 
-        if instance.selected_portfolio:
+        if instance.selected_portfolio and instance.selected_portfolio.user_account_id in live_account_ids:
             representation["selected_portfolio"] = SelectedPortfolioSerializer(instance.selected_portfolio).data
         else:
             representation["selected_portfolio"] = None

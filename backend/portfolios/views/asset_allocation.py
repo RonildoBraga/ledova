@@ -41,10 +41,11 @@ class AssetAllocationViewSet(AuthenticatedModelViewSet):
     @action(detail=False, methods=["delete"], url_path="by-portfolio/(?P<portfolio_uuid>[^/.]+)")
     @transaction.atomic
     def delete_by_portfolio(self, request, portfolio_uuid=None):
-        if not Portfolio.objects.filter(uuid=portfolio_uuid).exists():
+        portfolio = Portfolio.objects.visible_to_user(request.user).active().filter(uuid=portfolio_uuid).first()
+        if not portfolio:
             raise PortfolioNotFoundException(portfolio_uuid)
 
-        queryset = self.get_queryset().filter(portfolio__uuid=portfolio_uuid)
+        queryset = self.get_queryset().filter(portfolio=portfolio)
         allocations_count = queryset.count()
 
         if allocations_count == 0:
