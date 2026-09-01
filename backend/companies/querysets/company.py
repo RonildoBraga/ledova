@@ -1,5 +1,4 @@
 from django.db.models import Q, QuerySet
-from guardian.shortcuts import get_objects_for_user
 
 
 class CompanyQuerySet(QuerySet):
@@ -7,12 +6,16 @@ class CompanyQuerySet(QuerySet):
     def visible_to_user(self, user):
         if user.is_superuser or user.is_staff:
             return self
-        return get_objects_for_user(user, "companies.view_company", klass=self)
+        if not user.is_authenticated:
+            return self.none()
+        return self.filter(owner=user)
 
     def manageable_by_user(self, user):
         if user.is_superuser or user.is_staff:
             return self
-        return get_objects_for_user(user, "companies.change_company", klass=self)
+        if not user.is_authenticated:
+            return self.none()
+        return self.filter(owner=user)
 
     def with_optimized_data(self):
         return self.prefetch_related("contacts", "documents", "whitelist_entries")

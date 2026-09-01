@@ -1,6 +1,5 @@
 from django.db import models
 from django.db.models import QuerySet
-from guardian.shortcuts import get_objects_for_user
 
 
 class CapitalIncreaseRequestQuerySet(QuerySet):
@@ -14,12 +13,7 @@ class CapitalIncreaseRequestQuerySet(QuerySet):
 
         from companies.models import Company
 
-        user_companies = get_objects_for_user(
-            user,
-            "companies.view_company",
-            klass=Company,
-            accept_global_perms=False,
-        )
+        user_companies = Company.objects.visible_to_user(user)
         return self.filter(token__company__in=user_companies)
 
     def manageable_by_user(self, user):
@@ -31,12 +25,7 @@ class CapitalIncreaseRequestQuerySet(QuerySet):
 
         from companies.models import Company
 
-        user_companies = get_objects_for_user(
-            user,
-            "companies.change_company",
-            klass=Company,
-            accept_global_perms=False,
-        )
+        user_companies = Company.objects.manageable_by_user(user)
         return self.filter(token__company__in=user_companies)
 
     def draft(self):

@@ -32,7 +32,15 @@ class DocumentViewSet(AuthenticatedModelViewSet):
             qs = CompanyDocument.objects.visible_to_user(user)
 
         if company_uuid:
-            qs = qs.filter(company__uuid=company_uuid)
+            company_queryset = (
+                Company.objects.manageable_by_user(user)
+                if self.action in ("create", "destroy")
+                else Company.objects.visible_to_user(user)
+            )
+            company = company_queryset.filter(uuid=company_uuid).first()
+            if not company:
+                raise NotFound("Company not found or permission denied")
+            qs = qs.filter(company=company)
 
         return qs
 

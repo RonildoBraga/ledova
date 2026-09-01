@@ -54,16 +54,9 @@ class TransferOrderQuerySet(QuerySet):
         if user.is_staff or user.is_superuser:
             return self
 
-        from guardian.shortcuts import get_objects_for_user
-
         from companies.models import Company
 
-        user_companies = get_objects_for_user(
-            user,
-            "companies.view_company",
-            klass=Company,
-            accept_global_perms=False,
-        )
+        user_companies = Company.objects.visible_to_user(user)
         return self.ownership_bound().filter(token__company__in=user_companies)
 
     def open(self):
