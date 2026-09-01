@@ -32,7 +32,6 @@ def _authenticate_sync(request):
     except Exception:
         pass
 
-    # Mobile's URL token transport remains until GitHub issue #3 is addressed.
     query_token = request.GET.get("auth")
     if query_token:
         query_request = SimpleNamespace(
