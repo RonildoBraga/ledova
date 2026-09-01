@@ -1,6 +1,5 @@
 from django.db import models
 from django.db.models import QuerySet
-from guardian.shortcuts import get_objects_for_user
 
 
 class CountryQuerySet(QuerySet):
@@ -24,13 +23,6 @@ class CountryQuerySet(QuerySet):
         if search_query:
             return self.filter(models.Q(name__icontains=search_query) | models.Q(code__icontains=search_query))
         return self
-
-    def visible_to_user(self, user):
-        if user.is_superuser or user.is_staff:
-            return self
-        return get_objects_for_user(user, "view_country", klass=self, accept_global_perms=False).union(
-            self.filter(is_available=True)
-        )
 
     def filter_available(self, is_available=True):
         """Kept for manager proxy."""
