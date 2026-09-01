@@ -4,20 +4,25 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from shared.constants import get_native_asset_symbol
-from shared.views import AuthenticatedModelViewSet
+from shared.views import AuthenticatedReadOnlyViewSet
 from wallets.exceptions import WalletUuidRequiredException
 from wallets.models import FiatTransaction, Wallet
 from wallets.serializers import FiatTransactionSerializer
 from wallets.services.fiat_onramp import generate_transak_widget_url
 
 
-class FiatTransactionViewSet(AuthenticatedModelViewSet):
+class FiatTransactionViewSet(AuthenticatedReadOnlyViewSet):
     serializer_class = FiatTransactionSerializer
     ordering = ["-created_at"]
     ordering_fields = ["created_at", "updated_at"]
 
     def get_queryset(self):
-        return FiatTransaction.objects.filter(user=self.request.user).select_related("wallet")
+        user = self.request.user
+        if not user.is_authenticated:
+            return FiatTransaction.objects.none()
+
+        visible_wallets = Wallet.objects.visible_to_user(user)
+        return FiatTransaction.objects.filter(user=user, wallet__in=visible_wallets).select_related("wallet")
 
     @action(detail=False, methods=["post"], url_path="transak-widget-url")
     def transak_widget_url(self, request):
@@ -32,7 +37,7 @@ class FiatTransactionViewSet(AuthenticatedModelViewSet):
         if not crypto_currency_code:
             crypto_currency_code = get_native_asset_symbol(wallet.chain)
 
-        chain = request.data.get("chain") or wallet.chain
+        chain = wallet.chain
 
         # Fiat settings
         fiat_currency = request.data.get("fiat_currency")
@@ -40,14 +45,13 @@ class FiatTransactionViewSet(AuthenticatedModelViewSet):
         fiat_amount = request.data.get("fiat_amount")
         default_fiat_amount = request.data.get("default_fiat_amount")
 
-        # Auto-populate from authenticated user
-        email = request.data.get("email") or request.user.email
+        # Identity and destination binding are server-owned. The caller may
+        # choose purchase amounts/assets, but cannot redirect the session.
+        email = request.user.email
         partner_customer_id = str(request.user.pk)
 
         # Widget UX settings — server-side defaults for consistent branding
         theme_color = request.data.get("theme_color") or getattr(settings, "TRANSAK_THEME_COLOR", "")
-        disable_wallet_address_form = request.data.get("disable_wallet_address_form", True)
-        products_availed = request.data.get("products_availed", "BUY")
         redirect_url = request.data.get("redirect_url")
 
         widget_url = generate_transak_widget_url(
@@ -59,8 +63,8 @@ class FiatTransactionViewSet(AuthenticatedModelViewSet):
             fiat_amount=fiat_amount,
             default_fiat_amount=default_fiat_amount,
             email=email,
-            disable_wallet_address_form=disable_wallet_address_form,
-            products_availed=products_availed,
+            disable_wallet_address_form=True,
+            products_availed="BUY",
             redirect_url=redirect_url,
             theme_color=theme_color,
             hide_menu=True,

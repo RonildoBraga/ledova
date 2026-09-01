@@ -30,17 +30,4 @@ class FiatTransactionSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = [
-            "uuid",
-            "external_id",
-            "status",
-            "crypto_amount",
-            "transaction_hash",
-            "provider_fee",
-            "network_fee",
-            "completed_at",
-            "failed_at",
-            "failure_reason",
-            "created_at",
-            "updated_at",
-        ]
+        read_only_fields = fields
