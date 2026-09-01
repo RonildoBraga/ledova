@@ -1,14 +1,8 @@
 from django.db.models import QuerySet
 from django.utils import timezone
-from guardian.shortcuts import get_objects_for_user
 
 
 class CustomUserQuerySet(QuerySet):
-    def visible_to_user(self, user):
-        if user.is_superuser or user.is_staff:
-            return self
-        return get_objects_for_user(user, "view_customuser", klass=self)
-
     def active_users(self):
         return self.filter(is_active=True)
 
