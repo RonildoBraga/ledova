@@ -10,14 +10,19 @@ from rest_framework.test import APITestCase
 from companies.models import Company, CompanyDocument
 from tokens.models import (
     CapitalIncreaseRequest,
+    CapitalIncreaseStatus,
+    IssuanceStatus,
+    ShareIssuance,
     ShareIssuanceRequest,
     ShareToken,
+    ShareTokenStatus,
     TransferOrder,
 )
 from tokens.models.choices import TransferOrderStatus, TransferOrderType
 from tokens.views.share_token import ShareTokenViewSet
 from users.models import UserAccount, UserProfile
 from wallets.models import Wallet
+from whitelist.models import WhitelistEntry
 
 User = get_user_model()
 
@@ -196,6 +201,89 @@ class CompanyLiveAuthorizationTest(APITestCase):
 
         self.company.refresh_from_db()
         self.assertEqual(self.company.name, "Alice Holdings Pty Ltd")
+
+    def test_company_stats_are_exactly_self_scoped_for_regular_and_privileged_owners(self):
+        foreign_company = Company.objects.create(
+            owner=self.bob,
+            name="Foreign Stats Company",
+            company_type="pty",
+            acn="888888888",
+            status="active",
+        )
+        actor_cases = []
+        for index, actor in enumerate((self.alice, self.staff, self.superuser), start=5):
+            if actor == self.alice:
+                company = self.company
+            else:
+                company = Company.objects.create(
+                    owner=actor,
+                    name=f"Stats Company {index}",
+                    company_type="pty",
+                    acn=str(index) * 9,
+                    status="active",
+                )
+            token = ShareToken.objects.create(
+                company=company,
+                name=f"Stats Token {index}",
+                symbol=f"ST{index}",
+                total_supply="1000",
+                status=ShareTokenStatus.DEPLOYED,
+            )
+            ShareIssuance.objects.create(
+                token=token,
+                recipient_address="0x" + f"{index:x}" * 40,
+                amount="100",
+                reason="Stats coverage",
+                status=IssuanceStatus.COMPLETED,
+                initiated_by=actor,
+            )
+            CapitalIncreaseRequest.objects.create(
+                token=token,
+                additional_shares=100,
+                new_authorized_total=1100,
+                purpose="Stats coverage",
+                board_resolution_reference=f"BOARD-STATS-{index}",
+                status=CapitalIncreaseStatus.SUBMITTED,
+            )
+            actor_cases.append((actor, company))
+
+        expected = {
+            "totalTokens": 1,
+            "totalShareholders": 1,
+            "pendingActions": 1,
+            "pendingCapitalIncreases": 1,
+        }
+        baseline = {}
+        for actor, company in actor_cases:
+            self.client.force_authenticate(actor)
+            response = self.client.get(f"/api/v1/companies/{company.uuid}/stats/")
+            foreign_response = self.client.get(f"/api/v1/companies/{foreign_company.uuid}/stats/")
+
+            with self.subTest(actor=actor.email, phase="baseline"):
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json(), expected)
+                self.assertEqual(foreign_response.status_code, 404)
+                baseline[actor.pk] = response.json()
+
+        foreign_profile = UserProfile.objects.create(user=self.bob)
+        foreign_account = UserAccount.objects.create(account_number="FOREIGN-STATS")
+        foreign_account.user_profiles.add(foreign_profile)
+        foreign_wallet = Wallet.objects.create(
+            user_account=foreign_account,
+            address="0x" + "f" * 40,
+            chain="ethereum",
+            verification_status="VERIFIED",
+        )
+        WhitelistEntry.objects.create(wallet=foreign_wallet, is_whitelisted=True)
+
+        for actor, company in actor_cases:
+            self.client.force_authenticate(actor)
+            response = self.client.get(f"/api/v1/companies/{company.uuid}/stats/")
+
+            with self.subTest(actor=actor.email, phase="foreign-whitelist"):
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json(), baseline[actor.pk])
+                self.assertEqual(set(response.json()), set(expected))
 
 
 class CompanyEndpointIsolationTest(APITestCase):
