@@ -225,15 +225,11 @@ class ModelQuerySet(QuerySet):
     def visible_to_user(self, user):
         if user is None or not user.is_authenticated:
             return self.none()
-        if user.is_superuser or user.is_staff:
-            return self
         return self.filter(user_account__user_profiles__user=user).distinct()
 
     def manageable_by_user(self, user):
         if user is None or not user.is_authenticated:
             return self.none()
-        if user.is_superuser or user.is_staff:
-            return self
         return self.filter(user_account__user_profiles__user=user).distinct()
 
     def active(self):
@@ -278,9 +274,9 @@ class ModelManager(models.Manager.from_queryset(ModelQuerySet)):
 - **Ordering**: Use `ordering` (default) and `ordering_fields` (allowed) on views. DRF's `OrderingFilter` handles it.
 - **Pagination**: DRF's `PageNumberPagination` (25 items/page) handles limiting. No manual slicing.
 - **Permissions**: `visible_to_user(user)` for reads, `manageable_by_user(user)` for writes — called in `get_queryset()`.
+- **Operator access**: Customer API querysets scope every authenticated role, including staff and superusers. Global operator access belongs in Django Admin or a purpose-built action with explicit `IsAdminUser` and a separate bounded queryset.
 - **Managers**: Use `QuerySet.as_manager()` on the model. No separate manager file unless custom methods are needed.
 - Always use `select_related`/`prefetch_related` for related data.
-- Staff/superuser bypass permissions.
 
 **Reference**: `companies/filters.py`, `companies/querysets/document.py`, `companies/views/document.py`
 

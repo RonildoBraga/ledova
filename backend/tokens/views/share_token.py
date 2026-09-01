@@ -44,38 +44,18 @@ class ShareTokenViewSet(AuthenticatedModelViewSet):
         if self.action in ("create", "update", "partial_update", "destroy"):
             return ShareToken.objects.manageable_by_user(user).with_company()
 
-        if user.is_staff or user.is_superuser:
-            return ShareToken.objects.with_company()
-
         return ShareToken.objects.visible_to_user(user).with_company()
 
     def get_manageable_queryset(self):
-        user = self.request.user
-
-        if user.is_staff or user.is_superuser:
-            return ShareToken.objects.select_related("company").all()
-
-        return ShareToken.objects.manageable_by_user(user).select_related("company")
+        return ShareToken.objects.manageable_by_user(self.request.user).select_related("company")
 
     def get_user_company(self):
-        user = self.request.user
-
-        if user.is_staff or user.is_superuser:
-            return None
-
-        return Company.objects.manageable_by_user(user).first()
+        return Company.objects.manageable_by_user(self.request.user).first()
 
     def create(self, request, *args, **kwargs):
         from rest_framework.exceptions import PermissionDenied, ValidationError
 
         company = self.get_user_company()
-
-        if not company and request.user.is_staff:
-            company_uuid = request.data.get("company")
-            if company_uuid:
-                company = get_object_or_404(Company, uuid=company_uuid)
-            else:
-                raise ValidationError({"company": "Staff users must specify a company UUID."})
 
         if not company:
             raise PermissionDenied("You must be associated with a company to create tokens.")
