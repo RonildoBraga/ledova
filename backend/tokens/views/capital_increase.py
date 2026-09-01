@@ -51,11 +51,8 @@ class CapitalIncreaseViewSet(AuthenticatedModelViewSet):
         if not token_uuid:
             raise ValidationError({"token": "Token UUID is required."})
 
-        if request.user.is_staff or request.user.is_superuser:
-            token = get_object_or_404(ShareToken, uuid=token_uuid)
-        else:
-            manageable_tokens = ShareToken.objects.manageable_by_user(request.user)
-            token = get_object_or_404(manageable_tokens, uuid=token_uuid)
+        manageable_tokens = ShareToken.objects.manageable_by_user(request.user)
+        token = get_object_or_404(manageable_tokens, uuid=token_uuid)
 
         if token.status != "deployed":
             raise InvalidTokenStateException("Capital increase requests can only be created for deployed tokens.")
