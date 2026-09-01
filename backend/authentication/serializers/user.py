@@ -21,13 +21,10 @@ class UserTokenSerializer(serializers.ModelSerializer):
 
 class EmailVerificationSerializer(serializers.Serializer):
     token = serializers.CharField(required=True)
-    email = serializers.EmailField(required=False)
+    email = serializers.EmailField(required=True)
 
     def validate_email(self, value):
-        """Normalize email if provided"""
-        if value:
-            return value.lower().strip()
-        return value
+        return value.lower().strip()
 
     def to_representation(self, instance):
         representation = {
