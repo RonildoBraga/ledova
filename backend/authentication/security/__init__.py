@@ -59,6 +59,13 @@ from authentication.security.v2_email import (
     normalize_v2_email,
     v2_email_destination_expression,
 )
+from authentication.security.v2_request_source import (
+    V2TrustedProxyConfiguration,
+    V2TrustedProxyConfigurationError,
+    load_trusted_proxy_config,
+    request_ip_rate_digests,
+    resolve_trusted_proxy_config,
+)
 
 __all__ = [
     "INITIAL_ACCESS_KID",
@@ -83,6 +90,8 @@ __all__ = [
     "V2KeyMaterial",
     "V2KeyMaterialError",
     "V2RefreshTokenParts",
+    "V2TrustedProxyConfiguration",
+    "V2TrustedProxyConfigurationError",
     "V2_EMAIL_ERROR",
     "decode_v2_confirmation_token",
     "decode_v2_password_reset_credential",
@@ -97,6 +106,7 @@ __all__ = [
     "ip_rate_digests",
     "issue_access_token",
     "load_challenge_config",
+    "load_trusted_proxy_config",
     "load_v2_key_material",
     "normalize_v2_email",
     "otp_digest",
@@ -109,9 +119,11 @@ __all__ = [
     "refresh_confirmation_matches",
     "refresh_secret_digest",
     "refresh_secret_matches",
+    "request_ip_rate_digests",
     "resolve_access_config",
     "resolve_access_expiry",
     "resolve_challenge_config",
+    "resolve_trusted_proxy_config",
     "verify_access_token",
     "v2_email_destination_expression",
 ]
