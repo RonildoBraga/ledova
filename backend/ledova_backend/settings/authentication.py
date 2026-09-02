@@ -5,12 +5,9 @@ Authentication and authorization settings for ledova_backend project.
 import os
 from datetime import timedelta
 
-from ledova_backend.environment import read_canonical_cidr_list
-
 from .base import SECRET_KEY
 
 AUTH_USER_MODEL = "authentication.CustomUser"
-V2_TRUSTED_PROXY_CIDRS = read_canonical_cidr_list("V2_TRUSTED_PROXY_CIDRS")
 
 AUTHENTICATION_BACKENDS = ("django.contrib.auth.backends.ModelBackend",)
 

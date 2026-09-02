@@ -5,11 +5,6 @@ Logging settings for ledova_backend project.
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "filters": {
-        "v2_procrastinate_privacy": {
-            "()": "ledova_backend.logging_filters.V2ProcrastinateLogFilter",
-        },
-    },
     "formatters": {
         "verbose": {
             "format": "{levelname} {asctime} {module} {message}",
@@ -30,7 +25,6 @@ LOGGING = {
             "level": "WARNING",
             "class": "logging.StreamHandler",
             "formatter": "verbose",
-            "filters": ["v2_procrastinate_privacy"],
         },
     },
     "loggers": {

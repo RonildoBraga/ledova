@@ -16,7 +16,7 @@ from django.test import TransactionTestCase
 
 MIGRATE_FROM = [("authentication", "0002_authsession_refreshcredential")]
 MIGRATE_TO = [("authentication", "0003_customuser_v2_email_constraints")]
-MIGRATE_LATEST = [("authentication", "0005_auth_del_superseded_proof_shapes")]
+MIGRATE_LATEST = [("authentication", "0006_delete_v2_challenge_models")]
 PREFLIGHT_ERROR = "V2 email migration preflight failed."
 MIGRATION_NAME = "0003_customuser_v2_email_constraints"
 CONSTRAINT_NAMES = {
@@ -53,6 +53,9 @@ class V2EmailMigrationTest(TransactionTestCase):
             self.delete_users()
         finally:
             self.migrate(MIGRATE_LATEST)
+        tables = connection.introspection.table_names()
+        self.assertNotIn("authentication_challenge", tables)
+        self.assertNotIn("authentication_challenge_delivery", tables)
 
     def assert_preflight_rejected(self, private_value=None):
         stdout = StringIO()

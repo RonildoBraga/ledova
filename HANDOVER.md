@@ -1,6 +1,6 @@
 # Project handover
 
-Last verified: 2026-09-02
+Last verified: 2026-09-03
 
 ## Project context
 
@@ -20,37 +20,23 @@ is removed. Tenant isolation is enforced by the `visible_to_user` /
 `backend/shared/tests/test_cross_tenant_routes.py`; PostgreSQL RLS is not
 planned.
 
-[Issue #2](https://github.com/RonildoBraga/ledova/issues/2) is implemented
-through [PR #65](https://github.com/RonildoBraga/ledova/pull/65). PRs #39–#48
-landed fail-closed characterization, session rotation/revocation, strict access
-JWTs, and active-session binding. PRs #50–#57 froze and implemented the v2
-challenge primitives, canonical email boundary, durable schema, and request
-source identity. PRs #58–#65 completed the schema correction, logging and query
-privacy guards, typed SendGrid adapter, PostgreSQL admission kernel, and atomic
-reservation/job coupling.
-
-The last implementation checkpoint is
-`963c68656551a0d0dbbab463479f2efa119a31f6`; subsequent handover-only changes
-introduced no runtime code. Independent exact-diff review passed for the
-queue-coupling batch, and the latest
-[post-merge CI](https://github.com/RonildoBraga/ledova/actions/runs/33620614514)
-passed every JavaScript, Django, SQLite, and PostgreSQL stage. The v2 delivery
-task remains fixed-fail on an excluded hold queue: no provider worker, v2
-endpoint, CSRF boundary, client cutover, or legacy retirement is active.
+[Issue #2](https://github.com/RonildoBraga/ledova/issues/2) changed scope:
+the unwired v2 session protocol (PRs #39–#65, last checkpoint `963c686`) is
+withdrawn per [ADR 0005](backend/docs/adr/0005-withdraw-v2-session-protocol.md).
+The challenge/delivery/admission stream is deleted; the remaining v2 session
+modules are removed next, and the legacy `AuthViewSet` is hardened in place.
 
 ## Next work
 
-Add a disjoint, kernel-owned new-challenge path without weakening the existing
-`challenge is locked_scope` proof. The smallest first batch should create a
-password-reset challenge for an exact pre-clock locked user, derive all UUIDs
-and timestamps in the kernel, and roll back challenge, delivery, and queue job
-together. Keep absent-signup user creation and its uniqueness race as a separate
-typed batch.
+Do not continue v2. Harden the legacy auth path in this order:
 
-Then implement authoritative resend and worker claim/finalization before wiring
-public endpoints. Runtime authentication still needs request-derived transport
-classification, mixed cookie/Bearer rejection, typed `access_expired`, and the
-browser CSRF boundary before client cutover.
+1. Remove the remaining v2 session core (AuthSession, RefreshCredential,
+   v2_credentials, v2_access_tokens, v2_sessions, v2_access) and their tests.
+2. Refresh rotation with simplejwt `token_blacklist` (BLACKLIST_AFTER_ROTATION,
+   revoke-all via OutstandingToken), replacing UserToken.
+3. Hashed, expiring, attempt-capped OTP with a per-email throttle; no DEBUG bypass.
+4. CSRF check for cookie-sourced unsafe requests, pending the dashboard change.
+5. Explicit native body-token endpoints for the mobile app.
 
 The remaining canonical backlog is [ISSUES.md](ISSUES.md).
 

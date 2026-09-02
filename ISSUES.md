@@ -9,10 +9,10 @@ and independent review before any public multi-user or real-value use.
    `manageable_by_user` querysets, every detail route and action is covered by
    the cross-tenant route matrix, and global operator routes require explicit
    admin access. PostgreSQL RLS is not planned.
-2. **Authentication, sessions, and CSRF.** Implement the explicit browser and
-   native transports, stateful sessions, refresh rotation, email challenges,
-   and lifecycle gates accepted in
-   [ADR 0003](backend/docs/adr/0003-authentication-session-protocol.md).
+2. **Authentication hardening.** Refresh rotation and blacklist, hashed
+   expiring OTP with a per-email throttle, CSRF on the cookie transport
+   (pending a dashboard change), native token transport; see
+   [ADR 0005](backend/docs/adr/0005-withdraw-v2-session-protocol.md).
 3. **SSE query JWTs.** Replace event-stream authentication that places bearer
    tokens in URLs, where proxies, browser history, and logs can retain them.
 4. **Signed-intent binding and replay.** Bind every signature to one reviewed
