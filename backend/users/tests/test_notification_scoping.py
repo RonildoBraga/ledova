@@ -1,4 +1,4 @@
-"""Cross-tenant tests for notifications, notification preferences, device tokens and identity verification."""
+"""Behaviour tests for notifications, notification preferences, device tokens and identity verification."""
 
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -21,16 +21,10 @@ class NotificationScopingTest(APITestCase):
     def setUp(self):
         self.alice = User.objects.create_user(email="alice-notif@example.test", password="pw-12345678")
         self.bob = User.objects.create_user(email="bob-notif@example.test", password="pw-12345678")
-        self.staff = User.objects.create_user(email="staff-notif@example.test", password="pw-12345678", is_staff=True)
-        self.superuser = User.objects.create_user(
-            email="super-notif@example.test", password="pw-12345678", is_superuser=True, is_staff=True
-        )
-        self.profiles = {
-            user: UserProfile.objects.create(user=user) for user in (self.alice, self.bob, self.staff, self.superuser)
-        }
+        self.profiles = {user: UserProfile.objects.create(user=user) for user in (self.alice, self.bob)}
         self.notifications = {
             user: Notification.objects.create(user=user, title=f"For {user.email}", body="Body")
-            for user in (self.alice, self.bob, self.staff, self.superuser)
+            for user in (self.alice, self.bob)
         }
         self.bob_preferences = NotificationPreferences.objects.create(user_profile=self.profiles[self.bob])
         self.alice_token = DeviceToken.objects.create(
@@ -157,22 +151,3 @@ class NotificationScopingTest(APITestCase):
         ):
             with self.subTest(method=method, url=url):
                 self.assertEqual(getattr(self.client, method)(url, {}, format="json").status_code, 401)
-
-    def test_staff_and_superuser_are_self_scoped(self):
-        for actor in (self.staff, self.superuser):
-            self.client.force_authenticate(actor)
-            with self.subTest(actor=actor.email):
-                own = self.notifications[actor]
-                self.assertEqual(set(Notification.objects.visible_to_user(actor)), {own})
-                self.assertEqual({row["uuid"] for row in self._rows(self.client.get(NOTIFICATIONS))}, {str(own.uuid)})
-                self.assertEqual(self.client.get(f"{NOTIFICATIONS}unread-count/").json(), {"unreadCount": 1})
-                foreign = self.notifications[self.alice]
-                self.assertEqual(self.client.get(f"{NOTIFICATIONS}{foreign.uuid}/").status_code, 404)
-
-                preferences = self.client.get(PREFERENCES)
-                self.assertEqual(preferences.status_code, 200)
-                self.assertEqual(
-                    preferences.json()["uuid"], str(NotificationPreferences.objects.get(user_profile__user=actor).uuid)
-                )
-                self.assertEqual(self.client.get(f"{PREFERENCES}{self.bob_preferences.uuid}/").status_code, 404)
-                self.assertEqual({row["uuid"] for row in self._rows(self.client.get("/api/device-tokens/"))}, set())

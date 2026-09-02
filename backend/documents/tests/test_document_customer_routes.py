@@ -88,45 +88,32 @@ class DocumentCustomerRouteTest(APITestCase):
         body = response.json()
         return body.get("results", body) if isinstance(body, dict) else body
 
-    def test_regular_staff_and_superuser_read_delete_routes_are_self_scoped(self):
-        for actor, document, older_extraction, latest_extraction in self.actor_cases:
-            self.client.force_authenticate(actor)
+    def test_reads_expose_only_the_latest_extraction(self):
+        actor, document, older_extraction, latest_extraction = self.actor_cases[0]
+        self.client.force_authenticate(actor)
 
-            with self.subTest(actor=actor.email, operation="read"):
-                list_response = self.client.get("/api/v1/documents/")
-                self.assertEqual(list_response.status_code, 200)
-                rows = self._response_rows(list_response)
-                self.assertEqual({row["uuid"] for row in rows}, {str(document.uuid)})
-                self.assertEqual(rows[0]["latestExtraction"]["uuid"], str(latest_extraction.uuid))
-                self.assertNotEqual(rows[0]["latestExtraction"]["uuid"], str(older_extraction.uuid))
+        list_response = self.client.get("/api/v1/documents/")
+        self.assertEqual(list_response.status_code, 200)
+        rows = self._response_rows(list_response)
+        self.assertEqual({row["uuid"] for row in rows}, {str(document.uuid)})
+        self.assertEqual(rows[0]["latestExtraction"]["uuid"], str(latest_extraction.uuid))
+        self.assertNotEqual(rows[0]["latestExtraction"]["uuid"], str(older_extraction.uuid))
 
-                detail_response = self.client.get(f"/api/v1/documents/{document.uuid}/")
-                self.assertEqual(detail_response.status_code, 200)
-                self.assertEqual(detail_response.json()["uuid"], str(document.uuid))
-                self.assertEqual(
-                    detail_response.json()["latestExtraction"]["uuid"],
-                    str(latest_extraction.uuid),
-                )
+        detail_response = self.client.get(f"/api/v1/documents/{document.uuid}/")
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertEqual(detail_response.json()["latestExtraction"]["uuid"], str(latest_extraction.uuid))
 
-            with self.subTest(actor=actor.email, operation="foreign"):
-                foreign_retrieve = self.client.get(f"/api/v1/documents/{self.foreign_document.uuid}/")
-                foreign_delete = self.client.delete(f"/api/v1/documents/{self.foreign_document.uuid}/")
-                self.assertEqual(foreign_retrieve.status_code, 404)
-                self.assertEqual(foreign_delete.status_code, 404)
-                self.assertTrue(Document.objects.filter(uuid=self.foreign_document.uuid).exists())
-                self.assertTrue(DocumentExtraction.objects.filter(uuid=self.foreign_extraction.uuid).exists())
+    def test_delete_removes_the_document_and_its_extractions(self):
+        actor, _, _, _ = self.actor_cases[0]
+        self.client.force_authenticate(actor)
+        disposable = self._make_document(actor, "disposable")
+        disposable_extraction = self._make_extraction(disposable, "disposable", ExtractionStatus.PENDING)
 
-            with self.subTest(actor=actor.email, operation="delete"):
-                disposable = self._make_document(actor, f"{actor.email}-disposable")
-                disposable_extraction = self._make_extraction(
-                    disposable,
-                    f"{actor.email}-disposable",
-                    ExtractionStatus.PENDING,
-                )
-                delete_response = self.client.delete(f"/api/v1/documents/{disposable.uuid}/")
-                self.assertEqual(delete_response.status_code, 204)
-                self.assertFalse(Document.objects.filter(uuid=disposable.uuid).exists())
-                self.assertFalse(DocumentExtraction.objects.filter(uuid=disposable_extraction.uuid).exists())
+        delete_response = self.client.delete(f"/api/v1/documents/{disposable.uuid}/")
+
+        self.assertEqual(delete_response.status_code, 204)
+        self.assertFalse(Document.objects.filter(uuid=disposable.uuid).exists())
+        self.assertFalse(DocumentExtraction.objects.filter(uuid=disposable_extraction.uuid).exists())
 
     @patch("documents.views.document.extract_document.defer")
     def test_multipart_upload_is_server_bound_for_every_role(self, defer_task):

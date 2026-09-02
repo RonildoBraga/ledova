@@ -5,9 +5,10 @@ experimental local/testnet release. Open areas require implementation, tests,
 and independent review before any public multi-user or real-value use.
 
 1. **Tenant isolation and authorization — completed 2026-09-02.** Customer
-   queries and mutations are self-scoped, global operator routes require
-   explicit admin access, and PostgreSQL RLS activation remains deferred by
-   [ADR 0002](backend/docs/adr/0002-rls-tenant-isolation.md).
+   queries and mutations are self-scoped through the `visible_to_user` /
+   `manageable_by_user` querysets, every detail route and action is covered by
+   the cross-tenant route matrix, and global operator routes require explicit
+   admin access. PostgreSQL RLS is not planned.
 2. **Authentication, sessions, and CSRF.** Implement the explicit browser and
    native transports, stateful sessions, refresh rotation, email challenges,
    and lifecycle gates accepted in

@@ -3,7 +3,6 @@
 from datetime import date, datetime
 from decimal import Decimal
 from unittest.mock import patch
-from uuid import uuid4
 
 from django.contrib.auth import get_user_model
 from django.utils import timezone
@@ -109,70 +108,6 @@ class PortfolioLiveAuthorizationTest(PortfolioFixtureMixin, APITestCase):
         self.assertIn(bob_allocation, AssetAllocation.objects.visible_to_user(self.alice))
         self.assertIn(bob_snapshot, PortfolioSnapshot.objects.visible_to_user(self.alice))
 
-    def test_staff_and_superuser_follow_live_membership_scope(self):
-        privilege_cases = (
-            ("staff", {"is_staff": True}),
-            ("super", {"is_superuser": True, "is_staff": True}),
-        )
-
-        for label, privilege in privilege_cases:
-            privileged_user = User.objects.create_user(
-                email=f"{label}@portfolio.example.test",
-                password="pw-12345678",
-                **privilege,
-            )
-            profile = UserProfile.objects.create(user=privileged_user)
-            account = UserAccount.objects.create(account_number=f"ACCOUNT-{label.upper()}")
-            account.user_profiles.add(profile)
-            portfolio = Portfolio.objects.create(user_account=account, name=f"{label.title()} Portfolio")
-            allocation = AssetAllocation.objects.create(
-                portfolio=portfolio,
-                asset=self.asset,
-                percentage="25.00",
-            )
-            snapshot = PortfolioSnapshot.objects.create(
-                portfolio=portfolio,
-                snapshot_date=date(2026, 9, 2),
-                snapshot_reason="DAILY",
-            )
-
-            with self.subTest(user=privileged_user.email):
-                self.assertEqual(set(Portfolio.objects.visible_to_user(privileged_user)), {portfolio})
-                self.assertEqual(set(AssetAllocation.objects.visible_to_user(privileged_user)), {allocation})
-                self.assertEqual(set(PortfolioSnapshot.objects.visible_to_user(privileged_user)), {snapshot})
-
-                self.client.force_authenticate(privileged_user)
-                list_response = self.client.get("/api/portfolios/")
-                own_response = self.client.get(f"/api/portfolios/{portfolio.uuid}/")
-                foreign_response = self.client.get(f"/api/portfolios/{self.alice_portfolio.uuid}/")
-                foreign_update = self.client.patch(
-                    f"/api/portfolios/{self.alice_portfolio.uuid}/",
-                    {"name": "Stolen"},
-                    format="json",
-                )
-                allocations_response = self.client.get(f"/api/portfolios/{portfolio.uuid}/allocations/")
-                snapshots_response = self.client.get(f"/api/portfolios/{portfolio.uuid}/snapshots/")
-
-                self.assertEqual(list_response.status_code, 200)
-                self.assertEqual(
-                    {row["uuid"] for row in self.rows(list_response)},
-                    {str(portfolio.uuid)},
-                )
-                self.assertEqual(own_response.status_code, 200)
-                self.assertEqual(foreign_response.status_code, 404)
-                self.assertEqual(foreign_update.status_code, 404)
-                self.assertEqual(
-                    {row["uuid"] for row in self.rows(allocations_response)},
-                    {str(allocation.uuid)},
-                )
-                self.assertEqual(
-                    {row["uuid"] for row in self.rows(snapshots_response)},
-                    {str(snapshot.uuid)},
-                )
-
-        self.alice_portfolio.refresh_from_db()
-        self.assertEqual(self.alice_portfolio.name, "Alice Portfolio")
-
 
 class PortfolioEndpointIsolationTest(PortfolioFixtureMixin, APITestCase):
     def setUp(self):
@@ -208,12 +143,7 @@ class PortfolioEndpointIsolationTest(PortfolioFixtureMixin, APITestCase):
         )
         self.client.force_authenticate(self.alice)
 
-    def test_portfolio_list_filter_and_positive_nested_reads_stay_within_tenant(self):
-        list_response = self.client.get("/api/portfolios/")
-        self.assertEqual(list_response.status_code, 200)
-        returned = {row["uuid"] for row in self.rows(list_response)}
-        self.assertEqual(returned, {str(self.alice_portfolio.uuid)})
-
+    def test_portfolio_list_filter_cannot_expand_the_live_scope(self):
         filtered_response = self.client.get(
             "/api/portfolios/",
             {"user_profile": str(self.alice_profile.uuid)},
@@ -224,95 +154,28 @@ class PortfolioEndpointIsolationTest(PortfolioFixtureMixin, APITestCase):
             {str(self.alice_portfolio.uuid)},
         )
 
-        allocations_response = self.client.get(f"/api/portfolios/{self.alice_portfolio.uuid}/allocations/")
-        snapshots_response = self.client.get(f"/api/portfolios/{self.alice_portfolio.uuid}/snapshots/")
-        self.assertEqual(allocations_response.status_code, 200)
-        self.assertEqual(snapshots_response.status_code, 200)
-        self.assertEqual(
-            {row["uuid"] for row in self.rows(allocations_response)},
-            {str(self.alice_allocation.uuid)},
-        )
-        self.assertEqual(
-            {row["uuid"] for row in self.rows(snapshots_response)},
-            {str(self.alice_snapshot.uuid)},
-        )
+        foreign_filter = self.client.get("/api/portfolios/", {"user_profile": str(self.bob_profile.uuid)})
+        self.assertEqual(foreign_filter.status_code, 200)
+        self.assertNotIn(str(self.bob_portfolio.uuid), {row["uuid"] for row in self.rows(foreign_filter)})
 
-    def test_foreign_portfolio_and_nested_actions_are_not_found(self):
-        base_url = f"/api/portfolios/{self.bob_portfolio.uuid}/"
-        cases = (
-            ("get", base_url, None),
-            ("patch", base_url, {"name": "Stolen"}),
-            ("delete", base_url, None),
-            ("get", f"{base_url}allocations/", None),
-            ("get", f"{base_url}snapshots/", None),
-            ("post", f"{base_url}add-wallet/", {"walletUuid": str(self.alice_wallet.uuid)}),
-            ("post", f"{base_url}remove-wallet/", {"walletUuid": str(self.bob_wallet.uuid)}),
-        )
-        for method, url, payload in cases:
-            with self.subTest(method=method, url=url):
-                response = getattr(self.client, method)(url, payload, format="json")
-                self.assertEqual(response.status_code, 404)
-
-        self.bob_portfolio.refresh_from_db()
-        self.assertTrue(self.bob_portfolio.is_active)
-        self.assertEqual(self.bob_portfolio.name, "Bob Portfolio")
-
-    def test_allocation_crud_and_bulk_delete_do_not_cross_tenants(self):
-        list_response = self.client.get("/api/asset-allocations/")
-        self.assertEqual(list_response.status_code, 200)
-        returned = {row["uuid"] for row in self.rows(list_response)}
-        self.assertIn(str(self.alice_allocation.uuid), returned)
-        self.assertNotIn(str(self.bob_allocation.uuid), returned)
-
-        foreign_url = f"/api/asset-allocations/{self.bob_allocation.uuid}/"
-        for method, payload in (
-            ("get", None),
-            ("patch", {"percentage": "10.00"}),
-            ("delete", None),
-        ):
-            with self.subTest(method=method):
-                response = getattr(self.client, method)(foreign_url, payload, format="json")
-                self.assertEqual(response.status_code, 404)
-
-        create_response = self.client.post(
-            "/api/asset-allocations/",
-            {
-                "portfolio": str(self.bob_portfolio.uuid),
-                "asset": str(self.asset.uuid),
-                "percentage": "10.00",
-            },
+    def test_own_wallet_can_be_added_and_removed(self):
+        add_response = self.client.post(
+            f"/api/portfolios/{self.alice_portfolio.uuid}/add-wallet/",
+            {"walletUuid": str(self.alice_wallet.uuid)},
             format="json",
         )
-        self.assertEqual(create_response.status_code, 400)
-        self.assertIn("portfolio", create_response.json())
-
-        delete_response = self.client.delete(f"/api/asset-allocations/by-portfolio/{self.bob_portfolio.uuid}/")
-        self.assertEqual(delete_response.status_code, 404)
-        self.assertTrue(AssetAllocation.objects.filter(pk=self.bob_allocation.pk).exists())
-
-    def test_wallet_actions_do_not_reveal_foreign_wallet_existence(self):
-        add_url = f"/api/portfolios/{self.alice_portfolio.uuid}/add-wallet/"
-        own_add = self.client.post(add_url, {"walletUuid": str(self.alice_wallet.uuid)}, format="json")
-        self.assertEqual(own_add.status_code, 200)
+        self.assertEqual(add_response.status_code, 200)
+        self.assertEqual(add_response.json()["portfolio"]["walletUuids"], [str(self.alice_wallet.uuid)])
         self.assertTrue(self.alice_portfolio.wallets.filter(pk=self.alice_wallet.pk).exists())
 
-        remove_url = f"/api/portfolios/{self.alice_portfolio.uuid}/remove-wallet/"
-        own_remove = self.client.post(remove_url, {"walletUuid": str(self.alice_wallet.uuid)}, format="json")
-        self.assertEqual(own_remove.status_code, 200)
+        remove_response = self.client.post(
+            f"/api/portfolios/{self.alice_portfolio.uuid}/remove-wallet/",
+            {"walletUuid": str(self.alice_wallet.uuid)},
+            format="json",
+        )
+        self.assertEqual(remove_response.status_code, 200)
+        self.assertEqual(remove_response.json()["portfolio"]["walletUuids"], [])
         self.assertFalse(self.alice_portfolio.wallets.filter(pk=self.alice_wallet.pk).exists())
-
-        foreign_add = self.client.post(add_url, {"walletUuid": str(self.bob_wallet.uuid)}, format="json")
-        missing_add = self.client.post(add_url, {"walletUuid": str(uuid4())}, format="json")
-        self.assertEqual(foreign_add.status_code, 404)
-        self.assertEqual(missing_add.status_code, 404)
-        self.assertIn("not found", foreign_add.json()["detail"].lower())
-        self.assertIn("not found", missing_add.json()["detail"].lower())
-
-        foreign_remove = self.client.post(remove_url, {"walletUuid": str(self.bob_wallet.uuid)}, format="json")
-        missing_remove = self.client.post(remove_url, {"walletUuid": str(uuid4())}, format="json")
-        self.assertEqual(foreign_remove.status_code, 404)
-        self.assertEqual(missing_remove.status_code, 404)
-        self.assertEqual(foreign_remove.json(), missing_remove.json())
 
     def test_inconsistent_foreign_wallet_link_is_hidden_from_portfolio_output(self):
         self.alice_portfolio.wallets.add(self.alice_wallet, self.bob_wallet)

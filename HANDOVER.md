@@ -15,8 +15,10 @@ tracked backlog unless a task explicitly changes that scope.
 
 The tenant-isolation audit is complete through PR #37 and
 [Issue #1](https://github.com/RonildoBraga/ledova/issues/1) is closed. Guardian
-is removed; PostgreSQL RLS activation remains deferred by
-[ADR 0002](backend/docs/adr/0002-rls-tenant-isolation.md).
+is removed. Tenant isolation is enforced by the `visible_to_user` /
+`manageable_by_user` querysets and proven by the route matrix in
+`backend/shared/tests/test_cross_tenant_routes.py`; PostgreSQL RLS is not
+planned.
 
 [Issue #2](https://github.com/RonildoBraga/ledova/issues/2) is implemented
 through [PR #65](https://github.com/RonildoBraga/ledova/pull/65). PRs #39–#48
@@ -58,6 +60,5 @@ The remaining canonical backlog is [ISSUES.md](ISSUES.md).
 - Use only synthetic data, local development, and supported public testnets.
 - Never add secrets, private operational artifacts, personal data, production
   identifiers, or private endpoints to this public handover or repository.
-- Keep trading disabled and do not deploy or activate runtime RLS as part of
-  deferred-hardening work.
+- Keep trading disabled as part of deferred-hardening work.
 - Keep this file short and update it when a checkpoint or next task changes.

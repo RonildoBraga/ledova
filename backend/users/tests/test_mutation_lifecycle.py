@@ -33,12 +33,7 @@ class UserMutationLifecycleTest(APITestCase):
             password="pw-12345678",
             is_staff=True,
         )
-        self.superuser = User.objects.create_user(
-            email="lifecycle-superuser@example.test",
-            password="pw-12345678",
-            is_superuser=True,
-            is_staff=True,
-        )
+        self.superuser = User.objects.create_superuser(email="lifecycle-superuser@example.test", password="pw-12345678")
         self.owner_profile = UserProfile.objects.create(
             user=self.owner,
             full_name="Lifecycle Owner",

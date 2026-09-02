@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.test import SimpleTestCase
 
@@ -92,3 +93,14 @@ class EnvironmentParsingTests(SimpleTestCase):
             parse_bitcoin_network("main")
         self.assertEqual(parse_bitcoin_network("test"), "test")
         self.assertEqual(parse_bitcoin_network("regtest"), "regtest")
+
+
+class AuthorizationConfigurationTests(SimpleTestCase):
+    def test_authentication_uses_django_model_backend(self):
+        self.assertEqual(settings.AUTHENTICATION_BACKENDS, ("django.contrib.auth.backends.ModelBackend",))
+
+    def test_default_api_permission_requires_authentication(self):
+        self.assertEqual(
+            settings.REST_FRAMEWORK["DEFAULT_PERMISSION_CLASSES"],
+            ("rest_framework.permissions.IsAuthenticated",),
+        )
