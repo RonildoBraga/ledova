@@ -131,6 +131,10 @@ construct only the initial single-key configuration; rotation supplies both
 maps through reviewed process configuration. Its representation and every
 configuration error are fixed and redacted.
 
+Challenge key IDs use `[A-Za-z0-9][A-Za-z0-9._-]{0,63}`. A live proof row
+whose key ID is absent from the accepted proof map is a configuration invariant
+failure; verification never falls back to the current writer key.
+
 Rotation deploys old and new verification keys before switching writers. A
 proof key remains accepted until no live row references it and at least 3,720
 seconds after its final issuance. During rate-key overlap, every reservation
