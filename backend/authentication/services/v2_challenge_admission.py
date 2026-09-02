@@ -1,5 +1,7 @@
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timedelta
+from enum import Enum
 from functools import reduce
 from operator import or_
 
@@ -18,12 +20,21 @@ from authentication.security import (
 from authentication.services.v2_query_privacy import _require_unrecorded_v2_connection
 
 _ADMISSION_ERROR = "V2 challenge service unavailable."
-_ALLOWED_PURPOSES = frozenset(
+_ALL_PURPOSES = frozenset(
+    {
+        AuthenticationChallengeDelivery.Purpose.SIGNUP,
+        AuthenticationChallengeDelivery.Purpose.EMAIL_CHANGE,
+        AuthenticationChallengeDelivery.Purpose.PASSWORD_RESET,
+    }
+)
+_UNKNOWN_CONTEXT_PURPOSES = frozenset(
     {
         AuthenticationChallengeDelivery.Purpose.SIGNUP,
         AuthenticationChallengeDelivery.Purpose.EMAIL_CHANGE,
     }
 )
+_DESTINATION_LIMIT = 5
+_PASSWORD_RESET_LIMIT = 3
 _IP_LIMIT = 20
 _RATE_WINDOW = timedelta(seconds=3600)
 _DELIVERY_LEASE = timedelta(seconds=120)
@@ -34,16 +45,48 @@ class V2ChallengeAdmissionError(RuntimeError):
     pass
 
 
+class _V2ChallengeAdmissionDecision(Enum):
+    ADMITTED = "admitted"
+    REFUSED = "refused"
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class _V2ChallengeAdmissionContext:
+    using: str
+    purpose: str
+    delivery_id: uuid.UUID
+    reserved_at: datetime
+    lease_expires_at: datetime
+    rate_key_id: str
+    destination_rate_digest: bytes | None
+    ip_rate_digest: bytes
+
+    def __repr__(self):
+        return "_V2ChallengeAdmissionContext(<redacted>)"
+
+    __str__ = __repr__
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class _V2ChallengeAdmissionPlan:
+    status: str
+
+    def __repr__(self):
+        return "_V2ChallengeAdmissionPlan(<redacted>)"
+
+    __str__ = __repr__
+
+
 def _raise_admission_error():
     raise V2ChallengeAdmissionError(_ADMISSION_ERROR) from None
 
 
-def _validated_ip_aliases(ip_rates, configuration):
+def _validated_rate_aliases(rates, configuration):
     aliases = None
     try:
-        if not isinstance(ip_rates, ChallengeRateDigests) or not isinstance(configuration, ChallengeKeyConfiguration):
+        if not isinstance(rates, ChallengeRateDigests) or not isinstance(configuration, ChallengeKeyConfiguration):
             raise TypeError
-        candidate_aliases = ip_rates.aliases
+        candidate_aliases = rates.aliases
         expected_ids = tuple(sorted(configuration.rate_keys))
         candidate_ids = tuple(alias.key_id for alias in candidate_aliases)
         current_alias = next(alias for alias in candidate_aliases if alias.key_id == configuration.current_rate_kid)
@@ -52,8 +95,8 @@ def _validated_ip_aliases(ip_rates, configuration):
             and all(isinstance(alias, ChallengeDigest) for alias in candidate_aliases)
             and candidate_ids == expected_ids
             and len(set(candidate_ids)) == len(candidate_ids)
-            and ip_rates.current == current_alias
-            and ip_rates.current.key_id == configuration.current_rate_kid
+            and rates.current == current_alias
+            and rates.current.key_id == configuration.current_rate_kid
         )
         if valid:
             aliases = candidate_aliases
@@ -64,6 +107,10 @@ def _validated_ip_aliases(ip_rates, configuration):
         _raise_admission_error()
 
     return aliases
+
+
+def _validated_ip_aliases(ip_rates, configuration):
+    return _validated_rate_aliases(ip_rates, configuration)
 
 
 def _advisory_lock_ids(aliases):
@@ -89,6 +136,158 @@ def _database_clock(cursor):
     return row[0]
 
 
+def _admit_challenge_delivery(
+    *,
+    purpose,
+    destination_rates,
+    ip_rates,
+    challenge_configuration,
+    using,
+    post_lock_clock,
+    lock_scope,
+    apply_admitted,
+):
+    failed = False
+    try:
+        if (
+            not isinstance(purpose, str)
+            or purpose not in _ALL_PURPOSES
+            or not callable(post_lock_clock)
+            or not callable(lock_scope)
+            or not callable(apply_admitted)
+        ):
+            raise TypeError
+        if destination_rates is None:
+            if purpose not in _UNKNOWN_CONTEXT_PURPOSES:
+                raise ValueError
+            destination_aliases = ()
+        else:
+            destination_aliases = _validated_rate_aliases(destination_rates, challenge_configuration)
+        ip_aliases = _validated_rate_aliases(ip_rates, challenge_configuration)
+        if destination_aliases and destination_rates.current.key_id != ip_rates.current.key_id:
+            raise ValueError
+
+        selected = _require_unrecorded_v2_connection(using=using)
+        if selected.vendor != "postgresql":
+            raise RuntimeError
+        if selected.in_atomic_block is not False or selected.get_autocommit() is not True:
+            raise RuntimeError
+
+        lock_ids = _advisory_lock_ids(destination_aliases + ip_aliases)
+        destination_filter = None
+        if destination_aliases:
+            destination_filter = reduce(
+                or_,
+                (Q(rate_key_id=alias.key_id, destination_rate_digest=alias.digest) for alias in destination_aliases),
+            )
+        ip_filter = reduce(
+            or_,
+            (Q(rate_key_id=alias.key_id, ip_rate_digest=alias.digest) for alias in ip_aliases),
+        )
+
+        with transaction.atomic(using=selected.alias, durable=True):
+            with selected.cursor() as cursor:
+                cursor.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED, NOT DEFERRABLE")
+                for lock_id in lock_ids:
+                    cursor.execute("SELECT pg_advisory_xact_lock(%s)", [lock_id])
+
+            locked_scope = lock_scope(selected.alias)
+
+            with selected.cursor() as cursor:
+                at = post_lock_clock(cursor)
+            if not isinstance(at, datetime) or at.tzinfo is None:
+                raise ValueError
+
+            deliveries = AuthenticationChallengeDelivery.objects.using(selected.alias)
+            window_start = at - _RATE_WINDOW
+            destination_count = None
+            password_reset_count = None
+            if destination_filter is not None:
+                destination_count = deliveries.filter(
+                    destination_filter,
+                    reserved_at__gt=window_start,
+                ).count()
+                if purpose == AuthenticationChallengeDelivery.Purpose.PASSWORD_RESET:
+                    password_reset_count = deliveries.filter(
+                        destination_filter,
+                        purpose=AuthenticationChallengeDelivery.Purpose.PASSWORD_RESET,
+                        reserved_at__gt=window_start,
+                    ).count()
+            ip_count = deliveries.filter(
+                ip_filter,
+                reserved_at__gt=window_start,
+            ).count()
+
+            refused = (
+                (destination_count is not None and destination_count >= _DESTINATION_LIMIT)
+                or (password_reset_count is not None and password_reset_count >= _PASSWORD_RESET_LIMIT)
+                or ip_count >= _IP_LIMIT
+            )
+            if refused:
+                transaction.set_rollback(True, using=selected.alias)
+                return _V2ChallengeAdmissionDecision.REFUSED
+
+            context = _V2ChallengeAdmissionContext(
+                using=selected.alias,
+                purpose=purpose,
+                delivery_id=uuid.uuid4(),
+                reserved_at=at,
+                lease_expires_at=at + _DELIVERY_LEASE,
+                rate_key_id=ip_rates.current.key_id,
+                destination_rate_digest=(destination_rates.current.digest if destination_rates is not None else None),
+                ip_rate_digest=ip_rates.current.digest,
+            )
+            plan = apply_admitted(locked_scope, context)
+            if (
+                transaction.get_rollback(using=selected.alias)
+                or not isinstance(plan, _V2ChallengeAdmissionPlan)
+                or plan.status != AuthenticationChallengeDelivery.Status.SUPPRESSED
+            ):
+                raise ValueError
+            deliveries.create(
+                uuid=context.delivery_id,
+                challenge=None,
+                purpose=context.purpose,
+                status=plan.status,
+                rate_key_id=context.rate_key_id,
+                destination_rate_digest=context.destination_rate_digest,
+                ip_rate_digest=context.ip_rate_digest,
+                proof_key_id=None,
+                proof_digest=None,
+                reserved_at=context.reserved_at,
+                lease_expires_at=context.lease_expires_at,
+                sending_at=None,
+                accepted_at=None,
+                proof_expires_at=None,
+                resolved_at=at,
+            )
+            if transaction.get_rollback(using=selected.alias):
+                raise ValueError
+        return _V2ChallengeAdmissionDecision.ADMITTED
+    except Exception:
+        failed = True
+
+    if failed:
+        _raise_admission_error()
+
+
+def _lock_no_scope(_using):
+    return None
+
+
+def _plan_unknown_context_ip_suppression(locked_scope, context):
+    if (
+        locked_scope is not None
+        or not isinstance(context, _V2ChallengeAdmissionContext)
+        or context.purpose not in _UNKNOWN_CONTEXT_PURPOSES
+        or context.destination_rate_digest is not None
+    ):
+        raise ValueError
+    return _V2ChallengeAdmissionPlan(
+        status=AuthenticationChallengeDelivery.Status.SUPPRESSED,
+    )
+
+
 def _record_unknown_context_ip_suppression(
     *,
     purpose,
@@ -97,61 +296,16 @@ def _record_unknown_context_ip_suppression(
     using,
     post_lock_clock,
 ):
-    if not isinstance(purpose, str) or purpose not in _ALLOWED_PURPOSES or not callable(post_lock_clock):
-        _raise_admission_error()
-    aliases = _validated_ip_aliases(ip_rates, challenge_configuration)
-    selected = _require_unrecorded_v2_connection(using=using)
-    if selected.vendor != "postgresql":
-        _raise_admission_error()
-    safe_entry_state = False
-    try:
-        safe_entry_state = selected.in_atomic_block is False and selected.get_autocommit() is True
-    except Exception:
-        safe_entry_state = False
-    if not safe_entry_state:
-        _raise_admission_error()
-
-    lock_ids = _advisory_lock_ids(aliases)
-    identity_filter = reduce(
-        or_,
-        (Q(rate_key_id=alias.key_id, ip_rate_digest=alias.digest) for alias in aliases),
+    _admit_challenge_delivery(
+        purpose=purpose,
+        destination_rates=None,
+        ip_rates=ip_rates,
+        challenge_configuration=challenge_configuration,
+        using=using,
+        post_lock_clock=post_lock_clock,
+        lock_scope=_lock_no_scope,
+        apply_admitted=_plan_unknown_context_ip_suppression,
     )
-
-    with transaction.atomic(using=selected.alias, durable=True):
-        with selected.cursor() as cursor:
-            cursor.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED, NOT DEFERRABLE")
-            for lock_id in lock_ids:
-                cursor.execute("SELECT pg_advisory_xact_lock(%s)", [lock_id])
-            at = post_lock_clock(cursor)
-
-        if not isinstance(at, datetime) or at.tzinfo is None:
-            _raise_admission_error()
-
-        deliveries = AuthenticationChallengeDelivery.objects.using(selected.alias)
-        admitted_count = deliveries.filter(
-            identity_filter,
-            reserved_at__gt=at - _RATE_WINDOW,
-        ).count()
-        if admitted_count >= _IP_LIMIT:
-            return None
-
-        deliveries.create(
-            uuid=uuid.uuid4(),
-            challenge=None,
-            purpose=purpose,
-            status=AuthenticationChallengeDelivery.Status.SUPPRESSED,
-            rate_key_id=ip_rates.current.key_id,
-            destination_rate_digest=None,
-            ip_rate_digest=ip_rates.current.digest,
-            proof_key_id=None,
-            proof_digest=None,
-            reserved_at=at,
-            lease_expires_at=at + _DELIVERY_LEASE,
-            sending_at=None,
-            accepted_at=None,
-            proof_expires_at=None,
-            resolved_at=at,
-        )
     return None
 
 
@@ -165,7 +319,7 @@ def _record_unknown_context_request_ip_suppression(
 ) -> None:
     failed = False
     try:
-        if not isinstance(purpose, str) or purpose not in _ALLOWED_PURPOSES:
+        if not isinstance(purpose, str) or purpose not in _UNKNOWN_CONTEXT_PURPOSES:
             raise ValueError
         destination_rate_digests(
             _DUMMY_DESTINATION_KEY,
