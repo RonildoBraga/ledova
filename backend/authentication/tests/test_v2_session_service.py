@@ -18,11 +18,13 @@ from authentication.security import (
     refresh_secret_matches,
 )
 from authentication.services.v2_sessions import (
+    BrowserRefreshConfirmed,
     BrowserRefreshRaced,
     RefreshRotated,
     SessionIssued,
     SessionRejected,
     V2SessionPolicy,
+    confirm_browser_refresh,
     issue_browser_session,
     issue_native_session,
     rotate_browser_refresh,
@@ -83,6 +85,23 @@ class V2SessionServiceTest(TestCase):
         arguments = self.service_arguments()
         arguments.update(overrides)
         return rotate_native_refresh(token, **arguments)
+
+    def confirm_browser(self, refresh_token, confirmation_token=None, **overrides):
+        arguments = {"clock": self.clock, "key_material": self.keys}
+        arguments.update(overrides)
+        return confirm_browser_refresh(
+            refresh_token,
+            confirmation_token=confirmation_token,
+            **arguments,
+        )
+
+    def prepare_browser_confirmation(self):
+        issued = self.issue_browser()
+        self.now += timedelta(seconds=1)
+        rotated = self.rotate_browser(issued.refresh_token)
+        self.now += timedelta(seconds=1)
+        raced = self.rotate_browser(issued.refresh_token)
+        return issued, rotated, raced
 
     def credential_for(self, token):
         return RefreshCredential.objects.get(pk=decode_v2_refresh_token(token).selector)
@@ -412,6 +431,180 @@ class V2SessionServiceTest(TestCase):
 
         self.assertIsInstance(raced, BrowserRefreshRaced)
         self.assertEqual(raced.confirmation_expires_at, rotated.refresh_expires_at)
+
+    def test_browser_confirmation_consumes_nonce_without_rotating_successor(self):
+        issued, rotated, raced = self.prepare_browser_confirmation()
+        predecessor = self.credential_for(issued.refresh_token)
+        successor = self.credential_for(rotated.refresh_token)
+        last_used_at = AuthSession.objects.get(pk=issued.session_id).last_used_at
+        self.now += timedelta(seconds=1)
+
+        confirmed = self.confirm_browser(rotated.refresh_token, raced.confirmation_token)
+
+        session = AuthSession.objects.get(pk=issued.session_id)
+        predecessor.refresh_from_db()
+        successor.refresh_from_db()
+        self.assertIsInstance(confirmed, BrowserRefreshConfirmed)
+        self.assertEqual(confirmed.code, "refresh_confirmed")
+        self.assertEqual(session.status, AuthSession.Status.ACTIVE)
+        self.assertEqual(session.last_used_at, last_used_at)
+        self.assertEqual(predecessor.confirmation_consumed_at, self.now)
+        self.assertIsNotNone(predecessor.confirmation_nonce_digest)
+        self.assertIsNone(successor.used_at)
+        self.assertIsNone(successor.revoked_at)
+        self.assertEqual(RefreshCredential.objects.filter(session=session).count(), 2)
+        self.assertNotIn(str(confirmed.session_id), repr(confirmed))
+
+    def test_authenticated_invalid_confirmation_revokes_and_consumes_nonce(self):
+        proofs = (None, "malformed", encode_v2_confirmation_token(b"w" * 32))
+
+        for index, proof in enumerate(proofs):
+            with self.subTest(proof=index):
+                if index:
+                    self.user = User.objects.create_user(
+                        email=f"confirmation-failure-{index}@example.test",
+                        password="test-password-123",
+                        is_active=True,
+                        is_email_verified=True,
+                    )
+                    self.now = timezone.now()
+                issued, rotated, _raced = self.prepare_browser_confirmation()
+
+                result = self.confirm_browser(rotated.refresh_token, proof)
+
+                session = AuthSession.objects.get(pk=issued.session_id)
+                predecessor = self.credential_for(issued.refresh_token)
+                self.assertEqual(result, SessionRejected("session_revoked"))
+                self.assertEqual(session.status, AuthSession.Status.REVOKED)
+                self.assertEqual(session.revoke_reason, AuthSession.RevokeReason.CONFIRMATION_FAILED)
+                self.assertIsNotNone(predecessor.confirmation_consumed_at)
+                self.assertFalse(
+                    RefreshCredential.objects.filter(
+                        session=session,
+                        revoked_at__isnull=True,
+                    ).exists()
+                )
+
+    def test_unauthenticated_confirmation_attempts_do_not_mutate_pending_session(self):
+        issued, rotated, raced = self.prepare_browser_confirmation()
+        successor_parts = decode_v2_refresh_token(rotated.refresh_token)
+        wrong_secret = encode_v2_refresh_token(successor_parts.selector, b"w" * 32)
+        unknown = encode_v2_refresh_token(uuid.uuid4(), b"u" * 32)
+
+        for refresh_token in ("malformed", wrong_secret, unknown):
+            with self.subTest(refresh_token=refresh_token[:8]):
+                result = self.confirm_browser(refresh_token, raced.confirmation_token)
+                self.assertEqual(result, SessionRejected("invalid_refresh"))
+
+        native = self.issue_native()
+        native_result = self.confirm_browser(native.refresh_token, raced.confirmation_token)
+
+        session = AuthSession.objects.get(pk=issued.session_id)
+        predecessor = self.credential_for(issued.refresh_token)
+        native_session = AuthSession.objects.get(pk=native.session_id)
+        self.assertEqual(native_result, SessionRejected("invalid_refresh"))
+        self.assertEqual(session.status, AuthSession.Status.REFRESH_CONFIRMATION_REQUIRED)
+        self.assertIsNone(predecessor.confirmation_consumed_at)
+        self.assertFalse(RefreshCredential.objects.filter(session=session, revoked_at__isnull=False).exists())
+        self.assertEqual(native_session.status, AuthSession.Status.ACTIVE)
+
+    def test_late_expired_successor_and_repeated_confirmation_revoke(self):
+        issued, rotated, raced = self.prepare_browser_confirmation()
+        self.now = raced.confirmation_expires_at
+
+        late = self.confirm_browser(rotated.refresh_token, raced.confirmation_token)
+
+        late_session = AuthSession.objects.get(pk=issued.session_id)
+        self.assertEqual(late, SessionRejected("session_revoked"))
+        self.assertEqual(late_session.revoke_reason, AuthSession.RevokeReason.CONFIRMATION_FAILED)
+
+        self.user = User.objects.create_user(
+            email="confirmation-repeat@example.test",
+            password="test-password-123",
+            is_active=True,
+            is_email_verified=True,
+        )
+        self.now = timezone.now()
+        repeated_issued, repeated_rotated, repeated_raced = self.prepare_browser_confirmation()
+        self.now += timedelta(seconds=1)
+        self.assertIsInstance(
+            self.confirm_browser(repeated_rotated.refresh_token, repeated_raced.confirmation_token),
+            BrowserRefreshConfirmed,
+        )
+        predecessor = self.credential_for(repeated_issued.refresh_token)
+        consumed_at = predecessor.confirmation_consumed_at
+        self.now += timedelta(seconds=1)
+
+        repeated = self.confirm_browser(repeated_rotated.refresh_token, repeated_raced.confirmation_token)
+
+        repeated_session = AuthSession.objects.get(pk=repeated_issued.session_id)
+        predecessor.refresh_from_db()
+        self.assertEqual(repeated, SessionRejected("session_revoked"))
+        self.assertEqual(repeated_session.revoke_reason, AuthSession.RevokeReason.CONFIRMATION_FAILED)
+        self.assertEqual(predecessor.confirmation_consumed_at, consumed_at)
+
+    def test_confirmation_requires_exact_unexpired_successor(self):
+        issued, rotated, raced = self.prepare_browser_confirmation()
+        other = self.issue_browser()
+
+        wrong_successor = self.confirm_browser(other.refresh_token, raced.confirmation_token)
+
+        pending = AuthSession.objects.get(pk=issued.session_id)
+        other_session = AuthSession.objects.get(pk=other.session_id)
+        self.assertEqual(wrong_successor, SessionRejected("session_revoked"))
+        self.assertEqual(pending.status, AuthSession.Status.REFRESH_CONFIRMATION_REQUIRED)
+        self.assertEqual(other_session.revoke_reason, AuthSession.RevokeReason.CONFIRMATION_FAILED)
+
+        successor = self.credential_for(rotated.refresh_token)
+        successor.expires_at = self.now
+        successor.save(update_fields=["expires_at"])
+
+        expired = self.confirm_browser(rotated.refresh_token, raced.confirmation_token)
+
+        pending.refresh_from_db()
+        self.assertEqual(expired, SessionRejected("session_revoked"))
+        self.assertEqual(pending.revoke_reason, AuthSession.RevokeReason.CONFIRMATION_FAILED)
+
+    def test_spent_predecessor_cannot_confirm_its_successor(self):
+        issued, _rotated, raced = self.prepare_browser_confirmation()
+
+        result = self.confirm_browser(issued.refresh_token, raced.confirmation_token)
+
+        session = AuthSession.objects.get(pk=issued.session_id)
+        self.assertEqual(result, SessionRejected("session_revoked"))
+        self.assertEqual(session.revoke_reason, AuthSession.RevokeReason.CONFIRMATION_FAILED)
+
+    def test_confirmation_preserves_account_state_precedence(self):
+        issued, rotated, raced = self.prepare_browser_confirmation()
+        User.objects.filter(pk=self.user.pk).update(is_active=False)
+
+        result = self.confirm_browser(rotated.refresh_token, raced.confirmation_token)
+
+        session = AuthSession.objects.get(pk=issued.session_id)
+        self.assertEqual(result, SessionRejected("session_revoked"))
+        self.assertEqual(session.revoke_reason, AuthSession.RevokeReason.ACCOUNT_DISABLED)
+
+    def test_confirmation_rolls_back_consumption_and_reactivation_failure(self):
+        issued, rotated, raced = self.prepare_browser_confirmation()
+        original_save = AuthSession.save
+
+        def save_then_fail(instance, *args, **kwargs):
+            result = original_save(instance, *args, **kwargs)
+            if instance.status == AuthSession.Status.ACTIVE:
+                raise RuntimeError("synthetic confirmation failure")
+            return result
+
+        with patch.object(AuthSession, "save", new=save_then_fail):
+            with self.assertRaisesMessage(RuntimeError, "synthetic confirmation failure"):
+                self.confirm_browser(rotated.refresh_token, raced.confirmation_token)
+
+        session = AuthSession.objects.get(pk=issued.session_id)
+        predecessor = self.credential_for(issued.refresh_token)
+        successor = self.credential_for(rotated.refresh_token)
+        self.assertEqual(session.status, AuthSession.Status.REFRESH_CONFIRMATION_REQUIRED)
+        self.assertIsNone(predecessor.confirmation_consumed_at)
+        self.assertIsNone(successor.used_at)
+        self.assertIsNone(successor.revoked_at)
 
     def test_inactive_user_revokes_existing_session(self):
         issued = self.issue_native()

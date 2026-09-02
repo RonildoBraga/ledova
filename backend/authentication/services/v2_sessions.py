@@ -10,11 +10,13 @@ from django.utils import timezone
 from authentication.models import AuthSession, RefreshCredential
 from authentication.security import (
     V2KeyMaterial,
+    decode_v2_confirmation_token,
     decode_v2_refresh_token,
     encode_v2_confirmation_token,
     encode_v2_refresh_token,
     load_v2_key_material,
     refresh_confirmation_digest,
+    refresh_confirmation_matches,
     refresh_secret_digest,
     refresh_secret_matches,
 )
@@ -97,6 +99,15 @@ class BrowserRefreshRaced:
             "BrowserRefreshRaced(session_id=<redacted>, confirmation_token=<redacted>, "
             "confirmation_expires_at=<redacted>, code='refresh_raced')"
         )
+
+
+@dataclass(frozen=True, repr=False)
+class BrowserRefreshConfirmed:
+    session_id: uuid.UUID
+    code: str = field(default="refresh_confirmed", init=False)
+
+    def __repr__(self):
+        return "BrowserRefreshConfirmed(session_id=<redacted>, code='refresh_confirmed')"
 
 
 @dataclass(frozen=True, repr=False)
@@ -465,3 +476,134 @@ def rotate_native_refresh(
         random_bytes=random_bytes,
         key_material=key_material,
     )
+
+
+def _locked_confirmation_state(selector, topology):
+    session_id, user_id = topology
+    User = get_user_model()
+    user = User.objects.select_for_update().filter(pk=user_id).first()
+    if user is None:
+        return None
+
+    session = AuthSession.objects.select_for_update().filter(pk=session_id, user_id=user_id).first()
+    if session is None:
+        return None
+
+    confirmation_rows = list(
+        RefreshCredential.objects.filter(
+            session=session,
+            confirmation_nonce_digest__isnull=False,
+        ).values_list(
+            "uuid", "replaced_by_id"
+        )[:2]
+    )
+    credential_ids = {selector}
+    if len(confirmation_rows) == 1:
+        predecessor_id, successor_id = confirmation_rows[0]
+        credential_ids.add(predecessor_id)
+        if successor_id is not None:
+            credential_ids.add(successor_id)
+    else:
+        predecessor_id = None
+        successor_id = None
+
+    credentials = {
+        credential.uuid: credential
+        for credential in RefreshCredential.objects.select_for_update()
+        .filter(session=session, uuid__in=credential_ids)
+        .order_by("uuid")
+    }
+    presented = credentials.get(selector)
+    predecessor = credentials.get(predecessor_id)
+    successor = credentials.get(successor_id)
+    return user, session, presented, predecessor, successor, len(confirmation_rows) == 1
+
+
+def confirm_browser_refresh(
+    successor_refresh_token,
+    *,
+    confirmation_token=None,
+    clock=timezone.now,
+    key_material=None,
+):
+    try:
+        refresh_parts = decode_v2_refresh_token(successor_refresh_token)
+    except ValueError:
+        return SessionRejected("invalid_refresh")
+
+    material = _resolved_key_material(key_material)
+    topology = _rotation_topology(refresh_parts.selector)
+    if topology is None:
+        return SessionRejected("invalid_refresh")
+
+    with transaction.atomic():
+        state = _locked_confirmation_state(refresh_parts.selector, topology)
+        if state is None:
+            return SessionRejected("invalid_refresh")
+        user, session, presented, predecessor, successor, has_confirmation = state
+        if presented is None or not refresh_secret_matches(
+            presented.secret_digest,
+            presented.uuid,
+            refresh_parts.secret,
+            material.refresh_hmac_key,
+        ):
+            return SessionRejected("invalid_refresh")
+        if session.client_type != AuthSession.ClientType.BROWSER:
+            return SessionRejected("invalid_refresh")
+
+        at = clock()
+        if not user.is_active or not user.is_email_verified:
+            reason = (
+                AuthSession.RevokeReason.ACCOUNT_DISABLED
+                if not user.is_active
+                else AuthSession.RevokeReason.EMAIL_CHANGE
+            )
+            if session.status == AuthSession.Status.REVOKED:
+                _revoke_credentials(session, at)
+            else:
+                _revoke_session(session, at, reason)
+            return SessionRejected("session_revoked")
+        if session.status == AuthSession.Status.REVOKED:
+            _revoke_credentials(session, at)
+            return SessionRejected("session_revoked")
+
+        try:
+            confirmation_parts = decode_v2_confirmation_token(confirmation_token)
+        except ValueError:
+            _revoke_session(session, at, AuthSession.RevokeReason.CONFIRMATION_FAILED)
+            return SessionRejected("session_revoked")
+
+        valid_confirmation = (
+            has_confirmation
+            and session.status == AuthSession.Status.REFRESH_CONFIRMATION_REQUIRED
+            and predecessor is not None
+            and successor is not None
+            and presented.uuid == successor.uuid
+            and predecessor.replaced_by_id == successor.uuid
+            and predecessor.used_at is not None
+            and predecessor.revoked_at is None
+            and predecessor.confirmation_nonce_digest is not None
+            and predecessor.confirmation_expires_at is not None
+            and predecessor.confirmation_consumed_at is None
+            and successor.used_at is None
+            and successor.revoked_at is None
+            and session.absolute_expires_at > at
+            and predecessor.confirmation_expires_at > at
+            and successor.expires_at > at
+            and refresh_confirmation_matches(
+                predecessor.confirmation_nonce_digest,
+                session.uuid,
+                predecessor.uuid,
+                confirmation_parts.nonce,
+                material.refresh_hmac_key,
+            )
+        )
+        if not valid_confirmation:
+            _revoke_session(session, at, AuthSession.RevokeReason.CONFIRMATION_FAILED)
+            return SessionRejected("session_revoked")
+
+        predecessor.confirmation_consumed_at = at
+        predecessor.save(update_fields=["confirmation_consumed_at", "updated_at"])
+        session.status = AuthSession.Status.ACTIVE
+        session.save(update_fields=["status", "updated_at"])
+        return BrowserRefreshConfirmed(session_id=session.uuid)

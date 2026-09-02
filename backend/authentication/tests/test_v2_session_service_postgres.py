@@ -1,6 +1,7 @@
 import uuid
 from contextlib import contextmanager
 from datetime import timedelta
+from functools import partial
 from queue import Empty, Queue
 from threading import Barrier, Event, Thread
 from time import monotonic, sleep
@@ -14,13 +15,16 @@ from django.utils import timezone
 from authentication.models import AuthSession, RefreshCredential
 from authentication.security import (
     V2KeyMaterial,
+    encode_v2_confirmation_token,
     encode_v2_refresh_token,
     refresh_secret_digest,
 )
 from authentication.services.v2_sessions import (
+    BrowserRefreshConfirmed,
     BrowserRefreshRaced,
     RefreshRotated,
     SessionRejected,
+    confirm_browser_refresh,
     rotate_browser_refresh,
     rotate_native_refresh,
 )
@@ -72,6 +76,13 @@ class V2SessionServicePostgresTest(TransactionTestCase):
             clock=lambda: self.now,
             key_material=self.key_material,
         )
+
+    def prepare_confirmation(self):
+        session, predecessor, token = self.create_refresh(AuthSession.ClientType.BROWSER)
+        rotated = self.rotate(rotate_browser_refresh, token)
+        raced = self.rotate(rotate_browser_refresh, token)
+        predecessor.refresh_from_db()
+        return session, predecessor, rotated.refresh_token, raced.confirmation_token
 
     def worker(self, label, operation, token, barrier, started, pids, outcomes):
         close_old_connections()
@@ -295,3 +306,122 @@ class V2SessionServicePostgresTest(TransactionTestCase):
             RefreshCredential.objects.select_for_update(nowait=True).get(pk=historical.pk)
 
         self.assertEqual(run["results"]["rotate"].code, "refresh_rotated")
+
+    def test_simultaneous_confirmations_serialize_then_revoke_repeat(self):
+        session, predecessor, successor_token, confirmation_token = self.prepare_confirmation()
+        confirmation = partial(
+            confirm_browser_refresh,
+            confirmation_token=confirmation_token,
+        )
+        calls = [
+            ("first", confirmation, successor_token),
+            ("second", confirmation, successor_token),
+        ]
+
+        with self.workers_blocked_by(
+            lambda: User.objects.select_for_update().get(pk=self.user.pk),
+            calls,
+        ) as run:
+            pass
+
+        results = run["results"]
+        self.assertEqual(sum(isinstance(result, BrowserRefreshConfirmed) for result in results.values()), 1)
+        self.assertEqual(sum(isinstance(result, SessionRejected) for result in results.values()), 1)
+        session.refresh_from_db()
+        predecessor.refresh_from_db()
+        self.assertEqual(session.status, AuthSession.Status.REVOKED)
+        self.assertEqual(session.revoke_reason, AuthSession.RevokeReason.CONFIRMATION_FAILED)
+        self.assertIsNotNone(predecessor.confirmation_consumed_at)
+
+    def test_correct_and_wrong_confirmation_race_fails_closed_without_deadlock(self):
+        session, predecessor, successor_token, confirmation_token = self.prepare_confirmation()
+        correct = partial(
+            confirm_browser_refresh,
+            confirmation_token=confirmation_token,
+        )
+        wrong = partial(
+            confirm_browser_refresh,
+            confirmation_token=encode_v2_confirmation_token(b"w" * 32),
+        )
+        calls = [
+            ("correct", correct, successor_token),
+            ("wrong", wrong, successor_token),
+        ]
+
+        with self.workers_blocked_by(
+            lambda: User.objects.select_for_update().get(pk=self.user.pk),
+            calls,
+        ) as run:
+            pass
+
+        results = run["results"]
+        self.assertTrue(all(result.code in {"refresh_confirmed", "session_revoked"} for result in results.values()))
+        self.assertGreaterEqual(sum(result.code == "session_revoked" for result in results.values()), 1)
+        session.refresh_from_db()
+        predecessor.refresh_from_db()
+        self.assertEqual(session.status, AuthSession.Status.REVOKED)
+        self.assertEqual(session.revoke_reason, AuthSession.RevokeReason.CONFIRMATION_FAILED)
+        self.assertIsNotNone(predecessor.confirmation_consumed_at)
+
+    def test_confirmation_waiting_for_user_lock_does_not_lock_descendants(self):
+        session, predecessor, successor_token, confirmation_token = self.prepare_confirmation()
+        successor = RefreshCredential.objects.get(pk=predecessor.replaced_by_id)
+        confirmation = partial(
+            confirm_browser_refresh,
+            confirmation_token=confirmation_token,
+        )
+
+        with self.workers_blocked_by(
+            lambda: User.objects.select_for_update().get(pk=self.user.pk),
+            [("confirm", confirmation, successor_token)],
+        ) as run:
+            AuthSession.objects.select_for_update(nowait=True).get(pk=session.pk)
+            RefreshCredential.objects.select_for_update(nowait=True).get(pk=predecessor.pk)
+            RefreshCredential.objects.select_for_update(nowait=True).get(pk=successor.pk)
+
+        self.assertEqual(run["results"]["confirm"].code, "refresh_confirmed")
+
+    def test_confirmation_waiting_for_session_lock_does_not_lock_credentials(self):
+        session, predecessor, successor_token, confirmation_token = self.prepare_confirmation()
+        successor = RefreshCredential.objects.get(pk=predecessor.replaced_by_id)
+        confirmation = partial(
+            confirm_browser_refresh,
+            confirmation_token=confirmation_token,
+        )
+
+        with self.workers_blocked_by(
+            lambda: AuthSession.objects.select_for_update().get(pk=session.pk),
+            [("confirm", confirmation, successor_token)],
+        ) as run:
+            RefreshCredential.objects.select_for_update(nowait=True).get(pk=predecessor.pk)
+            RefreshCredential.objects.select_for_update(nowait=True).get(pk=successor.pk)
+
+        self.assertEqual(run["results"]["confirm"].code, "refresh_confirmed")
+
+    def test_confirmation_locks_only_relevant_credentials(self):
+        session, predecessor, successor_token, confirmation_token = self.prepare_confirmation()
+        successor = RefreshCredential.objects.get(pk=predecessor.replaced_by_id)
+        historical = RefreshCredential.objects.create(
+            uuid=uuid.UUID(int=0),
+            session=session,
+            secret_digest=refresh_secret_digest(
+                uuid.UUID(int=0),
+                b"h" * 32,
+                self.key_material.refresh_hmac_key,
+            ),
+            expires_at=self.now + timedelta(days=7),
+            used_at=self.now,
+            revoked_at=self.now,
+        )
+        confirmation = partial(
+            confirm_browser_refresh,
+            confirmation_token=confirmation_token,
+        )
+
+        with self.workers_blocked_by(
+            lambda: RefreshCredential.objects.select_for_update().get(pk=successor.pk),
+            [("confirm", confirmation, successor_token)],
+        ) as run:
+            RefreshCredential.objects.select_for_update(nowait=True).get(pk=historical.pk)
+
+        self.assertEqual(run["results"]["confirm"].code, "refresh_confirmed")
