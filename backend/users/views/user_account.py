@@ -2,6 +2,7 @@ import logging
 
 from django.db import transaction
 
+from compliance.services.risk_assessment import RiskAssessmentService
 from shared.utils.logging_utils import LoggingContext
 from shared.views.base import AuthenticatedModelViewSet
 from users.constants import USER_ACCOUNT_TYPE_INDIVIDUAL
@@ -33,6 +34,7 @@ class UserAccountViewSet(AuthenticatedModelViewSet):
         if account.account_type == USER_ACCOUNT_TYPE_INDIVIDUAL:
             account.director = profile
             account.save(update_fields=["director"])
+        RiskAssessmentService.create_pending_assessment(user_account=account)
 
     def perform_update(self, serializer):
         return serializer.save()

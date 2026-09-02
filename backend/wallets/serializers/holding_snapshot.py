@@ -1,11 +1,9 @@
 from rest_framework import serializers
 
-from wallets.models import Holding, HoldingSnapshot
+from wallets.models import HoldingSnapshot
 
 
 class HoldingSnapshotSerializer(serializers.ModelSerializer):
-    uuid = serializers.CharField(read_only=True)
-    holding = serializers.PrimaryKeyRelatedField(queryset=Holding.objects.none())
     holding_uuid = serializers.CharField(source="holding.uuid", read_only=True)
     wallet_uuid = serializers.CharField(source="holding.wallet.uuid", read_only=True)
     wallet_address = serializers.CharField(source="holding.wallet.address", read_only=True)
@@ -43,8 +41,3 @@ class HoldingSnapshotSerializer(serializers.ModelSerializer):
             "updated_at",
         )
         read_only_fields = fields
-
-    def get_fields(self):
-        fields = super().get_fields()
-        fields["holding"].queryset = Holding.objects.all()
-        return fields

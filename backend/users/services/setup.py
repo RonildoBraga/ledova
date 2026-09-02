@@ -2,6 +2,7 @@ import logging
 
 from django.db import transaction
 
+from compliance.services.risk_assessment import RiskAssessmentService
 from shared.utils.logging_utils import LoggingContext
 
 logger = logging.getLogger("ledova_backend")
@@ -45,6 +46,7 @@ class UserSetupService:
         else:
             account = UserAccount.objects.create(account_number=f"ACC-{user.id:06d}", director=user_profile)
             account.user_profiles.add(user_profile)
+            RiskAssessmentService.create_pending_assessment(user_account=account)
             logger.info(f"{LoggingContext.USER_SIGNUP} Created account {account.uuid} for {user.email}")
 
         portfolio = Portfolio.objects.create(user_account=account, name="My Portfolio")

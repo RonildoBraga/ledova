@@ -5,7 +5,3 @@ class WalletsConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "wallets"
     verbose_name = "3 - Wallets"
-
-    def ready(self):
-        """Import signals when Django starts"""
-        import wallets.signals  # noqa: F401

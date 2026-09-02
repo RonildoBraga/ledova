@@ -6,6 +6,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from assets.models import Asset
+from compliance.services.transaction_monitoring import TransactionMonitoringService
 from integrations.blockchain import get_blockchain_client
 from shared.constants import get_native_asset_symbol, normalize_chain
 from shared.utils.logging_utils import LoggingContext
@@ -67,6 +68,7 @@ class TransactionConfirmationService:
                 block_timestamp=None,
                 block_number=None,
             )
+            TransactionMonitoringService.check_new_transaction(tx)
 
             holding, _ = Holding.objects.get_or_create(
                 wallet=wallet,

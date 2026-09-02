@@ -8,6 +8,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 from assets.models import Asset, AssetSnapshot
+from compliance.services.transaction_monitoring import TransactionMonitoringService
 from integrations.blockchain import get_blockchain_client
 from shared.constants import EVM_BLOCKCHAINS, normalize_chain
 from shared.utils.logging_utils import LoggingContext
@@ -153,6 +154,8 @@ class WalletSyncService:
             },
         )
         result["tx"] = created
+        if created:
+            TransactionMonitoringService.check_new_transaction(tx)
 
         if created and asset.is_verified:
             holding, _ = Holding.objects.get_or_create(

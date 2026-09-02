@@ -14,6 +14,9 @@ RISK_THRESHOLD_HIGH = 8
 NEW_CUSTOMER_DAYS = 30
 RISK_REVIEW_PERIOD_MONTHS = 24
 BATCH_MONITORING_LOOKBACK_HOURS = 2
+# Only transactions mined within this window are screened on creation; older ones
+# arrive through historical wallet syncs and are handled by the batch task.
+TRANSACTION_MONITORING_WINDOW_HOURS = 1
 
 DOMESTIC_PEP_RISK_ADJUSTMENT = 2
 

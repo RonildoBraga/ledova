@@ -43,8 +43,8 @@ class WalletActionScopingTest(APITestCase):
             ("post", base + "broadcast-transfer/", {"signedTransaction": "0xdead"}),
         ]
 
-    @patch("wallets.tasks.sync_wallet")
-    @patch("wallets.services.sync.WalletSyncService")
+    @patch("wallets.views.wallet.sync_wallet")
+    @patch("wallets.views.wallet.WalletSyncService")
     @patch("wallets.views.wallet.TransferService")
     def test_foreign_wallet_routes_are_not_found_without_side_effects(self, transfer_service, sync_service, sync_task):
         for method, url, payload in self._routes(self.bob_wallet):

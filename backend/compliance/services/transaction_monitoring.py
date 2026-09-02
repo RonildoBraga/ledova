@@ -43,6 +43,7 @@ from compliance.constants import (
     RULE_TYPE_SOF_REQUIRED,
     RULE_TYPE_THRESHOLD,
     SCREENING_THRESHOLD_AUD,
+    TRANSACTION_MONITORING_WINDOW_HOURS,
 )
 from compliance.models import ComplianceAlert, MonitoringRule
 from compliance.services.tier_progression import TierProgressionService
@@ -68,6 +69,20 @@ RULE_CODE_TO_ALERT_TYPE = {
 
 class TransactionMonitoringService:
     @classmethod
+    def check_new_transaction(cls, tx) -> None:
+        """Screen a just-created wallet transaction. Never raises: a monitoring
+        failure must not roll back the sync or transfer that created the row."""
+        cutoff = timezone.now() - timedelta(hours=TRANSACTION_MONITORING_WINDOW_HOURS)
+        if tx.block_timestamp and tx.block_timestamp < cutoff:
+            return
+        try:
+            alerts = cls.check_transaction(transaction=tx, user_account=tx.wallet.user_account)
+            if alerts:
+                logger.info(f"{LoggingContext.MONITORING} Created {len(alerts)} alert(s) for transaction {tx.uuid}")
+        except Exception:
+            logger.exception(f"{LoggingContext.MONITORING} Error checking transaction {tx.uuid}")
+
+    @classmethod
     def check_transaction(cls, transaction, user_account) -> List[ComplianceAlert]:
         alerts_created = []
         active_rules = MonitoringRule.objects.active()
@@ -80,37 +95,12 @@ class TransactionMonitoringService:
                     rule=rule,
                     user_account=user_account,
                     transaction=transaction,
-                    fiat_transaction=None,
                     details=details,
                 )
                 alerts_created.append(alert)
                 logger.info(
                     f"{LoggingContext.MONITORING} Rule {rule.rule_code} triggered for "
                     f"user_account {user_account.uuid}, transaction {transaction.uuid}"
-                )
-
-        return alerts_created
-
-    @classmethod
-    def check_fiat_transaction(cls, fiat_transaction, user_account) -> List[ComplianceAlert]:
-        alerts_created = []
-        active_rules = MonitoringRule.objects.active()
-
-        for rule in active_rules:
-            triggered, details = cls._check_fiat_rule(rule, fiat_transaction, user_account)
-
-            if triggered:
-                alert = cls._create_alert(
-                    rule=rule,
-                    user_account=user_account,
-                    transaction=None,
-                    fiat_transaction=fiat_transaction,
-                    details=details,
-                )
-                alerts_created.append(alert)
-                logger.info(
-                    f"{LoggingContext.MONITORING} Rule {rule.rule_code} triggered for "
-                    f"user_account {user_account.uuid}, fiat_transaction {fiat_transaction.uuid}"
                 )
 
         return alerts_created
@@ -143,19 +133,6 @@ class TransactionMonitoringService:
         return False, {}
 
     @classmethod
-    def _check_fiat_rule(cls, rule: MonitoringRule, fiat_transaction, user_account) -> Tuple[bool, Dict]:
-        rule_type = rule.rule_type
-
-        if rule_type == RULE_TYPE_THRESHOLD:
-            return cls._check_fiat_threshold_rule(rule, fiat_transaction)
-        elif rule_type == RULE_TYPE_SOF_REQUIRED:
-            return cls._check_fiat_sof_required_rule(rule, fiat_transaction, user_account)
-        elif rule_type == RULE_TYPE_EXTREME_RISK:
-            return cls._check_fiat_extreme_risk_rule(rule, fiat_transaction, user_account)
-
-        return False, {}
-
-    @classmethod
     def _check_threshold_rule(cls, rule: MonitoringRule, transaction) -> Tuple[bool, Dict]:
         params = rule.parameters
         threshold = Decimal(str(params.get("amount", ALERT_THRESHOLD_AUD)))
@@ -166,20 +143,6 @@ class TransactionMonitoringService:
                 "amount": float(amount),
                 "threshold": float(threshold),
                 "currency": params.get("currency", "AUD"),
-            }
-        return False, {}
-
-    @classmethod
-    def _check_fiat_threshold_rule(cls, rule: MonitoringRule, fiat_transaction) -> Tuple[bool, Dict]:
-        params = rule.parameters
-        threshold = Decimal(str(params.get("amount", ALERT_THRESHOLD_AUD)))
-        amount = fiat_transaction.fiat_amount or Decimal("0")
-
-        if amount >= threshold:
-            return True, {
-                "amount": float(amount),
-                "threshold": float(threshold),
-                "currency": fiat_transaction.fiat_currency,
             }
         return False, {}
 
@@ -335,33 +298,6 @@ class TransactionMonitoringService:
                 "has_sof_documentation": False,
                 "customer_age_days": customer_age_days,
                 "reason": "High-value transaction by new customer without SOF documentation",
-                "action_required": "Request source of funds documentation",
-            }
-        return False, {}
-
-    @classmethod
-    def _check_fiat_sof_required_rule(cls, rule: MonitoringRule, fiat_transaction, user_account) -> Tuple[bool, Dict]:
-        params = rule.parameters
-        threshold = Decimal(str(params.get("amount", ALERT_THRESHOLD_AUD)))
-        customer_age_days = params.get("customer_age_days", 30)
-
-        if not TierProgressionService.is_new_customer(user_account, days=customer_age_days):
-            return False, {}
-
-        amount = fiat_transaction.fiat_amount or Decimal("0")
-        if amount < threshold:
-            return False, {}
-
-        has_sof = cls._has_sof_documentation(user_account)
-
-        if not has_sof:
-            return True, {
-                "amount": float(amount),
-                "threshold": float(threshold),
-                "has_sof_documentation": False,
-                "customer_age_days": customer_age_days,
-                "currency": fiat_transaction.fiat_currency,
-                "reason": "High-value fiat transaction by new customer without SOF documentation",
                 "action_required": "Request source of funds documentation",
             }
         return False, {}
@@ -581,42 +517,11 @@ class TransactionMonitoringService:
         }
 
     @classmethod
-    def _check_fiat_extreme_risk_rule(cls, rule: MonitoringRule, fiat_transaction, user_account) -> Tuple[bool, Dict]:
-        from compliance.models import CustomerRiskAssessment
-
-        latest_assessment = CustomerRiskAssessment.objects.filter(
-            user_account=user_account,
-            assessment_status="complete",
-        ).first()
-
-        if not latest_assessment:
-            return False, {}
-
-        if latest_assessment.overall_risk_rating != RISK_RATING_EXTREME:
-            return False, {}
-
-        amount = fiat_transaction.fiat_amount or Decimal("0")
-
-        return True, {
-            "risk_rating": latest_assessment.overall_risk_rating,
-            "risk_score": latest_assessment.total_score,
-            "transaction_amount": float(amount),
-            "currency": fiat_transaction.fiat_currency,
-            "assessment_date": latest_assessment.created_at.isoformat(),
-            "reason": (
-                f"Fiat transaction by EXTREME risk customer (score: {latest_assessment.total_score}) "
-                f"requires manual review per Document 2 §4.2"
-            ),
-            "action_required": "Manual review required before processing",
-        }
-
-    @classmethod
     def _create_alert(
         cls,
         rule: MonitoringRule,
         user_account,
         transaction,
-        fiat_transaction,
         details: Dict,
     ) -> ComplianceAlert:
         alert_type = RULE_CODE_TO_ALERT_TYPE.get(rule.rule_code, rule.rule_code.lower().replace("-", "_"))
@@ -624,7 +529,6 @@ class TransactionMonitoringService:
         return ComplianceAlert.objects.create(
             user_account=user_account,
             transaction=transaction,
-            fiat_transaction=fiat_transaction,
             monitoring_rule=rule,
             alert_type=alert_type,
             severity=rule.alert_severity,
@@ -654,7 +558,6 @@ class TransactionMonitoringService:
                         rule=rule,
                         user_account=user_account,
                         transaction=None,
-                        fiat_transaction=None,
                         details=details,
                     )
                     alerts_created.append(alert)

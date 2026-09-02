@@ -8,8 +8,8 @@ Ledova follows a layered architecture with clear separation of concerns:
 
 ```
 Views (API) → Serializers → Services (Business Logic) → QuerySets (Data Access) → Models
-                                  ↓                                                   ↓
-                            Exceptions (Error Handling)                     Signals (Side Effects)
+                                  ↓
+                            Exceptions (Error Handling)
                                   ↓
                             Logging (Observability)
                                   ↑
@@ -375,64 +375,11 @@ grep "user@example.com" logs.txt | grep "[AUTH"
 
 **Reference**: `shared/utils/logging_utils.py`
 
-## Signals
+## Side Effects
 
-Signals are limited to non-authorization side effects. Authorization is derived from current ownership and membership relationships whenever a query or request runs.
+There are no Django signals. A side effect of creating a row (screening a new transaction, opening a pending risk assessment, attaching a new wallet to the selected portfolio) is an explicit call in the service or `perform_create` that creates the row, so the behaviour is visible at the call site and does not fire from fixtures, admin forms or tests by accident.
 
-### Pattern
-
-```python
-import logging
-from django.db.models.signals import post_save
-from django.dispatch import receiver
-
-from shared.utils.logging_utils import LoggingContext
-from app.models import Model
-
-logger = logging.getLogger("ledova_backend")
-
-@receiver(post_save, sender=Model)
-def record_model_creation(sender, instance, created, **kwargs):
-    if not created:
-        return
-
-    logger.info(f"{LoggingContext.SYSTEM} Created {instance}")
-```
-
-### Common Use Cases
-
-| Use Case | Signal | Example |
-|----------|--------|---------|
-| Auto-assign relations | `post_save` | Add wallet to user's portfolio |
-| Lifecycle logging | `post_save` | Record model creation |
-| Membership logging | `m2m_changed` | Record users added to an account |
-
-### M2M Changed Pattern
-
-```python
-@receiver(m2m_changed, sender=Account.user_profiles.through)
-def account_users_changed(sender, instance, action, pk_set, **kwargs):
-    if action in ("post_add", "post_remove"):
-        logger.info(f"{LoggingContext.ACCOUNTS} Membership changed for {instance}")
-```
-
-### Guidelines
-
-- Use signals for non-authorization side effects such as notifications and lifecycle logging
-- Derive authorization from current ownership and membership relationships
-- Always check `if created:` for create-only logic
-- Register signals in `app/signals/__init__.py` and import in `app/apps.py`
-
-### When to Use Signals vs Services
-
-| Signals | Services |
-|---------|----------|
-| Automatic side effects | Explicit business logic |
-| Lifecycle logging | Complex validation |
-| Triggered by model save | Called from views |
-| Fire-and-forget | Return values needed |
-
-**Reference**: `authentication/signals/user.py`, `wallets/signals/wallet.py`
+**Reference**: `wallets/services/sync.py` (`TransactionMonitoringService.check_new_transaction`), `users/services/setup.py` (`RiskAssessmentService.create_pending_assessment`), `wallets/views/wallet.py` (`perform_create`)
 
 ## Serializers
 
@@ -808,9 +755,6 @@ app/
 ├── services/
 │   ├── __init__.py
 │   └── feature.py         # Service per feature/domain
-├── signals/
-│   ├── __init__.py        # Import signal handlers
-│   └── model.py           # Signals per model
 ├── serializers/
 │   ├── __init__.py
 │   └── model.py           # Serializer per model
@@ -829,12 +773,11 @@ app/
 1. **Model**: Add to `models/` with `objects = MyQuerySet.as_manager()`
 2. **QuerySet**: Create in `querysets/` with permission and business logic methods
 3. **FilterSet**: Add to `filters.py` with django-filter fields for API filtering
-4. **Signals**: Add non-authorization side effects in `signals/` if needed
-5. **Exceptions**: Add domain exceptions to `exceptions.py`
-6. **Service**: Create in `services/` with business logic
-7. **Serializer**: Create in `serializers/` for data transformation
-8. **View**: Create in `views/` with `filterset_class`, `ordering`, `ordering_fields`
-9. **Tasks**: Add to `tasks/` for background processing (if needed)
+4. **Exceptions**: Add domain exceptions to `exceptions.py`
+5. **Service**: Create in `services/` with business logic; side effects of creating a row are explicit calls here
+6. **Serializer**: Create in `serializers/` for data transformation
+7. **View**: Create in `views/` with `filterset_class`, `ordering`, `ordering_fields`
+8. **Tasks**: Add to `tasks/` for background processing (if needed)
 
 ### Code Review Checklist
 
@@ -851,7 +794,7 @@ app/
 - [ ] Related data uses `select_related`/`prefetch_related`
 - [ ] Exceptions have appropriate HTTP status codes
 - [ ] User-owned models derive authorization from current ownership or membership relationships
-- [ ] Signals check `if created:` for create-only logic
+- [ ] No Django signals; side effects are explicit calls where the row is created
 - [ ] Tasks use `bind=True` and `max_retries` for retry logic
 - [ ] Tasks delegate to services, don't contain business logic
 - [ ] Transactions are in services, not views

@@ -2,12 +2,6 @@ from rest_framework import status
 from rest_framework.exceptions import APIException
 
 
-class WalletAlreadyExistsException(APIException):
-    status_code = status.HTTP_409_CONFLICT
-    default_detail = "A wallet with this address already exists."
-    default_code = "wallet_already_exists"
-
-
 class InvalidSignatureException(APIException):
     status_code = status.HTTP_400_BAD_REQUEST
     default_detail = "The signature verification failed. Please ensure you signed the correct message."
