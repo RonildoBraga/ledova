@@ -84,6 +84,7 @@ jobs:
         run: >-
           python manage.py test tenancy authentication.tests.test_v2_session_models
           authentication.tests.test_v2_session_service_postgres
+          authentication.tests.test_v2_challenge_admission_postgres
           authentication.tests.test_v2_email_identity
           authentication.tests.test_v2_email_constraints
           authentication.tests.test_v2_email_migration

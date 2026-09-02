@@ -284,7 +284,9 @@ never queue delivery. It therefore neither consumes nor bypasses a real
 destination's delivery allowance. A syntactically valid unknown context never
 mutates an existing challenge; successful IP admission inserts exactly one
 challenge-null, destination-null, terminal `suppressed` delivery as IP-only rate
-evidence, with no proof digest or queued job.
+evidence, with no proof digest or queued job. Its fixed dummy destination key is
+exactly `unknown-context@invalid.example`; derive and discard that destination
+HMAC before deriving the source identity or attempting IP admission.
 
 Reservation acquires sorted PostgreSQL transaction advisory locks derived from
 every accepted-key alias for the destination and IP, then counts and inserts in
