@@ -271,6 +271,13 @@ false positives to resist IPv6 address churn. Family and prefix length are
 unsigned single bytes: `4, 32` for IPv4; `6, 64` for IPv6; and `0, 0` with empty
 network bytes for unknown.
 
+`V2_TRUSTED_PROXY_CIDRS` is empty or a comma-separated list of at most 32
+canonical CIDRs totaling at most 2,048 ASCII bytes. Whitespace, empty or
+duplicate entries, host bits, and IPv4-mapped IPv6 ranges are invalid and fail
+startup without echoing the setting. Forwarded-hop tokens permit only optional
+space or horizontal-tab padding; empty tokens, ports, brackets, zone IDs,
+Unicode, and other non-address material invalidate the complete chain.
+
 ### Confirmation responses
 
 Successful signup confirmation returns `200` using the browser or native
