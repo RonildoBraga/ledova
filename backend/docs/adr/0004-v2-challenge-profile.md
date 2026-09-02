@@ -1,6 +1,6 @@
 # ADR 0004 — Exact v2 challenge profile
 
-Status: Accepted — implementation pending
+Status: Accepted — implementation in progress
 Date: 2026-09-02
 Issue: [#2](https://github.com/RonildoBraga/ledova/issues/2)
 Extends: [ADR 0003](./0003-authentication-session-protocol.md)
@@ -78,6 +78,16 @@ a new context for that incomplete user. Complete and ineligible existing paths
 perform one dummy password hash before returning a decoy; a genuinely absent
 address performs equivalent work while creating the new user's password hash.
 A repeated signup never replaces the stored password.
+
+Eligibility is exact and is decided only after rate admission. Signup may
+create an absent user or use the authoritative existing-user path only for one
+active, unverified user. Email change requires an authenticated actor who is
+active and verified plus a different target that has no authoritative account.
+Password reset requires one active, verified user with a usable password.
+User-profile completion, KYC, company, and provider state are not authentication
+eligibility inputs. Every other or ambiguous case is suppressed. A repeated
+reset may reuse an open challenge only when its immutable transport matches the
+request; a transport mismatch is suppressed and cannot replace that challenge.
 
 ### Credentials and digests
 
@@ -199,6 +209,26 @@ queue payload or database row contains the plaintext credential. It revalidates
 account, challenge, candidate, and lease before sending and again under lock
 before any activation.
 
+For a queued reservation, the delivery insert and synchronous Procrastinate
+`.defer(delivery_uuid=...)` job insert use the Django connector on the same
+database connection inside the same outer `transaction.atomic`. Async defer,
+`transaction.on_commit`, a separate connector, and a crash-gap enqueue are
+forbidden: rollback or enqueue failure leaves neither row, while commit makes
+the reservation and its one corresponding job durable together. Provider work
+is blocked until tests prove this coupling.
+The installed Procrastinate version renders task keyword arguments through
+`Job.call_string` in message text and the `job` or `jobs` record extras. Pin the
+exact Procrastinate version before this task is enabled; changing it requires
+compatibility review. A pre-format filter on every Procrastinate handler or sink
+drops the complete record when those structured extras identify the v2 delivery
+task. It also drops every installed-version `action="ending_job"` record because
+that graceful-shutdown message renders `Job.call_string` without job-identifying
+extras. Message arguments, results, exception text, and stack data therefore
+cannot reach a formatter. Formatted-sink capture tests cover enqueue, start,
+success, retry, error, and graceful shutdown and prove that no delivery UUID or
+task argument appears. The task itself emits only fixed markers through a
+separate application logger.
+
 The v2 provider adapter returns only the typed result `accepted`, `rejected`,
 or `ambiguous`; it never derives state by parsing an error string. The current
 SendGrid client's collapsed result must be replaced before this worker lands.
@@ -251,7 +281,10 @@ public response. Resend with an authoritative context attempts both identities
 before eligibility; a decoy or unknown context has no recoverable destination,
 so it performs the fixed dummy destination HMAC, attempts the IP cap, and can
 never queue delivery. It therefore neither consumes nor bypasses a real
-destination's delivery allowance.
+destination's delivery allowance. A syntactically valid unknown context never
+mutates an existing challenge; successful IP admission inserts exactly one
+challenge-null, destination-null, terminal `suppressed` delivery as IP-only rate
+evidence, with no proof digest or queued job.
 
 Reservation acquires sorted PostgreSQL transaction advisory locks derived from
 every accepted-key alias for the destination and IP, then counts and inserts in
@@ -263,6 +296,20 @@ may over-serialize but never bypass a cap. PostgreSQL race tests are required;
 SQLite cannot prove this boundary. A lock-wait regression must start an older
 transaction first, let a newer transaction commit while it waits, and prove
 that admission and expiry use the older transaction's post-lock database time.
+
+Admission is PostgreSQL-only, uses `pg_advisory_xact_lock`, and exposes no
+standalone or unlocked capacity check. The IP alias set must contain exactly
+every accepted rate-key ID once,
+including the current writer; a recoverable destination has the identical key-ID
+set and the two current aliases select the same configured current writer ID,
+while an IP-only path has no destination aliases. Counts match aliases as an OR
+of exact `(rate_key_id, digest)` pairs; independent key-ID and digest `IN`
+filters are forbidden. They apply no status or upper-time filter. Each operation
+acquires all deduplicated, sorted advisory locks before any user, challenge, or
+delivery row lock, captures its single `clock_timestamp()` only after all locks,
+and then counts first. Capacity refusal returns without resolving eligibility
+or inserting a row; successful capacity admission resolves eligibility and
+inserts one reserved or suppressed row in that transaction.
 
 Trust forwarding headers only when the direct `REMOTE_ADDR` is in an exact,
 startup-validated trusted-proxy CIDR list. A valid untrusted direct address is
@@ -321,6 +368,14 @@ delivery evidence 3,720 seconds after reservation and terminal challenge rows
 only after their linked delivery evidence becomes eligible, and within 24
 hours. Deleting a challenge must not cascade-delete younger rate evidence; a
 delivery retains its purpose and permits a null challenge link.
+
+No v2 challenge request or worker service may execute challenge-domain SQL
+while Django query recording is enabled. Each operation checks
+`connection.queries_logged` before its first challenge-domain query and fails
+with a fixed redacted error when `DEBUG` or `force_debug_cursor` would retain SQL
+parameters; that failure path performs no challenge-service query or mutation.
+Tests that inspect query structure use a non-recording execute wrapper and never
+retain parameter values.
 
 Transactions that reserve capacity acquire sorted rate advisory locks before
 row locks. No other transaction may acquire a rate lock. The row-lock order is
