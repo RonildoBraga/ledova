@@ -1,8 +1,13 @@
+from datetime import datetime
+from unittest.mock import patch
+from uuid import UUID
+
 from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
 
 from assets.models import Asset
 from authentication.models import UserToken
+from authentication.security.v2_email import normalize_v2_email
 from users.models import FavouriteAsset, FinancialProfile, UserAccount, UserProfile
 
 User = get_user_model()
@@ -109,7 +114,12 @@ class UserMutationLifecycleTest(APITestCase):
         member_email = self.member.email
         self.client.force_authenticate(self.owner)
 
-        response = self.client.post("/api/user-profiles/delete-account/")
+        with (
+            patch("users.views.user_profile.datetime") as mocked_datetime,
+            patch("users.views.user_profile.uuid4", return_value=UUID("12345678-1234-4123-8123-123456789abc")),
+        ):
+            mocked_datetime.now.return_value = datetime(2026, 9, 2, 4, 5, 6)
+            response = self.client.post("/api/user-profiles/delete-account/")
 
         self.assertEqual(response.status_code, 200)
         self.owner.refresh_from_db()
@@ -119,7 +129,10 @@ class UserMutationLifecycleTest(APITestCase):
 
         self.assertFalse(self.owner.is_active)
         self.assertFalse(self.owner.is_email_verified)
-        self.assertTrue(self.owner.email.endswith("@deleted.invalid"))
+        expected_email = f"deleted_{self.owner.id}_20260902040506_12345678123441238123123456789abc@deleted.invalid"
+        self.assertEqual(self.owner.email, expected_email)
+        self.assertEqual(normalize_v2_email(self.owner.email), self.owner.email)
+        self.assertNotEqual(self.owner.email, "lifecycle-owner@example.test")
         self.assertEqual(self.member.email, member_email)
         self.assertTrue(self.member.is_active)
         self.assertEqual(self.owner_profile.full_name, "Deleted User")
@@ -135,3 +148,35 @@ class UserMutationLifecycleTest(APITestCase):
             set(self.account.user_profiles.values_list("pk", flat=True)),
             {self.owner_profile.pk, self.member_profile.pk},
         )
+
+    def test_account_deletion_fails_before_mutation_on_a_legacy_equivalent_tombstone(self):
+        original_email = self.owner.email
+        token = UserToken.objects.create(
+            user=self.owner,
+            access_token="collision-access-token",
+            refresh_token="collision-refresh-token",
+        )
+        collision = User(
+            email=f" DELETED_{self.owner.id}_20260902040506_12345678123441238123123456789ABC@DELETED.INVALID ",
+            is_active=True,
+        )
+        collision.set_password("pw-12345678")
+        collision.save()
+        self.client.force_authenticate(self.owner)
+
+        with (
+            patch("users.views.user_profile.datetime") as mocked_datetime,
+            patch("users.views.user_profile.uuid4", return_value=UUID("12345678-1234-4123-8123-123456789abc")),
+        ):
+            mocked_datetime.now.return_value = datetime(2026, 9, 2, 4, 5, 6)
+            response = self.client.post("/api/user-profiles/delete-account/")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data, {"error": ["Account deletion could not be completed."]})
+        self.owner.refresh_from_db()
+        self.owner_profile.refresh_from_db()
+        self.assertEqual(self.owner.email, original_email)
+        self.assertTrue(self.owner.is_active)
+        self.assertTrue(self.owner.is_email_verified)
+        self.assertEqual(self.owner_profile.full_name, "Lifecycle Owner")
+        self.assertTrue(UserToken.objects.filter(pk=token.pk).exists())

@@ -55,6 +55,7 @@ export type UpdateUserProfile = Partial<
     | 'uuid'
     | 'createdAt'
     | 'updatedAt'
+    | 'email'
     | 'isActive'
     | 'isStaff'
     | 'dateJoined'

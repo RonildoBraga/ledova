@@ -123,7 +123,7 @@ class V2EmailResolverTests(V2ExistingAddressTestCase):
 
 
 class V2EmailSerializerBoundaryTests(V2ExistingAddressTestCase):
-    def test_only_lookup_consumers_use_the_strict_field_in_this_batch(self):
+    def test_all_legacy_email_entry_points_use_the_strict_field(self):
         signin = UserSigninSerializer(
             data={"email": "member@example.test\t", "password": self.password},
         )
@@ -142,8 +142,8 @@ class V2EmailSerializerBoundaryTests(V2ExistingAddressTestCase):
         self.assertEqual(signin.errors, {"email": ["Enter a valid email address."]})
         self.assertFalse(verification.is_valid())
         self.assertEqual(verification.errors, {"email": ["Enter a valid email address."]})
-        self.assertTrue(signup.is_valid(), signup.errors)
-        self.assertEqual(signup.validated_data["email"], "member@example.test")
+        self.assertFalse(signup.is_valid())
+        self.assertEqual(signup.errors, {"email": ["Enter a valid email address."]})
 
 
 class V2EmailModelBackendTests(V2ExistingAddressTestCase):

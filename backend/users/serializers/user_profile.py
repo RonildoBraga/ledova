@@ -10,7 +10,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     citizenship_country_name = serializers.SerializerMethodField()
     residence_country = serializers.PrimaryKeyRelatedField(queryset=Country.objects.none(), required=False)
     residence_country_name = serializers.SerializerMethodField()
-    email = serializers.EmailField(required=False)
+    email = serializers.EmailField(source="user.email", read_only=True)
     is_active = serializers.SerializerMethodField()
     is_staff = serializers.SerializerMethodField()
     date_joined = serializers.SerializerMethodField()
@@ -97,18 +97,10 @@ class UserProfileSerializer(serializers.ModelSerializer):
         """Get the name of the residence country."""
         return obj.residence_country.name if obj.residence_country else None
 
-    def to_representation(self, instance):
-        ret = super().to_representation(instance)
-        ret["email"] = instance.user.email if instance.user else None
-        return ret
-
-    def update(self, instance, validated_data):
-        email = validated_data.pop("email", None)
-        instance = super().update(instance, validated_data)
-        if email is not None and instance.user:
-            instance.user.email = email
-            instance.user.save(update_fields=["email"])
-        return instance
+    def validate(self, attrs):
+        if "email" in self.initial_data:
+            raise serializers.ValidationError({"email": ["Email cannot be changed through a profile update."]})
+        return super().validate(attrs)
 
     def get_fields(self):
         fields = super().get_fields()

@@ -41,7 +41,7 @@ class EmailVerificationSerializer(serializers.Serializer):
 
 class UserSignupSerializer(serializers.Serializer):
     uuid = serializers.CharField(read_only=True, required=False)
-    email = serializers.EmailField(max_length=255, required=True)
+    email = V2EmailField(required=True)
     password = serializers.CharField(max_length=255, write_only=True, required=True, style={"input_type": "password"})
     password_confirm = serializers.CharField(
         max_length=255, write_only=True, required=True, style={"input_type": "password"}
@@ -50,10 +50,6 @@ class UserSignupSerializer(serializers.Serializer):
     is_email_verified = serializers.BooleanField(required=False, default=False)
     sms_verification_sent_at = serializers.DateTimeField(format=DATETIME_FORMAT, required=False, allow_null=True)
     is_phone_verified = serializers.BooleanField(required=False, default=False)
-
-    def validate_email(self, value):
-        """Basic email validation - business logic handled in service layer"""
-        return value.lower().strip()
 
     def validate_password(self, value):
         """Basic password validation"""

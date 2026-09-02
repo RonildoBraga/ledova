@@ -34,6 +34,10 @@ class V2EmailLookupResult:
 
 class CustomUserManager(BaseUserManager.from_queryset(CustomUserQuerySet)):
 
+    @classmethod
+    def normalize_email(cls, email):
+        return normalize_v2_email(email)
+
     def _v2_email_candidates(self, destination_key):
         normalized = normalize_v2_email(destination_key)
         if normalized != destination_key:
@@ -84,8 +88,10 @@ class CustomUserManager(BaseUserManager.from_queryset(CustomUserQuerySet)):
     def create_user(self, email, password=None, **extra_fields):
         if not email:
             raise ValueError("The Email field must be set")
-        email = self.normalize_email(email)
-        user = self.model(email=email, **extra_fields)
+        destination_key = self.normalize_email(email)
+        if self.resolve_v2_email(destination_key).state is not V2EmailLookupState.ABSENT:
+            raise ValueError("V2 email is unavailable.")
+        user = self.model(email=destination_key, **extra_fields)
         user.set_password(password)
         user.save(using=self._db)
         return user

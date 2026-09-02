@@ -65,99 +65,6 @@ function InfoRow({ label, value, fallback = 'Not provided', icon, isLast }: Info
   );
 }
 
-interface EditableInfoRowProps {
-  label: string;
-  value: string | null | undefined;
-  fallback?: string;
-  icon: React.ReactNode;
-  isEditing: boolean;
-  editValue: string;
-  onEdit: () => void;
-  onSave: () => void;
-  onCancel: () => void;
-  onChange: (value: string) => void;
-  isSaving: boolean;
-  inputType?: string;
-  placeholder?: string;
-  isLast?: boolean;
-}
-
-function EditableInfoRow({
-  label,
-  value,
-  fallback = 'Not provided',
-  icon,
-  isEditing,
-  editValue,
-  onEdit,
-  onSave,
-  onCancel,
-  onChange,
-  isSaving,
-  inputType = 'text',
-  placeholder,
-  isLast,
-}: EditableInfoRowProps) {
-  if (isEditing) {
-    return (
-      <div className={`flex items-center gap-3 px-4 py-3 ${!isLast ? 'border-b border-border-subtle' : ''}`}>
-        <div className="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center bg-surface-tertiary">
-          {icon}
-        </div>
-        <div className="flex-1 min-w-0">
-          <input
-            type={inputType}
-            value={editValue}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder={placeholder}
-            className="w-full text-sm bg-surface-tertiary border border-border rounded-lg px-3 py-1.5 text-text-primary focus:outline-none focus:border-border-focus"
-            autoFocus
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') onSave();
-              if (e.key === 'Escape') onCancel();
-            }}
-          />
-          <p className="text-xs text-text-muted mt-0.5">{label}</p>
-        </div>
-        <div className="flex items-center gap-1 flex-shrink-0">
-          <button
-            type="button"
-            onClick={onSave}
-            disabled={isSaving}
-            className="p-1.5 text-success-light hover:text-success-light transition-colors disabled:opacity-50"
-          >
-            <CheckIcon size={ICON_SM} weight="bold" />
-          </button>
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={isSaving}
-            className="p-1.5 text-text-muted hover:text-text-secondary transition-colors disabled:opacity-50"
-          >
-            <XIcon size={ICON_SM} weight="bold" />
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={onEdit}
-      className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-surface-tertiary/50 transition-colors ${!isLast ? 'border-b border-border-subtle' : ''}`}
-    >
-      <div className="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center bg-surface-tertiary">
-        {icon}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-text-primary">{value || fallback}</p>
-        <p className="text-xs text-text-muted mt-0.5">{label}</p>
-      </div>
-    </button>
-  );
-}
-
 function getVerificationStatusColor(statusType: VerificationStatusType): string {
   switch (statusType) {
     case 'verified':
@@ -200,22 +107,10 @@ export function UserProfilePage() {
 
   const verificationStatus = getUserVerificationStatus(userProfile);
 
-  const [isEditingEmail, setIsEditingEmail] = useState(false);
   const [isEditingPhone, setIsEditingPhone] = useState(false);
-  const [editEmail, setEditEmail] = useState('');
   const [editPhoneCode, setEditPhoneCode] = useState('');
   const [editPhoneNumber, setEditPhoneNumber] = useState('');
   const [showVerificationModal, setShowVerificationModal] = useState(false);
-
-  const handleEditEmail = () => {
-    setEditEmail(userProfile?.email || '');
-    setIsEditingEmail(true);
-  };
-
-  const handleSaveEmail = () => {
-    updateProfile({ email: editEmail });
-    setIsEditingEmail(false);
-  };
 
   const handleEditPhone = () => {
     setEditPhoneCode(userProfile?.phoneCountryCode || '');
@@ -274,19 +169,10 @@ export function UserProfilePage() {
                   value={userProfile.fullName}
                   icon={<UserIcon size={ICON_MD} className="text-text-muted" />}
                 />
-                <EditableInfoRow
+                <InfoRow
                   label="Email"
                   value={userProfile.email}
                   icon={<EnvelopeIcon size={ICON_MD} className="text-text-muted" />}
-                  isEditing={isEditingEmail}
-                  editValue={editEmail}
-                  onEdit={handleEditEmail}
-                  onSave={handleSaveEmail}
-                  onCancel={() => setIsEditingEmail(false)}
-                  onChange={setEditEmail}
-                  isSaving={isUpdating}
-                  inputType="email"
-                  placeholder="email@example.com"
                 />
                 {isEditingPhone ? (
                   <div className="flex items-center gap-3 px-4 py-3 border-b border-border-subtle">

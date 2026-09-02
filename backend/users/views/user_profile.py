@@ -1,12 +1,15 @@
 import logging
 from datetime import datetime
+from uuid import uuid4
 
 from django.db import transaction
-from rest_framework import status
+from rest_framework import serializers, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from authentication.managers.user import V2EmailLookupState
 from authentication.models.user_token import UserToken
+from authentication.security.v2_email import normalize_v2_email
 from portfolios.models import Portfolio
 from shared.utils.logging_utils import LoggingContext
 from shared.views.base import AuthenticatedModelViewSet
@@ -51,10 +54,13 @@ class UserProfileViewSet(AuthenticatedModelViewSet):
         logger.info(f"{LoggingContext.USER_PROFILE} Account deletion requested")
 
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        user.email = f"deleted_{user.id}_{timestamp}@deleted.invalid"
+        tombstone = normalize_v2_email(f"deleted_{user.id}_{timestamp}_{uuid4().hex}@deleted.invalid")
+        if user.__class__.objects.resolve_v2_email(tombstone).state is not V2EmailLookupState.ABSENT:
+            raise serializers.ValidationError({"error": ["Account deletion could not be completed."]})
+        user.email = tombstone
         user.is_active = False
         user.is_email_verified = False
-        user.save()
+        user.save(update_fields=["email", "is_active", "is_email_verified"])
 
         UserToken.objects.filter(user=user).delete()
 

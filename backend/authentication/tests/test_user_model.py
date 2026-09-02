@@ -127,7 +127,7 @@ class CustomUserModelTest(TestCase):
     def test_user_email_normalization(self):
         """Test that email addresses are properly normalized."""
         user = User.objects.create_user(email="TEST@EXAMPLE.COM", password="testpass123")
-        self.assertEqual(user.email, "TEST@example.com")  # Domain should be lowercase
+        self.assertEqual(user.email, "test@example.com")
 
     def test_create_user_without_email_raises_error(self):
         """Test that creating a user without email raises ValueError."""
