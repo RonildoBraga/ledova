@@ -157,6 +157,13 @@ A challenge is `open`, then exactly one of `consumed`, `exhausted`, `expired`,
 `suppressed`, `superseded`, `consumed`, `exhausted`, `expired`, or
 `invalidated`. A challenge has at most one active and one in-flight delivery.
 Resend never changes its context or resets its cumulative OTP failures.
+In-flight means `reserved`, `sending`, or `ambiguous`. Challenge and delivery
+rows use explicit UUIDs and database-clock timestamps rather than automatic
+application-clock model fields. A delivery is also the retained rate-evidence
+row, uses one rate-key ID for its destination and IP digests, and may omit the
+destination digest only for a suppressed path with no recoverable destination.
+Challenge ownership is protected from hard deletion while the challenge is
+retained; the existing account-deletion flow tombstones the user row.
 
 Provider-path delivery transitions are `reserved` to `sending`; `sending` to
 `active`, `rejected`, or `ambiguous`; and any in-flight state to `abandoned` at
