@@ -18,6 +18,8 @@ from authentication.security import (
     encode_v2_confirmation_token,
     encode_v2_refresh_token,
     refresh_secret_digest,
+    resolve_access_config,
+    verify_access_token,
 )
 from authentication.services.v2_sessions import (
     BrowserRefreshConfirmed,
@@ -42,6 +44,7 @@ class V2SessionServicePostgresTest(TransactionTestCase):
             access_signing_key=b"a" * 32,
             refresh_hmac_key=b"r" * 32,
         )
+        self.access_configuration = resolve_access_config(self.key_material)
         self.user = User.objects.create_user(
             email="refresh-race@example.test",
             password="test-password-123",
@@ -77,10 +80,33 @@ class V2SessionServicePostgresTest(TransactionTestCase):
             key_material=self.key_material,
         )
 
+    def assert_outcome_access_contract(self, outcome, session):
+        if isinstance(outcome, RefreshRotated):
+            claims = verify_access_token(
+                outcome.access_token,
+                configuration=self.access_configuration,
+                clock=lambda: self.now,
+            )
+            self.assertEqual(claims.user_id, self.user.pk)
+            self.assertEqual(claims.session_id, session.uuid)
+            self.assertEqual(claims.expires_at, outcome.access_expires_at)
+            return
+        self.assertIsInstance(
+            outcome,
+            (BrowserRefreshRaced, BrowserRefreshConfirmed, SessionRejected),
+        )
+        self.assertFalse(hasattr(outcome, "access_token"))
+
+    def assert_outcomes_access_contract(self, outcomes, session):
+        for outcome in outcomes:
+            self.assert_outcome_access_contract(outcome, session)
+
     def prepare_confirmation(self):
         session, predecessor, token = self.create_refresh(AuthSession.ClientType.BROWSER)
         rotated = self.rotate(rotate_browser_refresh, token)
         raced = self.rotate(rotate_browser_refresh, token)
+        self.assert_outcome_access_contract(rotated, session)
+        self.assert_outcome_access_contract(raced, session)
         predecessor.refresh_from_db()
         return session, predecessor, rotated.refresh_token, raced.confirmation_token
 
@@ -183,6 +209,7 @@ class V2SessionServicePostgresTest(TransactionTestCase):
             pass
 
         results = run["results"]
+        self.assert_outcomes_access_contract(results.values(), session)
         self.assertCountEqual([result.code for result in results.values()], ["refresh_rotated", "refresh_reused"])
         self.assertEqual(sum(isinstance(result, RefreshRotated) for result in results.values()), 1)
         self.assertEqual(sum(isinstance(result, SessionRejected) for result in results.values()), 1)
@@ -212,6 +239,7 @@ class V2SessionServicePostgresTest(TransactionTestCase):
             pass
 
         results = run["results"]
+        self.assert_outcomes_access_contract(results.values(), session)
         self.assertCountEqual([result.code for result in results.values()], ["refresh_rotated", "refresh_raced"])
         self.assertEqual(sum(isinstance(result, RefreshRotated) for result in results.values()), 1)
         self.assertEqual(sum(isinstance(result, BrowserRefreshRaced) for result in results.values()), 1)
@@ -245,6 +273,7 @@ class V2SessionServicePostgresTest(TransactionTestCase):
             pass
 
         results = run["results"]
+        self.assert_outcomes_access_contract(results.values(), session)
         self.assertEqual(results["valid"].code, "refresh_rotated")
         self.assertEqual(results["wrong"].code, "invalid_refresh")
         session.refresh_from_db()
@@ -271,7 +300,9 @@ class V2SessionServicePostgresTest(TransactionTestCase):
             AuthSession.objects.select_for_update(nowait=True).get(pk=session.pk)
             RefreshCredential.objects.select_for_update(nowait=True).get(pk=credential.pk)
 
-        self.assertEqual(run["results"]["rotate"].code, "refresh_rotated")
+        outcome = run["results"]["rotate"]
+        self.assert_outcome_access_contract(outcome, session)
+        self.assertEqual(outcome.code, "refresh_rotated")
 
     def test_refresh_waiting_for_session_lock_does_not_lock_credential(self):
         session, credential, token = self.create_refresh(AuthSession.ClientType.NATIVE)
@@ -282,7 +313,9 @@ class V2SessionServicePostgresTest(TransactionTestCase):
         ) as run:
             RefreshCredential.objects.select_for_update(nowait=True).get(pk=credential.pk)
 
-        self.assertEqual(run["results"]["rotate"].code, "refresh_rotated")
+        outcome = run["results"]["rotate"]
+        self.assert_outcome_access_contract(outcome, session)
+        self.assertEqual(outcome.code, "refresh_rotated")
 
     def test_refresh_locks_only_presented_and_related_credentials(self):
         session, credential, token = self.create_refresh(AuthSession.ClientType.NATIVE)
@@ -305,7 +338,9 @@ class V2SessionServicePostgresTest(TransactionTestCase):
         ) as run:
             RefreshCredential.objects.select_for_update(nowait=True).get(pk=historical.pk)
 
-        self.assertEqual(run["results"]["rotate"].code, "refresh_rotated")
+        outcome = run["results"]["rotate"]
+        self.assert_outcome_access_contract(outcome, session)
+        self.assertEqual(outcome.code, "refresh_rotated")
 
     def test_simultaneous_confirmations_serialize_then_revoke_repeat(self):
         session, predecessor, successor_token, confirmation_token = self.prepare_confirmation()
@@ -325,6 +360,7 @@ class V2SessionServicePostgresTest(TransactionTestCase):
             pass
 
         results = run["results"]
+        self.assert_outcomes_access_contract(results.values(), session)
         self.assertEqual(sum(isinstance(result, BrowserRefreshConfirmed) for result in results.values()), 1)
         self.assertEqual(sum(isinstance(result, SessionRejected) for result in results.values()), 1)
         session.refresh_from_db()
@@ -355,6 +391,7 @@ class V2SessionServicePostgresTest(TransactionTestCase):
             pass
 
         results = run["results"]
+        self.assert_outcomes_access_contract(results.values(), session)
         self.assertTrue(all(result.code in {"refresh_confirmed", "session_revoked"} for result in results.values()))
         self.assertGreaterEqual(sum(result.code == "session_revoked" for result in results.values()), 1)
         session.refresh_from_db()
@@ -379,7 +416,9 @@ class V2SessionServicePostgresTest(TransactionTestCase):
             RefreshCredential.objects.select_for_update(nowait=True).get(pk=predecessor.pk)
             RefreshCredential.objects.select_for_update(nowait=True).get(pk=successor.pk)
 
-        self.assertEqual(run["results"]["confirm"].code, "refresh_confirmed")
+        outcome = run["results"]["confirm"]
+        self.assert_outcome_access_contract(outcome, session)
+        self.assertEqual(outcome.code, "refresh_confirmed")
 
     def test_confirmation_waiting_for_session_lock_does_not_lock_credentials(self):
         session, predecessor, successor_token, confirmation_token = self.prepare_confirmation()
@@ -396,7 +435,9 @@ class V2SessionServicePostgresTest(TransactionTestCase):
             RefreshCredential.objects.select_for_update(nowait=True).get(pk=predecessor.pk)
             RefreshCredential.objects.select_for_update(nowait=True).get(pk=successor.pk)
 
-        self.assertEqual(run["results"]["confirm"].code, "refresh_confirmed")
+        outcome = run["results"]["confirm"]
+        self.assert_outcome_access_contract(outcome, session)
+        self.assertEqual(outcome.code, "refresh_confirmed")
 
     def test_confirmation_locks_only_relevant_credentials(self):
         session, predecessor, successor_token, confirmation_token = self.prepare_confirmation()
@@ -424,4 +465,6 @@ class V2SessionServicePostgresTest(TransactionTestCase):
         ) as run:
             RefreshCredential.objects.select_for_update(nowait=True).get(pk=historical.pk)
 
-        self.assertEqual(run["results"]["confirm"].code, "refresh_confirmed")
+        outcome = run["results"]["confirm"]
+        self.assert_outcome_access_contract(outcome, session)
+        self.assertEqual(outcome.code, "refresh_confirmed")

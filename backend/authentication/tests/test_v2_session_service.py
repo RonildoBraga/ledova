@@ -2,12 +2,16 @@ import uuid
 from datetime import timedelta
 from unittest.mock import patch
 
+import jwt
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 
 from authentication.models import AuthSession, RefreshCredential
 from authentication.security import (
+    INITIAL_ACCESS_KID,
+    AccessTokenConfigurationError,
+    AccessTokenError,
     V2KeyMaterial,
     decode_v2_confirmation_token,
     decode_v2_refresh_token,
@@ -16,6 +20,8 @@ from authentication.security import (
     refresh_confirmation_digest,
     refresh_confirmation_matches,
     refresh_secret_matches,
+    resolve_access_config,
+    verify_access_token,
 )
 from authentication.services.v2_sessions import (
     BrowserRefreshConfirmed,
@@ -49,6 +55,7 @@ class V2SessionServiceTest(TestCase):
         self.now = timezone.now()
         self.random_bytes = SyntheticRandom()
         self.keys = V2KeyMaterial(access_signing_key=b"a" * 32, refresh_hmac_key=b"r" * 32)
+        self.access_config = resolve_access_config(self.keys)
         self.user = User.objects.create_user(
             email="v2-session@example.test",
             password="test-password-123",
@@ -105,6 +112,13 @@ class V2SessionServiceTest(TestCase):
 
     def credential_for(self, token):
         return RefreshCredential.objects.get(pk=decode_v2_refresh_token(token).selector)
+
+    def access_claims_for(self, result):
+        return verify_access_token(
+            result.access_token,
+            configuration=self.access_config,
+            clock=self.clock,
+        )
 
     def test_refresh_and_confirmation_tokens_are_canonical_and_redacted(self):
         selector = uuid.UUID("00000000-0000-0000-0000-000000000001")
@@ -186,6 +200,7 @@ class V2SessionServiceTest(TestCase):
             ("refresh_lifetime", timedelta(days=7)),
             ("browser_collision_window", timedelta(seconds=5)),
             ("browser_confirmation_lifetime", timedelta(seconds=10)),
+            ("access_lifetime", timedelta(minutes=15)),
         )
 
         for field, cap in fields_and_caps:
@@ -195,6 +210,11 @@ class V2SessionServiceTest(TestCase):
             with self.subTest(field=field, boundary="extended"):
                 with self.assertRaisesMessage(ValueError, "Invalid v2 session policy."):
                     V2SessionPolicy(**{field: cap + timedelta(microseconds=1)})
+
+        for field in ("absolute_lifetime", "access_lifetime"):
+            with self.subTest(field=field, boundary="subsecond"):
+                with self.assertRaisesMessage(ValueError, "Invalid v2 session policy."):
+                    V2SessionPolicy(**{field: timedelta(microseconds=999_999)})
 
     def test_explicit_issuance_creates_digest_only_browser_and_native_sessions(self):
         browser = self.issue_browser(device_label="Browser")
@@ -206,6 +226,7 @@ class V2SessionServiceTest(TestCase):
         self.assertEqual(native.code, "session_issued")
         self.assertEqual(AuthSession.objects.count(), 2)
         self.assertEqual(RefreshCredential.objects.count(), 2)
+        token_ids = set()
 
         for result, client_type in (
             (browser, AuthSession.ClientType.BROWSER),
@@ -214,6 +235,7 @@ class V2SessionServiceTest(TestCase):
             session = AuthSession.objects.get(pk=result.session_id)
             credential = self.credential_for(result.refresh_token)
             parts = decode_v2_refresh_token(result.refresh_token)
+            claims = self.access_claims_for(result)
             self.assertEqual(session.client_type, client_type)
             self.assertEqual(session.last_used_at, self.now)
             self.assertEqual(session.absolute_expires_at, self.now + timedelta(days=30))
@@ -227,8 +249,75 @@ class V2SessionServiceTest(TestCase):
                 )
             )
             self.assertNotEqual(bytes(credential.secret_digest), parts.secret)
+            self.assertEqual(claims.user_id, self.user.pk)
+            self.assertEqual(claims.session_id, session.uuid)
+            self.assertEqual(claims.token_id.version, 4)
+            self.assertEqual(claims.expires_at - claims.issued_at, timedelta(minutes=15))
+            self.assertEqual(result.access_expires_at, claims.expires_at)
+            token_ids.add(claims.token_id)
+            self.assertNotIn(result.access_token, repr(result))
             self.assertNotIn(result.refresh_token, repr(result))
             self.assertNotIn(str(result.session_id), repr(result))
+            self.assertNotIn(str(result.access_expires_at), repr(result))
+
+        self.assertEqual(len(token_ids), 2)
+        self.assertIn(uuid.UUID(bytes=bytes(range(49, 65)), version=4), token_ids)
+
+    def test_access_lifetime_can_shorten_and_is_capped_by_session_expiry(self):
+        shortened = self.issue_native(policy=V2SessionPolicy(access_lifetime=timedelta(minutes=2)))
+        shortened_claims = self.access_claims_for(shortened)
+        capped = self.issue_browser(policy=V2SessionPolicy(absolute_lifetime=timedelta(seconds=30)))
+        capped_claims = self.access_claims_for(capped)
+
+        self.assertEqual(shortened_claims.expires_at - shortened_claims.issued_at, timedelta(minutes=2))
+        self.assertEqual(capped_claims.expires_at - capped_claims.issued_at, timedelta(seconds=30))
+        self.assertEqual(capped.access_expires_at, capped_claims.expires_at)
+
+    def test_rotated_access_configuration_issues_and_rotates_under_the_new_kid(self):
+        rotated_material = V2KeyMaterial(
+            access_signing_key=b"n" * 32,
+            refresh_hmac_key=self.keys.refresh_hmac_key,
+        )
+        rotated_configuration = resolve_access_config(
+            rotated_material,
+            current_kid="ledova-v2-access-hs256-2",
+            verifier_keys={
+                INITIAL_ACCESS_KID: self.keys.access_signing_key,
+                "ledova-v2-access-hs256-2": rotated_material.access_signing_key,
+            },
+        )
+        with self.assertRaisesMessage(
+            AccessTokenConfigurationError,
+            "Invalid v2 access token configuration.",
+        ):
+            self.issue_native(access_configuration=rotated_configuration)
+        self.assertFalse(AuthSession.objects.exists())
+        self.assertFalse(RefreshCredential.objects.exists())
+
+        issued = self.issue_native(
+            key_material=rotated_material,
+            access_configuration=rotated_configuration,
+        )
+        self.now += timedelta(seconds=1)
+        rotated = self.rotate_native(
+            issued.refresh_token,
+            key_material=rotated_material,
+            access_configuration=rotated_configuration,
+        )
+
+        for result in (issued, rotated):
+            with self.subTest(code=result.code):
+                self.assertEqual(
+                    jwt.get_unverified_header(result.access_token)["kid"],
+                    "ledova-v2-access-hs256-2",
+                )
+                claims = verify_access_token(
+                    result.access_token,
+                    configuration=rotated_configuration,
+                    clock=self.clock,
+                )
+                self.assertEqual(claims.user_id, self.user.pk)
+                self.assertEqual(claims.session_id, issued.session_id)
 
     def test_ineligible_or_unknown_user_cannot_receive_a_session(self):
         cases = (
@@ -254,15 +343,27 @@ class V2SessionServiceTest(TestCase):
         with self.assertRaisesMessage(ValueError, "Invalid v2 random source."):
             self.issue_native(random_bytes=lambda length: b"x" * (length - 1))
 
+        calls = 0
+
+        def fail_access_random(length):
+            nonlocal calls
+            calls += 1
+            return b"x" * (length if calls < 3 else length - 1)
+
+        with self.assertRaisesMessage(ValueError, "Invalid v2 random source."):
+            self.issue_native(random_bytes=fail_access_random)
+
         self.assertFalse(AuthSession.objects.exists())
         self.assertFalse(RefreshCredential.objects.exists())
 
     def test_rotation_consumes_and_links_exactly_one_successor(self):
         issued = self.issue_native()
+        issued_claims = self.access_claims_for(issued)
         predecessor = self.credential_for(issued.refresh_token)
         self.now += timedelta(hours=1)
 
         rotated = self.rotate_native(issued.refresh_token)
+        rotated_claims = self.access_claims_for(rotated)
 
         self.assertIsInstance(rotated, RefreshRotated)
         self.assertEqual(rotated.code, "refresh_rotated")
@@ -283,6 +384,11 @@ class V2SessionServiceTest(TestCase):
             successor,
         )
         self.assertEqual(session.last_used_at, self.now)
+        self.assertEqual(rotated_claims.user_id, issued_claims.user_id)
+        self.assertEqual(rotated_claims.session_id, issued_claims.session_id)
+        self.assertNotEqual(rotated_claims.token_id, issued_claims.token_id)
+        self.assertEqual(rotated.access_expires_at, rotated_claims.expires_at)
+        self.assertNotIn(rotated.access_token, repr(rotated))
 
     def test_wrong_secret_never_mutates_fresh_or_spent_credential(self):
         issued = self.issue_native()
@@ -349,6 +455,7 @@ class V2SessionServiceTest(TestCase):
             )
         )
         self.assertNotEqual(bytes(predecessor.confirmation_nonce_digest), confirmation.nonce)
+        self.assertFalse(hasattr(raced, "access_token"))
         self.assertNotIn(raced.confirmation_token, repr(raced))
         self.assertNotIn(str(raced.session_id), repr(raced))
 
@@ -453,6 +560,7 @@ class V2SessionServiceTest(TestCase):
         self.assertIsNone(successor.used_at)
         self.assertIsNone(successor.revoked_at)
         self.assertEqual(RefreshCredential.objects.filter(session=session).count(), 2)
+        self.assertFalse(hasattr(confirmed, "access_token"))
         self.assertNotIn(str(confirmed.session_id), repr(confirmed))
 
     def test_authenticated_invalid_confirmation_revokes_and_consumes_nonce(self):
@@ -645,4 +753,52 @@ class V2SessionServiceTest(TestCase):
         self.assertIsNone(predecessor.used_at)
         self.assertIsNone(predecessor.replaced_by_id)
         self.assertEqual(session.status, AuthSession.Status.ACTIVE)
+        self.assertEqual(RefreshCredential.objects.filter(session=session).count(), 1)
+
+    def test_access_signing_failure_rolls_back_issuance_and_rotation(self):
+        with patch(
+            "authentication.services.v2_sessions.issue_access_token",
+            side_effect=AccessTokenError("Invalid v2 access token."),
+        ):
+            with self.assertRaisesMessage(AccessTokenError, "Invalid v2 access token."):
+                self.issue_native()
+
+        self.assertFalse(AuthSession.objects.exists())
+        self.assertFalse(RefreshCredential.objects.exists())
+
+        issued = self.issue_native()
+        predecessor = self.credential_for(issued.refresh_token)
+        session = AuthSession.objects.get(pk=issued.session_id)
+        original_last_used_at = session.last_used_at
+        self.now += timedelta(seconds=1)
+
+        with patch(
+            "authentication.services.v2_sessions.issue_access_token",
+            side_effect=AccessTokenError("Invalid v2 access token."),
+        ):
+            with self.assertRaisesMessage(AccessTokenError, "Invalid v2 access token."):
+                self.rotate_native(issued.refresh_token)
+
+        predecessor.refresh_from_db()
+        session.refresh_from_db()
+        self.assertIsNone(predecessor.used_at)
+        self.assertIsNone(predecessor.replaced_by_id)
+        self.assertEqual(session.last_used_at, original_last_used_at)
+        self.assertEqual(RefreshCredential.objects.filter(session=session).count(), 1)
+
+    def test_rotation_refuses_an_empty_integer_access_window_without_mutation(self):
+        self.now = self.now.replace(microsecond=100_000)
+        issued = self.issue_native()
+        predecessor = self.credential_for(issued.refresh_token)
+        session = AuthSession.objects.get(pk=issued.session_id)
+        session.absolute_expires_at = self.now + timedelta(microseconds=500)
+        session.save(update_fields=["absolute_expires_at"])
+
+        result = self.rotate_native(issued.refresh_token)
+
+        predecessor.refresh_from_db()
+        session.refresh_from_db()
+        self.assertEqual(result, SessionRejected("refresh_expired"))
+        self.assertIsNone(predecessor.used_at)
+        self.assertIsNone(predecessor.replaced_by_id)
         self.assertEqual(RefreshCredential.objects.filter(session=session).count(), 1)
