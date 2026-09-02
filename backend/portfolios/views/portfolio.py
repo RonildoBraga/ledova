@@ -64,7 +64,6 @@ class PortfolioViewSet(AuthenticatedModelViewSet):
             .filter_active_assets()
             .exclude_zero_allocations()
             .select_related("asset")
-            .with_holdings_data(portfolio)
         )
         serializer = AssetAllocationSerializer(allocations, many=True, context={"request": request})
         return Response(serializer.data)

@@ -228,7 +228,3 @@ class SwapOrder(BaseModel):
 
             order.error_message = error_message
             order.save(update_fields=["filled_quantity", "status", "error_message", "updated_at"])
-
-    def mark_expired(self):
-        self.status = SwapOrderStatus.EXPIRED
-        self.save(update_fields=["status", "updated_at"])

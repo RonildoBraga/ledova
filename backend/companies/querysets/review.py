@@ -21,19 +21,6 @@ class ApplicationReviewQuerySet(QuerySet):
 
         return self.filter(decision__in=[ReviewDecision.APPROVED, ReviewDecision.REJECTED])
 
-    def approved(self):
-        from companies.models import ReviewDecision
-
-        return self.filter(decision=ReviewDecision.APPROVED)
-
-    def rejected(self):
-        from companies.models import ReviewDecision
-
-        return self.filter(decision=ReviewDecision.REJECTED)
-
-    def for_company(self, company):
-        return self.filter(company=company).order_by("review_order")
-
 
 class ReviewNoteQuerySet(QuerySet):
 
@@ -44,9 +31,3 @@ class ReviewNoteQuerySet(QuerySet):
 
     def with_optimized_data(self):
         return self.select_related("review", "review__company", "author")
-
-    def internal_only(self):
-        return self.filter(visible_to_company=False)
-
-    def external(self):
-        return self.filter(visible_to_company=True)

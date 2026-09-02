@@ -3,12 +3,6 @@ from django.db.models import QuerySet
 
 class UserPreferencesQuerySet(QuerySet):
 
-    def with_selected_account(self):
-        return self.filter(selected_account__isnull=False)
-
-    def with_selected_portfolio(self):
-        return self.filter(selected_portfolio__isnull=False)
-
     def visible_to_user(self, user):
         if user is None or not user.is_authenticated:
             return self.none()

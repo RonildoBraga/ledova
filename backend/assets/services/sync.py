@@ -3,7 +3,7 @@ import time
 from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
 from decimal import Decimal, InvalidOperation
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from django.db import transaction
 from django.utils import timezone
@@ -150,27 +150,6 @@ class AssetSyncService:
                 )
 
             return snapshot
-
-    @staticmethod
-    def get_price_history(
-        asset: Asset,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
-        limit: Optional[int] = None,
-    ) -> List[AssetSnapshot]:
-        queryset = AssetSnapshot.objects.filter(asset=asset)
-
-        if start_date:
-            queryset = queryset.filter(source_timestamp__gte=start_date)
-        if end_date:
-            queryset = queryset.filter(source_timestamp__lte=end_date)
-
-        queryset = queryset.order_by("-source_timestamp")
-
-        if limit:
-            queryset = queryset[:limit]
-
-        return list(queryset)
 
     @staticmethod
     def _create_or_update_assets() -> Dict[str, int]:

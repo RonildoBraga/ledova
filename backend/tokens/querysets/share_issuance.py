@@ -1,4 +1,4 @@
-from django.db.models import BigIntegerField, Max, Q, QuerySet, Sum
+from django.db.models import BigIntegerField, Max, QuerySet, Sum
 from django.db.models.functions import Cast
 
 from tokens.models.choices import IssuanceStatus
@@ -9,15 +9,6 @@ class ShareIssuanceQuerySet(QuerySet):
     def filter_by_token(self, token):
         if token:
             return self.filter(token=token)
-        return self
-
-    def filter_by_recipients(self, addresses):
-        """Complex: OR query across multiple addresses (case-insensitive)."""
-        if addresses:
-            q = Q()
-            for addr in addresses:
-                q |= Q(recipient_address__iexact=addr)
-            return self.filter(q)
         return self
 
     def filter_by_date_range(self, start_date=None, end_date=None):
@@ -39,17 +30,6 @@ class ShareIssuanceQuerySet(QuerySet):
 
     def with_initiated_by(self):
         return self.select_related("initiated_by")
-
-    def unique_holder_addresses(self):
-        return self.completed().order_by("recipient_address").values_list("recipient_address", flat=True).distinct()
-
-    def holder_address_names(self):
-        address_names = {}
-        for issuance in self.completed().order_by("-created_at"):
-            addr = issuance.recipient_address
-            if addr not in address_names:
-                address_names[addr] = issuance.recipient_name
-        return address_names
 
     def unique_holders_with_names(self):
         latest_per_address = self.completed().values("recipient_address").annotate(latest_created=Max("created_at"))

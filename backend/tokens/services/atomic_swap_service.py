@@ -528,13 +528,6 @@ class AtomicSwapService:
     def find_swap_order_by_transfer_order(self, transfer_order: TransferOrder) -> Optional[SwapOrder]:
         return SwapOrder.objects.for_transfer_order(transfer_order)
 
-    def expire_stale_orders(self) -> int:
-        expired = SwapOrder.objects.stale_pending(timezone.now())
-        count = expired.count()
-        for order in expired:
-            order.mark_expired()
-        return count
-
     def is_share_token_approved(self, token_address: str) -> bool:
         try:
             contract = self.chain_client.load_contract("AtomicSwap", self.contract_address)

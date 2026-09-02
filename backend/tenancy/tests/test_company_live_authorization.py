@@ -1,6 +1,5 @@
 """Application-level company isolation through the live owner relationship."""
 
-from decimal import Decimal
 from types import SimpleNamespace
 
 from django.contrib.auth import get_user_model
@@ -16,9 +15,7 @@ from tokens.models import (
     ShareIssuanceRequest,
     ShareToken,
     ShareTokenStatus,
-    TransferOrder,
 )
-from tokens.models.choices import TransferOrderStatus, TransferOrderType
 from tokens.serializers import ShareTokenCreateSerializer
 from users.models import UserAccount, UserProfile
 from wallets.models import Wallet
@@ -80,26 +77,6 @@ class CompanyLiveAuthorizationTest(APITestCase):
             reason="Testing",
         )
 
-        profile = UserProfile.objects.create(user=self.alice)
-        account = UserAccount.objects.create()
-        account.user_profiles.add(profile)
-        wallet = Wallet.objects.create(
-            user_account=account,
-            address="0x" + "a" * 40,
-            chain="ethereum",
-            verification_status="VERIFIED",
-        )
-        self.order = TransferOrder.objects.create(
-            token=self.token,
-            order_type=TransferOrderType.SELL,
-            status=TransferOrderStatus.OPEN,
-            wallet=wallet,
-            owner_account=account,
-            wallet_address=wallet.address,
-            quantity=10,
-            price_per_share=Decimal("1.00"),
-        )
-
     def test_owner_is_live_authority_for_company_and_all_derived_resources(self):
         self.assertNotIn(self.company, Company.objects.visible_to_user(self.bob))
         self.assertNotIn(self.company, Company.objects.manageable_by_user(self.bob))
@@ -118,7 +95,6 @@ class CompanyLiveAuthorizationTest(APITestCase):
             CapitalIncreaseRequest.objects.manageable_by_user(self.alice),
             ShareIssuanceRequest.objects.visible_to_user(self.alice),
             ShareIssuanceRequest.objects.manageable_by_user(self.alice),
-            TransferOrder.objects.for_token_visible_to_user(self.alice),
         )
         for queryset in former_owner_querysets:
             with self.subTest(model=queryset.model._meta.label):
@@ -135,7 +111,6 @@ class CompanyLiveAuthorizationTest(APITestCase):
             CapitalIncreaseRequest.objects.manageable_by_user(self.bob),
             ShareIssuanceRequest.objects.visible_to_user(self.bob),
             ShareIssuanceRequest.objects.manageable_by_user(self.bob),
-            TransferOrder.objects.for_token_visible_to_user(self.bob),
         )
         for queryset in current_owner_querysets:
             with self.subTest(model=queryset.model._meta.label):

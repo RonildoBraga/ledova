@@ -16,7 +16,7 @@ from compliance.constants import (
     INVESTIGATION_OUTCOME_CHOICES,
     SMR_TYPE_CHOICES,
 )
-from compliance.managers.compliance_alert import ComplianceAlertManager
+from compliance.querysets.compliance_alert import ComplianceAlertQuerySet
 from shared.models.base import BaseModel
 
 
@@ -158,8 +158,7 @@ class ComplianceAlert(BaseModel):
         help_text="When the account action was applied",
     )
 
-
-    objects = ComplianceAlertManager()
+    objects = ComplianceAlertQuerySet.as_manager()
 
     class Meta:
         ordering = ["-created_at"]

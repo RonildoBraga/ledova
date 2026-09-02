@@ -31,16 +31,6 @@ class Portfolio(BaseModel):
         """Return only wallet links that agree with the portfolio's tenant."""
         return self.wallets.filter(user_account_id=self.user_account_id)
 
-    @property
-    def holdings_summary(self):
-        from collections import defaultdict
-
-        aggregated = defaultdict(Decimal)
-        for wallet in self.account_wallets():
-            for holding in wallet.holdings.filter(asset__is_active=True):
-                aggregated[holding.asset] += holding.quantity
-        return dict(aggregated)
-
 
 class AssetAllocation(BaseModel):
     portfolio = models.ForeignKey(Portfolio, on_delete=models.CASCADE, related_name="allocations")

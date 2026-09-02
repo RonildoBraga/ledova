@@ -1,4 +1,3 @@
-from django.db import models
 from django.db.models import QuerySet
 
 from shared.utils.datetime_utils import (
@@ -61,26 +60,10 @@ class PortfolioSnapshotQuerySet(QuerySet):
     def with_optimized_data(self):
         return self.select_related("portfolio", "portfolio__user_account")
 
-    def latest_snapshot(self, portfolio=None):
-        queryset = self
-        if portfolio:
-            queryset = queryset.filter_by_portfolio(portfolio)
-        return queryset.order_by("-snapshot_date").first()
-
     def daily_snapshots(self):
         return self.filter(snapshot_reason="DAILY")
-
-    def calculate_value_range(self):
-        return self.aggregate(
-            min_value=models.Min("total_value"),
-            max_value=models.Max("total_value"),
-            avg_value=models.Avg("total_value"),
-        )
 
     def for_date(self, date):
         if date:
             return self.filter(snapshot_date=date)
         return self
-
-    def latest_for_date(self, date):
-        return self.for_date(date).order_by("-snapshot_date").first()

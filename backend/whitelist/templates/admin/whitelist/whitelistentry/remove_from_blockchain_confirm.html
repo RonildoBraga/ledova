@@ -35,7 +35,7 @@
                 </tr>
                 <tr>
                     <td class="label-col">Current Status</td>
-                    <td><span class="badge badge-success">{{ entry.status_display }}</span></td>
+                    <td><span class="badge badge-success">{{ entry.get_status_display }}</span></td>
                 </tr>
                 {% if entry.wallet.user %}
                 <tr>

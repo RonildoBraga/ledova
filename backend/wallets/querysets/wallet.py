@@ -8,9 +8,6 @@ class WalletQuerySet(QuerySet):
             return self.none()
         return self.filter(user_account__user_profiles__user=user)
 
-    def with_optimized_data(self):
-        return self.select_related("user_account", "user_account__user_profile")
-
     def with_market_value(self):
         from django.db.models import Q
 
@@ -37,19 +34,8 @@ class WalletQuerySet(QuerySet):
             ),
         )
 
-    def verified(self):
-        return self.filter(verification_status="VERIFIED")
-
-    def pending_verification(self):
-        return self.filter(verification_status="PENDING")
-
     def filter_by_address(self, address):
         return self.filter(address__iexact=address)
-
-    def by_chain(self, chain):
-        if chain:
-            return self.filter(chain__iexact=chain)
-        return self
 
     def for_chain_with_l2_fallback(self, chain):
         from wallets.models.wallet import Blockchain

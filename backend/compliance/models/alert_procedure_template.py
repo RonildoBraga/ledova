@@ -20,7 +20,7 @@ from compliance.constants import (
     SMR_REQUIREMENT_ASSESS,
     SMR_REQUIREMENT_CHOICES,
 )
-from compliance.managers.alert_procedure_template import AlertProcedureTemplateManager
+from compliance.querysets.alert_procedure_template import AlertProcedureTemplateQuerySet
 from shared.models.base import BaseModel
 
 
@@ -112,7 +112,7 @@ class AlertProcedureTemplate(BaseModel):
         help_text="Whether this template is currently in use",
     )
 
-    objects = AlertProcedureTemplateManager()
+    objects = AlertProcedureTemplateQuerySet.as_manager()
 
     class Meta:
         ordering = ["priority", "alert_type"]

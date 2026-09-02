@@ -46,38 +46,6 @@ class AssetSnapshotQuerySet(QuerySet):
 
         return None
 
-    def filter_by_price_range(self, min_price=None, max_price=None):
-        queryset = self
-
-        min_price_value = None
-        if min_price is not None:
-            try:
-                min_price_value = float(min_price)
-            except (ValueError, TypeError):
-                min_price_value = None
-
-        max_price_value = None
-        if max_price is not None:
-            try:
-                max_price_value = float(max_price)
-            except (ValueError, TypeError):
-                max_price_value = None
-
-        if min_price_value:
-            queryset = queryset.filter(price__gte=min_price_value)
-        if max_price_value:
-            queryset = queryset.filter(price__lte=max_price_value)
-        return queryset
-
-    def filter_by_exchange(self, exchange_short_name):
-        """Kept for manager proxy."""
-        if exchange_short_name:
-            return self.filter(asset__exchange__short_name=exchange_short_name)
-        return self
-
-    def active_assets_only(self):
-        return self.filter(asset__is_active=True)
-
     def closest_to_timestamp(self, timestamp):
         if not timestamp:
             return None

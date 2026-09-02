@@ -66,20 +66,6 @@ class Asset(BaseModel):
         dep = self.chain_deployments.first()
         return dep.contract_address if dep else None
 
-    @property
-    def is_native_token(self):
-        return not self.chain_deployments.filter(contract_address__isnull=False).exclude(contract_address="").exists()
-
-    @property
-    def is_erc20_token(self):
-        return self.chain_deployments.filter(contract_address__isnull=False).exclude(contract_address="").exists()
-
-    @property
-    def display_price(self):
-        if self.current_price is None:
-            return "N/A"
-        return f"{self.price_currency} {self.current_price:,.2f}"
-
     def get_deployment_for_chain(self, chain: str) -> Optional["AssetChainDeployment"]:
         return self.chain_deployments.filter(chain=chain, is_active=True).first()
 

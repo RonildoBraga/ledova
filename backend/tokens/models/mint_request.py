@@ -4,7 +4,6 @@ from django.db import models
 from django.utils import timezone
 
 from shared.models import BaseModel
-from tokens.querysets import MintRequestQuerySet
 
 
 class MintRequestStatus(models.TextChoices):
@@ -16,8 +15,6 @@ class MintRequestStatus(models.TextChoices):
 
 
 class MintRequest(BaseModel):
-
-    objects = MintRequestQuerySet.as_manager()
 
     stablecoin = models.ForeignKey(
         "tokens.Stablecoin",

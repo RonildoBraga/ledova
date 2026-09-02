@@ -111,13 +111,6 @@ class CustomUserModelTest(TestCase):
         self.assertEqual(admin_tokens.count(), 1)
         self.assertFalse(UserToken.objects.visible_to_user(None).exists())
 
-        # Test filtering by device info
-        ip_filtered = UserToken.objects.filter_by_device_info(ip_address="192.168.1.1")
-        self.assertEqual(ip_filtered.count(), 1)
-
-        ua_filtered = UserToken.objects.filter_by_device_info(user_agent="Chrome")
-        self.assertEqual(ua_filtered.count(), 1)
-
         # Test combined filters
         combined = (
             UserToken.objects.visible_to_user(regular_user).filter_active(True).filter(expires_at__gt=timezone.now())

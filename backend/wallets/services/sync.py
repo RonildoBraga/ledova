@@ -9,12 +9,10 @@ from django.utils.dateparse import parse_datetime
 
 from assets.models import Asset, AssetSnapshot
 from integrations.blockchain import get_blockchain_client
-from shared.constants import EVM_BLOCKCHAINS
+from shared.constants import EVM_BLOCKCHAINS, normalize_chain
 from shared.utils.logging_utils import LoggingContext
 from wallets.constants import SNAPSHOT_REASON_TRANSACTION
-from wallets.exceptions import BlockchainAPIError
 from wallets.models import Holding, HoldingSnapshot, Transaction, Wallet
-from wallets.services.blockchain import fetch_wallet_transactions
 from wallets.utils.scam_detection import is_scam_token
 
 logger = logging.getLogger("ledova_backend")
@@ -23,20 +21,16 @@ logger = logging.getLogger("ledova_backend")
 class WalletSyncService:
 
     @staticmethod
-    def sync_wallet(
-        wallet: Wallet,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
-    ) -> Dict[str, Any]:
+    def sync_wallet(wallet: Wallet) -> Dict[str, Any]:
         if not wallet.is_verified:
             return {"status": "skipped", "error": "Wallet not verified"}
 
         try:
-            transactions_data = fetch_wallet_transactions(
-                wallet=wallet,
-                start_date=start_date,
-                end_date=end_date,
-            )
+            chain = normalize_chain(wallet.chain)
+            transactions_data = get_blockchain_client(chain).get_transaction_history(wallet.address)
+            for tx in transactions_data:
+                # _process_single_transaction reads tx["chain"]; the client payload has no chain key.
+                tx["chain"] = chain
 
             result = WalletSyncService._process_transactions(wallet, transactions_data)
 
@@ -47,10 +41,6 @@ class WalletSyncService:
             wallet.save(update_fields=["last_synced_at"])
 
             return result
-
-        except BlockchainAPIError as e:
-            logger.error(f"{LoggingContext.WALLET_SYNC} API error: {e}")
-            return {"status": "error", "error": str(e)}
 
         except Exception as e:
             logger.error(f"{LoggingContext.WALLET_SYNC} Error: {e.__class__.__name__}: {e}")

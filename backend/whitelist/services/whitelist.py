@@ -69,9 +69,6 @@ class WhitelistService:
             "kyc_timestamp": result[1],
         }
 
-    def get_whitelist_count(self) -> int:
-        return self.contract.functions.whitelistCount().call()
-
     def can_receive(self, address: str) -> bool:
         checksum_address = self.chain_client.to_checksum_address(address)
         return self.contract.functions.canReceive(checksum_address).call()
@@ -98,10 +95,6 @@ class WhitelistService:
         if len(wallets) != 1:
             raise WalletNotRegisteredException()
         return wallets[0]
-
-    @staticmethod
-    def is_address_whitelisted(address: str) -> bool:
-        return WhitelistEntry.objects.filter_by_address(address).active().exists()
 
     @transaction.atomic
     def add_to_whitelist(

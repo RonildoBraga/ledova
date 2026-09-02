@@ -11,15 +11,6 @@ class UserTokenQuerySet(QuerySet):
     def filter_active(self, is_active=True):
         return self.filter(is_active=is_active)
 
-    def filter_by_device_info(self, ip_address=None, user_agent=None):
-        """Kept for manager proxy."""
-        queryset = self
-        if ip_address:
-            queryset = queryset.filter(ip_address=ip_address)
-        if user_agent:
-            queryset = queryset.filter(user_agent__icontains=user_agent)
-        return queryset
-
     def filter_by_date_range(self, start_date=None, end_date=None):
         """Kept for manager proxy."""
         queryset = self

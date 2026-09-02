@@ -1,5 +1,4 @@
 from django.db.models import QuerySet
-from django.utils import timezone
 
 
 class AlertChecklistItemQuerySet(QuerySet):
@@ -15,21 +14,11 @@ class AlertChecklistItemQuerySet(QuerySet):
     def pending(self):
         return self.filter(is_completed=False, is_skipped=False)
 
-    def skipped(self):
-        return self.filter(is_skipped=True)
-
     def required(self):
         return self.filter(step__is_required=True)
-
-    def optional(self):
-        return self.filter(step__is_required=False)
 
     def required_pending(self):
         return self.required().pending()
 
-    def completed_today(self):
-        today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
-        return self.filter(completed_at__gte=today_start)
-
-    def with_notes(self):
-        return self.exclude(notes="")
+    def pending_required_for_alert(self, alert):
+        return self.filter(alert=alert).required_pending().order_by("step__order")

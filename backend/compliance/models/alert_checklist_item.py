@@ -11,7 +11,7 @@ This standalone source release does not include an external policy document.
 from django.db import models
 from django.utils import timezone
 
-from compliance.managers.alert_checklist_item import AlertChecklistItemManager
+from compliance.querysets.alert_checklist_item import AlertChecklistItemQuerySet
 from shared.models.base import BaseModel
 
 
@@ -79,7 +79,7 @@ class AlertChecklistItem(BaseModel):
         help_text="References to evidence or documents related to this step",
     )
 
-    objects = AlertChecklistItemManager()
+    objects = AlertChecklistItemQuerySet.as_manager()
 
     class Meta:
         ordering = ["alert", "step__order"]

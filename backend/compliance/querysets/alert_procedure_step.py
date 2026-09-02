@@ -10,15 +10,3 @@ class AlertProcedureStepQuerySet(QuerySet):
 
     def required(self):
         return self.filter(is_required=True)
-
-    def optional(self):
-        return self.filter(is_required=False)
-
-    def conditional(self):
-        return self.exclude(condition="")
-
-    def unconditional(self):
-        return self.filter(condition="")
-
-    def for_active_templates(self):
-        return self.filter(template__is_active=True)

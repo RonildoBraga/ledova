@@ -186,7 +186,6 @@ class TenantOrderIsolationTest(APITestCase):
         for user in (None, AnonymousUser()):
             with self.subTest(user=user):
                 self.assertFalse(TransferOrder.objects.visible_to_user(user).exists())
-                self.assertFalse(TransferOrder.objects.for_token_visible_to_user(user).exists())
 
         legacy = TransferOrder.objects.create(
             token=self.alice_order.token,
@@ -216,7 +215,6 @@ class TenantOrderIsolationTest(APITestCase):
 
             with self.subTest(actor=actor.email):
                 self.assertEqual(set(TransferOrder.objects.visible_to_user(actor)), {order})
-                self.assertEqual(set(TransferOrder.objects.for_token_visible_to_user(actor)), {order})
                 self.assertNotIn(legacy, TransferOrder.objects.visible_to_user(actor))
                 self.assertNotIn(mismatched, TransferOrder.objects.visible_to_user(actor))
 

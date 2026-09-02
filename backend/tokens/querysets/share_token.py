@@ -28,9 +28,6 @@ class ShareTokenQuerySet(QuerySet):
     def deployed_with_contract(self):
         return self.deployed().exclude(contract_address__isnull=True).exclude(contract_address="")
 
-    def draft(self):
-        return self.filter(status="draft")
-
     def with_company(self):
         return self.select_related("company")
 

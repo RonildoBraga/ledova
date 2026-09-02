@@ -1,5 +1,4 @@
 from wallets.services.balance import BalanceService
-from wallets.services.blockchain import fetch_wallet_transactions
 from wallets.services.fiat_onramp import generate_transak_widget_url
 from wallets.services.sync import WalletSyncService
 from wallets.services.transfers import (
@@ -17,7 +16,6 @@ from wallets.services.wallets import (
 )
 
 __all__ = [
-    "fetch_wallet_transactions",
     "prepare_ethereum_transaction",
     "prepare_bitcoin_transaction",
     "broadcast_ethereum_transaction",

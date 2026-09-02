@@ -41,14 +41,6 @@ class WhitelistEntry(BaseModel):
     def __str__(self) -> str:
         return f"{self.wallet.address[:10]}..."
 
-    @property
-    def wallet_address(self) -> str:
-        return self.wallet.address
-
-    @property
-    def status_display(self) -> str:
-        return self.get_status_display()
-
     def mark_active(self, tx_hash: str) -> None:
         self.status = WhitelistStatus.ACTIVE
         self.is_whitelisted = True

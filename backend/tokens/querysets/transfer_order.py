@@ -1,6 +1,8 @@
 from django.db import models
 from django.db.models import QuerySet
 
+from tokens.models.choices import TransferOrderStatus, TransferOrderType
+
 
 class TransferOrderQuerySet(QuerySet):
 
@@ -12,11 +14,6 @@ class TransferOrderQuerySet(QuerySet):
     def filter_by_order_type(self, order_type):
         if order_type:
             return self.filter(order_type=order_type)
-        return self
-
-    def filter_by_wallet_address(self, address):
-        if address:
-            return self.filter(wallet_address__iexact=address)
         return self
 
     def ownership_bound(self):
@@ -44,58 +41,13 @@ class TransferOrderQuerySet(QuerySet):
             .distinct()
         )
 
-    def for_token_visible_to_user(self, user):
-        if user is None or not user.is_authenticated:
-            return self.none()
-
-        from companies.models import Company
-
-        user_companies = Company.objects.visible_to_user(user)
-        return self.ownership_bound().filter(token__company__in=user_companies)
-
     def open(self):
-        from tokens.models.choices import TransferOrderStatus
-
         return self.filter(status=TransferOrderStatus.OPEN)
 
-    def matched(self):
-        from tokens.models.choices import TransferOrderStatus
-
-        return self.filter(status=TransferOrderStatus.MATCHED)
-
-    def pending_signature(self):
-        from tokens.models.choices import TransferOrderStatus
-
-        return self.filter(status=TransferOrderStatus.PENDING_SIGNATURE)
-
-    def executing(self):
-        from tokens.models.choices import TransferOrderStatus
-
-        return self.filter(status=TransferOrderStatus.EXECUTING)
-
     def completed(self):
-        from tokens.models.choices import TransferOrderStatus
-
         return self.filter(status=TransferOrderStatus.COMPLETED)
 
-    def failed(self):
-        from tokens.models.choices import TransferOrderStatus
-
-        return self.filter(status=TransferOrderStatus.FAILED)
-
-    def cancelled(self):
-        from tokens.models.choices import TransferOrderStatus
-
-        return self.filter(status=TransferOrderStatus.CANCELLED)
-
-    def expired(self):
-        from tokens.models.choices import TransferOrderStatus
-
-        return self.filter(status=TransferOrderStatus.EXPIRED)
-
     def active(self):
-        from tokens.models.choices import TransferOrderStatus
-
         return self.filter(
             status__in=[
                 TransferOrderStatus.OPEN,
@@ -106,27 +58,13 @@ class TransferOrderQuerySet(QuerySet):
         )
 
     def buy_orders(self):
-        from tokens.models.choices import TransferOrderType
-
         return self.filter(order_type=TransferOrderType.BUY)
 
     def sell_orders(self):
-        from tokens.models.choices import TransferOrderType
-
         return self.filter(order_type=TransferOrderType.SELL)
-
-    def matchable(self):
-        """Orders that can be matched (open or partially filled)."""
-        from tokens.models.choices import TransferOrderStatus
-
-        return self.filter(
-            status__in=[TransferOrderStatus.OPEN, TransferOrderStatus.PARTIALLY_FILLED],
-        )
 
     def open_or_partial(self):
         """Orders that can still receive matches (open or partially filled)."""
-        from tokens.models.choices import TransferOrderStatus
-
         return self.filter(
             status__in=[TransferOrderStatus.OPEN, TransferOrderStatus.PARTIALLY_FILLED],
         )
@@ -146,8 +84,6 @@ class TransferOrderQuerySet(QuerySet):
         Returns:
             Total uncommitted quantity (quantity - filled_quantity) across matching orders.
         """
-        from tokens.models.choices import TransferOrderStatus, TransferOrderType
-
         qs = self.ownership_bound().filter(
             token=token,
             wallet_address__iexact=wallet_address,
@@ -177,8 +113,6 @@ class TransferOrderQuerySet(QuerySet):
         Returns:
             QuerySet with price_per_share, total_quantity, and order_count.
         """
-        from tokens.models.choices import TransferOrderType
-
         qs = self.ownership_bound().open().filter(token=token)
 
         if order_type == TransferOrderType.BUY:

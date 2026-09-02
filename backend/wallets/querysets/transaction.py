@@ -10,18 +10,6 @@ class TransactionQuerySet(QuerySet):
             return self.filter(wallet__uuid=wallet)
         return self
 
-    def filter_by_wallets(self, wallets):
-        if wallets is not None:
-            return self.filter(wallet__in=wallets)
-        return self
-
-    def filter_by_asset(self, asset):
-        if asset:
-            if hasattr(asset, "uuid"):
-                return self.filter(asset__uuid=asset.uuid)
-            return self.filter(asset__uuid=asset)
-        return self
-
     def filter_by_address(self, address):
         if address:
             return self.filter(Q(from_address__iexact=address) | Q(to_address__iexact=address))
@@ -55,19 +43,3 @@ class TransactionQuerySet(QuerySet):
 
     def with_optimized_data(self):
         return self.select_related("asset", "wallet", "wallet__user_account")
-
-    def for_wallet_address(self, wallet_address):
-        return self.filter_by_address(wallet_address)
-
-    def incoming(self, wallet_address):
-        if wallet_address:
-            return self.filter(to_address__iexact=wallet_address)
-        return self
-
-    def outgoing(self, wallet_address):
-        if wallet_address:
-            return self.filter(from_address__iexact=wallet_address)
-        return self
-
-    def latest_transactions(self, limit=20):
-        return self.order_by("-block_timestamp")

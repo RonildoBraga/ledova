@@ -53,11 +53,3 @@ class ExchangeRateService:
             return exchange_rate.rate
         except ExchangeRate.DoesNotExist:
             return None
-
-    @staticmethod
-    def convert(amount: Decimal, target_currency: str, base_currency: str = "USD") -> Optional[Decimal]:
-        """Convert an amount from base to target currency."""
-        rate = ExchangeRateService.get_rate(base_currency, target_currency)
-        if rate is None:
-            return None
-        return amount * rate

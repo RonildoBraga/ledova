@@ -86,18 +86,8 @@ class BlockchainTransaction(BaseModel):
         return self.status in [TransactionStatus.PENDING, TransactionStatus.SUBMITTED]
 
     @property
-    def is_successful(self) -> bool:
-        return self.status == TransactionStatus.CONFIRMED
-
-    @property
     def is_failed(self) -> bool:
         return self.status in [TransactionStatus.FAILED, TransactionStatus.REVERTED]
-
-    @property
-    def explorer_url(self) -> str | None:
-        if not self.tx_hash:
-            return None
-        return None
 
     def mark_submitted(self, tx_hash: str, nonce: int = None) -> None:
         self.tx_hash = tx_hash

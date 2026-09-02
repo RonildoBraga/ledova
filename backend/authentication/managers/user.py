@@ -3,7 +3,6 @@ from enum import Enum
 
 from django.contrib.auth.models import BaseUserManager
 
-from authentication.querysets.user import CustomUserQuerySet
 from authentication.security.v2_email import (
     V2_EMAIL_ERROR,
     V2EmailError,
@@ -32,7 +31,7 @@ class V2EmailLookupResult:
         return "V2EmailLookupResult(<redacted>)"
 
 
-class CustomUserManager(BaseUserManager.from_queryset(CustomUserQuerySet)):
+class CustomUserManager(BaseUserManager):
 
     @classmethod
     def normalize_email(cls, email):
