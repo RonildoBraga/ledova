@@ -8,6 +8,7 @@ from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
+from authentication.managers.user import V2EmailLookupResult, V2EmailLookupState
 from authentication.models import UserToken
 from authentication.services import TokenService
 from users.services import UserSetupService
@@ -53,7 +54,7 @@ class LegacyAuthProtocolTestCase(APITestCase):
         profile.save(update_fields=["is_signup_completed"])
         return user
 
-    def create_raw_user(self, email, *, password=None, active=True, verified=True):
+    def create_direct_user(self, email, *, password=None, active=True, verified=True):
         user = User(
             email=email,
             is_active=active,
@@ -63,11 +64,15 @@ class LegacyAuthProtocolTestCase(APITestCase):
         user.save()
         return user
 
-    def complete_raw_user(self, user):
+    def complete_direct_user(self, user):
         profile, _, _, _ = UserSetupService.ensure_defaults(user)
         profile.is_signup_completed = True
         profile.save(update_fields=["is_signup_completed"])
         return user
+
+    @staticmethod
+    def ambiguous_email_result():
+        return V2EmailLookupResult(V2EmailLookupState.AMBIGUOUS)
 
     def assert_issued_cookie(self, response, name, max_age):
         self.assertIn(name, response.cookies)
@@ -140,13 +145,13 @@ class LegacyTransportTest(LegacyAuthProtocolTestCase):
         self.assert_issued_cookie(response, "refresh", 604800)
         self.assertEqual(UserToken.objects.filter(user=user, is_active=True).count(), 1)
 
-    def test_legacy_signin_resolves_one_noncanonical_stored_address(self):
-        stored_email = " Legacy.Member@EXAMPLE.TEST "
-        user = self.complete_raw_user(self.create_raw_user(stored_email))
+    def test_legacy_signin_normalizes_input_for_a_canonical_stored_address(self):
+        stored_email = "legacy.member@example.test"
+        user = self.complete_direct_user(self.create_direct_user(stored_email))
 
         response = self.client.post(
             "/api/signin/",
-            {"email": " legacy.member@example.test ", "password": self.password},
+            {"email": " Legacy.Member@EXAMPLE.TEST ", "password": self.password},
             format="json",
         )
 
@@ -155,8 +160,8 @@ class LegacyTransportTest(LegacyAuthProtocolTestCase):
         self.assertEqual(UserToken.objects.filter(user=user, is_active=True).count(), 1)
 
     def test_legacy_signin_absent_and_ambiguous_responses_are_identical(self):
-        first = self.create_raw_user("Collision@EXAMPLE.TEST")
-        second = self.create_raw_user("collision@example.test ")
+        first = self.create_direct_user("collision-first@example.test")
+        second = self.create_direct_user("collision-second@example.test")
         initial_state = {
             first.pk: (first.password, first.last_login),
             second.pk: (second.password, second.last_login),
@@ -167,29 +172,40 @@ class LegacyTransportTest(LegacyAuthProtocolTestCase):
             {"email": "absent@example.test", "password": self.password},
             format="json",
         )
-        ambiguous_response = APIClient().post(
-            "/api/signin/",
-            {"email": "collision@example.test", "password": self.password},
-            format="json",
-        )
+        with patch.object(
+            type(User.objects),
+            "resolve_v2_email",
+            return_value=self.ambiguous_email_result(),
+        ) as resolve:
+            ambiguous_response = APIClient().post(
+                "/api/signin/",
+                {"email": "collision@example.test", "password": self.password},
+                format="json",
+            )
 
         self.assertEqual(ambiguous_response.status_code, absent_response.status_code)
         self.assertEqual(ambiguous_response.data, absent_response.data)
         self.assertEqual(list(ambiguous_response.cookies), list(absent_response.cookies))
+        resolve.assert_called_once_with("collision@example.test")
         self.assertFalse(UserToken.objects.exists())
         for user in (first, second):
             user.refresh_from_db()
             self.assertEqual((user.password, user.last_login), initial_state[user.pk])
 
-    def test_legacy_signup_reuses_one_noncanonical_incomplete_account(self):
-        stored_email = " Pending.Member@EXAMPLE.TEST "
-        user = self.create_raw_user(stored_email, password="old-password-123", active=False, verified=False)
+    def test_legacy_signup_reuses_one_canonical_incomplete_account(self):
+        stored_email = "pending.member@example.test"
+        user = self.create_direct_user(
+            stored_email,
+            password="old-password-123",
+            active=False,
+            verified=False,
+        )
 
         with patch("authentication.views.user.EmailCodeService.send") as send_email:
             response = self.client.post(
                 "/api/signup/",
                 {
-                    "email": "pending.member@example.test",
+                    "email": " Pending.Member@EXAMPLE.TEST ",
                     "password": self.password,
                     "passwordConfirm": self.password,
                 },
@@ -206,14 +222,28 @@ class LegacyTransportTest(LegacyAuthProtocolTestCase):
         self.assertEqual(send_email.call_args.args[0].pk, user.pk)
 
     def test_legacy_signup_ambiguity_fails_without_mutation_or_delivery(self):
-        first = self.create_raw_user("Collision@EXAMPLE.TEST", password="first-password-123", active=False)
-        second = self.create_raw_user("collision@example.test ", password="second-password-123")
+        first = self.create_direct_user(
+            "collision-first@example.test",
+            password="first-password-123",
+            active=False,
+        )
+        second = self.create_direct_user(
+            "collision-second@example.test",
+            password="second-password-123",
+        )
         initial_state = {
             first.pk: (first.email, first.password, first.is_active),
             second.pk: (second.email, second.password, second.is_active),
         }
 
-        with patch("authentication.views.user.EmailCodeService.send") as send_email:
+        with (
+            patch("authentication.views.user.EmailCodeService.send") as send_email,
+            patch.object(
+                type(User.objects),
+                "resolve_v2_email",
+                return_value=self.ambiguous_email_result(),
+            ) as resolve,
+        ):
             response = self.client.post(
                 "/api/signup/",
                 {
@@ -228,6 +258,7 @@ class LegacyTransportTest(LegacyAuthProtocolTestCase):
         self.assertEqual(response.data, {"email": ["Email already registered"]})
         self.assertEqual(User.objects.count(), 2)
         self.assertFalse(UserToken.objects.exists())
+        resolve.assert_called_once_with("collision@example.test")
         send_email.assert_not_called()
         for user in (first, second):
             user.refresh_from_db()

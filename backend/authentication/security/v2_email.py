@@ -1,6 +1,7 @@
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
-from django.db.models import CharField, F, Func
+from django.db import NotSupportedError
+from django.db.models import BooleanField, CharField, F, Func
 from django.db.models.functions import Trim
 
 V2_EMAIL_ERROR = "Invalid v2 email address."
@@ -25,6 +26,31 @@ class V2EmailDestinationKey(Func):
             template='%(function)s(%(expressions)s COLLATE "C")',
             **extra_context,
         )
+
+
+class V2EmailIsPrintableASCII(Func):
+    arity = 1
+    output_field = BooleanField()
+
+    def as_postgresql(self, compiler, connection, **extra_context):
+        expression, params = compiler.compile(self.source_expressions[0])
+        collation = connection.ops.quote_name("C")
+        return (
+            f"(CHAR_LENGTH({expression}) BETWEEN 1 AND 254 " f"AND ({expression} COLLATE {collation}) !~ %s)",
+            (*params, *params, r"[^ -~]"),
+        )
+
+    def as_sqlite(self, compiler, connection, **extra_context):
+        expression, params = compiler.compile(self.source_expressions[0])
+        return (
+            f"(LENGTH(CAST({expression} AS BLOB)) BETWEEN 1 AND 254 "
+            f"AND LENGTH(CAST({expression} AS BLOB)) = LENGTH({expression}) "
+            f"AND {expression} NOT GLOB %s)",
+            (*params, *params, *params, *params, r"*[^ -~]*"),
+        )
+
+    def as_sql(self, compiler, connection, **extra_context):
+        raise NotSupportedError("V2 email constraints support PostgreSQL and SQLite only.")
 
 
 def normalize_v2_email(value):

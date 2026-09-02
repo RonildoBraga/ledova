@@ -55,6 +55,7 @@ from authentication.security.v2_email import (
     V2_EMAIL_ERROR,
     V2EmailDestinationKey,
     V2EmailError,
+    V2EmailIsPrintableASCII,
     normalize_v2_email,
     v2_email_destination_expression,
 )
@@ -78,6 +79,7 @@ __all__ = [
     "V2ConfirmationTokenParts",
     "V2EmailDestinationKey",
     "V2EmailError",
+    "V2EmailIsPrintableASCII",
     "V2KeyMaterial",
     "V2KeyMaterialError",
     "V2RefreshTokenParts",

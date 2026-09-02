@@ -6,6 +6,7 @@ from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
 
 from assets.models import Asset
+from authentication.managers.user import V2EmailLookupResult, V2EmailLookupState
 from authentication.models import UserToken
 from authentication.security.v2_email import normalize_v2_email
 from users.models import FavouriteAsset, FinancialProfile, UserAccount, UserProfile
@@ -149,30 +150,31 @@ class UserMutationLifecycleTest(APITestCase):
             {self.owner_profile.pk, self.member_profile.pk},
         )
 
-    def test_account_deletion_fails_before_mutation_on_a_legacy_equivalent_tombstone(self):
+    def test_account_deletion_fails_before_mutation_when_tombstone_is_unavailable(self):
         original_email = self.owner.email
         token = UserToken.objects.create(
             user=self.owner,
             access_token="collision-access-token",
             refresh_token="collision-refresh-token",
         )
-        collision = User(
-            email=f" DELETED_{self.owner.id}_20260902040506_12345678123441238123123456789ABC@DELETED.INVALID ",
-            is_active=True,
-        )
-        collision.set_password("pw-12345678")
-        collision.save()
+        tombstone = f"deleted_{self.owner.id}_20260902040506_12345678123441238123123456789abc@deleted.invalid"
         self.client.force_authenticate(self.owner)
 
         with (
             patch("users.views.user_profile.datetime") as mocked_datetime,
             patch("users.views.user_profile.uuid4", return_value=UUID("12345678-1234-4123-8123-123456789abc")),
+            patch.object(
+                type(User.objects),
+                "resolve_v2_email",
+                return_value=V2EmailLookupResult(V2EmailLookupState.AMBIGUOUS),
+            ) as resolve,
         ):
             mocked_datetime.now.return_value = datetime(2026, 9, 2, 4, 5, 6)
             response = self.client.post("/api/user-profiles/delete-account/")
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.data, {"error": ["Account deletion could not be completed."]})
+        resolve.assert_called_once_with(tombstone)
         self.owner.refresh_from_db()
         self.owner_profile.refresh_from_db()
         self.assertEqual(self.owner.email, original_email)
