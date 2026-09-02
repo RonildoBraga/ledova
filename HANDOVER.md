@@ -10,29 +10,34 @@ is removed; PostgreSQL RLS activation remains deferred by
 [ADR 0002](backend/docs/adr/0002-rls-tenant-isolation.md).
 
 [Issue #2](https://github.com/RonildoBraga/ledova/issues/2) is implemented
-through [PR #48](https://github.com/RonildoBraga/ledova/pull/48). PRs #39–#45
-added fail-closed characterization and the session/refresh core; PRs #46–#48
-added strict v2 access JWT issuance, verification, and active-session binding.
-[ADR 0004](backend/docs/adr/0004-v2-challenge-profile.md) now freezes the exact
-locked-challenge contract without wiring a runtime endpoint.
+through [PR #65](https://github.com/RonildoBraga/ledova/pull/65). PRs #39–#48
+landed fail-closed characterization, session rotation/revocation, strict access
+JWTs, and active-session binding. PRs #50–#57 froze and implemented the v2
+challenge primitives, canonical email boundary, durable schema, and request
+source identity. PRs #58–#65 completed the schema correction, logging and query
+privacy guards, typed SendGrid adapter, PostgreSQL admission kernel, and atomic
+reservation/job coupling.
 
-Base main is `c459da00fdc24c3665ea0f843b0bd585ebf45596`. The 297-test backend suite,
-PostgreSQL checks, repository checks, independent reviews, and
-[post-merge CI](https://github.com/RonildoBraga/ledova/actions/runs/33583492183)
-passed. No v2 endpoint, request authenticator, CSRF boundary, client cutover,
-or legacy retirement is wired yet.
+Base `main` is `963c68656551a0d0dbbab463479f2efa119a31f6`. Independent exact-diff
+reviews passed for the queue-coupling batch, and
+[post-merge CI](https://github.com/RonildoBraga/ledova/actions/runs/33618762165)
+passed every JavaScript, Django, SQLite, and PostgreSQL stage. The v2 delivery
+task remains fixed-fail on an excluded hold queue: no provider worker, v2
+endpoint, CSRF boundary, client cutover, or legacy retirement is active.
 
 ## Next work
 
-Implement ADR 0004's strict parsers, HMAC framing, redacted key configuration,
-and deterministic tests. Then land canonical email enforcement, challenge
-schema, the typed email-provider/IP adapters, provider-neutral services, and
-PostgreSQL rate/confirmation races in small batches.
+Add a disjoint, kernel-owned new-challenge path without weakening the existing
+`challenge is locked_scope` proof. The smallest first batch should create a
+password-reset challenge for an exact pre-clock locked user, derive all UUIDs
+and timestamps in the kernel, and roll back challenge, delivery, and queue job
+together. Keep absent-signup user creation and its uniqueness race as a separate
+typed batch.
 
-Before any v2 endpoint or runtime authentication wiring, add a typed verified
-`access_expired` result and a request-derived transport classifier that rejects
-mixed cookie/Bearer credentials and never accepts caller-selected provenance.
-Browser cookie wiring must include its CSRF boundary.
+Then implement authoritative resend and worker claim/finalization before wiring
+public endpoints. Runtime authentication still needs request-derived transport
+classification, mixed cookie/Bearer rejection, typed `access_expired`, and the
+browser CSRF boundary before client cutover.
 
 The remaining canonical backlog is [ISSUES.md](ISSUES.md).
 
