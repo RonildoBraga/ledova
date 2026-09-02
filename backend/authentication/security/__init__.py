@@ -1,3 +1,15 @@
+from authentication.security.v2_access_tokens import (
+    INITIAL_ACCESS_KID,
+    AccessTokenClaims,
+    AccessTokenConfiguration,
+    AccessTokenConfigurationError,
+    AccessTokenError,
+    AccessTokenIssued,
+    issue_access_token,
+    resolve_access_config,
+    resolve_access_expiry,
+    verify_access_token,
+)
 from authentication.security.v2_credentials import (
     V2ConfirmationTokenParts,
     V2KeyMaterial,
@@ -15,6 +27,12 @@ from authentication.security.v2_credentials import (
 )
 
 __all__ = [
+    "INITIAL_ACCESS_KID",
+    "AccessTokenClaims",
+    "AccessTokenConfiguration",
+    "AccessTokenConfigurationError",
+    "AccessTokenError",
+    "AccessTokenIssued",
     "V2ConfirmationTokenParts",
     "V2KeyMaterial",
     "V2KeyMaterialError",
@@ -23,9 +41,13 @@ __all__ = [
     "decode_v2_refresh_token",
     "encode_v2_confirmation_token",
     "encode_v2_refresh_token",
+    "issue_access_token",
     "load_v2_key_material",
     "refresh_confirmation_digest",
     "refresh_confirmation_matches",
     "refresh_secret_digest",
     "refresh_secret_matches",
+    "resolve_access_config",
+    "resolve_access_expiry",
+    "verify_access_token",
 ]

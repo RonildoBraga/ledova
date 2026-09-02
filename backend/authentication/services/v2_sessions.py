@@ -9,16 +9,20 @@ from django.utils import timezone
 
 from authentication.models import AuthSession, RefreshCredential
 from authentication.security import (
+    AccessTokenConfiguration,
     V2KeyMaterial,
     decode_v2_confirmation_token,
     decode_v2_refresh_token,
     encode_v2_confirmation_token,
     encode_v2_refresh_token,
+    issue_access_token,
     load_v2_key_material,
     refresh_confirmation_digest,
     refresh_confirmation_matches,
     refresh_secret_digest,
     refresh_secret_matches,
+    resolve_access_config,
+    resolve_access_expiry,
 )
 
 _POLICY_ERROR = "Invalid v2 session policy."
@@ -42,6 +46,7 @@ class V2SessionPolicy:
     refresh_lifetime: timedelta = timedelta(days=7)
     browser_collision_window: timedelta = timedelta(seconds=5)
     browser_confirmation_lifetime: timedelta = timedelta(seconds=10)
+    access_lifetime: timedelta = timedelta(minutes=15)
 
     def __post_init__(self):
         limits = (
@@ -49,8 +54,11 @@ class V2SessionPolicy:
             (self.refresh_lifetime, timedelta(days=7)),
             (self.browser_collision_window, timedelta(seconds=5)),
             (self.browser_confirmation_lifetime, timedelta(seconds=10)),
+            (self.access_lifetime, timedelta(minutes=15)),
         )
         if any(not isinstance(value, timedelta) or value <= timedelta(0) or value > cap for value, cap in limits):
+            raise ValueError(_POLICY_ERROR)
+        if self.absolute_lifetime < timedelta(seconds=1) or self.access_lifetime < timedelta(seconds=1):
             raise ValueError(_POLICY_ERROR)
 
 
@@ -60,6 +68,8 @@ DEFAULT_V2_SESSION_POLICY = V2SessionPolicy()
 @dataclass(frozen=True, repr=False)
 class SessionIssued:
     session_id: uuid.UUID
+    access_token: str
+    access_expires_at: datetime
     refresh_token: str
     refresh_expires_at: datetime
     session_expires_at: datetime
@@ -67,14 +77,17 @@ class SessionIssued:
 
     def __repr__(self):
         return (
-            "SessionIssued(session_id=<redacted>, refresh_token=<redacted>, "
-            "refresh_expires_at=<redacted>, session_expires_at=<redacted>, code='session_issued')"
+            "SessionIssued(session_id=<redacted>, access_token=<redacted>, access_expires_at=<redacted>, "
+            "refresh_token=<redacted>, refresh_expires_at=<redacted>, session_expires_at=<redacted>, "
+            "code='session_issued')"
         )
 
 
 @dataclass(frozen=True, repr=False)
 class RefreshRotated:
     session_id: uuid.UUID
+    access_token: str
+    access_expires_at: datetime
     refresh_token: str
     refresh_expires_at: datetime
     session_expires_at: datetime
@@ -82,8 +95,9 @@ class RefreshRotated:
 
     def __repr__(self):
         return (
-            "RefreshRotated(session_id=<redacted>, refresh_token=<redacted>, "
-            "refresh_expires_at=<redacted>, session_expires_at=<redacted>, code='refresh_rotated')"
+            "RefreshRotated(session_id=<redacted>, access_token=<redacted>, access_expires_at=<redacted>, "
+            "refresh_token=<redacted>, refresh_expires_at=<redacted>, session_expires_at=<redacted>, "
+            "code='refresh_rotated')"
         )
 
 
@@ -155,6 +169,18 @@ def _validated_policy(policy):
     return policy
 
 
+def _resolved_access_configuration(key_material, access_configuration):
+    if access_configuration is None:
+        return resolve_access_config(key_material)
+    if not isinstance(access_configuration, AccessTokenConfiguration):
+        raise TypeError("Invalid v2 access token configuration.")
+    return resolve_access_config(
+        key_material,
+        current_kid=access_configuration.current_kid,
+        verifier_keys=access_configuration.verifier_keys,
+    )
+
+
 def _create_refresh_credential(session, *, at, policy, random_bytes, key_material):
     for _attempt in range(4):
         selector = uuid.UUID(bytes=_random_exact(random_bytes, 16))
@@ -175,10 +201,35 @@ def _create_refresh_credential(session, *, at, policy, random_bytes, key_materia
     return credential, token
 
 
-def _issue_session(user_id, client_type, *, device_label, policy, clock, random_bytes, key_material):
+def _create_access_token(session, *, at, policy, random_bytes, configuration):
+    expires_at = resolve_access_expiry(at, session.absolute_expires_at, policy.access_lifetime)
+    token_id = uuid.UUID(bytes=_random_exact(random_bytes, 16), version=4)
+    return issue_access_token(
+        session.user_id,
+        session.uuid,
+        issued_at=at,
+        expires_at=expires_at,
+        session_expires_at=session.absolute_expires_at,
+        token_id=token_id,
+        configuration=configuration,
+    )
+
+
+def _issue_session(
+    user_id,
+    client_type,
+    *,
+    device_label,
+    policy,
+    clock,
+    random_bytes,
+    key_material,
+    access_configuration,
+):
     label = _validated_device_label(device_label)
     policy = _validated_policy(policy)
     material = _resolved_key_material(key_material)
+    access_configuration = _resolved_access_configuration(material, access_configuration)
     User = get_user_model()
 
     with transaction.atomic():
@@ -201,8 +252,17 @@ def _issue_session(user_id, client_type, *, device_label, policy, clock, random_
             random_bytes=random_bytes,
             key_material=material,
         )
+        access = _create_access_token(
+            session,
+            at=at,
+            policy=policy,
+            random_bytes=random_bytes,
+            configuration=access_configuration,
+        )
         return SessionIssued(
             session_id=session.uuid,
+            access_token=access.access_token,
+            access_expires_at=access.access_expires_at,
             refresh_token=token,
             refresh_expires_at=credential.expires_at,
             session_expires_at=session.absolute_expires_at,
@@ -217,6 +277,7 @@ def issue_browser_session(
     clock=timezone.now,
     random_bytes=secrets.token_bytes,
     key_material=None,
+    access_configuration=None,
 ):
     return _issue_session(
         user_id,
@@ -226,6 +287,7 @@ def issue_browser_session(
         clock=clock,
         random_bytes=random_bytes,
         key_material=key_material,
+        access_configuration=access_configuration,
     )
 
 
@@ -237,6 +299,7 @@ def issue_native_session(
     clock=timezone.now,
     random_bytes=secrets.token_bytes,
     key_material=None,
+    access_configuration=None,
 ):
     return _issue_session(
         user_id,
@@ -246,6 +309,7 @@ def issue_native_session(
         clock=clock,
         random_bytes=random_bytes,
         key_material=key_material,
+        access_configuration=access_configuration,
     )
 
 
@@ -287,7 +351,7 @@ def _revoke_session(session, at, reason):
     _revoke_credentials(session, at)
 
 
-def _rotate_live(session, credential, *, at, policy, random_bytes, key_material):
+def _rotate_live(session, credential, *, at, policy, random_bytes, key_material, access_configuration):
     credential.used_at = at
     credential.save(update_fields=["used_at", "updated_at"])
     successor, token = _create_refresh_credential(
@@ -301,8 +365,17 @@ def _rotate_live(session, credential, *, at, policy, random_bytes, key_material)
     credential.save(update_fields=["replaced_by", "updated_at"])
     session.last_used_at = at
     session.save(update_fields=["last_used_at", "updated_at"])
+    access = _create_access_token(
+        session,
+        at=at,
+        policy=policy,
+        random_bytes=random_bytes,
+        configuration=access_configuration,
+    )
     return RefreshRotated(
         session_id=session.uuid,
+        access_token=access.access_token,
+        access_expires_at=access.access_expires_at,
         refresh_token=token,
         refresh_expires_at=successor.expires_at,
         session_expires_at=session.absolute_expires_at,
@@ -367,6 +440,7 @@ def _rotate_refresh(
     clock,
     random_bytes,
     key_material,
+    access_configuration,
 ):
     try:
         parts = decode_v2_refresh_token(refresh_token)
@@ -375,6 +449,7 @@ def _rotate_refresh(
 
     policy = _validated_policy(policy)
     material = _resolved_key_material(key_material)
+    access_configuration = _resolved_access_configuration(material, access_configuration)
     topology = _rotation_topology(parts.selector)
     if topology is None:
         return SessionRejected("invalid_refresh")
@@ -432,6 +507,8 @@ def _rotate_refresh(
             return SessionRejected("refresh_reused")
         if credential.expires_at <= at:
             return SessionRejected("refresh_expired")
+        if resolve_access_expiry(at, session.absolute_expires_at, policy.access_lifetime) is None:
+            return SessionRejected("refresh_expired")
         return _rotate_live(
             session,
             credential,
@@ -439,6 +516,7 @@ def _rotate_refresh(
             policy=policy,
             random_bytes=random_bytes,
             key_material=material,
+            access_configuration=access_configuration,
         )
 
 
@@ -449,6 +527,7 @@ def rotate_browser_refresh(
     clock=timezone.now,
     random_bytes=secrets.token_bytes,
     key_material=None,
+    access_configuration=None,
 ):
     return _rotate_refresh(
         refresh_token,
@@ -457,6 +536,7 @@ def rotate_browser_refresh(
         clock=clock,
         random_bytes=random_bytes,
         key_material=key_material,
+        access_configuration=access_configuration,
     )
 
 
@@ -467,6 +547,7 @@ def rotate_native_refresh(
     clock=timezone.now,
     random_bytes=secrets.token_bytes,
     key_material=None,
+    access_configuration=None,
 ):
     return _rotate_refresh(
         refresh_token,
@@ -475,6 +556,7 @@ def rotate_native_refresh(
         clock=clock,
         random_bytes=random_bytes,
         key_material=key_material,
+        access_configuration=access_configuration,
     )
 
 
