@@ -196,14 +196,14 @@ class IdentityVerificationService:
             logger.info(f"{LoggingContext.ID_VERIFICATION} Account {user_account.uuid} rejected: PEP type {pep_type}")
             return
 
-        citizenship = getattr(user_profile, "citizenship_country", None)
-        if citizenship and citizenship.upper() in FATF_BLACKLIST_COUNTRIES:
+        citizenship = user_profile.citizenship_country
+        if citizenship and citizenship.code and citizenship.code.upper() in FATF_BLACKLIST_COUNTRIES:
             user_account.account_status = ACCOUNT_STATUS_REJECTED
             user_account.rejection_reason = "fatf_blacklist"
             user_account.save()
             logger.info(
                 f"{LoggingContext.ID_VERIFICATION} Account {user_account.uuid} rejected: "
-                f"FATF black-list country {citizenship}"
+                f"FATF black-list country {citizenship.code}"
             )
             return
 

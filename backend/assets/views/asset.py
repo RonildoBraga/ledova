@@ -47,10 +47,10 @@ class AssetViewSet(AuthenticatedReadOnlyViewSet):
         end_date = request.query_params.get("end_date")
         if start_date or end_date:
             queryset = queryset.filter_by_date_range(start_date, end_date)
-        max_points = request.query_params.get("max_points")
-        if max_points:
-            queryset = queryset.sample_evenly(int(max_points))
+        queryset = queryset.sample_evenly(request.query_params.get("max_points"))
         order_by = request.query_params.get("order_by", "-source_timestamp")
+        if order_by not in {"source_timestamp", "-source_timestamp"}:
+            order_by = "-source_timestamp"
         queryset = queryset.order_by(order_by)
 
         serializer = AssetSnapshotSerializer(queryset, many=True)

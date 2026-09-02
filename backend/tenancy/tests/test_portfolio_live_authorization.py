@@ -436,3 +436,63 @@ class PortfolioEndpointIsolationTest(PortfolioFixtureMixin, APITestCase):
         )
         self.assertEqual(daily_snapshot.holdings_data, {})
         self.assertIsNone(daily_snapshot.total_market_value)
+
+
+class PortfolioCreateAccountSelectionTest(PortfolioFixtureMixin, APITestCase):
+    def setUp(self):
+        self.alice, self.alice_profile, self.account_a, _, _ = self.make_tenant("alice")
+        self.bob, _, self.bob_account, _, _ = self.make_tenant("bob")
+        self.account_b = UserAccount.objects.create(account_number="ACCOUNT-ALICE-B")
+        self.account_b.user_profiles.add(self.alice_profile)
+        self.client.force_authenticate(self.alice)
+
+    def _create(self, payload):
+        return self.client.post("/api/portfolios/", payload, format="json")
+
+    def test_defaults_to_selected_account(self):
+        UserPreferences.objects.create(user_profile=self.alice_profile, selected_account=self.account_b)
+
+        response = self._create({"name": "Selected"})
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()["userAccount"], str(self.account_b.uuid))
+        self.assertEqual(Portfolio.objects.get(name="Selected").user_account, self.account_b)
+
+    def test_explicit_own_account_wins_over_selected_account(self):
+        UserPreferences.objects.create(user_profile=self.alice_profile, selected_account=self.account_b)
+
+        response = self._create({"name": "Explicit", "userAccount": str(self.account_a.uuid)})
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(Portfolio.objects.get(name="Explicit").user_account, self.account_a)
+
+    def test_foreign_account_is_rejected(self):
+        response = self._create({"name": "Stolen", "userAccount": str(self.bob_account.uuid)})
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("userAccount", response.json())
+        self.assertFalse(Portfolio.objects.filter(name="Stolen").exists())
+
+    def test_ambiguous_accounts_without_selection_are_rejected(self):
+        response = self._create({"name": "Ambiguous"})
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("userAccount", response.json())
+        self.assertFalse(Portfolio.objects.filter(name="Ambiguous").exists())
+
+    def test_single_account_without_preferences_is_used(self):
+        self.account_b.user_profiles.remove(self.alice_profile)
+
+        response = self._create({"name": "Only"})
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(Portfolio.objects.get(name="Only").user_account, self.account_a)
+
+    def test_stale_selected_account_is_not_used(self):
+        UserPreferences.objects.create(user_profile=self.alice_profile, selected_account=self.account_b)
+        self.account_b.user_profiles.remove(self.alice_profile)
+
+        response = self._create({"name": "Stale"})
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(Portfolio.objects.get(name="Stale").user_account, self.account_a)

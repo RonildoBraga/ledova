@@ -17,6 +17,7 @@ from portfolios.services import (
 )
 from shared.utils.logging_utils import LoggingContext
 from shared.views.base import AuthenticatedModelViewSet
+from users.models import UserAccount
 
 logger = logging.getLogger("ledova_backend")
 
@@ -32,19 +33,22 @@ class PortfolioViewSet(AuthenticatedModelViewSet):
         return qs
 
     def perform_create(self, serializer):
+        user_account = serializer.validated_data.get("user_account")
+        if user_account is None:
+            # Default to the caller's selected account, then to their only
+            # account; never guess between several with .first().
+            accounts = UserAccount.objects.visible_to_user(self.request.user)
+            preferences = getattr(self.request.user.userprofile, "preferences", None)
+            selected_id = getattr(preferences, "selected_account_id", None)
+            user_account = accounts.filter(pk=selected_id).first() if selected_id else None
+        if user_account is None:
+            candidates = list(accounts[:2])
+            if len(candidates) != 1:
+                raise ValidationError({"userAccount": "Select the account this portfolio belongs to."})
+            user_account = candidates[0]
+
         logger.info(f"{LoggingContext.PORTFOLIOS} Creating portfolio for user {self.request.user.email}")
-
-        user_profile = self.request.user.userprofile
-        user_account = user_profile.user_accounts.first()
-
-        if not user_account:
-            raise ValidationError({"userAccount": "User account not found for authenticated user."})
-
         return serializer.save(user_account=user_account)
-
-    def perform_update(self, serializer):
-        logger.info(f"{LoggingContext.PORTFOLIOS} Updating portfolio")
-        return serializer.save()
 
     def perform_destroy(self, instance):
         logger.info(f"{LoggingContext.PORTFOLIOS} Soft deleting portfolio {instance.uuid}")
