@@ -5,6 +5,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAdminUser
 from rest_framework.response import Response
 
+from companies.exceptions import InvalidStatusTransitionException
 from companies.filters import CompanyFilter
 from companies.models import Company, CompanyStatus
 from companies.serializers import (
@@ -19,7 +20,7 @@ from companies.serializers import (
     CompanyStatusUpdateSerializer,
     CompanyUpdateSerializer,
 )
-from companies.services import CompanyService
+from companies.services import submit_application
 from shared.utils.logging_utils import LoggingContext
 from shared.views import AuthenticatedModelViewSet
 from tokens.models import (
@@ -69,7 +70,7 @@ class CompanyViewSet(AuthenticatedModelViewSet):
     def get_permissions(self):
         if self.action in ["list", "retrieve", "by_acn"]:
             return [AllowAny()]
-        if self.action in ["api_key", "status_update"]:
+        if self.action in self.administrative_actions:
             return [IsAdminUser()]
         return super().get_permissions()
 
@@ -189,31 +190,32 @@ class CompanyViewSet(AuthenticatedModelViewSet):
     def status_update(self, request, uuid=None):
         company = self.get_object()
 
-        serializer = CompanyStatusUpdateSerializer(
-            data=request.data,
-            context={"instance": company},
-        )
+        serializer = CompanyStatusUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         new_status = serializer.validated_data["status"]
         reason = serializer.validated_data.get("reason", "")
 
-        if new_status == CompanyStatus.REVIEW:
-            company = CompanyService.start_review(company, reviewer=request.user)
-        elif new_status == CompanyStatus.INFO_REQUIRED:
-            company = CompanyService.request_info(company, reason=reason, requested_by=request.user)
-        elif new_status == CompanyStatus.APPROVED:
-            company = CompanyService.approve_company(company, approved_by=request.user)
-        elif new_status == CompanyStatus.ACTIVE:
-            company = CompanyService.activate_company(company)
-        elif new_status == CompanyStatus.REJECTED:
-            company = CompanyService.reject_company(company, reason=reason, rejected_by=request.user)
-        elif new_status == CompanyStatus.SUSPENDED:
-            company = CompanyService.suspend_company(company, reason=reason, suspended_by=request.user)
-        elif new_status == CompanyStatus.WARNING:
-            company = CompanyService.issue_warning(company, reason=reason, issued_by=request.user)
-        elif new_status == CompanyStatus.DELISTED:
-            company = CompanyService.delist_company(company, reason=reason, delisted_by=request.user)
+        back_to_active = {CompanyStatus.WARNING: company.resolve_warning, CompanyStatus.SUSPENDED: company.reinstate}
+        transitions = {
+            CompanyStatus.REVIEW: company.start_review,
+            CompanyStatus.INFO_REQUIRED: lambda: company.request_info(reason),
+            CompanyStatus.APPROVED: lambda: company.approve(approved_by=request.user),
+            CompanyStatus.ACTIVE: back_to_active.get(company.status, company.activate),
+            CompanyStatus.REJECTED: lambda: company.reject(reason, rejected_by=request.user),
+            CompanyStatus.WARNING: lambda: company.issue_warning(reason),
+            CompanyStatus.SUSPENDED: lambda: company.suspend(reason),
+            CompanyStatus.DELISTED: lambda: company.delist(reason),
+        }
+        if new_status not in transitions:
+            raise InvalidStatusTransitionException(
+                from_status=company.get_status_display(),
+                to_status=CompanyStatus(new_status).label,
+            )
+        transitions[new_status]()
+        logger.info(
+            f"{LoggingContext.COMPANY} {request.user.email} set {company.name} to {company.get_status_display()}"
+        )
 
         return Response(
             {
@@ -226,13 +228,10 @@ class CompanyViewSet(AuthenticatedModelViewSet):
     def submit(self, request, uuid=None):
         company = self.get_object()
 
-        serializer = ApplicationSubmitSerializer(
-            data=request.data,
-            context={"company": company},
-        )
+        serializer = ApplicationSubmitSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        company = CompanyService.submit_application(company, submitted_by=request.user)
+        submit_application(company, submitted_by=request.user)
 
         return Response(
             {
@@ -245,14 +244,11 @@ class CompanyViewSet(AuthenticatedModelViewSet):
     def resubmit(self, request, uuid=None):
         company = self.get_object()
 
-        serializer = ApplicationResubmitSerializer(
-            data=request.data,
-            context={"company": company},
-        )
+        serializer = ApplicationResubmitSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        response = serializer.validated_data["response"]
-        company = CompanyService.resubmit_application(company, response=response)
+        company.resubmit()
+        logger.info(f"{LoggingContext.COMPANY} Application resubmitted: {company.name}")
 
         return Response(
             {
@@ -265,14 +261,11 @@ class CompanyViewSet(AuthenticatedModelViewSet):
     def withdraw(self, request, uuid=None):
         company = self.get_object()
 
-        serializer = ApplicationWithdrawSerializer(
-            data=request.data,
-            context={"company": company},
-        )
+        serializer = ApplicationWithdrawSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        reason = serializer.validated_data.get("reason")
-        company = CompanyService.withdraw_application(company, reason=reason)
+        company.withdraw(reason=serializer.validated_data.get("reason") or "")
+        logger.info(f"{LoggingContext.COMPANY} Application withdrawn: {company.name}")
 
         return Response(
             {

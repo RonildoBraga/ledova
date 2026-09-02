@@ -4,6 +4,7 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
+from companies.exceptions import InvalidStatusTransitionException
 from companies.querysets.company import CompanyQuerySet
 from shared.models import BaseModel
 from users.models import UserProfile
@@ -154,76 +155,56 @@ class Company(BaseModel):
         self.save(update_fields=["api_key", "api_key_created_at", "updated_at"])
         return self.api_key
 
+    def _require_status(self, allowed, to_status):
+        if self.status not in allowed:
+            raise InvalidStatusTransitionException(from_status=self.get_status_display(), to_status=to_status.label)
+
     def submit(self, submitted_by=None):
-        if self.status != CompanyStatus.DRAFT:
-            raise ValueError("Only draft applications can be submitted")
+        self._require_status([CompanyStatus.DRAFT], CompanyStatus.SUBMITTED)
         self.status = CompanyStatus.SUBMITTED
         self.submitted_at = timezone.now()
         self.submitted_by = submitted_by
         self.save(update_fields=["status", "submitted_at", "submitted_by", "updated_at"])
 
     def start_review(self):
-        if self.status != CompanyStatus.SUBMITTED:
-            raise ValueError("Only submitted applications can be reviewed")
+        self._require_status([CompanyStatus.SUBMITTED], CompanyStatus.REVIEW)
         self.status = CompanyStatus.REVIEW
         self.review_started_at = timezone.now()
         self.save(update_fields=["status", "review_started_at", "updated_at"])
 
     def request_info(self, reason: str):
-        if self.status != CompanyStatus.REVIEW:
-            raise ValueError("Can only request info for applications under review")
+        self._require_status([CompanyStatus.REVIEW], CompanyStatus.INFO_REQUIRED)
         self.status = CompanyStatus.INFO_REQUIRED
         self.info_requested_at = timezone.now()
         self.info_request_reason = reason
-        self.save(
-            update_fields=[
-                "status",
-                "info_requested_at",
-                "info_request_reason",
-                "updated_at",
-            ]
-        )
+        self.save(update_fields=["status", "info_requested_at", "info_request_reason", "updated_at"])
 
     def resubmit(self):
-        if self.status != CompanyStatus.INFO_REQUIRED:
-            raise ValueError("Only applications awaiting info can be resubmitted")
+        self._require_status([CompanyStatus.INFO_REQUIRED], CompanyStatus.SUBMITTED)
         self.status = CompanyStatus.SUBMITTED
         self.submitted_at = timezone.now()
         self.info_request_reason = ""
         self.save(update_fields=["status", "submitted_at", "info_request_reason", "updated_at"])
 
     def approve(self, approved_by=None):
-        if self.status != CompanyStatus.REVIEW:
-            raise ValueError("Only applications under review can be approved")
+        self._require_status([CompanyStatus.REVIEW], CompanyStatus.APPROVED)
         self.status = CompanyStatus.APPROVED
-        self.review_completed_at = timezone.now()
-        self.approved_at = timezone.now()
+        self.review_completed_at = self.approved_at = timezone.now()
         self.approved_by = approved_by
-        self.save(
-            update_fields=[
-                "status",
-                "review_completed_at",
-                "approved_at",
-                "approved_by",
-                "updated_at",
-            ]
-        )
+        self.save(update_fields=["status", "review_completed_at", "approved_at", "approved_by", "updated_at"])
 
     def activate(self):
-        if self.status != CompanyStatus.APPROVED:
-            raise ValueError("Company must be approved before activation")
+        self._require_status([CompanyStatus.APPROVED], CompanyStatus.ACTIVE)
         self.status = CompanyStatus.ACTIVE
         self.activated_at = timezone.now()
         self.save(update_fields=["status", "activated_at", "updated_at"])
 
     def reject(self, reason: str, rejected_by=None):
-        if self.status not in [CompanyStatus.REVIEW, CompanyStatus.SUBMITTED]:
-            raise ValueError("Only applications under review can be rejected")
+        self._require_status([CompanyStatus.REVIEW, CompanyStatus.SUBMITTED], CompanyStatus.REJECTED)
         self.status = CompanyStatus.REJECTED
         self.rejection_reason = reason
-        self.rejection_at = timezone.now()
+        self.rejection_at = self.review_completed_at = timezone.now()
         self.rejected_by = rejected_by
-        self.review_completed_at = timezone.now()
         self.save(
             update_fields=[
                 "status",
@@ -236,69 +217,40 @@ class Company(BaseModel):
         )
 
     def withdraw(self, reason: str = ""):
-        if self.status not in [
-            CompanyStatus.DRAFT,
-            CompanyStatus.SUBMITTED,
-            CompanyStatus.INFO_REQUIRED,
-        ]:
-            raise ValueError("Only pending applications can be withdrawn")
+        pending = [CompanyStatus.DRAFT, CompanyStatus.SUBMITTED, CompanyStatus.INFO_REQUIRED]
+        self._require_status(pending, CompanyStatus.WITHDRAWN)
         self.status = CompanyStatus.WITHDRAWN
         self.withdrawn_at = timezone.now()
         self.withdrawal_reason = reason
-        self.save(
-            update_fields=[
-                "status",
-                "withdrawn_at",
-                "withdrawal_reason",
-                "updated_at",
-            ]
-        )
+        self.save(update_fields=["status", "withdrawn_at", "withdrawal_reason", "updated_at"])
 
     def issue_warning(self, reason: str):
-        if self.status != CompanyStatus.ACTIVE:
-            raise ValueError("Warnings can only be issued to active companies")
+        self._require_status([CompanyStatus.ACTIVE], CompanyStatus.WARNING)
         self.status = CompanyStatus.WARNING
         self.warning_issued_at = timezone.now()
         self.warning_reason = reason
-        self.save(
-            update_fields=[
-                "status",
-                "warning_issued_at",
-                "warning_reason",
-                "updated_at",
-            ]
-        )
+        self.save(update_fields=["status", "warning_issued_at", "warning_reason", "updated_at"])
 
     def resolve_warning(self):
-        if self.status != CompanyStatus.WARNING:
-            raise ValueError("Only companies with warnings can have them resolved")
+        self._require_status([CompanyStatus.WARNING], CompanyStatus.ACTIVE)
         self.status = CompanyStatus.ACTIVE
         self.save(update_fields=["status", "updated_at"])
 
     def suspend(self, reason: str = ""):
-        if self.status not in [CompanyStatus.ACTIVE, CompanyStatus.WARNING]:
-            raise ValueError("Only active or warned companies can be suspended")
+        self._require_status([CompanyStatus.ACTIVE, CompanyStatus.WARNING], CompanyStatus.SUSPENDED)
         self.status = CompanyStatus.SUSPENDED
         self.suspended_at = timezone.now()
         self.suspension_reason = reason
-        self.save(
-            update_fields=[
-                "status",
-                "suspended_at",
-                "suspension_reason",
-                "updated_at",
-            ]
-        )
+        self.save(update_fields=["status", "suspended_at", "suspension_reason", "updated_at"])
 
     def reinstate(self):
-        if self.status != CompanyStatus.SUSPENDED:
-            raise ValueError("Only suspended companies can be reinstated")
+        self._require_status([CompanyStatus.SUSPENDED], CompanyStatus.ACTIVE)
         self.status = CompanyStatus.ACTIVE
         self.save(update_fields=["status", "updated_at"])
 
     def delist(self, reason: str):
-        if self.status in [CompanyStatus.DRAFT, CompanyStatus.REJECTED, CompanyStatus.WITHDRAWN]:
-            raise ValueError("Cannot delist an application that was never active")
+        never_active = [CompanyStatus.DRAFT, CompanyStatus.REJECTED, CompanyStatus.WITHDRAWN]
+        self._require_status([s for s in CompanyStatus if s not in never_active], CompanyStatus.DELISTED)
         self.status = CompanyStatus.DELISTED
         self.delisted_at = timezone.now()
         self.delisting_reason = reason

@@ -9,20 +9,6 @@ class CompanyNotFoundException(APIException):
     default_code = "company_not_found"
 
 
-class CompanyAlreadyExistsException(APIException):
-
-    status_code = status.HTTP_409_CONFLICT
-    default_detail = "A company with this ACN already exists."
-    default_code = "company_already_exists"
-
-
-class CompanyNotApprovedException(APIException):
-
-    status_code = status.HTTP_403_FORBIDDEN
-    default_detail = "This company has not been approved yet."
-    default_code = "company_not_approved"
-
-
 class ApplicationAlreadySubmittedException(APIException):
 
     status_code = status.HTTP_400_BAD_REQUEST

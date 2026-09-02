@@ -1,7 +1,8 @@
-from companies.services.company import CompanyService
+from companies.services.company import register_company, submit_application
 from companies.services.review import ReviewService
 
 __all__ = [
-    "CompanyService",
     "ReviewService",
+    "register_company",
+    "submit_application",
 ]
