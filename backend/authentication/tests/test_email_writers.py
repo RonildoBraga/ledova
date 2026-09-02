@@ -2,13 +2,13 @@ from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.test import RequestFactory, TestCase
 
-from authentication.admin.user import CustomUserAdmin, V2UserCreationForm
-from authentication.security.v2_email import V2_EMAIL_ERROR, V2EmailError
+from authentication.admin.user import CustomUserAdmin, CustomUserCreationForm
+from authentication.email import EMAIL_ERROR, EmailError
 
 User = get_user_model()
 
 
-class V2EmailManagerWriterTests(TestCase):
+class EmailManagerWriterTests(TestCase):
     password = "writer-password-123"
 
     def create_direct_user(self, email):
@@ -22,9 +22,9 @@ class V2EmailManagerWriterTests(TestCase):
             User.objects.normalize_email(" Owner.Name+Tag@EXAMPLE.TEST "),
             "owner.name+tag@example.test",
         )
-        with self.assertRaises(V2EmailError) as raised:
+        with self.assertRaises(EmailError) as raised:
             User.objects.normalize_email("owner@example.test\t")
-        self.assertEqual(str(raised.exception), V2_EMAIL_ERROR)
+        self.assertEqual(str(raised.exception), EMAIL_ERROR)
 
     def test_user_and_superuser_creation_store_the_destination_key(self):
         user = User.objects.create_user(
@@ -53,22 +53,22 @@ class V2EmailManagerWriterTests(TestCase):
         )
 
         for value in invalid_values:
-            with self.subTest(value=repr(value)), self.assertRaises(V2EmailError) as raised:
+            with self.subTest(value=repr(value)), self.assertRaises(EmailError) as raised:
                 User.objects.create_user(email=value, password=self.password)
-            self.assertEqual(str(raised.exception), V2_EMAIL_ERROR)
+            self.assertEqual(str(raised.exception), EMAIL_ERROR)
             self.assertNotIn(str(value), str(raised.exception))
         self.assertFalse(User.objects.exists())
 
     def test_existing_destination_key_blocks_user_and_superuser_creation(self):
         self.create_direct_user("legacy.owner@example.test")
 
-        with self.assertRaisesRegex(ValueError, r"^V2 email is unavailable\.$"):
+        with self.assertRaisesRegex(ValueError, r"^Email is unavailable\.$"):
             User.objects.create_user(
                 email=" Legacy.Owner@EXAMPLE.TEST ",
                 password=self.password,
             )
 
-        with self.assertRaisesRegex(ValueError, r"^V2 email is unavailable\.$"):
+        with self.assertRaisesRegex(ValueError, r"^Email is unavailable\.$"):
             User.objects.create_superuser(
                 email="LEGACY.OWNER@EXAMPLE.TEST",
                 password=self.password,
@@ -77,11 +77,11 @@ class V2EmailManagerWriterTests(TestCase):
         self.assertEqual(User.objects.count(), 1)
 
 
-class V2EmailAdminWriterTests(TestCase):
+class EmailAdminWriterTests(TestCase):
     password = "writer-password-123"
 
     def form(self, email):
-        return V2UserCreationForm(
+        return CustomUserCreationForm(
             data={
                 "email": email,
                 "password1": self.password,

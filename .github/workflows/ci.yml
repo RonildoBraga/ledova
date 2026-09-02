@@ -72,7 +72,7 @@ jobs:
         run: python manage.py test --settings=ledova_backend.settings.test
       - name: SQLite migration tests
         run: >-
-          python manage.py test authentication.tests.test_v2_email_migration
+          python manage.py test authentication.tests.test_email_migration
           --settings=ledova_backend.settings.test_migrations --noinput
       - name: PostgreSQL full suite
         env:

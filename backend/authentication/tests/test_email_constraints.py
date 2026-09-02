@@ -5,7 +5,7 @@ from django.test import TestCase
 User = get_user_model()
 
 
-class V2EmailConstraintTest(TestCase):
+class EmailConstraintTest(TestCase):
     constraint_names = {
         "auth_user_email_v2_ascii_ck",
         "auth_user_email_v2_canon_ck",

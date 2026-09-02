@@ -5,7 +5,7 @@ from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from authentication.managers.user import V2EmailLookupResult, V2EmailLookupState
+from authentication.managers.user import EmailLookupResult, EmailLookupState
 from authentication.models.user_token import UserToken
 from authentication.services.tokens import TokenService
 
@@ -163,8 +163,8 @@ class EmailVerificationTest(APITestCase):
         )
         with patch.object(
             type(User.objects),
-            "resolve_v2_email",
-            return_value=V2EmailLookupResult(V2EmailLookupState.AMBIGUOUS),
+            "resolve_email",
+            return_value=EmailLookupResult(EmailLookupState.AMBIGUOUS),
         ) as resolve:
             ambiguous_response = self.client.post(
                 self.endpoint,

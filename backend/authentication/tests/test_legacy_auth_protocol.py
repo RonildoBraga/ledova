@@ -8,7 +8,7 @@ from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 
-from authentication.managers.user import V2EmailLookupResult, V2EmailLookupState
+from authentication.managers.user import EmailLookupResult, EmailLookupState
 from authentication.models import UserToken
 from authentication.services import TokenService
 from users.services import UserSetupService
@@ -72,7 +72,7 @@ class LegacyAuthProtocolTestCase(APITestCase):
 
     @staticmethod
     def ambiguous_email_result():
-        return V2EmailLookupResult(V2EmailLookupState.AMBIGUOUS)
+        return EmailLookupResult(EmailLookupState.AMBIGUOUS)
 
     def assert_issued_cookie(self, response, name, max_age):
         self.assertIn(name, response.cookies)
@@ -141,6 +141,9 @@ class LegacyTransportTest(LegacyAuthProtocolTestCase):
         self.assertEqual(payload["email"], user.email)
         self.assertTrue(payload["isEmailVerified"])
         self.assertNotIn("password", payload)
+        issued = UserToken.objects.get(user=user, is_active=True)
+        self.assertEqual(payload["tokens"][0]["accessToken"], issued.access_token)
+        self.assertEqual(payload["tokens"][0]["refreshToken"], issued.refresh_token)
         self.assert_issued_cookie(response, "access", 900)
         self.assert_issued_cookie(response, "refresh", 604800)
         self.assertEqual(UserToken.objects.filter(user=user, is_active=True).count(), 1)
@@ -174,7 +177,7 @@ class LegacyTransportTest(LegacyAuthProtocolTestCase):
         )
         with patch.object(
             type(User.objects),
-            "resolve_v2_email",
+            "resolve_email",
             return_value=self.ambiguous_email_result(),
         ) as resolve:
             ambiguous_response = APIClient().post(
@@ -240,7 +243,7 @@ class LegacyTransportTest(LegacyAuthProtocolTestCase):
             patch("authentication.views.user.EmailCodeService.send") as send_email,
             patch.object(
                 type(User.objects),
-                "resolve_v2_email",
+                "resolve_email",
                 return_value=self.ambiguous_email_result(),
             ) as resolve,
         ):

@@ -16,7 +16,7 @@ from django.test import TransactionTestCase
 
 MIGRATE_FROM = [("authentication", "0002_authsession_refreshcredential")]
 MIGRATE_TO = [("authentication", "0003_customuser_v2_email_constraints")]
-MIGRATE_LATEST = [("authentication", "0006_delete_v2_challenge_models")]
+MIGRATE_LATEST = [("authentication", "0007_delete_authsession_refreshcredential")]
 PREFLIGHT_ERROR = "V2 email migration preflight failed."
 MIGRATION_NAME = "0003_customuser_v2_email_constraints"
 CONSTRAINT_NAMES = {
@@ -29,7 +29,7 @@ MIGRATIONS_ENABLED = not ("authentication" in _migration_modules and _migration_
 
 
 @skipUnless(MIGRATIONS_ENABLED, "Migration execution is required")
-class V2EmailMigrationTest(TransactionTestCase):
+class EmailMigrationTest(TransactionTestCase):
     reset_sequences = False
 
     def setUp(self):
@@ -54,8 +54,13 @@ class V2EmailMigrationTest(TransactionTestCase):
         finally:
             self.migrate(MIGRATE_LATEST)
         tables = connection.introspection.table_names()
-        self.assertNotIn("authentication_challenge", tables)
-        self.assertNotIn("authentication_challenge_delivery", tables)
+        for table in (
+            "authentication_auth_session",
+            "authentication_refresh_credential",
+            "authentication_challenge",
+            "authentication_challenge_delivery",
+        ):
+            self.assertNotIn(table, tables)
 
     def assert_preflight_rejected(self, private_value=None):
         stdout = StringIO()
@@ -189,7 +194,7 @@ class V2EmailMigrationTest(TransactionTestCase):
 
 
 @skipUnless(connection.vendor == "postgresql", "PostgreSQL locking semantics are required")
-class V2EmailMigrationPostgresLockTest(TransactionTestCase):
+class EmailMigrationPostgresLockTest(TransactionTestCase):
     reset_sequences = False
 
     def setUp(self):

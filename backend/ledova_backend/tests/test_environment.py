@@ -1,4 +1,6 @@
 import sys
+from importlib.util import find_spec
+from pathlib import Path
 from unittest.mock import patch
 
 from django.conf import settings
@@ -73,5 +75,14 @@ class V2WithdrawalTests(SimpleTestCase):
         from ledova_backend.procrastinate_app import app
 
         names = {model.__name__ for model in apps.get_app_config("authentication").get_models()}
-        self.assertEqual(names, {"AuthSession", "CustomUser", "RefreshCredential", "UserToken"})
+        self.assertEqual(names, {"CustomUser", "UserToken"})
         self.assertNotIn("authentication.deliver_v2_challenge", app.tasks)
+
+    def test_session_core_modules_and_key_material_are_gone(self):
+        self.assertIsNotNone(find_spec("authentication.email"))
+        for module in ("authentication.services.v2_sessions", "authentication.services.v2_access"):
+            with self.subTest(module=module):
+                self.assertIsNone(find_spec(module))
+        env_example = (Path(settings.BASE_DIR) / ".env.example").read_text()
+        self.assertNotIn("V2_ACCESS_SIGNING_KEY_B64", env_example)
+        self.assertNotIn("V2_REFRESH_HMAC_KEY_B64", env_example)

@@ -6,9 +6,9 @@ from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
 
 from assets.models import Asset
-from authentication.managers.user import V2EmailLookupResult, V2EmailLookupState
+from authentication.email import normalize_email
+from authentication.managers.user import EmailLookupResult, EmailLookupState
 from authentication.models import UserToken
-from authentication.security.v2_email import normalize_v2_email
 from users.models import FavouriteAsset, FinancialProfile, UserAccount, UserProfile
 
 User = get_user_model()
@@ -128,7 +128,7 @@ class UserMutationLifecycleTest(APITestCase):
         self.assertFalse(self.owner.is_email_verified)
         expected_email = f"deleted_{self.owner.id}_20260902040506_12345678123441238123123456789abc@deleted.invalid"
         self.assertEqual(self.owner.email, expected_email)
-        self.assertEqual(normalize_v2_email(self.owner.email), self.owner.email)
+        self.assertEqual(normalize_email(self.owner.email), self.owner.email)
         self.assertNotEqual(self.owner.email, "lifecycle-owner@example.test")
         self.assertEqual(self.member.email, member_email)
         self.assertTrue(self.member.is_active)
@@ -161,8 +161,8 @@ class UserMutationLifecycleTest(APITestCase):
             patch("users.views.user_profile.uuid4", return_value=UUID("12345678-1234-4123-8123-123456789abc")),
             patch.object(
                 type(User.objects),
-                "resolve_v2_email",
-                return_value=V2EmailLookupResult(V2EmailLookupState.AMBIGUOUS),
+                "resolve_email",
+                return_value=EmailLookupResult(EmailLookupState.AMBIGUOUS),
             ) as resolve,
         ):
             mocked_datetime.now.return_value = datetime(2026, 9, 2, 4, 5, 6)

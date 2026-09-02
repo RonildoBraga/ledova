@@ -5,8 +5,8 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 from rest_framework import serializers
 
-from authentication.managers.user import V2EmailLookupState
-from authentication.security.v2_email import V2EmailError, normalize_v2_email
+from authentication.email import EmailError, normalize_email
+from authentication.managers.user import EmailLookupState
 from shared.utils.logging_utils import LoggingContext
 
 User = get_user_model()
@@ -15,10 +15,10 @@ logger = logging.getLogger("ledova_backend")
 
 def _resolve_signup_email(email):
     try:
-        destination_key = normalize_v2_email(email)
-    except V2EmailError:
+        destination_key = normalize_email(email)
+    except EmailError:
         raise serializers.ValidationError({"email": ["Enter a valid email address."]}) from None
-    return destination_key, User.objects.resolve_v2_email(destination_key)
+    return destination_key, User.objects.resolve_email(destination_key)
 
 
 def _create_signup_user(email, password):
@@ -66,7 +66,7 @@ class SessionService:
             raise serializers.ValidationError({"password": ["Passwords do not match."]})
 
         email, lookup = _resolve_signup_email(email)
-        if lookup.state is V2EmailLookupState.AMBIGUOUS:
+        if lookup.state is EmailLookupState.AMBIGUOUS:
             raise serializers.ValidationError({"email": ["Email already registered"]})
         existing_user = lookup.user
         if existing_user and hasattr(existing_user, "userprofile") and existing_user.userprofile.is_signup_completed:

@@ -23,20 +23,19 @@ planned.
 [Issue #2](https://github.com/RonildoBraga/ledova/issues/2) changed scope:
 the unwired v2 session protocol (PRs #39–#65, last checkpoint `963c686`) is
 withdrawn per [ADR 0005](backend/docs/adr/0005-withdraw-v2-session-protocol.md).
-The challenge/delivery/admission stream is deleted; the remaining v2 session
-modules are removed next, and the legacy `AuthViewSet` is hardened in place.
+The whole v2 stream is deleted (challenge/delivery/admission, then the
+session core); only the canonical-email slice (`authentication/email.py`)
+remains, and the legacy `AuthViewSet` is hardened in place.
 
 ## Next work
 
 Do not continue v2. Harden the legacy auth path in this order:
 
-1. Remove the remaining v2 session core (AuthSession, RefreshCredential,
-   v2_credentials, v2_access_tokens, v2_sessions, v2_access) and their tests.
-2. Refresh rotation with simplejwt `token_blacklist` (BLACKLIST_AFTER_ROTATION,
+1. Refresh rotation with simplejwt `token_blacklist` (BLACKLIST_AFTER_ROTATION,
    revoke-all via OutstandingToken), replacing UserToken.
-3. Hashed, expiring, attempt-capped OTP with a per-email throttle; no DEBUG bypass.
-4. CSRF check for cookie-sourced unsafe requests, pending the dashboard change.
-5. Explicit native body-token endpoints for the mobile app.
+2. Hashed, expiring, attempt-capped OTP with a per-email throttle; no DEBUG bypass.
+3. CSRF check for cookie-sourced unsafe requests, pending the dashboard change.
+4. Explicit native body-token endpoints for the mobile app.
 
 The remaining canonical backlog is [ISSUES.md](ISSUES.md).
 

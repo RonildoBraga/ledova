@@ -6,11 +6,11 @@ from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.db import models
 from django.utils import timezone
 
-from authentication.managers.user import CustomUserManager
-from authentication.security.v2_email import (
-    V2EmailDestinationKey,
-    V2EmailIsPrintableASCII,
+from authentication.email import (
+    EmailDestinationKey,
+    EmailIsPrintableASCII,
 )
+from authentication.managers.user import CustomUserManager
 
 
 class CustomUser(AbstractBaseUser, PermissionsMixin):
@@ -39,15 +39,15 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     class Meta:
         constraints = [
             models.CheckConstraint(
-                condition=V2EmailIsPrintableASCII(models.F("email")),
+                condition=EmailIsPrintableASCII(models.F("email")),
                 name="auth_user_email_v2_ascii_ck",
             ),
             models.CheckConstraint(
-                condition=models.Q(email=V2EmailDestinationKey(models.F("email"))),
+                condition=models.Q(email=EmailDestinationKey(models.F("email"))),
                 name="auth_user_email_v2_canon_ck",
             ),
             models.UniqueConstraint(
-                V2EmailDestinationKey(models.F("email")),
+                EmailDestinationKey(models.F("email")),
                 name="auth_user_email_v2_key_uniq",
             ),
         ]

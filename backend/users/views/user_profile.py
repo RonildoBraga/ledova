@@ -7,9 +7,9 @@ from rest_framework import serializers, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from authentication.managers.user import V2EmailLookupState
+from authentication.email import normalize_email
+from authentication.managers.user import EmailLookupState
 from authentication.models.user_token import UserToken
-from authentication.security.v2_email import normalize_v2_email
 from portfolios.models import Portfolio
 from shared.utils.logging_utils import LoggingContext
 from shared.views.base import AuthenticatedModelViewSet
@@ -54,8 +54,8 @@ class UserProfileViewSet(AuthenticatedModelViewSet):
         logger.info(f"{LoggingContext.USER_PROFILE} Account deletion requested")
 
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        tombstone = normalize_v2_email(f"deleted_{user.id}_{timestamp}_{uuid4().hex}@deleted.invalid")
-        if user.__class__.objects.resolve_v2_email(tombstone).state is not V2EmailLookupState.ABSENT:
+        tombstone = normalize_email(f"deleted_{user.id}_{timestamp}_{uuid4().hex}@deleted.invalid")
+        if user.__class__.objects.resolve_email(tombstone).state is not EmailLookupState.ABSENT:
             raise serializers.ValidationError({"error": ["Account deletion could not be completed."]})
         user.email = tombstone
         user.is_active = False

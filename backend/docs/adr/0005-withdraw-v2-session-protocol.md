@@ -15,8 +15,8 @@ still unbuilt. This is a one-person testnet project.
 
 ## Decision
 
-Withdraw v2. Keep the canonical-email slice (`authentication/security/v2_email.py`
-and `CustomUserManager.resolve_v2_email`, used by the live sign-in and profile
+Withdraw v2. Keep the canonical-email slice (`authentication/email.py` and
+`CustomUserManager.resolve_email`, used by the live sign-in and profile
 paths). Harden the legacy `AuthViewSet` in place with simplejwt's token
 blacklist (refresh rotation, revoke-all), a CSRF check on the cookie transport,
 hashed expiring attempt-capped OTPs and a per-email throttle. One auth path.

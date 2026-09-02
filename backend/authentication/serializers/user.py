@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
 from authentication.models.user_token import UserToken
-from authentication.serializers.fields import V2EmailField
+from authentication.serializers.fields import NormalizedEmailField
 from shared.constants import DATETIME_FORMAT
 
 User = get_user_model()
@@ -22,7 +22,7 @@ class UserTokenSerializer(serializers.ModelSerializer):
 
 class EmailVerificationSerializer(serializers.Serializer):
     token = serializers.CharField(required=True)
-    email = V2EmailField(required=True)
+    email = NormalizedEmailField(required=True)
 
     def to_representation(self, instance):
         representation = {
@@ -40,7 +40,7 @@ class EmailVerificationSerializer(serializers.Serializer):
 
 
 class UserSignupSerializer(serializers.Serializer):
-    email = V2EmailField(required=True)
+    email = NormalizedEmailField(required=True)
     password = serializers.CharField(max_length=255, write_only=True, required=True, style={"input_type": "password"})
     password_confirm = serializers.CharField(
         max_length=255, write_only=True, required=True, style={"input_type": "password"}
@@ -62,7 +62,7 @@ class UserSignupSerializer(serializers.Serializer):
 
 
 class UserSigninSerializer(serializers.Serializer):
-    email = V2EmailField(required=True)
+    email = NormalizedEmailField(required=True)
     password = serializers.CharField(max_length=255, write_only=True, required=True, style={"input_type": "password"})
     tokens = UserTokenSerializer(many=True, read_only=True)
 

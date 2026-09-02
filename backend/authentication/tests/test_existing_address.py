@@ -7,12 +7,12 @@ from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from rest_framework import serializers
 
+from authentication.email import EMAIL_ERROR, EmailError
 from authentication.managers.user import (
-    V2EmailLookupResult,
-    V2EmailLookupState,
+    EmailLookupResult,
+    EmailLookupState,
 )
 from authentication.models.user_token import UserToken
-from authentication.security.v2_email import V2_EMAIL_ERROR, V2EmailError
 from authentication.serializers.user import (
     EmailVerificationSerializer,
     UserSigninSerializer,
@@ -23,7 +23,7 @@ from authentication.services.sessions import SessionService
 User = get_user_model()
 
 
-class V2ExistingAddressTestCase(TestCase):
+class ExistingAddressTestCase(TestCase):
     password = "current-password-123"
 
     def create_user(self, email, *, is_active=True, password=None):
@@ -34,14 +34,14 @@ class V2ExistingAddressTestCase(TestCase):
 
     @staticmethod
     def ambiguous_result():
-        return V2EmailLookupResult(V2EmailLookupState.AMBIGUOUS)
+        return EmailLookupResult(EmailLookupState.AMBIGUOUS)
 
 
-class V2EmailResolverTests(V2ExistingAddressTestCase):
+class EmailResolverTests(ExistingAddressTestCase):
     def test_zero_matches_returns_absent(self):
         with CaptureQueriesContext(connection) as captured:
-            result = User.objects.resolve_v2_email("absent@example.test")
-        self.assertIs(result.state, V2EmailLookupState.ABSENT)
+            result = User.objects.resolve_email("absent@example.test")
+        self.assertIs(result.state, EmailLookupState.ABSENT)
         self.assertIsNone(result.user)
         self.assertEqual(len(captured), 1)
         self.assertIn("LIMIT 2", captured[0]["sql"].upper())
@@ -49,16 +49,16 @@ class V2EmailResolverTests(V2ExistingAddressTestCase):
     def test_one_match_returns_unique_exact_stored_user(self):
         stored_email = "legacy.owner@example.test"
         user = self.create_user(stored_email)
-        result = User.objects.resolve_v2_email("legacy.owner@example.test")
-        self.assertIs(result.state, V2EmailLookupState.UNIQUE)
+        result = User.objects.resolve_email("legacy.owner@example.test")
+        self.assertIs(result.state, EmailLookupState.UNIQUE)
         self.assertEqual(result.user.pk, user.pk)
         self.assertEqual(result.user.email, stored_email)
 
     def test_two_matches_return_ambiguous_without_user(self):
         first = self.create_user("owner-one@example.test")
         second = self.create_user("owner-two@example.test")
-        result = User.objects._v2_email_result([first, second])
-        self.assertIs(result.state, V2EmailLookupState.AMBIGUOUS)
+        result = User.objects._email_result([first, second])
+        self.assertIs(result.state, EmailLookupState.AMBIGUOUS)
         self.assertIsNone(result.user)
 
     def test_three_matches_remain_ambiguous(self):
@@ -67,14 +67,14 @@ class V2EmailResolverTests(V2ExistingAddressTestCase):
             self.create_user("member-two@example.test"),
             self.create_user("member-three@example.test"),
         ]
-        result = User.objects._v2_email_result(users)
-        self.assertIs(result.state, V2EmailLookupState.AMBIGUOUS)
+        result = User.objects._email_result(users)
+        self.assertIs(result.state, EmailLookupState.AMBIGUOUS)
         self.assertIsNone(result.user)
 
     def test_lookup_does_not_filter_inactive_accounts(self):
         inactive = self.create_user("state-inactive@example.test", is_active=False)
-        result = User.objects.resolve_v2_email("state-inactive@example.test")
-        self.assertIs(result.state, V2EmailLookupState.UNIQUE)
+        result = User.objects.resolve_email("state-inactive@example.test")
+        self.assertIs(result.state, EmailLookupState.UNIQUE)
         self.assertEqual(result.user.pk, inactive.pk)
 
     def test_invalid_or_noncanonical_keys_fail_without_querying(self):
@@ -85,28 +85,28 @@ class V2EmailResolverTests(V2ExistingAddressTestCase):
             "not-an-email",
         ):
             with self.subTest(destination_key=repr(destination_key)):
-                with self.assertNumQueries(0), self.assertRaises(V2EmailError) as raised:
-                    User.objects.resolve_v2_email(destination_key)
-                self.assertEqual(str(raised.exception), V2_EMAIL_ERROR)
+                with self.assertNumQueries(0), self.assertRaises(EmailError) as raised:
+                    User.objects.resolve_email(destination_key)
+                self.assertEqual(str(raised.exception), EMAIL_ERROR)
                 self.assertNotIn(destination_key, str(raised.exception))
 
     def test_result_invariant_and_repr_are_redacted(self):
         user = self.create_user("private@example.test")
-        result = V2EmailLookupResult(V2EmailLookupState.UNIQUE, user)
-        self.assertEqual(repr(result), "V2EmailLookupResult(<redacted>)")
+        result = EmailLookupResult(EmailLookupState.UNIQUE, user)
+        self.assertEqual(repr(result), "EmailLookupResult(<redacted>)")
         self.assertNotIn(user.email, repr(result))
         self.assertNotIn(str(user.pk), repr(result))
         self.assertNotIn(result.state.value, repr(result))
         with self.assertRaises(ValueError):
-            V2EmailLookupResult(V2EmailLookupState.UNIQUE)
+            EmailLookupResult(EmailLookupState.UNIQUE)
         with self.assertRaises(ValueError):
-            V2EmailLookupResult(V2EmailLookupState.ABSENT, user)
+            EmailLookupResult(EmailLookupState.ABSENT, user)
 
     def test_lookup_is_one_bounded_select_with_an_unselected_alias(self):
         self.create_user("query@example.test")
         with CaptureQueriesContext(connection) as captured:
-            result = User.objects.resolve_v2_email("query@example.test")
-        self.assertIs(result.state, V2EmailLookupState.UNIQUE)
+            result = User.objects.resolve_email("query@example.test")
+        self.assertIs(result.state, EmailLookupState.UNIQUE)
         self.assertEqual(len(captured), 1)
         sql = captured[0]["sql"].upper()
         self.assertTrue(sql.startswith("SELECT "))
@@ -123,7 +123,7 @@ class V2EmailResolverTests(V2ExistingAddressTestCase):
             self.assertNotIn("COLLATE", sql)
 
 
-class V2EmailSerializerBoundaryTests(V2ExistingAddressTestCase):
+class EmailSerializerBoundaryTests(ExistingAddressTestCase):
     def test_all_legacy_email_entry_points_use_the_strict_field(self):
         signin = UserSigninSerializer(
             data={"email": "member@example.test\t", "password": self.password},
@@ -147,7 +147,7 @@ class V2EmailSerializerBoundaryTests(V2ExistingAddressTestCase):
         self.assertEqual(signup.errors, {"email": ["Enter a valid email address."]})
 
 
-class V2EmailModelBackendTests(V2ExistingAddressTestCase):
+class EmailModelBackendTests(ExistingAddressTestCase):
     def test_get_by_natural_key_returns_only_a_unique_exact_row(self):
         stored_email = "legacy.login@example.test"
         user = self.create_user(stored_email)
@@ -162,7 +162,7 @@ class V2EmailModelBackendTests(V2ExistingAddressTestCase):
 
         with patch.object(
             type(User.objects),
-            "resolve_v2_email",
+            "resolve_email",
             return_value=self.ambiguous_result(),
         ) as resolve:
             with self.assertRaises(User.DoesNotExist):
@@ -177,7 +177,7 @@ class V2EmailModelBackendTests(V2ExistingAddressTestCase):
         with (
             patch.object(
                 type(User.objects),
-                "resolve_v2_email",
+                "resolve_email",
                 return_value=self.ambiguous_result(),
             ),
             patch("django.contrib.auth.base_user.make_password", wraps=make_password) as dummy_hash,
@@ -189,7 +189,7 @@ class V2EmailModelBackendTests(V2ExistingAddressTestCase):
         with (
             patch.object(
                 type(User.objects),
-                "resolve_v2_email",
+                "resolve_email",
                 return_value=self.ambiguous_result(),
             ),
             patch.object(User, "check_password", autospec=True) as check_password,
@@ -247,7 +247,7 @@ class V2EmailModelBackendTests(V2ExistingAddressTestCase):
         with (
             patch.object(
                 type(User.objects),
-                "aresolve_v2_email",
+                "aresolve_email",
                 return_value=self.ambiguous_result(),
             ) as resolve,
             patch("django.contrib.auth.base_user.make_password", wraps=make_password) as dummy_hash,
@@ -265,7 +265,7 @@ class V2EmailModelBackendTests(V2ExistingAddressTestCase):
         with (
             patch.object(
                 type(User.objects),
-                "aresolve_v2_email",
+                "aresolve_email",
                 return_value=self.ambiguous_result(),
             ),
             patch.object(User, "acheck_password", autospec=True) as check_password,
@@ -279,7 +279,7 @@ class V2EmailModelBackendTests(V2ExistingAddressTestCase):
         check_password.assert_not_awaited()
 
 
-class V2EmailSignupLookupTests(V2ExistingAddressTestCase):
+class EmailSignupLookupTests(ExistingAddressTestCase):
     def create_users(self):
         first = self.create_user(
             "signup-first@example.test",
@@ -308,7 +308,7 @@ class V2EmailSignupLookupTests(V2ExistingAddressTestCase):
         with (
             patch.object(
                 type(User.objects),
-                "resolve_v2_email",
+                "resolve_email",
                 return_value=self.ambiguous_result(),
             ) as resolve,
             self.assertRaises(serializers.ValidationError) as raised,
