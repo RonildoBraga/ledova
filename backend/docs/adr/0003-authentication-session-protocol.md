@@ -1,6 +1,6 @@
 # ADR 0003 — One session core with explicit browser and native transports
 
-Status: Accepted — implementation pending
+Status: Accepted — implementation in progress
 Date: 2026-09-02
 Issue: [#2](https://github.com/RonildoBraga/ledova/issues/2)
 
@@ -42,6 +42,54 @@ Add an `AuthSession` per browser or native installation and a separate
 Initial lifetimes are 15 minutes for access, seven days of refresh inactivity,
 and 30 days absolute session lifetime. Configuration may shorten these values,
 but extending them requires a new review.
+
+### Exact v2 access JWT profile
+
+V2 access credentials are compact HS256 JWTs signed and verified only inside
+the trusted backend. Each environment uses distinct key bytes. The JOSE header
+has exactly `alg: HS256`, `typ: at+jwt`, and the current reviewed signer `kid`;
+callers cannot supply or override headers. The initial active `kid` is
+`ledova-v2-access-hs256-1`. Configuration names one current signer and an
+in-process reviewed map of accepted verifier keys; the current `kid` must map to
+that signer's key.
+
+The payload has exactly these nine claims:
+
+- `typ` is the string `access` and `ver` is the integer `2`;
+- `sub` is a JSON string matching `[1-9][0-9]*` for the user's canonical
+  positive decimal primary key;
+- `sid` is the session's canonical lowercase UUID and `jti` is a fresh
+  canonical lowercase UUIDv4;
+- `iat` and `exp` are integer UTC NumericDates produced by flooring Unix
+  seconds, not booleans or strings; and
+- `iss` is `urn:ledova:auth` and `aud` is the string `urn:ledova:api`.
+
+Encoded lifetime satisfies `0 < exp - iat <= 900` seconds and is capped by the
+session's absolute expiry. Initial session issuance and successful live refresh
+rotation refuse `exp <= iat` and sign before their state transaction commits;
+signing or configuration failure rolls back every session and credential change.
+Browser confirmation mints no token: it only makes the winning rotation's access
+JWT usable again. Verification uses zero clock leeway, so backend clocks must
+remain synchronized.
+
+Before reading an unverified header, reject any non-ASCII token, any token over
+1024 bytes, or any token without exactly three nonempty compact segments. Use
+`kid` only to select an in-process reviewed key map. Then pin HS256, require all
+nine claims, verify signature, issued-at time, expiry, exact issuer, and strict
+audience, and finally enforce the exact header/payload key sets, values, types,
+canonical identifiers, and lifetime bound. An unknown `kid` or invalid v2 token
+never falls back to legacy parsing. After cryptographic verification, require
+the active session identified by `sid` to belong to the active user identified
+by `sub`, have active status, and remain within its absolute lifetime. A cookie
+credential additionally requires a browser session; a bearer credential
+requires a native session.
+
+Key rotation always introduces a new reviewed key and `kid`; key bytes never
+change beneath an existing `kid`. Deploy verification for old and new keys
+before switching signers. Record when the final old signer stops, accept the old
+key until 900 seconds after that cutoff, then remove it. Emergency removal may be
+immediate. HS256 verification must not be distributed outside the trusted
+backend because its verifier key also grants signing authority.
 
 ### Explicit versioned transports
 
