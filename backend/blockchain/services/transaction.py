@@ -5,11 +5,6 @@ from typing import Any
 from django.db import transaction
 from django.utils import timezone
 
-from blockchain.exceptions import (
-    MaxRetryCountReachedException,
-    TransactionNotFailedException,
-    TransactionNotFoundException,
-)
 from shared.utils.logging_utils import LoggingContext
 
 logger = logging.getLogger(__name__)
@@ -70,32 +65,3 @@ class TransactionMonitorService:
 
         logger.info(f"{LoggingContext.BLOCKCHAIN_TX} Marked {count} stale transactions as failed")
         return {"cleaned": count}
-
-    @staticmethod
-    @transaction.atomic
-    def retry_transaction(transaction_uuid: str) -> dict[str, Any]:
-        from blockchain.models import BlockchainTransaction, TransactionStatus
-
-        try:
-            tx = BlockchainTransaction.objects.select_for_update().get(uuid=transaction_uuid)
-        except BlockchainTransaction.DoesNotExist:
-            logger.error(f"{LoggingContext.BLOCKCHAIN_TX} Transaction {transaction_uuid} not found")
-            raise TransactionNotFoundException()
-
-        if tx.status not in [TransactionStatus.FAILED, TransactionStatus.REVERTED]:
-            raise TransactionNotFailedException(f"Transaction is not in failed state: {tx.status}")
-
-        if tx.retry_count >= 3:
-            raise MaxRetryCountReachedException()
-
-        tx.status = TransactionStatus.PENDING
-        tx.retry_count += 1
-        tx.error_message = ""
-        tx.save(update_fields=["status", "retry_count", "error_message", "updated_at"])
-
-        logger.info(
-            f"{LoggingContext.BLOCKCHAIN_TX} Reset transaction {tx.tx_hash or tx.uuid} "
-            f"for retry (attempt {tx.retry_count})"
-        )
-
-        return {"success": True, "retry_count": tx.retry_count}

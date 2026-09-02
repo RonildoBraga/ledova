@@ -302,7 +302,7 @@ class V2EmailSignupLookupTests(V2ExistingAddressTestCase):
                 initial_state[user.pk],
             )
 
-    def test_signup_with_token_rejects_ambiguity_before_mutation(self):
+    def test_signup_rejects_ambiguity_before_mutation(self):
         users = self.create_users()
         initial_state = {user.pk: (user.email, user.password, user.is_active) for user in users}
         with (
@@ -314,22 +314,6 @@ class V2EmailSignupLookupTests(V2ExistingAddressTestCase):
             self.assertRaises(serializers.ValidationError) as raised,
         ):
             SessionService.signup("signup@example.test", self.password, self.password)
-        self.assertEqual(raised.exception.detail, {"email": ["Email already registered"]})
-        resolve.assert_called_once_with("signup@example.test")
-        self.assert_users_unchanged(users, initial_state)
-
-    def test_signup_without_token_rejects_ambiguity_before_mutation(self):
-        users = self.create_users()
-        initial_state = {user.pk: (user.email, user.password, user.is_active) for user in users}
-        with (
-            patch.object(
-                type(User.objects),
-                "resolve_v2_email",
-                return_value=self.ambiguous_result(),
-            ) as resolve,
-            self.assertRaises(serializers.ValidationError) as raised,
-        ):
-            SessionService.signup_without_token("signup@example.test", self.password, self.password)
         self.assertEqual(raised.exception.detail, {"email": ["Email already registered"]})
         resolve.assert_called_once_with("signup@example.test")
         self.assert_users_unchanged(users, initial_state)

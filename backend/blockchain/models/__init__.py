@@ -1,4 +1,3 @@
-from blockchain.models.deployment import ContractDeployment
 from blockchain.models.transaction import (
     BlockchainTransaction,
     TransactionStatus,
@@ -7,7 +6,6 @@ from blockchain.models.transaction import (
 
 __all__ = [
     "BlockchainTransaction",
-    "ContractDeployment",
     "TransactionStatus",
     "TransactionType",
 ]

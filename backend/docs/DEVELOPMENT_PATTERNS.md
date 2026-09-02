@@ -579,7 +579,7 @@ Transaction boundaries belong in the **service layer**, not views. A service met
 ### Pattern
 
 ```python
-# app/services/accounts.py
+# app/services/example.py
 from django.db import transaction
 
 class AccountService:
@@ -692,7 +692,7 @@ class PreferencesViewSet(AuthenticatedModelViewSet):
 - **Exceptions roll back**: Any exception triggers automatic rollback
 - **Keep transactions short**: Long-held locks reduce concurrency
 
-**Reference**: `users/services/accounts.py`, `wallets/services/transfers.py`
+**Reference**: `wallets/services/transfers.py`
 
 ## Dependency Injection
 

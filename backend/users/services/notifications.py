@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from integrations.expo_push import ExpoPushClient, ExpoPushError
 from shared.utils.logging_utils import LoggingContext
@@ -146,35 +146,3 @@ class NotificationService:
             data=data,
             notification_type="transaction",
         )
-
-    def notify_batch(
-        self,
-        users: List,
-        title: str,
-        body: str,
-        data: Optional[Dict[str, Any]] = None,
-        notification_type: str = "general",
-    ) -> Dict[str, Any]:
-        total_sent = 0
-        total_failed = 0
-        results = []
-
-        for user in users:
-            result = self.notify_user(
-                user=user,
-                title=title,
-                body=body,
-                data=data,
-                notification_type=notification_type,
-            )
-            total_sent += result.get("sent", 0)
-            total_failed += result.get("failed", 0)
-            results.append({"user": user.email, "result": result})
-
-        return {
-            "status": "completed",
-            "total_sent": total_sent,
-            "total_failed": total_failed,
-            "user_count": len(users),
-            "results": results,
-        }

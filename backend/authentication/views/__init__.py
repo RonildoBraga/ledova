@@ -1,10 +1,5 @@
-"""
-Views package for authentication app.
-"""
-
-from authentication.views.user import AuthViewSet, TokenCookieMixin
+from authentication.views.user import AuthViewSet
 
 __all__ = [
     "AuthViewSet",
-    "TokenCookieMixin",
 ]

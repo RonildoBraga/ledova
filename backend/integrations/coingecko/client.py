@@ -114,36 +114,6 @@ class CoinGeckoClient:
             logger.error(f"{LoggingContext.ASSETS} CoinGecko API error: {str(e)}")
             raise
 
-    def get_coin_info(self, coin_id: str) -> Dict[str, Any]:
-        """
-        Get detailed information about a cryptocurrency.
-
-        Args:
-            coin_id: CoinGecko coin ID (e.g., "bitcoin")
-
-        Returns:
-            Dictionary with detailed coin information including:
-            - name, symbol, description
-            - market data
-            - contract addresses
-            - community data
-
-        Raises:
-            requests.RequestException: If API request fails
-        """
-        try:
-            response = requests.get(
-                f"{self.base_url}/coins/{coin_id}",
-                headers=self._get_headers(),
-                timeout=self.timeout,
-            )
-            response.raise_for_status()
-            return response.json()
-
-        except requests.RequestException as e:
-            logger.error(f"{LoggingContext.ASSETS} CoinGecko API error: {str(e)}")
-            raise
-
     def fetch_prices_by_symbols(self, symbol_map: Dict[str, str]) -> Dict[str, Dict[str, Any]]:
         """
         Fetch prices using a symbol-to-ID mapping.
@@ -226,60 +196,6 @@ class CoinGeckoClient:
                 f"{LoggingContext.ASSETS} CoinGecko exchange rate error " f"(USD→{target_currency.upper()}): {str(e)}"
             )
             return None
-
-    def fetch_historical_price(self, coin_id: str, timestamp: datetime) -> Optional[Decimal]:
-        """
-        Fetch historical price for a cryptocurrency at a specific timestamp.
-
-        Uses CoinGecko's /coins/{id}/market_chart/range endpoint to get
-        price data around the specified timestamp.
-
-        Args:
-            coin_id: CoinGecko coin ID (e.g., "bitcoin", "ethereum")
-            timestamp: The datetime to fetch price for
-
-        Returns:
-            Price in USD as Decimal, or None if not available
-
-        Raises:
-            requests.RequestException: If API request fails
-        """
-        # Convert timestamp to unix time (seconds since epoch)
-        from_timestamp = int(timestamp.timestamp())
-        # Get data for +/- 1 hour window to ensure we get a data point
-        to_timestamp = from_timestamp + 3600  # 1 hour after
-
-        params = {
-            "vs_currency": "usd",
-            "from": from_timestamp,
-            "to": to_timestamp,
-        }
-
-        try:
-            response = requests.get(
-                f"{self.base_url}/coins/{coin_id}/market_chart/range",
-                params=params,
-                headers=self._get_headers(),
-                timeout=self.timeout,
-            )
-            response.raise_for_status()
-            data = response.json()
-
-            # Extract price data (returns array of [timestamp, price])
-            prices = data.get("prices", [])
-            if not prices:
-                logger.warning(f"{LoggingContext.ASSETS} No historical price data for " f"{coin_id} at {timestamp}")
-                return None
-
-            # Get the first price (closest to our timestamp)
-            price_usd = prices[0][1]
-            return Decimal(str(price_usd))
-
-        except requests.RequestException as e:
-            logger.error(
-                f"{LoggingContext.ASSETS} CoinGecko historical price error for " f"{coin_id} at {timestamp}: {str(e)}"
-            )
-            raise
 
     def fetch_historical_prices_bulk(
         self, coin_id: str, start_date: datetime, end_date: datetime

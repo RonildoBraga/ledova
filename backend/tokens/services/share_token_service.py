@@ -23,7 +23,6 @@ from tokens.exceptions import (
     TokenBalanceRetrievalException,
     TokenDeploymentFailedException,
     TokenFactoryNotConfiguredException,
-    TokenInfoRetrievalException,
 )
 from tokens.models import ShareIssuance, ShareIssuanceRequest, ShareToken, Stablecoin
 
@@ -222,42 +221,6 @@ class ShareTokenService:
 
         return issuance_request
 
-    def create_issuance(self, token, recipient: str, amount: int, user, reason: str = "") -> ShareIssuance:
-        """
-        Validate inputs and create a ShareIssuance record for later processing.
-
-        Raises:
-            InvalidTokenStateException: If token is not deployed
-            InvalidRecipientAddressException: If recipient address is invalid
-            ValidationError: If amount is invalid
-        """
-        if token.status != "deployed":
-            raise InvalidTokenStateException("Only deployed tokens can issue shares.")
-
-        if not token.contract_address:
-            raise InvalidTokenStateException("Token has no contract address.")
-
-        if not recipient or not Web3.is_address(recipient):
-            raise InvalidRecipientAddressException()
-
-        if amount <= 0:
-            raise ValidationError({"amount": "Amount must be a positive integer."})
-
-        issuance = ShareIssuance.objects.create(
-            token=token,
-            recipient_address=recipient,
-            amount=str(amount),
-            issuance_type="additional",
-            reason=reason,
-            initiated_by=user,
-        )
-
-        logger.info(
-            f"{LoggingContext.TOKEN} User {user.email} created issuance: " f"{amount} {token.symbol} to {recipient}"
-        )
-
-        return issuance
-
     def mint_shares(self, issuance: ShareIssuance) -> dict:
         """
         Execute on-chain mint for a pending ShareIssuance.
@@ -360,22 +323,6 @@ class ShareTokenService:
             logger.error(f"{LoggingContext.TOKEN} Error getting balance: {e}")
             raise TokenBalanceRetrievalException() from e
 
-    def get_token_info(self, contract_address: str) -> dict:
-        try:
-            token_contract = self.load_share_token(contract_address)
-
-            return {
-                "name": token_contract.functions.name().call(),
-                "symbol": token_contract.functions.symbol().call(),
-                "totalSupply": token_contract.functions.totalSupply().call(),
-                "authorizedShares": token_contract.functions.authorizedShares().call(),
-                "paused": token_contract.functions.paused().call(),
-            }
-
-        except Exception as e:
-            logger.error(f"{LoggingContext.TOKEN} Error getting token info: {e}")
-            raise TokenInfoRetrievalException() from e
-
     def get_token_by_identifier(self, identifier: str) -> Optional[str]:
         try:
             address = self.factory_contract.functions.getTokenByIdentifier(identifier).call()
@@ -385,23 +332,6 @@ class ShareTokenService:
         except Exception as e:
             logger.error(f"{LoggingContext.TOKEN} Error getting token by identifier: {e}")
             return None
-
-    def get_deployed_token_count(self) -> int:
-        try:
-            return self.factory_contract.functions.getDeployedTokenCount().call()
-        except Exception as e:
-            logger.error(f"{LoggingContext.TOKEN} Error getting token count: {e}")
-            return 0
-
-    def is_deployed_token(self, address: str) -> bool:
-        try:
-            if not self.chain_client.is_valid_address(address):
-                return False
-            checksum = self.chain_client.to_checksum_address(address)
-            return self.factory_contract.functions.isDeployedToken(checksum).call()
-        except Exception as e:
-            logger.error(f"{LoggingContext.TOKEN} Error checking token: {e}")
-            return False
 
     # --- Holders ---
 

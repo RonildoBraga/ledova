@@ -56,15 +56,3 @@ class InvalidReviewDecisionException(APIException):
     def __init__(self, decision=None):
         detail = f"Invalid decision: {decision}" if decision else self.default_detail
         super().__init__(detail=detail)
-
-
-class NoRecusedReviewException(APIException):
-    status_code = status.HTTP_400_BAD_REQUEST
-    default_detail = "No recused review found to replace."
-    default_code = "no_recused_review"
-
-
-class ReviewerAlreadyAssignedException(APIException):
-    status_code = status.HTTP_400_BAD_REQUEST
-    default_detail = "This reviewer is already assigned to this application."
-    default_code = "reviewer_already_assigned"

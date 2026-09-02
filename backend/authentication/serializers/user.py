@@ -40,19 +40,13 @@ class EmailVerificationSerializer(serializers.Serializer):
 
 
 class UserSignupSerializer(serializers.Serializer):
-    uuid = serializers.CharField(read_only=True, required=False)
     email = V2EmailField(required=True)
     password = serializers.CharField(max_length=255, write_only=True, required=True, style={"input_type": "password"})
     password_confirm = serializers.CharField(
         max_length=255, write_only=True, required=True, style={"input_type": "password"}
     )
-    email_verification_sent_at = serializers.DateTimeField(format=DATETIME_FORMAT, required=False, allow_null=True)
-    is_email_verified = serializers.BooleanField(required=False, default=False)
-    sms_verification_sent_at = serializers.DateTimeField(format=DATETIME_FORMAT, required=False, allow_null=True)
-    is_phone_verified = serializers.BooleanField(required=False, default=False)
 
     def validate_password(self, value):
-        """Basic password validation"""
         if len(value) < 8:
             raise serializers.ValidationError("Password must be at least 8 characters long.")
         return value
@@ -71,12 +65,6 @@ class UserSigninSerializer(serializers.Serializer):
     email = V2EmailField(required=True)
     password = serializers.CharField(max_length=255, write_only=True, required=True, style={"input_type": "password"})
     tokens = UserTokenSerializer(many=True, read_only=True)
-
-    def validate_password(self, value):
-        """Basic password validation - authentication handled in service layer"""
-        if not value:
-            raise serializers.ValidationError("Password is required.")
-        return value
 
     def to_representation(self, instance):
         representation = {

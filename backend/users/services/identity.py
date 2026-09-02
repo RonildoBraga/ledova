@@ -2,6 +2,7 @@ import logging
 from typing import Any, Dict, Optional
 
 from django.utils import timezone
+from rest_framework.exceptions import APIException
 
 from integrations.kyc import get_kyc_provider
 from integrations.kyc.base import (
@@ -18,12 +19,15 @@ from integrations.kyc.constants import (
 )
 from shared.models.country import Country
 from shared.utils.logging_utils import LoggingContext
-from users.exceptions import (
-    VerificationTokenGenerationException,
-)
 from users.models.user_profile import UserProfile
 
 logger = logging.getLogger("ledova_backend")
+
+
+class VerificationTokenGenerationException(APIException):
+    status_code = 502
+    default_detail = "Unable to initialize verification. Please try again."
+    default_code = "verification_token_generation_failed"
 
 
 class IdentityVerificationService:

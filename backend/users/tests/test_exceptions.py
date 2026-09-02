@@ -1,9 +1,6 @@
 from django.test import SimpleTestCase
 
-from users.exceptions import (
-    UserAccountNotFoundException,
-    VerificationTokenGenerationException,
-)
+from users.services.identity import VerificationTokenGenerationException
 
 
 class UserExceptionTests(SimpleTestCase):
@@ -13,7 +10,3 @@ class UserExceptionTests(SimpleTestCase):
             str(VerificationTokenGenerationException().detail), "Unable to initialize verification. Please try again."
         )
         self.assertEqual(str(VerificationTokenGenerationException("later").detail), "later")
-
-    def test_user_account_not_found_formats_account_type(self):
-        self.assertEqual(str(UserAccountNotFoundException("Retail account").detail), "Retail account not found.")
-        self.assertEqual(str(UserAccountNotFoundException().detail), "Customer account not found.")

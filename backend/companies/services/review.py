@@ -10,9 +10,7 @@ from companies.exceptions import (
     InsufficientReviewersException,
     InvalidReviewDecisionException,
     InvalidReviewStateException,
-    NoRecusedReviewException,
     ReviewAlreadyCompletedException,
-    ReviewerAlreadyAssignedException,
 )
 from companies.models import (
     ApplicationReview,
@@ -160,87 +158,3 @@ class ReviewService:
         pending_count = decisions.count(ReviewDecision.PENDING)
         logger.info(f"{LoggingContext.COMPANY} Company {company.name}: {pending_count} review(s) still pending")
         return None
-
-    @staticmethod
-    def get_review_status(company: Company) -> dict:
-        reviews = ApplicationReview.objects.filter(company=company).select_related("reviewer")
-
-        status = {
-            "company_status": company.status,
-            "total_reviews": reviews.count(),
-            "pending_count": 0,
-            "approved_count": 0,
-            "rejected_count": 0,
-            "recused_count": 0,
-            "reviews": [],
-        }
-
-        for review in reviews:
-            status["reviews"].append(
-                {
-                    "order": review.review_order,
-                    "reviewer_email": review.reviewer.email,
-                    "decision": review.decision,
-                    "decision_at": review.decision_at,
-                    "is_pending": review.is_pending,
-                }
-            )
-
-            if review.decision == ReviewDecision.PENDING:
-                status["pending_count"] += 1
-            elif review.decision == ReviewDecision.APPROVED:
-                status["approved_count"] += 1
-            elif review.decision == ReviewDecision.REJECTED:
-                status["rejected_count"] += 1
-            elif review.decision == ReviewDecision.RECUSED:
-                status["recused_count"] += 1
-
-        return status
-
-    @staticmethod
-    def can_be_finalized(company: Company) -> bool:
-        if company.status != CompanyStatus.REVIEW:
-            return False
-
-        pending = ApplicationReview.objects.filter(
-            company=company,
-            decision=ReviewDecision.PENDING,
-        ).count()
-
-        return pending == 0
-
-    @staticmethod
-    def replace_recused_reviewer(
-        company: Company,
-        new_reviewer: User,
-        assigned_by: Optional[User] = None,
-    ) -> ApplicationReview:
-        recused_review = ApplicationReview.objects.filter(
-            company=company,
-            decision=ReviewDecision.RECUSED,
-        ).first()
-
-        if not recused_review:
-            raise NoRecusedReviewException()
-
-        existing = ApplicationReview.objects.filter(
-            company=company,
-            reviewer=new_reviewer,
-        ).exists()
-
-        if existing:
-            raise ReviewerAlreadyAssignedException()
-
-        new_review = ApplicationReview.objects.create(
-            company=company,
-            reviewer=new_reviewer,
-            review_order=recused_review.review_order,
-            assigned_by=assigned_by,
-        )
-
-        logger.info(
-            f"{LoggingContext.COMPANY} Replaced recused reviewer {recused_review.reviewer.email} "
-            f"with {new_reviewer.email} for {company.name}"
-        )
-
-        return new_review

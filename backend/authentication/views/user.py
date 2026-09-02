@@ -88,7 +88,7 @@ class AuthViewSet(TokenCookieMixin, ViewSet):
         password = serializer.validated_data["password"]
         password_confirmation = serializer.validated_data["password_confirm"]
 
-        user = SessionService.signup_without_token(email, password, password_confirmation)
+        user = SessionService.signup(email, password, password_confirmation)
         EmailCodeService.send(user)
 
         response_serializer = UserSignupSerializer(instance=user)

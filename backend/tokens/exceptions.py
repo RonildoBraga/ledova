@@ -50,12 +50,6 @@ class InvalidHolderAddressException(APIException):
     default_code = "invalid_holder_address"
 
 
-class TokenInfoRetrievalException(APIException):
-    status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-    default_detail = "Failed to retrieve token information."
-    default_code = "token_info_retrieval_failed"
-
-
 class TokenBalanceRetrievalException(APIException):
     status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
     default_detail = "Failed to retrieve token balance."
