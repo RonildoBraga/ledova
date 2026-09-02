@@ -36,8 +36,8 @@ Add an `AuthSession` per browser or native installation and a separate
   records until the session's absolute expiry to detect replay.
 - Do not store access JWTs or plaintext refresh secrets. New sessions never use
   the legacy `UserToken` raw-token fields.
-- Use keys dedicated to access-token signing and refresh HMACs, separate from
-  Django's `SECRET_KEY`.
+- Use separate keys for access signing, refresh HMACs, challenge proofs, and
+  challenge rate identities. None may reuse Django's `SECRET_KEY`.
 
 Initial lifetimes are 15 minutes for access, seven days of refresh inactivity,
 and 30 days absolute session lifetime. Configuration may shorten these values,
@@ -170,8 +170,9 @@ identifiers.
 
 Refresh creates exactly one successor:
 
-1. Parse the selector and secret, then lock the credential and session in one
-   database transaction.
+1. Parse the selector and secret, use any unlocked lookup only to discover
+   bounded topology, then lock the user, session, and credential in that order
+   in one database transaction and revalidate every relationship.
 2. Compare the stored digest in constant time and validate user, session, idle,
    absolute, and credential expiry.
 3. Mark the credential used, create and link exactly one successor, then issue
@@ -264,31 +265,22 @@ sanitized device label, creation/last-use times, and whether it is current.
 
 ### Email challenges
 
-Replace user-row plaintext codes with locked, purpose-bound challenge records
-for signup, email change, and password reset. Signup returns an opaque
-pending-verification context and no session. Browser state uses a short-lived
-pending cookie; native state uses the opaque context. Neither client persists
-the signup email as the authority for verification. Password reset uses a
-high-entropy one-time secret rather than a six-digit code.
+V2 replaces user-row plaintext codes with stable, purpose-bound challenges and
+separate delivery generations. Signup and email change use a pending context
+plus a six-digit OTP; password reset uses a high-entropy one-time credential.
+Only HMAC digests are persisted, replacement proof activates only after typed
+provider acceptance, and PostgreSQL serializes rolling destination/IP limits.
 
-Signup and email-change OTPs are six digits, HMAC-protected with a dedicated
-pepper, valid for ten minutes, limited to five attempts, and subject to a
-60-second resend cooldown. Combined initial, resend, and replacement delivery
-caps are five per normalized destination and 20 per IP per hour. Responses do
-not enumerate accounts. Correct consumption and session creation occur in one
-locked transaction, so simultaneous submissions create at most one session.
+Initiating routes fix browser or native transport. Public responses do not
+enumerate accounts. Successful signup may issue one session; email change and
+password reset revoke all sessions and issue none. V2 and legacy proofs never
+cross protocols.
 
-Repeated signup cannot replace an incomplete account's password without proof.
-Resend activates a replacement only after delivery is accepted, so provider
-failure does not destroy the prior usable challenge. The runtime `000000`
-bypass is removed; tests inject deterministic code generation instead.
-
-Password-reset initiation always returns the same `202`, whether the address is
-known or not. For an eligible account it creates a HMAC-protected 256-bit secret
-valid for 30 minutes, limited to five failed confirmations, three sends per
-destination and 20 per IP per hour. Confirmation locks and consumes the
-challenge, validates and changes the password, and revokes every session in one
-transaction. It never issues a session; success returns the user to sign-in.
+[ADR 0004](./0004-v2-challenge-profile.md) is the normative contract for
+identity normalization, credential grammar, key rotation, delivery states,
+rate admission, trusted proxy handling, confirmation responses, retention,
+lock ordering, and exact time boundaries. Its primitives, schema, services, and
+PostgreSQL race tests must land before either client moves.
 
 ### Streaming, output, and logs
 
@@ -314,22 +306,26 @@ boundary.
    refresh, logout, password, verification, and SSE behavior.
 3. Add session and refresh-history schema plus service and PostgreSQL race tests
    without changing endpoints.
-4. Add the locked challenge model and v2-compatible signup, verification,
-   resend, and reset services before either client moves. Successful
-   verification must issue only the requested v2 transport.
-5. Add v2 browser endpoints, source-aware authentication, CSRF enforcement,
+4. Freeze [ADR 0004](./0004-v2-challenge-profile.md), then add its pure parsers,
+   HMACs, key configuration, and deterministic tests without changing
+   endpoints.
+5. Add challenge schema, provider-neutral signup, verification, resend, email
+   change, and reset services, plus PostgreSQL rate and confirmation races.
+   Successful signup verification may issue only the transport stored by its
+   initiating browser or native route.
+6. Add v2 browser endpoints, source-aware authentication, CSRF enforcement,
    current-session signout, and the dashboard coordinator. Cut over only after
    its complete signup-to-authenticated-to-signout journey passes.
-6. Add v2 native endpoints, atomic storage/provider migration, and remove saved
+7. Add v2 native endpoints, atomic storage/provider migration, and remove saved
    passwords. Cut over only after the same journey, including current-session
    signout, passes.
-7. Land signout-all, password, email, account, and push-session lifecycle
+8. Land signout-all, password, email, account, and push-session lifecycle
    batches.
-8. Complete Issue #3's SSE header/cookie migration and revocation checks.
-9. Disable legacy issuance and refresh, force one sign-in, wait out the maximum
+9. Complete Issue #3's SSE header/cookie migration and revocation checks.
+10. Disable legacy issuance and refresh, force one sign-in, wait out the maximum
    legacy access lifetime, then remove hybrid authentication, raw-token
    serialization/storage, old routes, and compatibility tests.
-10. Run an independent cross-client, CSRF, concurrency, secret-output, and
+11. Run an independent cross-client, CSRF, concurrency, secret-output, and
     session-lifecycle audit before closing Issue #2.
 
 Each numbered implementation area is split into reviewable regression-backed
@@ -352,8 +348,10 @@ them; v2 is never selected through a flag on a legacy endpoint.
 - **Reissue a successor during a replay grace window:** improves retry
   convenience but gives a replay another credential. The browser collision
   response deliberately issues nothing and expires after five seconds.
-- **Put SSE bearer or one-time credentials in URLs:** scoped credentials can
-  still enter histories, proxies, and observability systems.
+- **Put session, refresh, or SSE credentials in URLs:** scoped credentials can
+  still enter histories, proxies, and observability systems. The reset
+  fragment is the narrow one-time exception and must use ADR 0004's hardened
+  bootstrap; a query or server-visible path remains forbidden.
 
 ## Consequences and completion gate
 
@@ -362,9 +360,9 @@ refresh-history and challenge state, CSRF coordination, and a one-time forced
 sign-in when legacy sessions are retired. Strict rotation also favors security
 over transparent recovery from a lost refresh response.
 
-In return, browser and native behavior is explicit, raw server-side tokens are
-eliminated, revocation is immediate, and refresh replay and device lifecycle
-become testable invariants.
+In return, browser and native behavior is explicit, plaintext reusable
+credential storage is eliminated from v2, revocation is immediate, and refresh
+replay and device lifecycle become testable invariants.
 
 Issue #2 remains open until both clients use v2, legacy credential paths and
 plaintext token storage are removed, PostgreSQL concurrency and cross-client
