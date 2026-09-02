@@ -8,7 +8,10 @@ from operator import or_
 from django.db import DEFAULT_DB_ALIAS, transaction
 from django.db.models import Q
 
-from authentication.models import AuthenticationChallengeDelivery
+from authentication.models import (
+    AuthenticationChallenge,
+    AuthenticationChallengeDelivery,
+)
 from authentication.security import (
     ChallengeDigest,
     ChallengeKeyConfiguration,
@@ -16,6 +19,10 @@ from authentication.security import (
     V2TrustedProxyConfiguration,
     destination_rate_digests,
     request_ip_rate_digests,
+)
+from authentication.services.v2_delivery_queue import (
+    _enqueue_reserved_v2_delivery,
+    _validate_v2_delivery_queue,
 )
 from authentication.services.v2_query_privacy import _require_unrecorded_v2_connection
 
@@ -70,6 +77,7 @@ class _V2ChallengeAdmissionContext:
 @dataclass(frozen=True, slots=True, repr=False)
 class _V2ChallengeAdmissionPlan:
     status: str
+    challenge: AuthenticationChallenge | None = None
 
     def __repr__(self):
         return "_V2ChallengeAdmissionPlan(<redacted>)"
@@ -186,12 +194,25 @@ def _admit_challenge_delivery(
         )
 
         with transaction.atomic(using=selected.alias, durable=True):
+            raw_connection = selected.connection
+            if raw_connection is None:
+                raise RuntimeError
             with selected.cursor() as cursor:
                 cursor.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED, NOT DEFERRABLE")
                 for lock_id in lock_ids:
                     cursor.execute("SELECT pg_advisory_xact_lock(%s)", [lock_id])
 
             locked_scope = lock_scope(selected.alias)
+            if isinstance(locked_scope, AuthenticationChallenge):
+                if (
+                    locked_scope._state.adding is not False
+                    or locked_scope._state.db != selected.alias
+                    or type(locked_scope.pk) is not uuid.UUID
+                ):
+                    raise ValueError
+                locked_scope = (
+                    AuthenticationChallenge.objects.using(selected.alias).select_for_update().get(pk=locked_scope.pk)
+                )
 
             with selected.cursor() as cursor:
                 at = post_lock_clock(cursor)
@@ -238,15 +259,62 @@ def _admit_challenge_delivery(
                 ip_rate_digest=ip_rates.current.digest,
             )
             plan = apply_admitted(locked_scope, context)
-            if (
-                transaction.get_rollback(using=selected.alias)
-                or not isinstance(plan, _V2ChallengeAdmissionPlan)
-                or plan.status != AuthenticationChallengeDelivery.Status.SUPPRESSED
-            ):
+            verified = _require_unrecorded_v2_connection(using=selected.alias)
+            connection_valid = (
+                verified is selected
+                and selected.connection is raw_connection
+                and selected.in_atomic_block is True
+                and selected.get_autocommit() is False
+                and transaction.get_rollback(using=selected.alias) is False
+            )
+            challenge_valid = False
+            if isinstance(plan, _V2ChallengeAdmissionPlan):
+                if plan.status == AuthenticationChallengeDelivery.Status.SUPPRESSED:
+                    challenge_valid = plan.challenge is None
+                elif plan.status == AuthenticationChallengeDelivery.Status.RESERVED:
+                    challenge = plan.challenge
+                    challenge_valid = (
+                        isinstance(challenge, AuthenticationChallenge)
+                        and challenge is locked_scope
+                        and challenge._state.adding is False
+                        and challenge._state.db == selected.alias
+                        and type(challenge.pk) is uuid.UUID
+                        and challenge.purpose == context.purpose
+                        and challenge.status == AuthenticationChallenge.Status.OPEN
+                        and challenge.resolved_at is None
+                        and isinstance(challenge.created_at, datetime)
+                        and challenge.created_at.tzinfo is not None
+                        and isinstance(challenge.expires_at, datetime)
+                        and challenge.expires_at.tzinfo is not None
+                        and challenge.created_at <= context.reserved_at < challenge.expires_at
+                        and context.destination_rate_digest is not None
+                    )
+                    if challenge_valid:
+                        challenge_valid = (
+                            AuthenticationChallenge.objects.using(selected.alias)
+                            .filter(
+                                pk=challenge.pk,
+                                purpose=context.purpose,
+                                status=AuthenticationChallenge.Status.OPEN,
+                                resolved_at__isnull=True,
+                                created_at__lte=context.reserved_at,
+                                expires_at__gt=context.reserved_at,
+                            )
+                            .exists()
+                        )
+            if not connection_valid or not isinstance(plan, _V2ChallengeAdmissionPlan) or not challenge_valid:
                 raise ValueError
+            verified = _require_unrecorded_v2_connection(using=selected.alias)
+            if verified is not selected or selected.connection is not raw_connection:
+                raise ValueError
+            if plan.status == AuthenticationChallengeDelivery.Status.RESERVED:
+                _validate_v2_delivery_queue(
+                    selected=selected,
+                    raw_connection=raw_connection,
+                )
             deliveries.create(
                 uuid=context.delivery_id,
-                challenge=None,
+                challenge=plan.challenge,
                 purpose=context.purpose,
                 status=plan.status,
                 rate_key_id=context.rate_key_id,
@@ -259,9 +327,22 @@ def _admit_challenge_delivery(
                 sending_at=None,
                 accepted_at=None,
                 proof_expires_at=None,
-                resolved_at=at,
+                resolved_at=(at if plan.status == AuthenticationChallengeDelivery.Status.SUPPRESSED else None),
             )
-            if transaction.get_rollback(using=selected.alias):
+            if plan.status == AuthenticationChallengeDelivery.Status.RESERVED:
+                _enqueue_reserved_v2_delivery(
+                    selected=selected,
+                    raw_connection=raw_connection,
+                    delivery_id=context.delivery_id,
+                )
+            verified = _require_unrecorded_v2_connection(using=selected.alias)
+            if (
+                transaction.get_rollback(using=selected.alias)
+                or verified is not selected
+                or selected.connection is not raw_connection
+                or selected.in_atomic_block is not True
+                or selected.get_autocommit() is not False
+            ):
                 raise ValueError
         return _V2ChallengeAdmissionDecision.ADMITTED
     except Exception:

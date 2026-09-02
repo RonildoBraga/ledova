@@ -3,7 +3,7 @@
 Cloud Run requires every container to listen on $PORT for health checks. The
 procrastinate worker doesn't serve HTTP, so we run both:
 
-  - the worker (blocking, main thread): `python manage.py procrastinate worker`
+  - the worker (blocking, main thread): `python manage.py procrastinate worker --queues=default,builtin`
   - a tiny HTTP listener on $PORT in a daemon thread: responds 200 to anything
 
 If the worker process crashes, the entrypoint exits non-zero so Cloud Run
@@ -42,7 +42,7 @@ def main() -> int:
 
     # Blocks until worker exits.
     result = subprocess.run(
-        [sys.executable, "manage.py", "procrastinate", "worker"],
+        [sys.executable, "manage.py", "procrastinate", "worker", "--queues=default,builtin"],
         check=False,
     )
     return result.returncode

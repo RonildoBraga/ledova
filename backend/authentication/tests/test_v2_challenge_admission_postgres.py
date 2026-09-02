@@ -1,3 +1,4 @@
+import uuid
 from contextlib import contextmanager
 from datetime import timedelta
 from queue import Empty, Queue
@@ -6,9 +7,11 @@ from time import monotonic, sleep
 from unittest import skipUnless
 from unittest.mock import patch
 
-from django.db import close_old_connections, connection, transaction
+from django.contrib.auth import get_user_model
+from django.db import close_old_connections, connection, connections, transaction
 from django.test import RequestFactory, TransactionTestCase, override_settings
 from django.utils import timezone
+from procrastinate.contrib.django.models import ProcrastinateJob
 
 from authentication.models import (
     AuthenticationChallenge,
@@ -31,6 +34,15 @@ from authentication.services.v2_challenge_admission import (
     _V2ChallengeAdmissionPlan,
     record_unknown_signup_context_ip_suppression,
 )
+from authentication.services.v2_delivery_queue import (
+    _V2DeliveryQueueError,
+    _validate_v2_delivery_queue,
+)
+from authentication.tasks import V2_DELIVERY_HOLD_QUEUE, deliver_v2_challenge
+from ledova_backend.logging_filters import V2_DELIVERY_TASK_NAME
+from ledova_backend.procrastinate_app import app as django_procrastinate_app
+
+User = get_user_model()
 
 
 @skipUnless(connection.vendor == "postgresql", "PostgreSQL locking semantics are required")
@@ -40,6 +52,7 @@ class V2ChallengeAdmissionPostgresTest(TransactionTestCase):
     error = "V2 challenge service unavailable."
 
     def setUp(self):
+        self.clear_v2_jobs()
         self.factory = RequestFactory()
         self.key_material = V2KeyMaterial(
             access_signing_key=b"a" * 32,
@@ -48,6 +61,17 @@ class V2ChallengeAdmissionPostgresTest(TransactionTestCase):
         self.access_configuration = resolve_access_config(self.key_material)
         self.old_configuration = self.configuration("rate-1", b"o" * 32)
         self.new_configuration = self.configuration("rate-2", b"n" * 32)
+
+    def tearDown(self):
+        self.clear_v2_jobs()
+        super().tearDown()
+
+    def clear_v2_jobs(self):
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM procrastinate_jobs WHERE task_name = %s",
+                [V2_DELIVERY_TASK_NAME],
+            )
 
     def configuration(self, current_rate_kid, rate_key):
         return resolve_challenge_config(
@@ -152,6 +176,55 @@ class V2ChallengeAdmissionPostgresTest(TransactionTestCase):
             status=AuthenticationChallengeDelivery.Status.SUPPRESSED,
         )
 
+    def plan_reserved(self, _locked_scope, _context):
+        return _V2ChallengeAdmissionPlan(
+            status=AuthenticationChallengeDelivery.Status.RESERVED,
+            challenge=_locked_scope,
+        )
+
+    def v2_jobs(self):
+        return ProcrastinateJob.objects.filter(task_name=V2_DELIVERY_TASK_NAME)
+
+    def create_open_challenge(self, at, purpose="signup"):
+        user = User.objects.create_user(
+            email=f"queue-owner-{uuid.uuid4()}@example.test",
+            password="synthetic-test-password",
+            is_active=True,
+        )
+        values = {
+            "user": user,
+            "purpose": purpose,
+            "transport": AuthenticationChallenge.Transport.BROWSER,
+            "status": AuthenticationChallenge.Status.OPEN,
+            "pending_context_key_id": "synthetic-proof-key-1",
+            "pending_context_digest": b"c" * 32,
+            "target_email": None,
+            "otp_failure_count": 0,
+            "created_at": at - timedelta(minutes=1),
+            "expires_at": at + timedelta(hours=1),
+            "resolved_at": None,
+        }
+        if purpose == AuthenticationChallenge.Purpose.PASSWORD_RESET:
+            values["pending_context_key_id"] = None
+            values["pending_context_digest"] = None
+        if purpose == AuthenticationChallenge.Purpose.EMAIL_CHANGE:
+            values["target_email"] = f"queue-target-{uuid.uuid4()}@example.test"
+        return AuthenticationChallenge.objects.create(**values)
+
+    def call_reserved_admission(self, at, *, challenge=None, purpose="signup", **overrides):
+        challenge = challenge or self.create_open_challenge(at, purpose)
+
+        def lock_scope(using):
+            return AuthenticationChallenge.objects.using(using).select_for_update().get(pk=challenge.pk)
+
+        return self.call_admission(
+            at,
+            purpose=purpose,
+            lock_scope=lock_scope,
+            apply_admitted=self.plan_reserved,
+            **overrides,
+        )
+
     def call_admission(
         self,
         at,
@@ -195,11 +268,15 @@ class V2ChallengeAdmissionPostgresTest(TransactionTestCase):
             self.assertNotIn(sensitive_value, rendered)
 
     def test_success_inserts_only_the_terminal_ip_rate_evidence_shape(self):
-        before = timezone.now()
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT clock_timestamp()")
+            before = cursor.fetchone()[0]
 
         result = self.call_public()
 
-        after = timezone.now()
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT clock_timestamp()")
+            after = cursor.fetchone()[0]
         self.assertIsNone(result)
         delivery = AuthenticationChallengeDelivery.objects.get()
         self.assertEqual(delivery.uuid.version, 4)
@@ -219,6 +296,382 @@ class V2ChallengeAdmissionPostgresTest(TransactionTestCase):
         self.assertGreaterEqual(delivery.reserved_at, before)
         self.assertLessEqual(delivery.reserved_at, after)
         self.assertEqual(AuthenticationChallenge.objects.count(), 0)
+        self.assertEqual(self.v2_jobs().count(), 0)
+
+    def test_reserved_delivery_and_job_commit_together_on_the_same_connection(self):
+        at = timezone.now()
+        events = []
+        wrappers = []
+
+        def record(execute, sql, params, many, context):
+            classification = self.classify_admission_sql(sql)
+            if classification in {"insert", "enqueue"}:
+                events.append(classification)
+                wrapper = context["connection"]
+                wrappers.append(
+                    (
+                        wrapper,
+                        wrapper.connection,
+                        wrapper.in_atomic_block,
+                        wrapper.get_autocommit(),
+                    )
+                )
+            return execute(sql, params, many, context)
+
+        with connection.execute_wrapper(record):
+            result = self.call_reserved_admission(at)
+
+        self.assertEqual(result, _V2ChallengeAdmissionDecision.ADMITTED)
+        self.assertEqual(events, ["insert", "enqueue"])
+        selected = connections["default"]
+        self.assertIs(wrappers[0][0], selected)
+        self.assertIs(wrappers[1][0], selected)
+        self.assertIsNotNone(wrappers[0][1])
+        self.assertIs(wrappers[0][1], wrappers[1][1])
+        self.assertEqual([item[2:] for item in wrappers], [(True, False), (True, False)])
+        delivery = AuthenticationChallengeDelivery.objects.get()
+        self.assertEqual(delivery.status, AuthenticationChallengeDelivery.Status.RESERVED)
+        self.assertIsNone(delivery.resolved_at)
+        job = self.v2_jobs().get()
+        self.assertEqual(job.task_name, V2_DELIVERY_TASK_NAME)
+        self.assertEqual(job.queue_name, V2_DELIVERY_HOLD_QUEUE)
+        self.assertEqual(job.args, {"delivery_uuid": str(delivery.uuid)})
+        self.assertEqual(job.status, "todo")
+        self.assertEqual(job.priority, 0)
+        self.assertEqual(job.attempts, 0)
+        self.assertIsNone(job.lock)
+        self.assertIsNone(job.queueing_lock)
+        self.assertIsNone(job.scheduled_at)
+        self.assertFalse(job.abort_requested)
+        self.assertIsNone(job.worker_id)
+
+    def test_enqueue_failure_before_and_after_sql_rolls_back_delivery_and_job(self):
+        at = timezone.now()
+        sensitive_value = "private-enqueue-failure-marker"
+
+        with patch(
+            "authentication.services.v2_delivery_queue.deliver_v2_challenge.defer",
+            side_effect=RuntimeError(sensitive_value),
+        ):
+            self.assert_fixed_rejection(
+                lambda: self.call_reserved_admission(at),
+                sensitive_value,
+            )
+        self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 0)
+        self.assertEqual(self.v2_jobs().count(), 0)
+
+        def fail_after_enqueue(execute, sql, params, many, context):
+            result = execute(sql, params, many, context)
+            if self.classify_admission_sql(sql) == "enqueue":
+                raise RuntimeError(sensitive_value)
+            return result
+
+        with connection.execute_wrapper(fail_after_enqueue):
+            self.assert_fixed_rejection(
+                lambda: self.call_reserved_admission(at),
+                sensitive_value,
+            )
+        self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 0)
+        self.assertEqual(self.v2_jobs().count(), 0)
+
+    def test_post_enqueue_rollback_only_state_rolls_back_delivery_and_job(self):
+        at = timezone.now()
+
+        def mark_rollback(execute, sql, params, many, context):
+            result = execute(sql, params, many, context)
+            if self.classify_admission_sql(sql) == "enqueue":
+                transaction.set_rollback(True, using="default")
+            return result
+
+        with connection.execute_wrapper(mark_rollback):
+            self.assert_fixed_rejection(
+                lambda: self.call_reserved_admission(at),
+            )
+
+        self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 0)
+        self.assertEqual(self.v2_jobs().count(), 0)
+
+    def test_failure_after_enqueue_rolls_back_challenge_mutation_delivery_and_job(self):
+        at = timezone.now()
+        challenge = self.create_open_challenge(at)
+        sensitive_value = "private-post-enqueue-scope-marker"
+
+        def lock_scope(using):
+            return AuthenticationChallenge.objects.using(using).select_for_update().get(pk=challenge.pk)
+
+        def mutate_then_reserve(locked, context):
+            AuthenticationChallenge.objects.using(context.using).filter(pk=locked.pk).update(otp_failure_count=1)
+            return self.plan_reserved(locked, context)
+
+        def fail_after_enqueue(execute, sql, params, many, context):
+            result = execute(sql, params, many, context)
+            if self.classify_admission_sql(sql) == "enqueue":
+                raise RuntimeError(sensitive_value)
+            return result
+
+        with connection.execute_wrapper(fail_after_enqueue):
+            self.assert_fixed_rejection(
+                lambda: self.call_admission(
+                    at,
+                    lock_scope=lock_scope,
+                    apply_admitted=mutate_then_reserve,
+                ),
+                sensitive_value,
+            )
+
+        challenge.refresh_from_db()
+        self.assertEqual(challenge.otp_failure_count, 0)
+        self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 0)
+        self.assertEqual(self.v2_jobs().count(), 0)
+
+    def test_suppressed_admission_is_independent_of_queue_availability(self):
+        at = timezone.now()
+        manager = deliver_v2_challenge.blueprint.job_manager
+
+        with (
+            patch.object(manager, "connector", object()),
+            patch.object(deliver_v2_challenge, "defer", side_effect=AssertionError) as defer,
+        ):
+            result = self.call_admission(at)
+
+        self.assertEqual(result, _V2ChallengeAdmissionDecision.ADMITTED)
+        self.assertEqual(
+            AuthenticationChallengeDelivery.objects.get().status,
+            AuthenticationChallengeDelivery.Status.SUPPRESSED,
+        )
+        self.assertEqual(self.v2_jobs().count(), 0)
+        defer.assert_not_called()
+
+    def test_reserved_plan_requires_a_live_matching_saved_challenge_and_destination(self):
+        at = timezone.now()
+        wrong_purpose = self.create_open_challenge(at, AuthenticationChallenge.Purpose.PASSWORD_RESET)
+        closed = self.create_open_challenge(at)
+        AuthenticationChallenge.objects.filter(pk=closed.pk).update(
+            status=AuthenticationChallenge.Status.CONSUMED,
+            resolved_at=at,
+        )
+        closed.refresh_from_db()
+        expired = self.create_open_challenge(at)
+        AuthenticationChallenge.objects.filter(pk=expired.pk).update(expires_at=at)
+        expired.refresh_from_db()
+        unsaved_user = User.objects.create_user(
+            email=f"unsaved-queue-owner-{uuid.uuid4()}@example.test",
+            password="synthetic-test-password",
+            is_active=True,
+        )
+        unsaved = AuthenticationChallenge(
+            user=unsaved_user,
+            purpose=AuthenticationChallenge.Purpose.SIGNUP,
+            transport=AuthenticationChallenge.Transport.BROWSER,
+            status=AuthenticationChallenge.Status.OPEN,
+            pending_context_key_id="synthetic-proof-key-1",
+            pending_context_digest=b"c" * 32,
+            target_email=None,
+            otp_failure_count=0,
+            created_at=at - timedelta(minutes=1),
+            expires_at=at + timedelta(hours=1),
+            resolved_at=None,
+        )
+
+        for challenge in (wrong_purpose, closed, expired, unsaved):
+            with self.subTest(challenge_state=challenge.status, saved=not challenge._state.adding):
+                self.assert_fixed_rejection(
+                    lambda challenge=challenge: self.call_admission(
+                        at,
+                        lock_scope=lambda _using: challenge,
+                        apply_admitted=self.plan_reserved,
+                    )
+                )
+                self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 0)
+                self.assertEqual(self.v2_jobs().count(), 0)
+
+        valid = self.create_open_challenge(at)
+        self.assert_fixed_rejection(
+            lambda: _admit_challenge_delivery(
+                purpose=AuthenticationChallengeDelivery.Purpose.SIGNUP,
+                destination_rates=None,
+                ip_rates=self.ip_rates(),
+                challenge_configuration=self.new_configuration,
+                using="default",
+                post_lock_clock=lambda _cursor: at,
+                lock_scope=lambda _using: valid,
+                apply_admitted=self.plan_reserved,
+            )
+        )
+        self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 0)
+        self.assertEqual(self.v2_jobs().count(), 0)
+
+    def test_reserved_plan_cannot_substitute_a_different_challenge_from_the_locked_scope(self):
+        at = timezone.now()
+        locked = self.create_open_challenge(at)
+        substitute = self.create_open_challenge(at)
+
+        def lock_scope(using):
+            return AuthenticationChallenge.objects.using(using).select_for_update().get(pk=locked.pk)
+
+        def substitute_plan(_locked_scope, _context):
+            return _V2ChallengeAdmissionPlan(
+                status=AuthenticationChallengeDelivery.Status.RESERVED,
+                challenge=substitute,
+            )
+
+        self.assert_fixed_rejection(
+            lambda: self.call_admission(
+                at,
+                lock_scope=lock_scope,
+                apply_admitted=substitute_plan,
+            )
+        )
+        self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 0)
+        self.assertEqual(self.v2_jobs().count(), 0)
+
+    def test_kernel_owns_the_challenge_row_lock_before_the_database_clock(self):
+        at = timezone.now()
+        challenge = self.create_open_challenge(at)
+        events = []
+
+        def record(execute, sql, params, many, context):
+            classification = self.classify_admission_sql(sql)
+            if classification in {"lock_scope", "clock"}:
+                events.append(classification)
+            return execute(sql, params, many, context)
+
+        def post_lock_clock(cursor):
+            cursor.execute("SELECT clock_timestamp()")
+            return cursor.fetchone()[0]
+
+        with connection.execute_wrapper(record):
+            result = self.call_admission(
+                at,
+                lock_scope=lambda _using: challenge,
+                post_lock_clock=post_lock_clock,
+                apply_admitted=self.plan_reserved,
+            )
+
+        self.assertEqual(result, _V2ChallengeAdmissionDecision.ADMITTED)
+        self.assertEqual(events, ["lock_scope", "clock"])
+        self.assertEqual(AuthenticationChallengeDelivery.objects.get().challenge_id, challenge.pk)
+        self.assertEqual(self.v2_jobs().count(), 1)
+
+    def test_reserved_plan_rechecks_the_locked_challenge_database_state(self):
+        at = timezone.now()
+        challenge = self.create_open_challenge(at)
+
+        def lock_scope(using):
+            return AuthenticationChallenge.objects.using(using).select_for_update().get(pk=challenge.pk)
+
+        def close_then_return(locked, context):
+            AuthenticationChallenge.objects.using(context.using).filter(pk=locked.pk).update(
+                status=AuthenticationChallenge.Status.CONSUMED,
+                resolved_at=context.reserved_at,
+            )
+            return self.plan_reserved(locked, context)
+
+        self.assert_fixed_rejection(
+            lambda: self.call_admission(
+                at,
+                lock_scope=lock_scope,
+                apply_admitted=close_then_return,
+            )
+        )
+        challenge.refresh_from_db()
+        self.assertEqual(challenge.status, AuthenticationChallenge.Status.OPEN)
+        self.assertIsNone(challenge.resolved_at)
+        self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 0)
+        self.assertEqual(self.v2_jobs().count(), 0)
+
+    def test_queue_binding_mismatch_rejects_before_delivery_or_enqueue_sql(self):
+        at = timezone.now()
+        events = []
+
+        def record(execute, sql, params, many, context):
+            events.append(self.classify_admission_sql(sql))
+            return execute(sql, params, many, context)
+
+        manager = deliver_v2_challenge.blueprint.job_manager
+        with (
+            patch.object(manager, "connector", object()),
+            connection.execute_wrapper(record),
+        ):
+            self.assert_fixed_rejection(lambda: self.call_reserved_admission(at))
+
+        self.assertNotIn("insert", events)
+        self.assertNotIn("enqueue", events)
+        self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 0)
+        self.assertEqual(self.v2_jobs().count(), 0)
+
+    def test_queue_validator_rejects_raw_connection_and_alias_mismatch(self):
+        selected = connections["default"]
+
+        with transaction.atomic():
+            for action in (
+                lambda: _validate_v2_delivery_queue(
+                    selected=selected,
+                    raw_connection=object(),
+                ),
+                lambda: self._validate_with_mismatched_queue_alias(selected),
+            ):
+                with self.assertRaises(_V2DeliveryQueueError) as raised:
+                    action()
+                self.assertEqual(str(raised.exception), "V2 challenge queue unavailable.")
+                self.assertIsNone(raised.exception.__cause__)
+                self.assertIsNone(raised.exception.__context__)
+
+    def _validate_with_mismatched_queue_alias(self, selected):
+        with patch.object(django_procrastinate_app.connector, "alias", "private-mismatch"):
+            _validate_v2_delivery_queue(
+                selected=selected,
+                raw_connection=selected.connection,
+            )
+
+    def test_callback_cannot_enable_query_recording_before_owned_writes(self):
+        at = timezone.now()
+        challenge = self.create_open_challenge(at)
+
+        def enable_recording(_locked_scope, _context):
+            connection.force_debug_cursor = True
+            return _V2ChallengeAdmissionPlan(
+                status=AuthenticationChallengeDelivery.Status.RESERVED,
+                challenge=challenge,
+            )
+
+        try:
+            self.assert_fixed_rejection(
+                lambda: self.call_admission(
+                    at,
+                    lock_scope=lambda _using: challenge,
+                    apply_admitted=enable_recording,
+                )
+            )
+        finally:
+            connection.force_debug_cursor = False
+
+        self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 0)
+        self.assertEqual(self.v2_jobs().count(), 0)
+
+    def test_delivery_insert_cannot_enable_query_recording_before_enqueue(self):
+        at = timezone.now()
+        events = []
+
+        def enable_after_insert(execute, sql, params, many, context):
+            result = execute(sql, params, many, context)
+            classification = self.classify_admission_sql(sql)
+            events.append(classification)
+            if classification == "insert":
+                connection.force_debug_cursor = True
+            return result
+
+        try:
+            with connection.execute_wrapper(enable_after_insert):
+                self.assert_fixed_rejection(lambda: self.call_reserved_admission(at))
+            self.assertEqual([query["sql"] for query in connection.queries], ["ROLLBACK"])
+        finally:
+            connection.force_debug_cursor = False
+            connection.queries_log.clear()
+
+        self.assertNotIn("enqueue", events)
+        self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 0)
+        self.assertEqual(self.v2_jobs().count(), 0)
 
     def test_twentieth_is_inserted_and_twenty_first_is_refused_without_a_row(self):
         self.create_matching_rows(19, timezone.now() - timedelta(minutes=1))
@@ -690,6 +1143,26 @@ class V2ChallengeAdmissionPostgresTest(TransactionTestCase):
 
         self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 0)
 
+    def test_reserved_atomic_exit_failure_rolls_back_delivery_and_job(self):
+        at = timezone.now()
+        sensitive_value = "private-reserved-atomic-exit-marker"
+        real_atomic = transaction.atomic
+
+        @contextmanager
+        def failing_atomic(*args, **kwargs):
+            with real_atomic(*args, **kwargs):
+                yield
+                raise RuntimeError(sensitive_value)
+
+        with patch("authentication.services.v2_challenge_admission.transaction.atomic", new=failing_atomic):
+            self.assert_fixed_rejection(
+                lambda: self.call_reserved_admission(at),
+                sensitive_value,
+            )
+
+        self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 0)
+        self.assertEqual(self.v2_jobs().count(), 0)
+
     def test_post_insert_rollback_only_state_is_fixed_and_not_admitted(self):
         at = timezone.now()
 
@@ -723,6 +1196,8 @@ class V2ChallengeAdmissionPostgresTest(TransactionTestCase):
                 return "ip_count"
         if normalized.startswith('INSERT INTO "AUTHENTICATION_CHALLENGE_DELIVERY"'):
             return "insert"
+        if "PROCRASTINATE_DEFER_JOBS_V1" in normalized:
+            return "enqueue"
         return "other"
 
     def test_kernel_sql_order_uses_all_locks_then_scope_clock_counts_and_apply(self):
@@ -1049,7 +1524,17 @@ class V2ChallengeAdmissionPostgresTest(TransactionTestCase):
 
         return results, marker
 
-    def admission_worker(self, label, destination_rates, ip_rates, barrier, pids, outcomes, applied):
+    def admission_worker(
+        self,
+        label,
+        destination_rates,
+        ip_rates,
+        challenge_id,
+        barrier,
+        pids,
+        outcomes,
+        applied,
+    ):
         close_old_connections()
         try:
             with connection.cursor() as cursor:
@@ -1065,7 +1550,14 @@ class V2ChallengeAdmissionPostgresTest(TransactionTestCase):
 
             def apply_admitted(locked_scope, context):
                 applied.put(label)
-                return self.plan_admitted(locked_scope, context)
+                if challenge_id is None:
+                    return self.plan_admitted(locked_scope, context)
+                return self.plan_reserved(locked_scope, context)
+
+            def lock_scope(using):
+                if challenge_id is None:
+                    return using
+                return AuthenticationChallenge.objects.using(using).select_for_update().get(pk=challenge_id)
 
             outcome = _admit_challenge_delivery(
                 purpose="signup",
@@ -1074,7 +1566,7 @@ class V2ChallengeAdmissionPostgresTest(TransactionTestCase):
                 challenge_configuration=self.new_configuration,
                 using="default",
                 post_lock_clock=post_lock_clock,
-                lock_scope=lambda using: using,
+                lock_scope=lock_scope,
                 apply_admitted=apply_admitted,
             )
             outcomes.put((label, outcome))
@@ -1083,18 +1575,28 @@ class V2ChallengeAdmissionPostgresTest(TransactionTestCase):
         finally:
             close_old_connections()
 
-    def run_admission_workers_behind_locks(self, cases, shared_aliases):
+    def run_admission_workers_behind_locks(self, cases, shared_aliases, challenges=None):
         barrier = Barrier(len(cases) + 1)
         pids = Queue()
         outcomes = Queue()
         applied = Queue()
+        challenge_ids = [None] * len(cases) if challenges is None else [challenge.pk for challenge in challenges]
         threads = [
             Thread(
                 target=self.admission_worker,
                 name=f"v2-kernel-admission-{index}",
-                args=(str(index), destination_rates, ip_rates, barrier, pids, outcomes, applied),
+                args=(
+                    str(index),
+                    destination_rates,
+                    ip_rates,
+                    challenge_id,
+                    barrier,
+                    pids,
+                    outcomes,
+                    applied,
+                ),
             )
-            for index, (destination_rates, ip_rates) in enumerate(cases)
+            for index, ((destination_rates, ip_rates), challenge_id) in enumerate(zip(cases, challenge_ids))
         ]
         lock_ids = _advisory_lock_ids(shared_aliases)
         results = None
@@ -1149,6 +1651,38 @@ class V2ChallengeAdmissionPostgresTest(TransactionTestCase):
         self.assertEqual(len(applied), 1)
         self.assertEqual(results[applied[0]], _V2ChallengeAdmissionDecision.ADMITTED)
         self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 5)
+
+    def test_concurrent_reserved_final_slot_commits_exactly_one_matching_job(self):
+        at = timezone.now()
+        destination_rates = self.destination_rates()
+        unrelated_ip = self.ip_rates_for(b"\xcb\x00\x71\x63").current
+        for _ in range(4):
+            self.create_delivery_row(
+                rate_key_id=destination_rates.current.key_id,
+                destination_rate_digest=destination_rates.current.digest,
+                ip_rate_digest=unrelated_ip.digest,
+                reserved_at=at - timedelta(minutes=1),
+            )
+        cases = (
+            (destination_rates, self.ip_rates_for(b"\xcb\x00\x71\x2b")),
+            (destination_rates, self.ip_rates_for(b"\xcb\x00\x71\x2c")),
+        )
+        challenges = (self.create_open_challenge(at), self.create_open_challenge(at))
+
+        results, applied = self.run_admission_workers_behind_locks(
+            cases,
+            destination_rates.aliases,
+            challenges=challenges,
+        )
+
+        self.assertEqual(sorted(result.value for result in results.values()), ["admitted", "refused"])
+        self.assertEqual(len(applied), 1)
+        delivery = AuthenticationChallengeDelivery.objects.get(status=AuthenticationChallengeDelivery.Status.RESERVED)
+        job = self.v2_jobs().get()
+        self.assertEqual(job.args, {"delivery_uuid": str(delivery.uuid)})
+        self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 5)
+        self.assertEqual(self.v2_jobs().count(), 1)
+        self.assertEqual(delivery.challenge_id, challenges[int(applied[0])].pk)
 
     def test_concurrent_ip_final_slot_admits_exactly_one_writer(self):
         at = timezone.now() - timedelta(minutes=1)
