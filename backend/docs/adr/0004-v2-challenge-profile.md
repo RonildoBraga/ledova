@@ -28,16 +28,23 @@ printable `0x20..0x7e` before normalization. Its destination key removes only
 U+0020 from both ends with Python `str.strip(" ")`, lowercases the full address
 with `str.lower()`, then validates it as an email. It performs no Unicode
 normalization, case folding, IDNA conversion, or provider-specific dot, alias,
-or plus-tag folding. New signup and successful email-change rows store this
-key. A unique legacy account is contacted at its exact stored address, while
-its v2 lookup and rate identity use the destination key.
+or plus-tag folding. Django 5.2 `validate_email` semantics define syntax
+acceptance; changing that dependency requires compatibility review of the
+accepted vectors. New signup and successful email-change rows store this key.
+A unique legacy account is contacted at its exact stored address, while its v2
+lookup and rate identity use the destination key.
 
-Before v2 endpoint cutover, a migration preflight must reject non-ASCII,
-non-canonical, and case-insensitively colliding stored addresses without
-printing any address. After that preflight, every user writer must use the v2
-normalizer and the database must enforce both
-printable ASCII plus `email = Lower(Trim("email"))`, and unique
-`Lower(Trim("email"))` expressions. `Trim` means U+0020-only trimming here.
+Before v2 endpoint cutover, a migration preflight must reject every stored
+address that the frozen normalizer would not accept unchanged, including
+non-ASCII, invalid-syntax, non-canonical, and case-insensitively colliding
+addresses, without printing any address. Every deployed user writer must use
+the v2 normalizer before that migration begins. The atomic migration first
+acquires its strongest table lock, then runs the non-disclosing preflight and
+installs database checks for printable ASCII plus
+`email = Lower(Trim("email"))` and unique `Lower(Trim("email"))` expressions
+before releasing the lock. `Trim` means U+0020-only trimming here. PostgreSQL
+evaluates the trimmed value under C collation so its ASCII lowercase behavior
+matches Python.
 Until all three land, an existing-address operation proceeds only if a bounded
 query on that exact `Lower(Trim("email")) = destination_key` expression returns
 one row; zero or multiple rows take the same non-enumerating path. The
