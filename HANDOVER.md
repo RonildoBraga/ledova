@@ -2,6 +2,15 @@
 
 Last verified: 2026-09-02
 
+## Project context
+
+Ledova is the sanitized public continuation of the private Blueberry codebase.
+Preserve existing architecture and behaviour where practical; this transition
+is not a clean-sheet rewrite. Never transfer secrets, production configuration,
+private operations, private evidence, or private data into this repository.
+Address publication blockers here and leave broader production hardening in the
+tracked backlog unless a task explicitly changes that scope.
+
 ## Current checkpoint
 
 The tenant-isolation audit is complete through PR #37 and
@@ -18,9 +27,11 @@ source identity. PRs #58–#65 completed the schema correction, logging and quer
 privacy guards, typed SendGrid adapter, PostgreSQL admission kernel, and atomic
 reservation/job coupling.
 
-Base `main` is `963c68656551a0d0dbbab463479f2efa119a31f6`. Independent exact-diff
-reviews passed for the queue-coupling batch, and
-[post-merge CI](https://github.com/RonildoBraga/ledova/actions/runs/33618762165)
+The last implementation checkpoint is
+`963c68656551a0d0dbbab463479f2efa119a31f6`; subsequent handover-only changes
+introduced no runtime code. Independent exact-diff review passed for the
+queue-coupling batch, and the latest
+[post-merge CI](https://github.com/RonildoBraga/ledova/actions/runs/33620614514)
 passed every JavaScript, Django, SQLite, and PostgreSQL stage. The v2 delivery
 task remains fixed-fail on an excluded hold queue: no provider worker, v2
 endpoint, CSRF boundary, client cutover, or legacy retirement is active.
