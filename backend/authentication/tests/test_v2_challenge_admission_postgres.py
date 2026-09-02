@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from datetime import timedelta
 from queue import Empty, Queue
 from threading import Barrier, Event, Thread
@@ -15,6 +16,7 @@ from authentication.models import (
 )
 from authentication.security import (
     V2KeyMaterial,
+    destination_rate_digests,
     ip_rate_digests,
     resolve_access_config,
     resolve_challenge_config,
@@ -22,8 +24,11 @@ from authentication.security import (
 )
 from authentication.services.v2_challenge_admission import (
     V2ChallengeAdmissionError,
+    _admit_challenge_delivery,
     _advisory_lock_ids,
     _record_unknown_context_ip_suppression,
+    _V2ChallengeAdmissionDecision,
+    _V2ChallengeAdmissionPlan,
     record_unknown_signup_context_ip_suppression,
 )
 
@@ -55,10 +60,19 @@ class V2ChallengeAdmissionPostgresTest(TransactionTestCase):
         )
 
     def ip_rates(self, configuration=None):
+        return self.ip_rates_for(b"\xcb\x00\x71\x2a", configuration)
+
+    def ip_rates_for(self, packed_network, configuration=None):
         return ip_rate_digests(
             4,
             32,
-            b"\xcb\x00\x71\x2a",
+            packed_network,
+            configuration=configuration or self.new_configuration,
+        )
+
+    def destination_rates(self, destination="owner@example.test", configuration=None):
+        return destination_rate_digests(
+            destination,
             configuration=configuration or self.new_configuration,
         )
 
@@ -96,13 +110,33 @@ class V2ChallengeAdmissionPostgresTest(TransactionTestCase):
     ):
         if purpose == "password_reset" and destination_rate_digest is None:
             destination_rate_digest = b"d" * 32
-        return AuthenticationChallengeDelivery.objects.create(
-            challenge=None,
-            purpose=purpose,
-            status=status,
+        return self.create_delivery_row(
             rate_key_id=alias.key_id,
             destination_rate_digest=destination_rate_digest,
             ip_rate_digest=alias.digest,
+            reserved_at=reserved_at,
+            purpose=purpose,
+            status=status,
+        )
+
+    def create_delivery_row(
+        self,
+        *,
+        rate_key_id,
+        destination_rate_digest,
+        ip_rate_digest,
+        reserved_at,
+        purpose="signup",
+        status="suppressed",
+        using="default",
+    ):
+        return AuthenticationChallengeDelivery.objects.using(using).create(
+            challenge=None,
+            purpose=purpose,
+            status=status,
+            rate_key_id=rate_key_id,
+            destination_rate_digest=destination_rate_digest,
+            ip_rate_digest=ip_rate_digest,
             proof_key_id=None,
             proof_digest=None,
             reserved_at=reserved_at,
@@ -111,6 +145,35 @@ class V2ChallengeAdmissionPostgresTest(TransactionTestCase):
             accepted_at=None,
             proof_expires_at=None,
             resolved_at=reserved_at,
+        )
+
+    def plan_admitted(self, _locked_scope, _context):
+        return _V2ChallengeAdmissionPlan(
+            status=AuthenticationChallengeDelivery.Status.SUPPRESSED,
+        )
+
+    def call_admission(
+        self,
+        at,
+        *,
+        purpose="signup",
+        destination_rates=None,
+        ip_rates=None,
+        configuration=None,
+        post_lock_clock=None,
+        lock_scope=None,
+        apply_admitted=None,
+    ):
+        configuration = configuration or self.new_configuration
+        return _admit_challenge_delivery(
+            purpose=purpose,
+            destination_rates=destination_rates or self.destination_rates(configuration=configuration),
+            ip_rates=ip_rates or self.ip_rates(configuration),
+            challenge_configuration=configuration,
+            using="default",
+            post_lock_clock=post_lock_clock or (lambda _cursor: at),
+            lock_scope=lock_scope or (lambda using: using),
+            apply_admitted=apply_admitted or self.plan_admitted,
         )
 
     def create_matching_rows(self, count, reserved_at, configuration=None):
@@ -214,6 +277,648 @@ class V2ChallengeAdmissionPostgresTest(TransactionTestCase):
 
         self.call_private(at + timedelta(seconds=1))
         self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 21)
+
+    def test_destination_fifth_slot_is_admitted_and_sixth_is_refused(self):
+        at = timezone.now()
+        destination_rates = self.destination_rates()
+        unrelated_ip = self.ip_rates_for(b"\xcb\x00\x71\x63").current
+        for _ in range(4):
+            self.create_delivery_row(
+                rate_key_id=destination_rates.current.key_id,
+                destination_rate_digest=destination_rates.current.digest,
+                ip_rate_digest=unrelated_ip.digest,
+                reserved_at=at - timedelta(minutes=1),
+            )
+
+        self.assertEqual(
+            self.call_admission(at, destination_rates=destination_rates),
+            _V2ChallengeAdmissionDecision.ADMITTED,
+        )
+        self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 5)
+
+        self.assertEqual(
+            self.call_admission(at + timedelta(seconds=1), destination_rates=destination_rates),
+            _V2ChallengeAdmissionDecision.REFUSED,
+        )
+        self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 5)
+
+    def test_password_reset_third_slot_is_admitted_and_fourth_is_refused(self):
+        at = timezone.now()
+        destination_rates = self.destination_rates()
+        unrelated_ip = self.ip_rates_for(b"\xcb\x00\x71\x63").current
+        for _ in range(2):
+            self.create_delivery_row(
+                rate_key_id=destination_rates.current.key_id,
+                destination_rate_digest=destination_rates.current.digest,
+                ip_rate_digest=unrelated_ip.digest,
+                reserved_at=at - timedelta(minutes=1),
+                purpose="password_reset",
+            )
+
+        self.assertEqual(
+            self.call_admission(
+                at,
+                purpose="password_reset",
+                destination_rates=destination_rates,
+            ),
+            _V2ChallengeAdmissionDecision.ADMITTED,
+        )
+        self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 3)
+
+        self.assertEqual(
+            self.call_admission(
+                at + timedelta(seconds=1),
+                purpose="password_reset",
+                destination_rates=destination_rates,
+            ),
+            _V2ChallengeAdmissionDecision.REFUSED,
+        )
+        self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 3)
+
+    def test_ip_twentieth_slot_is_admitted_and_twenty_first_is_refused(self):
+        at = timezone.now()
+        ip_rates = self.ip_rates()
+        unrelated_destination = self.destination_rates("unrelated@example.test").current
+        for _ in range(19):
+            self.create_delivery_row(
+                rate_key_id=ip_rates.current.key_id,
+                destination_rate_digest=unrelated_destination.digest,
+                ip_rate_digest=ip_rates.current.digest,
+                reserved_at=at - timedelta(minutes=1),
+            )
+
+        self.assertEqual(
+            self.call_admission(at, ip_rates=ip_rates),
+            _V2ChallengeAdmissionDecision.ADMITTED,
+        )
+        self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 20)
+
+        self.assertEqual(
+            self.call_admission(at + timedelta(seconds=1), ip_rates=ip_rates),
+            _V2ChallengeAdmissionDecision.REFUSED,
+        )
+        self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 20)
+
+    def test_destination_window_counts_future_statuses_and_all_purposes(self):
+        at = timezone.now()
+        destination_rates = self.destination_rates()
+        unrelated_ip = self.ip_rates_for(b"\xcb\x00\x71\x63").current
+        rows = (
+            ("signup", "suppressed", at - timedelta(minutes=1)),
+            ("email_change", "abandoned", at - timedelta(minutes=2)),
+            ("password_reset", "invalidated", at - timedelta(minutes=3)),
+            ("email_change", "superseded", at + timedelta(minutes=1)),
+            ("signup", "expired", at - timedelta(seconds=3600)),
+        )
+        for purpose, status, reserved_at in rows:
+            self.create_delivery_row(
+                rate_key_id=destination_rates.current.key_id,
+                destination_rate_digest=destination_rates.current.digest,
+                ip_rate_digest=unrelated_ip.digest,
+                reserved_at=reserved_at,
+                purpose=purpose,
+                status=status,
+            )
+
+        self.assertEqual(
+            self.call_admission(at, destination_rates=destination_rates),
+            _V2ChallengeAdmissionDecision.ADMITTED,
+        )
+        self.assertEqual(
+            self.call_admission(at + timedelta(seconds=1), destination_rates=destination_rates),
+            _V2ChallengeAdmissionDecision.REFUSED,
+        )
+        self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 6)
+
+    def test_destination_window_has_no_upper_bound_and_excludes_exact_lower_bound(self):
+        at = timezone.now()
+        destination_rates = self.destination_rates()
+        unrelated_ip = self.ip_rates_for(b"\xcb\x00\x71\x63").current
+        future_shapes = (
+            ("signup", "abandoned"),
+            ("email_change", "superseded"),
+            ("password_reset", "invalidated"),
+            ("signup", "expired"),
+            ("email_change", "suppressed"),
+        )
+        for purpose, status in future_shapes:
+            self.create_delivery_row(
+                rate_key_id=destination_rates.current.key_id,
+                destination_rate_digest=destination_rates.current.digest,
+                ip_rate_digest=unrelated_ip.digest,
+                reserved_at=at + timedelta(minutes=1),
+                purpose=purpose,
+                status=status,
+            )
+
+        self.assertEqual(
+            self.call_admission(at, destination_rates=destination_rates),
+            _V2ChallengeAdmissionDecision.REFUSED,
+        )
+        self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 5)
+
+        AuthenticationChallengeDelivery.objects.all().delete()
+        for _ in range(4):
+            self.create_delivery_row(
+                rate_key_id=destination_rates.current.key_id,
+                destination_rate_digest=destination_rates.current.digest,
+                ip_rate_digest=unrelated_ip.digest,
+                reserved_at=at - timedelta(minutes=1),
+            )
+        self.create_delivery_row(
+            rate_key_id=destination_rates.current.key_id,
+            destination_rate_digest=destination_rates.current.digest,
+            ip_rate_digest=unrelated_ip.digest,
+            reserved_at=at - timedelta(seconds=3600),
+            status="expired",
+        )
+
+        self.assertEqual(
+            self.call_admission(at, destination_rates=destination_rates),
+            _V2ChallengeAdmissionDecision.ADMITTED,
+        )
+        self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 6)
+
+    def test_reset_window_has_no_upper_bound_and_excludes_exact_lower_bound(self):
+        at = timezone.now()
+        destination_rates = self.destination_rates()
+        unrelated_ip = self.ip_rates_for(b"\xcb\x00\x71\x63").current
+        for status in ("abandoned", "expired", "invalidated"):
+            self.create_delivery_row(
+                rate_key_id=destination_rates.current.key_id,
+                destination_rate_digest=destination_rates.current.digest,
+                ip_rate_digest=unrelated_ip.digest,
+                reserved_at=at + timedelta(minutes=1),
+                purpose="password_reset",
+                status=status,
+            )
+
+        self.assertEqual(
+            self.call_admission(
+                at,
+                purpose="password_reset",
+                destination_rates=destination_rates,
+            ),
+            _V2ChallengeAdmissionDecision.REFUSED,
+        )
+        self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 3)
+
+        AuthenticationChallengeDelivery.objects.all().delete()
+        for status in ("abandoned", "invalidated"):
+            self.create_delivery_row(
+                rate_key_id=destination_rates.current.key_id,
+                destination_rate_digest=destination_rates.current.digest,
+                ip_rate_digest=unrelated_ip.digest,
+                reserved_at=at - timedelta(minutes=1),
+                purpose="password_reset",
+                status=status,
+            )
+        self.create_delivery_row(
+            rate_key_id=destination_rates.current.key_id,
+            destination_rate_digest=destination_rates.current.digest,
+            ip_rate_digest=unrelated_ip.digest,
+            reserved_at=at - timedelta(seconds=3600),
+            purpose="password_reset",
+            status="expired",
+        )
+
+        self.assertEqual(
+            self.call_admission(
+                at,
+                purpose="password_reset",
+                destination_rates=destination_rates,
+            ),
+            _V2ChallengeAdmissionDecision.ADMITTED,
+        )
+        self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 4)
+
+    def test_ip_window_counts_future_statuses_and_all_purposes(self):
+        at = timezone.now()
+        ip_rates = self.ip_rates()
+        unrelated_destination = self.destination_rates("unrelated@example.test").current
+        shapes = (
+            ("signup", "suppressed"),
+            ("signup", "abandoned"),
+            ("signup", "expired"),
+            ("signup", "invalidated"),
+            ("email_change", "suppressed"),
+            ("email_change", "abandoned"),
+            ("email_change", "superseded"),
+            ("email_change", "expired"),
+            ("email_change", "invalidated"),
+            ("password_reset", "suppressed"),
+            ("password_reset", "abandoned"),
+            ("password_reset", "expired"),
+            ("password_reset", "invalidated"),
+        )
+        for index in range(18):
+            purpose, status = shapes[index % len(shapes)]
+            self.create_delivery_row(
+                rate_key_id=ip_rates.current.key_id,
+                destination_rate_digest=unrelated_destination.digest,
+                ip_rate_digest=ip_rates.current.digest,
+                reserved_at=at - timedelta(minutes=1),
+                purpose=purpose,
+                status=status,
+            )
+        self.create_delivery_row(
+            rate_key_id=ip_rates.current.key_id,
+            destination_rate_digest=unrelated_destination.digest,
+            ip_rate_digest=ip_rates.current.digest,
+            reserved_at=at + timedelta(minutes=1),
+            purpose="email_change",
+            status="superseded",
+        )
+        self.create_delivery_row(
+            rate_key_id=ip_rates.current.key_id,
+            destination_rate_digest=unrelated_destination.digest,
+            ip_rate_digest=ip_rates.current.digest,
+            reserved_at=at - timedelta(seconds=3600),
+            purpose="password_reset",
+            status="invalidated",
+        )
+
+        self.assertEqual(
+            self.call_admission(at, ip_rates=ip_rates),
+            _V2ChallengeAdmissionDecision.ADMITTED,
+        )
+        self.assertEqual(
+            self.call_admission(at + timedelta(seconds=1), ip_rates=ip_rates),
+            _V2ChallengeAdmissionDecision.REFUSED,
+        )
+        self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 21)
+
+    def test_rotation_uses_exact_digest_pairs_and_current_writer_context(self):
+        at = timezone.now()
+        destination_rates = self.destination_rates()
+        ip_rates = self.ip_rates()
+        destination_old, destination_current = destination_rates.aliases
+        ip_old, ip_current = ip_rates.aliases
+        unrelated_destination_old = self.destination_rates("unrelated@example.test").aliases[0]
+        unrelated_ip_old = self.ip_rates_for(b"\xcb\x00\x71\x63").aliases[0]
+        for _ in range(4):
+            self.create_delivery_row(
+                rate_key_id=destination_old.key_id,
+                destination_rate_digest=destination_old.digest,
+                ip_rate_digest=unrelated_ip_old.digest,
+                reserved_at=at - timedelta(minutes=1),
+            )
+        for _ in range(19):
+            self.create_delivery_row(
+                rate_key_id=ip_old.key_id,
+                destination_rate_digest=unrelated_destination_old.digest,
+                ip_rate_digest=ip_old.digest,
+                reserved_at=at - timedelta(minutes=1),
+            )
+        self.create_delivery_row(
+            rate_key_id=destination_old.key_id,
+            destination_rate_digest=destination_current.digest,
+            ip_rate_digest=unrelated_ip_old.digest,
+            reserved_at=at - timedelta(minutes=1),
+        )
+        self.create_delivery_row(
+            rate_key_id=ip_old.key_id,
+            destination_rate_digest=unrelated_destination_old.digest,
+            ip_rate_digest=ip_current.digest,
+            reserved_at=at - timedelta(minutes=1),
+        )
+        scope = object()
+        captured = []
+
+        def apply_admitted(locked_scope, context):
+            captured.append((locked_scope, context))
+            return self.plan_admitted(locked_scope, context)
+
+        self.assertEqual(
+            self.call_admission(
+                at,
+                destination_rates=destination_rates,
+                ip_rates=ip_rates,
+                lock_scope=lambda _using: scope,
+                apply_admitted=apply_admitted,
+            ),
+            _V2ChallengeAdmissionDecision.ADMITTED,
+        )
+        self.assertEqual(len(captured), 1)
+        locked_scope, context = captured[0]
+        self.assertIs(locked_scope, scope)
+        self.assertEqual(context.rate_key_id, destination_current.key_id)
+        self.assertEqual(context.destination_rate_digest, destination_current.digest)
+        self.assertEqual(context.ip_rate_digest, ip_current.digest)
+        inserted = AuthenticationChallengeDelivery.objects.get(reserved_at=at)
+        self.assertEqual(inserted.uuid, context.delivery_id)
+        self.assertEqual(inserted.rate_key_id, destination_current.key_id)
+        self.assertEqual(bytes(inserted.destination_rate_digest), destination_current.digest)
+        self.assertEqual(bytes(inserted.ip_rate_digest), ip_current.digest)
+
+        self.assertEqual(
+            self.call_admission(
+                at + timedelta(seconds=1),
+                destination_rates=destination_rates,
+                ip_rates=ip_rates,
+            ),
+            _V2ChallengeAdmissionDecision.REFUSED,
+        )
+        self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 26)
+
+    def test_callback_and_insert_failures_roll_back_with_fixed_errors(self):
+        at = timezone.now()
+        sensitive_value = "private-callback-failure-marker"
+
+        def insert_then_fail(locked_scope, context):
+            self.create_delivery_row(
+                rate_key_id=context.rate_key_id,
+                destination_rate_digest=context.destination_rate_digest,
+                ip_rate_digest=context.ip_rate_digest,
+                reserved_at=context.reserved_at,
+                purpose=context.purpose,
+                using=context.using,
+            )
+            raise RuntimeError(sensitive_value)
+
+        self.assert_fixed_rejection(
+            lambda: self.call_admission(at, apply_admitted=insert_then_fail),
+            sensitive_value,
+        )
+        self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 0)
+
+        def fail_insert(_locked_scope, context):
+            self.create_delivery_row(
+                rate_key_id=context.rate_key_id,
+                destination_rate_digest=context.destination_rate_digest,
+                ip_rate_digest=b"i" * 31,
+                reserved_at=context.reserved_at,
+                purpose=context.purpose,
+                using=context.using,
+            )
+
+        self.assert_fixed_rejection(lambda: self.call_admission(at, apply_admitted=fail_insert))
+        self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 0)
+
+    def test_callback_requires_a_valid_plan_and_cannot_cancel_the_transaction(self):
+        at = timezone.now()
+
+        def rollback_only(_locked_scope, context):
+            transaction.set_rollback(True, using=context.using)
+            return self.plan_admitted(_locked_scope, context)
+
+        callbacks = (
+            lambda _scope, _context: None,
+            lambda _scope, _context: object(),
+            lambda _scope, _context: _V2ChallengeAdmissionPlan(status="active"),
+            lambda _scope, _context: _V2ChallengeAdmissionPlan(status="reserved"),
+            rollback_only,
+        )
+        for callback in callbacks:
+            with self.subTest(callback=callback):
+                self.assert_fixed_rejection(lambda callback=callback: self.call_admission(at, apply_admitted=callback))
+                self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 0)
+
+    def test_atomic_exit_failure_rolls_back_and_is_fixed_unchained(self):
+        at = timezone.now()
+        sensitive_value = "private-atomic-exit-failure-marker"
+        real_atomic = transaction.atomic
+
+        @contextmanager
+        def failing_atomic(*args, **kwargs):
+            with real_atomic(*args, **kwargs):
+                yield
+                raise RuntimeError(sensitive_value)
+
+        with patch("authentication.services.v2_challenge_admission.transaction.atomic", new=failing_atomic):
+            self.assert_fixed_rejection(lambda: self.call_admission(at), sensitive_value)
+
+        self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 0)
+
+    def test_post_insert_rollback_only_state_is_fixed_and_not_admitted(self):
+        at = timezone.now()
+
+        def mark_rollback(execute, sql, params, many, context):
+            result = execute(sql, params, many, context)
+            if self.classify_admission_sql(sql) == "insert":
+                transaction.set_rollback(True, using="default")
+            return result
+
+        with connection.execute_wrapper(mark_rollback):
+            self.assert_fixed_rejection(lambda: self.call_admission(at))
+
+        self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 0)
+
+    def classify_admission_sql(self, sql):
+        normalized = " ".join(sql.split()).upper()
+        if normalized.startswith("SET TRANSACTION ISOLATION LEVEL READ COMMITTED, NOT DEFERRABLE"):
+            return "isolation"
+        if "PG_ADVISORY_XACT_LOCK" in normalized:
+            return "lock"
+        if "CLOCK_TIMESTAMP" in normalized:
+            return "clock"
+        if normalized.startswith("SELECT") and "FOR UPDATE" in normalized:
+            return "lock_scope"
+        if normalized.startswith("SELECT COUNT("):
+            if '"DESTINATION_RATE_DIGEST"' in normalized:
+                if '"PURPOSE"' in normalized:
+                    return "reset_count"
+                return "destination_count"
+            if '"IP_RATE_DIGEST"' in normalized:
+                return "ip_count"
+        if normalized.startswith('INSERT INTO "AUTHENTICATION_CHALLENGE_DELIVERY"'):
+            return "insert"
+        return "other"
+
+    def test_kernel_sql_order_uses_all_locks_then_scope_clock_counts_and_apply(self):
+        events = []
+        lock_parameters = []
+        count_sql = {}
+        destination_rates = self.destination_rates()
+        ip_rates = self.ip_rates()
+        scope_row = self.create_delivery_row(
+            rate_key_id=destination_rates.current.key_id,
+            destination_rate_digest=self.destination_rates("scope@example.test").current.digest,
+            ip_rate_digest=self.ip_rates_for(b"\xcb\x00\x71\x63").current.digest,
+            reserved_at=timezone.now() - timedelta(hours=2),
+        )
+
+        def record(execute, sql, params, many, context):
+            classification = self.classify_admission_sql(sql)
+            if classification != "other":
+                events.append(classification)
+            if classification == "lock":
+                lock_parameters.append(params[0])
+            if classification.endswith("_count"):
+                count_sql[classification] = " ".join(sql.split()).upper()
+            return execute(sql, params, many, context)
+
+        def lock_scope(using):
+            return AuthenticationChallengeDelivery.objects.using(using).select_for_update().get(pk=scope_row.pk)
+
+        def post_lock_clock(cursor):
+            cursor.execute("SELECT clock_timestamp()")
+            return cursor.fetchone()[0]
+
+        def apply_admitted(locked_scope, context):
+            events.append("apply")
+            return self.plan_admitted(locked_scope, context)
+
+        with connection.execute_wrapper(record):
+            result = self.call_admission(
+                timezone.now(),
+                purpose="password_reset",
+                destination_rates=destination_rates,
+                ip_rates=ip_rates,
+                post_lock_clock=post_lock_clock,
+                lock_scope=lock_scope,
+                apply_admitted=apply_admitted,
+            )
+
+        expected_locks = _advisory_lock_ids(destination_rates.aliases + ip_rates.aliases)
+        self.assertEqual(result, _V2ChallengeAdmissionDecision.ADMITTED)
+        self.assertEqual(lock_parameters, list(expected_locks))
+        self.assertEqual(
+            events,
+            [
+                "isolation",
+                *("lock" for _ in expected_locks),
+                "lock_scope",
+                "clock",
+                "destination_count",
+                "reset_count",
+                "ip_count",
+                "apply",
+                "insert",
+            ],
+        )
+        self.assertNotIn('"STATUS"', count_sql["destination_count"])
+        self.assertNotIn('"PURPOSE"', count_sql["destination_count"])
+        self.assertNotIn('"STATUS"', count_sql["reset_count"])
+        self.assertIn('"PURPOSE"', count_sql["reset_count"])
+        self.assertNotIn('"STATUS"', count_sql["ip_count"])
+        self.assertNotIn('"PURPOSE"', count_sql["ip_count"])
+
+    def test_non_reset_admission_omits_the_reset_specific_count(self):
+        counts = []
+
+        def record(execute, sql, params, many, context):
+            classification = self.classify_admission_sql(sql)
+            if classification.endswith("_count"):
+                counts.append(classification)
+            return execute(sql, params, many, context)
+
+        with connection.execute_wrapper(record):
+            result = self.call_admission(timezone.now())
+
+        self.assertEqual(result, _V2ChallengeAdmissionDecision.ADMITTED)
+        self.assertEqual(counts, ["destination_count", "ip_count"])
+
+    def test_scope_and_each_count_failure_are_fixed_unchained_and_write_nothing(self):
+        at = timezone.now()
+        sensitive_value = "private-kernel-stage-failure-marker"
+
+        def fail_scope(_using):
+            raise RuntimeError(sensitive_value)
+
+        self.assert_fixed_rejection(
+            lambda: self.call_admission(at, lock_scope=fail_scope),
+            sensitive_value,
+        )
+        self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 0)
+
+        for target in ("destination_count", "reset_count", "ip_count"):
+            with self.subTest(target=target):
+
+                def fail_target(execute, sql, params, many, context):
+                    if self.classify_admission_sql(sql) == target:
+                        raise RuntimeError(sensitive_value)
+                    return execute(sql, params, many, context)
+
+                with connection.execute_wrapper(fail_target):
+                    self.assert_fixed_rejection(
+                        lambda: self.call_admission(at, purpose="password_reset"),
+                        sensitive_value,
+                    )
+                self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 0)
+
+    def test_refusal_executes_every_count_before_returning_without_apply_or_write(self):
+        at = timezone.now()
+        destination_rates = self.destination_rates()
+        ip_rates = self.ip_rates()
+        unrelated_destination = self.destination_rates("unrelated@example.test").current
+        for index in range(5):
+            self.create_delivery_row(
+                rate_key_id=destination_rates.current.key_id,
+                destination_rate_digest=destination_rates.current.digest,
+                ip_rate_digest=ip_rates.current.digest,
+                reserved_at=at - timedelta(minutes=1),
+                purpose="password_reset" if index < 3 else "signup",
+            )
+        for _ in range(15):
+            self.create_delivery_row(
+                rate_key_id=ip_rates.current.key_id,
+                destination_rate_digest=unrelated_destination.digest,
+                ip_rate_digest=ip_rates.current.digest,
+                reserved_at=at - timedelta(minutes=1),
+            )
+        counts = []
+        applied = []
+
+        def record(execute, sql, params, many, context):
+            classification = self.classify_admission_sql(sql)
+            if classification.endswith("_count"):
+                counts.append(classification)
+            return execute(sql, params, many, context)
+
+        def apply_admitted(_locked_scope, _context):
+            applied.append(True)
+
+        before = AuthenticationChallengeDelivery.objects.count()
+        with connection.execute_wrapper(record):
+            result = self.call_admission(
+                at,
+                purpose="password_reset",
+                destination_rates=destination_rates,
+                ip_rates=ip_rates,
+                apply_admitted=apply_admitted,
+            )
+
+        self.assertEqual(result, _V2ChallengeAdmissionDecision.REFUSED)
+        self.assertEqual(counts, ["destination_count", "reset_count", "ip_count"])
+        self.assertEqual(applied, [])
+        self.assertEqual(AuthenticationChallengeDelivery.objects.count(), before)
+
+    def test_refusal_rolls_back_scope_mutation_and_discards_on_commit(self):
+        at = timezone.now()
+        destination_rates = self.destination_rates()
+        unrelated_ip = self.ip_rates_for(b"\xcb\x00\x71\x63").current
+        rows = [
+            self.create_delivery_row(
+                rate_key_id=destination_rates.current.key_id,
+                destination_rate_digest=destination_rates.current.digest,
+                ip_rate_digest=unrelated_ip.digest,
+                reserved_at=at - timedelta(minutes=1),
+            )
+            for _ in range(5)
+        ]
+        committed = []
+        applied = []
+
+        def lock_scope(using):
+            locked = AuthenticationChallengeDelivery.objects.using(using).select_for_update().get(pk=rows[0].pk)
+            AuthenticationChallengeDelivery.objects.using(using).filter(pk=locked.pk).update(status="invalidated")
+            transaction.on_commit(lambda: committed.append(True), using=using)
+            return locked
+
+        result = self.call_admission(
+            at,
+            destination_rates=destination_rates,
+            lock_scope=lock_scope,
+            apply_admitted=lambda _scope, _context: applied.append(True),
+        )
+
+        rows[0].refresh_from_db()
+        self.assertEqual(result, _V2ChallengeAdmissionDecision.REFUSED)
+        self.assertEqual(rows[0].status, "suppressed")
+        self.assertEqual(committed, [])
+        self.assertEqual(applied, [])
+        self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 5)
 
     def classify_sql(self, sql):
         normalized = " ".join(sql.split()).upper()
@@ -343,6 +1048,133 @@ class V2ChallengeAdmissionPostgresTest(TransactionTestCase):
                 results = self.finish_workers(threads, outcomes)
 
         return results, marker
+
+    def admission_worker(self, label, destination_rates, ip_rates, barrier, pids, outcomes, applied):
+        close_old_connections()
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SET lock_timeout = '10s'")
+                cursor.execute("SET statement_timeout = '15s'")
+                cursor.execute("SELECT pg_backend_pid()")
+                pids.put((label, cursor.fetchone()[0]))
+            barrier.wait(timeout=5)
+
+            def post_lock_clock(cursor):
+                cursor.execute("SELECT clock_timestamp()")
+                return cursor.fetchone()[0]
+
+            def apply_admitted(locked_scope, context):
+                applied.put(label)
+                return self.plan_admitted(locked_scope, context)
+
+            outcome = _admit_challenge_delivery(
+                purpose="signup",
+                destination_rates=destination_rates,
+                ip_rates=ip_rates,
+                challenge_configuration=self.new_configuration,
+                using="default",
+                post_lock_clock=post_lock_clock,
+                lock_scope=lambda using: using,
+                apply_admitted=apply_admitted,
+            )
+            outcomes.put((label, outcome))
+        except BaseException as exc:
+            outcomes.put((label, exc))
+        finally:
+            close_old_connections()
+
+    def run_admission_workers_behind_locks(self, cases, shared_aliases):
+        barrier = Barrier(len(cases) + 1)
+        pids = Queue()
+        outcomes = Queue()
+        applied = Queue()
+        threads = [
+            Thread(
+                target=self.admission_worker,
+                name=f"v2-kernel-admission-{index}",
+                args=(str(index), destination_rates, ip_rates, barrier, pids, outcomes, applied),
+            )
+            for index, (destination_rates, ip_rates) in enumerate(cases)
+        ]
+        lock_ids = _advisory_lock_ids(shared_aliases)
+        results = None
+
+        try:
+            with transaction.atomic():
+                with connection.cursor() as cursor:
+                    for lock_id in lock_ids:
+                        cursor.execute("SELECT pg_advisory_xact_lock(%s)", [lock_id])
+                for thread in threads:
+                    thread.start()
+                worker_pids = {}
+                for _ in threads:
+                    label, pid = pids.get(timeout=5)
+                    worker_pids[label] = pid
+                barrier.wait(timeout=5)
+                self.assertTrue(self.wait_until_blocked(worker_pids.values()))
+        finally:
+            if any(thread.ident is not None for thread in threads):
+                results = self.finish_workers(threads, outcomes)
+
+        applied_labels = []
+        while True:
+            try:
+                applied_labels.append(applied.get_nowait())
+            except Empty:
+                break
+        return results, applied_labels
+
+    def test_concurrent_destination_final_slot_admits_exactly_one_writer(self):
+        at = timezone.now() - timedelta(minutes=1)
+        destination_rates = self.destination_rates()
+        unrelated_ip = self.ip_rates_for(b"\xcb\x00\x71\x63").current
+        for _ in range(4):
+            self.create_delivery_row(
+                rate_key_id=destination_rates.current.key_id,
+                destination_rate_digest=destination_rates.current.digest,
+                ip_rate_digest=unrelated_ip.digest,
+                reserved_at=at,
+            )
+        cases = (
+            (destination_rates, self.ip_rates_for(b"\xcb\x00\x71\x2b")),
+            (destination_rates, self.ip_rates_for(b"\xcb\x00\x71\x2c")),
+        )
+
+        results, applied = self.run_admission_workers_behind_locks(cases, destination_rates.aliases)
+
+        self.assertEqual(
+            sorted(result.value for result in results.values()),
+            ["admitted", "refused"],
+        )
+        self.assertEqual(len(applied), 1)
+        self.assertEqual(results[applied[0]], _V2ChallengeAdmissionDecision.ADMITTED)
+        self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 5)
+
+    def test_concurrent_ip_final_slot_admits_exactly_one_writer(self):
+        at = timezone.now() - timedelta(minutes=1)
+        ip_rates = self.ip_rates()
+        unrelated_destination = self.destination_rates("unrelated@example.test").current
+        for _ in range(19):
+            self.create_delivery_row(
+                rate_key_id=ip_rates.current.key_id,
+                destination_rate_digest=unrelated_destination.digest,
+                ip_rate_digest=ip_rates.current.digest,
+                reserved_at=at,
+            )
+        cases = (
+            (self.destination_rates("first@example.test"), ip_rates),
+            (self.destination_rates("second@example.test"), ip_rates),
+        )
+
+        results, applied = self.run_admission_workers_behind_locks(cases, ip_rates.aliases)
+
+        self.assertEqual(
+            sorted(result.value for result in results.values()),
+            ["admitted", "refused"],
+        )
+        self.assertEqual(len(applied), 1)
+        self.assertEqual(results[applied[0]], _V2ChallengeAdmissionDecision.ADMITTED)
+        self.assertEqual(AuthenticationChallengeDelivery.objects.count(), 20)
 
     def test_concurrent_final_slot_allows_exactly_one_insert(self):
         self.create_matching_rows(19, timezone.now() - timedelta(minutes=1))
