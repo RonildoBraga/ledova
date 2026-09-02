@@ -12,6 +12,7 @@ from django.test import TransactionTestCase
 
 MIGRATE_FROM = [("authentication", "0003_customuser_v2_email_constraints")]
 MIGRATE_TO = [("authentication", "0004_v2_challenge_schema")]
+MIGRATE_LATEST = [("authentication", "0005_auth_del_superseded_proof_shapes")]
 MIGRATION_NAME = "0004_v2_challenge_schema"
 CHALLENGE_TABLE = "authentication_challenge"
 DELIVERY_TABLE = "authentication_challenge_delivery"
@@ -90,7 +91,7 @@ class V2ChallengeMigrationTest(TransactionTestCase):
         return executor.loader.project_state(targets).apps
 
     def restore_latest_schema(self):
-        self.migrate(MIGRATE_TO)
+        self.migrate(MIGRATE_LATEST)
 
     def table_names(self):
         return set(connection.introspection.table_names())

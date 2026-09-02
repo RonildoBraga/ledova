@@ -183,6 +183,12 @@ or a conflicting account-security lifecycle makes the challenge and every
 nonterminal delivery `invalidated`. Late workers revalidate these coupled
 states under lock and cannot revive them.
 
+Challenge-wide supersession preserves each delivery's unsent,
+sent-but-unaccepted, or accepted proof shape; its unaccepted shapes are
+therefore email-change-only. An accepted delivery of any purpose may also be
+superseded when an accepted replacement activates. Only status and resolution
+time change.
+
 The public request persists a reservation, queues only its delivery UUID, and
 returns; provider latency therefore cannot reveal eligibility. A worker claims
 that row, generates its OTP or reset secret in memory, persists only the digest

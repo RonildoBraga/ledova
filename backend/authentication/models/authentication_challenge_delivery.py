@@ -129,7 +129,14 @@ class AuthenticationChallengeDelivery(models.Model):
             models.CheckConstraint(
                 condition=(
                     models.Q(
-                        status__in=["reserved", "suppressed", "abandoned", "expired", "invalidated"],
+                        status__in=[
+                            "reserved",
+                            "suppressed",
+                            "abandoned",
+                            "superseded",
+                            "expired",
+                            "invalidated",
+                        ],
                         proof_digest__isnull=True,
                         proof_key_id__isnull=True,
                         sending_at__isnull=True,
@@ -138,7 +145,15 @@ class AuthenticationChallengeDelivery(models.Model):
                     )
                     | (
                         models.Q(
-                            status__in=["sending", "ambiguous", "rejected", "abandoned", "expired", "invalidated"],
+                            status__in=[
+                                "sending",
+                                "ambiguous",
+                                "rejected",
+                                "abandoned",
+                                "superseded",
+                                "expired",
+                                "invalidated",
+                            ],
                             proof_digest__isnull=False,
                             proof_key_id__isnull=False,
                             sending_at__isnull=False,
@@ -160,6 +175,10 @@ class AuthenticationChallengeDelivery(models.Model):
                     )
                 ),
                 name="auth_del_proof_state",
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(status="superseded", accepted_at__isnull=True) | models.Q(purpose="email_change"),
+                name="auth_del_supersede_purpose",
             ),
             models.CheckConstraint(
                 condition=(
