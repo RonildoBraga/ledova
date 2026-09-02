@@ -12,9 +12,9 @@ from typing import Any, Dict
 
 from procrastinate import RetryStrategy
 
-from ledova_backend.procrastinate_app import app
 from documents.models import Document
 from documents.services.extraction import ExtractionService
+from ledova_backend.procrastinate_app import app
 
 logger = logging.getLogger("ledova_backend")
 

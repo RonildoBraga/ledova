@@ -4,8 +4,8 @@ import secrets
 from hashlib import new as hashlib_new
 from hashlib import sha256
 
-import bech32
 import base58
+import bech32
 from bitcoin_message_tool import bmt
 from django.conf import settings
 from django.utils import timezone

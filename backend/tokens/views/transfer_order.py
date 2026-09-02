@@ -1,5 +1,4 @@
 from rest_framework.decorators import action
-from rest_framework.response import Response
 
 from shared.views import AuthenticatedReadOnlyViewSet
 from tokens.filters import TransferOrderFilter

@@ -12,6 +12,3 @@ class BlockchainTransactionQuerySet(QuerySet):
 
     def stale(self, cutoff_datetime):
         return self.pending().filter(created_at__lt=cutoff_datetime)
-
-    def with_optimized_data(self):
-        return self.select_related("deployed_contract")

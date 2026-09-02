@@ -284,7 +284,7 @@ class Company(BaseModel):
 
     @property
     def primary_contact(self):
-        return getattr(self.owner, "profile", None)
+        return getattr(self.owner, "userprofile", None)
 
     def get_primary_wallet(self, chain: str | None = None):
         if chain is None:

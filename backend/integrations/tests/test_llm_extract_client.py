@@ -6,7 +6,10 @@ from openai import OpenAIError
 from pydantic import BaseModel
 
 from integrations.llm_extract.client import LlmExtractClient, _validate_local_base_url
-from integrations.llm_extract.exceptions import LlmExtractError, LlmExtractValidationError
+from integrations.llm_extract.exceptions import (
+    LlmExtractError,
+    LlmExtractValidationError,
+)
 
 
 class ExampleExtraction(BaseModel):

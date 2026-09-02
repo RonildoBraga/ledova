@@ -7,12 +7,11 @@
 import logging
 from datetime import timedelta
 
-from django.conf import settings
 from django.utils import timezone
 from procrastinate import RetryStrategy
 
-from ledova_backend.procrastinate_app import app
 from compliance.constants import BATCH_MONITORING_LOOKBACK_HOURS
+from ledova_backend.procrastinate_app import app
 
 logger = logging.getLogger("ledova_backend")
 

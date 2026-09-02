@@ -4,8 +4,8 @@ from datetime import timedelta
 from django.utils import timezone
 from procrastinate import RetryStrategy
 
-from ledova_backend.procrastinate_app import app
 from blockchain.models import BlockchainTransaction, TransactionStatus, TransactionType
+from ledova_backend.procrastinate_app import app
 from shared.utils.logging_utils import LoggingContext
 from tokens.models import ShareIssuance, ShareToken, ShareTokenStatus
 from tokens.services import ShareTokenService

@@ -56,7 +56,6 @@ class Document(BaseModel):
     # Optional human-supplied note ("first payslip from new employer", etc.)
     note = models.CharField(max_length=255, blank=True)
 
-
     class Meta:
         db_table = "documents"
         verbose_name = "Document"
