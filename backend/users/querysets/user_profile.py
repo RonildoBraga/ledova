@@ -2,12 +2,6 @@ from django.db.models import QuerySet
 
 
 class UserProfileQuerySet(QuerySet):
-
-    def get_by_email(self, email):
-        if email:
-            return self.filter(user__email=email).first()
-        return None
-
     def get_by_uuid(self, uuid):
         if uuid:
             return self.filter(uuid=uuid).first()

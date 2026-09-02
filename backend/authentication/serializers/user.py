@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
 from authentication.models.user_token import UserToken
+from authentication.serializers.fields import V2EmailField
 from shared.constants import DATETIME_FORMAT
 
 User = get_user_model()
@@ -21,10 +22,7 @@ class UserTokenSerializer(serializers.ModelSerializer):
 
 class EmailVerificationSerializer(serializers.Serializer):
     token = serializers.CharField(required=True)
-    email = serializers.EmailField(required=True)
-
-    def validate_email(self, value):
-        return value.lower().strip()
+    email = V2EmailField(required=True)
 
     def to_representation(self, instance):
         representation = {
@@ -74,13 +72,9 @@ class UserSignupSerializer(serializers.Serializer):
 
 
 class UserSigninSerializer(serializers.Serializer):
-    email = serializers.EmailField(max_length=255, required=True)
+    email = V2EmailField(required=True)
     password = serializers.CharField(max_length=255, write_only=True, required=True, style={"input_type": "password"})
     tokens = UserTokenSerializer(many=True, read_only=True)
-
-    def validate_email(self, value):
-        """Basic email format validation - business logic handled in service layer"""
-        return value.lower().strip()
 
     def validate_password(self, value):
         """Basic password validation - authentication handled in service layer"""
