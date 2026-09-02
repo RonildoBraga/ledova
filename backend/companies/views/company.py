@@ -2,6 +2,7 @@ import logging
 
 from rest_framework import status
 from rest_framework.decorators import action
+from rest_framework.generics import get_object_or_404
 from rest_framework.permissions import AllowAny, IsAdminUser
 from rest_framework.response import Response
 
@@ -44,6 +45,7 @@ class CompanyViewSet(AuthenticatedModelViewSet):
         "update",
         "withdraw",
     }
+    public_actions = {"list", "retrieve", "by_acn"}
     filterset_class = CompanyFilter
     ordering = ["-created_at"]
     ordering_fields = ["created_at", "name", "status"]
@@ -51,7 +53,7 @@ class CompanyViewSet(AuthenticatedModelViewSet):
     def get_serializer_class(self):
         if self.action == "create":
             return CompanyRegistrationSerializer
-        if self.action == "list" or (self.action in ("retrieve", "by_acn") and not self.request.user.is_authenticated):
+        if self.action == "list":
             return CompanyListSerializer
         if self.action in ["update", "partial_update"]:
             return CompanyUpdateSerializer
@@ -68,7 +70,7 @@ class CompanyViewSet(AuthenticatedModelViewSet):
         return CompanyDetailSerializer
 
     def get_permissions(self):
-        if self.action in ["list", "retrieve", "by_acn"]:
+        if self.action in self.public_actions:
             return [AllowAny()]
         if self.action in self.administrative_actions:
             return [IsAdminUser()]
@@ -78,18 +80,25 @@ class CompanyViewSet(AuthenticatedModelViewSet):
         user = self.request.user
 
         if self.action in self.administrative_actions:
-            if user.is_authenticated and user.is_staff:
-                return Company.objects.all()
-            return Company.objects.none()
-
+            return Company.objects.all()
         if self.action in self.manageable_actions:
-            if user.is_authenticated:
-                return Company.objects.manageable_by_user(user)
-            return Company.objects.none()
+            return Company.objects.manageable_by_user(user)
+        if self.action == "list":
+            return Company.objects.visible_to_user(user) if user.is_authenticated else Company.objects.active()
+        if self.action in self.public_actions:
+            return Company.objects.readable_by_user(user)
+        return Company.objects.visible_to_user(user)
 
-        if user.is_authenticated:
-            return Company.objects.visible_to_user(user)
-        return Company.objects.active()
+    def retrieve(self, request, *args, **kwargs):
+        return self._company_response(self.get_object())
+
+    def _company_response(self, company):
+        """Owners get the full record; every other caller the public listing shape."""
+        if company.owner_id == self.request.user.pk:
+            serializer_class = CompanyDetailSerializer
+        else:
+            serializer_class = CompanyListSerializer
+        return Response(serializer_class(company, context=self.get_serializer_context()).data)
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -115,23 +124,7 @@ class CompanyViewSet(AuthenticatedModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="acn/(?P<acn>[^/.]+)")
     def by_acn(self, request, acn=None):
-        user = request.user
-
-        if user.is_authenticated:
-            queryset = Company.objects.visible_to_user(user).active()
-        else:
-            queryset = Company.objects.active()
-
-        try:
-            company = queryset.get(acn=acn)
-        except Company.DoesNotExist:
-            return Response(
-                {"error": "Company not found"},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        serializer = self.get_serializer(company)
-        return Response(serializer.data)
+        return self._company_response(get_object_or_404(self.get_queryset(), acn=acn))
 
     @action(detail=True, methods=["get"])
     def stats(self, request, uuid=None):

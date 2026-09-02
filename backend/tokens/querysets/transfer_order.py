@@ -18,8 +18,6 @@ class TransferOrderQuerySet(QuerySet):
     def ownership_bound(self):
         """Return orders whose immutable tenant and address snapshots match."""
         return self.filter(
-            wallet__isnull=False,
-            owner_account__isnull=False,
             wallet__user_account_id=models.F("owner_account_id"),
             wallet__address__iexact=models.F("wallet_address"),
         )
@@ -30,8 +28,7 @@ class TransferOrderQuerySet(QuerySet):
 
         # Authorization is anchored to the exact wallet row selected when the
         # order was created. Address matching is unsafe because public wallet
-        # addresses may be registered under more than one tenant. Legacy rows
-        # without a wallet binding intentionally match nothing.
+        # addresses may be registered under more than one tenant.
         return (
             self.ownership_bound()
             .filter(

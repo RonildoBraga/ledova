@@ -1,9 +1,12 @@
 from django.db import models
 
 from shared.models import BaseModel
+from users.querysets.notification_preferences import NotificationPreferencesQuerySet
 
 
 class NotificationPreferences(BaseModel):
+    objects = NotificationPreferencesQuerySet.as_manager()
+
     user_profile = models.OneToOneField(
         "users.UserProfile",
         on_delete=models.CASCADE,

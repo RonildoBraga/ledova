@@ -246,7 +246,6 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
 
         if (
             transfer_order.wallet_id not in authorized_wallets.wallet_ids
-            or transfer_order.owner_account_id is None
             or transfer_order.wallet.user_account_id != transfer_order.owner_account_id
             or transfer_order.wallet.address.casefold() != transfer_order.wallet_address.casefold()
         ):

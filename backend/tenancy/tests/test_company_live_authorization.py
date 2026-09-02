@@ -166,7 +166,10 @@ class CompanyLiveAuthorizationTest(APITestCase):
                 rows = list_response.json().get("results", list_response.json())
                 self.assertEqual({row["uuid"] for row in rows}, {str(company.uuid)})
                 self.assertEqual(own_response.status_code, 200)
-                self.assertEqual(foreign_response.status_code, 404)
+                self.assertIn("email", own_response.json())
+                self.assertEqual(foreign_response.status_code, 200)
+                self.assertEqual(foreign_response.json()["uuid"], str(self.company.uuid))
+                self.assertNotIn("email", foreign_response.json())
                 self.assertEqual(foreign_update.status_code, 404)
                 self.assertEqual(own_documents.status_code, 200)
                 document_rows = own_documents.json().get("results", own_documents.json())
@@ -312,7 +315,6 @@ class CompanyEndpointIsolationTest(APITestCase):
         self.assertNotIn(str(self.bob_company.uuid), returned)
 
         cases = (
-            ("get", f"/api/v1/companies/{self.bob_company.uuid}/", None),
             ("get", f"/api/v1/companies/{self.bob_company.uuid}/stats/", None),
             ("get", f"/api/v1/companies/{self.bob_company.uuid}/application-status/", None),
             ("patch", f"/api/v1/companies/{self.bob_company.uuid}/", {"name": "Stolen"}),
@@ -328,6 +330,39 @@ class CompanyEndpointIsolationTest(APITestCase):
 
         self.bob_company.refresh_from_db()
         self.assertEqual(self.bob_company.name, "Bob Company")
+
+        own_detail = self.client.get(f"/api/v1/companies/{self.alice_company.uuid}/")
+        self.assertEqual(own_detail.status_code, 200)
+        self.assertIn("email", own_detail.json())
+        self.assertIn("documents", own_detail.json())
+        self._assert_public_representation(self.bob_company)
+
+        draft_company = Company.objects.create(
+            owner=self.bob, name="Bob Draft", company_type="pty", acn="888888888", status="draft"
+        )
+        self.assertEqual(self.client.get(f"/api/v1/companies/{draft_company.uuid}/").status_code, 404)
+        self.assertEqual(self.client.get(f"/api/v1/companies/acn/{draft_company.acn}/").status_code, 404)
+
+    def _assert_public_representation(self, company):
+        for url in (
+            f"/api/v1/companies/{company.uuid}/",
+            f"/api/v1/companies/acn/{company.acn}/",
+        ):
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 200)
+                body = response.json()
+                self.assertEqual(body["uuid"], str(company.uuid))
+                for private_field in (
+                    "documents",
+                    "email",
+                    "phone",
+                    "addressLine1",
+                    "infoRequestReason",
+                    "primaryContact",
+                ):
+                    self.assertNotIn(private_field, body)
+                self.assertNotIn(self.bob_document.external_url, str(body))
 
     def test_nested_company_documents_require_access_to_the_parent(self):
         self.client.force_authenticate(self.alice)
@@ -371,25 +406,7 @@ class CompanyEndpointIsolationTest(APITestCase):
         self.assertIn(str(self.bob_company.uuid), returned)
         self.assertNotIn(str(inactive_company.uuid), returned)
 
-        for url in (
-            f"/api/v1/companies/{self.bob_company.uuid}/",
-            f"/api/v1/companies/acn/{self.bob_company.acn}/",
-        ):
-            with self.subTest(url=url):
-                response = self.client.get(url)
-                self.assertEqual(response.status_code, 200)
-                body = response.json()
-                self.assertEqual(body["uuid"], str(self.bob_company.uuid))
-                for private_field in (
-                    "documents",
-                    "email",
-                    "phone",
-                    "addressLine1",
-                    "infoRequestReason",
-                    "primaryContact",
-                ):
-                    self.assertNotIn(private_field, body)
-                self.assertNotIn(self.bob_document.external_url, str(body))
+        self._assert_public_representation(self.bob_company)
 
         for url in (
             f"/api/v1/companies/{inactive_company.uuid}/",

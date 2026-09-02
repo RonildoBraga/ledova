@@ -38,9 +38,9 @@ reuse. Admin, background-worker, migration, and streaming paths also need
 explicit designs. Those properties are not established by this proof.
 
 Coverage is also incomplete. `wallets` and `portfolios` have direct account
-keys. PR #14 added nullable `owner_account_id` and `wallet_id` fields to
-`tokens_transferorder`, but its explicit RLS policy, legacy-null treatment, and
-any backfill strategy remain undecided. Indirect tables such as `holdings`,
+keys. `tokens_transferorder` carries NOT NULL `owner_account_id` and `wallet_id`
+(migrations 0010-0011 bound or deleted the legacy unbound rows), but its explicit RLS
+policy remains undecided. Indirect tables such as `holdings`,
 `transactions`, `holding_snapshots`, `fiat_transactions`,
 `asset_allocations`, and `portfolio_snapshots` need a separate schema and
 policy design. The identity table `customer_accounts_account` needs a bootstrap

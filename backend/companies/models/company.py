@@ -41,8 +41,6 @@ class Company(BaseModel):
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
         related_name="owned_companies",
-        null=True,
-        blank=True,
     )
 
     name = models.CharField(max_length=255)
@@ -282,7 +280,7 @@ class Company(BaseModel):
 
     @property
     def email(self):
-        return self.owner.email if self.owner else None
+        return self.owner.email
 
     @property
     def primary_contact(self):
@@ -294,9 +292,6 @@ class Company(BaseModel):
 
         if self.operator_wallet and self.operator_wallet.chain == chain:
             return self.operator_wallet
-
-        if not self.owner:
-            return None
 
         profile = UserProfile.objects.filter(user=self.owner).first()
         if not profile:

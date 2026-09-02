@@ -24,7 +24,7 @@ class DeviceTokenViewSet(AuthenticatedModelViewSet):
     ordering_fields = ["created_at"]
 
     def get_queryset(self):
-        return DeviceToken.objects.filter(user=self.request.user, is_active=True)
+        return DeviceToken.objects.visible_to_user(self.request.user).filter(is_active=True)
 
     @action(detail=False, methods=["post"], url_path="register")
     def register_token(self, request):
@@ -62,10 +62,7 @@ class DeviceTokenViewSet(AuthenticatedModelViewSet):
 
         push_token = serializer.validated_data["push_token"]
 
-        deleted_count, _ = DeviceToken.objects.filter(
-            user=request.user,
-            push_token=push_token,
-        ).delete()
+        deleted_count, _ = DeviceToken.objects.visible_to_user(request.user).filter(push_token=push_token).delete()
         if deleted_count:
             logger.info(f"{LoggingContext.DEVICE_TOKEN} Unregistered token for user {request.user.email}")
             return Response(status=status.HTTP_204_NO_CONTENT)

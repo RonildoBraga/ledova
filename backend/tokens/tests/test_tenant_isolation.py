@@ -146,21 +146,6 @@ class TenantOrderIsolationTest(APITestCase):
         visible = TransferOrder.objects.visible_to_user(self.bob)
         self.assertNotIn(self.alice_order.uuid, visible.values_list("uuid", flat=True))
 
-    def test_legacy_unbound_order_is_hidden_from_nonstaff(self):
-        legacy = TransferOrder.objects.create(
-            token=self.alice_order.token,
-            order_type=TransferOrderType.SELL,
-            status=TransferOrderStatus.OPEN,
-            wallet_address=self.alice_wallet.address,
-            quantity=1,
-            price_per_share=Decimal("1.00"),
-        )
-
-        self.assertNotIn(
-            legacy.uuid,
-            TransferOrder.objects.visible_to_user(self.alice).values_list("uuid", flat=True),
-        )
-
     def test_mismatched_account_and_wallet_fail_closed_for_both_tenants(self):
         mismatched = TransferOrder.objects.create(
             token=self.alice_order.token,
@@ -187,14 +172,6 @@ class TenantOrderIsolationTest(APITestCase):
             with self.subTest(user=user):
                 self.assertFalse(TransferOrder.objects.visible_to_user(user).exists())
 
-        legacy = TransferOrder.objects.create(
-            token=self.alice_order.token,
-            order_type=TransferOrderType.SELL,
-            status=TransferOrderStatus.OPEN,
-            wallet_address=self.alice_wallet.address,
-            quantity=1,
-            price_per_share=Decimal("1.00"),
-        )
         mismatched = TransferOrder.objects.create(
             token=self.alice_order.token,
             order_type=TransferOrderType.SELL,
@@ -215,7 +192,6 @@ class TenantOrderIsolationTest(APITestCase):
 
             with self.subTest(actor=actor.email):
                 self.assertEqual(set(TransferOrder.objects.visible_to_user(actor)), {order})
-                self.assertNotIn(legacy, TransferOrder.objects.visible_to_user(actor))
                 self.assertNotIn(mismatched, TransferOrder.objects.visible_to_user(actor))
 
                 self.client.force_authenticate(actor)
@@ -367,14 +343,6 @@ class TransferOrderOwnershipBindingTest(APITestCase):
             wallet_address=self.wallet.address,
             quantity=10,
             price_per_share=Decimal("2.00"),
-        )
-        TransferOrder.objects.create(
-            token=self.token,
-            order_type=TransferOrderType.SELL,
-            status=TransferOrderStatus.OPEN,
-            wallet_address="0x" + "b" * 40,
-            quantity=10,
-            price_per_share=Decimal("1.00"),
         )
         TransferOrder.objects.create(
             token=self.token,

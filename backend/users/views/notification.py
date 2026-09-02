@@ -21,7 +21,7 @@ class NotificationViewSet(AuthenticatedReadOnlyViewSet):
     ordering_fields = ["created_at"]
 
     def get_queryset(self):
-        return Notification.objects.for_user(self.request.user).not_archived().with_optimized_data()
+        return Notification.objects.visible_to_user(self.request.user).not_archived().with_optimized_data()
 
     def partial_update(self, request, **kwargs):
         notification = self.get_object()
@@ -44,6 +44,6 @@ class NotificationViewSet(AuthenticatedReadOnlyViewSet):
 
     @action(detail=False, methods=["post"], url_path="mark-all-read")
     def mark_all_read(self, request):
-        updated = Notification.objects.for_user(request.user).not_archived().mark_all_read()
+        updated = Notification.objects.visible_to_user(request.user).not_archived().mark_all_read()
         logger.info(f"{LoggingContext.NOTIFICATIONS} Marked {updated} notifications as read for {request.user.email}")
         return Response({"marked": updated}, status=status.HTTP_200_OK)

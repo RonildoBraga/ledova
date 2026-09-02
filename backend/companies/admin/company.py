@@ -341,7 +341,7 @@ class CompanyAdmin(admin.ModelAdmin):
     status_badge.admin_order_field = "status"
 
     def owner_email(self, obj):
-        return obj.email if obj.owner else "-"
+        return obj.email
 
     owner_email.short_description = "Email"
     owner_email.admin_order_field = "owner__email"

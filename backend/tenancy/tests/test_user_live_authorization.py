@@ -14,8 +14,11 @@ from rest_framework.test import APIClient, APITestCase
 
 from assets.models import Asset
 from users.models import (
+    DeviceToken,
     FavouriteAsset,
     FinancialProfile,
+    Notification,
+    NotificationPreferences,
     UserAccount,
     UserPreferences,
     UserProfile,
@@ -407,6 +410,9 @@ class UserLiveAuthorizationTest(APITestCase):
             FinancialProfile.objects,
             UserPreferences.objects,
             FavouriteAsset.objects,
+            Notification.objects,
+            NotificationPreferences.objects,
+            DeviceToken.objects,
         )
         for manager in managers:
             with self.subTest(model=manager.model._meta.label, user="anonymous"):
