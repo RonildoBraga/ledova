@@ -10,24 +10,24 @@ is removed; PostgreSQL RLS activation remains deferred by
 [ADR 0002](backend/docs/adr/0002-rls-tenant-isolation.md).
 
 [Issue #2](https://github.com/RonildoBraga/ledova/issues/2) is implemented
-through [PR #48](https://github.com/RonildoBraga/ledova/pull/48). PRs #39–#42
-added fail-closed verification, the protocol ADR, and legacy/client
-characterization. PRs #43–#45 added the session and refresh-history core. PRs
-#46–#48 defined and implemented strict v2 access JWT issuance, verification,
-and read-only binding to active users and sessions.
+through [PR #48](https://github.com/RonildoBraga/ledova/pull/48). PRs #39–#45
+added fail-closed characterization and the session/refresh core; PRs #46–#48
+added strict v2 access JWT issuance, verification, and active-session binding.
+[ADR 0004](backend/docs/adr/0004-v2-challenge-profile.md) now freezes the exact
+locked-challenge contract without wiring a runtime endpoint.
 
-Main is `dca41907a4ea0834f933c50c427e178f5136c436`. The 297-test backend suite,
+Base main is `c459da00fdc24c3665ea0f843b0bd585ebf45596`. The 297-test backend suite,
 PostgreSQL checks, repository checks, independent reviews, and
-[post-merge CI](https://github.com/RonildoBraga/ledova/actions/runs/33582661963)
+[post-merge CI](https://github.com/RonildoBraga/ledova/actions/runs/33583492183)
 passed. No v2 endpoint, request authenticator, CSRF boundary, client cutover,
 or legacy retirement is wired yet.
 
 ## Next work
 
-Continue [ADR 0003](backend/docs/adr/0003-authentication-session-protocol.md)
-by first freezing the exact locked-challenge credential, delivery-state,
-rate-limit, and key-rotation profile. Then add its schema and services for
-signup, verification, resend, email change, and password reset.
+Implement ADR 0004's strict parsers, HMAC framing, redacted key configuration,
+and deterministic tests. Then land canonical email enforcement, challenge
+schema, the typed email-provider/IP adapters, provider-neutral services, and
+PostgreSQL rate/confirmation races in small batches.
 
 Before any v2 endpoint or runtime authentication wiring, add a typed verified
 `access_expired` result and a request-derived transport classifier that rejects
