@@ -5,6 +5,13 @@ allowlist-gated share tokens and settlement flows. The repository contains
 Solidity contracts, a Django API, web applications, a React Native client, and
 shared TypeScript packages.
 
+Ledova is the sanitized public continuation of the earlier private Blueberry
+codebase. The transition preserves its existing architecture and behaviour
+where practical rather than rebuilding the platform from scratch. Secrets,
+production configuration, private operations, and private data do not belong
+here; publication blockers are addressed now, while broader production
+hardening remains tracked in [ISSUES.md](./ISSUES.md).
+
 > **Experimental and unaudited.** Use Ledova only with synthetic data on a
 > local development chain or supported public testnet. It is not production
 > ready and must not be used with real funds, securities, companies, identities,
