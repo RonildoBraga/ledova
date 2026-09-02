@@ -2,8 +2,10 @@ import asyncio
 import logging
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as package_version
+from inspect import signature
 from io import StringIO
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.conf import settings
@@ -12,11 +14,14 @@ from procrastinate import App, RetryStrategy
 from procrastinate.testing import InMemoryConnector
 from procrastinate.worker import Worker
 
+from authentication.tasks import V2_DELIVERY_HOLD_QUEUE, deliver_v2_challenge
+from ledova_backend import worker_entrypoint
 from ledova_backend.logging_filters import (
     AUDITED_PROCRASTINATE_VERSION,
     V2_DELIVERY_TASK_NAME,
     V2ProcrastinateLogFilter,
 )
+from ledova_backend.procrastinate_app import app as django_procrastinate_app
 
 _PRIVATE_SUCCESS_UUID = "10000000-0000-4000-8000-000000000001"
 _PRIVATE_ERROR_UUID = "10000000-0000-4000-8000-000000000002"
@@ -93,6 +98,99 @@ class V2ProcrastinateLogFilterTest(SimpleTestCase):
         requirements = (Path(settings.BASE_DIR) / "requirements.txt").read_text(encoding="utf-8").splitlines()
         expected = f"procrastinate[django]=={AUDITED_PROCRASTINATE_VERSION}"
         self.assertEqual([line for line in requirements if line.startswith("procrastinate")], [expected])
+
+    def test_registered_v2_task_is_fixed_fail_and_held_out_of_normal_workers(self):
+        registered = django_procrastinate_app.tasks[V2_DELIVERY_TASK_NAME]
+        self.assertIs(registered, deliver_v2_challenge)
+        self.assertEqual(registered.name, V2_DELIVERY_TASK_NAME)
+        self.assertEqual(registered.queue, V2_DELIVERY_HOLD_QUEUE)
+        self.assertIsNone(registered.retry_strategy)
+        self.assertIsNone(registered.lock)
+        self.assertIsNone(registered.queueing_lock)
+        self.assertEqual(tuple(signature(registered.func).parameters), ("delivery_uuid",))
+        parameter = signature(registered.func).parameters["delivery_uuid"]
+        self.assertEqual(parameter.kind, parameter.KEYWORD_ONLY)
+
+        with self.assertRaises(RuntimeError) as raised:
+            registered.func(delivery_uuid=_PRIVATE_ERROR_UUID)
+
+        self.assertEqual(str(raised.exception), "V2 challenge delivery worker unavailable.")
+        self.assertIsNone(raised.exception.__cause__)
+        self.assertIsNone(raised.exception.__context__)
+        self.assertNotIn(_PRIVATE_ERROR_UUID, f"{raised.exception!s} {raised.exception!r}")
+
+    def test_normal_worker_entrypoints_exclude_the_v2_hold_queue(self):
+        backend = Path(settings.BASE_DIR)
+        compose = (backend.parent / "docker-compose.yml").read_text(encoding="utf-8")
+        makefile = (backend / "Makefile").read_text(encoding="utf-8")
+        entrypoint = (backend / "ledova_backend" / "worker_entrypoint.py").read_text(encoding="utf-8")
+        command = "python manage.py procrastinate worker --queues=default,builtin"
+
+        self.assertIn(f"command: {command}", compose)
+        self.assertIn("exec $(PYTHON) manage.py procrastinate worker --queues=default,builtin", makefile)
+        self.assertIn('"procrastinate", "worker", "--queues=default,builtin"', entrypoint)
+        self.assertNotIn("v2_challenge_hold", compose)
+        self.assertNotIn("v2_challenge_hold", makefile)
+        self.assertNotIn("v2_challenge_hold", entrypoint)
+
+        queues = {name: task.queue for name, task in django_procrastinate_app.tasks.items()}
+        self.assertEqual(queues[V2_DELIVERY_TASK_NAME], V2_DELIVERY_HOLD_QUEUE)
+        self.assertEqual(
+            {queue for name, queue in queues.items() if name != V2_DELIVERY_TASK_NAME},
+            {"default", "builtin"},
+        )
+
+        with (
+            patch.object(worker_entrypoint.threading, "Thread") as thread,
+            patch.object(
+                worker_entrypoint.subprocess,
+                "run",
+                return_value=SimpleNamespace(returncode=7),
+            ) as run,
+            patch.dict(worker_entrypoint.os.environ, {"PORT": "8080"}),
+        ):
+            self.assertEqual(worker_entrypoint.main(), 7)
+
+        thread.return_value.start.assert_called_once_with()
+        run.assert_called_once_with(
+            [
+                worker_entrypoint.sys.executable,
+                "manage.py",
+                "procrastinate",
+                "worker",
+                "--queues=default,builtin",
+            ],
+            check=False,
+        )
+
+    def test_normal_queue_selection_never_executes_the_v2_hold_task(self):
+        connector = InMemoryConnector()
+        app = App(connector=connector)
+        executed = []
+
+        @app.task(name=V2_DELIVERY_TASK_NAME, queue=V2_DELIVERY_HOLD_QUEUE)
+        def held(delivery_uuid):
+            executed.append(delivery_uuid)
+
+        @app.task(name="tests.normal_queue_control")
+        def normal():
+            executed.append(_PUBLIC_CONTROL)
+
+        with _FormattedLogCapture() as capture:
+            held.defer(delivery_uuid=_PRIVATE_SUCCESS_UUID)
+            normal.defer()
+            app.run_worker(
+                queues=["default", "builtin"],
+                wait=False,
+                listen_notify=False,
+                install_signal_handlers=False,
+            )
+
+        jobs = {job["task_name"]: job for job in connector.jobs.values()}
+        self.assertEqual(executed, [_PUBLIC_CONTROL])
+        self.assertEqual(jobs[V2_DELIVERY_TASK_NAME]["status"], "todo")
+        self.assertEqual(jobs["tests.normal_queue_control"]["status"], "succeeded")
+        self.assert_private_values_absent(capture.stream.getvalue())
 
     def test_filter_refuses_unsupported_or_missing_package_version(self):
         for outcome in ("3.9.1", PackageNotFoundError("procrastinate")):

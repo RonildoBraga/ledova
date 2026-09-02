@@ -33,7 +33,7 @@ run: require-env
 	@set -a; . ./.env; set +a; exec $(PYTHON) manage.py runserver
 
 worker: require-env
-	@set -a; . ./.env; set +a; exec $(PYTHON) manage.py procrastinate worker
+	@set -a; . ./.env; set +a; exec $(PYTHON) manage.py procrastinate worker --queues=default,builtin
 
 docker-build:
 	docker build -t ledova-backend .

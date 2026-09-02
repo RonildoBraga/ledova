@@ -76,7 +76,7 @@ services:
       POSTGRES_HOST: postgres
       REDIS_URL: redis://redis:6379/0
       STORAGE_BACKEND: local
-    command: python manage.py procrastinate worker
+    command: python manage.py procrastinate worker --queues=default,builtin
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
