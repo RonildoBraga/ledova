@@ -1,7 +1,3 @@
-"""
-Models package for wallets app.
-"""
-
 from wallets.models.fiat_purchase import FiatTransaction
 from wallets.models.holding import Holding
 from wallets.models.holding_snapshot import HoldingSnapshot

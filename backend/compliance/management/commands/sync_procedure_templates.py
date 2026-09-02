@@ -133,9 +133,7 @@ class Command(BaseCommand):
     def get_templates(self):
         """Return list of all procedure templates with their steps."""
         return [
-            # =================================================================
             # CRITICAL PRIORITY ALERTS (A01-A03)
-            # =================================================================
             {
                 "alert_type": ALERT_TYPE_SANCTIONS_MATCH,
                 "name": "Sanctions Match",
@@ -262,9 +260,7 @@ class Command(BaseCommand):
                     {"order": 10, "description": "Consider authority notification", "is_required": True},
                 ],
             },
-            # =================================================================
             # HIGH PRIORITY ALERTS (A04-A12, A22)
-            # =================================================================
             {
                 "alert_type": ALERT_TYPE_ADVERSE_MEDIA_SERIOUS,
                 "name": "Adverse Media - Serious",
@@ -712,9 +708,7 @@ class Command(BaseCommand):
                     {"order": 8, "description": "Make holistic risk assessment", "is_required": True},
                 ],
             },
-            # =================================================================
             # MEDIUM PRIORITY ALERTS (A13-A20)
-            # =================================================================
             {
                 "alert_type": ALERT_TYPE_HIGH_AGGREGATE_VOLUME,
                 "name": "High Aggregate Volume",
@@ -1020,9 +1014,7 @@ class Command(BaseCommand):
                     {"order": 6, "description": "Document re-screening completion", "is_required": True},
                 ],
             },
-            # =================================================================
             # LOW PRIORITY ALERTS (A21)
-            # =================================================================
             {
                 "alert_type": ALERT_TYPE_PERIODIC_REVIEW,
                 "name": "Periodic Review Due",

@@ -34,8 +34,6 @@ class ShareTokenService:
         self.chain_client = get_base_chain_client()
         self._factory_contract = None
 
-    # --- Configuration ---
-
     @property
     def factory_address(self) -> str:
         address = getattr(settings, "SHARE_TOKEN_FACTORY_ADDRESS", "")
@@ -65,17 +63,13 @@ class ShareTokenService:
                 raise ContractLoadException(f"Failed to load contract: {e}") from e
         return self._factory_contract
 
-    # --- Helpers ---
-
     def _validate_address(self, address: str) -> str:
-        """Validate an Ethereum address and return its checksum form."""
         if not self.chain_client.is_valid_address(address):
             raise InvalidRecipientAddressException()
         return self.chain_client.to_checksum_address(address)
 
     @staticmethod
     def _tx_result(tx_hash: str, receipt: dict | None) -> dict:
-        """Extract standard transaction result from a receipt."""
         return {
             "tx_hash": tx_hash,
             "block_number": receipt["blockNumber"] if receipt else None,
@@ -83,12 +77,7 @@ class ShareTokenService:
         }
 
     def _mint_to(self, contract_address: str, recipient: str, amount: int) -> dict:
-        """
-        Execute an on-chain mint call. Shared by initial supply and additional issuances.
-
-        Returns:
-            dict with tx_hash, block_number, gas_used
-        """
+        """On-chain mint shared by the initial supply and later issuances."""
         token_contract = self.load_share_token(contract_address)
         recipient_checksum = self.chain_client.to_checksum_address(recipient)
 
@@ -102,7 +91,6 @@ class ShareTokenService:
         return self._tx_result(tx_hash, receipt)
 
     def _get_balance(self, contract_name: str, contract_address: str, holder: str) -> int:
-        """Get token balance for a holder. Works with any ERC20-compatible contract."""
         if not self.chain_client.is_valid_address(holder):
             raise InvalidHolderAddressException()
 
@@ -113,16 +101,12 @@ class ShareTokenService:
 
         return contract.functions.balanceOf(holder_checksum).call()
 
-    # --- Contract loading ---
-
     def load_share_token(self, contract_address: str):
         if not self.chain_client.is_valid_address(contract_address):
             raise InvalidTokenAddressException()
 
         checksum = self.chain_client.to_checksum_address(contract_address)
         return self.chain_client.load_contract("ShareToken", checksum)
-
-    # --- Deployment ---
 
     def deploy_share_token(
         self,
@@ -175,19 +159,9 @@ class ShareTokenService:
             logger.error(f"{LoggingContext.TOKEN} Deployment error: {e}")
             raise TokenDeploymentFailedException(f"Token deployment failed: {e}") from e
 
-    # --- Issuance ---
-
     def create_issuance_request(
         self, token, recipient: str, amount: int, user, reason: str = "", issuance_type: str = "additional"
     ) -> ShareIssuanceRequest:
-        """
-        Validate inputs and create a ShareIssuanceRequest record for approval.
-
-        Raises:
-            InvalidTokenStateException: If token is not deployed
-            InvalidRecipientAddressException: If recipient address is invalid
-            ValidationError: If amount is invalid
-        """
         if token.status != "deployed":
             raise InvalidTokenStateException("Only deployed tokens can issue shares.")
 
@@ -210,7 +184,6 @@ class ShareTokenService:
             submitted_at=timezone.now(),
         )
 
-        # Calculate dilution after creation
         issuance_request.dilution_percentage = issuance_request.calculate_dilution()
         issuance_request.save(update_fields=["dilution_percentage", "updated_at"])
 
@@ -222,12 +195,6 @@ class ShareTokenService:
         return issuance_request
 
     def mint_shares(self, issuance: ShareIssuance) -> dict:
-        """
-        Execute on-chain mint for a pending ShareIssuance.
-
-        Raises:
-            ShareIssuanceFailedException: If minting fails
-        """
         token = issuance.token
 
         if not token.contract_address or token.status != "deployed":
@@ -260,8 +227,6 @@ class ShareTokenService:
             issuance.mark_failed(str(e))
             logger.error(f"{LoggingContext.TOKEN} Issuance mint failed: {e}")
             raise ShareIssuanceFailedException(f"Share issuance failed: {e}") from e
-
-    # --- Capital increases ---
 
     def increase_authorized_shares(
         self,
@@ -312,8 +277,6 @@ class ShareTokenService:
             logger.error(f"{LoggingContext.TOKEN} Capital increase error: {e}")
             raise TokenDeploymentFailedException(f"Token deployment failed: {e}") from e
 
-    # --- Queries ---
-
     def get_token_balance(self, contract_address: str, holder: str) -> int:
         try:
             return self._get_balance("ShareToken", contract_address, holder)
@@ -332,8 +295,6 @@ class ShareTokenService:
         except Exception as e:
             logger.error(f"{LoggingContext.TOKEN} Error getting token by identifier: {e}")
             return None
-
-    # --- Holders ---
 
     def get_token_holders(self, token) -> list[dict]:
         holders_data = []
@@ -372,8 +333,6 @@ class ShareTokenService:
         holders_data.sort(key=lambda x: int(x["balance"]), reverse=True)
 
         return holders_data
-
-    # --- Wallet balances ---
 
     def get_wallet_token_balances(self, wallet_address: str) -> dict:
         wallet_checksum = self._validate_address(wallet_address)

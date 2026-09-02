@@ -1,7 +1,3 @@
-"""
-Admin for TransactionScreening model.
-"""
-
 from django.contrib import admin
 from django.utils.html import format_html
 
@@ -135,7 +131,6 @@ class TransactionScreeningAdmin(admin.ModelAdmin):
     actions = ["retry_failed_screenings"]
 
     def to_address_short(self, obj):
-        """Display truncated address."""
         if obj.to_address:
             return f"{obj.to_address[:10]}...{obj.to_address[-8:]}"
         return "-"
@@ -143,7 +138,6 @@ class TransactionScreeningAdmin(admin.ModelAdmin):
     to_address_short.short_description = "To Address"
 
     def status_badge(self, obj):
-        """Display status as a colored badge."""
         colors = {
             "pending": "#ffc107",
             "completed": "#28a745",
@@ -161,7 +155,6 @@ class TransactionScreeningAdmin(admin.ModelAdmin):
     status_badge.admin_order_field = "status"
 
     def result_badge(self, obj):
-        """Display result as a colored badge."""
         if not obj.result:
             return "-"
         colors = {
@@ -181,7 +174,6 @@ class TransactionScreeningAdmin(admin.ModelAdmin):
     result_badge.admin_order_field = "result"
 
     def risk_level_badge(self, obj):
-        """Display risk level as a colored badge."""
         if not obj.risk_level:
             return "-"
         colors = {
@@ -201,7 +193,6 @@ class TransactionScreeningAdmin(admin.ModelAdmin):
     risk_level_badge.admin_order_field = "risk_level"
 
     def transaction_link(self, obj):
-        """Link to related crypto transaction."""
         if obj.transaction:
             return format_html(
                 '<a href="/admin/wallets/transaction/{}/change/">{}</a>',
@@ -213,7 +204,6 @@ class TransactionScreeningAdmin(admin.ModelAdmin):
     transaction_link.short_description = "Transaction"
 
     def user_account_link(self, obj):
-        """Link to related user account."""
         if obj.user_account:
             return format_html(
                 '<a href="/admin/users/useraccount/{}/change/">{}</a>',
@@ -225,7 +215,6 @@ class TransactionScreeningAdmin(admin.ModelAdmin):
     user_account_link.short_description = "User Account"
 
     def related_alerts(self, obj):
-        """Show alerts related to this screening."""
         from compliance.models import ComplianceAlert
 
         alerts = ComplianceAlert.objects.filter(alert_data__screening_id=str(obj.uuid)).select_related()
@@ -249,7 +238,6 @@ class TransactionScreeningAdmin(admin.ModelAdmin):
     related_alerts.short_description = "Related Alerts"
 
     def risk_signals_display(self, obj):
-        """Display risk signals as a formatted list."""
         if not obj.risk_signals:
             return "None detected"
 
@@ -262,7 +250,6 @@ class TransactionScreeningAdmin(admin.ModelAdmin):
     risk_signals_display.short_description = "Risk Signals"
 
     def raw_response_display(self, obj):
-        """Display raw API response as formatted JSON."""
         import json
 
         if not obj.raw_response:
@@ -282,7 +269,6 @@ class TransactionScreeningAdmin(admin.ModelAdmin):
 
     @admin.action(description="Retry failed screenings")
     def retry_failed_screenings(self, request, queryset):
-        """Retry selected failed screenings."""
         failed_screenings = queryset.filter(status=SCREENING_STATUS_FAILED)
         count = failed_screenings.count()
 

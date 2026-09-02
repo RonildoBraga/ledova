@@ -6,13 +6,11 @@ from django.utils.dateparse import parse_date, parse_datetime
 
 class AssetSnapshotQuerySet(QuerySet):
     def filter_by_asset(self, asset_uuid):
-        """Kept for external callers (e.g. portfolios/services/sync.py)."""
         if asset_uuid:
             return self.filter(asset__uuid=asset_uuid)
         return self
 
     def filter_by_date_range(self, start_date=None, end_date=None):
-        """Complex date parsing — kept as method for external callers."""
         queryset = self
 
         start_datetime = self._parse_date_param(start_date, use_day_start=True)
@@ -69,7 +67,6 @@ class AssetSnapshotQuerySet(QuerySet):
         return None
 
     def sample_evenly(self, max_points):
-        """Return evenly-distributed sample of max_points rows."""
         if not max_points:
             return self
         try:

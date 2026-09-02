@@ -38,7 +38,8 @@ compliance or legal recognition is made.
 | `packages/` | Shared TypeScript constants, types, services, and utilities |
 
 The current verified checkpoint and next task are recorded in
-[HANDOVER.md](./HANDOVER.md).
+[HANDOVER.md](./HANDOVER.md). Backend layering and style rules live in
+[backend/docs/CONVENTIONS.md](./backend/docs/CONVENTIONS.md).
 
 ## Quick start
 

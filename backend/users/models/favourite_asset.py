@@ -1,7 +1,3 @@
-"""
-FavouriteAsset model for tracking user's favourite assets.
-"""
-
 from django.db import models
 
 from assets.models import Asset
@@ -11,13 +7,6 @@ from users.querysets.favourite_asset import FavouriteAssetQuerySet
 
 
 class FavouriteAsset(BaseModel):
-    """
-    Represents a user's favourite asset.
-
-    Each user account can mark assets as favourites to easily track them.
-    The relationship is unique per user_account + asset combination.
-    """
-
     user_account = models.ForeignKey(
         UserAccount,
         on_delete=models.CASCADE,

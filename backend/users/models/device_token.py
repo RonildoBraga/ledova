@@ -1,7 +1,3 @@
-"""
-Device token model for push notifications.
-"""
-
 from django.conf import settings
 from django.db import models
 
@@ -9,13 +5,7 @@ from shared.models import BaseModel
 
 
 class DeviceToken(BaseModel):
-    """
-    Stores device push tokens for notifications.
-
-    Each token represents a device that can receive push notifications.
-    Tokens are provided by Expo Push Notification service and follow
-    the format: ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]
-    """
+    """Expo push tokens, format ExponentPushToken[...]."""
 
     class DeviceType(models.TextChoices):
         IOS = "ios", "iOS"
@@ -61,9 +51,4 @@ class DeviceToken(BaseModel):
 
     @classmethod
     def validate_expo_token(cls, token: str) -> bool:
-        """
-        Validate that a token follows the Expo push token format.
-
-        Expo tokens should start with 'ExponentPushToken[' and end with ']'.
-        """
         return token.startswith("ExponentPushToken[") and token.endswith("]")

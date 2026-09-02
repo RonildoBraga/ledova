@@ -1,7 +1,3 @@
-"""
-Admin for ComplianceAlert model.
-"""
-
 from django.contrib import admin
 from django.utils import timezone
 from django.utils.html import format_html
@@ -10,8 +6,6 @@ from compliance.models import AlertChecklistItem, ComplianceAlert
 
 
 class AlertChecklistItemInline(admin.TabularInline):
-    """Inline for checklist items on the alert page."""
-
     model = AlertChecklistItem
     extra = 0
     can_delete = False
@@ -207,7 +201,6 @@ class ComplianceAlertAdmin(admin.ModelAdmin):
     actions = ["assign_to_me", "mark_as_reviewing", "close_alerts"]
 
     def severity_badge(self, obj):
-        """Display severity as a colored badge."""
         colors = {
             "low": "#28a745",
             "medium": "#ffc107",
@@ -226,7 +219,6 @@ class ComplianceAlertAdmin(admin.ModelAdmin):
     severity_badge.admin_order_field = "severity"
 
     def status_badge(self, obj):
-        """Display status as a colored badge."""
         colors = {
             "new": "#17a2b8",
             "reviewing": "#ffc107",
@@ -245,7 +237,6 @@ class ComplianceAlertAdmin(admin.ModelAdmin):
     status_badge.admin_order_field = "status"
 
     def smr_badge(self, obj):
-        """Display SMR status as a badge."""
         if obj.smr_required:
             if obj.smr_filed_at:
                 return format_html(
@@ -261,7 +252,6 @@ class ComplianceAlertAdmin(admin.ModelAdmin):
     smr_badge.short_description = "SMR"
 
     def transaction_link(self, obj):
-        """Link to related crypto transaction."""
         if obj.transaction:
             return format_html(
                 '<a href="/admin/wallets/transaction/{}/change/">{}</a>',
@@ -273,7 +263,6 @@ class ComplianceAlertAdmin(admin.ModelAdmin):
     transaction_link.short_description = "Crypto Transaction"
 
     def fiat_transaction_link(self, obj):
-        """Link to related fiat transaction."""
         if obj.fiat_transaction:
             return format_html(
                 '<a href="/admin/wallets/fiattransaction/{}/change/">{}</a>',

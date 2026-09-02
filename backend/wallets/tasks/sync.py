@@ -32,7 +32,7 @@ def sync_wallet(wallet_uuid: str) -> Dict[str, Any]:
 @app.periodic(cron="0 * * * *")
 @app.task
 def sync_all_wallets(timestamp: int) -> Dict[str, Any]:
-    """Fan out a sync_wallet job per verified wallet. Runs hourly."""
+    """Fan out a sync_wallet job per verified wallet."""
     wallets = Wallet.objects.filter(verification_status=WALLET_VERIFICATION_STATUS_VERIFIED)
     total = wallets.count()
     queued = 0

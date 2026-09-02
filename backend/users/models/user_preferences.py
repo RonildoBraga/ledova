@@ -1,7 +1,3 @@
-"""
-Models for user preferences.
-"""
-
 from django.core.exceptions import ValidationError
 from django.db import models
 
@@ -10,8 +6,6 @@ from users.querysets.user_preferences import UserPreferencesQuerySet
 
 
 class UserPreferences(BaseModel):
-    """Model for storing user preferences, including selected account and portfolio."""
-
     user_profile = models.OneToOneField("users.UserProfile", on_delete=models.CASCADE, related_name="preferences")
 
     selected_account = models.ForeignKey(
@@ -53,7 +47,6 @@ class UserPreferences(BaseModel):
         verbose_name_plural = "User Preferences"
 
     def clean(self):
-        """Validate that selected portfolio belongs to selected account."""
         super().clean()
 
         if self.selected_portfolio and self.selected_account:
@@ -83,7 +76,6 @@ class UserPreferences(BaseModel):
                 )
 
     def save(self, *args, **kwargs):
-        """Override save to call full_clean() for validation."""
         self.full_clean()
         super().save(*args, **kwargs)
 

@@ -2,9 +2,7 @@ from django.db.models import QuerySet
 
 
 class AssetAllocationQuerySet(QuerySet):
-
     def filter_by_portfolio(self, portfolio):
-        """Filter by portfolio object. Kept for external callers."""
         if portfolio:
             if portfolio.uuid:
                 return self.filter(portfolio__uuid=portfolio.uuid)

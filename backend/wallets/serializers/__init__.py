@@ -1,7 +1,3 @@
-"""
-Serializers package for wallets app.
-"""
-
 from wallets.serializers.fiat_purchase import FiatTransactionSerializer
 from wallets.serializers.holding import HoldingSerializer
 from wallets.serializers.holding_snapshot import HoldingSnapshotSerializer

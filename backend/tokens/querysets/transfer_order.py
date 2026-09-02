@@ -5,7 +5,6 @@ from tokens.models.choices import TransferOrderStatus, TransferOrderType
 
 
 class TransferOrderQuerySet(QuerySet):
-
     def filter_by_token(self, token_uuid):
         if token_uuid:
             return self.filter(token__uuid=token_uuid)
@@ -70,20 +69,7 @@ class TransferOrderQuerySet(QuerySet):
         )
 
     def committed_sell_quantity(self, token, wallet_address, exclude_uuid=None) -> int:
-        """
-        Calculate the total quantity committed to open SELL orders for a wallet.
-
-        This is used to determine the available balance for new sell orders
-        by subtracting committed quantity from the total token balance.
-
-        Args:
-            token: The ShareToken to filter by.
-            wallet_address: The wallet address to check.
-            exclude_uuid: Optional order UUID to exclude (e.g., the order being modified).
-
-        Returns:
-            Total uncommitted quantity (quantity - filled_quantity) across matching orders.
-        """
+        """Quantity locked in open SELL orders; subtracted from the token balance to size new sells."""
         qs = self.ownership_bound().filter(
             token=token,
             wallet_address__iexact=wallet_address,
@@ -99,20 +85,7 @@ class TransferOrderQuerySet(QuerySet):
         return result or 0
 
     def order_book_levels(self, token, order_type: str, limit: int = 20):
-        """
-        Get aggregated order book levels for a token.
-
-        Groups orders by price and calculates total remaining quantity at each level.
-        Used to build order book displays.
-
-        Args:
-            token: The ShareToken to get order book for.
-            order_type: "BUY" or "SELL".
-            limit: Maximum number of price levels to return.
-
-        Returns:
-            QuerySet with price_per_share, total_quantity, and order_count.
-        """
+        """Remaining quantity aggregated per price level."""
         qs = self.ownership_bound().open().filter(token=token)
 
         if order_type == TransferOrderType.BUY:
@@ -126,27 +99,9 @@ class TransferOrderQuerySet(QuerySet):
         )[:limit]
 
     def best_bid(self, token):
-        """
-        Get the best (highest) buy order for a token.
-
-        Args:
-            token: The ShareToken to find best bid for.
-
-        Returns:
-            The best bid TransferOrder or None.
-        """
         return self.ownership_bound().open().buy_orders().filter(token=token).order_by("-price_per_share").first()
 
     def best_ask(self, token):
-        """
-        Get the best (lowest) sell order for a token.
-
-        Args:
-            token: The ShareToken to find best ask for.
-
-        Returns:
-            The best ask TransferOrder or None.
-        """
         return self.ownership_bound().open().sell_orders().filter(token=token).order_by("price_per_share").first()
 
     def with_relations(self):

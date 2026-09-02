@@ -1,10 +1,3 @@
-"""
-Country reconciliation service.
-
-This service provides functionality to reconcile country names based on their codes.
-It uses ISO 3166-1 alpha-2 and alpha-3 country codes to resolve proper country names.
-"""
-
 import logging
 
 from shared.models.country import Country
@@ -13,11 +6,8 @@ logger = logging.getLogger("ledova_backend")
 
 
 class CountryService:
-    """Service for reconciling country names based on country codes."""
-
     # ISO 3166-1 country code to name mapping (alpha-2 and alpha-3)
     COUNTRY_CODE_MAP = {
-        # Major countries with common variations
         "US": "United States",
         "USA": "United States",
         "GB": "United Kingdom",
@@ -283,30 +273,14 @@ class CountryService:
 
     @classmethod
     def get_country_name_by_code(cls, code):
-        """
-        Get the country name for a given country code.
-
-        Args:
-            code: The country code (alpha-2 or alpha-3)
-
-        Returns:
-            str: The country name or None if not found
-        """
         if not code:
             return None
 
-        # Convert to uppercase and strip whitespace
         normalized_code = code.upper().strip()
         return cls.COUNTRY_CODE_MAP.get(normalized_code)
 
     @classmethod
     def reconcile_country_names(cls):
-        """
-        Reconcile all country names in the database based on their codes.
-
-        Returns:
-            dict: Summary of the reconciliation process including updated count
-        """
         logger.info("Starting country name reconciliation process")
 
         updated_count = 0
@@ -315,7 +289,6 @@ class CountryService:
         error_count = 0
         not_found_codes = []
 
-        # Get all countries from the database
         countries = Country.objects.all()
         total_countries = countries.count()
 
@@ -323,28 +296,23 @@ class CountryService:
 
         for country in countries:
             try:
-                # Skip if country already has a name
                 if country.name:
                     already_named_count += 1
                     continue
 
-                # Skip if no code is available
                 if not country.code:
                     logger.warning(f"Country {country.uuid} has no code to reconcile")
                     error_count += 1
                     continue
 
-                # Try to get the country name by code
                 country_name = cls.get_country_name_by_code(country.code)
 
                 if country_name:
-                    # Update the country name
                     country.name = country_name
                     country.save(update_fields=["name", "updated_at"])
                     updated_count += 1
                     logger.info(f"Updated country {country.code} -> {country_name}")
                 else:
-                    # Code not found in our mapping
                     not_found_count += 1
                     not_found_codes.append(country.code)
                     logger.warning(f"No mapping found for country code: {country.code}")
@@ -353,7 +321,6 @@ class CountryService:
                 error_count += 1
                 logger.error(f"Error processing country {country.code}: {str(e)}")
 
-        # Log summary
         summary = {
             "total_countries": total_countries,
             "updated_count": updated_count,
@@ -369,15 +336,6 @@ class CountryService:
 
     @classmethod
     def reconcile_single_country(cls, country_code):
-        """
-        Reconcile a single country by its code.
-
-        Args:
-            country_code: The country code to reconcile
-
-        Returns:
-            dict: Result of the reconciliation
-        """
         try:
             country = Country.objects.get(code=country_code)
             country_name = cls.get_country_name_by_code(country_code)

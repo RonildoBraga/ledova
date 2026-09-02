@@ -1,7 +1,3 @@
-"""
-Admin for CustomerRiskAssessment model.
-"""
-
 from django.contrib import admin
 from django.utils.html import format_html
 
@@ -119,7 +115,6 @@ class CustomerRiskAssessmentAdmin(admin.ModelAdmin):
     )
 
     def status_badge(self, obj):
-        """Display assessment status as a colored badge."""
         colors = {
             "pending": "#ffc107",
             "complete": "#28a745",
@@ -137,7 +132,6 @@ class CustomerRiskAssessmentAdmin(admin.ModelAdmin):
     status_badge.admin_order_field = "assessment_status"
 
     def risk_rating_badge(self, obj):
-        """Display risk rating as a colored badge."""
         if not obj.overall_risk_rating:
             return "-"
         colors = {
@@ -158,7 +152,6 @@ class CustomerRiskAssessmentAdmin(admin.ModelAdmin):
     risk_rating_badge.admin_order_field = "overall_risk_rating"
 
     def pep_badge(self, obj):
-        """Display PEP type as a badge."""
         if obj.is_pep:
             colors = {
                 "domestic": "#fd7e14",
@@ -180,7 +173,6 @@ class CustomerRiskAssessmentAdmin(admin.ModelAdmin):
     pep_badge.admin_order_field = "pep_type"
 
     def total_risk_score(self, obj):
-        """Display calculated total risk score."""
         score = obj.total_risk_score
         return f"{score}/15" if score is not None else "-"
 

@@ -1,7 +1,3 @@
-"""
-Admin for AlertChecklistItem model.
-"""
-
 from django.contrib import admin
 from django.utils.html import format_html
 
@@ -105,14 +101,12 @@ class AlertChecklistItemAdmin(admin.ModelAdmin):
     actions = ["mark_completed", "mark_skipped"]
 
     def step_description(self, obj):
-        """Display step description."""
         return f"Step {obj.step.order}: {obj.step.description[:40]}"
 
     step_description.short_description = "Step"
     step_description.admin_order_field = "step__order"
 
     def alert_link(self, obj):
-        """Link to the parent alert."""
         return format_html(
             '<a href="/admin/compliance/compliancealert/{}/change/">{} - {}</a>',
             obj.alert.uuid,
@@ -123,7 +117,6 @@ class AlertChecklistItemAdmin(admin.ModelAdmin):
     alert_link.short_description = "Alert"
 
     def step_info(self, obj):
-        """Display step information."""
         required = "Required" if obj.step.is_required else "Optional"
         condition = f" (Condition: {obj.step.condition})" if obj.step.condition else ""
         return f"{required}{condition}"
@@ -131,7 +124,6 @@ class AlertChecklistItemAdmin(admin.ModelAdmin):
     step_info.short_description = "Step Requirements"
 
     def status_badge(self, obj):
-        """Display status as a colored badge."""
         if obj.is_completed:
             return format_html(
                 '<span style="background-color: #28a745; color: white; padding: 2px 8px; '
@@ -155,14 +147,12 @@ class AlertChecklistItemAdmin(admin.ModelAdmin):
     status_badge.short_description = "Status"
 
     def has_notes(self, obj):
-        """Show if item has notes."""
         return bool(obj.notes)
 
     has_notes.short_description = "Notes"
     has_notes.boolean = True
 
     def is_overdue_display(self, obj):
-        """Display overdue status."""
         return obj.is_overdue
 
     is_overdue_display.short_description = "Overdue"

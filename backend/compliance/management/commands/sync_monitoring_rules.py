@@ -42,7 +42,6 @@ class Command(BaseCommand):
                 if verbosity >= 2:
                     self.stdout.write(f"  Updated: {rule_code} - {obj.name}")
 
-        # Remove rules not in the defined list
         obsolete_rules = MonitoringRule.objects.exclude(rule_code__in=valid_rule_codes)
         deleted_count = obsolete_rules.count()
         if deleted_count > 0:
@@ -59,11 +58,8 @@ class Command(BaseCommand):
             )
 
     def get_rules(self):
-        """Return list of all monitoring rules."""
         return [
-            # =================================================================
             # Core Transaction Monitoring Rules (MON-001 to MON-006)
-            # =================================================================
             {
                 "rule_code": "MON-001",
                 "name": "Large Transaction",
@@ -124,10 +120,8 @@ class Command(BaseCommand):
                 "alert_severity": "high",
                 "is_active": True,
             },
-            # =================================================================
             # Advanced Monitoring Rules (MON-007 to MON-010)
             # Policy References: Document 3 §3.1, Document 5 §3.2
-            # =================================================================
             {
                 "rule_code": "MON-007",
                 "name": "High Aggregate Volume",
@@ -164,10 +158,8 @@ class Command(BaseCommand):
                 "alert_severity": "low",
                 "is_active": True,
             },
-            # =================================================================
             # Risk-Based Monitoring Rules (MON-011)
             # Policy References: Document 2 §4.2
-            # =================================================================
             {
                 "rule_code": "MON-011",
                 "name": "Extreme Risk Customer",

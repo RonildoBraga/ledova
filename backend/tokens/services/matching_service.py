@@ -8,17 +8,7 @@ logger = logging.getLogger(__name__)
 
 class MatchingService:
     def find_best_match_with_partial_fill(self, incoming_order: TransferOrder) -> Optional[TransferOrder]:
-        """
-        Find the best matching order considering partial fill requirements.
-
-        Finds a single best match that satisfies both parties' min_quantity constraints.
-
-        Args:
-            incoming_order: The order to find a match for.
-
-        Returns:
-            The best matching order, or None if no valid match exists.
-        """
+        """Best-priced opposite order whose fill would satisfy both sides' min_quantity."""
         opposite_type = (
             TransferOrderType.SELL if incoming_order.order_type == TransferOrderType.BUY else TransferOrderType.BUY
         )

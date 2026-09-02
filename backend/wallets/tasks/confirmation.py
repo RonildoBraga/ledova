@@ -6,8 +6,8 @@ from typing import Any, Dict, Optional
 from django.utils import timezone
 from procrastinate import RetryStrategy
 
-from ledova_backend.procrastinate_app import app
 from integrations.blockchain import get_blockchain_client
+from ledova_backend.procrastinate_app import app
 from shared.constants import BLOCKCHAIN_BITCOIN, EVM_BLOCKCHAINS
 from shared.utils.logging_utils import LoggingContext
 from wallets.constants import TRANSACTION_STATUS_PENDING
@@ -21,7 +21,6 @@ SATOSHI_TO_BTC = Decimal("100000000")
 
 
 def _extract_actual_fee(receipt: Dict[str, Any], chain: str) -> Optional[Decimal]:
-    """Extract the actual transaction fee from a blockchain receipt."""
     try:
         chain_lower = chain.lower()
 
@@ -138,7 +137,7 @@ def check_all_pending_transactions(timestamp: int) -> Dict[str, Any]:
 @app.periodic(cron="0 3 * * *")
 @app.task
 def cleanup_stale_pending_transactions(timestamp: int) -> Dict[str, Any]:
-    """Mark pending transactions older than 24h as failed. Runs daily at 03:00 UTC."""
+    """Mark pending transactions older than 24h as failed."""
     stale_cutoff = timezone.now() - timedelta(hours=24)
     stale_txs = Transaction.objects.filter(
         status=TRANSACTION_STATUS_PENDING,

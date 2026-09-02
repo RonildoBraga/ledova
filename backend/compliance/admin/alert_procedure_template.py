@@ -1,7 +1,3 @@
-"""
-Admin for AlertProcedureTemplate model.
-"""
-
 from django.contrib import admin
 from django.utils.html import format_html
 
@@ -9,8 +5,6 @@ from compliance.models import AlertProcedureTemplate
 
 
 class AlertProcedureStepInline(admin.TabularInline):
-    """Inline admin for procedure steps within a template."""
-
     model = AlertProcedureTemplate.steps.rel.related_model
     extra = 0
     ordering = ["order"]
@@ -137,7 +131,6 @@ class AlertProcedureTemplateAdmin(admin.ModelAdmin):
     )
 
     def priority_badge(self, obj):
-        """Display priority as a colored badge."""
         colors = {
             "critical": "#dc3545",
             "high": "#fd7e14",
@@ -156,7 +149,6 @@ class AlertProcedureTemplateAdmin(admin.ModelAdmin):
     priority_badge.admin_order_field = "priority"
 
     def smr_requirement_badge(self, obj):
-        """Display SMR requirement as a colored badge."""
         colors = {
             "mandatory": "#dc3545",
             "likely": "#fd7e14",
@@ -175,7 +167,6 @@ class AlertProcedureTemplateAdmin(admin.ModelAdmin):
     smr_requirement_badge.admin_order_field = "smr_requirement"
 
     def response_time_display(self, obj):
-        """Display response time in human-readable format."""
         hours = obj.response_time_hours
         if hours < 24:
             return f"{hours}h"
@@ -189,13 +180,11 @@ class AlertProcedureTemplateAdmin(admin.ModelAdmin):
     response_time_display.admin_order_field = "response_time_hours"
 
     def step_count_display(self, obj):
-        """Display total step count."""
         return obj.step_count
 
     step_count_display.short_description = "Total Steps"
 
     def required_step_count_display(self, obj):
-        """Display required step count."""
         return obj.required_step_count
 
     required_step_count_display.short_description = "Required Steps"

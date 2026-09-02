@@ -41,7 +41,6 @@ class UserProfile(BaseModel):
     terms_and_conditions = models.BooleanField(default=False)
     is_signup_completed = models.BooleanField(default=False)
 
-    # Provider-agnostic KYC fields
     kyc_provider = models.CharField(
         max_length=20,
         choices=KYC_PROVIDER_CHOICES,
@@ -62,11 +61,9 @@ class UserProfile(BaseModel):
     rejection_labels = models.JSONField(blank=True, null=True)
     verified_at = models.DateTimeField(null=True, blank=True)
 
-    # KYCAID-specific fields
     kycaid_applicant_id = models.CharField(max_length=100, blank=True, null=True)
     kycaid_verification_id = models.CharField(max_length=100, blank=True, null=True)
 
-    # Sumsub-specific fields
     sumsub_applicant_id = models.CharField(max_length=100, blank=True, null=True)
     sumsub_verification_status = models.CharField(
         max_length=50,

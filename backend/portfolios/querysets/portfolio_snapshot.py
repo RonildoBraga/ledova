@@ -7,9 +7,7 @@ from shared.utils.datetime_utils import (
 
 
 class PortfolioSnapshotQuerySet(QuerySet):
-
     def filter_by_portfolio(self, portfolio):
-        """Filter by portfolio object or UUID. Kept for external callers."""
         if portfolio:
             if hasattr(portfolio, "uuid"):
                 return self.filter(portfolio__uuid=portfolio.uuid)
@@ -17,7 +15,7 @@ class PortfolioSnapshotQuerySet(QuerySet):
         return self
 
     def filter_by_date_range(self, start_date=None, end_date=None):
-        """Custom date range with timezone-aware parsing (snapshot_date uses __lt for end)."""
+        """End of range is exclusive (snapshot_date__lt)."""
         queryset = self
 
         if start_date:
@@ -36,7 +34,6 @@ class PortfolioSnapshotQuerySet(QuerySet):
         return self.filter(portfolio__user_account__user_profiles__user=user)
 
     def sample_evenly(self, max_points):
-        """Return evenly-distributed sample of max_points rows."""
         if not max_points:
             return self
         try:

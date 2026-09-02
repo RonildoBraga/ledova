@@ -1,7 +1,3 @@
-"""
-Notification model for in-app notification inbox.
-"""
-
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
@@ -19,13 +15,7 @@ class NotificationType(models.TextChoices):
 
 
 class Notification(BaseModel):
-    """
-    Represents an in-app notification for a user.
-
-    Every notification sent through NotificationService is persisted here,
-    regardless of push delivery preferences. Users can view, read, and
-    archive notifications through the API.
-    """
+    """Persisted for every NotificationService send, regardless of push preferences."""
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
