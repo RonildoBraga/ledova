@@ -68,7 +68,7 @@ jobs:
         run: python manage.py makemigrations --check --dry-run
       - name: Unit tests (credential-free settings)
         run: python manage.py test --settings=ledova_backend.settings.test
-      - name: Row-level-security tests (PostgreSQL)
+      - name: PostgreSQL contract tests
         env:
           POSTGRES_HOST: 127.0.0.1
           POSTGRES_PORT: '5432'
@@ -76,4 +76,5 @@ jobs:
           POSTGRES_USER: ledova
         run: >-
           python manage.py test tenancy authentication.tests.test_v2_session_models
+          authentication.tests.test_v2_session_service_postgres
           --settings=ledova_backend.settings.test_postgres --noinput
