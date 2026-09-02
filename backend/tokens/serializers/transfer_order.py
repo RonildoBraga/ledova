@@ -4,7 +4,6 @@ from rest_framework import serializers
 from web3 import Web3
 
 from tokens.models import (
-    OrderModificationLog,
     ShareToken,
     Stablecoin,
     TransferOrder,
@@ -253,16 +252,6 @@ class OrderModificationRequestSerializer(serializers.Serializer):
         return data
 
 
-class OrderModificationMessageResponseSerializer(serializers.Serializer):
-
-    message = serializers.CharField()
-    message_hash = serializers.CharField()
-    order_uuid = serializers.UUIDField()
-    nonce = serializers.IntegerField()
-    current_values = serializers.DictField()
-    new_values = serializers.DictField()
-
-
 class OrderModificationExecuteSerializer(serializers.Serializer):
 
     message = serializers.CharField()
@@ -274,27 +263,3 @@ class OrderModificationExecuteSerializer(serializers.Serializer):
         if len(value) != 132:  # 0x + 130 hex chars
             raise serializers.ValidationError("Invalid signature length")
         return value
-
-
-class OrderModificationLogSerializer(serializers.ModelSerializer):
-
-    class Meta:
-        model = OrderModificationLog
-        fields = [
-            "uuid",
-            "field_name",
-            "old_value",
-            "new_value",
-            "signer_address",
-            "created_at",
-        ]
-        read_only_fields = fields
-
-
-class OrderModificationHistorySerializer(serializers.Serializer):
-
-    order_uuid = serializers.UUIDField()
-    original_quantity = serializers.IntegerField(allow_null=True)
-    original_price = serializers.DecimalField(max_digits=18, decimal_places=2, allow_null=True)
-    modification_count = serializers.IntegerField()
-    modifications = OrderModificationLogSerializer(many=True)

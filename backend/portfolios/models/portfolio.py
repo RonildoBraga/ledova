@@ -118,10 +118,3 @@ class PortfolioSnapshot(BaseModel):
                 return False
 
         return True
-
-    def calculate_total_value(self):
-        total = Decimal("0")
-        for asset_data in self.holdings_data.values():
-            if "market_value" in asset_data:
-                total += Decimal(str(asset_data["market_value"]))
-        return total

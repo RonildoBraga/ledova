@@ -27,19 +27,6 @@ CURRENCY_CHOICES = [
     (CURRENCY_SGD, CURRENCY_LABEL_SGD),
 ]
 
-CURRENCY_SYMBOLS = {
-    CURRENCY_AUD: "A$",
-    CURRENCY_USD: "$",
-    CURRENCY_EUR: "€",
-    CURRENCY_GBP: "£",
-    CURRENCY_CAD: "C$",
-    CURRENCY_JPY: "¥",
-    CURRENCY_NZD: "NZ$",
-    CURRENCY_SGD: "S$",
-}
-
-DEFAULT_CURRENCY = CURRENCY_AUD
-
 DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 BLOCKCHAIN_ETHEREUM = "ethereum"
@@ -114,21 +101,3 @@ def normalize_chain(chain: str) -> str:
 def get_native_asset_symbol(chain: str) -> str:
     normalized = normalize_chain(chain)
     return CHAIN_TO_NATIVE_ASSET.get(normalized, normalized.upper())
-
-
-JOB_STATUS_SCHEDULED = "scheduled"
-JOB_STATUS_RUNNING = "running"
-JOB_STATUS_COMPLETED = "completed"
-JOB_STATUS_FAILED = "failed"
-
-JOB_STATUS_LABEL_SCHEDULED = "Scheduled"
-JOB_STATUS_LABEL_RUNNING = "Running"
-JOB_STATUS_LABEL_COMPLETED = "Completed"
-JOB_STATUS_LABEL_FAILED = "Failed"
-
-JOB_STATUS_CHOICES = [
-    (JOB_STATUS_SCHEDULED, JOB_STATUS_LABEL_SCHEDULED),
-    (JOB_STATUS_RUNNING, JOB_STATUS_LABEL_RUNNING),
-    (JOB_STATUS_COMPLETED, JOB_STATUS_LABEL_COMPLETED),
-    (JOB_STATUS_FAILED, JOB_STATUS_LABEL_FAILED),
-]

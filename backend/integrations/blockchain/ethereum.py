@@ -184,9 +184,6 @@ class EthereumClient(BlockchainClient):
             logger.error(f"Error getting gas price: {str(e)}")
             raise
 
-    def is_address_valid(self, address: str) -> bool:
-        return self.w3.is_address(address)
-
     def wait_for_transaction_receipt(self, tx_hash: str, timeout: int = 120) -> Dict[str, Any]:
         try:
             logger.info(f"Waiting for transaction {tx_hash} confirmation")
@@ -199,22 +196,6 @@ class EthereumClient(BlockchainClient):
             raise TimeoutError(f"Transaction not confirmed within {timeout}s")
         except Exception as e:
             logger.error(f"Error waiting for receipt {tx_hash}: {str(e)}")
-            raise
-
-    def get_token_info(self, contract_address: str) -> Dict[str, Any]:
-        try:
-            checksum_contract = Web3.to_checksum_address(contract_address)
-            contract = self.w3.eth.contract(address=checksum_contract, abi=self.ERC20_ABI)
-
-            symbol = contract.functions.symbol().call()
-            decimals = contract.functions.decimals().call()
-
-            logger.debug(f"Token info: {symbol}, {decimals} decimals")
-
-            return {"symbol": symbol, "decimals": decimals, "contract_address": contract_address}
-
-        except Exception as e:
-            logger.error(f"Error getting token info for {contract_address}: {str(e)}")
             raise
 
     def build_erc20_transfer_data(self, contract_address: str, recipient: str, amount: Decimal, decimals: int) -> str:

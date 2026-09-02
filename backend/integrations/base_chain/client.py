@@ -99,10 +99,6 @@ class BaseChainClient:
         except Exception:
             return False
 
-    def reconnect(self) -> None:
-        self._web3 = None
-        self._connect()
-
     def to_checksum_address(self, address: str) -> ChecksumAddress:
         return self.w3.to_checksum_address(address)
 
@@ -122,15 +118,9 @@ class BaseChainClient:
         checksum_address = self.to_checksum_address(address)
         return self.w3.eth.get_balance(checksum_address)
 
-    def get_balance_ether(self, address: str) -> Decimal:
-        return self.from_wei(self.get_balance(address), "ether")
-
     def get_nonce(self, address: str) -> int:
         checksum_address = self.to_checksum_address(address)
         return self.w3.eth.get_transaction_count(checksum_address, "pending")
-
-    def create_account(self) -> LocalAccount:
-        return Account.create()
 
     def account_from_key(self, private_key: str) -> LocalAccount:
         return Account.from_key(private_key)

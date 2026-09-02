@@ -176,7 +176,3 @@ class MintRequest(BaseModel):
         self.executed_at = timezone.now()
         self.rejection_reason = reason
         self.save(update_fields=["status", "executed_by", "executed_at", "rejection_reason", "updated_at"])
-
-    def mark_approved(self):
-        self.status = MintRequestStatus.APPROVED
-        self.save(update_fields=["status", "updated_at"])

@@ -56,53 +56,6 @@ class ExpoPushClient:
         """
         return token.startswith("ExponentPushToken[") and token.endswith("]")
 
-    def send_notification(
-        self,
-        push_token: str,
-        title: str,
-        body: str,
-        data: Optional[Dict[str, Any]] = None,
-        badge: Optional[int] = None,
-        sound: str = "default",
-        priority: str = "default",
-    ) -> Dict[str, Any]:
-        """
-        Send a single push notification.
-
-        Args:
-            push_token: The Expo push token for the device
-            title: Notification title
-            body: Notification body text
-            data: Optional JSON data to send with the notification
-            badge: Optional badge number for iOS
-            sound: Sound to play ("default" or None)
-            priority: Notification priority ("default", "normal", "high")
-
-        Returns:
-            Response from Expo Push API
-
-        Raises:
-            ExpoPushError: If the notification fails to send
-        """
-        if not self._validate_token(push_token):
-            raise ExpoPushError(f"Invalid Expo push token format: {push_token}")
-
-        message = {
-            "to": push_token,
-            "title": title,
-            "body": body,
-            "sound": sound,
-            "priority": priority,
-        }
-
-        if data:
-            message["data"] = data
-
-        if badge is not None:
-            message["badge"] = badge
-
-        return self._send_request([message])[0]
-
     def send_batch(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         Send multiple notifications in a batch.
@@ -190,40 +143,3 @@ class ExpoPushClient:
         except requests.RequestException as e:
             logger.error(f"[EXPO_PUSH] Request failed: {e}")
             raise ExpoPushError(f"Failed to send push notification: {e}")
-
-    def check_receipts(self, ticket_ids: List[str]) -> Dict[str, Dict[str, Any]]:
-        """
-        Check the status of sent notifications using ticket IDs.
-
-        This can be used to verify if notifications were delivered.
-
-        Args:
-            ticket_ids: List of ticket IDs from send responses
-
-        Returns:
-            Dictionary mapping ticket IDs to their receipt status
-
-        Raises:
-            ExpoPushError: If the request fails
-        """
-        if not ticket_ids:
-            return {}
-
-        try:
-            response = self.session.post(
-                "https://exp.host/--/api/v2/push/getReceipts",
-                json={"ids": ticket_ids},
-                timeout=30,
-            )
-
-            if not response.ok:
-                raise ExpoPushError(
-                    f"Expo receipts API error: {response.status_code}",
-                    {"status_code": response.status_code, "response": response.text},
-                )
-
-            return response.json().get("data", {})
-
-        except requests.RequestException as e:
-            logger.error(f"[EXPO_PUSH] Receipt check failed: {e}")
-            raise ExpoPushError(f"Failed to check notification receipts: {e}")

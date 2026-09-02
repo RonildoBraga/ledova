@@ -1,4 +1,3 @@
-from decimal import Decimal
 from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
@@ -80,12 +79,6 @@ class Asset(BaseModel):
         if self.current_price is None:
             return "N/A"
         return f"{self.price_currency} {self.current_price:,.2f}"
-
-    def to_base_units(self, amount: Decimal) -> int:
-        return int(amount * (10**self.decimals))
-
-    def from_base_units(self, base_amount: int) -> Decimal:
-        return Decimal(base_amount) / Decimal(10**self.decimals)
 
     def get_deployment_for_chain(self, chain: str) -> Optional["AssetChainDeployment"]:
         return self.chain_deployments.filter(chain=chain, is_active=True).first()

@@ -5,7 +5,7 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.response import Response
 
-from shared.utils import LoggingContext
+from shared.utils import LoggingContext, get_client_ip
 from shared.views import AuthenticatedReadOnlyViewSet
 from tokens.exceptions import (
     OrderModificationException,
@@ -318,7 +318,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
                 order=order,
                 message=message,
                 signature=signature,
-                ip_address=self._get_client_ip(request),
+                ip_address=get_client_ip(request),
                 user_agent=request.META.get("HTTP_USER_AGENT", ""),
             )
         except OrderModificationException:
@@ -347,9 +347,3 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
         result = modification_service.get_modification_history(order)
 
         return Response(result)
-
-    def _get_client_ip(self, request):
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for:
-            return x_forwarded_for.split(",")[0].strip()
-        return request.META.get("REMOTE_ADDR")

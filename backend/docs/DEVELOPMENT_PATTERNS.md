@@ -39,7 +39,8 @@ class AssetViewSet(AuthenticatedReadOnlyViewSet):
 | `AuthenticatedModelViewSet` | Full CRUD for user resources |
 | `AuthenticatedReadOnlyViewSet` | Read-only authenticated data |
 | `AuthenticatedReferenceDataViewSet` | List/retrieve reference data |
-| `PublicReferenceDataViewSet` | Public reference data (no auth) |
+| `AuthenticatedListViewSet` | List-only authenticated data |
+| `AuthenticatedGenericViewSet` | Custom actions on authenticated data |
 
 ### Pattern
 

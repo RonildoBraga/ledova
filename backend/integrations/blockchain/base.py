@@ -114,18 +114,6 @@ class BlockchainClient(ABC):
         """
 
     @abstractmethod
-    def is_address_valid(self, address: str) -> bool:
-        """
-        Validate if address format is correct
-
-        Args:
-            address: Address to validate
-
-        Returns:
-            True if valid format, False otherwise
-        """
-
-    @abstractmethod
     def wait_for_transaction_receipt(self, tx_hash: str, timeout: int = 120) -> Dict[str, Any]:
         """
         Wait for transaction to be confirmed

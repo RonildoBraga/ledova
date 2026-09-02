@@ -122,61 +122,13 @@ class AssetSyncService:
             return result
 
     @staticmethod
-    def get_historical_price(asset: Asset, timestamp: datetime) -> Optional[Decimal]:
-        time_window_start = timestamp - timedelta(minutes=30)
-        time_window_end = timestamp + timedelta(minutes=30)
-
-        cached_snapshot = (
-            AssetSnapshot.objects.filter(
-                asset=asset,
-                source_timestamp__gte=time_window_start,
-                source_timestamp__lte=time_window_end,
-            )
-            .order_by("source_timestamp")
-            .first()
-        )
-
-        if cached_snapshot:
-            return cached_snapshot.price
-
-        coin_id = SYMBOL_TO_COINGECKO_ID.get(asset.symbol.upper())
-        if not coin_id:
-            return None
-
-        try:
-            client = CoinGeckoClient()
-            price = client.fetch_historical_price(coin_id, timestamp)
-
-            if price is None:
-                return None
-
-            AssetSnapshot.objects.create(
-                asset=asset,
-                price=price,
-                price_currency="USD",
-                source_timestamp=timestamp,
-                data_source="coingecko_historical",
-                market_data={},
-            )
-
-            return price
-
-        except Exception as e:
-            logger.error(f"{LoggingContext.ASSETS} Failed to fetch historical price for {asset.symbol}: {str(e)}")
-            return None
-
-    @staticmethod
     def update_price(
         asset: Asset,
         price: Decimal,
         source: str = "manual",
         currency: str = "USD",
         create_snapshot: bool = True,
-        timestamp: Optional[datetime] = None,
     ) -> Optional[AssetSnapshot]:
-        if timestamp is None:
-            timestamp = timezone.now()
-
         if price <= 0:
             raise ValueError(f"Price must be positive, got {price}")
 
@@ -187,13 +139,14 @@ class AssetSyncService:
 
             snapshot = None
             if create_snapshot:
-                snapshot = AssetSnapshot.objects.create(
+                # One row per asset per day: a manual price overwrites today's midnight row
+                # (same key the periodic sync writes) instead of adding an intraday duplicate.
+                # market_data is deliberately not in defaults so an existing NAV row keeps its provenance.
+                today_midnight = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+                snapshot, _ = AssetSnapshot.objects.update_or_create(
                     asset=asset,
-                    price=price,
-                    price_currency=currency,
-                    market_data={},
-                    source_timestamp=timestamp,
-                    data_source=source,
+                    source_timestamp=today_midnight,
+                    defaults={"price": price, "price_currency": currency, "data_source": source},
                 )
 
             return snapshot

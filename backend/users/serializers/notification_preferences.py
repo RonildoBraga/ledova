@@ -28,15 +28,3 @@ class NotificationPreferencesSerializer(serializers.ModelSerializer):
             "updated_at",
         )
         read_only_fields = ("uuid", "user_profile", "created_at", "updated_at")
-
-
-class UpdateNotificationPreferencesSerializer(serializers.Serializer):
-    """
-    Serializer for updating notification preferences.
-
-    All fields are optional to allow partial updates.
-    """
-
-    transaction_alerts = serializers.BooleanField(required=False)
-    price_alerts = serializers.BooleanField(required=False)
-    marketing = serializers.BooleanField(required=False)

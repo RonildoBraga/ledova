@@ -11,9 +11,9 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
-import requests
 import base58
 import bech32
+import requests
 from django.conf import settings
 
 from .base import BlockchainClient
@@ -195,10 +195,6 @@ class BitcoinClient(BlockchainClient):
         except Exception as e:
             logger.error(f"Error getting fee rate: {str(e)}")
             return 20
-
-    def is_address_valid(self, address: str) -> bool:
-        """Validate Bitcoin address format."""
-        return is_bitcoin_address_valid(address, self.expected_network)
 
     def wait_for_transaction_receipt(self, tx_hash: str, timeout: int = 120) -> Dict[str, Any]:
         """Wait for transaction confirmation."""

@@ -278,7 +278,6 @@ class TradingReadIsolationTest(APITestCase):
             }
         )
 
-        self.assertEqual(serializer._get_wallet_addresses(), [self.bob_wallet.address.lower()])
         self.assertEqual(
             serializer._get_wallet_address(self.swap, "buyer_address", "seller_address"),
             Web3.to_checksum_address(self.bob_wallet.address),
