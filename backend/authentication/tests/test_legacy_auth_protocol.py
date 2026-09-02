@@ -103,6 +103,24 @@ class LegacyTransportTest(LegacyAuthProtocolTestCase):
         self.assertFalse(UserToken.objects.exists())
         send_email.assert_called_once_with(User.objects.get(email="new.user@example.com"))
 
+    def test_legacy_signup_rejects_noncanonical_raw_input_without_side_effects(self):
+        with patch("authentication.views.user.EmailCodeService.send") as send_email:
+            response = self.client.post(
+                "/api/signup/",
+                {
+                    "email": "new.user@example.com\t",
+                    "password": self.password,
+                    "passwordConfirm": self.password,
+                },
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data, {"email": ["Enter a valid email address."]})
+        self.assertFalse(User.objects.exists())
+        self.assertFalse(UserToken.objects.exists())
+        send_email.assert_not_called()
+
     def test_legacy_signin_sets_secure_httponly_cookie_pair_and_identity_fields(self):
         user = self.create_completed_user()
 

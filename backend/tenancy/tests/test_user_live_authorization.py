@@ -9,6 +9,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 from django.db import close_old_connections, connection
 from django.test import TransactionTestCase, skipUnlessDBFeature
+from django.test.utils import CaptureQueriesContext
 from rest_framework.test import APIClient, APITestCase
 
 from assets.models import Asset
@@ -190,6 +191,38 @@ class UserLiveAuthorizationTest(APITestCase):
         self.assertEqual(self.bob_financial.occupation, "Bob occupation")
         self.assertEqual(self.bob_preferences.theme, "dark")
         self.assertTrue(FavouriteAsset.objects.filter(pk=self.bob_favourite.pk).exists())
+
+    def test_profile_email_update_is_rejected_without_mutation(self):
+        original_email = self.alice.email
+        original_name = self.alice_profile.full_name
+        self.client.force_authenticate(self.alice)
+
+        with CaptureQueriesContext(connection) as captured:
+            response = self.client.patch(
+                f"/api/user-profiles/{self.alice_profile.uuid}/",
+                {
+                    "email": "replacement@example.test",
+                    "fullName": "Updated Alice",
+                },
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.data,
+            {"email": ["Email cannot be changed through a profile update."]},
+        )
+        self.alice.refresh_from_db()
+        self.alice_profile.refresh_from_db()
+        self.assertEqual(self.alice.email, original_email)
+        self.assertEqual(self.alice_profile.full_name, original_name)
+        user_table = User._meta.db_table.upper()
+        self.assertFalse(
+            any(
+                query["sql"].lstrip().upper().startswith(f'UPDATE "{user_table}"')
+                for query in captured.captured_queries
+            )
+        )
 
     def test_privileged_customer_updates_are_self_scoped(self):
         for label, privileged_user in (

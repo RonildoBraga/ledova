@@ -10,7 +10,7 @@ This module handles:
 import logging
 
 from django.contrib.auth import authenticate, get_user_model
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -23,12 +23,19 @@ logger = logging.getLogger("ledova_backend")
 
 
 def _resolve_signup_email(email):
-    legacy_email = email.lower().strip()
     try:
-        destination_key = normalize_v2_email(legacy_email)
+        destination_key = normalize_v2_email(email)
     except V2EmailError:
         raise serializers.ValidationError({"email": ["Enter a valid email address."]}) from None
-    return legacy_email, User.objects.resolve_v2_email(destination_key)
+    return destination_key, User.objects.resolve_v2_email(destination_key)
+
+
+def _create_signup_user(email, password):
+    try:
+        with transaction.atomic():
+            return User.objects.create_user(email=email, password=password, is_active=True)
+    except (IntegrityError, ValueError):
+        raise serializers.ValidationError({"email": ["Email already registered"]}) from None
 
 
 class SessionService:
@@ -110,11 +117,9 @@ class SessionService:
             user = existing_user
             user.set_password(password)
             user.is_active = True
-            user.save()
+            user.save(update_fields=["password", "is_active"])
         else:
-            user = User.objects.create(email=email, is_active=True)
-            user.set_password(password)
-            user.save()
+            user = _create_signup_user(email, password)
 
         # Create token using TokenService
         from authentication.services.tokens import TokenService
@@ -159,11 +164,9 @@ class SessionService:
             user = existing_user
             user.set_password(password)
             user.is_active = True
-            user.save()
+            user.save(update_fields=["password", "is_active"])
         else:
-            user = User.objects.create(email=email, is_active=True)
-            user.set_password(password)
-            user.save()
+            user = _create_signup_user(email, password)
 
         # Initialize user defaults (account, portfolio, preferences)
         from users.services.setup import UserSetupService

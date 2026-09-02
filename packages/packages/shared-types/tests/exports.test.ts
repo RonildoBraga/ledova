@@ -1,4 +1,4 @@
-import type { AssetFilters } from '../src';
+import type { AssetFilters, UpdateUserProfile } from '../src';
 
 describe('shared-types exports', () => {
   it('should export type definitions module', () => {
@@ -8,6 +8,8 @@ describe('shared-types exports', () => {
 
   it('exposes the public compile-time type surface', () => {
     const filters: AssetFilters = { search: 'synthetic', chain: 'ethereum' };
+    const profileEmailIsResponseOnly: 'email' extends keyof UpdateUserProfile ? false : true = true;
     expect(filters).toEqual({ search: 'synthetic', chain: 'ethereum' });
+    expect(profileEmailIsResponseOnly).toBe(true);
   });
 });

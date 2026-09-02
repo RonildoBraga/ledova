@@ -198,7 +198,7 @@ class AuthViewSet(TokenCookieMixin, ViewSet):
             )
 
         user.set_password(new_password)
-        user.save()
+        user.save(update_fields=["password"])
 
         logger.info(f"{LoggingContext.AUTH} Password changed successfully for user {user.email}")
 
