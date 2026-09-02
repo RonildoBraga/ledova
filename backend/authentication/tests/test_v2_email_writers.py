@@ -11,7 +11,7 @@ User = get_user_model()
 class V2EmailManagerWriterTests(TestCase):
     password = "writer-password-123"
 
-    def create_raw_user(self, email):
+    def create_direct_user(self, email):
         user = User(email=email)
         user.set_password(self.password)
         user.save()
@@ -59,23 +59,22 @@ class V2EmailManagerWriterTests(TestCase):
             self.assertNotIn(str(value), str(raised.exception))
         self.assertFalse(User.objects.exists())
 
-    def test_legacy_equivalent_rows_block_user_and_superuser_creation(self):
-        self.create_raw_user(" Legacy.Owner@EXAMPLE.TEST ")
+    def test_existing_destination_key_blocks_user_and_superuser_creation(self):
+        self.create_direct_user("legacy.owner@example.test")
 
         with self.assertRaisesRegex(ValueError, r"^V2 email is unavailable\.$"):
             User.objects.create_user(
-                email="legacy.owner@example.test",
+                email=" Legacy.Owner@EXAMPLE.TEST ",
                 password=self.password,
             )
 
-        self.create_raw_user("legacy.owner@example.test ")
         with self.assertRaisesRegex(ValueError, r"^V2 email is unavailable\.$"):
             User.objects.create_superuser(
-                email="legacy.owner@example.test",
+                email="LEGACY.OWNER@EXAMPLE.TEST",
                 password=self.password,
             )
 
-        self.assertEqual(User.objects.count(), 2)
+        self.assertEqual(User.objects.count(), 1)
 
 
 class V2EmailAdminWriterTests(TestCase):
@@ -99,15 +98,15 @@ class V2EmailAdminWriterTests(TestCase):
         self.assertEqual(user.email, "admin.owner@example.test")
         self.assertTrue(user.check_password(self.password))
 
-    def test_add_form_rejects_disallowed_and_legacy_equivalent_values(self):
+    def test_add_form_rejects_disallowed_and_unavailable_values(self):
         invalid = self.form("admin.owner@example.test\t")
         self.assertFalse(invalid.is_valid())
         self.assertEqual(invalid.errors["email"], ["Enter a valid email address."])
 
-        raw_user = User(email=" Legacy.Admin@EXAMPLE.TEST ")
-        raw_user.set_password(self.password)
-        raw_user.save()
-        collision = self.form("legacy.admin@example.test")
+        existing = User(email="legacy.admin@example.test")
+        existing.set_password(self.password)
+        existing.save()
+        collision = self.form(" Legacy.Admin@EXAMPLE.TEST ")
         self.assertFalse(collision.is_valid())
         self.assertEqual(collision.errors["email"], ["Email is unavailable."])
         self.assertEqual(User.objects.count(), 1)

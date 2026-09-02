@@ -7,6 +7,10 @@ from django.db import models
 from django.utils import timezone
 
 from authentication.managers.user import CustomUserManager
+from authentication.security.v2_email import (
+    V2EmailDestinationKey,
+    V2EmailIsPrintableASCII,
+)
 
 
 class CustomUser(AbstractBaseUser, PermissionsMixin):
@@ -31,6 +35,22 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     password_reset_sent_at = models.DateTimeField(blank=True, null=True)
 
     objects = CustomUserManager()
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=V2EmailIsPrintableASCII(models.F("email")),
+                name="auth_user_email_v2_ascii_ck",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(email=V2EmailDestinationKey(models.F("email"))),
+                name="auth_user_email_v2_canon_ck",
+            ),
+            models.UniqueConstraint(
+                V2EmailDestinationKey(models.F("email")),
+                name="auth_user_email_v2_key_uniq",
+            ),
+        ]
 
     USERNAME_FIELD = "email"
 

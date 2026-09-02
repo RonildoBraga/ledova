@@ -1,8 +1,11 @@
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from authentication.managers.user import V2EmailLookupResult, V2EmailLookupState
 from authentication.models.user_token import UserToken
 from authentication.services.tokens import TokenService
 
@@ -14,7 +17,7 @@ class EmailVerificationTest(APITestCase):
     endpoint = "/api/email-verification/"
     invalid_response = {"token": ["Invalid email or verification code."]}
 
-    def create_raw_user(self, email, token="654321"):
+    def create_direct_user(self, email, token="654321"):
         user = User(
             email=email,
             is_active=True,
@@ -132,13 +135,13 @@ class EmailVerificationTest(APITestCase):
         self.assertNotIn("refresh", replay_response.cookies)
         self.assertEqual(UserToken.objects.filter(user=user, is_active=True).count(), 1)
 
-    def test_unique_noncanonical_stored_address_is_verified(self):
-        stored_email = " Pending.Member@EXAMPLE.TEST "
-        user = self.create_raw_user(stored_email)
+    def test_canonical_stored_address_is_verified_from_normalized_input(self):
+        stored_email = "pending.member@example.test"
+        user = self.create_direct_user(stored_email)
 
         response = self.client.post(
             self.endpoint,
-            {"email": " pending.member@example.test ", "token": "654321"},
+            {"email": " Pending.Member@EXAMPLE.TEST ", "token": "654321"},
             format="json",
         )
 
@@ -150,23 +153,29 @@ class EmailVerificationTest(APITestCase):
         self.assertEqual(UserToken.objects.filter(user=user, is_active=True).count(), 1)
 
     def test_absent_and_ambiguous_destinations_have_the_same_failure(self):
-        first = self.create_raw_user("Pending@EXAMPLE.TEST")
-        second = self.create_raw_user("pending@example.test ")
+        first = self.create_direct_user("pending-first@example.test")
+        second = self.create_direct_user("pending-second@example.test")
 
         absent_response = self.client.post(
             self.endpoint,
             {"email": "absent@example.test", "token": "654321"},
             format="json",
         )
-        ambiguous_response = self.client.post(
-            self.endpoint,
-            {"email": "pending@example.test", "token": "654321"},
-            format="json",
-        )
+        with patch.object(
+            type(User.objects),
+            "resolve_v2_email",
+            return_value=V2EmailLookupResult(V2EmailLookupState.AMBIGUOUS),
+        ) as resolve:
+            ambiguous_response = self.client.post(
+                self.endpoint,
+                {"email": "pending@example.test", "token": "654321"},
+                format="json",
+            )
 
         self.assertEqual(ambiguous_response.status_code, absent_response.status_code)
         self.assertEqual(ambiguous_response.data, absent_response.data)
         self.assertEqual(list(ambiguous_response.cookies), list(absent_response.cookies))
+        resolve.assert_called_once_with("pending@example.test")
         self.assertFalse(UserToken.objects.exists())
         for user in (first, second):
             user.refresh_from_db()

@@ -1,6 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.db import connection
-from django.db.models import F
+from django.db.models import F, Value
 from django.db.models.functions import Trim
 from django.test import SimpleTestCase, TestCase
 from rest_framework import serializers
@@ -119,11 +119,14 @@ class V2EmailSerializerTests(SimpleTestCase):
 
 class V2EmailDestinationExpressionTests(TestCase):
     def test_expression_executes_canonical_comparison(self):
-        user = User.objects.create(email=" Legacy.Owner@EXAMPLE.TEST ")
-        matches = User.objects.annotate(destination_key=v2_email_destination_expression()).filter(
-            destination_key="legacy.owner@example.test"
+        user = User.objects.create(email="legacy.owner@example.test")
+        destination_key = (
+            User.objects.filter(pk=user.pk)
+            .annotate(destination_key=V2EmailDestinationKey(Value(" Legacy.Owner@EXAMPLE.TEST ")))
+            .values_list("destination_key", flat=True)
+            .get()
         )
-        self.assertEqual(list(matches.values_list("pk", flat=True)), [user.pk])
+        self.assertEqual(destination_key, "legacy.owner@example.test")
 
     def test_expression_uses_c_collation_only_on_postgresql(self):
         query = User.objects.annotate(destination_key=v2_email_destination_expression()).filter(
