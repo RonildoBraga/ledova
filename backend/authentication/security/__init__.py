@@ -1,15 +1,31 @@
 from authentication.security.v2_credentials import (
+    V2ConfirmationTokenParts,
     V2KeyMaterial,
     V2KeyMaterialError,
+    V2RefreshTokenParts,
+    decode_v2_confirmation_token,
+    decode_v2_refresh_token,
+    encode_v2_confirmation_token,
+    encode_v2_refresh_token,
     load_v2_key_material,
+    refresh_confirmation_digest,
+    refresh_confirmation_matches,
     refresh_secret_digest,
     refresh_secret_matches,
 )
 
 __all__ = [
+    "V2ConfirmationTokenParts",
     "V2KeyMaterial",
     "V2KeyMaterialError",
+    "V2RefreshTokenParts",
+    "decode_v2_confirmation_token",
+    "decode_v2_refresh_token",
+    "encode_v2_confirmation_token",
+    "encode_v2_refresh_token",
     "load_v2_key_material",
+    "refresh_confirmation_digest",
+    "refresh_confirmation_matches",
     "refresh_secret_digest",
     "refresh_secret_matches",
 ]

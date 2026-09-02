@@ -8,6 +8,7 @@ from unittest.mock import patch
 from django.test import SimpleTestCase, override_settings
 
 from authentication.security.v2_credentials import (
+    V2KeyMaterial,
     V2KeyMaterialError,
     load_v2_key_material,
     refresh_secret_digest,
@@ -120,11 +121,25 @@ class V2KeyMaterialTest(SimpleTestCase):
             ("access", self.access_key, self.refresh_key),
             ("refresh", self.access_key, self.refresh_key),
         ):
-            with self.subTest(field=field):
-                django_secret = encoded(access_key if field == "access" else refresh_key)
-                self.configure(access_key=access_key, refresh_key=refresh_key)
+            selected_key = access_key if field == "access" else refresh_key
+            for django_secret in (encoded(selected_key), encoded(selected_key).rstrip("=")):
+                with self.subTest(field=field, padding=django_secret.endswith("=")):
+                    self.configure(access_key=access_key, refresh_key=refresh_key)
+                    with override_settings(SECRET_KEY=django_secret):
+                        self.assert_configuration_rejected(django_secret)
+
+    def test_direct_key_material_rejects_padded_and_unpadded_django_key_reuse(self):
+        for django_secret in (encoded(self.access_key), encoded(self.access_key).rstrip("=")):
+            with self.subTest(padding=django_secret.endswith("=")):
                 with override_settings(SECRET_KEY=django_secret):
-                    self.assert_configuration_rejected(django_secret)
+                    with self.assertRaisesMessage(
+                        V2KeyMaterialError,
+                        "Invalid v2 authentication key configuration.",
+                    ):
+                        V2KeyMaterial(
+                            access_signing_key=self.access_key,
+                            refresh_hmac_key=self.refresh_key,
+                        )
 
 
 class RefreshSecretDigestTest(SimpleTestCase):
