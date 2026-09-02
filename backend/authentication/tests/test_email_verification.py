@@ -14,6 +14,16 @@ class EmailVerificationTest(APITestCase):
     endpoint = "/api/email-verification/"
     invalid_response = {"token": ["Invalid email or verification code."]}
 
+    def create_raw_user(self, email, token="654321"):
+        user = User(
+            email=email,
+            is_active=True,
+            email_verification_token=token,
+        )
+        user.set_password("testpass123")
+        user.save()
+        return user
+
     def test_wrong_code_cannot_disclose_or_reuse_an_existing_session(self):
         user = User.objects.create_user(
             email="verified@example.com",
@@ -121,3 +131,44 @@ class EmailVerificationTest(APITestCase):
         self.assertNotIn("access", replay_response.cookies)
         self.assertNotIn("refresh", replay_response.cookies)
         self.assertEqual(UserToken.objects.filter(user=user, is_active=True).count(), 1)
+
+    def test_unique_noncanonical_stored_address_is_verified(self):
+        stored_email = " Pending.Member@EXAMPLE.TEST "
+        user = self.create_raw_user(stored_email)
+
+        response = self.client.post(
+            self.endpoint,
+            {"email": " pending.member@example.test ", "token": "654321"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["email"], stored_email)
+        user.refresh_from_db()
+        self.assertTrue(user.is_email_verified)
+        self.assertIsNone(user.email_verification_token)
+        self.assertEqual(UserToken.objects.filter(user=user, is_active=True).count(), 1)
+
+    def test_absent_and_ambiguous_destinations_have_the_same_failure(self):
+        first = self.create_raw_user("Pending@EXAMPLE.TEST")
+        second = self.create_raw_user("pending@example.test ")
+
+        absent_response = self.client.post(
+            self.endpoint,
+            {"email": "absent@example.test", "token": "654321"},
+            format="json",
+        )
+        ambiguous_response = self.client.post(
+            self.endpoint,
+            {"email": "pending@example.test", "token": "654321"},
+            format="json",
+        )
+
+        self.assertEqual(ambiguous_response.status_code, absent_response.status_code)
+        self.assertEqual(ambiguous_response.data, absent_response.data)
+        self.assertEqual(list(ambiguous_response.cookies), list(absent_response.cookies))
+        self.assertFalse(UserToken.objects.exists())
+        for user in (first, second):
+            user.refresh_from_db()
+            self.assertFalse(user.is_email_verified)
+            self.assertEqual(user.email_verification_token, "654321")

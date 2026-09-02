@@ -53,6 +53,22 @@ class LegacyAuthProtocolTestCase(APITestCase):
         profile.save(update_fields=["is_signup_completed"])
         return user
 
+    def create_raw_user(self, email, *, password=None, active=True, verified=True):
+        user = User(
+            email=email,
+            is_active=active,
+            is_email_verified=verified,
+        )
+        user.set_password(password or self.password)
+        user.save()
+        return user
+
+    def complete_raw_user(self, user):
+        profile, _, _, _ = UserSetupService.ensure_defaults(user)
+        profile.is_signup_completed = True
+        profile.save(update_fields=["is_signup_completed"])
+        return user
+
     def assert_issued_cookie(self, response, name, max_age):
         self.assertIn(name, response.cookies)
         cookie = response.cookies[name]
@@ -105,6 +121,99 @@ class LegacyTransportTest(LegacyAuthProtocolTestCase):
         self.assert_issued_cookie(response, "access", 900)
         self.assert_issued_cookie(response, "refresh", 604800)
         self.assertEqual(UserToken.objects.filter(user=user, is_active=True).count(), 1)
+
+    def test_legacy_signin_resolves_one_noncanonical_stored_address(self):
+        stored_email = " Legacy.Member@EXAMPLE.TEST "
+        user = self.complete_raw_user(self.create_raw_user(stored_email))
+
+        response = self.client.post(
+            "/api/signin/",
+            {"email": " legacy.member@example.test ", "password": self.password},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()["email"], stored_email)
+        self.assertEqual(UserToken.objects.filter(user=user, is_active=True).count(), 1)
+
+    def test_legacy_signin_absent_and_ambiguous_responses_are_identical(self):
+        first = self.create_raw_user("Collision@EXAMPLE.TEST")
+        second = self.create_raw_user("collision@example.test ")
+        initial_state = {
+            first.pk: (first.password, first.last_login),
+            second.pk: (second.password, second.last_login),
+        }
+
+        absent_response = APIClient().post(
+            "/api/signin/",
+            {"email": "absent@example.test", "password": self.password},
+            format="json",
+        )
+        ambiguous_response = APIClient().post(
+            "/api/signin/",
+            {"email": "collision@example.test", "password": self.password},
+            format="json",
+        )
+
+        self.assertEqual(ambiguous_response.status_code, absent_response.status_code)
+        self.assertEqual(ambiguous_response.data, absent_response.data)
+        self.assertEqual(list(ambiguous_response.cookies), list(absent_response.cookies))
+        self.assertFalse(UserToken.objects.exists())
+        for user in (first, second):
+            user.refresh_from_db()
+            self.assertEqual((user.password, user.last_login), initial_state[user.pk])
+
+    def test_legacy_signup_reuses_one_noncanonical_incomplete_account(self):
+        stored_email = " Pending.Member@EXAMPLE.TEST "
+        user = self.create_raw_user(stored_email, password="old-password-123", active=False, verified=False)
+
+        with patch("authentication.views.user.EmailCodeService.send") as send_email:
+            response = self.client.post(
+                "/api/signup/",
+                {
+                    "email": "pending.member@example.test",
+                    "password": self.password,
+                    "passwordConfirm": self.password,
+                },
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.json()["email"], stored_email)
+        self.assertEqual(User.objects.count(), 1)
+        user.refresh_from_db()
+        self.assertTrue(user.is_active)
+        self.assertTrue(user.check_password(self.password))
+        send_email.assert_called_once()
+        self.assertEqual(send_email.call_args.args[0].pk, user.pk)
+
+    def test_legacy_signup_ambiguity_fails_without_mutation_or_delivery(self):
+        first = self.create_raw_user("Collision@EXAMPLE.TEST", password="first-password-123", active=False)
+        second = self.create_raw_user("collision@example.test ", password="second-password-123")
+        initial_state = {
+            first.pk: (first.email, first.password, first.is_active),
+            second.pk: (second.email, second.password, second.is_active),
+        }
+
+        with patch("authentication.views.user.EmailCodeService.send") as send_email:
+            response = self.client.post(
+                "/api/signup/",
+                {
+                    "email": "collision@example.test",
+                    "password": self.password,
+                    "passwordConfirm": self.password,
+                },
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data, {"email": ["Email already registered"]})
+        self.assertEqual(User.objects.count(), 2)
+        self.assertFalse(UserToken.objects.exists())
+        send_email.assert_not_called()
+        for user in (first, second):
+            user.refresh_from_db()
+            self.assertEqual((user.email, user.password, user.is_active), initial_state[user.pk])
 
     def test_legacy_cookie_and_bearer_access_each_authenticate_the_verify_endpoint(self):
         user = self.create_completed_user()

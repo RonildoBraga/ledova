@@ -10,6 +10,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
 
+from authentication.managers.user import V2EmailLookupState
 from authentication.models.user_token import UserToken
 from authentication.serializers.user import (
     ChangePasswordSerializer,
@@ -144,7 +145,8 @@ class AuthViewSet(TokenCookieMixin, ViewSet):
         token = serializer.validated_data["token"]
         email = serializer.validated_data["email"]
 
-        user = User.objects.filter(email=email).first()
+        lookup = User.objects.resolve_v2_email(email)
+        user = lookup.user if lookup.state is V2EmailLookupState.UNIQUE else None
 
         if user is None or not EmailCodeService.verify(user, token):
             return Response(

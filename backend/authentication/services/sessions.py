@@ -14,10 +14,21 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
 
+from authentication.managers.user import V2EmailLookupState
+from authentication.security.v2_email import V2EmailError, normalize_v2_email
 from shared.utils.logging_utils import LoggingContext
 
 User = get_user_model()
 logger = logging.getLogger("ledova_backend")
+
+
+def _resolve_signup_email(email):
+    legacy_email = email.lower().strip()
+    try:
+        destination_key = normalize_v2_email(legacy_email)
+    except V2EmailError:
+        raise serializers.ValidationError({"email": ["Enter a valid email address."]}) from None
+    return legacy_email, User.objects.resolve_v2_email(destination_key)
 
 
 class SessionService:
@@ -42,7 +53,7 @@ class SessionService:
         if not email or not password:
             raise serializers.ValidationError({"error": ["Email and password are required."]})
 
-        user = authenticate(username=email.lower().strip(), password=password)
+        user = authenticate(username=email, password=password)
         if not user:
             raise serializers.ValidationError({"error": ["Invalid email or password."]})
 
@@ -88,9 +99,10 @@ class SessionService:
         if password != password_confirmation:
             raise serializers.ValidationError({"password": ["Passwords do not match."]})
 
-        email = email.lower().strip()
-
-        existing_user = User.objects.filter(email=email).first()
+        email, lookup = _resolve_signup_email(email)
+        if lookup.state is V2EmailLookupState.AMBIGUOUS:
+            raise serializers.ValidationError({"email": ["Email already registered"]})
+        existing_user = lookup.user
         if existing_user and hasattr(existing_user, "userprofile") and existing_user.userprofile.is_signup_completed:
             raise serializers.ValidationError({"email": ["Email already registered"]})
 
@@ -136,9 +148,10 @@ class SessionService:
         if password != password_confirmation:
             raise serializers.ValidationError({"password": ["Passwords do not match."]})
 
-        email = email.lower().strip()
-
-        existing_user = User.objects.filter(email=email).first()
+        email, lookup = _resolve_signup_email(email)
+        if lookup.state is V2EmailLookupState.AMBIGUOUS:
+            raise serializers.ValidationError({"email": ["Email already registered"]})
+        existing_user = lookup.user
         if existing_user and hasattr(existing_user, "userprofile") and existing_user.userprofile.is_signup_completed:
             raise serializers.ValidationError({"email": ["Email already registered"]})
 
