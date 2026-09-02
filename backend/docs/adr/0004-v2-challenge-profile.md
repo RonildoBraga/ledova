@@ -237,7 +237,12 @@ still-current candidate and atomically supersedes the prior active delivery. A
 local pre-send failure or explicit `4xx` is `rejected`. Timeout, connection
 loss, `5xx`, or an unexpected response is `ambiguous`. Neither rejected nor
 ambiguous delivery replaces the old credential. Provider acceptance means only
-that SendGrid accepted the request, not that an inbox received it.
+that SendGrid accepted the request, not that an inbox received it. V2 calls only
+the exact global or EU SendGrid `/v3/mail/send` HTTPS endpoint through a
+dedicated zero-retry transport with ambient environment credentials, proxies,
+cookies, hooks, and redirects absent. Responses are streamed with TLS
+verification and a timeout no greater than ten seconds for each connection and
+read wait.
 
 An in-flight row has a lease ending exactly 120 seconds after reservation and
 blocks another candidate while `now < lease_expires_at`. At equality it is
