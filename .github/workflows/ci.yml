@@ -77,4 +77,5 @@ jobs:
         run: >-
           python manage.py test tenancy authentication.tests.test_v2_session_models
           authentication.tests.test_v2_session_service_postgres
+          authentication.tests.test_v2_email_identity
           --settings=ledova_backend.settings.test_postgres --noinput

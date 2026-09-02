@@ -51,6 +51,13 @@ from authentication.security.v2_credentials import (
     refresh_secret_digest,
     refresh_secret_matches,
 )
+from authentication.security.v2_email import (
+    V2_EMAIL_ERROR,
+    V2EmailDestinationKey,
+    V2EmailError,
+    normalize_v2_email,
+    v2_email_destination_expression,
+)
 
 __all__ = [
     "INITIAL_ACCESS_KID",
@@ -69,9 +76,12 @@ __all__ = [
     "ChallengeRateDigests",
     "V2ChallengeCredentialParts",
     "V2ConfirmationTokenParts",
+    "V2EmailDestinationKey",
+    "V2EmailError",
     "V2KeyMaterial",
     "V2KeyMaterialError",
     "V2RefreshTokenParts",
+    "V2_EMAIL_ERROR",
     "decode_v2_confirmation_token",
     "decode_v2_password_reset_credential",
     "decode_v2_pending_context",
@@ -86,6 +96,7 @@ __all__ = [
     "issue_access_token",
     "load_challenge_config",
     "load_v2_key_material",
+    "normalize_v2_email",
     "otp_digest",
     "otp_matches",
     "password_reset_digest",
@@ -100,4 +111,5 @@ __all__ = [
     "resolve_access_expiry",
     "resolve_challenge_config",
     "verify_access_token",
+    "v2_email_destination_expression",
 ]
