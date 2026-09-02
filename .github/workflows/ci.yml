@@ -71,6 +71,8 @@ jobs:
       - name: SQLite migration tests
         run: >-
           python manage.py test authentication.tests.test_v2_email_migration
+          authentication.tests.test_v2_challenge_migration
+          authentication.tests.test_v2_challenge_models
           --settings=ledova_backend.settings.test_migrations --noinput
       - name: PostgreSQL contract tests
         env:
@@ -84,6 +86,8 @@ jobs:
           authentication.tests.test_v2_email_identity
           authentication.tests.test_v2_email_constraints
           authentication.tests.test_v2_email_migration
+          authentication.tests.test_v2_challenge_migration
+          authentication.tests.test_v2_challenge_models
           authentication.tests.test_v2_existing_address
           authentication.tests.test_v2_email_writers
           authentication.tests.test_legacy_auth_protocol

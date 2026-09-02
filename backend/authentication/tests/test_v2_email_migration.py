@@ -16,6 +16,7 @@ from django.test import TransactionTestCase
 
 MIGRATE_FROM = [("authentication", "0002_authsession_refreshcredential")]
 MIGRATE_TO = [("authentication", "0003_customuser_v2_email_constraints")]
+MIGRATE_LATEST = [("authentication", "0004_v2_challenge_schema")]
 PREFLIGHT_ERROR = "V2 email migration preflight failed."
 MIGRATION_NAME = "0003_customuser_v2_email_constraints"
 CONSTRAINT_NAMES = {
@@ -51,7 +52,7 @@ class V2EmailMigrationTest(TransactionTestCase):
         try:
             self.delete_users()
         finally:
-            self.migrate(MIGRATE_TO)
+            self.migrate(MIGRATE_LATEST)
 
     def assert_preflight_rejected(self, private_value=None):
         stdout = StringIO()
@@ -200,7 +201,7 @@ class V2EmailMigrationPostgresLockTest(TransactionTestCase):
         return executor.loader.project_state(targets).apps
 
     def restore_latest_schema(self):
-        self.migrate(MIGRATE_TO)
+        self.migrate(MIGRATE_LATEST)
 
     def writer(self, table, started, outcomes):
         close_old_connections()
