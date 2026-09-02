@@ -486,7 +486,7 @@ class AtomicSwapService:
             from tokens.events import publish_trading_event
 
             publish_trading_event("swap_failed", str(swap_order.share_token.uuid))
-            raise SwapExecutionException(user_friendly_msg) from e
+            raise SwapExecutionException(f"Swap execution failed: {user_friendly_msg}") from e
         except InsufficientBalanceException:
             raise
         except Exception as e:
@@ -499,7 +499,7 @@ class AtomicSwapService:
             from tokens.events import publish_trading_event
 
             publish_trading_event("swap_failed", str(swap_order.share_token.uuid))
-            raise SwapExecutionException(user_friendly_msg) from e
+            raise SwapExecutionException(f"Swap execution failed: {user_friendly_msg}") from e
 
     def get_pending_swaps_for_wallet_ids(self, wallet_ids):
         """Return a lazy owner-bound queryset so the API can paginate in SQL."""

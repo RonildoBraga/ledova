@@ -18,9 +18,3 @@ class MaxRetryCountReachedException(APIException):
     status_code = status.HTTP_400_BAD_REQUEST
     default_detail = "Maximum retry count reached."
     default_code = "max_retry_reached"
-
-
-class BlockchainClientException(APIException):
-    status_code = status.HTTP_502_BAD_GATEWAY
-    default_detail = "Blockchain client error."
-    default_code = "blockchain_client_error"

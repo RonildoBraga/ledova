@@ -8,10 +8,7 @@ from rest_framework.response import Response
 
 from shared.utils.logging_utils import LoggingContext
 from shared.views import AuthenticatedModelViewSet
-from tokens.exceptions import (
-    CapitalIncreaseSubmissionException,
-    InvalidTokenStateException,
-)
+from tokens.exceptions import InvalidTokenStateException
 from tokens.filters import CapitalIncreaseFilter
 from tokens.models import CapitalIncreaseRequest, ShareToken
 from tokens.serializers import (
@@ -127,7 +124,7 @@ class CapitalIncreaseViewSet(AuthenticatedModelViewSet):
         try:
             capital_increase.submit(request.user)
         except ValueError as e:
-            raise CapitalIncreaseSubmissionException(str(e))
+            raise InvalidTokenStateException(str(e))
 
         logger.info(
             f"{LoggingContext.TOKEN} User {request.user.email} submitted capital increase request: "

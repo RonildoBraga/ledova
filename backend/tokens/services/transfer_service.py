@@ -128,7 +128,7 @@ class TransferService:
             raise
         except Exception as e:
             logger.error(f"{LoggingContext.TOKEN_TRANSFER} Preparation failed: {e}")
-            raise TransferPreparationException(str(e)) from e
+            raise TransferPreparationException(f"Transfer preparation failed: {e}") from e
 
     def broadcast_transfer(self, signed_tx: str) -> tuple[str, dict]:
         try:
@@ -146,10 +146,10 @@ class TransferService:
 
         except (BaseChainTransactionError, BaseChainContractError) as e:
             logger.error(f"{LoggingContext.TOKEN_TRANSFER} Broadcast failed: {e}")
-            raise TransferBroadcastException(str(e)) from e
+            raise TransferBroadcastException(f"Transfer broadcast failed: {e}") from e
         except ValueError as e:
             logger.error(f"{LoggingContext.TOKEN_TRANSFER} Invalid transaction hex: {e}")
-            raise TransferBroadcastException("Invalid transaction format") from e
+            raise TransferBroadcastException("Transfer broadcast failed: Invalid transaction format") from e
 
     @transaction.atomic
     def match_orders(

@@ -1,10 +1,11 @@
 import logging
 
+from rest_framework.exceptions import NotFound
+
 from portfolios.exceptions import (
     InactivePortfolioException,
     WalletAlreadyInPortfolioException,
     WalletNotFoundException,
-    WalletNotInPortfolioException,
 )
 from portfolios.models.portfolio import Portfolio
 from shared.utils.logging_utils import LoggingContext
@@ -44,7 +45,7 @@ class PortfolioWalletService:
 
         wallet = portfolio.account_wallets().filter(uuid=wallet_uuid).first()
         if not wallet:
-            raise WalletNotInPortfolioException()
+            raise NotFound("Wallet is not in this portfolio.")
 
         portfolio.wallets.remove(wallet)
 

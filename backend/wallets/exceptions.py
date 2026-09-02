@@ -8,34 +8,10 @@ class WalletAlreadyExistsException(APIException):
     default_code = "wallet_already_exists"
 
 
-class WalletNotVerifiedException(APIException):
-    status_code = status.HTTP_403_FORBIDDEN
-    default_detail = "This wallet has not been verified yet."
-    default_code = "wallet_not_verified"
-
-
-class InvalidWalletAddressException(APIException):
-    status_code = status.HTTP_400_BAD_REQUEST
-    default_detail = "The provided wallet address is invalid."
-    default_code = "invalid_wallet_address"
-
-
 class InvalidSignatureException(APIException):
     status_code = status.HTTP_400_BAD_REQUEST
     default_detail = "The signature verification failed. Please ensure you signed the correct message."
     default_code = "invalid_signature"
-
-
-class BlockchainNotSupportedException(APIException):
-    status_code = status.HTTP_400_BAD_REQUEST
-    default_detail = "This blockchain is not supported."
-    default_code = "blockchain_not_supported"
-
-
-class WalletBalanceFetchException(APIException):
-    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
-    default_detail = "Unable to fetch wallet balance from blockchain. Please try again later."
-    default_code = "wallet_balance_fetch_failed"
 
 
 class BlockchainAPIError(APIException):
@@ -56,12 +32,6 @@ class VerificationChallengeNotFoundException(APIException):
     default_code = "verification_challenge_not_found"
 
 
-class WalletBalanceSyncException(APIException):
-    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
-    default_detail = "Failed to sync wallet balance from blockchain. Please try again later."
-    default_code = "wallet_balance_sync_failed"
-
-
 class InsufficientBalanceException(APIException):
     status_code = status.HTTP_400_BAD_REQUEST
     default_detail = "Insufficient balance to complete this transaction."
@@ -72,12 +42,6 @@ class InvalidTransactionException(APIException):
     status_code = status.HTTP_400_BAD_REQUEST
     default_detail = "The transaction parameters are invalid."
     default_code = "invalid_transaction"
-
-
-class TransactionBroadcastException(APIException):
-    status_code = status.HTTP_502_BAD_GATEWAY
-    default_detail = "Failed to broadcast transaction to blockchain network."
-    default_code = "transaction_broadcast_failed"
 
 
 class WalletUuidRequiredException(APIException):

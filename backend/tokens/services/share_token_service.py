@@ -63,7 +63,7 @@ class ShareTokenService:
                     self.factory_address,
                 )
             except BaseChainContractError as e:
-                raise ContractLoadException(str(e)) from e
+                raise ContractLoadException(f"Failed to load contract: {e}") from e
         return self._factory_contract
 
     # --- Helpers ---
@@ -171,10 +171,10 @@ class ShareTokenService:
 
         except BaseChainTransactionError as e:
             logger.error(f"{LoggingContext.TOKEN} Transaction failed: {e}")
-            raise TokenDeploymentFailedException(str(e)) from e
+            raise TokenDeploymentFailedException(f"Token deployment failed: {e}") from e
         except Exception as e:
             logger.error(f"{LoggingContext.TOKEN} Deployment error: {e}")
-            raise TokenDeploymentFailedException(str(e)) from e
+            raise TokenDeploymentFailedException(f"Token deployment failed: {e}") from e
 
     # --- Issuance ---
 
@@ -270,7 +270,7 @@ class ShareTokenService:
         if not token.contract_address or token.status != "deployed":
             error = "Token is not deployed on blockchain"
             issuance.mark_failed(error)
-            raise ShareIssuanceFailedException(error)
+            raise ShareIssuanceFailedException(f"Share issuance failed: {error}")
 
         issuance.mark_processing()
 
@@ -296,7 +296,7 @@ class ShareTokenService:
         except Exception as e:
             issuance.mark_failed(str(e))
             logger.error(f"{LoggingContext.TOKEN} Issuance mint failed: {e}")
-            raise ShareIssuanceFailedException(str(e)) from e
+            raise ShareIssuanceFailedException(f"Share issuance failed: {e}") from e
 
     # --- Capital increases ---
 
@@ -344,10 +344,10 @@ class ShareTokenService:
 
         except BaseChainTransactionError as e:
             logger.error(f"{LoggingContext.TOKEN} Capital increase transaction failed: {e}")
-            raise TokenDeploymentFailedException(str(e)) from e
+            raise TokenDeploymentFailedException(f"Token deployment failed: {e}") from e
         except Exception as e:
             logger.error(f"{LoggingContext.TOKEN} Capital increase error: {e}")
-            raise TokenDeploymentFailedException(str(e)) from e
+            raise TokenDeploymentFailedException(f"Token deployment failed: {e}") from e
 
     # --- Queries ---
 

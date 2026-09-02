@@ -71,7 +71,9 @@ class StablecoinService(BaseTokenService):
 
         balance = self.get_balance(self.signer_address)
         if balance < amount:
-            raise StablecoinBurnFailedException(f"Insufficient balance: have {balance}, need {amount}")
+            raise StablecoinBurnFailedException(
+                f"Stablecoin burning failed: Insufficient balance: have {balance}, need {amount}"
+            )
 
         tx_record = BlockchainTransaction.objects.create(
             tx_type=TransactionType.STABLECOIN_BURN,
@@ -106,7 +108,7 @@ class StablecoinService(BaseTokenService):
         except (BaseChainTransactionError, BaseChainContractError) as e:
             tx_record.mark_failed(str(e))
             logger.error(f"{LoggingContext.TOKEN_BURN} Failed to burn AUDY: {e}")
-            raise StablecoinBurnFailedException(str(e)) from e
+            raise StablecoinBurnFailedException(f"Stablecoin burning failed: {e}") from e
 
     def get_stablecoin_info(self) -> dict:
         return {

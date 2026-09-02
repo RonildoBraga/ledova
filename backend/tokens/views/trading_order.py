@@ -10,7 +10,6 @@ from shared.views import AuthenticatedReadOnlyViewSet
 from tokens.exceptions import (
     OrderModificationException,
     SwapExpiredException,
-    SwapOrderNotFoundException,
     SwapSignatureException,
     TokenBalanceRetrievalException,
 )
@@ -155,7 +154,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
 
         swap_order = atomic_swap_service.find_swap_order_by_transfer_order(transfer_order)
         if not swap_order:
-            raise SwapOrderNotFoundException("No swap order found for this transfer order.")
+            raise NotFound("No swap order found for this transfer order.")
 
         serializer = SubmitSignatureSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -255,7 +254,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
 
         swap_order = SwapOrder.objects.for_transfer_order(transfer_order)
         if not swap_order:
-            raise SwapOrderNotFoundException("No swap order found for this transfer order.")
+            raise NotFound("No swap order found for this transfer order.")
 
         if (
             swap_order.sell_order_id == transfer_order.pk

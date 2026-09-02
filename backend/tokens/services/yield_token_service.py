@@ -111,7 +111,7 @@ class YieldTokenService(BaseTokenService):
 
             except (BaseChainTransactionError, BaseChainContractError) as e:
                 logger.error(f"{LoggingContext.ASSETS} On-chain NAV update failed for {yield_token.symbol}: {e}")
-                raise YieldTokenNAVUpdateFailedException(str(e)) from e
+                raise YieldTokenNAVUpdateFailedException(f"NAV update failed: {e}") from e
 
         yield_token.nav_per_token = new_nav_per_token
         yield_token.total_reserve_value = total_reserve_value

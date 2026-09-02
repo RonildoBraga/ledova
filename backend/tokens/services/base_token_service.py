@@ -120,7 +120,7 @@ class BaseTokenService:
 
         except (BaseChainTransactionError, BaseChainContractError) as e:
             tx_record.mark_failed(str(e))
-            raise self.mint_failed_exception(str(e)) from e
+            raise self.mint_failed_exception(f"{self.contract_name} minting failed: {e}") from e
 
     def _send_and_confirm(
         self,
