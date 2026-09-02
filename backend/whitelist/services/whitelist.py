@@ -18,6 +18,7 @@ from wallets.models import Wallet
 from whitelist.exceptions import (
     AddressAlreadyWhitelistedException,
     AddressNotWhitelistedException,
+    WalletNotRegisteredException,
     WhitelistContractNotConfiguredException,
     WhitelistOperationFailedException,
 )
@@ -91,16 +92,12 @@ class WhitelistService:
             "on_chain_whitelisted": on_chain_whitelisted,
         }
 
-    def _get_or_create_investor_wallet(self, address: str) -> Wallet:
-        checksum_address = self.chain_client.to_checksum_address(address)
-        wallet = Wallet.objects.filter_by_address(checksum_address).first()
-        if wallet:
-            return wallet
-        return Wallet.objects.create(
-            address=checksum_address,
-            is_verified=True,
-            verified_at=timezone.now(),
-        )
+    @staticmethod
+    def _get_investor_wallet(checksum_address: str) -> Wallet:
+        wallets = list(Wallet.objects.filter_by_address(checksum_address).order_by("uuid")[:2])
+        if len(wallets) != 1:
+            raise WalletNotRegisteredException()
+        return wallets[0]
 
     @staticmethod
     def is_address_whitelisted(address: str) -> bool:
@@ -120,7 +117,7 @@ class WhitelistService:
         if self.is_whitelisted(address):
             raise AddressAlreadyWhitelistedException(f"Address {address} is already whitelisted")
 
-        wallet = self._get_or_create_investor_wallet(checksum_address)
+        wallet = self._get_investor_wallet(checksum_address)
 
         entry, created = WhitelistEntry.objects.get_or_create(
             wallet=wallet,

@@ -4,6 +4,7 @@ from django.db import IntegrityError
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 
 from companies.models import Company
@@ -49,19 +50,11 @@ class ShareTokenViewSet(AuthenticatedModelViewSet):
     def get_manageable_queryset(self):
         return ShareToken.objects.manageable_by_user(self.request.user).select_related("company")
 
-    def get_user_company(self):
-        return Company.objects.manageable_by_user(self.request.user).first()
-
     def create(self, request, *args, **kwargs):
-        from rest_framework.exceptions import PermissionDenied, ValidationError
-
-        company = self.get_user_company()
-
-        if not company:
+        if not Company.objects.manageable_by_user(request.user).exists():
             raise PermissionDenied("You must be associated with a company to create tokens.")
 
         serializer = self.get_serializer(data=request.data)
-        serializer.context["company"] = company
         serializer.is_valid(raise_exception=True)
 
         try:

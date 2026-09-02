@@ -112,7 +112,7 @@ class PortfolioLiveAuthorizationTest(PortfolioFixtureMixin, APITestCase):
     def test_staff_and_superuser_follow_live_membership_scope(self):
         privilege_cases = (
             ("staff", {"is_staff": True}),
-            ("super", {"is_superuser": True}),
+            ("super", {"is_superuser": True, "is_staff": True}),
         )
 
         for label, privilege in privilege_cases:

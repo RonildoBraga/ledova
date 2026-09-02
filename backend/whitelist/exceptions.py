@@ -23,6 +23,12 @@ class AddressNotWhitelistedException(APIException):
     default_code = "address_not_whitelisted"
 
 
+class WalletNotRegisteredException(APIException):
+    status_code = status.HTTP_404_NOT_FOUND
+    default_detail = "No unique registered wallet matches this address."
+    default_code = "wallet_not_registered"
+
+
 class InvalidWalletAddressException(APIException):
 
     status_code = status.HTTP_400_BAD_REQUEST

@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from companies.models import Company
 from tokens.models import ShareToken
 
 
@@ -92,9 +93,12 @@ class ShareTokenDetailSerializer(serializers.ModelSerializer):
 
 
 class ShareTokenCreateSerializer(serializers.ModelSerializer):
+    company = serializers.SlugRelatedField(slug_field="uuid", queryset=Company.objects.none(), required=False)
+
     class Meta:
         model = ShareToken
         fields = [
+            "company",
             "name",
             "symbol",
             "token_type",
@@ -103,6 +107,12 @@ class ShareTokenCreateSerializer(serializers.ModelSerializer):
             "is_transferable",
             "is_divisible",
         ]
+
+    def get_fields(self):
+        fields = super().get_fields()
+        request = self.context.get("request")
+        fields["company"].queryset = Company.objects.manageable_by_user(getattr(request, "user", None))
+        return fields
 
     def validate_symbol(self, value):
         if not value.isalpha():
@@ -120,10 +130,11 @@ class ShareTokenCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Total supply must be a valid number.")
         return str(supply)
 
-    def create(self, validated_data):
-        company = self.context.get("company")
-
-        if not company:
-            raise serializers.ValidationError({"company": "Company context is required."})
-
-        return ShareToken.objects.create(company=company, **validated_data)
+    def to_internal_value(self, data):
+        attrs = super().to_internal_value(data)
+        if attrs.get("company") is None:
+            companies = list(self.fields["company"].queryset[:2])
+            if len(companies) != 1:
+                raise serializers.ValidationError({"company": "Select the company that issues this token."})
+            attrs["company"] = companies[0]
+        return attrs

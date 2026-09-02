@@ -19,7 +19,7 @@ from tokens.models import (
     TransferOrder,
 )
 from tokens.models.choices import TransferOrderStatus, TransferOrderType
-from tokens.views.share_token import ShareTokenViewSet
+from tokens.serializers import ShareTokenCreateSerializer
 from users.models import UserAccount, UserProfile
 from wallets.models import Wallet
 from whitelist.models import WhitelistEntry
@@ -40,6 +40,7 @@ class CompanyLiveAuthorizationTest(APITestCase):
             email="super-company@example.test",
             password="pw-12345678",
             is_superuser=True,
+            is_staff=True,
         )
         self.company = Company.objects.create(
             owner=self.alice,
@@ -140,11 +141,9 @@ class CompanyLiveAuthorizationTest(APITestCase):
             with self.subTest(model=queryset.model._meta.label):
                 self.assertTrue(queryset.exists())
 
-        view = ShareTokenViewSet()
-        view.request = SimpleNamespace(user=self.alice)
-        self.assertIsNone(view.get_user_company())
-        view.request = SimpleNamespace(user=self.bob)
-        self.assertEqual(view.get_user_company(), self.company)
+        for user, expected in ((self.alice, set()), (self.bob, {self.company.uuid})):
+            serializer = ShareTokenCreateSerializer(context={"request": SimpleNamespace(user=user)})
+            self.assertEqual(set(serializer.fields["company"].queryset.values_list("uuid", flat=True)), expected)
 
     def test_staff_and_superuser_customer_routes_follow_company_ownership(self):
         for user in (None, AnonymousUser()):

@@ -24,7 +24,7 @@ class DeviceTokenOwnershipTest(APITestCase):
         self.actor_cases = (
             self._make_actor_case("device-regular"),
             self._make_actor_case("device-staff", is_staff=True),
-            self._make_actor_case("device-super", is_superuser=True),
+            self._make_actor_case("device-super", is_superuser=True, is_staff=True),
         )
 
     def _make_user(self, label, **privileges):

@@ -34,7 +34,7 @@ class DocumentCustomerRouteTest(APITestCase):
         self.actor_cases = (
             self._make_actor_case("documents-regular"),
             self._make_actor_case("documents-staff", is_staff=True),
-            self._make_actor_case("documents-super", is_superuser=True),
+            self._make_actor_case("documents-super", is_superuser=True, is_staff=True),
         )
 
     def _make_user(self, label, **privileges):

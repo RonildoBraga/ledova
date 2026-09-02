@@ -40,6 +40,7 @@ class UserLiveAuthorizationTest(APITestCase):
             email="super-user@example.test",
             password="pw-12345678",
             is_superuser=True,
+            is_staff=True,
         )
         self.alice_profile = UserProfile.objects.create(user=self.alice, full_name="Alice")
         self.bob_profile = UserProfile.objects.create(user=self.bob, full_name="Bob")

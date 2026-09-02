@@ -207,7 +207,7 @@ class TenantOrderIsolationTest(APITestCase):
             price_per_share=Decimal("1.00"),
         )
 
-        for index, privilege in enumerate(({"is_staff": True}, {"is_superuser": True}), start=3):
+        for index, privilege in enumerate(({"is_staff": True}, {"is_superuser": True, "is_staff": True}), start=3):
             actor, _, wallet = self._make_tenant(f"privileged-{index}@ex.com", "0x" + f"{index:x}" * 40)
             for field, value in privilege.items():
                 setattr(actor, field, value)

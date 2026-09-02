@@ -128,24 +128,27 @@ class ShareTokenIsolationTest(APITestCase):
                 self.assertEqual(own_detail.json()["uuid"], str(own_token.uuid))
 
                 foreign_count = foreign_company.tokens.count()
+                payload = {
+                    "name": f"Created by {actor.email}",
+                    "symbol": f"N{chr(65 + index)}W",
+                    "tokenType": ShareTokenType.ORDINARY,
+                    "totalSupply": "1000",
+                    "decimals": 0,
+                    "isTransferable": True,
+                    "isDivisible": False,
+                }
+                foreign_create = self.client.post(
+                    "/api/v1/tokens/", {**payload, "company": str(foreign_company.uuid)}, format="json"
+                )
+                self.assertEqual(foreign_create.status_code, 400)
+                self.assertEqual(foreign_company.tokens.count(), foreign_count)
+
                 create_response = self.client.post(
-                    "/api/v1/tokens/",
-                    {
-                        "company": str(foreign_company.uuid),
-                        "name": f"Created by {actor.email}",
-                        "symbol": f"N{chr(65 + index)}W",
-                        "tokenType": ShareTokenType.ORDINARY,
-                        "totalSupply": "1000",
-                        "decimals": 0,
-                        "isTransferable": True,
-                        "isDivisible": False,
-                    },
-                    format="json",
+                    "/api/v1/tokens/", {**payload, "company": str(company.uuid)}, format="json"
                 )
                 self.assertEqual(create_response.status_code, 201)
                 created_token = ShareToken.objects.get(uuid=create_response.json()["uuid"])
                 self.assertEqual(created_token.company, company)
-                self.assertEqual(foreign_company.tokens.count(), foreign_count)
 
                 delete_response = self.client.delete(f"/api/v1/tokens/{disposable_token.uuid}/")
                 self.assertEqual(delete_response.status_code, 204)
@@ -339,3 +342,35 @@ class ShareTokenIsolationTest(APITestCase):
             deploy_task.reset_mock()
             service_class.reset_mock()
             whitelist_class.reset_mock()
+
+    def test_multi_company_owner_must_name_the_issuing_company(self):
+        owner = self._make_user("multi-owner")
+        first = self._make_company(owner, "First")
+        second = self._make_company(owner, "Second")
+        self.client.force_authenticate(owner)
+        payload = {"name": "Second token", "symbol": "SEC", "tokenType": ShareTokenType.ORDINARY, "totalSupply": "1000"}
+
+        ambiguous = self.client.post("/api/v1/tokens/", payload, format="json")
+        self.assertEqual(ambiguous.status_code, 400)
+        self.assertIn("company", ambiguous.json())
+        self.assertEqual(ShareToken.objects.count(), 0)
+
+        explicit = self.client.post("/api/v1/tokens/", {**payload, "company": str(second.uuid)}, format="json")
+        self.assertEqual(explicit.status_code, 201)
+        self.assertEqual(ShareToken.objects.get(symbol="SEC").company, second)
+
+        foreign = self.client.post(
+            "/api/v1/tokens/",
+            {**payload, "symbol": "FOR", "company": str(self._make_company(self._make_user("other"), "Other").uuid)},
+            format="json",
+        )
+        self.assertEqual(foreign.status_code, 400)
+        self.assertFalse(ShareToken.objects.filter(symbol="FOR").exists())
+
+        single = self._make_user("single-owner")
+        only = self._make_company(single, "Only")
+        self.client.force_authenticate(single)
+        defaulted = self.client.post("/api/v1/tokens/", {**payload, "symbol": "ONE"}, format="json")
+        self.assertEqual(defaulted.status_code, 201)
+        self.assertEqual(ShareToken.objects.get(symbol="ONE").company, only)
+        self.assertNotEqual(first, only)

@@ -59,7 +59,7 @@ def _format_public_trading_event(event, token_uuid: str):
         return None
 
     event_type = event.get("event")
-    if event_type not in TRADING_EVENT_TYPES:
+    if not isinstance(event_type, str) or event_type not in TRADING_EVENT_TYPES:
         return None
 
     return _format_sse(event_type, {})

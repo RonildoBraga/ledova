@@ -45,9 +45,9 @@ class NotificationService:
         except NotificationPreferences.DoesNotExist:
             pass
 
-        device_tokens = DeviceToken.objects.filter(user=user, is_active=True)
+        device_tokens = list(DeviceToken.objects.filter(user=user, is_active=True))
 
-        if not device_tokens.exists():
+        if not device_tokens:
             logger.info(f"{LoggingContext.NOTIFICATIONS} No active devices for user {user.email}")
             return {
                 "status": "no_devices",
@@ -80,8 +80,7 @@ class NotificationService:
 
                     if error_type in ["DeviceNotRegistered", "InvalidCredentials"]:
                         token = device_tokens[i]
-                        token.is_active = False
-                        token.save()
+                        DeviceToken.objects.filter(pk=token.pk).update(is_active=False)
                         logger.info(
                             f"{LoggingContext.NOTIFICATIONS} Deactivated invalid token for {user.email}: "
                             f"{token.push_token[:30]}..."

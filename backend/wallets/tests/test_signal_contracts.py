@@ -46,7 +46,7 @@ class WalletSignalContractTest(TestCase):
             selected_account=self.account,
             selected_portfolio=self.portfolio,
         )
-        foreign_account = UserAccount.objects.create(account_number="WALLET-SIGNAL-FOREIGN")
+        foreign_account = UserAccount.objects.create(account_number="WALLET-SIGNAL-FRGN")
         foreign_portfolio = Portfolio.objects.create(
             user_account=foreign_account,
             name="Foreign portfolio",

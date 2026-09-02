@@ -27,6 +27,7 @@ class CountryReadContractTest(APITestCase):
             email="country-superuser@example.test",
             password="pw-12345678",
             is_superuser=True,
+            is_staff=True,
         )
         self.available = Country.objects.create(
             name="Available Country",
@@ -80,6 +81,7 @@ class WalletHoldingReadContractTest(APITestCase):
             email="holding-superuser@example.test",
             password="pw-12345678",
             is_superuser=True,
+            is_staff=True,
         )
         self.alice_profile = UserProfile.objects.create(user=self.alice)
         self.bob_profile = UserProfile.objects.create(user=self.bob)

@@ -38,8 +38,11 @@ class AlchemyWebhookView(APIView):
         signature = request.headers.get("X-Alchemy-Signature", "")
         signing_key = getattr(settings, "ALCHEMY_WEBHOOK_SIGNING_KEY", "")
 
-        if signing_key and not verify_alchemy_signature(request.body, signature, signing_key):
-            logger.warning("[WEBHOOK:ALCHEMY] Invalid signature")
+        if not signing_key or not verify_alchemy_signature(request.body, signature, signing_key):
+            logger.warning(
+                "[WEBHOOK:ALCHEMY] Rejected webhook: %s",
+                "signing key not configured" if not signing_key else "invalid signature",
+            )
             return Response({"error": "Invalid signature"}, status=status.HTTP_401_UNAUTHORIZED)
 
         try:

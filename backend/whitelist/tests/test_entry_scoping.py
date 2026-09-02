@@ -4,8 +4,10 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 from rest_framework.test import APITestCase
 
+from blockchain.models import BlockchainTransaction
 from users.models import UserAccount, UserProfile
 from wallets.models import Wallet
+from whitelist.exceptions import WalletNotRegisteredException
 from whitelist.models import WhitelistEntry
 from whitelist.services import WhitelistService
 
@@ -289,3 +291,30 @@ class WhitelistEntryScopingTest(APITestCase):
 
         self.assertEqual(response.status_code, 404)
         whitelist_service.assert_not_called()
+
+    def _service_with_mocked_chain(self):
+        service = WhitelistService.__new__(WhitelistService)
+        service.chain_client = Mock()
+        service.chain_client.to_checksum_address.side_effect = lambda address: address
+        service.signer_key = "0xoperator"
+        service.contract_address = "0x" + "d" * 40
+        service.is_whitelisted = Mock(return_value=False)
+        return service
+
+    def test_add_rejects_unregistered_address_without_creating_rows(self):
+        unknown = "0x" + "c" * 40
+
+        with self.assertRaises(WalletNotRegisteredException):
+            self._service_with_mocked_chain().add_to_whitelist(unknown)
+
+        self.assertFalse(Wallet.objects.filter_by_address(unknown).exists())
+        self.assertFalse(WhitelistEntry.objects.filter(wallet__address__iexact=unknown).exists())
+        self.assertFalse(BlockchainTransaction.objects.exists())
+
+    def test_add_rejects_ambiguous_address(self):
+        Wallet.objects.create(user_account=UserAccount.objects.create(), address=self.wallet.address, chain="base")
+
+        with self.assertRaises(WalletNotRegisteredException):
+            self._service_with_mocked_chain().add_to_whitelist(self.wallet.address)
+
+        self.assertFalse(BlockchainTransaction.objects.exists())

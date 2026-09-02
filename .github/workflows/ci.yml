@@ -75,24 +75,10 @@ jobs:
           authentication.tests.test_v2_challenge_supersede_migration
           authentication.tests.test_v2_challenge_models
           --settings=ledova_backend.settings.test_migrations --noinput
-      - name: PostgreSQL contract tests
+      - name: PostgreSQL full suite
         env:
           POSTGRES_HOST: 127.0.0.1
           POSTGRES_PORT: '5432'
           POSTGRES_DB: ledova
           POSTGRES_USER: ledova
-        run: >-
-          python manage.py test tenancy authentication.tests.test_v2_session_models
-          authentication.tests.test_v2_session_service_postgres
-          authentication.tests.test_v2_challenge_admission_postgres
-          authentication.tests.test_v2_email_identity
-          authentication.tests.test_v2_email_constraints
-          authentication.tests.test_v2_email_migration
-          authentication.tests.test_v2_challenge_migration
-          authentication.tests.test_v2_challenge_supersede_migration
-          authentication.tests.test_v2_challenge_models
-          authentication.tests.test_v2_existing_address
-          authentication.tests.test_v2_email_writers
-          authentication.tests.test_legacy_auth_protocol
-          authentication.tests.test_email_verification
-          --settings=ledova_backend.settings.test_postgres --noinput
+        run: python manage.py test --settings=ledova_backend.settings.test_postgres --noinput

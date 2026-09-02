@@ -161,6 +161,7 @@ class LiveMembershipScopingTest(TestCase):
             email="superuser-membership@ex.com",
             password="pw-12345678",
             is_superuser=True,
+            is_staff=True,
         )
 
         for privileged_user in (staff, superuser):
