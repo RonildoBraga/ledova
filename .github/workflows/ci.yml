@@ -72,6 +72,7 @@ jobs:
         run: >-
           python manage.py test authentication.tests.test_v2_email_migration
           authentication.tests.test_v2_challenge_migration
+          authentication.tests.test_v2_challenge_supersede_migration
           authentication.tests.test_v2_challenge_models
           --settings=ledova_backend.settings.test_migrations --noinput
       - name: PostgreSQL contract tests
@@ -87,6 +88,7 @@ jobs:
           authentication.tests.test_v2_email_constraints
           authentication.tests.test_v2_email_migration
           authentication.tests.test_v2_challenge_migration
+          authentication.tests.test_v2_challenge_supersede_migration
           authentication.tests.test_v2_challenge_models
           authentication.tests.test_v2_existing_address
           authentication.tests.test_v2_email_writers

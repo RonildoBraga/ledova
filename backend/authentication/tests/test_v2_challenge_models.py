@@ -428,6 +428,63 @@ class V2ChallengeModelTest(TestCase):
         self.assertEqual(rejected.challenge, challenge)
         self.assertEqual(abandoned.challenge, challenge)
 
+    def test_email_change_nonterminal_proof_shapes_can_be_superseded(self):
+        for status in (
+            AuthenticationChallengeDelivery.Status.RESERVED,
+            AuthenticationChallengeDelivery.Status.SENDING,
+            AuthenticationChallengeDelivery.Status.AMBIGUOUS,
+            AuthenticationChallengeDelivery.Status.ACTIVE,
+        ):
+            with self.subTest(status=status):
+                delivery = self.create_delivery(
+                    purpose=AuthenticationChallengeDelivery.Purpose.EMAIL_CHANGE,
+                    status=status,
+                )
+                delivery.status = AuthenticationChallengeDelivery.Status.SUPERSEDED
+                delivery.resolved_at = self.now + timedelta(seconds=3)
+                delivery.save(update_fields=["status", "resolved_at"])
+                delivery.refresh_from_db()
+
+                self.assertEqual(
+                    delivery.status,
+                    AuthenticationChallengeDelivery.Status.SUPERSEDED,
+                )
+                self.assertEqual(delivery.resolved_at, self.now + timedelta(seconds=3))
+
+    def test_unaccepted_supersession_is_rejected_for_other_purposes(self):
+        for purpose in (
+            AuthenticationChallengeDelivery.Purpose.SIGNUP,
+            AuthenticationChallengeDelivery.Purpose.PASSWORD_RESET,
+        ):
+            for status in (
+                AuthenticationChallengeDelivery.Status.RESERVED,
+                AuthenticationChallengeDelivery.Status.SENDING,
+                AuthenticationChallengeDelivery.Status.AMBIGUOUS,
+            ):
+                with self.subTest(purpose=purpose, status=status):
+                    delivery = self.create_delivery(purpose=purpose, status=status)
+                    delivery.status = AuthenticationChallengeDelivery.Status.SUPERSEDED
+                    delivery.resolved_at = self.now + timedelta(seconds=3)
+                    with self.assertRaises(IntegrityError), transaction.atomic():
+                        delivery.save(update_fields=["status", "resolved_at"])
+
+    def test_accepted_supersession_is_valid_for_every_purpose(self):
+        for purpose in AuthenticationChallengeDelivery.Purpose.values:
+            with self.subTest(purpose=purpose):
+                delivery = self.create_delivery(
+                    purpose=purpose,
+                    status=AuthenticationChallengeDelivery.Status.ACTIVE,
+                )
+                delivery.status = AuthenticationChallengeDelivery.Status.SUPERSEDED
+                delivery.resolved_at = self.now + timedelta(seconds=3)
+                delivery.save(update_fields=["status", "resolved_at"])
+                delivery.refresh_from_db()
+
+                self.assertEqual(
+                    delivery.status,
+                    AuthenticationChallengeDelivery.Status.SUPERSEDED,
+                )
+
     def test_delivery_evidence_survives_challenge_deletion(self):
         challenge = self.create_challenge(status=AuthenticationChallenge.Status.CONSUMED)
         delivery = self.create_delivery(
