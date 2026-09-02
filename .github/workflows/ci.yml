@@ -74,4 +74,6 @@ jobs:
           POSTGRES_PORT: '5432'
           POSTGRES_DB: ledova
           POSTGRES_USER: ledova
-        run: python manage.py test tenancy --settings=ledova_backend.settings.test_postgres --noinput
+        run: >-
+          python manage.py test tenancy authentication.tests.test_v2_session_models
+          --settings=ledova_backend.settings.test_postgres --noinput
