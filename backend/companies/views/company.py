@@ -24,13 +24,7 @@ from companies.serializers import (
 from companies.services import submit_application
 from shared.utils.logging_utils import LoggingContext
 from shared.views import AuthenticatedModelViewSet
-from tokens.models import (
-    CapitalIncreaseRequest,
-    IssuanceStatus,
-    RequestStatus,
-    ShareIssuance,
-    ShareToken,
-)
+from tokens.services.company_stats import company_stats
 
 logger = logging.getLogger(__name__)
 
@@ -128,39 +122,7 @@ class CompanyViewSet(AuthenticatedModelViewSet):
 
     @action(detail=True, methods=["get"])
     def stats(self, request, uuid=None):
-        company = self.get_object()
-
-        tokens = ShareToken.objects.filter(company=company)
-        total_tokens = tokens.filter(status="deployed").count()
-
-        deployed_tokens = tokens.filter(status="deployed")
-        total_shareholders = (
-            ShareIssuance.objects.filter(
-                token__in=deployed_tokens,
-                status=IssuanceStatus.COMPLETED,
-            )
-            .values("recipient_address")
-            .distinct()
-            .count()
-        )
-
-        pending_capital_increases = CapitalIncreaseRequest.objects.filter(
-            token__company=company,
-            status__in=[
-                RequestStatus.SUBMITTED,
-                RequestStatus.UNDER_REVIEW,
-                RequestStatus.APPROVED,
-            ],
-        ).count()
-
-        data = {
-            "totalTokens": total_tokens,
-            "totalShareholders": total_shareholders,
-            "pendingActions": pending_capital_increases,
-            "pendingCapitalIncreases": pending_capital_increases,
-        }
-
-        return Response(data, status=status.HTTP_200_OK)
+        return Response(company_stats(self.get_object()))
 
     @action(detail=True, methods=["get", "post"], url_path="api-key")
     def api_key(self, request, uuid=None):

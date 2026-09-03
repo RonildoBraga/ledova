@@ -3,7 +3,9 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import connection
 from django.test import override_settings
+from django.test.utils import CaptureQueriesContext
 from rest_framework.test import APITestCase
 
 from documents.models import (
@@ -102,6 +104,21 @@ class DocumentCustomerRouteTest(APITestCase):
         detail_response = self.client.get(f"/api/v1/documents/{document.uuid}/")
         self.assertEqual(detail_response.status_code, 200)
         self.assertEqual(detail_response.json()["latestExtraction"]["uuid"], str(latest_extraction.uuid))
+
+    def test_list_query_count_does_not_grow_with_documents(self):
+        actor, _, _, _ = self.actor_cases[0]
+        self.client.force_authenticate(actor)
+        with CaptureQueriesContext(connection) as single:
+            self.client.get("/api/v1/documents/")
+        for index in range(3):
+            document = self._make_document(actor, f"more-{index}")
+            self._make_extraction(document, f"more-{index}", ExtractionStatus.SUCCEEDED)
+
+        with CaptureQueriesContext(connection) as several:
+            response = self.client.get("/api/v1/documents/")
+
+        self.assertEqual(len(self._response_rows(response)), 4)
+        self.assertEqual(len(several.captured_queries), len(single.captured_queries))
 
     def test_delete_removes_the_document_and_its_extractions(self):
         actor, _, _, _ = self.actor_cases[0]

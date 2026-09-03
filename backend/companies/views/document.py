@@ -22,34 +22,26 @@ class DocumentViewSet(AuthenticatedModelViewSet):
     ordering = ["-created_at"]
     ordering_fields = ["created_at"]
 
-    def get_queryset(self):
-        company_uuid = self.kwargs.get("company_uuid")
-        user = self.request.user
+    def _writing(self):
+        return self.action in ("create", "destroy")
 
-        if self.action in ("create", "destroy"):
-            qs = CompanyDocument.objects.manageable_by_user(user)
-        else:
-            qs = CompanyDocument.objects.visible_to_user(user)
-
-        if company_uuid:
-            company_queryset = (
-                Company.objects.manageable_by_user(user)
-                if self.action in ("create", "destroy")
-                else Company.objects.visible_to_user(user)
-            )
-            company = company_queryset.filter(uuid=company_uuid).first()
-            if not company:
-                raise NotFound("Company not found or permission denied")
-            qs = qs.filter(company=company)
-
-        return qs
-
-    def create(self, request, *args, **kwargs):
-        company_uuid = self.kwargs.get("company_uuid")
-        company = Company.objects.manageable_by_user(request.user).filter(uuid=company_uuid).first()
+    def _company(self):
+        """The parent company from the URL, scoped like the documents themselves (writes need management rights)."""
+        scope = Company.objects.manageable_by_user if self._writing() else Company.objects.visible_to_user
+        company = scope(self.request.user).filter(uuid=self.kwargs["company_uuid"]).first()
         if not company:
             raise NotFound("Company not found or permission denied")
+        return company
 
+    def get_queryset(self):
+        user = self.request.user
+        scope = (
+            CompanyDocument.objects.manageable_by_user if self._writing() else CompanyDocument.objects.visible_to_user
+        )
+        return scope(user).filter(company=self._company())
+
+    def create(self, request, *args, **kwargs):
+        company = self._company()
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save(company=company)

@@ -1,6 +1,8 @@
 from django.db import models
 from django.db.models import QuerySet
 
+from tokens.models.choices import RequestStatus
+
 
 class CapitalIncreaseRequestQuerySet(QuerySet):
 
@@ -21,6 +23,10 @@ class CapitalIncreaseRequestQuerySet(QuerySet):
 
         user_companies = Company.objects.manageable_by_user(user)
         return self.filter(token__company__in=user_companies)
+
+    def pending(self):
+        """Requests still needing staff action: submitted, under review, or approved but not yet executed."""
+        return self.filter(status__in=[RequestStatus.SUBMITTED, RequestStatus.UNDER_REVIEW, RequestStatus.APPROVED])
 
     def with_relations(self):
         return self.select_related(

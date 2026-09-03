@@ -1,5 +1,5 @@
 {% extends "admin/base_custom.html" %}
-{% load i18n admin_urls static %}
+{% load i18n admin_urls %}
 
 {% block breadcrumbs %}
 <div class="breadcrumbs">
@@ -7,15 +7,14 @@
     &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_label|capfirst }}</a>
     &rsaquo; <a href="{% url 'admin:companies_company_changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
     &rsaquo; <a href="{% url 'admin:companies_company_change' company.pk %}">{{ company.name }}</a>
-    &rsaquo; Suspend
+    &rsaquo; {{ transition.title }}
 </div>
 {% endblock %}
 
 {% block content %}
 <div class="admin-custom-form">
-    <div class="alert alert-warning">
-        <strong>&#9888; Warning:</strong> You are about to suspend the company <strong>{{ company.name }}</strong>.
-        A suspended company cannot perform any operations until reactivated.
+    <div class="alert alert-{{ transition.alert }}">
+        <strong>&#9888; {{ transition.heading }}:</strong> {{ intro }}
     </div>
 
     <div class="admin-card">
@@ -31,12 +30,20 @@
                     <td>{{ company.acn }}</td>
                 </tr>
                 <tr>
+                    <td class="label-col">Email</td>
+                    <td>{{ company.email }}</td>
+                </tr>
+                <tr>
                     <td class="label-col">Status</td>
                     <td>{{ company.get_status_display }}</td>
                 </tr>
                 <tr>
-                    <td class="label-col">Email</td>
-                    <td>{{ company.email }}</td>
+                    <td class="label-col">Registered</td>
+                    <td>{{ company.created_at|date:"N j, Y, P" }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Active Since</td>
+                    <td>{{ company.activated_at|date:"N j, Y, P"|default:"N/A" }}</td>
                 </tr>
             </table>
         </div>
@@ -45,7 +52,7 @@
     <form method="post" class="admin-form">
         {% csrf_token %}
         <fieldset>
-            <legend>Suspension Details</legend>
+            <legend>{{ transition.legend }}</legend>
             <div class="form-group">
                 <label for="id_reason" class="required">{{ form.reason.label }}</label>
                 {{ form.reason }}
@@ -63,7 +70,7 @@
         </fieldset>
 
         <div class="action-row">
-            <button type="submit" class="btn btn-warning">Suspend Company</button>
+            <button type="submit" class="btn {{ transition.button.1 }}">{{ transition.button.0 }}</button>
             <a href="{% url 'admin:companies_company_change' company.pk %}" class="btn btn-secondary">Cancel</a>
         </div>
     </form>

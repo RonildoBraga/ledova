@@ -4,7 +4,6 @@ from datetime import timezone as dt_timezone
 from typing import Optional
 
 from django.conf import settings
-from django.db import transaction
 from django.utils import timezone
 
 from blockchain.models import BlockchainTransaction, TransactionStatus, TransactionType
@@ -57,6 +56,8 @@ class WhitelistService:
         account = self.chain_client.account_from_key(self.signer_key)
         return account.address
 
+    # On-chain reads
+
     def is_whitelisted(self, address: str) -> bool:
         checksum_address = self.chain_client.to_checksum_address(address)
         return self.contract.functions.isWhitelisted(checksum_address).call()
@@ -89,149 +90,104 @@ class WhitelistService:
             "on_chain_whitelisted": on_chain_whitelisted,
         }
 
+    # Registry transactions
+
     @staticmethod
-    def _get_investor_wallet(checksum_address: str) -> Wallet:
-        wallets = list(Wallet.objects.filter_by_address(checksum_address).order_by("uuid")[:2])
-        if len(wallets) != 1:
+    def _resolve_wallet(checksum_address: str, wallet_uuid=None) -> Wallet:
+        """The wallet behind an address; a uuid picks between duplicates, otherwise the match must be unique."""
+        wallets = Wallet.objects.filter_by_address(checksum_address).order_by("uuid")
+        if wallet_uuid is not None:
+            wallet = wallets.filter(uuid=wallet_uuid).first()
+        else:
+            matches = list(wallets[:2])
+            wallet = matches[0] if len(matches) == 1 else None
+        if wallet is None:
             raise WalletNotRegisteredException()
-        return wallets[0]
+        return wallet
 
-    @transaction.atomic
-    def add_to_whitelist(
-        self,
-        address: str,
-        wait_for_receipt: bool = True,
-    ) -> tuple[str, Optional[WhitelistEntry]]:
-        if not self.signer_key:
-            raise WhitelistContractNotConfiguredException("Blockchain operator key not configured")
-
-        checksum_address = self.chain_client.to_checksum_address(address)
-
-        if self.is_whitelisted(address):
-            raise AddressAlreadyWhitelistedException(f"Address {address} is already whitelisted")
-
-        wallet = self._get_investor_wallet(checksum_address)
-
-        entry, created = WhitelistEntry.objects.get_or_create(
-            wallet=wallet,
-            defaults={"status": WhitelistStatus.PENDING},
-        )
-
+    def _send_tx(self, tx_type, function_name, checksum_address, entry, wait_for_receipt):
+        """Record, send and settle one registry call; a chain error marks the record and the entry failed."""
         tx_record = BlockchainTransaction.objects.create(
-            tx_type=TransactionType.WHITELIST_ADD,
+            tx_type=tx_type,
             status=TransactionStatus.PENDING,
             from_address=self.signer_address,
             to_address=self.contract_address,
-            function_name="addToWhitelist",
+            function_name=function_name,
             function_args={"investor": checksum_address},
-            related_model="whitelist.WhitelistEntry",
-            related_uuid=entry.uuid,
+            related_model="whitelist.WhitelistEntry" if entry else None,
+            related_uuid=entry.uuid if entry else None,
         )
-
         try:
-            contract_function = self.contract.functions.addToWhitelist(checksum_address)
+            contract_function = getattr(self.contract.functions, function_name)(checksum_address)
             tx_hash, receipt = self.chain_client.send_transaction(
                 contract_function,
                 self.signer_key,
                 wait_for_receipt=wait_for_receipt,
             )
-
-            tx_record.mark_submitted(tx_hash)
-
-            if receipt:
-                tx_record.mark_confirmed(
-                    block_number=receipt["blockNumber"],
-                    block_hash=receipt["blockHash"].hex(),
-                    gas_used=receipt["gasUsed"],
-                )
-                entry.mark_active(tx_hash)
-
-            logger.info(f"{LoggingContext.WHITELIST} Added {checksum_address} to whitelist (tx={tx_hash})")
-            return tx_hash, entry
-
         except (BaseChainTransactionError, BaseChainContractError) as e:
             tx_record.mark_failed(str(e))
-            entry.mark_failed(str(e))
-            logger.error(f"{LoggingContext.WHITELIST} Failed to add {address}: {e}")
-            raise WhitelistOperationFailedException(f"Failed to add to whitelist: {e}") from e
+            if entry:
+                entry.mark_failed(str(e))
+            logger.error(f"{LoggingContext.WHITELIST} {function_name}({checksum_address}) failed: {e}")
+            raise WhitelistOperationFailedException(f"{TransactionType(tx_type).label} failed: {e}") from e
 
-    @transaction.atomic
+        tx_record.mark_submitted(tx_hash)
+        if receipt:
+            tx_record.mark_confirmed(
+                block_number=receipt["blockNumber"],
+                block_hash=receipt["blockHash"].hex(),
+                gas_used=receipt["gasUsed"],
+            )
+        logger.info(f"{LoggingContext.WHITELIST} {function_name}({checksum_address}) sent (tx={tx_hash})")
+        return tx_hash, receipt
+
+    def add_to_whitelist(
+        self,
+        address: str,
+        wait_for_receipt: bool = True,
+        wallet_uuid=None,
+    ) -> tuple[str, WhitelistEntry]:
+        checksum_address = self.chain_client.to_checksum_address(address)
+        if self.is_whitelisted(checksum_address):
+            raise AddressAlreadyWhitelistedException(f"Address {address} is already whitelisted")
+
+        wallet = self._resolve_wallet(checksum_address, wallet_uuid)
+        entry, _ = WhitelistEntry.objects.get_or_create(wallet=wallet, defaults={"status": WhitelistStatus.PENDING})
+        tx_hash, receipt = self._send_tx(
+            TransactionType.WHITELIST_ADD, "addToWhitelist", checksum_address, entry, wait_for_receipt
+        )
+        if receipt:
+            entry.mark_active(tx_hash)
+        return tx_hash, entry
+
     def remove_from_whitelist(
         self,
         address: str,
         wait_for_receipt: bool = True,
     ) -> tuple[str, Optional[WhitelistEntry]]:
-        if not self.signer_key:
-            raise WhitelistContractNotConfiguredException("Blockchain operator key not configured")
-
         checksum_address = self.chain_client.to_checksum_address(address)
-
-        if not self.is_whitelisted(address):
+        if not self.is_whitelisted(checksum_address):
             raise AddressNotWhitelistedException(f"Address {address} is not whitelisted")
 
         entry = WhitelistEntry.objects.filter_by_address(checksum_address).first()
-
-        tx_record = BlockchainTransaction.objects.create(
-            tx_type=TransactionType.WHITELIST_REMOVE,
-            status=TransactionStatus.PENDING,
-            from_address=self.signer_address,
-            to_address=self.contract_address,
-            function_name="removeFromWhitelist",
-            function_args={"investor": checksum_address},
-            related_model="whitelist.WhitelistEntry" if entry else None,
-            related_uuid=entry.uuid if entry else None,
+        tx_hash, receipt = self._send_tx(
+            TransactionType.WHITELIST_REMOVE, "removeFromWhitelist", checksum_address, entry, wait_for_receipt
         )
+        if receipt and entry:
+            entry.mark_removed(tx_hash)
+        return tx_hash, entry
 
-        try:
-            contract_function = self.contract.functions.removeFromWhitelist(checksum_address)
-            tx_hash, receipt = self.chain_client.send_transaction(
-                contract_function,
-                self.signer_key,
-                wait_for_receipt=wait_for_receipt,
-            )
+    # Database sync
 
-            tx_record.mark_submitted(tx_hash)
-
-            if receipt:
-                tx_record.mark_confirmed(
-                    block_number=receipt["blockNumber"],
-                    block_hash=receipt["blockHash"].hex(),
-                    gas_used=receipt["gasUsed"],
-                )
-                if entry:
-                    entry.mark_removed(tx_hash)
-
-            logger.info(f"{LoggingContext.WHITELIST} Removed {checksum_address} from whitelist (tx={tx_hash})")
-            return tx_hash, entry
-
-        except (BaseChainTransactionError, BaseChainContractError) as e:
-            tx_record.mark_failed(str(e))
-            if entry:
-                entry.mark_failed(str(e))
-            logger.error(f"{LoggingContext.WHITELIST} Failed to remove {address}: {e}")
-            raise WhitelistOperationFailedException(f"Failed to remove from whitelist: {e}") from e
-
-    @transaction.atomic
     def sync_entry(self, address: str, wallet_uuid=None) -> WhitelistEntry:
         checksum_address = self.chain_client.to_checksum_address(address)
+        wallet = self._resolve_wallet(checksum_address, wallet_uuid)
 
-        wallets = Wallet.objects.filter_by_address(checksum_address).order_by("uuid")
-        if wallet_uuid is None:
-            wallet_ids = list(wallets.values_list("uuid", flat=True)[:2])
-            if len(wallet_ids) != 1:
-                raise WhitelistOperationFailedException("Unable to resolve a unique wallet.")
-            wallet_uuid = wallet_ids[0]
-
-        try:
-            wallet = wallets.get(uuid=wallet_uuid)
-        except Wallet.DoesNotExist as exc:
-            raise WhitelistOperationFailedException("Unable to resolve the selected wallet.") from exc
-
-        info = self.get_investor_info(address)
+        info = self.get_investor_info(checksum_address)
         kyc_ts = info["kyc_timestamp"]
         on_chain_ts = datetime.fromtimestamp(kyc_ts, tz=dt_timezone.utc) if kyc_ts else None
 
-        entry, created = WhitelistEntry.objects.update_or_create(
+        entry, _ = WhitelistEntry.objects.update_or_create(
             wallet=wallet,
             defaults={
                 "is_whitelisted": info["whitelisted"],
@@ -265,98 +221,40 @@ class WhitelistService:
         return result["synced"]
 
     def ensure_whitelisted(self, entries: list[WhitelistEntry]) -> dict:
-        to_add = []
-        to_sync = []
-        skipped = 0
-        errors = []
+        result = {"added": 0, "synced": 0, "skipped": 0, "errors": []}
 
         for entry in entries:
             if entry.is_whitelisted:
-                skipped += 1
+                result["skipped"] += 1
                 continue
             try:
-                if self.is_whitelisted(entry.wallet.address):
-                    to_sync.append(entry)
-                else:
-                    to_add.append(entry)
+                try:
+                    self.add_to_whitelist(entry.wallet.address, wallet_uuid=entry.wallet_id)
+                    result["added"] += 1
+                except AddressAlreadyWhitelistedException:
+                    self.sync_entry(entry.wallet.address, wallet_uuid=entry.wallet_id)
+                    result["synced"] += 1
             except Exception as e:
-                errors.append(f"Failed to check {entry.wallet.address}: {e}")
-                logger.error(f"{LoggingContext.WHITELIST} Failed to check {entry.wallet.address}: {e}")
+                result["errors"].append(f"Failed to whitelist {entry.wallet.address}: {e}")
+                logger.error(f"{LoggingContext.WHITELIST} Failed to whitelist {entry.wallet.address}: {e}")
 
-        for entry in to_sync:
-            try:
-                self.sync_entry(entry.wallet.address, wallet_uuid=entry.wallet_id)
-            except Exception as e:
-                errors.append(f"Failed to sync {entry.wallet.address}: {e}")
-                logger.error(f"{LoggingContext.WHITELIST} Failed to sync {entry.wallet.address}: {e}")
-
-        if to_add:
-            addresses = [entry.wallet.address for entry in to_add]
-            try:
-                tx_hash = self.batch_add_to_whitelist(addresses, wait_for_receipt=True)
-                logger.info(f"{LoggingContext.WHITELIST} Batch added {len(addresses)} addresses (tx={tx_hash})")
-                for entry in to_add:
-                    try:
-                        self.sync_entry(entry.wallet.address, wallet_uuid=entry.wallet_id)
-                    except Exception as e:
-                        errors.append(f"Failed to sync {entry.wallet.address} after add: {e}")
-                        logger.error(f"{LoggingContext.WHITELIST} Post-add sync failed for {entry.wallet.address}: {e}")
-            except Exception as e:
-                errors.append(f"Batch add failed: {e}")
-                logger.error(f"{LoggingContext.WHITELIST} Batch add failed: {e}")
-
-        return {
-            "added": len(to_add),
-            "synced": len(to_sync),
-            "skipped": skipped,
-            "errors": errors,
-        }
+        return result
 
     def ensure_removed(self, entries: list[WhitelistEntry]) -> dict:
-        removed = 0
-        skipped = 0
-        errors = []
+        result = {"removed": 0, "skipped": 0, "errors": []}
 
         for entry in entries:
             if not entry.is_whitelisted:
-                skipped += 1
+                result["skipped"] += 1
                 continue
             try:
-                self.remove_from_whitelist(address=entry.wallet.address, wait_for_receipt=True)
-                removed += 1
-            except AddressNotWhitelistedException:
-                self.sync_entry(entry.wallet.address, wallet_uuid=entry.wallet_id)
-                removed += 1
+                try:
+                    self.remove_from_whitelist(entry.wallet.address)
+                except AddressNotWhitelistedException:
+                    self.sync_entry(entry.wallet.address, wallet_uuid=entry.wallet_id)
+                result["removed"] += 1
             except Exception as e:
-                errors.append(f"Failed to remove {entry.wallet.address}: {e}")
+                result["errors"].append(f"Failed to remove {entry.wallet.address}: {e}")
                 logger.error(f"{LoggingContext.WHITELIST} Failed to remove {entry.wallet.address}: {e}")
 
-        return {
-            "removed": removed,
-            "skipped": skipped,
-            "errors": errors,
-        }
-
-    def batch_add_to_whitelist(
-        self,
-        addresses: list[str],
-        wait_for_receipt: bool = True,
-    ) -> str:
-        if not self.signer_key:
-            raise WhitelistContractNotConfiguredException("Blockchain operator key not configured")
-
-        checksum_addresses = [self.chain_client.to_checksum_address(addr) for addr in addresses]
-
-        try:
-            contract_function = self.contract.functions.batchAddToWhitelist(checksum_addresses)
-            tx_hash, receipt = self.chain_client.send_transaction(
-                contract_function,
-                self.signer_key,
-                wait_for_receipt=wait_for_receipt,
-            )
-            logger.info(f"{LoggingContext.WHITELIST} Batch added {len(addresses)} addresses (tx={tx_hash})")
-            return tx_hash
-
-        except (BaseChainTransactionError, BaseChainContractError) as e:
-            logger.error(f"{LoggingContext.WHITELIST} Batch add failed: {e}")
-            raise WhitelistOperationFailedException(f"Batch add failed: {e}") from e
+        return result

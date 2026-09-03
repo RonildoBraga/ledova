@@ -5,7 +5,6 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from documents.models import Document
-from documents.querysets.document import DocumentQuerySet
 from documents.serializers.document import (
     DocumentSerializer,
     DocumentUploadSerializer,
@@ -22,29 +21,14 @@ class DocumentViewSet(
     mixins.DestroyModelMixin,
     viewsets.GenericViewSet,
 ):
-    """
-    /api/v1/documents/
-
-      POST   .                  upload a document, queue extraction
-      GET    .                  list current user's documents
-      GET    /{uuid}/           retrieve a document + its latest extraction
-      DELETE /{uuid}/           delete the document + its extractions
-
-    Async by design: POST returns 202 with the document UUID; clients
-    poll the GET endpoint for the extraction status + result.
-
-    DELETE removes the DB rows (extractions cascade off the foreign key).
-    The underlying file in storage is left as-is for the PoC — orphan
-    files are cheap and we can add a storage-cleanup signal later if it
-    becomes a real issue.
-    """
+    """Upload returns 202: extraction runs in a worker and clients poll the document for its result."""
 
     permission_classes = [IsAuthenticated]
     lookup_field = "uuid"
     serializer_class = DocumentSerializer
 
-    def get_queryset(self) -> DocumentQuerySet:
-        return DocumentQuerySet(Document).for_user(self.request.user).with_latest_extraction()
+    def get_queryset(self):
+        return Document.objects.for_user(self.request.user).prefetch_related("extractions")
 
     def get_serializer_class(self):
         if self.action == "create":
@@ -64,11 +48,7 @@ class DocumentViewSet(
             mime_type=getattr(upload, "content_type", "") or "",
             file=upload,
         )
-
-        # Fire off the extraction. The procrastinate worker picks it up
-        # asynchronously; the response returns immediately.
         extract_document.defer(document_uuid=str(document.uuid))
         logger.info("documents: queued extraction for %s (%s)", document.uuid, document.document_type)
 
-        read_ser = DocumentSerializer(document)
-        return Response(read_ser.data, status=status.HTTP_202_ACCEPTED)
+        return Response(DocumentSerializer(document).data, status=status.HTTP_202_ACCEPTED)

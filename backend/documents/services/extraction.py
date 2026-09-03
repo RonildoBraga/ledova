@@ -1,19 +1,3 @@
-"""
-Orchestrates the LLM extraction flow for a single Document.
-
-Called from the procrastinate task. Responsibilities:
-
-  1. Load the Document and read its file bytes (Django storage handles
-     local-fs vs GCS transparently).
-  2. Rasterise PDFs page-by-page via PyMuPDF — VLMs need images, not
-     PDF bytes. For now we send page 1 only; multi-page payslips are
-     rare. Bank statements (Phase 5) will need a loop.
-  3. Pick the right prompt + schema for the Document.document_type.
-  4. Call the LLM, validate, write a DocumentExtraction row, return it.
-
-Anything async/retry-related belongs to the task layer, not here.
-"""
-
 from __future__ import annotations
 
 import io
@@ -38,25 +22,21 @@ logger = logging.getLogger("ledova_backend")
 
 
 class ExtractionService:
-    """Stateless. Pure functions wrapping a small bit of orchestration."""
 
     @staticmethod
     def render_first_page(document: Document) -> bytes:
-        """Return one PNG with the document's first page."""
+        """One PNG of the first page: the vision model takes images, not PDF bytes."""
         with document.file.open("rb") as fh:
             raw = fh.read()
 
-        # PDF -> rasterise page 1 at 2× zoom (~144 dpi).
         if document.mime_type == "application/pdf" or document.original_filename.lower().endswith(".pdf"):
             doc = fitz.open(stream=raw, filetype="pdf")
             try:
-                pix = doc[0].get_pixmap(matrix=fitz.Matrix(2, 2))
+                pix = doc[0].get_pixmap(matrix=fitz.Matrix(2, 2))  # 2x zoom is roughly 144 dpi
                 return pix.tobytes("png")
             finally:
                 doc.close()
 
-        # Image — open, downscale if huge, re-encode as PNG so the LLM
-        # always receives a known format.
         img = Image.open(io.BytesIO(raw)).convert("RGB")
         max_side = 1600
         if max(img.size) > max_side:
@@ -71,11 +51,7 @@ class ExtractionService:
 
     @classmethod
     def run(cls, document: Document) -> DocumentExtraction:
-        """
-        Run an extraction and persist it. Always returns a saved
-        DocumentExtraction row — even on failure (with status=FAILED
-        and `error` populated) — so the API can surface what happened.
-        """
+        """Always returns a saved row, FAILED with `error` set when anything goes wrong, so the API can show it."""
         extraction = DocumentExtraction.objects.create(
             document=document,
             status=ExtractionStatus.RUNNING,
@@ -124,7 +100,7 @@ class ExtractionService:
             logger.warning("documents.extraction: doc=%s failed: %s", document.uuid, e.detail)
             return extraction
 
-        except Exception as e:  # noqa: BLE001 — catch-all so the task DB row reflects truth
+        except Exception as e:
             extraction.status = ExtractionStatus.FAILED
             extraction.error = f"{type(e).__name__}: {e}"
             extraction.finished_at = timezone.now()

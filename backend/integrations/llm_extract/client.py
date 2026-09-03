@@ -1,9 +1,8 @@
 """
-Local OpenAI-compatible LLM extraction client.
+OpenAI-compatible chat client for document extraction.
 
-The extraction flow handles private financial documents, so this client only
-accepts loopback and host-container endpoints. Ollama requires a truthy API key
-but ignores its value.
+The documents are private financial records, so only loopback and host-container endpoints are accepted.
+Ollama requires a non-empty API key but ignores its value.
 """
 
 from __future__ import annotations
@@ -31,7 +30,6 @@ _LOCAL_LLM_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "host.docker.inte
 
 
 def _validate_local_base_url(value: str) -> str:
-    """Return a normalized local endpoint or fail before private input is sent."""
     candidate = value.strip().rstrip("/")
     parsed = urlsplit(candidate)
 
@@ -57,7 +55,6 @@ class ExtractionResult:
 
 
 class LlmExtractClient:
-    """Stateless client. Cheap to instantiate per request."""
 
     def __init__(
         self,
@@ -72,13 +69,8 @@ class LlmExtractClient:
             raise ImproperlyConfigured("LLM_MODEL must not be blank")
         self.timeout_s = timeout_s
 
-    # ----- auth -------------------------------------------------------
-
     def _get_api_key(self) -> str:
-        """Return Ollama's required non-empty placeholder key."""
         return "ollama"
-
-    # ----- public API -------------------------------------------------
 
     def extract(
         self,
@@ -87,14 +79,7 @@ class LlmExtractClient:
         prompt: str,
         schema: Type[BaseModel],
     ) -> ExtractionResult:
-        """
-        Send a single image + prompt to the LLM, validate the response
-        against `schema`, return the parsed object plus debug metadata.
-
-        Raises:
-            LlmExtractError on network/server failures.
-            LlmExtractValidationError on schema mismatches.
-        """
+        """One image plus prompt in, the schema-validated object plus the raw reply and timing out."""
         b64 = base64.b64encode(image_bytes).decode("ascii")
 
         client = OpenAI(

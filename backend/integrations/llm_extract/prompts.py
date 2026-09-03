@@ -1,15 +1,8 @@
 """
 Per-document-type extraction prompts.
 
-Mirror of scripts/llm-spike/prompts.py — the prompts we validated
-against during Phase 0. Keep these stable; if the model regresses
-after a prompt change you'll spend more time debugging than the
-"better" prompt saved.
-
-Strategy: enumerate exact field names. We rely on Ollama/vLLM's
-"format=json" mode for syntactic validity and on a separate pydantic
-validation pass for semantic correctness — schema-as-format triggers
-field renaming (observed in spike), so we don't use it.
+The prompt enumerates exact field names and relies on the server's JSON mode plus a separate pydantic pass;
+passing the schema as the response format made the model rename fields.
 """
 
 _RULES = """
