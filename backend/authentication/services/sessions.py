@@ -7,6 +7,7 @@ from rest_framework import serializers
 
 from authentication.email import EmailError, normalize_email
 from authentication.managers.user import EmailLookupState
+from authentication.services.tokens import TokenService
 from shared.utils.logging_utils import LoggingContext
 
 User = get_user_model()
@@ -31,7 +32,7 @@ def _create_signup_user(email, password):
 
 class SessionService:
     @staticmethod
-    def login(email, password, request=None):
+    def login(email, password):
         if not email or not password:
             raise serializers.ValidationError({"error": ["Email and password are required."]})
 
@@ -48,17 +49,16 @@ class SessionService:
         user.last_login = timezone.now()
         user.save(update_fields=["last_login"])
 
-        from authentication.services.tokens import TokenService
-
-        token = TokenService.get_or_create(user, request)
-
         logger.info(f"{LoggingContext.AUTH} User {user.email} successfully authenticated")
-        return user, token
+        return user
 
     @staticmethod
     @transaction.atomic
     def signup(email, password, password_confirmation):
-        """Create (or reactivate) the user without issuing tokens; tokens are issued after email verification."""
+        """Create the user without issuing tokens; tokens are issued after email verification.
+
+        A repeated signup for an incomplete account never touches the stored row: knowing the
+        address is not proof of ownership, so the caller only gets the verification code resent."""
         if not email or not password:
             raise serializers.ValidationError({"error": ["Email and password are required."]})
 
@@ -72,13 +72,7 @@ class SessionService:
         if existing_user and hasattr(existing_user, "userprofile") and existing_user.userprofile.is_signup_completed:
             raise serializers.ValidationError({"email": ["Email already registered"]})
 
-        if existing_user:
-            user = existing_user
-            user.set_password(password)
-            user.is_active = True
-            user.save(update_fields=["password", "is_active"])
-        else:
-            user = _create_signup_user(email, password)
+        user = existing_user or _create_signup_user(email, password)
 
         from users.services.setup import UserSetupService
 
@@ -88,25 +82,9 @@ class SessionService:
         return user
 
     @staticmethod
-    @transaction.atomic
-    def logout(user, refresh_token=None):
-        from authentication.services.tokens import TokenService
-
-        try:
-            if refresh_token:
-                success = TokenService.revoke_by_refresh(user, refresh_token)
-                if success:
-                    logger.info(
-                        f"{LoggingContext.TOKEN_MANAGEMENT} Session ended for user {user.email} using refresh token"
-                    )
-                return success
-            else:
-                count = TokenService.revoke_all(user)
-                logger.info(f"{LoggingContext.TOKEN_MANAGEMENT} Ended {count} sessions for user {user.email}")
-                return count > 0
-
-        except Exception as e:
-            logger.error(
-                f"{LoggingContext.TOKEN_MANAGEMENT} Logout error for user {user.email}: {str(e)}", exc_info=True
-            )
-            return False
+    def logout(refresh_token=None, refresh_jti=None):
+        """End one session: the presented refresh token, else the session the access token belongs to."""
+        if refresh_token:
+            TokenService.revoke(refresh_token)
+        elif refresh_jti:
+            TokenService.revoke_jti(refresh_jti)

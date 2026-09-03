@@ -29,13 +29,15 @@ remains, and the legacy `AuthViewSet` is hardened in place.
 
 ## Next work
 
-Do not continue v2. Harden the legacy auth path in this order:
+Do not continue v2. Sessions are now simplejwt refresh tokens with the
+`token_blacklist` app (`authentication/services/tokens.py`: refresh rotates and
+blacklists the presented token, signout revokes one session, `signout-all`
+revokes every session, the access token is bound to its refresh via `rjti`).
+Harden the legacy auth path in this order:
 
-1. Refresh rotation with simplejwt `token_blacklist` (BLACKLIST_AFTER_ROTATION,
-   revoke-all via OutstandingToken), replacing UserToken.
-2. Hashed, expiring, attempt-capped OTP with a per-email throttle; no DEBUG bypass.
-3. CSRF check for cookie-sourced unsafe requests, pending the dashboard change.
-4. Explicit native body-token endpoints for the mobile app.
+1. Hashed, expiring, attempt-capped OTP with a per-email throttle; no DEBUG bypass.
+2. CSRF check for cookie-sourced unsafe requests, pending the dashboard change.
+3. Explicit native body-token endpoints for the mobile app.
 
 The remaining canonical backlog is [ISSUES.md](ISSUES.md).
 

@@ -10,7 +10,7 @@ from rest_framework import HTTP_HEADER_ENCODING
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import InvalidToken
 
-from authentication.models.user_token import UserToken
+from authentication.services.tokens import TokenService
 from shared.utils.logging_utils import LoggingContext
 
 logger = logging.getLogger("ledova_backend")
@@ -60,8 +60,8 @@ class HybridJWTAuthentication(JWTAuthentication):
         try:
             validated_token = self.get_validated_token(raw_token)
 
-            token_obj = UserToken.objects.get_by_active_access_token(raw_token)
-            if not token_obj:
+            # An access token is only as live as the refresh token it was issued with.
+            if not TokenService.is_session_live(validated_token.get("rjti")):
                 raise InvalidToken("Token has been revoked")
 
             return self.get_user(validated_token), validated_token

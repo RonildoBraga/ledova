@@ -7,9 +7,13 @@ from django.contrib.auth import get_user_model
 from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
+from rest_framework_simplejwt.token_blacklist.models import (
+    BlacklistedToken,
+    OutstandingToken,
+)
+from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
 
 from authentication.managers.user import EmailLookupResult, EmailLookupState
-from authentication.models import UserToken
 from authentication.services import TokenService
 from users.services import UserSetupService
 
@@ -20,6 +24,16 @@ TEST_SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
 }
+
+IDENTITY_KEYS = {"uuid", "email", "isEmailVerified", "isPhoneVerified"}
+
+
+def jti_of(raw_refresh):
+    return RefreshToken(raw_refresh, verify=False)["jti"]
+
+
+def is_blacklisted(raw_refresh):
+    return BlacklistedToken.objects.filter(token__jti=jti_of(raw_refresh)).exists()
 
 
 @override_settings(DEBUG=False, SIMPLE_JWT=TEST_SIMPLE_JWT)
@@ -82,6 +96,28 @@ class LegacyAuthProtocolTestCase(APITestCase):
         self.assertEqual(cookie["samesite"], "Lax")
         self.assertEqual(cookie["max-age"], max_age)
 
+    def assert_session_body(self, response, user):
+        """The mobile app reads `tokens[0].accessToken/refreshToken`; the pair must be the one in the cookies."""
+        payload = response.json()
+        self.assertEqual(set(payload), IDENTITY_KEYS | {"tokens"})
+        self.assertEqual(payload["email"], user.email)
+        self.assertEqual(len(payload["tokens"]), 1)
+        self.assertEqual(set(payload["tokens"][0]), {"accessToken", "refreshToken"})
+        self.assertEqual(payload["tokens"][0]["accessToken"], response.cookies["access"].value)
+        self.assertEqual(payload["tokens"][0]["refreshToken"], response.cookies["refresh"].value)
+        self.assertEqual(response["Cache-Control"], "no-store")
+        return payload
+
+    def verify_with_cookie(self, access_token):
+        client = APIClient()
+        client.cookies["access"] = access_token
+        return client.get("/api/auth/verify/").json()
+
+    def verify_with_bearer(self, access_token):
+        client = APIClient()
+        client.credentials(HTTP_AUTHORIZATION=f"Bearer {access_token}")
+        return client.get("/api/auth/verify/").json()
+
 
 class LegacyTransportTest(LegacyAuthProtocolTestCase):
     def test_legacy_signup_returns_safe_identity_without_starting_a_session(self):
@@ -98,14 +134,13 @@ class LegacyTransportTest(LegacyAuthProtocolTestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         payload = response.json()
+        self.assertEqual(set(payload), IDENTITY_KEYS)
         self.assertTrue(payload["uuid"])
         self.assertEqual(payload["email"], "new.user@example.com")
         self.assertFalse(payload["isEmailVerified"])
-        self.assertNotIn("password", payload)
-        self.assertNotIn("passwordConfirm", payload)
         self.assertNotIn("access", response.cookies)
         self.assertNotIn("refresh", response.cookies)
-        self.assertFalse(UserToken.objects.exists())
+        self.assertFalse(OutstandingToken.objects.exists())
         send_email.assert_called_once_with(User.objects.get(email="new.user@example.com"))
 
     def test_legacy_signup_rejects_noncanonical_raw_input_without_side_effects(self):
@@ -123,7 +158,7 @@ class LegacyTransportTest(LegacyAuthProtocolTestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data, {"email": ["Enter a valid email address."]})
         self.assertFalse(User.objects.exists())
-        self.assertFalse(UserToken.objects.exists())
+        self.assertFalse(OutstandingToken.objects.exists())
         send_email.assert_not_called()
 
     def test_legacy_signin_sets_secure_httponly_cookie_pair_and_identity_fields(self):
@@ -136,17 +171,31 @@ class LegacyTransportTest(LegacyAuthProtocolTestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        payload = response.json()
+        payload = self.assert_session_body(response, user)
         self.assertEqual(payload["uuid"], str(user.userprofile.uuid))
-        self.assertEqual(payload["email"], user.email)
         self.assertTrue(payload["isEmailVerified"])
-        self.assertNotIn("password", payload)
-        issued = UserToken.objects.get(user=user, is_active=True)
-        self.assertEqual(payload["tokens"][0]["accessToken"], issued.access_token)
-        self.assertEqual(payload["tokens"][0]["refreshToken"], issued.refresh_token)
         self.assert_issued_cookie(response, "access", 900)
         self.assert_issued_cookie(response, "refresh", 604800)
-        self.assertEqual(UserToken.objects.filter(user=user, is_active=True).count(), 1)
+        self.assertEqual(OutstandingToken.objects.filter(user=user).count(), 1)
+        self.assertFalse(BlacklistedToken.objects.exists())
+        self.assertTrue(self.verify_with_cookie(payload["tokens"][0]["accessToken"])["valid"])
+
+    def test_legacy_signin_issues_its_own_session_and_discloses_no_other(self):
+        user = self.create_completed_user()
+        other_access, other_refresh = TokenService.issue(user)
+
+        response = self.client.post(
+            "/api/signin/",
+            {"email": user.email, "password": self.password},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        payload = self.assert_session_body(response, user)
+        self.assertNotIn(other_access, str(payload))
+        self.assertNotIn(other_refresh, str(payload))
+        self.assertEqual(OutstandingToken.objects.filter(user=user).count(), 2)
+        self.assertTrue(self.verify_with_cookie(other_access)["valid"])
 
     def test_legacy_signin_normalizes_input_for_a_canonical_stored_address(self):
         stored_email = "legacy.member@example.test"
@@ -160,7 +209,7 @@ class LegacyTransportTest(LegacyAuthProtocolTestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.json()["email"], stored_email)
-        self.assertEqual(UserToken.objects.filter(user=user, is_active=True).count(), 1)
+        self.assertEqual(OutstandingToken.objects.filter(user=user).count(), 1)
 
     def test_legacy_signin_absent_and_ambiguous_responses_are_identical(self):
         first = self.create_direct_user("collision-first@example.test")
@@ -190,12 +239,12 @@ class LegacyTransportTest(LegacyAuthProtocolTestCase):
         self.assertEqual(ambiguous_response.data, absent_response.data)
         self.assertEqual(list(ambiguous_response.cookies), list(absent_response.cookies))
         resolve.assert_called_once_with("collision@example.test")
-        self.assertFalse(UserToken.objects.exists())
+        self.assertFalse(OutstandingToken.objects.exists())
         for user in (first, second):
             user.refresh_from_db()
             self.assertEqual((user.password, user.last_login), initial_state[user.pk])
 
-    def test_legacy_signup_reuses_one_canonical_incomplete_account(self):
+    def test_legacy_signup_for_an_incomplete_account_never_overwrites_the_password(self):
         stored_email = "pending.member@example.test"
         user = self.create_direct_user(
             stored_email,
@@ -203,6 +252,7 @@ class LegacyTransportTest(LegacyAuthProtocolTestCase):
             active=False,
             verified=False,
         )
+        stored_hash = user.password
 
         with patch("authentication.views.user.EmailCodeService.send") as send_email:
             response = self.client.post(
@@ -216,11 +266,31 @@ class LegacyTransportTest(LegacyAuthProtocolTestCase):
             )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(set(response.json()), IDENTITY_KEYS)
         self.assertEqual(response.json()["email"], stored_email)
         self.assertEqual(User.objects.count(), 1)
         user.refresh_from_db()
-        self.assertTrue(user.is_active)
-        self.assertTrue(user.check_password(self.password))
+        self.assertEqual(user.password, stored_hash)
+        self.assertFalse(user.is_active)
+        self.assertTrue(user.check_password("old-password-123"))
+        send_email.assert_called_once()
+        self.assertEqual(send_email.call_args.args[0].pk, user.pk)
+
+    def test_legacy_signup_with_the_matching_password_resends_the_code_untouched(self):
+        user = self.create_direct_user("pending.member@example.test", active=True, verified=False)
+        stored_hash = user.password
+
+        with patch("authentication.views.user.EmailCodeService.send") as send_email:
+            response = self.client.post(
+                "/api/signup/",
+                {"email": user.email, "password": self.password, "passwordConfirm": self.password},
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(User.objects.count(), 1)
+        user.refresh_from_db()
+        self.assertEqual(user.password, stored_hash)
         send_email.assert_called_once()
         self.assertEqual(send_email.call_args.args[0].pk, user.pk)
 
@@ -260,7 +330,7 @@ class LegacyTransportTest(LegacyAuthProtocolTestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(response.data, {"email": ["Email already registered"]})
         self.assertEqual(User.objects.count(), 2)
-        self.assertFalse(UserToken.objects.exists())
+        self.assertFalse(OutstandingToken.objects.exists())
         resolve.assert_called_once_with("collision@example.test")
         send_email.assert_not_called()
         for user in (first, second):
@@ -269,65 +339,100 @@ class LegacyTransportTest(LegacyAuthProtocolTestCase):
 
     def test_legacy_cookie_and_bearer_access_each_authenticate_the_verify_endpoint(self):
         user = self.create_completed_user()
-        token = TokenService.create(user)
+        access, _ = TokenService.issue(user)
 
-        cookie_client = APIClient()
-        cookie_client.cookies["access"] = token.access_token
-        cookie_response = cookie_client.get("/api/auth/verify/")
-
-        bearer_client = APIClient()
-        bearer_client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.access_token}")
-        bearer_response = bearer_client.get("/api/auth/verify/")
-
-        for response in (cookie_response, bearer_response):
-            self.assertEqual(response.status_code, status.HTTP_200_OK)
-            payload = response.json()
+        for payload in (self.verify_with_cookie(access), self.verify_with_bearer(access)):
+            self.assertEqual(set(payload), {"valid", "expiresAt"})
             self.assertTrue(payload["valid"])
             self.assertTrue(payload["expiresAt"])
 
     def test_legacy_revoked_access_is_rejected_for_cookie_and_bearer(self):
         user = self.create_completed_user()
-        token = TokenService.create(user)
-        token.revoke()
+        access, refresh = TokenService.issue(user)
+        TokenService.revoke(refresh)
 
-        cookie_client = APIClient()
-        cookie_client.cookies["access"] = token.access_token
-        cookie_response = cookie_client.get("/api/auth/verify/")
+        self.assertTrue(is_blacklisted(refresh))
+        self.assertEqual(self.verify_with_cookie(access), {"valid": False})
+        self.assertEqual(self.verify_with_bearer(access), {"valid": False})
 
-        bearer_client = APIClient()
-        bearer_client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.access_token}")
-        bearer_response = bearer_client.get("/api/auth/verify/")
+    def test_legacy_access_token_without_a_live_refresh_session_is_rejected(self):
+        user = self.create_completed_user()
+        unbound = str(AccessToken.for_user(user))
+        orphan = RefreshToken.for_user(user)
+        orphan_access = orphan.access_token
+        orphan_access["rjti"] = orphan["jti"]
+        OutstandingToken.objects.filter(jti=orphan["jti"]).delete()
 
-        for response in (cookie_response, bearer_response):
-            self.assertEqual(response.status_code, status.HTTP_200_OK)
-            self.assertEqual(response.json(), {"valid": False})
+        self.assertEqual(self.verify_with_cookie(unbound), {"valid": False})
+        self.assertEqual(self.verify_with_cookie(str(orphan_access)), {"valid": False})
+
+    def test_legacy_revoke_all_invalidates_every_issued_access_token(self):
+        user = self.create_completed_user()
+        first_access, first_refresh = TokenService.issue(user)
+        second_access, second_refresh = TokenService.issue(user)
+        TokenService.revoke(first_refresh)
+
+        TokenService.revoke_all(user)
+
+        self.assertEqual(BlacklistedToken.objects.filter(token__user=user).count(), 2)
+        self.assertEqual(self.verify_with_cookie(first_access), {"valid": False})
+        self.assertEqual(self.verify_with_cookie(second_access), {"valid": False})
+        self.assertFalse(OutstandingToken.objects.filter(user=user, blacklistedtoken__isnull=True).exists())
 
 
 class LegacyRefreshLogoutTest(LegacyAuthProtocolTestCase):
-    def test_legacy_refresh_requires_the_refresh_cookie(self):
+    def test_legacy_refresh_requires_a_refresh_token(self):
         response = self.client.post("/api/token/refresh/", {}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(response.json(), {"error": "Refresh token not found in cookies."})
-        self.assertFalse(UserToken.objects.exists())
+        self.assertEqual(response.json(), {"error": "Refresh token not found."})
+        self.assertFalse(OutstandingToken.objects.exists())
 
-    def test_legacy_valid_refresh_returns_one_usable_active_session(self):
+    def test_legacy_cookie_refresh_rotates_and_retires_the_presented_token(self):
         user = self.create_completed_user()
-        token = TokenService.create(user)
-        self.client.cookies["refresh"] = token.refresh_token
+        old_access, old_refresh = TokenService.issue(user)
+        self.client.cookies["refresh"] = old_refresh
 
         response = self.client.post("/api/token/refresh/", {}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(set(response.json()), {"access", "refresh"})
+        self.assertEqual(response["Cache-Control"], "no-store")
         self.assert_issued_cookie(response, "access", 900)
         self.assert_issued_cookie(response, "refresh", 604800)
-        self.assertEqual(UserToken.objects.filter(user=user, is_active=True).count(), 1)
+        new_access, new_refresh = response.json()["access"], response.json()["refresh"]
+        self.assertEqual(
+            (response.cookies["access"].value, response.cookies["refresh"].value), (new_access, new_refresh)
+        )
+        self.assertNotEqual(jti_of(old_refresh), jti_of(new_refresh))
+        self.assertTrue(is_blacklisted(old_refresh))
+        self.assertFalse(is_blacklisted(new_refresh))
+        self.assertEqual(OutstandingToken.objects.filter(user=user, blacklistedtoken__isnull=True).count(), 1)
+        self.assertTrue(self.verify_with_cookie(new_access)["valid"])
+        self.assertEqual(self.verify_with_cookie(old_access), {"valid": False})
 
-        verify_client = APIClient()
-        verify_client.cookies["access"] = response.cookies["access"].value
-        verify_response = verify_client.get("/api/auth/verify/")
-        self.assertEqual(verify_response.status_code, status.HTTP_200_OK)
-        self.assertTrue(verify_response.json()["valid"])
+        self.client.cookies["refresh"] = old_refresh
+        replay = self.client.post("/api/token/refresh/", {}, format="json")
+
+        self.assertEqual(replay.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(replay.cookies["access"]["max-age"], 0)
+        self.assertEqual(replay.cookies["refresh"]["max-age"], 0)
+
+    def test_legacy_body_refresh_rotates_for_cookieless_clients(self):
+        user = self.create_completed_user()
+        _, old_refresh = TokenService.issue(user)
+
+        response = self.client.post("/api/token/refresh/", {"refresh": old_refresh}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(set(response.json()), {"access", "refresh"})
+        self.assertTrue(is_blacklisted(old_refresh))
+        self.assertTrue(self.verify_with_bearer(response.json()["access"])["valid"])
+
+        second = self.client.post("/api/token/refresh/", {"refresh": response.json()["refresh"]}, format="json")
+
+        self.assertEqual(second.status_code, status.HTTP_200_OK)
+        self.assertNotEqual(jti_of(second.json()["refresh"]), jti_of(response.json()["refresh"]))
 
     def test_legacy_invalid_refresh_clears_both_cookie_names(self):
         self.client.cookies["refresh"] = "invalid-refresh-token"
@@ -335,33 +440,106 @@ class LegacyRefreshLogoutTest(LegacyAuthProtocolTestCase):
         response = self.client.post("/api/token/refresh/", {}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response.json(), {"error": "Invalid refresh token."})
         self.assertEqual(response.cookies["access"]["max-age"], 0)
         self.assertEqual(response.cookies["refresh"]["max-age"], 0)
-        self.assertFalse(UserToken.objects.exists())
+        self.assertFalse(OutstandingToken.objects.exists())
+
+    def test_legacy_refresh_for_a_disabled_user_is_rejected(self):
+        user = self.create_completed_user()
+        _, refresh = TokenService.issue(user)
+        user.is_active = False
+        user.save(update_fields=["is_active"])
+        self.client.cookies["refresh"] = refresh
+
+        response = self.client.post("/api/token/refresh/", {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(OutstandingToken.objects.filter(user=user).count(), 1)
 
     def test_legacy_cookie_signout_revokes_only_the_refresh_matched_session(self):
         user = self.create_completed_user()
-        selected_session = TokenService.create(user)
-        other_session = TokenService.create(user)
-        self.client.cookies["access"] = selected_session.access_token
-        self.client.cookies["refresh"] = selected_session.refresh_token
+        selected_access, selected_refresh = TokenService.issue(user)
+        other_access, other_refresh = TokenService.issue(user)
+        self.client.cookies["access"] = selected_access
+        self.client.cookies["refresh"] = selected_refresh
 
         response = self.client.post("/api/signout/", {}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        selected_session.refresh_from_db()
-        other_session.refresh_from_db()
-        self.assertFalse(selected_session.is_active)
-        self.assertTrue(other_session.is_active)
+        self.assertEqual(response.json(), {"message": "Successfully signed out."})
+        self.assertTrue(is_blacklisted(selected_refresh))
+        self.assertFalse(is_blacklisted(other_refresh))
+        self.assertEqual(self.verify_with_cookie(selected_access), {"valid": False})
+        self.assertTrue(self.verify_with_cookie(other_access)["valid"])
         self.assertEqual(response.cookies["access"]["max-age"], 0)
         self.assertEqual(response.cookies["refresh"]["max-age"], 0)
+
+    def test_legacy_bearer_signout_without_a_refresh_revokes_only_its_own_session(self):
+        user = self.create_completed_user()
+        mobile_access, mobile_refresh = TokenService.issue(user)
+        dashboard_access, dashboard_refresh = TokenService.issue(user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {mobile_access}")
+
+        response = self.client.post("/api/signout/", {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(is_blacklisted(mobile_refresh))
+        self.assertFalse(is_blacklisted(dashboard_refresh))
+        self.assertEqual(self.verify_with_bearer(mobile_access), {"valid": False})
+        self.assertTrue(self.verify_with_cookie(dashboard_access)["valid"])
+
+    def test_legacy_body_refresh_signout_revokes_that_session(self):
+        user = self.create_completed_user()
+        access, refresh = TokenService.issue(user)
+        _, other_refresh = TokenService.issue(user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {access}")
+
+        response = self.client.post("/api/signout/", {"refresh": refresh}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(is_blacklisted(refresh))
+        self.assertFalse(is_blacklisted(other_refresh))
+
+    def test_legacy_anonymous_signout_clears_cookies_without_touching_sessions(self):
+        user = self.create_completed_user()
+        _, refresh = TokenService.issue(user)
+
+        response = self.client.post("/api/signout/", {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.cookies["access"]["max-age"], 0)
+        self.assertFalse(is_blacklisted(refresh))
+
+    def test_legacy_signout_all_revokes_every_session_and_requires_authentication(self):
+        user = self.create_completed_user()
+        first_access, first_refresh = TokenService.issue(user)
+        second_access, second_refresh = TokenService.issue(user)
+        bystander = self.create_completed_user(email="bystander@example.com")
+        _, bystander_refresh = TokenService.issue(bystander)
+
+        anonymous = APIClient().post("/api/signout-all/", {}, format="json")
+        self.assertEqual(anonymous.status_code, status.HTTP_401_UNAUTHORIZED)
+
+        self.client.cookies["access"] = first_access
+        response = self.client.post("/api/signout-all/", {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json(), {"message": "Successfully signed out."})
+        self.assertEqual(response.cookies["access"]["max-age"], 0)
+        self.assertEqual(response.cookies["refresh"]["max-age"], 0)
+        self.assertTrue(is_blacklisted(first_refresh))
+        self.assertTrue(is_blacklisted(second_refresh))
+        self.assertFalse(is_blacklisted(bystander_refresh))
+        self.assertEqual(self.verify_with_cookie(first_access), {"valid": False})
+        self.assertEqual(self.verify_with_cookie(second_access), {"valid": False})
 
 
 class LegacyCredentialMutationTest(LegacyAuthProtocolTestCase):
     def test_legacy_change_password_with_correct_current_password_updates_the_hash(self):
         user = self.create_completed_user()
-        token = TokenService.create(user)
-        self.client.cookies["access"] = token.access_token
+        access, _ = TokenService.issue(user)
+        self.client.cookies["access"] = access
 
         response = self.client.post(
             "/api/change-password/",
@@ -380,8 +558,8 @@ class LegacyCredentialMutationTest(LegacyAuthProtocolTestCase):
 
     def test_legacy_change_password_with_wrong_current_password_preserves_the_hash(self):
         user = self.create_completed_user()
-        token = TokenService.create(user)
-        self.client.cookies["access"] = token.access_token
+        access, _ = TokenService.issue(user)
+        self.client.cookies["access"] = access
 
         response = self.client.post(
             "/api/change-password/",
@@ -400,8 +578,8 @@ class LegacyCredentialMutationTest(LegacyAuthProtocolTestCase):
 
     def test_legacy_resend_for_authenticated_unverified_user_invokes_delivery(self):
         user = self.create_user(verified=False)
-        token = TokenService.create(user)
-        self.client.cookies["access"] = token.access_token
+        access, _ = TokenService.issue(user)
+        self.client.cookies["access"] = access
 
         with patch("authentication.views.user.EmailCodeService.send") as send_email:
             response = self.client.post("/api/resend-verification/", {}, format="json")
@@ -411,8 +589,8 @@ class LegacyCredentialMutationTest(LegacyAuthProtocolTestCase):
 
     def test_legacy_resend_rejects_an_already_verified_user_without_delivery(self):
         user = self.create_user(verified=True)
-        token = TokenService.create(user)
-        self.client.cookies["access"] = token.access_token
+        access, _ = TokenService.issue(user)
+        self.client.cookies["access"] = access
 
         with patch("authentication.views.user.EmailCodeService.send") as send_email:
             response = self.client.post("/api/resend-verification/", {}, format="json")

@@ -16,7 +16,7 @@ from django.test import TransactionTestCase
 
 MIGRATE_FROM = [("authentication", "0002_authsession_refreshcredential")]
 MIGRATE_TO = [("authentication", "0003_customuser_v2_email_constraints")]
-MIGRATE_LATEST = [("authentication", "0007_delete_authsession_refreshcredential")]
+MIGRATE_LATEST = [("authentication", "0008_delete_usertoken")]
 PREFLIGHT_ERROR = "V2 email migration preflight failed."
 MIGRATION_NAME = "0003_customuser_v2_email_constraints"
 CONSTRAINT_NAMES = {

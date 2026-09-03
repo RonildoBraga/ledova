@@ -9,15 +9,14 @@ from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
+from rest_framework_simplejwt.exceptions import TokenError
 
 from authentication.managers.user import EmailLookupState
-from authentication.models.user_token import UserToken
 from authentication.serializers.user import (
     ChangePasswordSerializer,
     EmailVerificationSerializer,
     UserSigninSerializer,
     UserSignupSerializer,
-    UserTokenSerializer,
 )
 from authentication.services.email_codes import EmailCodeService
 from authentication.services.sessions import SessionService
@@ -70,12 +69,23 @@ class TokenCookieMixin:
         response.delete_cookie(cookie_refresh_name, path="/", domain=domain, samesite="Lax")
         return response
 
+    def session_response(self, data, access_token, refresh_token):
+        """Cookies for the dashboard plus the same pair in the body for the mobile app (which reads
+        `tokens[0]`); the body carries raw tokens, so it must never be cached."""
+        data["tokens"] = [{"access_token": access_token, "refresh_token": refresh_token}]
+        response = Response(data, status=status.HTTP_200_OK, headers={"Cache-Control": "no-store"})
+        return self.set_token_cookies(response, access_token, refresh_token)
+
+    def presented_refresh_token(self, request):
+        cookie_refresh_name = os.getenv("COOKIE_REFRESH_NAME", "refresh")
+        return request.COOKIES.get(cookie_refresh_name) or request.data.get("refresh")
+
 
 class AuthViewSet(TokenCookieMixin, ViewSet):
     throttle_scope = "auth"
 
     def get_permissions(self):
-        if self.action in ["resend_verification", "change_password"]:
+        if self.action in ["resend_verification", "change_password", "signout_all"]:
             return [IsAuthenticated()]
         return [AllowAny()]
 
@@ -102,40 +112,44 @@ class AuthViewSet(TokenCookieMixin, ViewSet):
         email = serializer.validated_data["email"]
         password = serializer.validated_data["password"]
 
-        user, token = SessionService.login(email, password, request)
-
-        response_serializer = UserSigninSerializer(instance=user)
-        resp = Response(response_serializer.data, status=status.HTTP_200_OK)
-
-        return self.set_token_cookies(resp, token.access_token, token.refresh_token)
+        user = SessionService.login(email, password)
+        access_token, refresh_token = TokenService.issue(user)
+        return self.session_response(UserSigninSerializer(instance=user).data, access_token, refresh_token)
 
     @action(detail=False, methods=["post"], url_path="signout")
     def signout(self, request):
         if request.user.is_authenticated:
-            cookie_refresh_name = os.getenv("COOKIE_REFRESH_NAME", "refresh")
-            refresh_token = request.COOKIES.get(cookie_refresh_name)
-            SessionService.logout(request.user, refresh_token)
+            refresh_jti = request.auth.get("rjti") if request.auth else None
+            SessionService.logout(self.presented_refresh_token(request), refresh_jti)
+
+        response = Response({"message": "Successfully signed out."}, status=status.HTTP_200_OK)
+        return self.clear_token_cookies(response)
+
+    @action(detail=False, methods=["post"], url_path="signout-all")
+    def signout_all(self, request):
+        TokenService.revoke_all(request.user)
 
         response = Response({"message": "Successfully signed out."}, status=status.HTTP_200_OK)
         return self.clear_token_cookies(response)
 
     @action(detail=False, methods=["post"], url_path="token/refresh")
     def token_refresh(self, request):
-        cookie_refresh_name = os.getenv("COOKIE_REFRESH_NAME", "refresh")
-        refresh_token = request.COOKIES.get(cookie_refresh_name)
-
+        refresh_token = self.presented_refresh_token(request)
         if not refresh_token:
-            return Response({"error": "Refresh token not found in cookies."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "Refresh token not found."}, status=status.HTTP_400_BAD_REQUEST)
 
-        user_token = UserToken.objects.get_by_refresh_token(refresh_token)
-        if not user_token:
+        try:
+            _, access_token, refresh_token = TokenService.rotate(refresh_token)
+        except TokenError:
             resp = Response({"error": "Invalid refresh token."}, status=status.HTTP_401_UNAUTHORIZED)
             return self.clear_token_cookies(resp)
-        else:
-            new_user_token = TokenService.get_or_create(user_token.user, request)
-            serializer = UserTokenSerializer(instance=new_user_token)
-            response = Response(serializer.data, status=status.HTTP_200_OK)
-            return self.set_token_cookies(response, new_user_token.access_token, new_user_token.refresh_token)
+
+        response = Response(
+            {"access": access_token, "refresh": refresh_token},
+            status=status.HTTP_200_OK,
+            headers={"Cache-Control": "no-store"},
+        )
+        return self.set_token_cookies(response, access_token, refresh_token)
 
     @action(detail=False, methods=["post"], url_path="email-verification")
     def email_verification(self, request):
@@ -154,10 +168,8 @@ class AuthViewSet(TokenCookieMixin, ViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        jwt_token = TokenService.get_or_create(user, request)
-        response_serializer = EmailVerificationSerializer(instance=user)
-        response = Response(response_serializer.data, status=status.HTTP_200_OK)
-        return self.set_token_cookies(response, jwt_token.access_token, jwt_token.refresh_token)
+        access_token, refresh_token = TokenService.issue(user)
+        return self.session_response(EmailVerificationSerializer(instance=user).data, access_token, refresh_token)
 
     @action(detail=False, methods=["post"], url_path="resend-verification")
     def resend_verification(self, request):

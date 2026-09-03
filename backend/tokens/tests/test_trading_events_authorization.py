@@ -205,7 +205,7 @@ class TradingEventsAuthorizationTest(TestCase):
             password="pw-12345678",
             is_active=True,
         )
-        self.investor_token = TokenService.create(self.investor)
+        self.investor_access, self.investor_refresh = TokenService.issue(self.investor)
         self.company = Company.objects.create(
             owner=self.issuer,
             name="SSE Market Pty Ltd",
@@ -228,12 +228,12 @@ class TradingEventsAuthorizationTest(TestCase):
             contract_address="0x" + symbol.lower().ljust(40, "0") if status == ShareTokenStatus.DEPLOYED else None,
         )
 
-    def _authenticate_cookie(self, token):
-        self.client.cookies["access"] = token.access_token
+    def _authenticate_cookie(self, access_token):
+        self.client.cookies["access"] = access_token
 
     @patch("tokens.views.trading_events._event_stream", side_effect=lambda _token_uuid: _empty_stream())
     def test_unrelated_investor_can_subscribe_to_deployed_market_token(self, event_stream):
-        self._authenticate_cookie(self.investor_token)
+        self._authenticate_cookie(self.investor_access)
 
         response = self.client.get(self.endpoint, {"token": str(self.deployed_token.uuid)})
 
@@ -248,7 +248,7 @@ class TradingEventsAuthorizationTest(TestCase):
         response = self.client.get(
             self.endpoint,
             {"token": str(self.deployed_token.uuid)},
-            HTTP_AUTHORIZATION=f"Bearer {self.investor_token.access_token}",
+            HTTP_AUTHORIZATION=f"Bearer {self.investor_access}",
         )
 
         self.assertEqual(response.status_code, 200)
@@ -256,7 +256,7 @@ class TradingEventsAuthorizationTest(TestCase):
 
     @patch("tokens.views.trading_events._event_stream", side_effect=lambda _token_uuid: _empty_stream())
     def test_nonpublic_and_unknown_targets_are_indistinguishable(self, event_stream):
-        self._authenticate_cookie(self.investor_token)
+        self._authenticate_cookie(self.investor_access)
         targets = (
             None,
             "not-a-uuid",
@@ -282,7 +282,7 @@ class TradingEventsAuthorizationTest(TestCase):
             is_staff=True,
             is_active=True,
         )
-        self._authenticate_cookie(TokenService.create(staff))
+        self._authenticate_cookie(TokenService.issue(staff)[0])
 
         deployed_response = self.client.get(self.endpoint, {"token": str(self.deployed_token.uuid)})
         draft_response = self.client.get(self.endpoint, {"token": str(self.draft_token.uuid)})
@@ -302,8 +302,8 @@ class TradingEventsAuthorizationTest(TestCase):
 
     @patch("tokens.views.trading_events._event_stream", side_effect=lambda _token_uuid: _empty_stream())
     def test_revoked_cookie_token_is_rejected_before_stream_creation(self, event_stream):
-        self._authenticate_cookie(self.investor_token)
-        self.investor_token.revoke()
+        self._authenticate_cookie(self.investor_access)
+        TokenService.revoke(self.investor_refresh)
 
         response = self.client.get(self.endpoint, {"token": str(self.deployed_token.uuid)})
 
@@ -313,7 +313,7 @@ class TradingEventsAuthorizationTest(TestCase):
 
     @patch("tokens.views.trading_events._event_stream", side_effect=lambda _token_uuid: _empty_stream())
     def test_disabled_user_is_rejected_before_stream_creation(self, event_stream):
-        self._authenticate_cookie(self.investor_token)
+        self._authenticate_cookie(self.investor_access)
         self.investor.is_active = False
         self.investor.save(update_fields=["is_active"])
 
@@ -329,7 +329,7 @@ class TradingEventsAuthorizationTest(TestCase):
             self.endpoint,
             {
                 "token": str(self.deployed_token.uuid),
-                "auth": self.investor_token.access_token,
+                "auth": self.investor_access,
             },
         )
 
@@ -338,8 +338,8 @@ class TradingEventsAuthorizationTest(TestCase):
 
     @patch("tokens.views.trading_events._event_stream", side_effect=lambda _token_uuid: _empty_stream())
     def test_query_token_uses_the_normal_revocation_boundary(self, event_stream):
-        access_token = self.investor_token.access_token
-        self.investor_token.revoke()
+        access_token = self.investor_access
+        TokenService.revoke(self.investor_refresh)
 
         response = self.client.get(
             self.endpoint,

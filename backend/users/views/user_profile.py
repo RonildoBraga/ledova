@@ -9,7 +9,7 @@ from rest_framework.response import Response
 
 from authentication.email import normalize_email
 from authentication.managers.user import EmailLookupState
-from authentication.models.user_token import UserToken
+from authentication.services import TokenService
 from portfolios.models import Portfolio
 from shared.utils.logging_utils import LoggingContext
 from shared.views.base import AuthenticatedModelViewSet
@@ -62,7 +62,7 @@ class UserProfileViewSet(AuthenticatedModelViewSet):
         user.is_email_verified = False
         user.save(update_fields=["email", "is_active", "is_email_verified"])
 
-        UserToken.objects.filter(user=user).delete()
+        TokenService.revoke_all(user)
 
         try:
             profile = UserProfile.objects.get(user=user)

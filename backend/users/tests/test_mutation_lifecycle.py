@@ -4,11 +4,12 @@ from uuid import UUID
 
 from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
+from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 
 from assets.models import Asset
 from authentication.email import normalize_email
 from authentication.managers.user import EmailLookupResult, EmailLookupState
-from authentication.models import UserToken
+from authentication.services import TokenService
 from users.models import FavouriteAsset, FinancialProfile, UserAccount, UserProfile
 
 User = get_user_model()
@@ -103,11 +104,8 @@ class UserMutationLifecycleTest(APITestCase):
                 self.assertTrue({"GET", "PUT", "PATCH", "HEAD", "OPTIONS"}.issubset(allowed_methods))
 
     def test_dedicated_account_deletion_keeps_shared_records_and_deactivates_only_requester(self):
-        token = UserToken.objects.create(
-            user=self.owner,
-            access_token="test-access-token",
-            refresh_token="test-refresh-token",
-        )
+        TokenService.issue(self.owner)
+        TokenService.issue(self.owner)
         member_email = self.member.email
         self.client.force_authenticate(self.owner)
 
@@ -136,7 +134,8 @@ class UserMutationLifecycleTest(APITestCase):
         self.assertIsNone(self.owner_profile.phone_country_code)
         self.assertIsNone(self.owner_profile.phone_number)
         self.assertIsNone(self.owner_profile.residential_address)
-        self.assertFalse(UserToken.objects.filter(pk=token.pk).exists())
+        self.assertEqual(OutstandingToken.objects.filter(user=self.owner).count(), 2)
+        self.assertFalse(OutstandingToken.objects.filter(user=self.owner, blacklistedtoken__isnull=True).exists())
         self.assertTrue(FinancialProfile.objects.filter(pk=self.financial_profile.pk).exists())
         self.assertTrue(UserAccount.objects.filter(pk=self.account.pk).exists())
         self.assertTrue(FavouriteAsset.objects.filter(pk=self.favourite.pk).exists())
@@ -148,11 +147,7 @@ class UserMutationLifecycleTest(APITestCase):
 
     def test_account_deletion_fails_before_mutation_when_tombstone_is_unavailable(self):
         original_email = self.owner.email
-        token = UserToken.objects.create(
-            user=self.owner,
-            access_token="collision-access-token",
-            refresh_token="collision-refresh-token",
-        )
+        TokenService.issue(self.owner)
         tombstone = f"deleted_{self.owner.id}_20260902040506_12345678123441238123123456789abc@deleted.invalid"
         self.client.force_authenticate(self.owner)
 
@@ -177,4 +172,4 @@ class UserMutationLifecycleTest(APITestCase):
         self.assertTrue(self.owner.is_active)
         self.assertTrue(self.owner.is_email_verified)
         self.assertEqual(self.owner_profile.full_name, "Lifecycle Owner")
-        self.assertTrue(UserToken.objects.filter(pk=token.pk).exists())
+        self.assertEqual(OutstandingToken.objects.filter(user=self.owner, blacklistedtoken__isnull=True).count(), 1)

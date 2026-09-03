@@ -75,7 +75,7 @@ class V2WithdrawalTests(SimpleTestCase):
         from ledova_backend.procrastinate_app import app
 
         names = {model.__name__ for model in apps.get_app_config("authentication").get_models()}
-        self.assertEqual(names, {"CustomUser", "UserToken"})
+        self.assertEqual(names, {"CustomUser"})
         self.assertNotIn("authentication.deliver_v2_challenge", app.tasks)
 
     def test_session_core_modules_and_key_material_are_gone(self):

@@ -6,13 +6,13 @@ from django.db import connection
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from rest_framework import serializers
+from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
 
 from authentication.email import EMAIL_ERROR, EmailError
 from authentication.managers.user import (
     EmailLookupResult,
     EmailLookupState,
 )
-from authentication.models.user_token import UserToken
 from authentication.serializers.user import (
     EmailVerificationSerializer,
     UserSigninSerializer,
@@ -294,7 +294,7 @@ class EmailSignupLookupTests(ExistingAddressTestCase):
 
     def assert_users_unchanged(self, users, initial_state):
         self.assertEqual(User.objects.count(), 2)
-        self.assertFalse(UserToken.objects.exists())
+        self.assertFalse(OutstandingToken.objects.exists())
         for user in users:
             user.refresh_from_db()
             self.assertEqual(

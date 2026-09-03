@@ -1,23 +1,18 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
-from authentication.models.user_token import UserToken
 from authentication.serializers.fields import NormalizedEmailField
-from shared.constants import DATETIME_FORMAT
 
 User = get_user_model()
 
 
-class UserTokenSerializer(serializers.ModelSerializer):
-    expires_at = serializers.DateTimeField(format=DATETIME_FORMAT, required=False)
-    last_used_at = serializers.DateTimeField(format=DATETIME_FORMAT, required=False, allow_null=True)
-    revoked_at = serializers.DateTimeField(format=DATETIME_FORMAT, required=False, allow_null=True)
-    created_at = serializers.DateTimeField(format=DATETIME_FORMAT, required=False, allow_null=True)
-    updated_at = serializers.DateTimeField(format=DATETIME_FORMAT, required=False, allow_null=True)
-
-    class Meta:
-        model = UserToken
-        exclude = ["uuid", "user"]
+def _identity(instance):
+    return {
+        "uuid": str(instance.userprofile.uuid) if hasattr(instance, "userprofile") else None,
+        "email": instance.email,
+        "is_email_verified": instance.is_email_verified,
+        "is_phone_verified": getattr(instance, "is_phone_verified", False),
+    }
 
 
 class EmailVerificationSerializer(serializers.Serializer):
@@ -25,18 +20,7 @@ class EmailVerificationSerializer(serializers.Serializer):
     email = NormalizedEmailField(required=True)
 
     def to_representation(self, instance):
-        representation = {
-            "uuid": str(instance.userprofile.uuid) if hasattr(instance, "userprofile") else None,
-            "email": instance.email,
-            "is_email_verified": instance.is_email_verified,
-            "is_phone_verified": getattr(instance, "is_phone_verified", False),
-        }
-
-        if hasattr(instance, "tokens"):
-            tokens_qs = instance.tokens.filter(is_active=True).order_by("-created_at")
-            representation["tokens"] = UserTokenSerializer(tokens_qs, many=True).data
-
-        return representation
+        return _identity(instance)
 
 
 class UserSignupSerializer(serializers.Serializer):
@@ -52,33 +36,15 @@ class UserSignupSerializer(serializers.Serializer):
         return value
 
     def to_representation(self, instance):
-        representation = {
-            "uuid": str(instance.userprofile.uuid) if hasattr(instance, "userprofile") else None,
-            "email": instance.email,
-            "is_email_verified": instance.is_email_verified,
-            "is_phone_verified": getattr(instance, "is_phone_verified", False),
-        }
-        return representation
+        return _identity(instance)
 
 
 class UserSigninSerializer(serializers.Serializer):
     email = NormalizedEmailField(required=True)
     password = serializers.CharField(max_length=255, write_only=True, required=True, style={"input_type": "password"})
-    tokens = UserTokenSerializer(many=True, read_only=True)
 
     def to_representation(self, instance):
-        representation = {
-            "uuid": str(instance.userprofile.uuid),
-            "email": instance.email,
-            "is_email_verified": instance.is_email_verified,
-            "is_phone_verified": getattr(instance, "is_phone_verified", False),
-        }
-
-        if hasattr(instance, "tokens"):
-            tokens_qs = instance.tokens.filter(is_active=True).order_by("-created_at")
-            representation["tokens"] = UserTokenSerializer(tokens_qs, many=True).data
-
-        return representation
+        return _identity(instance)
 
 
 class ChangePasswordSerializer(serializers.Serializer):
