@@ -145,15 +145,12 @@ class MintRequest(BaseModel):
 
     @property
     def can_be_executed(self) -> bool:
-        return self.status in [MintRequestStatus.PENDING, MintRequestStatus.APPROVED]
+        """Pending requests execute; failed ones may be retried."""
+        return self.status in (MintRequestStatus.PENDING, MintRequestStatus.APPROVED, MintRequestStatus.FAILED)
 
     @property
     def can_be_rejected(self) -> bool:
-        return self.status in [MintRequestStatus.PENDING, MintRequestStatus.APPROVED]
-
-    @property
-    def can_retry(self) -> bool:
-        return self.status == MintRequestStatus.FAILED
+        return self.status in (MintRequestStatus.PENDING, MintRequestStatus.APPROVED)
 
     def mark_executed(self, user, transaction):
         self.status = MintRequestStatus.EXECUTED

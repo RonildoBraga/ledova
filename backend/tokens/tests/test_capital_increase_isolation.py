@@ -5,7 +5,7 @@ from rest_framework.test import APITestCase
 from companies.models import Company, CompanyStatus, CompanyType
 from tokens.models import (
     CapitalIncreaseRequest,
-    CapitalIncreaseStatus,
+    RequestStatus,
     ShareToken,
     ShareTokenStatus,
     ShareTokenType,
@@ -107,7 +107,7 @@ class CapitalIncreaseIsolationTest(APITestCase):
         self.assertEqual(create_response.status_code, 201)
         created = CapitalIncreaseRequest.objects.get(uuid=create_response.json()["uuid"])
         self.assertEqual(created.token, token)
-        self.assertEqual(created.status, CapitalIncreaseStatus.DRAFT)
+        self.assertEqual(created.status, RequestStatus.DRAFT)
         self.assertEqual(created.board_resolution_reference, "BOARD-API-001")
 
         submit_response = self.client.post(
@@ -116,7 +116,7 @@ class CapitalIncreaseIsolationTest(APITestCase):
         self.assertEqual(submit_response.status_code, 200)
         self.assertEqual(submit_response.json()["request"]["uuid"], str(draft.uuid))
         draft.refresh_from_db()
-        self.assertEqual(draft.status, CapitalIncreaseStatus.SUBMITTED)
+        self.assertEqual(draft.status, RequestStatus.SUBMITTED)
         self.assertEqual(draft.submitted_by, owner)
         self.assertIsNotNone(draft.submitted_at)
 
@@ -162,7 +162,7 @@ class CapitalIncreaseIsolationTest(APITestCase):
         self.assertEqual(edited.json()["uuid"], str(draft.uuid))
         self.assertEqual(edited.json()["purpose"], "Changed")
         self.assertTrue(edited.json()["canBeEdited"])
-        self.assertEqual(edited.json()["status"], CapitalIncreaseStatus.DRAFT)
+        self.assertEqual(edited.json()["status"], RequestStatus.DRAFT)
 
         self.assertEqual(self.client.post(f"{detail_url}submit/").status_code, 200)
         resubmitted = self.client.post(f"{detail_url}submit/")

@@ -9,8 +9,8 @@ from rest_framework.test import APITestCase
 from companies.models import Company, CompanyDocument
 from tokens.models import (
     CapitalIncreaseRequest,
-    CapitalIncreaseStatus,
     IssuanceStatus,
+    RequestStatus,
     ShareIssuance,
     ShareIssuanceRequest,
     ShareToken,
@@ -187,7 +187,7 @@ class CompanyLiveAuthorizationTest(APITestCase):
                 new_authorized_total=1100,
                 purpose="Stats coverage",
                 board_resolution_reference=f"BOARD-STATS-{index}",
-                status=CapitalIncreaseStatus.SUBMITTED,
+                status=RequestStatus.SUBMITTED,
             )
             actor_cases.append((actor, company))
 

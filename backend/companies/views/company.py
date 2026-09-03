@@ -26,8 +26,8 @@ from shared.utils.logging_utils import LoggingContext
 from shared.views import AuthenticatedModelViewSet
 from tokens.models import (
     CapitalIncreaseRequest,
-    CapitalIncreaseStatus,
     IssuanceStatus,
+    RequestStatus,
     ShareIssuance,
     ShareToken,
 )
@@ -147,9 +147,9 @@ class CompanyViewSet(AuthenticatedModelViewSet):
         pending_capital_increases = CapitalIncreaseRequest.objects.filter(
             token__company=company,
             status__in=[
-                CapitalIncreaseStatus.SUBMITTED,
-                CapitalIncreaseStatus.UNDER_REVIEW,
-                CapitalIncreaseStatus.APPROVED,
+                RequestStatus.SUBMITTED,
+                RequestStatus.UNDER_REVIEW,
+                RequestStatus.APPROVED,
             ],
         ).count()
 

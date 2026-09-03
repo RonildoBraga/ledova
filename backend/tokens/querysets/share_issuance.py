@@ -22,6 +22,16 @@ class ShareIssuanceQuerySet(QuerySet):
     def completed(self):
         return self.filter(status=IssuanceStatus.COMPLETED)
 
+    def completed_supply(self, token) -> int:
+        """Shares already minted for the token: the sum of its completed issuances."""
+        total = (
+            self.completed()
+            .filter(token=token)
+            .exclude(amount="")
+            .aggregate(total=Sum(Cast("amount", BigIntegerField())))["total"]
+        )
+        return int(total or 0)
+
     def pending(self):
         return self.filter(status=IssuanceStatus.PENDING)
 

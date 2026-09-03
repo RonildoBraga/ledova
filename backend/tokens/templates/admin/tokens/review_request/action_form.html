@@ -1,0 +1,154 @@
+{% extends "admin/base_custom.html" %}
+{% load admin_urls %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Home</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_label|capfirst }}</a>
+    &rsaquo; <a href="{% url opts|admin_urlname:'changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+    &rsaquo; <a href="{% url opts|admin_urlname:'change' review_request.pk %}">{{ review_request.token.symbol }}</a>
+    &rsaquo; {{ action|capfirst }}
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="admin-custom-form admin-custom-form--wide">
+    {% if action == "approve" %}
+    <div class="alert alert-success">
+        <strong>Approve {{ label }} Request</strong>
+    {% elif action == "reject" %}
+    <div class="alert alert-danger">
+        <strong>Reject {{ label }} Request</strong>
+    {% else %}
+    <div class="alert alert-warning">
+        <strong>&#9888; Execute {{ label }}</strong>
+    {% endif %}
+        <p class="mt-1 mb-0">
+            You are about to {{ action }} a {{ label|lower }} request for
+            <strong>{{ review_request.token.name }} ({{ review_request.token.symbol }})</strong>.
+        </p>
+    </div>
+
+    <div class="admin-card">
+        <div class="admin-card-header">Request Details</div>
+        <div class="admin-card-body">
+            <table class="admin-table">
+                <tr>
+                    <td class="label-col">Token</td>
+                    <td>{{ review_request.token.name }} ({{ review_request.token.symbol }})</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Company</td>
+                    <td>{{ review_request.token.company.name }}</td>
+                </tr>
+                {% if action == "execute" %}
+                <tr>
+                    <td class="label-col">Contract Address</td>
+                    <td class="monospace">{{ review_request.token.contract_address }}</td>
+                </tr>
+                {% endif %}
+                {% for row_label, value in detail_rows %}
+                <tr>
+                    <td class="label-col">{{ row_label }}</td>
+                    <td>{{ value }}</td>
+                </tr>
+                {% endfor %}
+                {% if review_request.dilution_percentage %}
+                <tr>
+                    <td class="label-col">Dilution</td>
+                    <td>{{ review_request.dilution_percentage }}%</td>
+                </tr>
+                {% endif %}
+                <tr>
+                    <td class="label-col">Submitted By</td>
+                    <td>{{ review_request.submitted_by.email|default:"-" }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Submitted At</td>
+                    <td>{{ review_request.submitted_at|default:"-" }}</td>
+                </tr>
+                {% if review_request.reviewed_at %}
+                <tr>
+                    <td class="label-col">Approved By</td>
+                    <td>{{ review_request.reviewed_by.email }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Approved At</td>
+                    <td>{{ review_request.reviewed_at }}</td>
+                </tr>
+                {% endif %}
+            </table>
+        </div>
+    </div>
+
+    {% if action == "execute" %}
+    <div class="admin-card">
+        <div class="admin-card-header">On-chain Operations</div>
+        <div class="admin-card-body">
+            <p class="mb-1">The following operations will be executed on the blockchain:</p>
+            <ol>
+                {% for step in execution_steps %}<li><code>{{ step }}</code></li>{% endfor %}
+            </ol>
+        </div>
+    </div>
+
+    <div class="alert alert-warning">
+        <strong>&#9888; Important:</strong>
+        <p class="mt-1 mb-0">
+            This action will submit blockchain transactions that cannot be undone. Please ensure all details are correct before proceeding.
+        </p>
+    </div>
+    {% endif %}
+
+    <form method="post" class="admin-form">
+        {% csrf_token %}
+        {% if action == "approve" %}
+        <fieldset>
+            <legend>Review Notes (Optional)</legend>
+            <div class="form-group">{{ form.notes }}</div>
+        </fieldset>
+
+        <div class="alert alert-success">
+            <strong>Approval Confirmation:</strong>
+            <p class="mt-1 mb-0">By approving this request, you confirm that:</p>
+            <ul class="mb-0">
+                <li>The request has been properly authorized by the company</li>
+                <li>Required approvals have been obtained and any recipient address verified</li>
+                <li>The request complies with company policies and regulations</li>
+            </ul>
+            <p class="mt-1 mb-0">
+                <strong>Note:</strong> After approval, you will need to execute the request to perform the on-chain operations.
+            </p>
+        </div>
+        {% elif action == "reject" %}
+        <fieldset>
+            <legend>Rejection Reason (Required)</legend>
+            <div class="form-group">
+                {{ form.reason }}
+                {% if form.reason.errors %}
+                <p class="error-text">{{ form.reason.errors.0 }}</p>
+                {% endif %}
+            </div>
+        </fieldset>
+
+        <div class="alert alert-warning">
+            <strong>&#9888; Note:</strong>
+            <p class="mt-1 mb-0">
+                The rejection reason will be visible to the company. Please provide a clear explanation.
+            </p>
+        </div>
+        {% endif %}
+
+        <div class="action-row mt-0">
+            {% if action == "approve" %}
+            <button type="submit" class="btn btn-success">Approve Request</button>
+            {% elif action == "reject" %}
+            <button type="submit" class="btn btn-danger">Reject Request</button>
+            {% else %}
+            <button type="submit" class="btn btn-warning">Execute {{ label }}</button>
+            {% endif %}
+            <a href="{% url opts|admin_urlname:'change' review_request.pk %}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

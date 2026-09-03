@@ -27,6 +27,8 @@ from tokens.exceptions import (
     TokenFactoryNotConfiguredException,
 )
 from tokens.models import (
+    CapitalIncreaseRequest,
+    IssuanceType,
     ShareIssuance,
     ShareIssuanceRequest,
     ShareToken,
@@ -260,6 +262,65 @@ class ShareTokenService:
             issuance.mark_failed(str(e))
             logger.error(f"{LoggingContext.TOKEN} Issuance mint failed: {e}")
             raise ShareIssuanceFailedException(f"Share issuance failed: {e}") from e
+
+    def execute_request(self, request) -> dict:
+        """Run an approved (or failed and retried) review request on-chain.
+
+        One ShareIssuance records the mint; the request and the issuance are marked failed before re-raising so
+        the task can retry, and the token supply is bumped only once the chain has confirmed.
+        """
+        token = request.token
+        if not request.can_be_executed:
+            raise InvalidTokenStateException(f"Cannot execute request with status '{request.get_status_display()}'")
+        if not token.contract_address or token.status != ShareTokenStatus.DEPLOYED:
+            request.mark_failed("Token is not deployed on blockchain")
+            raise InvalidTokenStateException("Token is not deployed on blockchain")
+
+        is_capital_increase = isinstance(request, CapitalIncreaseRequest)
+        if is_capital_increase:
+            wallet = token.company.get_primary_wallet()
+            if wallet is None:
+                request.mark_failed("Company has no operator wallet or verified ETH wallet")
+                raise CompanyNotReadyException("Company has no operator wallet or verified ETH wallet")
+            recipient_address, recipient_name = wallet.address, f"{token.company.name} Primary Wallet"
+            issuance_type, reason = IssuanceType.ADDITIONAL, f"Capital increase: {request.purpose}"
+        else:
+            recipient_address, recipient_name = request.recipient_address, request.recipient_name
+            issuance_type, reason = request.issuance_type, f"Issuance request: {request.reason}"
+
+        request.mark_executing()
+        issuance = ShareIssuance.objects.create(
+            token=token,
+            recipient_address=recipient_address,
+            recipient_name=recipient_name,
+            amount=str(request.share_delta),
+            issuance_type=issuance_type,
+            reason=reason,
+        )
+        issuance.mark_processing()
+        logger.info(
+            f"{LoggingContext.TOKEN} Executing {token.symbol} +{request.share_delta} shares to {recipient_address}"
+        )
+
+        try:
+            if is_capital_increase:
+                result = self.increase_authorized_shares(token.contract_address, request.share_delta, recipient_address)
+                tx_hash = result["mint_tx_hash"]
+            else:
+                result = self._mint_to(token.contract_address, recipient_address, request.share_delta)
+                tx_hash = result["tx_hash"]
+        except Exception as exc:
+            logger.error(f"{LoggingContext.TOKEN} Execution failed: {exc}")
+            issuance.mark_failed(str(exc))
+            request.mark_failed(str(exc))
+            raise
+
+        issuance.mark_completed(tx_hash=tx_hash, block_number=result["block_number"], gas_used=result["gas_used"])
+        token.total_supply = str(int(token.total_supply) + request.share_delta)
+        token.save(update_fields=["total_supply", "updated_at"])
+        request.mark_executed(issuance)
+        logger.info(f"{LoggingContext.TOKEN} Request executed for {token.symbol}: {tx_hash}")
+        return result
 
     def increase_authorized_shares(
         self,
