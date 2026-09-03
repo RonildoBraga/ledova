@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
-from tokens.models import CapitalIncreaseRequest
+from tokens.exceptions import InvalidTokenStateException
+from tokens.models import CapitalIncreaseRequest, ShareTokenStatus
 
 
 class CapitalIncreaseListSerializer(serializers.ModelSerializer):
@@ -76,6 +77,7 @@ class CapitalIncreaseDetailSerializer(serializers.ModelSerializer):
 
 
 class CapitalIncreaseCreateSerializer(serializers.ModelSerializer):
+    """The view resolves the caller's token and passes it as context["token"]."""
 
     class Meta:
         model = CapitalIncreaseRequest
@@ -98,12 +100,22 @@ class CapitalIncreaseCreateSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
-        additional = attrs.get("additional_shares", 0)
-        new_total = attrs.get("new_authorized_total", 0)
+        token = self.context["token"]
+        if token.status != ShareTokenStatus.DEPLOYED:
+            raise InvalidTokenStateException("Capital increase requests can only be created for deployed tokens.")
 
-        if new_total < additional:
-            raise serializers.ValidationError("New authorized total must be at least equal to additional shares")
-
+        additional = attrs["additional_shares"]
+        current_supply = int(token.total_supply) if token.total_supply else 0
+        expected_new_total = current_supply + additional
+        if attrs["new_authorized_total"] < expected_new_total:
+            raise serializers.ValidationError(
+                {
+                    "new_authorized_total": (
+                        f"Must be at least current supply ({current_supply}) + "
+                        f"additional shares ({additional}) = {expected_new_total}"
+                    )
+                }
+            )
         return attrs
 
 
@@ -130,13 +142,14 @@ class CapitalIncreaseUpdateSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
-        if self.instance and not self.instance.can_be_edited:
-            raise serializers.ValidationError("Cannot edit request that is not in draft status")
+        if not self.instance.can_be_edited:
+            raise InvalidTokenStateException("Only draft requests can be edited.")
 
-        additional = attrs.get("additional_shares", self.instance.additional_shares if self.instance else 0)
-        new_total = attrs.get("new_authorized_total", self.instance.new_authorized_total if self.instance else 0)
-
+        additional = attrs.get("additional_shares", self.instance.additional_shares)
+        new_total = attrs.get("new_authorized_total", self.instance.new_authorized_total)
         if new_total < additional:
             raise serializers.ValidationError("New authorized total must be at least equal to additional shares")
-
         return attrs
+
+    def to_representation(self, instance):
+        return CapitalIncreaseDetailSerializer(instance, context=self.context).data

@@ -45,8 +45,15 @@ class WalletViewSet(AuthenticatedModelViewSet):
     ordering_fields = ["created_at", "chain", "verification_status"]
 
     def get_queryset(self):
-        user = self.request.user
-        return Wallet.objects.visible_to_user(user).with_market_value()
+        queryset = Wallet.objects.visible_to_user(self.request.user)
+        if self.action in ("update", "partial_update"):
+            # Lock the row before validation runs; FOR UPDATE cannot be combined with the market-value aggregate.
+            return queryset.select_for_update(of=("self",))
+        return queryset.with_market_value()
+
+    @transaction.atomic
+    def update(self, request, *args, **kwargs):
+        return super().update(request, *args, **kwargs)
 
     def perform_create(self, serializer):
         wallet = serializer.save(verification_status=WALLET_VERIFICATION_STATUS_PENDING)

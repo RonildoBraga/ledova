@@ -152,6 +152,7 @@ class OrderModificationService:
 
         try:
             modifications = parse_order_modify_message(message)
+            new_price = Decimal(modifications.get("new_price_per_share", str(order.price_per_share)))
         except Exception as e:
             raise OrderModificationException(f"Invalid message format: {str(e)}")
 
@@ -160,7 +161,6 @@ class OrderModificationService:
 
         new_quantity = modifications.get("new_quantity", order.quantity)
         new_min_quantity = modifications.get("new_min_quantity", order.min_quantity)
-        new_price = Decimal(modifications.get("new_price_per_share", str(order.price_per_share)))
 
         errors = self.validate_modifications(order, new_quantity, new_min_quantity, new_price)
         if errors:
@@ -205,16 +205,20 @@ class OrderModificationService:
         order.current_signature = signature
         order.save()
 
-        if changes:
-            OrderModificationLog.log_multiple_modifications(
+        OrderModificationLog.objects.bulk_create(
+            OrderModificationLog(
                 order=order,
-                changes=[(c["field"], c["old"], c["new"]) for c in changes],
-                message=message,
+                field_name=change["field"],
+                old_value=change["old"],
+                new_value=change["new"],
+                modification_message=message,
                 signature=signature,
                 signer_address=signer,
                 ip_address=ip_address,
-                user_agent=user_agent,
+                user_agent=(user_agent or "")[:500],
             )
+            for change in changes
+        )
 
         logger.info(f"{LoggingContext.ORDER} Modified order {order.uuid}: " f"{len(changes)} field(s) changed")
 

@@ -7,7 +7,6 @@ from django.utils import timezone
 from companies.exceptions import InvalidStatusTransitionException
 from companies.querysets.company import CompanyQuerySet
 from shared.models import BaseModel
-from users.models import UserProfile
 from wallets.models import Wallet
 from wallets.models.wallet import Blockchain
 
@@ -287,15 +286,7 @@ class Company(BaseModel):
         return getattr(self.owner, "userprofile", None)
 
     def get_primary_wallet(self, chain: str | None = None):
-        if chain is None:
-            chain = Blockchain.BASE.value
-
+        chain = chain or Blockchain.BASE.value
         if self.operator_wallet and self.operator_wallet.chain == chain:
             return self.operator_wallet
-
-        profile = UserProfile.objects.filter(user=self.owner).first()
-        if not profile:
-            return None
-
-        account_ids = profile.user_accounts.values_list("uuid", flat=True)
-        return Wallet.objects.filter(user_account_id__in=account_ids).for_chain_with_l2_fallback(chain)
+        return Wallet.objects.visible_to_user(self.owner).for_chain_with_l2_fallback(chain)

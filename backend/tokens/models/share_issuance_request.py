@@ -118,22 +118,6 @@ class ShareIssuanceRequest(BaseModel):
         return f"{self.token.symbol}: {self.amount} shares to {addr}... ({self.get_status_display()})"
 
     @property
-    def is_pending(self) -> bool:
-        return self.status == IssuanceRequestStatus.PENDING_APPROVAL
-
-    @property
-    def is_approved(self) -> bool:
-        return self.status == IssuanceRequestStatus.APPROVED
-
-    @property
-    def is_rejected(self) -> bool:
-        return self.status == IssuanceRequestStatus.REJECTED
-
-    @property
-    def is_executed(self) -> bool:
-        return self.status == IssuanceRequestStatus.EXECUTED
-
-    @property
     def can_be_approved(self) -> bool:
         return self.status in [
             IssuanceRequestStatus.PENDING_APPROVAL,
@@ -164,25 +148,6 @@ class ShareIssuanceRequest(BaseModel):
         new_supply = current_supply + self.amount
         dilution = (self.amount / new_supply) * 100
         return round(dilution, 2)
-
-    def submit(self, user) -> None:
-        if self.status != IssuanceRequestStatus.PENDING_APPROVAL:
-            raise ValueError(f"Cannot submit request with status '{self.get_status_display()}'")
-
-        self.dilution_percentage = self.calculate_dilution()
-
-        self.status = IssuanceRequestStatus.PENDING_APPROVAL
-        self.submitted_by = user
-        self.submitted_at = timezone.now()
-        self.save(
-            update_fields=[
-                "status",
-                "submitted_by",
-                "submitted_at",
-                "dilution_percentage",
-                "updated_at",
-            ]
-        )
 
     def start_review(self, reviewer) -> None:
         if self.status != IssuanceRequestStatus.PENDING_APPROVAL:

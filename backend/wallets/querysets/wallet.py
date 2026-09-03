@@ -1,12 +1,22 @@
 from django.db.models import DecimalField, F, QuerySet, Sum, Value
 from django.db.models.functions import Coalesce
 
+from shared.constants import BLOCKCHAIN_BASE, BLOCKCHAIN_ETHEREUM
+from wallets.constants import WALLET_VERIFICATION_STATUS_VERIFIED
+
 
 class WalletQuerySet(QuerySet):
     def visible_to_user(self, user):
         if user is None or not user.is_authenticated:
             return self.none()
         return self.filter(user_account__user_profiles__user=user)
+
+    def verified_evm(self):
+        """Wallets that may sign trading messages: verified and on a chain the trading contracts live on."""
+        return self.filter(
+            verification_status=WALLET_VERIFICATION_STATUS_VERIFIED,
+            chain__in=(BLOCKCHAIN_ETHEREUM, BLOCKCHAIN_BASE),
+        )
 
     def with_market_value(self):
         from django.db.models import Q

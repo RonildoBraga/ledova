@@ -5,8 +5,9 @@ from django.urls import path, reverse
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 
-from companies.models import CompanyStatus
+from tokens.exceptions import CompanyNotReadyException, InvalidTokenStateException
 from tokens.models import IssuanceStatus, ShareIssuance, ShareToken, ShareTokenStatus
+from tokens.services import ShareTokenService
 
 
 class ShareIssuanceInline(admin.TabularInline):
@@ -221,25 +222,18 @@ class ShareTokenAdmin(admin.ModelAdmin):
         )
 
         if obj.status == ShareTokenStatus.DRAFT:
-            has_wallet = obj.company.get_primary_wallet() is not None
-            can_deploy = obj.company.status == CompanyStatus.ACTIVE and has_wallet
-            if can_deploy:
+            try:
+                ShareTokenService.require_deployable(obj)
+            except CompanyNotReadyException as exc:
+                buttons.append(
+                    f'<span style="{base_style} background-color: #e9ecef; color: #6c757d;">⚠ {exc.detail}</span>'
+                )
+            else:
                 deploy_url = reverse("admin:tokens_sharetoken_deploy", args=[obj.uuid])
                 buttons.append(
                     f'<a href="{deploy_url}" style="{base_style} background-color: #007bff; color: white;">'
                     "🚀 Deploy Token</a>"
                 )
-            else:
-                if obj.company.status != CompanyStatus.ACTIVE:
-                    buttons.append(
-                        f'<span style="{base_style} background-color: #e9ecef; color: #6c757d;">'
-                        "⚠ Company Not Active</span>"
-                    )
-                elif not has_wallet:
-                    buttons.append(
-                        f'<span style="{base_style} background-color: #e9ecef; color: #6c757d;">'
-                        "⚠ No Verified Wallet</span>"
-                    )
 
         elif obj.status == ShareTokenStatus.DEPLOYING:
             buttons.append(
@@ -270,33 +264,24 @@ class ShareTokenAdmin(admin.ModelAdmin):
 
     def deploy_view(self, request, uuid):
         token = get_object_or_404(ShareToken, uuid=uuid)
+        change_url = reverse("admin:tokens_sharetoken_change", args=[token.pk])
 
-        if token.status != ShareTokenStatus.DRAFT:
-            messages.error(request, f"Cannot deploy: token status is '{token.get_status_display()}'")
-            return HttpResponseRedirect(reverse("admin:tokens_sharetoken_change", args=[token.pk]))
-
-        if token.company.status != CompanyStatus.ACTIVE:
-            messages.error(request, "Cannot deploy: company is not active")
-            return HttpResponseRedirect(reverse("admin:tokens_sharetoken_change", args=[token.pk]))
-
-        primary_wallet = token.company.get_primary_wallet()
-        if not primary_wallet:
-            messages.error(request, "Cannot deploy: company has no operator wallet or verified ETH wallet")
-            return HttpResponseRedirect(reverse("admin:tokens_sharetoken_change", args=[token.pk]))
+        try:
+            if request.method == "POST":
+                ShareTokenService.start_deployment(token)
+            else:
+                primary_wallet = ShareTokenService.require_deployable(token)
+        except (InvalidTokenStateException, CompanyNotReadyException) as exc:
+            messages.error(request, f"Cannot deploy: {exc.detail}")
+            return HttpResponseRedirect(change_url)
 
         if request.method == "POST":
-            token.mark_deploying()
-
-            from tokens.tasks import deploy_share_token_task
-
-            deploy_share_token_task.defer(token_uuid=str(token.uuid))
-
             messages.success(
                 request,
                 f"Deployment started for '{token.name}'. "
                 f"All {token.total_supply} shares will be minted to the company wallet.",
             )
-            return HttpResponseRedirect(reverse("admin:tokens_sharetoken_change", args=[token.pk]))
+            return HttpResponseRedirect(change_url)
 
         context = {
             **self.admin_site.each_context(request),

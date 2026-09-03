@@ -1,5 +1,4 @@
 from django.conf import settings
-from django.db import transaction
 from rest_framework import serializers
 from web3 import Web3
 
@@ -135,11 +134,3 @@ class WalletSerializer(serializers.ModelSerializer):
                 )
 
         return data
-
-    @transaction.atomic
-    def update(self, instance, validated_data):
-        locked_wallet = Wallet.objects.select_for_update(of=("self",)).get(pk=instance.pk)
-        immutable_changes = self._verified_identity_change_errors(locked_wallet, validated_data)
-        if immutable_changes:
-            raise serializers.ValidationError(immutable_changes)
-        return super().update(locked_wallet, validated_data)

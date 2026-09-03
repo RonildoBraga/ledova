@@ -7,12 +7,7 @@ from rest_framework.response import Response
 
 from shared.utils import LoggingContext, get_client_ip
 from shared.views import AuthenticatedReadOnlyViewSet
-from tokens.exceptions import (
-    OrderModificationException,
-    SwapExpiredException,
-    SwapSignatureException,
-    TokenBalanceRetrievalException,
-)
+from tokens.exceptions import SwapExpiredException, TokenBalanceRetrievalException
 from tokens.filters import TransferOrderFilter
 from tokens.models import SwapOrder, TransferOrder
 from tokens.serializers import (
@@ -162,15 +157,11 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
         signature = serializer.validated_data["signature"]
         signer_address = serializer.validated_data["signer_address"]
 
-        try:
-            updated_order = atomic_swap_service.submit_signature(
-                swap_order=swap_order,
-                signature=signature,
-                signer_address=signer_address,
-            )
-        except Exception as e:
-            logger.error(f"{LoggingContext.TOKEN_TRANSFER} Signature submission failed: {e}")
-            raise SwapSignatureException(str(e))
+        updated_order = atomic_swap_service.submit_signature(
+            swap_order=swap_order,
+            signature=signature,
+            signer_address=signer_address,
+        )
 
         return Response(SwapOrderDetailSerializer(updated_order).data)
 
@@ -281,21 +272,12 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        modification_service = OrderModificationService()
-
-        try:
-            result = modification_service.generate_modification_message(
-                order=order,
-                new_quantity=data.get("new_quantity"),
-                new_min_quantity=data.get("new_min_quantity"),
-                new_price=data.get("new_price_per_share"),
-            )
-        except OrderModificationException:
-            raise
-        except Exception as e:
-            raise ValidationError({"error": str(e)})
-
-        logger.info(f"{LoggingContext.ORDER} Generated modification message for order: {order.uuid}")
+        result = OrderModificationService().generate_modification_message(
+            order=order,
+            new_quantity=data.get("new_quantity"),
+            new_min_quantity=data.get("new_min_quantity"),
+            new_price=data.get("new_price_per_share"),
+        )
 
         return Response(result)
 
@@ -310,20 +292,13 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
         signature = serializer.validated_data["signature"]
 
         modification_service = OrderModificationService()
-
-        try:
-            modified_order, changes = modification_service.apply_modification(
-                order=order,
-                message=message,
-                signature=signature,
-                ip_address=get_client_ip(request),
-                user_agent=request.META.get("HTTP_USER_AGENT", ""),
-            )
-        except OrderModificationException:
-            raise
-        except Exception as e:
-            logger.error(f"{LoggingContext.ORDER} Order modification failed: {e}")
-            raise OrderModificationException("Modification failed due to an internal error")
+        modified_order, changes = modification_service.apply_modification(
+            order=order,
+            message=message,
+            signature=signature,
+            ip_address=get_client_ip(request),
+            user_agent=request.META.get("HTTP_USER_AGENT", ""),
+        )
 
         match_result = modification_service.check_for_matches_after_modification(modified_order)
 
@@ -340,8 +315,4 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
     @action(detail=True, methods=["get"], url_path="modifications")
     def modifications(self, request, uuid=None):
         order = self.get_object()
-
-        modification_service = OrderModificationService()
-        result = modification_service.get_modification_history(order)
-
-        return Response(result)
+        return Response(OrderModificationService().get_modification_history(order))

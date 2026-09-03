@@ -3,6 +3,7 @@ from django.db import models
 from django.utils import timezone
 
 from shared.models import BaseModel
+from tokens.exceptions import InvalidTokenStateException
 from tokens.querysets import CapitalIncreaseRequestQuerySet
 
 from .choices import CapitalIncreaseStatus
@@ -114,33 +115,6 @@ class CapitalIncreaseRequest(BaseModel):
         return f"{self.token.symbol}: +{self.additional_shares} shares ({self.get_status_display()})"
 
     @property
-    def is_draft(self) -> bool:
-        return self.status == CapitalIncreaseStatus.DRAFT
-
-    @property
-    def is_submitted(self) -> bool:
-        return self.status == CapitalIncreaseStatus.SUBMITTED
-
-    @property
-    def is_pending_review(self) -> bool:
-        return self.status in [
-            CapitalIncreaseStatus.SUBMITTED,
-            CapitalIncreaseStatus.UNDER_REVIEW,
-        ]
-
-    @property
-    def is_approved(self) -> bool:
-        return self.status == CapitalIncreaseStatus.APPROVED
-
-    @property
-    def is_rejected(self) -> bool:
-        return self.status == CapitalIncreaseStatus.REJECTED
-
-    @property
-    def is_executed(self) -> bool:
-        return self.status == CapitalIncreaseStatus.EXECUTED
-
-    @property
     def can_be_edited(self) -> bool:
         return self.status == CapitalIncreaseStatus.DRAFT
 
@@ -182,7 +156,7 @@ class CapitalIncreaseRequest(BaseModel):
 
     def submit(self, user) -> None:
         if not self.can_be_submitted:
-            raise ValueError(f"Cannot submit request with status '{self.get_status_display()}'")
+            raise InvalidTokenStateException(f"Cannot submit request with status '{self.get_status_display()}'.")
 
         self.dilution_percentage = self.calculate_dilution()
 

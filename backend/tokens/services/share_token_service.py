@@ -6,6 +6,7 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 from web3 import Web3
 
+from companies.models import CompanyStatus
 from integrations.base_chain import get_base_chain_client
 from integrations.base_chain.exceptions import (
     BaseChainContractError,
@@ -13,6 +14,7 @@ from integrations.base_chain.exceptions import (
 )
 from shared.utils.logging_utils import LoggingContext
 from tokens.exceptions import (
+    CompanyNotReadyException,
     ContractLoadException,
     InvalidHolderAddressException,
     InvalidRecipientAddressException,
@@ -24,7 +26,13 @@ from tokens.exceptions import (
     TokenDeploymentFailedException,
     TokenFactoryNotConfiguredException,
 )
-from tokens.models import ShareIssuance, ShareIssuanceRequest, ShareToken, Stablecoin
+from tokens.models import (
+    ShareIssuance,
+    ShareIssuanceRequest,
+    ShareToken,
+    ShareTokenStatus,
+    Stablecoin,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +70,31 @@ class ShareTokenService:
             except BaseChainContractError as e:
                 raise ContractLoadException(f"Failed to load contract: {e}") from e
         return self._factory_contract
+
+    @staticmethod
+    def require_deployable(token: ShareToken):
+        """Raise unless the draft token's active company has a wallet; return the wallet that receives the supply."""
+        if token.status != ShareTokenStatus.DRAFT:
+            raise InvalidTokenStateException(
+                f"Cannot deploy token with status '{token.get_status_display()}'. Token must be in draft status."
+            )
+        if token.company.status != CompanyStatus.ACTIVE:
+            raise CompanyNotReadyException("Company must be active before deploying tokens.")
+        primary_wallet = token.company.get_primary_wallet()
+        if primary_wallet is None:
+            raise CompanyNotReadyException(
+                "Company must have an operator wallet or verified ETH wallet before deploying tokens."
+            )
+        return primary_wallet
+
+    @staticmethod
+    def start_deployment(token: ShareToken) -> None:
+        """The one deployment entry point for the API and the admin; the chain work runs in the task."""
+        from tokens.tasks import deploy_share_token_task
+
+        ShareTokenService.require_deployable(token)
+        token.mark_deploying()
+        deploy_share_token_task.defer(token_uuid=str(token.uuid))
 
     def _validate_address(self, address: str) -> str:
         if not self.chain_client.is_valid_address(address):

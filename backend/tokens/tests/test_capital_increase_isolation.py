@@ -110,10 +110,74 @@ class CapitalIncreaseIsolationTest(APITestCase):
         self.assertEqual(created.status, CapitalIncreaseStatus.DRAFT)
         self.assertEqual(created.board_resolution_reference, "BOARD-API-001")
 
-        submit_response = self.client.post(f"/api/v1/tokens/capital-increases/{draft.uuid}/submit/")
+        submit_response = self.client.post(
+            f"/api/v1/tokens/capital-increases/{draft.uuid}/submit/", QUERY_STRING="status=submitted&search=zzz"
+        )
         self.assertEqual(submit_response.status_code, 200)
         self.assertEqual(submit_response.json()["request"]["uuid"], str(draft.uuid))
         draft.refresh_from_db()
         self.assertEqual(draft.status, CapitalIncreaseStatus.SUBMITTED)
         self.assertEqual(draft.submitted_by, owner)
         self.assertIsNotNone(draft.submitted_at)
+
+    def test_create_and_edit_rules_answer_with_detail_or_field_errors(self):
+        owner = self._make_user("rules-owner")
+        company = self._make_company(owner, "Rules")
+        token = self._make_token(company, "RUL")
+        draft_token = ShareToken.objects.create(company=company, name="Draft", symbol="DRA", total_supply="10")
+        self.client.force_authenticate(owner)
+        payload = {
+            "token": str(token.uuid),
+            "additionalShares": 100,
+            "newAuthorizedTotal": 1100,
+            "purpose": "Growth",
+            "boardResolutionReference": "BOARD-1",
+        }
+
+        not_deployed = self.client.post(
+            "/api/v1/tokens/capital-increases/", {**payload, "token": str(draft_token.uuid)}, format="json"
+        )
+        self.assertEqual(not_deployed.status_code, 400)
+        self.assertEqual(
+            not_deployed.json()["detail"], "Capital increase requests can only be created for deployed tokens."
+        )
+
+        short = self.client.post(
+            "/api/v1/tokens/capital-increases/", {**payload, "newAuthorizedTotal": 1050}, format="json"
+        )
+        self.assertEqual(short.status_code, 400)
+        self.assertEqual(
+            short.json()["newAuthorizedTotal"],
+            ["Must be at least current supply (1000) + additional shares (100) = 1100"],
+        )
+
+        missing = self.client.post("/api/v1/tokens/capital-increases/", {**payload, "token": ""}, format="json")
+        self.assertEqual(missing.status_code, 400)
+        self.assertIn("token", missing.json())
+
+        draft = self._make_request(token, "EDIT")
+        detail_url = f"/api/v1/tokens/capital-increases/{draft.uuid}/"
+        edited = self.client.patch(detail_url, {"purpose": "Changed"}, format="json")
+        self.assertEqual(edited.status_code, 200)
+        self.assertEqual(edited.json()["uuid"], str(draft.uuid))
+        self.assertEqual(edited.json()["purpose"], "Changed")
+        self.assertTrue(edited.json()["canBeEdited"])
+        self.assertEqual(edited.json()["status"], CapitalIncreaseStatus.DRAFT)
+
+        self.assertEqual(self.client.post(f"{detail_url}submit/").status_code, 200)
+        resubmitted = self.client.post(f"{detail_url}submit/")
+        self.assertEqual(resubmitted.status_code, 400)
+        self.assertTrue(resubmitted.json()["detail"].startswith("Cannot submit request with status"))
+
+        locked = self.client.patch(detail_url, {"purpose": "Again"}, format="json")
+        self.assertEqual(locked.status_code, 400)
+        self.assertEqual(locked.json()["detail"], "Only draft requests can be edited.")
+
+        kept = self.client.delete(detail_url)
+        self.assertEqual(kept.status_code, 400)
+        self.assertEqual(kept.json()["detail"], "Only draft requests can be deleted.")
+        self.assertTrue(CapitalIncreaseRequest.objects.filter(pk=draft.pk).exists())
+
+        deletable = self._make_request(token, "DELETE")
+        self.assertEqual(self.client.delete(f"/api/v1/tokens/capital-increases/{deletable.uuid}/").status_code, 204)
+        self.assertFalse(CapitalIncreaseRequest.objects.filter(pk=deletable.pk).exists())

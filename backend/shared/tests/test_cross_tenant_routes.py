@@ -285,7 +285,7 @@ class CrossTenantRouteMatrixTest(APITestCase):
         self._service("wallets.views.wallet.verify_wallet_signature", return_value=True)
         self._service("wallets.views.wallet.sync_wallet").defer.return_value = "job"
         self._service("wallets.views.fiat_purchase.generate_transak_widget_url", return_value="https://widget.test")
-        self._service("tokens.views.share_token.deploy_share_token_task")
+        self._service("tokens.tasks.deploy_share_token_task")
         share_tokens = self._service("tokens.views.share_token.ShareTokenService").return_value
         share_tokens.create_issuance_request.side_effect = _create_issuance_request
         share_tokens.get_token_holders.return_value = []

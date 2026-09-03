@@ -1,5 +1,4 @@
 import logging
-from decimal import Decimal
 from typing import Optional
 
 from django.conf import settings
@@ -11,8 +10,6 @@ from integrations.base_chain.exceptions import (
     BaseChainContractError,
     BaseChainTransactionError,
 )
-from integrations.blockchain.factory import get_blockchain_client
-from shared.constants import EVM_BLOCKCHAINS
 from tokens.exceptions import (
     InvalidRecipientAddressException,
     NotAuthorizedMinterException,
@@ -158,38 +155,3 @@ class BaseTokenService:
             )
 
         return tx_hash, tx_record
-
-
-def get_multi_chain_supply(symbol: str) -> tuple[Decimal | None, list[dict]]:
-    from assets.models import Asset
-
-    asset = Asset.objects.filter(symbol=symbol).first()
-    if not asset:
-        return None, []
-
-    deployments = asset.chain_deployments.filter(is_active=True, chain__in=EVM_BLOCKCHAINS)
-    if not deployments.exists():
-        return None, []
-
-    total = Decimal("0")
-    any_success = False
-    chain_data = []
-
-    for deployment in deployments:
-        entry = {
-            "chain": deployment.chain,
-            "contract_address": deployment.contract_address,
-            "decimals": deployment.decimals,
-            "supply": None,
-        }
-        try:
-            client = get_blockchain_client(deployment.chain)
-            supply = client.get_total_supply(deployment.contract_address, deployment.decimals)
-            total += supply
-            any_success = True
-            entry["supply"] = str(supply)
-        except Exception:
-            logger.warning(f"Failed to fetch supply for {symbol} on {deployment.chain}")
-        chain_data.append(entry)
-
-    return (total if any_success else None), chain_data
