@@ -9,12 +9,6 @@ from compliance.constants import (
 
 
 class MonitoringRuleQuerySet(QuerySet):
-
-    def visible_to_user(self, user):
-        if user and (user.is_superuser or user.is_staff):
-            return self
-        return self.none()
-
     def active(self):
         return self.filter(is_active=True)
 

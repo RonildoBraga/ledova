@@ -1,11 +1,3 @@
-"""
-MonitoringRule model for configurable transaction monitoring rules.
-
-AML/CTF Compliance:
-Implements monitoring scenarios from Document 3 (Transaction Monitoring Program) Section 3.
-Rules are stored in database to allow configuration without code changes.
-"""
-
 from django.db import models
 
 from compliance.constants import (
@@ -18,16 +10,8 @@ from shared.models.base import BaseModel
 
 
 class MonitoringRule(BaseModel):
-    """
-    Configurable transaction monitoring rule.
+    """Transaction monitoring rule; stored in the database so thresholds can change without a deploy."""
 
-    AML/CTF Compliance: Implements monitoring scenarios from Document 3
-    (Transaction Monitoring Program) Section 3.
-
-    Rules are stored in database to allow configuration without code changes.
-    """
-
-    # Rule identification
     rule_code = models.CharField(
         max_length=20,
         unique=True,
@@ -35,32 +19,22 @@ class MonitoringRule(BaseModel):
     )
     name = models.CharField(max_length=100)
     description = models.TextField()
-
-    # Rule type
     rule_type = models.CharField(
         max_length=30,
         choices=RULE_TYPE_CHOICES,
         help_text="Type of check: threshold, velocity, pattern, address, etc.",
     )
-
-    # Rule parameters (flexible JSON for different rule types)
+    # Per rule_type, e.g. threshold {"amount": 10000, "currency": "AUD"},
+    # pattern {"min_transactions": 3, "max_each": 9500, "period_hours": 48}.
     parameters = models.JSONField(
         default=dict,
         help_text="Rule-specific parameters (thresholds, timeframes, etc.)",
     )
-    # Example parameters:
-    # Threshold: {"amount": 10000, "currency": "AUD"}
-    # Velocity: {"max_amount": 25000, "period_hours": 24}
-    # Pattern: {"min_transactions": 3, "max_each": 9500, "period_hours": 48}
-
-    # Alert configuration
     alert_severity = models.CharField(
         max_length=20,
         choices=ALERT_SEVERITY_CHOICES,
         default=ALERT_SEVERITY_MEDIUM,
     )
-
-    # Rule status
     is_active = models.BooleanField(default=True)
 
     objects = MonitoringRuleQuerySet.as_manager()

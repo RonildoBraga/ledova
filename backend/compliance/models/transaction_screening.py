@@ -1,10 +1,3 @@
-"""
-TransactionScreening model for crypto transaction blockchain analytics screening.
-
-Stores screening results from KYCAID crypto address verification.
-Detects: sanctions, mixers, darknet, stolen coins, ransomware, etc.
-"""
-
 from django.db import models
 
 from compliance.constants import (
@@ -17,14 +10,8 @@ from shared.models.base import BaseModel
 
 
 class TransactionScreening(BaseModel):
-    """
-    Stores crypto transaction screening results.
+    """Blockchain-analytics result for one transaction's destination address (sanctions, mixers, darknet...)."""
 
-    Each screening record represents the blockchain analytics check performed
-    on a transaction's destination address to detect compliance risks.
-    """
-
-    # Relationships
     transaction = models.OneToOneField(
         "wallets.Transaction",
         on_delete=models.CASCADE,
@@ -36,8 +23,6 @@ class TransactionScreening(BaseModel):
         on_delete=models.CASCADE,
         related_name="transaction_screenings",
     )
-
-    # Provider
     provider = models.CharField(
         max_length=20,
         default=PROVIDER_KYCAID,
@@ -50,8 +35,6 @@ class TransactionScreening(BaseModel):
         null=True,
         help_text="Provider transaction/request ID",
     )
-
-    # Screening status
     status = models.CharField(
         max_length=20,
         choices=SCREENING_STATUS_CHOICES,
@@ -64,8 +47,6 @@ class TransactionScreening(BaseModel):
         blank=True,
         help_text="Final screening result: approved, review, or rejected",
     )
-
-    # Risk scoring
     risk_score = models.FloatField(
         null=True,
         blank=True,
@@ -77,14 +58,10 @@ class TransactionScreening(BaseModel):
         blank=True,
         help_text="Risk level: LOW, MEDIUM, or HIGH",
     )
-
-    # Risk signals detected by blockchain analytics
     risk_signals = models.JSONField(
         default=list,
         help_text="List of risk signals detected (sanctions, mixer, darknet, etc.)",
     )
-
-    # Addresses screened
     to_address = models.CharField(
         max_length=100,
         help_text="Destination wallet address that was screened",
@@ -95,14 +72,10 @@ class TransactionScreening(BaseModel):
         blank=True,
         help_text="Source wallet address (if applicable)",
     )
-
-    # Full response from provider
     raw_response = models.JSONField(
         default=dict,
         help_text="Complete response from provider API for audit purposes",
     )
-
-    # Timestamps
     submitted_at = models.DateTimeField(
         auto_now_add=True,
         help_text="When the screening was submitted",
@@ -112,8 +85,6 @@ class TransactionScreening(BaseModel):
         blank=True,
         help_text="When the screening result was received",
     )
-
-    # Error handling
     error_message = models.TextField(
         null=True,
         blank=True,
@@ -135,13 +106,3 @@ class TransactionScreening(BaseModel):
 
     def __str__(self):
         return f"Screening {self.provider_transaction_id} - {self.status}"
-
-    @property
-    def is_high_risk(self):
-        """Check if screening result indicates high risk."""
-        return self.risk_level == "HIGH" or self.result == "rejected"
-
-    @property
-    def requires_review(self):
-        """Check if screening result requires manual review."""
-        return self.result == "review" or self.risk_level == "MEDIUM"

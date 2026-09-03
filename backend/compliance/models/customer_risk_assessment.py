@@ -1,6 +1,5 @@
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
-from django.utils import timezone
 
 from compliance.constants import (
     ASSESSMENT_STATUS_CHOICES,
@@ -9,7 +8,6 @@ from compliance.constants import (
     PEP_TYPE_NONE,
     RISK_RATING_CHOICES,
 )
-from compliance.querysets.customer_risk_assessment import CustomerRiskAssessmentQuerySet
 from shared.models.base import BaseModel
 
 
@@ -19,20 +17,17 @@ class CustomerRiskAssessment(BaseModel):
         on_delete=models.CASCADE,
         related_name="risk_assessments",
     )
-
     assessment_status = models.CharField(
         max_length=20,
         choices=ASSESSMENT_STATUS_CHOICES,
         default=ASSESSMENT_STATUS_PENDING,
     )
-
     overall_risk_rating = models.CharField(
         max_length=20,
         choices=RISK_RATING_CHOICES,
         null=True,
         blank=True,
     )
-
     customer_risk_score = models.PositiveSmallIntegerField(
         null=True,
         blank=True,
@@ -47,7 +42,6 @@ class CustomerRiskAssessment(BaseModel):
         default=1,
         validators=[MinValueValidator(1), MaxValueValidator(5)],
     )
-
     pep_type = models.CharField(
         max_length=20,
         choices=PEP_TYPE_CHOICES,
@@ -56,11 +50,6 @@ class CustomerRiskAssessment(BaseModel):
     pep_details = models.JSONField(null=True, blank=True)
     high_risk_country = models.BooleanField(default=False)
     high_risk_occupation = models.BooleanField(default=False)
-
-    @property
-    def is_pep(self):
-        return self.pep_type != PEP_TYPE_NONE
-
     assessment_reason = models.TextField(blank=True)
     assessed_by = models.ForeignKey(
         "authentication.CustomUser",
@@ -70,12 +59,9 @@ class CustomerRiskAssessment(BaseModel):
         related_name="risk_assessments_made",
     )
     is_automated = models.BooleanField(default=True)
-
     valid_from = models.DateTimeField(null=True, blank=True)
     valid_until = models.DateTimeField(null=True, blank=True)
     next_review_date = models.DateTimeField(null=True, blank=True)
-
-    objects = CustomerRiskAssessmentQuerySet.as_manager()
 
     class Meta:
         ordering = ["-created_at"]
@@ -90,17 +76,11 @@ class CustomerRiskAssessment(BaseModel):
         return f"Risk Assessment for {self.user_account} - {rating.upper()}"
 
     @property
+    def is_pep(self):
+        return self.pep_type != PEP_TYPE_NONE
+
+    @property
     def total_risk_score(self):
         if self.customer_risk_score is None or self.geographic_risk_score is None:
             return None
         return self.customer_risk_score + self.geographic_risk_score + self.product_risk_score
-
-    @property
-    def is_valid(self):
-        now = timezone.now()
-        return (
-            self.assessment_status == "complete"
-            and self.valid_from
-            and self.valid_from <= now
-            and (self.valid_until is None or self.valid_until > now)
-        )
