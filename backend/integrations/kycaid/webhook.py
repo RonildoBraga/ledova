@@ -29,15 +29,6 @@ logger = logging.getLogger(__name__)
 
 @method_decorator(csrf_exempt, name="dispatch")
 class KYCAIDWebhookView(APIView):
-    """
-    Handle webhooks from KYCAID.
-
-    POST /webhooks/kycaid/
-
-    Webhook Types:
-    - VERIFICATION_COMPLETED: Verification finished (approved or declined)
-    - VERIFICATION_STATUS_CHANGED: Intermediate status update
-    """
 
     authentication_classes = []
     permission_classes = []

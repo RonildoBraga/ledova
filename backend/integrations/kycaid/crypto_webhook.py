@@ -23,15 +23,6 @@ logger = logging.getLogger(__name__)
 
 @method_decorator(csrf_exempt, name="dispatch")
 class KYCAIDCryptoWebhookView(APIView):
-    """
-    Handle crypto screening webhooks from KYCAID.
-
-    POST /webhooks/kycaid/crypto/
-
-    Receives SERVICE_RESULT callbacks for:
-    - CRYPTO_ADDRESS_CHECK: Address verification result
-    - CRYPTO_TRANSACTION_CHECK: Transaction verification result
-    """
 
     authentication_classes = []
     permission_classes = []

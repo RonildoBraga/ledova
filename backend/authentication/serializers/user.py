@@ -58,13 +58,11 @@ class ChangePasswordSerializer(serializers.Serializer):
     )
 
     def validate_new_password(self, value):
-        """Validate new password meets requirements"""
         if len(value) < 8:
             raise serializers.ValidationError("Password must be at least 8 characters long.")
         return value
 
     def validate(self, attrs):
-        """Cross-field validation"""
         if attrs["new_password"] != attrs["new_password_confirm"]:
             raise serializers.ValidationError({"new_password_confirm": "New passwords do not match."})
 

@@ -1,7 +1,3 @@
-"""
-CORS settings for ledova_backend project.
-"""
-
 import os
 
 CORS_ALLOW_CREDENTIALS = True

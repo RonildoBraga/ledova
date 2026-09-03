@@ -18,7 +18,7 @@ The dashboard (`dashboard/`), the mobile app (`mobile/`) and the shared TypeScri
 
 ## Rules
 
-- Tenant scoping: every customer-facing queryset has `visible_to_user(user)` (and `manageable_by_user` for writes) returning `none()` for None/anonymous; every viewset calls it in `get_queryset`; writable FKs are scoped in `get_fields()`; owner FKs are NOT NULL. Every new detail route or action gets a cross-tenant test (a row in `ROUTES` in `shared/tests/test_cross_tenant_routes.py`, or the app's own tests).
+- Tenant scoping: every customer-facing queryset has `visible_to_user(user)` (and `manageable_by_user` for writes) returning `none()` for None/anonymous; every viewset calls it in `get_queryset`; writable FKs are scoped in `get_fields()`; owner FKs are NOT NULL. Every new detail route or action gets a cross-tenant test: a row in `ROUTES` in `shared/tests/test_cross_tenant_routes.py` (`OPERATOR_ROUTES` for `IsAdminUser` routes, `LIST_ROUTES` for collections), or the app's own tests.
 - No Django signals. A side effect is an explicit call in the service (or `perform_create`) that creates the row.
 - No new `managers/` packages. The only Manager is `CustomUserManager` in `authentication/managers/` (create_user, create_superuser, email resolution); everything else is a queryset wired with `as_manager()`.
 - Exceptions: one `exceptions.py` per app containing only classes that are raised; no `__init__` that merely forwards `detail`; use DRF `NotFound`/`PermissionDenied`/`ValidationError` for plain 404/403/400. Error bodies carry `detail` (auth failures also `error` and `code`); clients read `detail`.

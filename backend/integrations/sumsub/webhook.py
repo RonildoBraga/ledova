@@ -33,20 +33,6 @@ logger = logging.getLogger(__name__)
 
 @method_decorator(csrf_exempt, name="dispatch")
 class SumSubWebhookView(APIView):
-    """
-    Handle webhooks from SumSub.
-
-    POST /api/users/webhooks/sumsub/
-
-    Webhook Types:
-    - applicantCreated
-    - applicantPending
-    - applicantReviewed
-    - applicantOnHold
-    - applicantActionPending
-    - applicantActionReviewed
-    """
-
     authentication_classes = []
     permission_classes = []
     # SumSub sends camelCase keys (applicantId, externalUserId, reviewResult, reviewStatus); the

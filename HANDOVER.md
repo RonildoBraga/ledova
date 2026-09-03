@@ -13,34 +13,68 @@ tracked backlog unless a task explicitly changes that scope.
 
 ## Current checkpoint
 
-The tenant-isolation audit is complete through PR #37 and
-[Issue #1](https://github.com/RonildoBraga/ledova/issues/1) is closed. Guardian
-is removed. Tenant isolation is enforced by the `visible_to_user` /
-`manageable_by_user` querysets and proven by the route matrix in
-`backend/shared/tests/test_cross_tenant_routes.py`; PostgreSQL RLS is not
-planned.
+Branch `claude/backend-simplification` (on top of `main` `d6c09ee`) is the
+backend simplification pass. The dashboard, mobile app and shared packages were
+frozen for the whole pass: every URL, response key, cookie and header they read
+is unchanged, and `backend/shared/tests/test_cross_tenant_routes.py` pins the
+scoped routes, the operator-only routes and the collection routes per actor.
 
-[Issue #2](https://github.com/RonildoBraga/ledova/issues/2) changed scope:
-the unwired v2 session protocol (PRs #39–#65, last checkpoint `963c686`) is
-withdrawn per [ADR 0005](backend/docs/adr/0005-withdraw-v2-session-protocol.md).
-The whole v2 stream is deleted (challenge/delivery/admission, then the
-session core); only the canonical-email slice (`authentication/email.py`)
-remains, and the legacy `AuthViewSet` is hardened in place.
+What the branch did, in order:
+
+- Verified defects closed with regression tests; the company application
+  lifecycle fixed and given its first tests.
+- Dead code out: unused modules, exception classes, queryset/manager methods,
+  service methods, serializers, dependencies; every Django signal replaced by an
+  explicit call in the service that creates the row; the `tenancy` app
+  dissolved into per-app tests. Lint (`black`, `isort`, `flake8`) is a CI gate.
+- Tenant isolation: fail-closed `visible_to_user` / `manageable_by_user`
+  querysets on every customer-facing model, owner FKs NOT NULL, explicit
+  `company` on token creation, one route matrix. PostgreSQL RLS is not planned.
+- Authentication: one auth path, the legacy `AuthViewSet` hardened in place.
+  Sessions are simplejwt refresh tokens with the `token_blacklist` app
+  (`authentication/services/tokens.py`: refresh rotates and blacklists the
+  presented token, signout revokes one session, `signout-all` revokes every
+  session, the access token is bound to its refresh via `rjti`). The OTP is
+  hashed, expiring (10 minutes) and attempt-capped (5); sign-in, sign-up and
+  verification are throttled per address; the DEBUG `000000` bypass is gone;
+  cookie flags come from `settings.AUTH_COOKIE`; access tokens live 24 hours.
+- Per-app simplification with every feature kept: compliance (shared admin
+  helpers, seed modules, flat services), users (lifecycle service, one
+  preferences guard), tokens (deployment and mint services, one review
+  workflow, thin views, market-summary annotations), companies and whitelist
+  (table-driven admin transitions, whitelist transaction helper), wallets,
+  portfolios and assets (annotated balances, flat sync, thin admins), shared
+  and core (no `LoggingContext`, library country lookup, no KYC config layer).
+- Docs: `backend/docs/CONVENTIONS.md` is the layering and style reference;
+  restating comments, docstrings and section banners removed.
 
 ## Next work
-
-Do not continue v2. Sessions are now simplejwt refresh tokens with the
-`token_blacklist` app (`authentication/services/tokens.py`: refresh rotates and
-blacklists the presented token, signout revokes one session, `signout-all`
-revokes every session, the access token is bound to its refresh via `rjti`).
-The OTP is now hashed, expiring and attempt-capped, sign-in/sign-up/verification
-are throttled per address, the DEBUG `000000` bypass is gone, and cookie flags
-come from `settings.AUTH_COOKIE`. Access tokens live 24 hours until the clients
-refresh on 401. Remaining auth work:
 
 1. CSRF check for cookie-sourced unsafe requests, pending the dashboard change
    (axios `xsrfCookieName`/`xsrfHeaderName`).
 2. Explicit native body-token endpoints for the mobile app.
+3. Replace the `?auth=` query-string JWT fallback in
+   `backend/tokens/views/trading_events.py` (ISSUES.md item 3).
+
+Decisions deferred during the simplification pass (each is a delete-or-keep
+call for the owner; the code is kept and working until decided):
+
+- Client-less API surfaces: `/api/v1/tokens/orders/`, `yield-tokens/`,
+  `tokens/{uuid}/can-receive/`, wallets `batch-check-balances`,
+  `sync-holdings`, `{uuid}/transactions`, `{uuid}/balances` (PostgreSQL-only
+  `DISTINCT ON`), `/api/holding-snapshots/`, `assets/bulk-update-prices`,
+  `/api/countries/`, `/api/waitlist/`, anonymous company listing and `acn/`.
+- Models nothing writes or reads: `SignatureRequest`, `AssetAllocation`,
+  `FiatTransaction` persistence, the unread `Wallet`/`Holding` columns,
+  `NotificationPreferences` (foldable into `UserPreferences`).
+- The materialised `PortfolioSnapshot` table versus an on-read value series.
+- Bitcoin support end to end (`integrations/blockchain/bitcoin.py`).
+- The two-reviewer company approval workflow (`ApplicationReview`,
+  `ReviewNote`): finish wiring or delete.
+- Push notifications: nothing creates `Notification` rows or defers the send
+  tasks; wire one producer or keep the model as an admin-populated inbox.
+- Mobile app status and the collapse of the four shared TypeScript packages
+  into one; both are client-side work and were out of scope here.
 
 The remaining canonical backlog is [ISSUES.md](ISSUES.md).
 

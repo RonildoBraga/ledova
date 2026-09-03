@@ -1,5 +1,3 @@
-"""SendGrid transactional email client."""
-
 import logging
 from urllib.parse import urlsplit
 

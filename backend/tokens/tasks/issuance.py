@@ -11,7 +11,6 @@ logger = logging.getLogger(__name__)
 
 @app.task(retry=RetryStrategy(max_attempts=4, wait=30))
 def issue_shares_task(issuance_uuid: str):
-    """Process a pending share issuance by minting tokens on-chain."""
     try:
         issuance = ShareIssuance.objects.select_related("token", "token__company").get(uuid=issuance_uuid)
     except ShareIssuance.DoesNotExist:

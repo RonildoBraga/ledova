@@ -126,7 +126,6 @@ async def _event_stream(token_uuid: str):
 
 
 async def trading_events_stream(request):
-    """SSE endpoint for real-time trading updates."""
     user = await _authenticate(request)
     if user is None:
         return HttpResponse("Unauthorized", status=401, content_type="text/plain")

@@ -10,12 +10,7 @@ from tokens.serializers import (
 
 
 class TransferOrderViewSet(AuthenticatedReadOnlyViewSet):
-    """
-    Authenticated ViewSet for transfer orders.
-
-    Provides owner-scoped legacy read access. Order mutations use the signed
-    trading endpoints only.
-    """
+    """Read-only: order mutations go through the signed /api/v1/trading/ endpoints."""
 
     filterset_class = TransferOrderFilter
     ordering = ["-created_at"]

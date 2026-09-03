@@ -1,7 +1,3 @@
-"""
-Admin registration for asset models.
-"""
-
 from .asset import AssetAdmin
 from .asset_snapshot import AssetSnapshotAdmin
 

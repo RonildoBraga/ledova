@@ -1,5 +1,3 @@
-"""Strict environment-variable parsing helpers."""
-
 import os
 from collections.abc import Collection
 
@@ -7,7 +5,6 @@ from django.core.exceptions import ImproperlyConfigured
 
 
 def read_bool(name: str, *, default: bool) -> bool:
-    """Read an explicit ``true``/``false`` environment variable."""
     raw_value = os.environ.get(name)
     if raw_value is None:
         return default
@@ -22,7 +19,6 @@ def read_bool(name: str, *, default: bool) -> bool:
 
 
 def read_choice(name: str, *, choices: Collection[str], default: str) -> str:
-    """Read and validate a case-insensitive environment choice."""
     allowed = frozenset(choice.lower() for choice in choices)
     value = os.environ.get(name, default).strip().lower()
     if value not in allowed:

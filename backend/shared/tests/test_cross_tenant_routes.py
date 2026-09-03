@@ -232,6 +232,20 @@ ROUTES = (
     Route("delete", "/api/v1/documents/{document}/"),
 )
 
+# Operator routes (IsAdminUser) are deliberately unscoped: staff and superusers reach every tenant's
+# row, while a regular user gets the same 403 for a foreign row as for one that does not exist.
+# Here prepare runs against the target tenant, whose row the operator acts on.
+OPERATOR_ROUTES = (
+    Route("get", "/api/v1/companies/{company}/api-key/"),
+    Route("post", "/api/v1/companies/{company}/api-key/", {}),
+    Route(
+        "post",
+        "/api/v1/companies/{company}/status/",
+        {"status": "warning", "reason": "Review"},
+        prepare=_activate_company,
+    ),
+)
+
 # Collection routes and the keys of the rows the acting tenant must see, and nothing else.
 LIST_ROUTES = (
     ("/api/user-profiles/", ("profile",)),
@@ -373,6 +387,27 @@ class CrossTenantRouteMatrixTest(APITestCase):
                         response = self.send(route, actor, own)
                         transaction.set_rollback(True)
                     self.assertIn(response.status_code, (200, 201, 202, 204), response.content)
+
+    def test_operator_routes_are_staff_only_and_reach_every_tenant(self):
+        foreign = route_context(self.other)
+        phantom = phantom_context(self.other)
+        for actor in self.actors:
+            self.client.force_authenticate(actor.user)
+            for route in OPERATOR_ROUTES:
+                with self.subTest(actor=actor.label, route=f"{route.method} {route.path}"):
+                    with transaction.atomic():
+                        if route.prepare:
+                            route.prepare(self.other)
+                        foreign_response = self.send(route, actor, foreign)
+                        phantom_response = self.send(route, actor, phantom)
+                        transaction.set_rollback(True)
+                    if actor.user.is_staff:
+                        self.assertEqual(foreign_response.status_code, 200, foreign_response.content)
+                        self.assertEqual(phantom_response.status_code, 404, phantom_response.content)
+                    else:
+                        self.assertEqual(foreign_response.status_code, 403, foreign_response.content)
+                        self.assertEqual(phantom_response.status_code, 403, phantom_response.content)
+                        self.assertEqual(self.masked(foreign_response, foreign), self.masked(phantom_response, phantom))
 
     def test_collection_routes_return_only_the_actors_rows(self):
         for actor in self.actors:

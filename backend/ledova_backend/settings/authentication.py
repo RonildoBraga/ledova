@@ -1,7 +1,3 @@
-"""
-Authentication and authorization settings for ledova_backend project.
-"""
-
 import os
 from datetime import timedelta
 

@@ -16,7 +16,6 @@ class ExchangeRateService:
 
     @staticmethod
     def sync_exchange_rates() -> dict:
-        """Fetch and store exchange rates for all supported target currencies."""
         client = CoinGeckoClient()
         updated = 0
 
@@ -40,7 +39,6 @@ class ExchangeRateService:
 
     @staticmethod
     def get_rate(base_currency: str = "USD", target_currency: str = "AUD") -> Optional[Decimal]:
-        """Get the stored exchange rate for a currency pair."""
         if base_currency == target_currency:
             return Decimal("1")
 

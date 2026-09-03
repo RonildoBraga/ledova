@@ -51,8 +51,8 @@ credentials.
 3. **Add or update tests** for any behavior change. Security- and
    correctness-related changes should come with a regression test.
 4. **Run the checks locally** before pushing:
-   - Backend: `black . && isort . && flake8 && python manage.py check` and the
-     relevant tests. Follow
+   - Backend (from `backend/`): `make lint && make check && make test`; CI
+     also runs the suite on PostgreSQL. Follow
      [backend/docs/CONVENTIONS.md](./backend/docs/CONVENTIONS.md) for
      layering and style.
    - JS/TS workspaces: the package's `lint`, `type`/build, and `test` scripts.

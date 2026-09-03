@@ -1,9 +1,4 @@
-"""
-Scam token detection utilities.
-
-This module provides utilities to detect potential scam/fake tokens that attempt
-to impersonate legitimate tokens through various deceptive techniques.
-"""
+"""Flag tokens whose symbol impersonates a well-known one (Unicode lookalikes, case tricks, empty symbols)."""
 
 import re
 from dataclasses import dataclass
@@ -88,19 +83,13 @@ LOOKALIKE_CHARS = {
 
 @dataclass
 class ScamDetectionResult:
-    """Result of scam token detection."""
-
     is_scam: bool
     reason: Optional[str] = None
     matched_token: Optional[str] = None
 
 
 def _normalize_symbol(symbol: str) -> str:
-    """
-    Normalize a symbol by replacing lookalike characters with their ASCII equivalents.
-
-    This helps detect scam tokens that use Unicode lookalikes.
-    """
+    """Map lookalike characters back to ASCII so an impersonating symbol compares equal to the real one."""
     normalized = symbol.upper()
 
     # Build reverse mapping: lookalike -> legitimate character
@@ -118,11 +107,7 @@ def _normalize_symbol(symbol: str) -> str:
 
 
 def _has_mixed_case_lookalikes(symbol: str, known_symbol: str) -> bool:
-    """
-    Check if a symbol uses lowercase/uppercase substitution to mimic a known token.
-
-    For example: "DAl" (with lowercase L) trying to look like "DAI"
-    """
+    """Same length, differing only by case or lookalike substitutions, e.g. "DAl" (lowercase L) for "DAI"."""
     if len(symbol) != len(known_symbol):
         return False
 
@@ -143,21 +128,6 @@ def _has_mixed_case_lookalikes(symbol: str, known_symbol: str) -> bool:
 
 
 def is_scam_token(symbol: str, contract_address: Optional[str] = None) -> ScamDetectionResult:
-    """
-    Detect potential scam tokens using multiple heuristics.
-
-    Checks for:
-    1. Empty or missing symbols
-    2. Non-ASCII characters (Unicode lookalikes like "EꓔH")
-    3. Lookalike symbols that mimic known tokens (like "DAl" for "DAI")
-
-    Args:
-        symbol: The token symbol to check
-        contract_address: Optional contract address for logging context
-
-    Returns:
-        ScamDetectionResult with is_scam flag, reason, and matched legitimate token if applicable
-    """
     # Check 1: Empty or missing symbol
     if not symbol or not symbol.strip():
         return ScamDetectionResult(

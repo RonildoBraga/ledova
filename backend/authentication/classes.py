@@ -1,7 +1,3 @@
-"""
-Contains custom authentication classes for use with Django REST Framework.
-"""
-
 import logging
 
 from django.conf import settings

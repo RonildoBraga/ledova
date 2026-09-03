@@ -52,7 +52,6 @@ class AssetViewSet(AuthenticatedReadOnlyViewSet):
 
     @action(detail=False, methods=["get"], url_path="exchange-rates")
     def exchange_rates(self, request):
-        """Return current exchange rates for display currency conversion."""
         target = request.query_params.get("currency", "AUD")
         rate = ExchangeRateService.get_rate(target_currency=target.upper())
 
