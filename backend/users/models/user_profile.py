@@ -4,7 +4,6 @@ from django.db import models
 from integrations.kyc.constants import (
     KYC_PROVIDER_CHOICES,
     PROVIDER_KYCAID,
-    REVIEW_GREEN,
     REVIEW_RESULT_CHOICES,
     REVIEW_YELLOW,
     VERIFICATION_STATUS_CHOICES,
@@ -35,7 +34,6 @@ class UserProfile(BaseModel):
     confirmed_over_18 = models.BooleanField(default=False)
     confirmed_australian_resident = models.BooleanField(default=False)
     confirmed_individual_account = models.BooleanField(default=False)
-    pre_screening_completed_at = models.DateTimeField(null=True, blank=True)
 
     is_id_verified = models.BooleanField(default=False)
     terms_and_conditions = models.BooleanField(default=False)
@@ -62,7 +60,6 @@ class UserProfile(BaseModel):
     verified_at = models.DateTimeField(null=True, blank=True)
 
     kycaid_applicant_id = models.CharField(max_length=100, blank=True, null=True)
-    kycaid_verification_id = models.CharField(max_length=100, blank=True, null=True)
 
     sumsub_applicant_id = models.CharField(max_length=100, blank=True, null=True)
     sumsub_verification_status = models.CharField(
@@ -71,20 +68,6 @@ class UserProfile(BaseModel):
         blank=True,
         null=True,
     )
-    sumsub_review_result = models.CharField(
-        max_length=50,
-        choices=REVIEW_RESULT_CHOICES,
-        blank=True,
-        null=True,
-    )
-    sumsub_review_answer = models.CharField(
-        max_length=50,
-        choices=REVIEW_RESULT_CHOICES,
-        blank=True,
-        null=True,
-    )
-    sumsub_rejection_labels = models.JSONField(blank=True, null=True)
-    sumsub_verified_at = models.DateTimeField(null=True, blank=True)
 
     objects = UserProfileQuerySet.as_manager()
 
@@ -95,29 +78,8 @@ class UserProfile(BaseModel):
         return f"UserProfile {self.user.email}"
 
     @property
-    def is_pre_screening_complete(self):
-        return self.confirmed_over_18 and self.confirmed_australian_resident and self.confirmed_individual_account
-
-    @property
-    def failed_pre_screening_checks(self):
-        failed = []
-        if not self.confirmed_over_18:
-            failed.append("age_confirmation")
-        if not self.confirmed_australian_resident:
-            failed.append("residency_confirmation")
-        if not self.confirmed_individual_account:
-            failed.append("individual_account_confirmation")
-        return failed
-
-    @property
-    def is_verification_approved(self):
-        result = self.review_result or self.sumsub_review_result
-        return self.is_id_verified and result == REVIEW_GREEN
-
-    @property
     def needs_verification_retry(self):
-        result = self.review_result or self.sumsub_review_answer
-        return result == REVIEW_YELLOW
+        return self.review_result == REVIEW_YELLOW
 
     @property
     def active_applicant_id(self):

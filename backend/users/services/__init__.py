@@ -1,9 +1,11 @@
+from users.services import lifecycle
 from users.services.identity import IdentityVerificationService
 from users.services.notifications import NotificationService
-from users.services.setup import UserSetupService
+from users.services.setup import ensure_defaults
 
 __all__ = [
     "IdentityVerificationService",
     "NotificationService",
-    "UserSetupService",
+    "ensure_defaults",
+    "lifecycle",
 ]

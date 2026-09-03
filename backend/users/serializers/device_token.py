@@ -28,7 +28,7 @@ class RegisterDeviceTokenSerializer(serializers.Serializer):
     )
 
     def validate_push_token(self, value):
-        if not DeviceToken.validate_expo_token(value):
+        if not (value.startswith("ExponentPushToken[") and value.endswith("]")):
             raise serializers.ValidationError(
                 "Invalid Expo push token format. Token must start with 'ExponentPushToken[' and end with ']'."
             )

@@ -51,31 +51,17 @@ class UserPreferencesSerializer(serializers.ModelSerializer):
         return fields
 
     def validate(self, data):
+        """get_fields already limits both querysets to the user's own rows, so only the cross-field rule is left."""
         selected_account = data.get("selected_account")
         selected_portfolio = data.get("selected_portfolio")
-        user_profile = self.context["request"].user.userprofile
 
         if selected_portfolio and not selected_account:
-            data["selected_account"] = selected_portfolio.user_account
-            selected_account = data["selected_account"]
+            data["selected_account"] = selected_account = selected_portfolio.user_account
 
-        if selected_portfolio and selected_account:
-            if selected_portfolio.user_account != selected_account:
-                raise serializers.ValidationError(
-                    {"selected_portfolio": "The selected portfolio must belong to the selected account."}
-                )
-
-        if selected_account and selected_account not in user_profile.user_accounts.all():
+        if selected_portfolio and selected_account and selected_portfolio.user_account != selected_account:
             raise serializers.ValidationError(
-                {"selected_account": "The selected account must be one of your accounts."}
+                {"selected_portfolio": "The selected portfolio must belong to the selected account."}
             )
-
-        if selected_portfolio:
-            user_portfolios = Portfolio.objects.filter(user_account__in=user_profile.user_accounts.all())
-            if selected_portfolio not in user_portfolios:
-                raise serializers.ValidationError(
-                    {"selected_portfolio": "The selected portfolio must be one of your portfolios."}
-                )
 
         return data
 

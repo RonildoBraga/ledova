@@ -43,7 +43,7 @@ class WalletCreatePortfolioAssignmentTest(APITestCase):
     def test_new_wallet_is_not_added_when_the_selected_portfolio_belongs_to_another_account(self):
         foreign_account = UserAccount.objects.create(account_number="WALLET-FOREIGN")
         foreign_portfolio = Portfolio.objects.create(user_account=foreign_account, name="Foreign portfolio")
-        # UserPreferences.save() rejects a foreign portfolio, so bypass it the way a stale row would look.
+        # Write the row directly, the way a stale selection left behind by a membership change looks.
         UserPreferences.objects.filter(pk=self.preferences.pk).update(selected_portfolio=foreign_portfolio)
 
         wallet = self.create_wallet("b")

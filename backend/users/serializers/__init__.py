@@ -1,7 +1,3 @@
-"""
-Serializers package for users app.
-"""
-
 from users.serializers.device_token import (
     DeviceTokenSerializer,
     RegisterDeviceTokenSerializer,

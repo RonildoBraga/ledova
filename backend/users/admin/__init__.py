@@ -1,7 +1,3 @@
-"""
-Admin package for users app.
-"""
-
 import users.admin.device_token
 import users.admin.favourite_asset
 import users.admin.financial_profile

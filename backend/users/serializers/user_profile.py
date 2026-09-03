@@ -37,7 +37,6 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "confirmed_over_18",
             "confirmed_australian_resident",
             "confirmed_individual_account",
-            "pre_screening_completed_at",
             "is_id_verified",
             "terms_and_conditions",
             "is_signup_completed",
@@ -49,16 +48,11 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "kycaid_applicant_id",
             "sumsub_applicant_id",
             "sumsub_verification_status",
-            "sumsub_review_result",
-            "sumsub_review_answer",
-            "sumsub_rejection_labels",
-            "sumsub_verified_at",
         )
         read_only_fields = (
             "uuid",
             "is_id_verified",
             "residence_country",
-            "pre_screening_completed_at",
             "kyc_provider",
             "verification_status",
             "review_result",
@@ -67,10 +61,6 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "kycaid_applicant_id",
             "sumsub_applicant_id",
             "sumsub_verification_status",
-            "sumsub_review_result",
-            "sumsub_review_answer",
-            "sumsub_rejection_labels",
-            "sumsub_verified_at",
         )
 
     def get_is_active(self, obj):

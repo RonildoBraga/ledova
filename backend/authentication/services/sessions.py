@@ -74,9 +74,9 @@ class SessionService:
 
         user = existing_user or _create_signup_user(email, password)
 
-        from users.services.setup import UserSetupService
+        from users.services.setup import ensure_defaults
 
-        UserSetupService.ensure_defaults(user)
+        ensure_defaults(user)
 
         logger.info(f"{LoggingContext.USER_SIGNUP} User account created/updated for {user.email}")
         return user

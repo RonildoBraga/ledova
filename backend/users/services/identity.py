@@ -143,9 +143,6 @@ class IdentityVerificationService:
 
         if user_profile.kyc_provider == PROVIDER_SUMSUB:
             user_profile.sumsub_verification_status = normalized.verification_status
-            user_profile.sumsub_review_result = normalized.review_result
-            user_profile.sumsub_review_answer = normalized.review_result
-            user_profile.sumsub_rejection_labels = normalized.rejection_labels or None
 
         if normalized.document_type:
             user_profile.id_document_type = normalized.document_type
@@ -157,8 +154,6 @@ class IdentityVerificationService:
         if normalized.review_result == REVIEW_GREEN and not user_profile.is_id_verified:
             user_profile.is_id_verified = True
             user_profile.verified_at = timezone.now()
-            if user_profile.kyc_provider == PROVIDER_SUMSUB:
-                user_profile.sumsub_verified_at = timezone.now()
             logger.info(f"{LoggingContext.ID_VERIFICATION} User {user_profile.user.id} verified successfully")
         elif normalized.review_result in [REVIEW_RED, REVIEW_YELLOW]:
             user_profile.is_id_verified = False
@@ -170,14 +165,6 @@ class IdentityVerificationService:
             IdentityVerificationService._process_verified_customer(user_profile, normalized.pep_data)
 
         return user_profile.is_id_verified
-
-    @staticmethod
-    def update_status(user_profile: UserProfile, status_data: Dict[str, Any], log_prefix: str = "") -> bool:
-        from integrations.sumsub.client import SumSubService
-
-        sumsub = SumSubService()
-        normalized = sumsub.normalize_webhook(status_data)
-        return IdentityVerificationService.update_status_from_normalized(user_profile, normalized)
 
     @staticmethod
     def _process_verified_customer(user_profile, pep_data: Dict[str, Any]) -> None:
@@ -214,32 +201,19 @@ class IdentityVerificationService:
         user_account.account_status = ACCOUNT_STATUS_ACTIVE
         user_account.save()
 
-        IdentityVerificationService._trigger_risk_assessment(user_profile, pep_data)
+        IdentityVerificationService._trigger_risk_assessment(user_account, pep_data)
 
     @staticmethod
-    def _trigger_risk_assessment(user_profile, pep_data: Dict[str, Any]) -> None:
+    def _trigger_risk_assessment(user_account, pep_data: Dict[str, Any]) -> None:
+        from compliance.services.risk_assessment import RiskAssessmentService
+
         try:
-            user_account = user_profile.user_accounts.first()
-            if not user_account:
-                logger.warning(
-                    f"{LoggingContext.ID_VERIFICATION} No user_account found for user_profile {user_profile.uuid}, "
-                    "skipping risk assessment"
-                )
-                return
-
-            from compliance.services.risk_assessment import RiskAssessmentService
-
-            RiskAssessmentService.calculate_and_create(
-                user_account=user_account,
-                pep_data=pep_data,
-            )
-            logger.info(
-                f"{LoggingContext.ID_VERIFICATION} Triggered risk assessment for user_profile {user_profile.uuid}"
-            )
+            RiskAssessmentService.calculate_and_create(user_account=user_account, pep_data=pep_data)
+            logger.info(f"{LoggingContext.ID_VERIFICATION} Triggered risk assessment for account {user_account.uuid}")
         except Exception as e:
             logger.error(
-                f"{LoggingContext.ID_VERIFICATION} Error triggering risk assessment for user_profile "
-                f"{user_profile.uuid}: {e}",
+                f"{LoggingContext.ID_VERIFICATION} Error triggering risk assessment for account "
+                f"{user_account.uuid}: {e}",
                 exc_info=True,
             )
 

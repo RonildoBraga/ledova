@@ -110,8 +110,8 @@ class UserMutationLifecycleTest(APITestCase):
         self.client.force_authenticate(self.owner)
 
         with (
-            patch("users.views.user_profile.datetime") as mocked_datetime,
-            patch("users.views.user_profile.uuid4", return_value=UUID("12345678-1234-4123-8123-123456789abc")),
+            patch("users.services.lifecycle.datetime") as mocked_datetime,
+            patch("users.services.lifecycle.uuid4", return_value=UUID("12345678-1234-4123-8123-123456789abc")),
         ):
             mocked_datetime.now.return_value = datetime(2026, 9, 2, 4, 5, 6)
             response = self.client.post("/api/user-profiles/delete-account/")
@@ -152,8 +152,8 @@ class UserMutationLifecycleTest(APITestCase):
         self.client.force_authenticate(self.owner)
 
         with (
-            patch("users.views.user_profile.datetime") as mocked_datetime,
-            patch("users.views.user_profile.uuid4", return_value=UUID("12345678-1234-4123-8123-123456789abc")),
+            patch("users.services.lifecycle.datetime") as mocked_datetime,
+            patch("users.services.lifecycle.uuid4", return_value=UUID("12345678-1234-4123-8123-123456789abc")),
             patch.object(
                 type(User.objects),
                 "resolve_email",

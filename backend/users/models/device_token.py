@@ -51,7 +51,3 @@ class DeviceToken(BaseModel):
 
     def __str__(self):
         return f"{self.user.email} - {self.device_type} ({self.push_token[:30]}...)"
-
-    @classmethod
-    def validate_expo_token(cls, token: str) -> bool:
-        return token.startswith("ExponentPushToken[") and token.endswith("]")

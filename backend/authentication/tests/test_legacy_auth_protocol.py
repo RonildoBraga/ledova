@@ -15,7 +15,7 @@ from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
 
 from authentication.managers.user import EmailLookupResult, EmailLookupState
 from authentication.services import TokenService
-from users.services import UserSetupService
+from users.services import ensure_defaults
 
 User = get_user_model()
 
@@ -57,7 +57,7 @@ class LegacyAuthProtocolTestCase(APITestCase):
 
     def create_completed_user(self, email="member@example.com", verified=True):
         user = self.create_user(email=email, verified=verified)
-        profile, _, _, _ = UserSetupService.ensure_defaults(user)
+        profile, _, _, _ = ensure_defaults(user)
         profile.is_signup_completed = True
         profile.save(update_fields=["is_signup_completed"])
         return user
@@ -73,7 +73,7 @@ class LegacyAuthProtocolTestCase(APITestCase):
         return user
 
     def complete_direct_user(self, user):
-        profile, _, _, _ = UserSetupService.ensure_defaults(user)
+        profile, _, _, _ = ensure_defaults(user)
         profile.is_signup_completed = True
         profile.save(update_fields=["is_signup_completed"])
         return user
