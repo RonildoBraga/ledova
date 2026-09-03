@@ -183,15 +183,9 @@ class TransferService:
         from assets.models import Asset
         from wallets.models import Holding
 
-        native_asset = Asset.objects.filter(
-            chain_deployments__chain=wallet.chain,
-            asset_type="native_crypto",
-            chain_deployments__contract_address__isnull=True,
-        ).first()
-        if not native_asset:
-            return Decimal("0")
-        holding = Holding.objects.filter(wallet=wallet, asset=native_asset).first()
-        return holding.quantity if holding else Decimal("0")
+        native_asset = Asset.objects.native_for_chain(wallet.chain)
+        quantity = Holding.objects.filter(wallet=wallet, asset=native_asset).values_list("quantity", flat=True).first()
+        return quantity or Decimal("0")
 
 
 def prepare_ethereum_transaction(

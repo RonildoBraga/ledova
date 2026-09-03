@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.db.models import Count
 
 from portfolios.models.portfolio import (
     AssetAllocation,
@@ -15,10 +16,12 @@ class PortfolioAdmin(admin.ModelAdmin):
     readonly_fields = ["uuid", "wallet_count", "created_at", "updated_at"]
     filter_horizontal = ["wallets"]
 
-    def wallet_count(self, obj):
-        return obj.wallets.count()
+    def get_queryset(self, request):
+        return super().get_queryset(request).annotate(wallet_count=Count("wallets", distinct=True))
 
-    wallet_count.short_description = "Wallets"
+    @admin.display(description="Wallets", ordering="wallet_count")
+    def wallet_count(self, obj):
+        return obj.wallet_count
 
 
 @admin.register(AssetAllocation)
@@ -63,17 +66,15 @@ class PortfolioSnapshotAdmin(admin.ModelAdmin):
     list_per_page = 50
     ordering = ["-snapshot_date", "-created_at"]
 
+    @admin.display(description="Assets")
     def asset_count(self, obj):
         return len(obj.holdings_data) if obj.holdings_data else 0
 
-    asset_count.short_description = "Assets"
-
+    @admin.display(description="Market Value")
     def total_market_value_display(self, obj):
         if obj.total_market_value:
             return f"${obj.total_market_value:,.2f}"
         return "-"
-
-    total_market_value_display.short_description = "Market Value"
 
     def has_add_permission(self, request):
         return False

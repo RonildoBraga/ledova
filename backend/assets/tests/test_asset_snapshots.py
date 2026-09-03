@@ -52,3 +52,16 @@ class AssetSnapshotsEndpointTest(APITestCase):
 
     def test_max_points_samples_rows(self):
         self.assertEqual(self._prices({"max_points": "2"}), ["3.000000000000000000", "1.000000000000000000"])
+
+    def test_date_bounds_are_calendar_days_with_an_inclusive_end(self):
+        self.assertEqual(self._prices({"start_date": "2026-09-02"}), ["3.000000000000000000", "2.000000000000000000"])
+        self.assertEqual(self._prices({"end_date": "2026-09-02"}), ["2.000000000000000000", "1.000000000000000000"])
+        self.assertEqual(
+            self._prices({"start_date": "2026-09-02", "end_date": "2026-09-02", "order_by": "source_timestamp"}),
+            ["2.000000000000000000"],
+        )
+
+    def test_malformed_dates_are_a_client_error(self):
+        response = self.client.get(self.url, {"start_date": "2026-09-01T12:00:00"})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["detail"], "start_date and end_date must be YYYY-MM-DD.")

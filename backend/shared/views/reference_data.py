@@ -1,5 +1,5 @@
-from assets.serializers.asset import CountrySerializer
 from shared.models.country import Country
+from shared.serializers.country import CountrySerializer
 from shared.views.base import AuthenticatedReferenceDataViewSet
 
 

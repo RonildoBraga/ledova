@@ -1,7 +1,11 @@
-from datetime import datetime, time
+from decimal import Decimal
 
 from django.db.models import QuerySet
-from django.utils.dateparse import parse_date, parse_datetime
+
+from shared.utils.datetime_utils import (
+    parse_date_to_timezone_aware,
+    parse_end_date_inclusive,
+)
 
 
 class AssetSnapshotQuerySet(QuerySet):
@@ -11,38 +15,13 @@ class AssetSnapshotQuerySet(QuerySet):
         return self
 
     def filter_by_date_range(self, start_date=None, end_date=None):
+        """Both bounds are YYYY-MM-DD strings or datetimes; the end date is inclusive."""
         queryset = self
-
-        start_datetime = self._parse_date_param(start_date, use_day_start=True)
-        if start_datetime:
-            queryset = queryset.filter(source_timestamp__gte=start_datetime)
-
-        end_datetime = self._parse_date_param(end_date, use_day_start=False)
-        if end_datetime:
-            queryset = queryset.filter(source_timestamp__lte=end_datetime)
-
+        if start_date:
+            queryset = queryset.filter(source_timestamp__gte=parse_date_to_timezone_aware(start_date))
+        if end_date:
+            queryset = queryset.filter(source_timestamp__lt=parse_end_date_inclusive(end_date))
         return queryset
-
-    def _parse_date_param(self, date_value, use_day_start=True):
-        if date_value is None:
-            return None
-
-        if isinstance(date_value, datetime):
-            return date_value
-
-        if hasattr(date_value, "year") and hasattr(date_value, "month") and hasattr(date_value, "day"):
-            return datetime.combine(date_value, time.min if use_day_start else time.max)
-
-        if isinstance(date_value, str):
-            parsed_datetime = parse_datetime(date_value)
-            if parsed_datetime:
-                return parsed_datetime
-
-            parsed_date = parse_date(date_value)
-            if parsed_date:
-                return datetime.combine(parsed_date, time.min if use_day_start else time.max)
-
-        return None
 
     def closest_to_timestamp(self, timestamp):
         if not timestamp:
@@ -59,28 +38,7 @@ class AssetSnapshotQuerySet(QuerySet):
         return snapshot_before or snapshot_after
 
     def get_price_at_timestamp(self, timestamp):
-        from decimal import Decimal
-
         snapshot = self.closest_to_timestamp(timestamp)
         if snapshot:
             return Decimal(str(snapshot.price))
         return None
-
-    def sample_evenly(self, max_points):
-        if not max_points:
-            return self
-        try:
-            max_points = int(max_points)
-        except (ValueError, TypeError):
-            return self
-        if max_points <= 0:
-            return self
-
-        pks = list(self.values_list("pk", flat=True))
-        total = len(pks)
-        if total <= max_points:
-            return self
-
-        step = (total - 1) / (max_points - 1)
-        sampled_pks = [pks[round(i * step)] for i in range(max_points)]
-        return self.filter(pk__in=sampled_pks)

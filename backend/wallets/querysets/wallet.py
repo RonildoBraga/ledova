@@ -1,8 +1,10 @@
-from django.db.models import DecimalField, F, QuerySet, Sum, Value
+from django.db.models import DecimalField, F, Q, QuerySet, Sum, Value
 from django.db.models.functions import Coalesce
 
 from shared.constants import BLOCKCHAIN_BASE, BLOCKCHAIN_ETHEREUM
 from wallets.constants import WALLET_VERIFICATION_STATUS_VERIFIED
+
+_MONEY = DecimalField(max_digits=40, decimal_places=18)
 
 
 class WalletQuerySet(QuerySet):
@@ -19,28 +21,19 @@ class WalletQuerySet(QuerySet):
         )
 
     def with_market_value(self):
-        from django.db.models import Q
-
+        """Annotate the three balance figures WalletSerializer exposes, in one aggregate query."""
+        tradable = Q(holdings__asset__is_active=True, holdings__asset__is_verified=True)
+        native = Q(holdings__asset__asset_type="native_crypto")
+        holding_value = F("holdings__quantity") * F("holdings__asset__current_price")
         return self.annotate(
-            annotated_market_value=Coalesce(
-                Sum(
-                    F("holdings__quantity") * F("holdings__asset__current_price"),
-                    filter=Q(holdings__asset__is_active=True, holdings__asset__is_verified=True),
-                ),
-                Value(0),
-                output_field=DecimalField(max_digits=40, decimal_places=18),
-            ),
+            annotated_market_value=Coalesce(Sum(holding_value, filter=tradable), Value(0), output_field=_MONEY),
             annotated_native_market_value=Coalesce(
-                Sum(
-                    F("holdings__quantity") * F("holdings__asset__current_price"),
-                    filter=Q(
-                        holdings__asset__is_active=True,
-                        holdings__asset__is_verified=True,
-                        holdings__asset__asset_type="native_crypto",
-                    ),
-                ),
+                Sum(holding_value, filter=tradable & native), Value(0), output_field=_MONEY
+            ),
+            annotated_native_balance=Coalesce(
+                Sum("holdings__quantity", filter=native & Q(holdings__asset__is_active=True)),
                 Value(0),
-                output_field=DecimalField(max_digits=40, decimal_places=18),
+                output_field=_MONEY,
             ),
         )
 

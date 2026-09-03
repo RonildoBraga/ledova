@@ -49,3 +49,17 @@ class CountryReadContractTest(APITestCase):
                 self.assertNotIn(str(self.unavailable.uuid), returned)
                 self.assertEqual(available_response.status_code, 200)
                 self.assertEqual(unavailable_response.status_code, 404)
+
+    def test_rows_carry_the_keys_the_shared_types_declare(self):
+        self.client.force_authenticate(self.user)
+        row = self.client.get(f"/api/countries/{self.available.uuid}/").json()
+        self.assertEqual(
+            row,
+            {
+                "uuid": str(self.available.uuid),
+                "name": "Available Country",
+                "code": "AAC",
+                "dialCode": None,
+                "isAvailable": True,
+            },
+        )

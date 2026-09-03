@@ -15,6 +15,15 @@ class AssetQuerySet(QuerySet):
     def active(self):
         return self.filter(is_active=True)
 
+    def native_for_chain(self, chain):
+        """The chain's native coin: a native_crypto asset with an active contract-less deployment on `chain`."""
+        return self.filter(
+            asset_type="native_crypto",
+            chain_deployments__chain=chain,
+            chain_deployments__contract_address__isnull=True,
+            chain_deployments__is_active=True,
+        ).first()
+
     def search(self, search_query):
         if not search_query:
             return self

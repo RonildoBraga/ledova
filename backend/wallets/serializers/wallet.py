@@ -18,9 +18,16 @@ class WalletSerializer(serializers.ModelSerializer):
     uuid = serializers.CharField(read_only=True)
     user_account = serializers.PrimaryKeyRelatedField(queryset=UserAccount.objects.none())
     chain = serializers.ChoiceField(choices=sorted(SUPPORTED_CHAINS))
-    native_balance = serializers.DecimalField(read_only=True, max_digits=30, decimal_places=18)
-    native_market_value = serializers.SerializerMethodField(read_only=True)
-    market_value = serializers.SerializerMethodField(read_only=True)
+    # Sourced from WalletQuerySet.with_market_value(); the view always serializes annotated rows.
+    native_balance = serializers.DecimalField(
+        source="annotated_native_balance", read_only=True, max_digits=40, decimal_places=18
+    )
+    native_market_value = serializers.DecimalField(
+        source="annotated_native_market_value", read_only=True, max_digits=40, decimal_places=18
+    )
+    market_value = serializers.DecimalField(
+        source="annotated_market_value", read_only=True, max_digits=40, decimal_places=18
+    )
 
     class Meta:
         model = Wallet
@@ -58,16 +65,6 @@ class WalletSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
-
-    def get_native_market_value(self, obj):
-        if hasattr(obj, "annotated_native_market_value") and obj.annotated_native_market_value is not None:
-            return str(obj.annotated_native_market_value)
-        return str(obj.native_market_value)
-
-    def get_market_value(self, obj):
-        if hasattr(obj, "annotated_market_value") and obj.annotated_market_value is not None:
-            return str(obj.annotated_market_value)
-        return str(obj.market_value)
 
     def get_fields(self):
         fields = super().get_fields()

@@ -33,27 +33,6 @@ class PortfolioSnapshotQuerySet(QuerySet):
             return self.none()
         return self.filter(portfolio__user_account__user_profiles__user=user)
 
-    def sample_evenly(self, max_points):
-        if not max_points:
-            return self
-        try:
-            max_points = int(max_points)
-        except (ValueError, TypeError):
-            return self
-        if max_points <= 0:
-            return self
-
-        pks = list(self.values_list("pk", flat=True))
-        total = len(pks)
-        if total <= max_points:
-            return self
-
-        step = (total - 1) / (max_points - 1)
-        sampled_pks = [pks[round(i * step)] for i in range(max_points)]
-        # Preserve the original queryset ordering after filtering by sampled PKs
-        ordering = self.query.order_by or ("snapshot_date",)
-        return self.filter(pk__in=sampled_pks).order_by(*ordering)
-
     def with_optimized_data(self):
         return self.select_related("portfolio", "portfolio__user_account")
 

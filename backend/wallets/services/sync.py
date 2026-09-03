@@ -10,10 +10,11 @@ from django.utils.dateparse import parse_datetime
 from assets.models import Asset, AssetSnapshot
 from compliance.services.transaction_monitoring import TransactionMonitoringService
 from integrations.blockchain import get_blockchain_client
-from shared.constants import EVM_BLOCKCHAINS, normalize_chain
+from shared.constants import normalize_chain
 from shared.utils.logging_utils import LoggingContext
 from wallets.constants import SNAPSHOT_REASON_TRANSACTION
 from wallets.models import Holding, HoldingSnapshot, Transaction, Wallet
+from wallets.services.chain import fetch_chain_balance
 from wallets.utils.scam_detection import is_scam_token
 
 logger = logging.getLogger("ledova_backend")
@@ -189,7 +190,7 @@ class WalletSyncService:
         updated = 0
 
         for holding in wallet.holdings.select_related("asset").filter(asset__is_verified=True):
-            blockchain_balance = WalletSyncService._get_blockchain_balance(wallet, holding.asset)
+            blockchain_balance = fetch_chain_balance(wallet, holding.asset)
 
             if blockchain_balance is not None:
                 holding.quantity = blockchain_balance
@@ -201,42 +202,6 @@ class WalletSyncService:
                 HoldingSnapshot.objects.filter(holding=holding, snapshot_date=today).update(quantity=blockchain_balance)
 
         return updated
-
-    @staticmethod
-    def _get_blockchain_balance(wallet: Wallet, asset: Asset) -> Optional[Decimal]:
-        try:
-            deployment = asset.get_deployment_for_chain(wallet.chain)
-            if deployment and not deployment.contract_address:
-                client = get_blockchain_client(wallet.chain)
-                return client.get_native_balance(wallet.address)
-
-            if wallet.chain in EVM_BLOCKCHAINS:
-                total_balance = Decimal("0")
-                found_any = False
-                for dep in asset.chain_deployments.filter(chain__in=EVM_BLOCKCHAINS, is_active=True):
-                    if dep.contract_address:
-                        try:
-                            client = get_blockchain_client(dep.chain)
-                            balance = client.get_token_balance(
-                                address=wallet.address,
-                                contract_address=dep.contract_address,
-                                decimals=dep.decimals,
-                            )
-                            if balance is not None:
-                                total_balance += balance
-                                found_any = True
-                        except Exception as e:
-                            logger.warning(
-                                f"{LoggingContext.WALLET_SYNC} Balance query failed for "
-                                f"{asset.symbol} on {dep.chain}: {e}"
-                            )
-                return total_balance if found_any else None
-
-            return None
-
-        except Exception as e:
-            logger.warning(f"{LoggingContext.WALLET_SYNC} Balance query failed for {asset.symbol}: {e}")
-            return None
 
     @staticmethod
     def _calculate_market_value(amount: Decimal, asset: Asset, timestamp: datetime) -> Optional[Decimal]:

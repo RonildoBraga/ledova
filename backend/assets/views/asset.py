@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from rest_framework import status
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 
@@ -14,6 +15,7 @@ from assets.serializers import (
 )
 from assets.services import AssetSyncService, ExchangeRateService
 from shared.utils.logging_utils import LoggingContext
+from shared.utils.querysets import sample_evenly
 from shared.views.base import AuthenticatedReadOnlyViewSet
 
 logger = logging.getLogger("ledova_backend")
@@ -42,16 +44,16 @@ class AssetViewSet(AuthenticatedReadOnlyViewSet):
             f"{LoggingContext.ASSETS} Fetching snapshots for {asset.symbol} (params={dict(request.query_params)})"
         )
 
-        queryset = AssetSnapshot.objects.filter(asset=asset)
-        start_date = request.query_params.get("start_date")
-        end_date = request.query_params.get("end_date")
-        if start_date or end_date:
-            queryset = queryset.filter_by_date_range(start_date, end_date)
-        queryset = queryset.sample_evenly(request.query_params.get("max_points"))
         order_by = request.query_params.get("order_by", "-source_timestamp")
         if order_by not in {"source_timestamp", "-source_timestamp"}:
             order_by = "-source_timestamp"
-        queryset = queryset.order_by(order_by)
+        try:
+            queryset = AssetSnapshot.objects.filter(asset=asset).filter_by_date_range(
+                request.query_params.get("start_date"), request.query_params.get("end_date")
+            )
+        except ValueError:
+            raise ValidationError({"detail": "start_date and end_date must be YYYY-MM-DD."})
+        queryset = sample_evenly(queryset.order_by(order_by), request.query_params.get("max_points"))
 
         serializer = AssetSnapshotSerializer(queryset, many=True)
         return Response(serializer.data)

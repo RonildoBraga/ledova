@@ -37,44 +37,20 @@ class HoldingAdmin(admin.ModelAdmin):
     ordering = ("-quantity",)
     list_select_related = ("wallet", "asset")
 
-    fieldsets = (
-        ("Wallet & Asset", {"fields": ("uuid", "wallet", "asset")}),
-        ("Quantity", {"fields": ("quantity", "market_value")}),
-        (
-            "Sync Information",
-            {
-                "fields": ("last_synced_block", "last_synced_at"),
-                "classes": ("collapse",),
-            },
-        ),
-        (
-            "Timestamps",
-            {
-                "fields": ("created_at", "updated_at"),
-                "classes": ("collapse",),
-            },
-        ),
-    )
-
+    @admin.display(description="Wallet", ordering="wallet__address")
     def wallet_address_short(self, obj):
         return f"{obj.wallet.address[:10]}..."
 
-    wallet_address_short.short_description = "Wallet"
-    wallet_address_short.admin_order_field = "wallet__address"
-
+    @admin.display(description="Asset", ordering="asset__symbol")
     def asset_symbol(self, obj):
         return obj.asset.symbol
 
-    asset_symbol.short_description = "Asset"
-    asset_symbol.admin_order_field = "asset__symbol"
-
+    @admin.display(description="Market Value (USD)")
     def market_value_display(self, obj):
         value = obj.market_value
         if value:
             return f"${value:,.2f}"
         return "-"
-
-    market_value_display.short_description = "Market Value (USD)"
 
     def has_add_permission(self, request):
         return False

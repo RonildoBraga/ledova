@@ -16,6 +16,7 @@ from portfolios.services import (
     PortfolioWalletService,
 )
 from shared.utils.logging_utils import LoggingContext
+from shared.utils.querysets import sample_evenly
 from shared.views.base import AuthenticatedModelViewSet
 from users.models import UserAccount
 
@@ -116,9 +117,7 @@ class PortfolioViewSet(AuthenticatedModelViewSet):
         allowed_orderings = {"snapshot_date", "-snapshot_date"}
         if order_by not in allowed_orderings:
             order_by = "-snapshot_date"
-        snapshots = snapshots.order_by(order_by)
-        if params.get("max_points"):
-            snapshots = snapshots.sample_evenly(params["max_points"])
+        snapshots = sample_evenly(snapshots.order_by(order_by), params.get("max_points"))
 
         serializer = PortfolioSnapshotSerializer(snapshots, many=True, context={"request": request})
         return Response(serializer.data)

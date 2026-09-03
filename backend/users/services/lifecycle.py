@@ -112,12 +112,12 @@ def export_account_data(user):
             "name": wallet.name,
             "chain": wallet.chain,
             "address": wallet.address,
-            "native_balance": str(wallet.native_balance),
-            "market_value": str(wallet.market_value),
+            "native_balance": str(wallet.annotated_native_balance),
+            "market_value": str(wallet.annotated_market_value),
             "is_verified": wallet.is_verified,
             "created_at": wallet.created_at,
         }
-        for wallet in Wallet.objects.filter(user_account__in=accounts)
+        for wallet in Wallet.objects.filter(user_account__in=accounts).with_market_value()
     ]
     transactions = (
         Transaction.objects.filter(wallet__user_account__in=accounts)

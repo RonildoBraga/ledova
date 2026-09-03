@@ -7,7 +7,6 @@ from django.utils import timezone
 
 from assets.models import Asset
 from compliance.services.transaction_monitoring import TransactionMonitoringService
-from integrations.blockchain import get_blockchain_client
 from shared.constants import get_native_asset_symbol, normalize_chain
 from shared.utils.logging_utils import LoggingContext
 from wallets.constants import (
@@ -17,6 +16,7 @@ from wallets.constants import (
     TRANSACTION_STATUS_PENDING,
 )
 from wallets.models import Holding, HoldingSnapshot, Transaction, Wallet
+from wallets.services.chain import fetch_chain_balance
 
 logger = logging.getLogger("ledova_backend")
 
@@ -34,23 +34,18 @@ class TransactionConfirmationService:
     ) -> Dict[str, Any]:
         chain = normalize_chain(wallet.chain)
 
-        if token_contract:
-            asset = Asset.get_by_chain_and_contract(wallet.chain, token_contract)
-            if not asset:
-                logger.warning(
-                    f"{LoggingContext.WALLET_TRANSFER} Token contract not found: {token_contract} "
-                    f"on {wallet.chain}, falling back to native asset"
-                )
-                asset_symbol = get_native_asset_symbol(chain)
-                asset, _ = Asset.objects.get_or_create(
-                    symbol=asset_symbol,
-                    defaults={"name": asset_symbol, "asset_type": "native_crypto"},
-                )
-        else:
+        asset = Asset.get_by_chain_and_contract(wallet.chain, token_contract) if token_contract else None
+        if token_contract and asset is None:
+            logger.warning(
+                f"{LoggingContext.WALLET_TRANSFER} Token contract not found: {token_contract} "
+                f"on {wallet.chain}, falling back to native asset"
+            )
+        if asset is None:
+            asset = Asset.objects.native_for_chain(wallet.chain)
+        if asset is None:
             asset_symbol = get_native_asset_symbol(chain)
             asset, _ = Asset.objects.get_or_create(
-                symbol=asset_symbol,
-                defaults={"name": asset_symbol, "asset_type": "native_crypto"},
+                symbol=asset_symbol, defaults={"name": asset_symbol, "asset_type": "native_crypto"}
             )
 
         with transaction.atomic():
@@ -174,36 +169,19 @@ class TransactionConfirmationService:
 
     @staticmethod
     def _verify_holding_balance(wallet: Wallet, asset: Asset) -> None:
-        try:
-            deployment = asset.get_deployment_for_chain(wallet.chain)
-            if deployment and deployment.contract_address:
-                client = get_blockchain_client(wallet.chain)
-                blockchain_balance = client.get_token_balance(
-                    address=wallet.address,
-                    contract_address=deployment.contract_address,
-                    decimals=deployment.decimals,
-                )
-            elif deployment:
-                client = get_blockchain_client(wallet.chain)
-                blockchain_balance = client.get_native_balance(wallet.address)
-            else:
-                return
+        blockchain_balance = fetch_chain_balance(wallet, asset)
+        if blockchain_balance is None:
+            return
 
-            if blockchain_balance is None:
-                return
-
-            holding = Holding.objects.filter(wallet=wallet, asset=asset).first()
-            if holding and holding.quantity != blockchain_balance:
-                logger.warning(
-                    f"{LoggingContext.WALLET_SYNC} Balance correction: "
-                    f"{holding.quantity} -> {blockchain_balance} {asset.symbol}"
-                )
-                holding.quantity = blockchain_balance
-                holding.last_synced_at = timezone.now()
-                holding.save(update_fields=["quantity", "last_synced_at"])
-
-        except Exception as e:
-            logger.warning(f"{LoggingContext.WALLET_SYNC} Balance verification failed: {e}")
+        holding = Holding.objects.filter(wallet=wallet, asset=asset).first()
+        if holding and holding.quantity != blockchain_balance:
+            logger.warning(
+                f"{LoggingContext.WALLET_SYNC} Balance correction: "
+                f"{holding.quantity} -> {blockchain_balance} {asset.symbol}"
+            )
+            holding.quantity = blockchain_balance
+            holding.last_synced_at = timezone.now()
+            holding.save(update_fields=["quantity", "last_synced_at"])
 
     @staticmethod
     def _update_snapshot_on_confirmation(tx: Transaction) -> None:

@@ -35,9 +35,7 @@ class AssetSnapshotAdmin(admin.ModelAdmin):
     ]
 
     def has_add_permission(self, request):
-        """Snapshots should be created programmatically"""
         return False
 
     def has_change_permission(self, request, obj=None):
-        """Snapshots are immutable"""
         return False

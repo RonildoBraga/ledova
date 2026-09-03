@@ -55,8 +55,14 @@ class WalletViewSet(AuthenticatedModelViewSet):
     def update(self, request, *args, **kwargs):
         return super().update(request, *args, **kwargs)
 
+    def perform_update(self, serializer):
+        wallet = serializer.save()
+        serializer.instance = Wallet.objects.with_market_value().get(pk=wallet.pk)
+
     def perform_create(self, serializer):
         wallet = serializer.save(verification_status=WALLET_VERIFICATION_STATUS_PENDING)
+        # The saved instance carries no balance annotations; respond with the annotated row.
+        serializer.instance = Wallet.objects.with_market_value().get(pk=wallet.pk)
         # A new wallet lands in the requester's selected portfolio; the UI has no
         # other way to put wallets into portfolios.
         preferences = getattr(getattr(self.request.user, "userprofile", None), "preferences", None)
