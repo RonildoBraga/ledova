@@ -5,6 +5,8 @@ from urllib.parse import urlsplit
 
 import requests
 from django.conf import settings
+from django.core.mail import send_mail
+from django.utils.html import strip_tags
 
 from shared.utils.logging_utils import LoggingContext
 
@@ -39,14 +41,16 @@ class SendGridClient:
         self.timeout = int(getattr(settings, "SENDGRID_TIMEOUT", 10))
 
     def send_email(self, to_email, subject, html_content, from_email=None, text_content=None):
+        sender = from_email or self.from_email
         if not self.api_key:
-            logger.error(f"{LoggingContext.INTEGRATIONS} SENDGRID_API_KEY not configured")
-            return {"success": False, "error": "SENDGRID_API_KEY not configured"}
+            # No SendGrid key: hand the message to Django's EMAIL_BACKEND (console in DEBUG).
+            send_mail(subject, text_content or strip_tags(html_content), sender, [to_email], html_message=html_content)
+            logger.info(f"{LoggingContext.INTEGRATIONS} Email sent through EMAIL_BACKEND (no SendGrid key)")
+            return {"success": True, "message_id": ""}
         if not self.api_url:
             logger.error(f"{LoggingContext.INTEGRATIONS} SENDGRID_API_URL not configured or invalid")
             return {"success": False, "error": "SENDGRID_API_URL not configured or invalid"}
 
-        sender = from_email or self.from_email
         content = [{"type": "text/html", "value": html_content}]
         if text_content:
             content.insert(0, {"type": "text/plain", "value": text_content})

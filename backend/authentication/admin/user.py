@@ -30,21 +30,14 @@ class CustomUserCreationForm(BaseUserCreationForm):
 class CustomUserAdmin(UserAdmin):
     model = CustomUser
     add_form = CustomUserCreationForm
-    list_display = (
-        "email",
-        "is_active",
-        "is_staff",
-        "is_email_verified",
-        "is_phone_verified",
-        "email_verification_token",
-    )
-    list_filter = ("is_active", "is_staff", "is_email_verified", "is_phone_verified")
+    list_display = ("email", "is_active", "is_staff", "is_email_verified")
+    list_filter = ("is_active", "is_staff", "is_email_verified")
     search_fields = ("email",)
     ordering = ("email",)
 
     fieldsets = (
         (None, {"fields": ("email", "password")}),
-        (_("Personal info"), {"fields": ("is_email_verified", "is_phone_verified")}),
+        (_("Personal info"), {"fields": ("is_email_verified",)}),
         (_("Permissions"), {"fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions")}),
         (_("Important dates"), {"fields": ("last_login", "date_joined")}),
     )

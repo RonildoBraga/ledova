@@ -9,9 +9,11 @@ and independent review before any public multi-user or real-value use.
    `manageable_by_user` querysets, every detail route and action is covered by
    the cross-tenant route matrix, and global operator routes require explicit
    admin access. PostgreSQL RLS is not planned.
-2. **Authentication hardening.** Refresh rotation and blacklist, hashed
-   expiring OTP with a per-email throttle, CSRF on the cookie transport
-   (pending a dashboard change), native token transport; see
+2. **Authentication hardening.** Done: refresh rotation and blacklist, hashed
+   expiring attempt-capped OTP, per-email throttle, no DEBUG bypass, cookie
+   flags from `AUTH_COOKIE`. Open: CSRF on the cookie transport, which needs
+   the dashboard's axios client to send `X-CSRFToken` from the `csrftoken`
+   cookie before the backend can enforce it; see
    [ADR 0005](backend/docs/adr/0005-withdraw-v2-session-protocol.md).
 3. **SSE query JWTs.** Replace event-stream authentication that places bearer
    tokens in URLs, where proxies, browser history, and logs can retain them.

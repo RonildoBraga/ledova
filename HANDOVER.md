@@ -33,11 +33,14 @@ Do not continue v2. Sessions are now simplejwt refresh tokens with the
 `token_blacklist` app (`authentication/services/tokens.py`: refresh rotates and
 blacklists the presented token, signout revokes one session, `signout-all`
 revokes every session, the access token is bound to its refresh via `rjti`).
-Harden the legacy auth path in this order:
+The OTP is now hashed, expiring and attempt-capped, sign-in/sign-up/verification
+are throttled per address, the DEBUG `000000` bypass is gone, and cookie flags
+come from `settings.AUTH_COOKIE`. Access tokens live 24 hours until the clients
+refresh on 401. Remaining auth work:
 
-1. Hashed, expiring, attempt-capped OTP with a per-email throttle; no DEBUG bypass.
-2. CSRF check for cookie-sourced unsafe requests, pending the dashboard change.
-3. Explicit native body-token endpoints for the mobile app.
+1. CSRF check for cookie-sourced unsafe requests, pending the dashboard change
+   (axios `xsrfCookieName`/`xsrfHeaderName`).
+2. Explicit native body-token endpoints for the mobile app.
 
 The remaining canonical backlog is [ISSUES.md](ISSUES.md).
 

@@ -35,6 +35,7 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_THROTTLE_RATES": {
         "auth": "60/min",
+        "auth_email": "10/hour",
         "anon": "200/min",
         "user": "1000/min",
         "order_write": "30/min",

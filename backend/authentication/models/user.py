@@ -20,19 +20,12 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     date_joined = models.DateTimeField(default=timezone.now)
     last_login = models.DateTimeField(blank=True, null=True)
 
-    # Email verification
+    # Email verification: the column holds sha256(pk:code), never the code itself
+    # (see authentication.services.email_codes).
     email_verification_token = models.CharField(max_length=100, blank=True, null=True)
     email_verification_sent_at = models.DateTimeField(blank=True, null=True)
+    email_verification_attempts = models.PositiveSmallIntegerField(default=0)
     is_email_verified = models.BooleanField(default=False)
-
-    # SMS verification
-    sms_verification_token = models.CharField(max_length=10, blank=True, null=True)
-    sms_verification_sent_at = models.DateTimeField(blank=True, null=True)
-    is_phone_verified = models.BooleanField(default=False)
-
-    # Password reset
-    password_reset_token = models.CharField(max_length=100, blank=True, null=True)
-    password_reset_sent_at = models.DateTimeField(blank=True, null=True)
 
     objects = CustomUserManager()
 

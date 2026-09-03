@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock, patch
 
 import requests
+from django.core import mail
 from django.core.exceptions import ImproperlyConfigured
 from django.test import SimpleTestCase, override_settings
 
@@ -88,6 +89,21 @@ class KYCAIDClientBoundaryTests(SimpleTestCase):
 
 
 class SendGridClientBoundaryTests(SimpleTestCase):
+    @override_settings(SENDGRID_API_KEY="", SENDGRID_API_URL="", DEFAULT_FROM_EMAIL="noreply@example.test")
+    @patch("integrations.sendgrid_email.client.requests.post")
+    def test_without_a_key_mail_goes_through_the_django_backend(self, post: MagicMock) -> None:
+        result = SendGridClient().send_email("person@example.test", "Subject", "<p>Your code is 123456</p>")
+
+        self.assertTrue(result["success"])
+        post.assert_not_called()
+        self.assertEqual(len(mail.outbox), 1)
+        message = mail.outbox[0]
+        self.assertEqual(message.to, ["person@example.test"])
+        self.assertEqual(message.from_email, "noreply@example.test")
+        self.assertEqual(message.subject, "Subject")
+        self.assertEqual(message.body, "Your code is 123456")
+        self.assertEqual(message.alternatives[0][0], "<p>Your code is 123456</p>")
+
     @override_settings(
         SENDGRID_API_KEY="key",
         SENDGRID_API_URL="",

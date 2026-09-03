@@ -1,5 +1,4 @@
 import logging
-import os
 from datetime import datetime
 
 from django.conf import settings
@@ -21,6 +20,7 @@ from authentication.serializers.user import (
 from authentication.services.email_codes import EmailCodeService
 from authentication.services.sessions import SessionService
 from authentication.services.tokens import TokenService
+from authentication.throttles import EmailRateThrottle
 from shared.utils.logging_utils import LoggingContext
 
 User = get_user_model()
@@ -31,42 +31,28 @@ logger = logging.getLogger("ledova_backend")
 class TokenCookieMixin:
 
     def set_token_cookies(self, response, access_token, refresh_token):
-        access_lifetime = settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"].total_seconds()
-        refresh_lifetime = settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds()
-        secure = settings.DEBUG is False
-        domain = os.getenv("COOKIE_DOMAIN")
-        cookie_access_name = os.getenv("COOKIE_ACCESS_NAME", "access")
-        cookie_refresh_name = os.getenv("COOKIE_REFRESH_NAME", "refresh")
-
-        response.set_cookie(
-            cookie_access_name,
-            access_token,
-            max_age=int(access_lifetime),
-            httponly=True,
-            secure=secure,
-            domain=domain,
-            samesite="Lax",
-            path="/",
+        cookie = settings.AUTH_COOKIE
+        pairs = (
+            (cookie["access"], access_token, settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"]),
+            (cookie["refresh"], refresh_token, settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"]),
         )
-        response.set_cookie(
-            cookie_refresh_name,
-            refresh_token,
-            max_age=int(refresh_lifetime),
-            httponly=True,
-            secure=secure,
-            domain=domain,
-            samesite="Lax",
-            path="/",
-        )
+        for name, value, lifetime in pairs:
+            response.set_cookie(
+                name,
+                value,
+                max_age=int(lifetime.total_seconds()),
+                httponly=True,
+                secure=cookie["secure"],
+                domain=cookie["domain"],
+                samesite=cookie["samesite"],
+                path="/",
+            )
         return response
 
     def clear_token_cookies(self, response):
-        cookie_access_name = os.getenv("COOKIE_ACCESS_NAME", "access")
-        cookie_refresh_name = os.getenv("COOKIE_REFRESH_NAME", "refresh")
-        domain = os.getenv("COOKIE_DOMAIN")
-
-        response.delete_cookie(cookie_access_name, path="/", domain=domain, samesite="Lax")
-        response.delete_cookie(cookie_refresh_name, path="/", domain=domain, samesite="Lax")
+        cookie = settings.AUTH_COOKIE
+        for name in (cookie["access"], cookie["refresh"]):
+            response.delete_cookie(name, path="/", domain=cookie["domain"], samesite=cookie["samesite"])
         return response
 
     def session_response(self, data, access_token, refresh_token):
@@ -77,12 +63,18 @@ class TokenCookieMixin:
         return self.set_token_cookies(response, access_token, refresh_token)
 
     def presented_refresh_token(self, request):
-        cookie_refresh_name = os.getenv("COOKIE_REFRESH_NAME", "refresh")
-        return request.COOKIES.get(cookie_refresh_name) or request.data.get("refresh")
+        return request.COOKIES.get(settings.AUTH_COOKIE["refresh"]) or request.data.get("refresh")
 
 
 class AuthViewSet(TokenCookieMixin, ViewSet):
     throttle_scope = "auth"
+    email_throttled_actions = ("signin", "signup", "email_verification", "resend_verification")
+
+    def get_throttles(self):
+        throttles = super().get_throttles()
+        if self.action in self.email_throttled_actions:
+            throttles.append(EmailRateThrottle())
+        return throttles
 
     def get_permissions(self):
         if self.action in ["resend_verification", "change_password", "signout_all"]:

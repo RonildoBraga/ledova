@@ -11,7 +11,6 @@ def _identity(instance):
         "uuid": str(instance.userprofile.uuid) if hasattr(instance, "userprofile") else None,
         "email": instance.email,
         "is_email_verified": instance.is_email_verified,
-        "is_phone_verified": getattr(instance, "is_phone_verified", False),
     }
 
 

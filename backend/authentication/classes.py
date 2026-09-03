@@ -3,7 +3,6 @@ Contains custom authentication classes for use with Django REST Framework.
 """
 
 import logging
-import os
 
 from django.conf import settings
 from rest_framework import HTTP_HEADER_ENCODING
@@ -30,8 +29,7 @@ class HybridJWTAuthentication(JWTAuthentication):
     def _get_token_and_source(self, request):
         """Returns (raw_token, source) where source is 'cookie' or 'header'."""
         if hasattr(request, "COOKIES"):
-            cookie_access_name = os.getenv("COOKIE_ACCESS_NAME", "access")
-            token = request.COOKIES.get(cookie_access_name)
+            token = request.COOKIES.get(settings.AUTH_COOKIE["access"])
             if token:
                 return token, "cookie"
 

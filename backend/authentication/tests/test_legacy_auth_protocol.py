@@ -1,10 +1,10 @@
-import os
 from datetime import timedelta
 from unittest.mock import patch
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.test import override_settings
+from django.core.cache import cache
+from django.test import SimpleTestCase, override_settings
 from rest_framework import status
 from rest_framework.test import APIClient, APITestCase
 from rest_framework_simplejwt.token_blacklist.models import (
@@ -25,7 +25,9 @@ TEST_SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
 }
 
-IDENTITY_KEYS = {"uuid", "email", "isEmailVerified", "isPhoneVerified"}
+TEST_AUTH_COOKIE = {"access": "access", "refresh": "refresh", "domain": None, "secure": True, "samesite": "Lax"}
+
+IDENTITY_KEYS = {"uuid", "email", "isEmailVerified"}
 
 
 def jti_of(raw_refresh):
@@ -36,22 +38,14 @@ def is_blacklisted(raw_refresh):
     return BlacklistedToken.objects.filter(token__jti=jti_of(raw_refresh)).exists()
 
 
-@override_settings(DEBUG=False, SIMPLE_JWT=TEST_SIMPLE_JWT)
+@override_settings(DEBUG=False, SIMPLE_JWT=TEST_SIMPLE_JWT, AUTH_COOKIE=TEST_AUTH_COOKIE)
 class LegacyAuthProtocolTestCase(APITestCase):
     password = "current-password-123"
 
     def setUp(self):
         super().setUp()
-        cookie_environment = patch.dict(
-            os.environ,
-            {
-                "COOKIE_ACCESS_NAME": "access",
-                "COOKIE_REFRESH_NAME": "refresh",
-                "COOKIE_DOMAIN": "",
-            },
-        )
-        cookie_environment.start()
-        self.addCleanup(cookie_environment.stop)
+        cache.clear()
+        self.addCleanup(cache.clear)
 
     def create_user(self, email="member@example.com", verified=True):
         return User.objects.create_user(
@@ -533,6 +527,107 @@ class LegacyRefreshLogoutTest(LegacyAuthProtocolTestCase):
         self.assertFalse(is_blacklisted(bystander_refresh))
         self.assertEqual(self.verify_with_cookie(first_access), {"valid": False})
         self.assertEqual(self.verify_with_cookie(second_access), {"valid": False})
+
+
+class TokenLifetimeDefaultsTest(SimpleTestCase):
+    def test_access_lives_a_day_and_refresh_a_week_by_default(self):
+        self.assertEqual(settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"], timedelta(days=1))
+        self.assertEqual(settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"], timedelta(days=7))
+
+
+class CookieSettingsTest(LegacyAuthProtocolTestCase):
+    custom_cookie = {"access": "sid", "refresh": "rid", "domain": "example.test", "secure": False, "samesite": "Lax"}
+
+    @override_settings(AUTH_COOKIE=custom_cookie)
+    def test_cookie_names_domain_and_secure_flag_come_from_auth_cookie(self):
+        user = self.create_completed_user()
+
+        response = self.client.post("/api/signin/", {"email": user.email, "password": self.password}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(set(response.cookies), {"sid", "rid"})
+        for name in ("sid", "rid"):
+            self.assertEqual(response.cookies[name]["domain"], "example.test")
+            self.assertFalse(response.cookies[name]["secure"])
+            self.assertTrue(response.cookies[name]["httponly"])
+            self.assertEqual(response.cookies[name]["samesite"], "Lax")
+
+        client = APIClient()
+        client.cookies["sid"] = response.cookies["sid"].value
+        self.assertTrue(client.get("/api/auth/verify/").json()["valid"])
+
+        client.cookies["rid"] = response.cookies["rid"].value
+        signout = client.post("/api/signout/", {}, format="json")
+        self.assertEqual(signout.status_code, status.HTTP_200_OK)
+        self.assertEqual(set(signout.cookies), {"sid", "rid"})
+        for name in ("sid", "rid"):
+            self.assertEqual(signout.cookies[name]["max-age"], 0)
+            self.assertEqual(signout.cookies[name]["domain"], "example.test")
+
+
+class EmailThrottleTest(LegacyAuthProtocolTestCase):
+    def signin(self, email, password="wrong-password"):
+        return self.client.post("/api/signin/", {"email": email, "password": password}, format="json")
+
+    def test_eleventh_signin_for_one_address_within_an_hour_is_throttled(self):
+        user = self.create_completed_user()
+
+        for _ in range(9):
+            self.assertEqual(self.signin(user.email).status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self.signin(" Member@EXAMPLE.com ").status_code, status.HTTP_400_BAD_REQUEST)
+
+        throttled = self.signin(user.email, self.password)
+
+        self.assertEqual(throttled.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertNotIn("access", throttled.cookies)
+        self.assertFalse(OutstandingToken.objects.exists())
+        self.assertEqual(self.signin("other@example.com").status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_signup_and_verification_share_the_address_budget(self):
+        with patch("authentication.views.user.EmailCodeService.send"):
+            for _ in range(5):
+                response = self.client.post(
+                    "/api/signup/",
+                    {"email": "new@example.com", "password": self.password, "passwordConfirm": self.password},
+                    format="json",
+                )
+                self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        for _ in range(5):
+            response = self.client.post(
+                "/api/email-verification/", {"email": "new@example.com", "token": "111111"}, format="json"
+            )
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        response = self.client.post(
+            "/api/email-verification/", {"email": "new@example.com", "token": "111111"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def test_resend_is_throttled_per_authenticated_address(self):
+        user = self.create_user(verified=False)
+        access, _ = TokenService.issue(user)
+        self.client.cookies["access"] = access
+
+        with patch("authentication.views.user.EmailCodeService.send") as send_email:
+            for _ in range(10):
+                self.assertEqual(
+                    self.client.post("/api/resend-verification/", {}, format="json").status_code, status.HTTP_200_OK
+                )
+            throttled = self.client.post("/api/resend-verification/", {}, format="json")
+
+        self.assertEqual(throttled.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertEqual(send_email.call_count, 10)
+
+    def test_refresh_and_signout_are_not_address_throttled(self):
+        user = self.create_completed_user()
+        for _ in range(10):
+            self.assertEqual(self.signin(user.email).status_code, status.HTTP_400_BAD_REQUEST)
+        _, refresh = TokenService.issue(user)
+        self.client.cookies["refresh"] = refresh
+
+        self.assertEqual(self.client.post("/api/token/refresh/", {}, format="json").status_code, status.HTTP_200_OK)
+        self.assertEqual(self.client.post("/api/signout/", {}, format="json").status_code, status.HTTP_200_OK)
 
 
 class LegacyCredentialMutationTest(LegacyAuthProtocolTestCase):
