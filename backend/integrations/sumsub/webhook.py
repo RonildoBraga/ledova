@@ -28,7 +28,7 @@ from integrations.sumsub import SumSubService
 from users.models.user_profile import UserProfile
 from users.services import IdentityVerificationService
 
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 
 @method_decorator(csrf_exempt, name="dispatch")

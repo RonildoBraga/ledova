@@ -5,7 +5,7 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.response import Response
 
-from shared.utils import LoggingContext, get_client_ip
+from shared.utils import get_client_ip
 from shared.views import AuthenticatedReadOnlyViewSet
 from tokens.exceptions import SwapExpiredException, TokenBalanceRetrievalException
 from tokens.filters import TransferOrderFilter
@@ -33,7 +33,6 @@ logger = logging.getLogger(__name__)
 
 
 class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
-
     serializer_class = TransferOrderListSerializer
     filterset_class = TransferOrderFilter
     ordering = ["-created_at"]
@@ -82,8 +81,6 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
         )
 
         response_data = TradingOrderService.build_order_response(order, match_result)
-
-        logger.info(f"{LoggingContext.ORDER_CREATE} Created {order.order_type} order: {order.uuid}")
 
         return Response(response_data, status=status.HTTP_201_CREATED)
 
@@ -172,7 +169,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
         try:
             allowances = atomic_swap_service.check_swap_allowances(swap_order)
         except Exception as e:
-            logger.error(f"{LoggingContext.TOKEN_TRANSFER} Failed to check allowances: {e}")
+            logger.error(f"Failed to check allowances: {e}")
             raise TokenBalanceRetrievalException()
 
         user_allowance = allowances[user_role]
@@ -224,7 +221,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
             )
 
         except Exception as e:
-            logger.error(f"{LoggingContext.TOKEN_TRANSFER} Failed to get approval data: {e}")
+            logger.error(f"Failed to get approval data: {e}")
             raise TokenBalanceRetrievalException()
 
     def _get_authorized_swap_context(self, request):

@@ -9,12 +9,11 @@ from procrastinate import RetryStrategy
 from integrations.blockchain import get_blockchain_client
 from ledova_backend.procrastinate_app import app
 from shared.constants import BLOCKCHAIN_BITCOIN, EVM_BLOCKCHAINS
-from shared.utils.logging_utils import LoggingContext
 from wallets.constants import TRANSACTION_STATUS_PENDING
 from wallets.models import Transaction, Wallet
 from wallets.services.transaction_confirmation import TransactionConfirmationService
 
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 WEI_TO_ETH = Decimal("1000000000000000000")
 SATOSHI_TO_BTC = Decimal("100000000")
@@ -50,7 +49,7 @@ def _extract_actual_fee(receipt: Dict[str, Any], chain: str) -> Optional[Decimal
         return None
 
     except Exception as e:
-        logger.warning(f"{LoggingContext.WALLET_SYNC} Failed to extract actual fee: {e}")
+        logger.warning(f"Failed to extract actual fee: {e}")
         return None
 
 
@@ -59,13 +58,13 @@ def confirm_pending_transaction(tx_hash: str, wallet_uuid: str) -> Dict[str, Any
     try:
         wallet = Wallet.objects.get(uuid=wallet_uuid)
     except Wallet.DoesNotExist:
-        logger.error(f"{LoggingContext.WALLET_SYNC} Wallet not found: {wallet_uuid}")
+        logger.error(f"Wallet not found: {wallet_uuid}")
         return {"status": "error", "error": "Wallet not found"}
 
     try:
         tx = Transaction.objects.get(tx_hash=tx_hash, wallet=wallet)
         if tx.status != TRANSACTION_STATUS_PENDING:
-            logger.info(f"{LoggingContext.WALLET_SYNC} Transaction already processed: {tx_hash}")
+            logger.info(f"Transaction already processed: {tx_hash}")
             return {"status": "already_processed", "current_status": tx.status}
     except Transaction.DoesNotExist:
         pass
@@ -74,7 +73,7 @@ def confirm_pending_transaction(tx_hash: str, wallet_uuid: str) -> Dict[str, Any
     receipt = client.get_transaction_receipt(tx_hash)
 
     if receipt is None:
-        logger.info(f"{LoggingContext.WALLET_SYNC} Transaction not yet confirmed: {tx_hash}")
+        logger.info(f"Transaction not yet confirmed: {tx_hash}")
         raise RuntimeError(f"receipt not yet available for {tx_hash}")
 
     block_number = receipt.get("blockNumber") or receipt.get("block_number")
@@ -97,13 +96,13 @@ def confirm_pending_transaction(tx_hash: str, wallet_uuid: str) -> Dict[str, Any
             block_timestamp=block_timestamp,
             actual_fee=actual_fee,
         )
-        logger.info(f"{LoggingContext.WALLET_SYNC} Transaction confirmed: {tx_hash}, actual_fee={actual_fee}")
+        logger.info(f"Transaction confirmed: {tx_hash}, actual_fee={actual_fee}")
     else:
         result = TransactionConfirmationService.fail_transaction(
             tx_hash=tx_hash,
             reason="Transaction reverted on-chain",
         )
-        logger.warning(f"{LoggingContext.WALLET_SYNC} Transaction failed on-chain: {tx_hash}")
+        logger.warning(f"Transaction failed on-chain: {tx_hash}")
 
     return result
 
@@ -126,10 +125,10 @@ def check_all_pending_transactions(timestamp: int) -> Dict[str, Any]:
             confirm_pending_transaction.defer(tx_hash=tx.tx_hash, wallet_uuid=str(tx.wallet.uuid))
             queued += 1
         except Exception as e:
-            logger.error(f"{LoggingContext.WALLET_SYNC} Queue confirmation failed {tx.tx_hash}: {e}")
+            logger.error(f"Queue confirmation failed {tx.tx_hash}: {e}")
 
     if total > 0:
-        logger.info(f"{LoggingContext.WALLET_SYNC} Queued {queued}/{total} pending transactions for confirmation")
+        logger.info(f"Queued {queued}/{total} pending transactions for confirmation")
 
     return {"total": total, "queued": queued}
 
@@ -156,9 +155,9 @@ def cleanup_stale_pending_transactions(timestamp: int) -> Dict[str, Any]:
             if result["status"] == "failed":
                 failed += 1
         except Exception as e:
-            logger.error(f"{LoggingContext.WALLET_SYNC} Stale cleanup failed {tx.tx_hash}: {e}")
+            logger.error(f"Stale cleanup failed {tx.tx_hash}: {e}")
 
     if total > 0:
-        logger.info(f"{LoggingContext.WALLET_SYNC} Marked {failed}/{total} stale transactions as failed")
+        logger.info(f"Marked {failed}/{total} stale transactions as failed")
 
     return {"total": total, "failed": failed}

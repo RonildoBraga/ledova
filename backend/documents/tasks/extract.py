@@ -7,7 +7,7 @@ from documents.models import Document
 from documents.services.extraction import ExtractionService
 from ledova_backend.procrastinate_app import app
 
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 
 # The usual failure is a cold or unreachable local LLM, which a short retry wait resolves.

@@ -1,14 +1,12 @@
-"""Factory for creating KYC provider instances."""
-
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 
 from integrations.kyc.base import KYCProvider
 from integrations.kyc.constants import PROVIDER_KYCAID, PROVIDER_SUMSUB
 
 
 def get_kyc_provider() -> KYCProvider:
-    """Return the configured KYC provider instance based on settings.KYC_PROVIDER."""
-    provider = getattr(settings, "KYC_PROVIDER", PROVIDER_KYCAID)
+    provider = settings.KYC_PROVIDER
 
     if provider == PROVIDER_KYCAID:
         from integrations.kycaid.client import KYCAIDService
@@ -20,4 +18,4 @@ def get_kyc_provider() -> KYCProvider:
 
         return SumSubService()
 
-    raise ValueError(f"Unknown KYC provider: {provider}. Must be '{PROVIDER_KYCAID}' or '{PROVIDER_SUMSUB}'.")
+    raise ImproperlyConfigured(f'KYC_PROVIDER is {provider!r}; set it to "{PROVIDER_SUMSUB}" or "{PROVIDER_KYCAID}".')

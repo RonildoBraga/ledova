@@ -10,9 +10,8 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import InvalidToken
 
 from authentication.services.tokens import TokenService
-from shared.utils.logging_utils import LoggingContext
 
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 
 class HybridJWTAuthentication(JWTAuthentication):
@@ -65,5 +64,5 @@ class HybridJWTAuthentication(JWTAuthentication):
             return self.get_user(validated_token), validated_token
 
         except Exception as e:
-            logger.debug(f"{LoggingContext.AUTH} {source} auth failed, proceeding as anonymous: {e}")
+            logger.debug(f"{source} auth failed, proceeding as anonymous: {e}")
             return None

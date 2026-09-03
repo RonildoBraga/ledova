@@ -1,4 +1,3 @@
-import logging
 from typing import Optional
 
 from django.conf import settings
@@ -14,8 +13,6 @@ from tokens.exceptions import (
     InvalidRecipientAddressException,
     NotAuthorizedMinterException,
 )
-
-logger = logging.getLogger(__name__)
 
 
 class BaseTokenService:

@@ -13,7 +13,7 @@ from rest_framework.views import APIView
 from wallets.models import Transaction, Wallet
 from wallets.tasks import confirm_pending_transaction
 
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 
 def verify_alchemy_signature(payload: bytes, signature: str, signing_key: str) -> bool:

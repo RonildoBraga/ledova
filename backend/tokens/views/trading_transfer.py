@@ -1,19 +1,13 @@
-import logging
-
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from shared.utils import LoggingContext
 from shared.views import AuthenticatedGenericViewSet
 from tokens.serializers import BroadcastTransferSerializer, PrepareTransferSerializer
 from tokens.services import TransferService
 from tokens.trading_wallet_access import resolve_verified_evm_wallets
 
-logger = logging.getLogger(__name__)
-
 
 class TradingTransferViewSet(AuthenticatedGenericViewSet):
-
     throttle_scope = "broadcast"
 
     @action(detail=False, methods=["post"])
@@ -32,11 +26,6 @@ class TradingTransferViewSet(AuthenticatedGenericViewSet):
             from_address=from_address,
             to_address=data["to_address"],
             amount=data["amount"],
-        )
-
-        logger.info(
-            f"{LoggingContext.TOKEN_TRANSFER} Prepared transfer: {data['amount']} {data['token'].symbol} "
-            f"from {from_address} to {data['to_address']}"
         )
 
         return Response(
@@ -62,8 +51,6 @@ class TradingTransferViewSet(AuthenticatedGenericViewSet):
         transfer_service = TransferService()
 
         tx_hash, receipt = transfer_service.broadcast_transfer(data["signed_transaction"])
-
-        logger.info(f"{LoggingContext.TOKEN_TRANSFER} Broadcast transfer: tx={tx_hash}")
 
         return Response(
             {

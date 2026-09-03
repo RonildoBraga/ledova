@@ -1,5 +1,3 @@
-import logging
-
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
@@ -15,12 +13,9 @@ from portfolios.serializers.portfolio import (
 from portfolios.services import (
     PortfolioWalletService,
 )
-from shared.utils.logging_utils import LoggingContext
 from shared.utils.querysets import sample_evenly
 from shared.views.base import AuthenticatedModelViewSet
 from users.models import UserAccount
-
-logger = logging.getLogger("ledova_backend")
 
 
 class PortfolioViewSet(AuthenticatedModelViewSet):
@@ -48,11 +43,9 @@ class PortfolioViewSet(AuthenticatedModelViewSet):
                 raise ValidationError({"userAccount": "Select the account this portfolio belongs to."})
             user_account = candidates[0]
 
-        logger.info(f"{LoggingContext.PORTFOLIOS} Creating portfolio for user {self.request.user.email}")
         return serializer.save(user_account=user_account)
 
     def perform_destroy(self, instance):
-        logger.info(f"{LoggingContext.PORTFOLIOS} Soft deleting portfolio {instance.uuid}")
         instance.is_active = False
         instance.save(update_fields=["is_active"])
 

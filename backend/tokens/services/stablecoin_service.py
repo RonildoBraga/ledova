@@ -9,7 +9,6 @@ from integrations.base_chain.exceptions import (
     BaseChainContractError,
     BaseChainTransactionError,
 )
-from shared.utils.logging_utils import LoggingContext
 from tokens.exceptions import (
     StablecoinBurnFailedException,
     StablecoinContractNotConfiguredException,
@@ -81,10 +80,10 @@ class StablecoinService(BaseTokenService):
                     gas_used=receipt["gasUsed"],
                 )
 
-            logger.info(f"{LoggingContext.TOKEN_BURN} Burned {amount} AUDY from {self.signer_address} (tx={tx_hash})")
+            logger.info(f"Burned {amount} AUDY from {self.signer_address} (tx={tx_hash})")
             return tx_hash, tx_record
 
         except (BaseChainTransactionError, BaseChainContractError) as e:
             tx_record.mark_failed(str(e))
-            logger.error(f"{LoggingContext.TOKEN_BURN} Failed to burn AUDY: {e}")
+            logger.error(f"Failed to burn AUDY: {e}")
             raise StablecoinBurnFailedException(f"Stablecoin burning failed: {e}") from e

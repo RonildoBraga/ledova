@@ -1,16 +1,11 @@
-import logging
-
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from shared.utils.logging_utils import LoggingContext
 from shared.views.base import AuthenticatedReadOnlyViewSet
 from users.filters import NotificationFilter
 from users.models.notification import Notification
 from users.serializers.notification import NotificationSerializer
-
-logger = logging.getLogger("ledova_backend")
 
 
 class NotificationViewSet(AuthenticatedReadOnlyViewSet):
@@ -45,5 +40,4 @@ class NotificationViewSet(AuthenticatedReadOnlyViewSet):
     @action(detail=False, methods=["post"], url_path="mark-all-read")
     def mark_all_read(self, request):
         updated = Notification.objects.visible_to_user(request.user).not_archived().mark_all_read()
-        logger.info(f"{LoggingContext.NOTIFICATIONS} Marked {updated} notifications as read for {request.user.email}")
         return Response({"marked": updated}, status=status.HTTP_200_OK)

@@ -13,7 +13,6 @@ from eth_account.messages import encode_typed_data
 from blockchain.models import BlockchainTransaction, TransactionStatus, TransactionType
 from integrations.base_chain import get_base_chain_client
 from shared.utils.blockchain import decode_exception_to_message
-from shared.utils.logging_utils import LoggingContext
 from tokens.exceptions import (
     AtomicSwapNotConfiguredException,
     InsufficientBalanceException,
@@ -292,10 +291,7 @@ class AtomicSwapService:
         buy_order.status = TransferOrderStatus.PENDING_SIGNATURE
         buy_order.save(update_fields=["status", "updated_at"])
 
-        logger.info(
-            f"{LoggingContext.TOKEN_TRANSFER} Created swap order {swap_order.uuid}: "
-            f"{share_amount} shares for {payment_amount} payment"
-        )
+        logger.info(f"Created swap order {swap_order.uuid}: {share_amount} shares for {payment_amount} payment")
 
         return swap_order
 
@@ -338,17 +334,14 @@ class AtomicSwapService:
             swap_order.add_seller_signature(signature)
         else:
             swap_order.add_buyer_signature(signature)
-        logger.info(
-            f"{LoggingContext.TOKEN_TRANSFER} {'Seller' if is_seller else 'Buyer'} signed swap "
-            f"{swap_order.uuid} (ready={swap_order.is_ready})"
-        )
+        logger.info(f"{'Seller' if is_seller else 'Buyer'} signed swap {swap_order.uuid} (ready={swap_order.is_ready})")
 
         from tokens.events import publish_trading_event
 
         publish_trading_event("swap_signed", str(swap_order.share_token.uuid))
 
         if swap_order.is_ready:
-            logger.info(f"{LoggingContext.TOKEN_TRANSFER} Both signatures present, executing swap {swap_order.uuid}")
+            logger.info(f"Both signatures present, executing swap {swap_order.uuid}")
             self.execute_swap(swap_order)
 
         return swap_order
@@ -428,7 +421,7 @@ class AtomicSwapService:
                     gas_used=receipt.get("gasUsed"),
                 )
                 swap_order.mark_completed()
-                logger.info(f"{LoggingContext.TOKEN_TRANSFER} Swap {swap_order.uuid} completed: {tx_hash}")
+                logger.info(f"Swap {swap_order.uuid} completed: {tx_hash}")
 
                 from tokens.events import publish_trading_event
 
@@ -436,7 +429,7 @@ class AtomicSwapService:
             else:
                 tx_record.mark_reverted("Transaction reverted")
                 swap_order.mark_failed("Transaction reverted")
-                logger.error(f"{LoggingContext.TOKEN_TRANSFER} Swap {swap_order.uuid} failed: {tx_hash}")
+                logger.error(f"Swap {swap_order.uuid} failed: {tx_hash}")
 
                 from tokens.events import publish_trading_event
 
@@ -451,7 +444,7 @@ class AtomicSwapService:
             user_friendly_msg = decode_exception_to_message(e, "Swap execution failed")
             tx_record.mark_failed(raw_error)
             swap_order.mark_failed(raw_error)
-            logger.error(f"{LoggingContext.TOKEN_TRANSFER} Swap execution failed: {raw_error}")
+            logger.error(f"Swap execution failed: {raw_error}")
 
             from tokens.events import publish_trading_event
 
@@ -471,7 +464,7 @@ class AtomicSwapService:
             checksum = self.chain_client.to_checksum_address(token_address)
             return contract.functions.approvedShareTokens(checksum).call()
         except Exception as e:
-            logger.error(f"{LoggingContext.TOKEN} Error checking token approval: {e}")
+            logger.error(f"Error checking token approval: {e}")
             return False
 
     def approve_share_token(self, token_address: str) -> Optional[str]:
@@ -479,10 +472,10 @@ class AtomicSwapService:
             checksum = self.chain_client.to_checksum_address(token_address)
 
             if self.is_share_token_approved(checksum):
-                logger.info(f"{LoggingContext.TOKEN} ShareToken {checksum} already approved in AtomicSwap")
+                logger.info(f"ShareToken {checksum} already approved in AtomicSwap")
                 return None
 
-            logger.info(f"{LoggingContext.TOKEN} Approving ShareToken {checksum} in AtomicSwap contract")
+            logger.info(f"Approving ShareToken {checksum} in AtomicSwap contract")
 
             contract = self.chain_client.load_contract("AtomicSwap", self.contract_address)
             approve_fn = contract.functions.setShareTokenApproval(checksum, True)
@@ -494,12 +487,12 @@ class AtomicSwapService:
             )
 
             if receipt and receipt.get("status") == 1:
-                logger.info(f"{LoggingContext.TOKEN} ShareToken {checksum} approved in AtomicSwap - tx: {tx_hash}")
+                logger.info(f"ShareToken {checksum} approved in AtomicSwap - tx: {tx_hash}")
                 return tx_hash
             else:
-                logger.error(f"{LoggingContext.TOKEN} ShareToken approval transaction reverted")
+                logger.error("ShareToken approval transaction reverted")
                 return None
 
         except Exception as e:
-            logger.error(f"{LoggingContext.TOKEN} Failed to approve ShareToken in AtomicSwap: {e}")
+            logger.error(f"Failed to approve ShareToken in AtomicSwap: {e}")
             return None

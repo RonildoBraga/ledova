@@ -18,7 +18,7 @@ from integrations.llm_extract import (
 )
 from integrations.llm_extract.prompts import PROMPT_BY_TYPE
 
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 
 class ExtractionService:

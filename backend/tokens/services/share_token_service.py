@@ -12,7 +12,6 @@ from integrations.base_chain.exceptions import (
     BaseChainContractError,
     BaseChainTransactionError,
 )
-from shared.utils.logging_utils import LoggingContext
 from tokens.exceptions import (
     CompanyNotReadyException,
     ContractLoadException,
@@ -156,7 +155,7 @@ class ShareTokenService:
             signer_address = self.chain_client.get_address_from_private_key(self.signer_key)
 
             logger.info(
-                f"{LoggingContext.TOKEN} Deploying ShareToken: {name} ({symbol}) "
+                f"Deploying ShareToken: {name} ({symbol}) "
                 f"with {authorized_shares} shares for company wallet: {company_checksum}"
             )
 
@@ -180,7 +179,7 @@ class ShareTokenService:
                 token_created_events = self.factory_contract.events.ShareTokenCreated().process_receipt(receipt)
                 if token_created_events:
                     contract_address = token_created_events[0]["args"]["tokenAddress"]
-                    logger.info(f"{LoggingContext.TOKEN} ShareToken deployed at: {contract_address}")
+                    logger.info(f"ShareToken deployed at: {contract_address}")
 
                     result["contract_address"] = contract_address
                     result["mint_result"] = self._mint_to(contract_address, company_checksum, authorized_shares)
@@ -188,10 +187,10 @@ class ShareTokenService:
             return result
 
         except BaseChainTransactionError as e:
-            logger.error(f"{LoggingContext.TOKEN} Transaction failed: {e}")
+            logger.error(f"Transaction failed: {e}")
             raise TokenDeploymentFailedException(f"Token deployment failed: {e}") from e
         except Exception as e:
-            logger.error(f"{LoggingContext.TOKEN} Deployment error: {e}")
+            logger.error(f"Deployment error: {e}")
             raise TokenDeploymentFailedException(f"Token deployment failed: {e}") from e
 
     def create_issuance_request(
@@ -222,10 +221,7 @@ class ShareTokenService:
         issuance_request.dilution_percentage = issuance_request.calculate_dilution()
         issuance_request.save(update_fields=["dilution_percentage", "updated_at"])
 
-        logger.info(
-            f"{LoggingContext.TOKEN} User {user.email} created issuance request: "
-            f"{amount} {token.symbol} to {recipient}"
-        )
+        logger.info(f"User {user.email} created issuance request: {amount} {token.symbol} to {recipient}")
 
         return issuance_request
 
@@ -240,9 +236,7 @@ class ShareTokenService:
         issuance.mark_processing()
 
         try:
-            logger.info(
-                f"{LoggingContext.TOKEN} Minting {issuance.amount} {token.symbol} to {issuance.recipient_address}"
-            )
+            logger.info(f"Minting {issuance.amount} {token.symbol} to {issuance.recipient_address}")
 
             result = self._mint_to(token.contract_address, issuance.recipient_address, int(issuance.amount))
 
@@ -252,15 +246,13 @@ class ShareTokenService:
                 gas_used=result["gas_used"],
             )
 
-            logger.info(
-                f"{LoggingContext.TOKEN} Issuance complete: {issuance.amount} {token.symbol} - tx: {result['tx_hash']}"
-            )
+            logger.info(f"Issuance complete: {issuance.amount} {token.symbol} - tx: {result['tx_hash']}")
 
             return result
 
         except Exception as e:
             issuance.mark_failed(str(e))
-            logger.error(f"{LoggingContext.TOKEN} Issuance mint failed: {e}")
+            logger.error(f"Issuance mint failed: {e}")
             raise ShareIssuanceFailedException(f"Share issuance failed: {e}") from e
 
     def execute_request(self, request) -> dict:
@@ -298,9 +290,7 @@ class ShareTokenService:
             reason=reason,
         )
         issuance.mark_processing()
-        logger.info(
-            f"{LoggingContext.TOKEN} Executing {token.symbol} +{request.share_delta} shares to {recipient_address}"
-        )
+        logger.info(f"Executing {token.symbol} +{request.share_delta} shares to {recipient_address}")
 
         try:
             if is_capital_increase:
@@ -310,7 +300,7 @@ class ShareTokenService:
                 result = self._mint_to(token.contract_address, recipient_address, request.share_delta)
                 tx_hash = result["tx_hash"]
         except Exception as exc:
-            logger.error(f"{LoggingContext.TOKEN} Execution failed: {exc}")
+            logger.error(f"Execution failed: {exc}")
             issuance.mark_failed(str(exc))
             request.mark_failed(str(exc))
             raise
@@ -319,7 +309,7 @@ class ShareTokenService:
         token.total_supply = str(int(token.total_supply) + request.share_delta)
         token.save(update_fields=["total_supply", "updated_at"])
         request.mark_executed(issuance)
-        logger.info(f"{LoggingContext.TOKEN} Request executed for {token.symbol}: {tx_hash}")
+        logger.info(f"Request executed for {token.symbol}: {tx_hash}")
         return result
 
     def increase_authorized_shares(
@@ -336,8 +326,7 @@ class ShareTokenService:
             new_authorized = current_authorized + additional_shares
 
             logger.info(
-                f"{LoggingContext.TOKEN} Increasing authorized shares: "
-                f"{current_authorized} -> {new_authorized} (+{additional_shares})"
+                f"Increasing authorized shares: {current_authorized} -> {new_authorized} (+{additional_shares})"
             )
 
             set_auth_fn = token_contract.functions.setAuthorizedShares(new_authorized)
@@ -347,14 +336,11 @@ class ShareTokenService:
                 wait_for_receipt=True,
             )
 
-            logger.info(f"{LoggingContext.TOKEN} Authorized shares increased - tx: {set_auth_tx_hash}")
+            logger.info(f"Authorized shares increased - tx: {set_auth_tx_hash}")
 
             mint_result = self._mint_to(contract_address, company_checksum, additional_shares)
 
-            logger.info(
-                f"{LoggingContext.TOKEN} Minted {additional_shares} shares "
-                f"to {company_checksum} - tx: {mint_result['tx_hash']}"
-            )
+            logger.info(f"Minted {additional_shares} shares to {company_checksum} - tx: {mint_result['tx_hash']}")
 
             return {
                 "set_authorized_tx_hash": set_auth_tx_hash,
@@ -365,10 +351,10 @@ class ShareTokenService:
             }
 
         except BaseChainTransactionError as e:
-            logger.error(f"{LoggingContext.TOKEN} Capital increase transaction failed: {e}")
+            logger.error(f"Capital increase transaction failed: {e}")
             raise TokenDeploymentFailedException(f"Token deployment failed: {e}") from e
         except Exception as e:
-            logger.error(f"{LoggingContext.TOKEN} Capital increase error: {e}")
+            logger.error(f"Capital increase error: {e}")
             raise TokenDeploymentFailedException(f"Token deployment failed: {e}") from e
 
     def get_token_balance(self, contract_address: str, holder: str) -> int:
@@ -377,7 +363,7 @@ class ShareTokenService:
         except InvalidHolderAddressException:
             raise
         except Exception as e:
-            logger.error(f"{LoggingContext.TOKEN} Error getting balance: {e}")
+            logger.error(f"Error getting balance: {e}")
             raise TokenBalanceRetrievalException() from e
 
     def get_token_by_identifier(self, identifier: str) -> Optional[str]:
@@ -387,7 +373,7 @@ class ShareTokenService:
                 return None
             return address
         except Exception as e:
-            logger.error(f"{LoggingContext.TOKEN} Error getting token by identifier: {e}")
+            logger.error(f"Error getting token by identifier: {e}")
             return None
 
     def get_token_holders(self, token) -> list[dict]:
@@ -411,10 +397,10 @@ class ShareTokenService:
                                 }
                             )
                     except Exception as e:
-                        logger.warning(f"{LoggingContext.TOKEN} Failed to get balance for {address}: {e}")
+                        logger.warning(f"Failed to get balance for {address}: {e}")
 
             except Exception as e:
-                logger.error(f"{LoggingContext.TOKEN} Failed to query blockchain for holders: {e}")
+                logger.error(f"Failed to query blockchain for holders: {e}")
                 holders_data = ShareIssuance.objects.filter_by_token(token).holders_as_list()
         else:
             holders_data = ShareIssuance.objects.filter_by_token(token).holders_as_list()
@@ -450,7 +436,7 @@ class ShareTokenService:
                         }
                     )
             except Exception as e:
-                logger.warning(f"{LoggingContext.TOKEN} Failed to get balance for {token.symbol}: {e}")
+                logger.warning(f"Failed to get balance for {token.symbol}: {e}")
 
         stablecoins = (
             Stablecoin.objects.filter(is_active=True)
@@ -473,6 +459,6 @@ class ShareTokenService:
                         }
                     )
             except Exception as e:
-                logger.warning(f"{LoggingContext.TOKEN} Failed to get stablecoin balance for {stablecoin.symbol}: {e}")
+                logger.warning(f"Failed to get stablecoin balance for {stablecoin.symbol}: {e}")
 
         return {"walletAddress": wallet_checksum, "balances": balances}

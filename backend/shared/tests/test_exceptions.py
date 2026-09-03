@@ -23,7 +23,7 @@ class CustomExceptionHandlerTests(SimpleTestCase):
         request = Request(RequestFactory().get("/api/v1/example/"))
         if user is not None:
             request.user = user
-        with self.assertLogs("ledova_backend", level="WARNING") as logs:
+        with self.assertLogs("shared.api.exceptions", level="WARNING") as logs:
             response = custom_exception_handler(exc, {"view": APIView(), "request": request})
         return response, "\n".join(logs.output)
 

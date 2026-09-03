@@ -4,7 +4,6 @@ from django.apps import apps
 from procrastinate import RetryStrategy
 
 from ledova_backend.procrastinate_app import app
-from shared.utils.logging_utils import LoggingContext
 from tokens.exceptions import CompanyNotReadyException, InvalidTokenStateException
 from tokens.services import ShareTokenService
 
@@ -21,13 +20,13 @@ def execute_review_request_task(model_label: str, request_uuid: str):
     model = apps.get_model(model_label)
     request = model.objects.select_related("token", "token__company").filter(uuid=request_uuid).first()
     if request is None:
-        logger.error(f"{LoggingContext.TOKEN} Request not found: {model_label} {request_uuid}")
+        logger.error(f"Request not found: {model_label} {request_uuid}")
         return {"success": False, "error": "Request not found"}
 
     try:
         result = ShareTokenService().execute_request(request)
     except (InvalidTokenStateException, CompanyNotReadyException) as exc:
-        logger.warning(f"{LoggingContext.TOKEN} Request {request_uuid} not executed: {exc.detail}")
+        logger.warning(f"Request {request_uuid} not executed: {exc.detail}")
         return {"success": False, "error": str(exc.detail)}
 
     return {"success": True, **result}

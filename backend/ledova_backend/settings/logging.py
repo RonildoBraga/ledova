@@ -1,17 +1,9 @@
-"""
-Logging settings for ledova_backend project.
-"""
-
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "formatters": {
         "verbose": {
-            "format": "{levelname} {asctime} {module} {message}",
-            "style": "{",
-        },
-        "simple": {
-            "format": "{levelname} {message}",
+            "format": "{levelname} {asctime} {name} {message}",
             "style": "{",
         },
     },
@@ -27,15 +19,12 @@ LOGGING = {
             "formatter": "verbose",
         },
     },
+    # Every module logs under its own __name__ and propagates to the root console handler.
+    "root": {"handlers": ["console"], "level": "INFO"},
     "loggers": {
         "django": {
             "handlers": ["console"],
-            "level": "DEBUG",
-            "propagate": True,
-        },
-        "ledova_backend": {
-            "handlers": ["console"],
-            "level": "DEBUG",
+            "level": "INFO",
             "propagate": False,
         },
         "procrastinate": {

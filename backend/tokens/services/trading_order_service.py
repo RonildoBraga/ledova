@@ -3,7 +3,6 @@ from decimal import Decimal
 from typing import Optional
 
 from shared.utils import (
-    LoggingContext,
     generate_order_cancel_message,
     generate_order_create_message,
     verify_signature,
@@ -51,10 +50,7 @@ class TradingOrderService:
                 "Please sign with the wallet that will place this order."
             )
 
-        logger.info(
-            f"{LoggingContext.ORDER_CREATE} Signature verified for {wallet_address[:10]}... "
-            f"creating {order_type} order"
-        )
+        logger.info(f"Signature verified for {wallet_address[:10]}... creating {order_type} order")
 
     @staticmethod
     def verify_order_cancel_signature(
@@ -76,7 +72,7 @@ class TradingOrderService:
         if not verify_signature(message, signature, order.wallet_address):
             raise InvalidSignatureException("Signature does not match the wallet address that created this order.")
 
-        logger.info(f"{LoggingContext.ORDER_CANCEL} Signature verified for order {order.uuid}")
+        logger.info(f"Signature verified for order {order.uuid}")
 
     @staticmethod
     def cancel_order(order: TransferOrder) -> TransferOrder:
@@ -84,7 +80,7 @@ class TradingOrderService:
             raise OrderCancellationException(f"Order with status '{order.get_status_display()}' cannot be cancelled.")
 
         order.cancel()
-        logger.info(f"{LoggingContext.ORDER_CANCEL} Cancelled order: {order.uuid}")
+        logger.info(f"Cancelled order: {order.uuid}")
 
         from tokens.events import publish_trading_event
 
@@ -159,8 +155,7 @@ class TradingOrderService:
         sell_levels = TransferOrder.objects.order_book_levels(token, TransferOrderType.SELL)
 
         logger.info(
-            f"{LoggingContext.ORDER} Order book fetched for {token.symbol}: "
-            f"{len(buy_levels)} buy levels, {len(sell_levels)} sell levels"
+            f"Order book fetched for {token.symbol}: {len(buy_levels)} buy levels, {len(sell_levels)} sell levels"
         )
 
         return {

@@ -1,16 +1,11 @@
-import logging
-
 from django.db import transaction
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from shared.utils.logging_utils import LoggingContext
 from shared.views.base import AuthenticatedModelViewSet
 from users.models.user_profile import UserProfile
 from users.serializers import UserProfileSerializer
 from users.services import lifecycle
-
-logger = logging.getLogger("ledova_backend")
 
 
 class UserProfileViewSet(AuthenticatedModelViewSet):
@@ -26,11 +21,9 @@ class UserProfileViewSet(AuthenticatedModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
-        logger.info(f"{LoggingContext.USER_PROFILE} Creating user profile")
         serializer.save(user=self.request.user)
 
     def perform_update(self, serializer):
-        logger.info(f"{LoggingContext.USER_PROFILE} Updating user profile")
         serializer.save()
 
     @transaction.atomic

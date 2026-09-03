@@ -7,7 +7,7 @@ from authentication.models import CustomUser
 from ledova_backend.procrastinate_app import app
 from users.services.notifications import NotificationService
 
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 
 @app.task(retry=RetryStrategy(max_attempts=4, wait=60))

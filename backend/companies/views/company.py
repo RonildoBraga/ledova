@@ -1,5 +1,3 @@
-import logging
-
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.generics import get_object_or_404
@@ -22,11 +20,8 @@ from companies.serializers import (
     CompanyUpdateSerializer,
 )
 from companies.services import submit_application
-from shared.utils.logging_utils import LoggingContext
 from shared.views import AuthenticatedModelViewSet
 from tokens.services.company_stats import company_stats
-
-logger = logging.getLogger(__name__)
 
 
 class CompanyViewSet(AuthenticatedModelViewSet):
@@ -99,10 +94,6 @@ class CompanyViewSet(AuthenticatedModelViewSet):
         serializer.is_valid(raise_exception=True)
         company = serializer.save()
 
-        logger.info(
-            f"{LoggingContext.COMPANY_REGISTRATION} User {request.user.email} registered company: {company.name}"
-        )
-
         response_serializer = CompanyDetailSerializer(company)
         return Response(
             {
@@ -113,8 +104,7 @@ class CompanyViewSet(AuthenticatedModelViewSet):
         )
 
     def perform_update(self, serializer):
-        company = serializer.save()
-        logger.info(f"{LoggingContext.COMPANY} User {self.request.user.email} updated company: {company.name}")
+        serializer.save()
 
     @action(detail=False, methods=["get"], url_path="acn/(?P<acn>[^/.]+)")
     def by_acn(self, request, acn=None):
@@ -168,9 +158,6 @@ class CompanyViewSet(AuthenticatedModelViewSet):
                 to_status=CompanyStatus(new_status).label,
             )
         transitions[new_status]()
-        logger.info(
-            f"{LoggingContext.COMPANY} {request.user.email} set {company.name} to {company.get_status_display()}"
-        )
 
         return Response(
             {
@@ -203,7 +190,6 @@ class CompanyViewSet(AuthenticatedModelViewSet):
         serializer.is_valid(raise_exception=True)
 
         company.resubmit()
-        logger.info(f"{LoggingContext.COMPANY} Application resubmitted: {company.name}")
 
         return Response(
             {
@@ -220,7 +206,6 @@ class CompanyViewSet(AuthenticatedModelViewSet):
         serializer.is_valid(raise_exception=True)
 
         company.withdraw(reason=serializer.validated_data.get("reason") or "")
-        logger.info(f"{LoggingContext.COMPANY} Application withdrawn: {company.name}")
 
         return Response(
             {

@@ -1,15 +1,10 @@
-import logging
-
 from django.db import transaction
 
 from compliance.services.risk_assessment import RiskAssessmentService
-from shared.utils.logging_utils import LoggingContext
 from shared.views.base import AuthenticatedModelViewSet
 from users.constants import USER_ACCOUNT_TYPE_INDIVIDUAL
 from users.models import UserAccount
 from users.serializers.user_account import UserAccountSerializer
-
-logger = logging.getLogger("ledova_backend")
 
 
 class UserAccountViewSet(AuthenticatedModelViewSet):
@@ -28,7 +23,6 @@ class UserAccountViewSet(AuthenticatedModelViewSet):
     @transaction.atomic
     def perform_create(self, serializer):
         profile = self.request.user.userprofile
-        logger.info(f"{LoggingContext.ACCOUNT_CREATION} Creating customer account for user: {self.request.user.email}")
         account = serializer.save()
         account.user_profiles.add(profile)
         if account.account_type == USER_ACCOUNT_TYPE_INDIVIDUAL:

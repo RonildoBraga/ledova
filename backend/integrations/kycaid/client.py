@@ -22,9 +22,8 @@ from integrations.kyc.constants import (
     STATUS_PENDING,
     STATUS_UNUSED,
 )
-from shared.utils.logging_utils import LoggingContext
 
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 _LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "host.docker.internal"})
 
@@ -76,17 +75,17 @@ class KYCAIDService(KYCProvider):
         response = self._make_request("POST", "/applicants", data=body)
         applicant_id = response.get("applicant_id") or response.get("id")
 
-        logger.info(f"{LoggingContext.KYCAID_INTEGRATION} Created applicant")
+        logger.info("Created applicant")
         return {"applicant_id": applicant_id}
 
     def get_applicant_status(self, applicant_id: str) -> Dict[str, Any]:
         response = self._make_request("GET", f"/applicants/{applicant_id}")
-        logger.info(f"{LoggingContext.KYCAID_INTEGRATION} Fetched applicant status")
+        logger.info("Fetched applicant status")
         return response
 
     def get_applicant_data(self, applicant_id: str) -> Dict[str, Any]:
         response = self._make_request("GET", f"/applicants/{applicant_id}")
-        logger.info(f"{LoggingContext.KYCAID_INTEGRATION} Fetched applicant data")
+        logger.info("Fetched applicant data")
         return response
 
     def get_form_url(self, form_id: str, applicant_id: str) -> str:
@@ -97,7 +96,7 @@ class KYCAIDService(KYCProvider):
 
     def verify_webhook_signature(self, payload: bytes, signature: str) -> bool:
         if not self.api_token:
-            logger.warning(f"{LoggingContext.KYCAID_INTEGRATION} Webhook verification is not configured")
+            logger.warning("Webhook verification is not configured")
             return False
 
         encoded_body = base64.b64encode(payload)
@@ -106,7 +105,7 @@ class KYCAIDService(KYCProvider):
         is_valid = hmac.compare_digest(expected_signature, signature)
 
         if not is_valid:
-            logger.warning(f"{LoggingContext.KYCAID_INTEGRATION} Invalid webhook signature")
+            logger.warning("Invalid webhook signature")
 
         return is_valid
 
@@ -239,9 +238,9 @@ class KYCAIDService(KYCProvider):
             "callback_url": callback_url,
         }
 
-        logger.info(f"{LoggingContext.KYCAID_CRYPTO} Submitting address check")
+        logger.info("Submitting address check")
         response = self._make_request("POST", "/services/crypto/address-verification", data=body)
-        logger.info(f"{LoggingContext.KYCAID_CRYPTO} Address check accepted")
+        logger.info("Address check accepted")
 
         return response
 
@@ -282,13 +281,11 @@ class KYCAIDService(KYCProvider):
         try:
             response = requests.request(**kwargs)
         except requests.RequestException as exc:
-            logger.error(f"{LoggingContext.KYCAID_INTEGRATION} Provider request failed")
+            logger.error("Provider request failed")
             raise requests.HTTPError("KYCAID request failed") from exc
 
         if not response.ok:
-            logger.error(
-                f"{LoggingContext.KYCAID_INTEGRATION} Provider request failed with HTTP {response.status_code}"
-            )
+            logger.error(f"Provider request failed with HTTP {response.status_code}")
             raise requests.HTTPError(
                 f"KYCAID request failed with HTTP {response.status_code}",
                 response=response,

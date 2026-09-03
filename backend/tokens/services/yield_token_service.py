@@ -10,7 +10,6 @@ from integrations.base_chain.exceptions import (
     BaseChainContractError,
     BaseChainTransactionError,
 )
-from shared.utils.logging_utils import LoggingContext
 from tokens.exceptions import (
     YieldTokenContractNotConfiguredException,
     YieldTokenMintFailedException,
@@ -104,13 +103,10 @@ class YieldTokenService(BaseTokenService):
                 nav_update.transaction = tx_record
                 nav_update.save(update_fields=["transaction", "updated_at"])
 
-                logger.info(
-                    f"{LoggingContext.ASSETS} Updated NAV for {yield_token.symbol}: "
-                    f"${old_nav} → ${new_nav_per_token} (tx={tx_hash})"
-                )
+                logger.info(f"Updated NAV for {yield_token.symbol}: ${old_nav} → ${new_nav_per_token} (tx={tx_hash})")
 
             except (BaseChainTransactionError, BaseChainContractError) as e:
-                logger.error(f"{LoggingContext.ASSETS} On-chain NAV update failed for {yield_token.symbol}: {e}")
+                logger.error(f"On-chain NAV update failed for {yield_token.symbol}: {e}")
                 raise YieldTokenNAVUpdateFailedException(f"NAV update failed: {e}") from e
 
         yield_token.nav_per_token = new_nav_per_token
@@ -146,6 +142,6 @@ class YieldTokenService(BaseTokenService):
                 },
             )
         except Asset.DoesNotExist:
-            logger.warning(f"{LoggingContext.ASSETS} Asset record not found for {yield_token.symbol}")
+            logger.warning(f"Asset record not found for {yield_token.symbol}")
 
         return nav_update

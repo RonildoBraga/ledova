@@ -8,10 +8,9 @@ from portfolios.exceptions import (
     WalletNotFoundException,
 )
 from portfolios.models.portfolio import Portfolio
-from shared.utils.logging_utils import LoggingContext
 from wallets.models import Wallet
 
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 
 class PortfolioWalletService:
@@ -33,7 +32,7 @@ class PortfolioWalletService:
 
         portfolio.wallets.add(wallet)
 
-        logger.info(f"{LoggingContext.PORTFOLIOS} Added wallet {wallet.address[:10]}... to portfolio {portfolio.uuid}")
+        logger.info(f"Added wallet {wallet.address[:10]}... to portfolio {portfolio.uuid}")
 
         portfolio.refresh_from_db()
         return portfolio
@@ -49,9 +48,7 @@ class PortfolioWalletService:
 
         portfolio.wallets.remove(wallet)
 
-        logger.info(
-            f"{LoggingContext.PORTFOLIOS} Removed wallet {wallet.address[:10]}... from portfolio {portfolio.uuid}"
-        )
+        logger.info(f"Removed wallet {wallet.address[:10]}... from portfolio {portfolio.uuid}")
 
         portfolio.refresh_from_db()
         return portfolio

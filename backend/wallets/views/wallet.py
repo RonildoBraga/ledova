@@ -7,7 +7,6 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from shared.utils.logging_utils import LoggingContext
 from shared.views.base import AuthenticatedModelViewSet
 from wallets.constants import (
     WALLET_VERIFICATION_STATUS_PENDING,
@@ -35,7 +34,7 @@ from wallets.services import (
 from wallets.services.sync import WalletSyncService
 from wallets.tasks import sync_wallet
 
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 
 class WalletViewSet(AuthenticatedModelViewSet):
@@ -119,7 +118,7 @@ class WalletViewSet(AuthenticatedModelViewSet):
             try:
                 sync_wallet.defer(wallet_uuid=str(wallet.uuid))
             except Exception as e:
-                logger.error(f"{LoggingContext.WALLET_SYNC} Failed to queue sync: {e}")
+                logger.error(f"Failed to queue sync: {e}")
 
             return Response(
                 {

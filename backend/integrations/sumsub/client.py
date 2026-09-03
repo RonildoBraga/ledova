@@ -16,7 +16,7 @@ from integrations.kyc.base import (
 )
 from integrations.kyc.constants import PROVIDER_SUMSUB, REVIEW_GREEN, STATUS_COMPLETED
 
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 
 class SumSubService(KYCProvider):

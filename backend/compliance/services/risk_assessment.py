@@ -22,9 +22,8 @@ from compliance.constants import (
     RISK_THRESHOLD_MEDIUM,
 )
 from compliance.models import CustomerRiskAssessment
-from shared.utils.logging_utils import LoggingContext
 
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 # Total score (customer + geographic + product, each 1-5) up to and including the bound maps to the rating.
 RATING_BY_MAX_SCORE = (
@@ -96,7 +95,7 @@ class RiskAssessmentService:
             is_automated=True,
             assessment_reason="Pending verification completion",
         )
-        logger.info(f"{LoggingContext.RISK_ASSESSMENT} Created pending assessment for user_account {user_account.uuid}")
+        logger.info(f"Created pending assessment for user_account {user_account.uuid}")
         return assessment
 
     @staticmethod
@@ -104,9 +103,7 @@ class RiskAssessmentService:
         """Complete the account's pending assessment in place, or create a complete one if none is pending."""
         director = user_account.director or user_account.user_profiles.first()
         if not director:
-            logger.warning(
-                f"{LoggingContext.RISK_ASSESSMENT} No user profile found for user_account {user_account.uuid}"
-            )
+            logger.warning(f"No user profile found for user_account {user_account.uuid}")
             return CustomerRiskAssessment.objects.create(
                 user_account=user_account,
                 assessment_status=ASSESSMENT_STATUS_INCOMPLETE,
@@ -148,8 +145,5 @@ class RiskAssessmentService:
         else:
             assessment = CustomerRiskAssessment.objects.create(user_account=user_account, is_automated=True, **values)
 
-        logger.info(
-            f"{LoggingContext.RISK_ASSESSMENT} Assessed user_account {user_account.uuid}: "
-            f"{rating.upper()} (score: {total})"
-        )
+        logger.info(f"Assessed user_account {user_account.uuid}: {rating.upper()} (score: {total})")
         return assessment

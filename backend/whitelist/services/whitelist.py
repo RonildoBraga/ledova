@@ -12,7 +12,6 @@ from integrations.base_chain.exceptions import (
     BaseChainContractError,
     BaseChainTransactionError,
 )
-from shared.utils.logging_utils import LoggingContext
 from wallets.models import Wallet
 from whitelist.exceptions import (
     AddressAlreadyWhitelistedException,
@@ -82,7 +81,7 @@ class WhitelistService:
         try:
             on_chain_whitelisted = self.is_whitelisted(checksum_address)
         except Exception as e:
-            logger.warning(f"{LoggingContext.WHITELIST} Failed to check on-chain status for {address}: {e}")
+            logger.warning(f"Failed to check on-chain status for {address}: {e}")
 
         return {
             "can_receive": db_whitelisted or (on_chain_whitelisted is True),
@@ -128,7 +127,7 @@ class WhitelistService:
             tx_record.mark_failed(str(e))
             if entry:
                 entry.mark_failed(str(e))
-            logger.error(f"{LoggingContext.WHITELIST} {function_name}({checksum_address}) failed: {e}")
+            logger.error(f"{function_name}({checksum_address}) failed: {e}")
             raise WhitelistOperationFailedException(f"{TransactionType(tx_type).label} failed: {e}") from e
 
         tx_record.mark_submitted(tx_hash)
@@ -138,7 +137,7 @@ class WhitelistService:
                 block_hash=receipt["blockHash"].hex(),
                 gas_used=receipt["gasUsed"],
             )
-        logger.info(f"{LoggingContext.WHITELIST} {function_name}({checksum_address}) sent (tx={tx_hash})")
+        logger.info(f"{function_name}({checksum_address}) sent (tx={tx_hash})")
         return tx_hash, receipt
 
     def add_to_whitelist(
@@ -197,7 +196,7 @@ class WhitelistService:
             },
         )
 
-        logger.debug(f"{LoggingContext.WHITELIST} Synced {checksum_address}: {info}")
+        logger.debug(f"Synced {checksum_address}: {info}")
         return entry
 
     def sync_entries(self, entries: list[WhitelistEntry]) -> dict:
@@ -210,14 +209,14 @@ class WhitelistService:
                 synced += 1
             except Exception as e:
                 errors.append(f"Failed to sync {entry.wallet.address}: {e}")
-                logger.error(f"{LoggingContext.WHITELIST} Failed to sync {entry.wallet.address}: {e}")
+                logger.error(f"Failed to sync {entry.wallet.address}: {e}")
 
         return {"synced": synced, "errors": errors}
 
     def sync_all_entries(self) -> int:
         entries = list(WhitelistEntry.objects.active() | WhitelistEntry.objects.pending())
         result = self.sync_entries(entries)
-        logger.info(f"{LoggingContext.WHITELIST} Synced {result['synced']} entries")
+        logger.info(f"Synced {result['synced']} entries")
         return result["synced"]
 
     def ensure_whitelisted(self, entries: list[WhitelistEntry]) -> dict:
@@ -236,7 +235,7 @@ class WhitelistService:
                     result["synced"] += 1
             except Exception as e:
                 result["errors"].append(f"Failed to whitelist {entry.wallet.address}: {e}")
-                logger.error(f"{LoggingContext.WHITELIST} Failed to whitelist {entry.wallet.address}: {e}")
+                logger.error(f"Failed to whitelist {entry.wallet.address}: {e}")
 
         return result
 
@@ -255,6 +254,6 @@ class WhitelistService:
                 result["removed"] += 1
             except Exception as e:
                 result["errors"].append(f"Failed to remove {entry.wallet.address}: {e}")
-                logger.error(f"{LoggingContext.WHITELIST} Failed to remove {entry.wallet.address}: {e}")
+                logger.error(f"Failed to remove {entry.wallet.address}: {e}")
 
         return result

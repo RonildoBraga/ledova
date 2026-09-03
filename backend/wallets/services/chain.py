@@ -3,9 +3,8 @@ from decimal import Decimal
 from typing import Optional
 
 from integrations.blockchain import get_blockchain_client
-from shared.utils.logging_utils import LoggingContext
 
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 
 def fetch_chain_balance(wallet, asset) -> Optional[Decimal]:
@@ -27,5 +26,5 @@ def fetch_chain_balance(wallet, asset) -> Optional[Decimal]:
             )
         return client.get_native_balance(wallet.address)
     except Exception as e:
-        logger.warning(f"{LoggingContext.WALLET_SYNC} Balance query failed for {asset.symbol} on {wallet.chain}: {e}")
+        logger.warning(f"Balance query failed for {asset.symbol} on {wallet.chain}: {e}")
         return None

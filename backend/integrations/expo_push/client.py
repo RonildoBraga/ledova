@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 
 class ExpoPushError(Exception):
@@ -76,7 +76,7 @@ class ExpoPushClient:
             for i, ticket in enumerate(tickets):
                 if ticket.get("status") == "error":
                     logger.warning(
-                        f"[EXPO_PUSH] Notification {i} failed: " f"{ticket.get('message')} - {ticket.get('details')}"
+                        f"[EXPO_PUSH] Notification {i} failed: {ticket.get('message')} - {ticket.get('details')}"
                     )
                 else:
                     logger.debug(f"[EXPO_PUSH] Notification {i} sent: {ticket.get('id')}")

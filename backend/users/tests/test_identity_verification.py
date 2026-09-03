@@ -72,3 +72,19 @@ class IdentityVerificationApprovalTest(TestCase):
         profile.refresh_from_db()
         self.assertTrue(profile.needs_verification_retry)
         self.assertFalse(profile.is_id_verified)
+
+
+class PopulateProfileTest(TestCase):
+    def test_residence_country_is_created_with_its_iso_name(self):
+        user = User.objects.create_user(email="resident@example.test", password="pw-12345678")
+        profile = UserProfile.objects.create(user=user)
+
+        self.assertTrue(
+            IdentityVerificationService.populate_profile(
+                profile, {"fullName": "Res Ident", "address": None, "dateOfBirth": None, "residenceCountry": "AUS"}
+            )
+        )
+
+        profile.refresh_from_db()
+        self.assertEqual(profile.full_name, "Res Ident")
+        self.assertEqual((profile.residence_country.code, profile.residence_country.name), ("AUS", "Australia"))

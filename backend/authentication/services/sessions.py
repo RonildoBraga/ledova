@@ -8,10 +8,9 @@ from rest_framework import serializers
 from authentication.email import EmailError, normalize_email
 from authentication.managers.user import EmailLookupState
 from authentication.services.tokens import TokenService
-from shared.utils.logging_utils import LoggingContext
 
 User = get_user_model()
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 
 def _resolve_signup_email(email):
@@ -49,7 +48,7 @@ class SessionService:
         user.last_login = timezone.now()
         user.save(update_fields=["last_login"])
 
-        logger.info(f"{LoggingContext.AUTH} User {user.email} successfully authenticated")
+        logger.info(f"User {user.email} successfully authenticated")
         return user
 
     @staticmethod
@@ -78,7 +77,7 @@ class SessionService:
 
         ensure_defaults(user)
 
-        logger.info(f"{LoggingContext.USER_SIGNUP} User account created/updated for {user.email}")
+        logger.info(f"User account created/updated for {user.email}")
         return user
 
     @staticmethod

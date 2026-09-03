@@ -1,5 +1,3 @@
-import logging
-
 from rest_framework import status
 from rest_framework.exceptions import NotFound
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -8,10 +6,7 @@ from rest_framework.response import Response
 from companies.filters import CompanyDocumentFilter
 from companies.models import Company, CompanyDocument
 from companies.serializers import CompanyDocumentSerializer
-from shared.utils.logging_utils import LoggingContext
 from shared.views import AuthenticatedModelViewSet
-
-logger = logging.getLogger(__name__)
 
 
 class DocumentViewSet(AuthenticatedModelViewSet):
@@ -46,17 +41,10 @@ class DocumentViewSet(AuthenticatedModelViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save(company=company)
 
-        logger.info(f"{LoggingContext.COMPANY_DOCUMENT} Document uploaded for company: {company.name}")
-
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
-
-        logger.info(
-            f"{LoggingContext.COMPANY_DOCUMENT} Document deleted for company: "
-            f"{instance.company.name} - {instance.document_type}"
-        )
 
         instance.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)

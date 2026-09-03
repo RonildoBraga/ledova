@@ -9,9 +9,8 @@ from django.utils import timezone
 
 from assets.models import Asset, AssetChainDeployment, AssetSnapshot, AssetType
 from integrations.coingecko import SYMBOL_TO_COINGECKO_ID, CoinGeckoClient
-from shared.utils.logging_utils import LoggingContext
 
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 SUPPORTED_ASSETS = {
     "BTC": {
@@ -70,9 +69,7 @@ def _midnight(moment) -> Any:
 class AssetSyncService:
     @staticmethod
     def sync_assets(backfill_days: int = 365, today_only: bool = False) -> Dict[str, Any]:
-        logger.info(
-            f"{LoggingContext.ASSETS} Starting asset sync (today_only={today_only}, backfill_days={backfill_days})"
-        )
+        logger.info(f"Starting asset sync (today_only={today_only}, backfill_days={backfill_days})")
         try:
             result = {
                 "status": "success",
@@ -82,12 +79,12 @@ class AssetSyncService:
             if not today_only:
                 result["historical_snapshots"] = AssetSyncService._backfill_historical_prices(days=backfill_days)
             logger.info(
-                f"{LoggingContext.ASSETS} Asset sync completed - prices: {result['prices_updated']} updated, "
+                f"Asset sync completed - prices: {result['prices_updated']} updated, "
                 f"historical snapshots: {result['historical_snapshots']} created"
             )
             return result
         except Exception as e:
-            logger.error(f"{LoggingContext.ASSETS} Asset sync failed: {e.__class__.__name__}: {str(e)}")
+            logger.error(f"Asset sync failed: {e.__class__.__name__}: {str(e)}")
             return {"status": "error", "error": f"{e.__class__.__name__}: {str(e)}"}
 
     @staticmethod
@@ -161,7 +158,7 @@ class AssetSyncService:
                 for symbol, data in CoinGeckoClient().fetch_prices_by_symbols(symbol_map).items():
                     prices[symbol] = (Decimal(str(data["price"])), "coingecko")
             except Exception as e:
-                logger.error(f"{LoggingContext.ASSETS} Failed to fetch prices from CoinGecko: {str(e)}")
+                logger.error(f"Failed to fetch prices from CoinGecko: {str(e)}")
         return prices
 
     @staticmethod
@@ -174,8 +171,8 @@ class AssetSyncService:
                 AssetSyncService.update_price(asset, price, source=source)
                 updated += 1
             except Exception as e:
-                logger.error(f"{LoggingContext.ASSETS} Failed to update {asset.symbol}: {str(e)}")
-        logger.info(f"{LoggingContext.ASSETS} Price sync completed - {updated} of {len(prices)} prices written")
+                logger.error(f"Failed to update {asset.symbol}: {str(e)}")
+        logger.info(f"Price sync completed - {updated} of {len(prices)} prices written")
         return updated
 
     @staticmethod
@@ -195,13 +192,13 @@ class AssetSyncService:
                 ).values_list("source_timestamp", flat=True)
             )
             if days > 0 and len(existing) / days >= 0.95:
-                logger.info(f"{LoggingContext.ASSETS} {asset.symbol} already has {len(existing)}/{days} days, skipping")
+                logger.info(f"{asset.symbol} already has {len(existing)}/{days} days, skipping")
                 continue
 
             try:
                 price_data = CoinGeckoClient().fetch_historical_prices_bulk(coin_id, start_date, end_date)
             except Exception as e:
-                logger.error(f"{LoggingContext.ASSETS} Failed to backfill {asset.symbol}: {str(e)}")
+                logger.error(f"Failed to backfill {asset.symbol}: {str(e)}")
                 continue
 
             daily_prices = {_midnight(point["timestamp"]): point["price"] for point in price_data}
@@ -220,8 +217,8 @@ class AssetSyncService:
             if snapshots:
                 AssetSnapshot.objects.bulk_create(snapshots, ignore_conflicts=True)
                 created += len(snapshots)
-                logger.info(f"{LoggingContext.ASSETS} Created {len(snapshots)} daily snapshots for {asset.symbol}")
+                logger.info(f"Created {len(snapshots)} daily snapshots for {asset.symbol}")
             time.sleep(2)
 
-        logger.info(f"{LoggingContext.ASSETS} Historical backfill completed - {created} snapshots created")
+        logger.info(f"Historical backfill completed - {created} snapshots created")
         return created

@@ -24,7 +24,7 @@ from integrations.llm_extract.exceptions import (
     LlmExtractValidationError,
 )
 
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 _LOCAL_LLM_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "host.docker.internal"})
 

@@ -1,8 +1,4 @@
-import logging
-
 from django.http import HttpResponse
-
-logger = logging.getLogger("ledova_backend")
 
 
 class HealthCheckMiddleware:

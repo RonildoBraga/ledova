@@ -2,10 +2,9 @@ import logging
 from typing import Any, Dict, Optional
 
 from integrations.expo_push import ExpoPushClient, ExpoPushError
-from shared.utils.logging_utils import LoggingContext
 from users.models import DeviceToken, Notification, NotificationPreferences
 
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 
 class NotificationService:
@@ -32,10 +31,7 @@ class NotificationService:
         try:
             prefs = NotificationPreferences.objects.get(user_profile=user.userprofile)
             if not prefs.can_receive_notification(notification_type):
-                logger.info(
-                    f"{LoggingContext.NOTIFICATIONS} Skipped for user {user.email}: "
-                    f"{notification_type} notifications disabled"
-                )
+                logger.info(f"Skipped for user {user.email}: {notification_type} notifications disabled")
                 return {
                     "status": "skipped",
                     "reason": f"{notification_type} notifications disabled",
@@ -48,7 +44,7 @@ class NotificationService:
         device_tokens = list(DeviceToken.objects.filter(user=user, is_active=True))
 
         if not device_tokens:
-            logger.info(f"{LoggingContext.NOTIFICATIONS} No active devices for user {user.email}")
+            logger.info(f"No active devices for user {user.email}")
             return {
                 "status": "no_devices",
                 "sent": 0,
@@ -81,12 +77,9 @@ class NotificationService:
                     if error_type in ["DeviceNotRegistered", "InvalidCredentials"]:
                         token = device_tokens[i]
                         DeviceToken.objects.filter(pk=token.pk).update(is_active=False)
-                        logger.info(
-                            f"{LoggingContext.NOTIFICATIONS} Deactivated invalid token for {user.email}: "
-                            f"{token.push_token[:30]}..."
-                        )
+                        logger.info(f"Deactivated invalid token for {user.email}: {token.push_token[:30]}...")
 
-            logger.info(f"{LoggingContext.NOTIFICATIONS} Sent to user {user.email}: {sent} successful, {failed} failed")
+            logger.info(f"Sent to user {user.email}: {sent} successful, {failed} failed")
 
             return {
                 "status": "sent",
@@ -96,7 +89,7 @@ class NotificationService:
             }
 
         except ExpoPushError as e:
-            logger.error(f"{LoggingContext.NOTIFICATIONS} Failed to send to user {user.email}: {e}")
+            logger.error(f"Failed to send to user {user.email}: {e}")
             return {
                 "status": "error",
                 "error": str(e),

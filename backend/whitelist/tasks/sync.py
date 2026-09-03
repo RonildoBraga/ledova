@@ -3,7 +3,6 @@ import logging
 from procrastinate import RetryStrategy
 
 from ledova_backend.procrastinate_app import app
-from shared.utils.logging_utils import LoggingContext
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +15,7 @@ def sync_all_entries(timestamp: int):
 
     service = WhitelistService()
     count = service.sync_all_entries()
-    logger.info(f"{LoggingContext.WHITELIST_SYNC} Synced {count} entries")
+    logger.info(f"Synced {count} entries")
     return {"synced": count}
 
 
@@ -26,5 +25,5 @@ def sync_entry(address: str):
 
     service = WhitelistService()
     entry = service.sync_entry(address)
-    logger.info(f"{LoggingContext.WHITELIST_SYNC} Synced entry {address}: {entry.status}")
+    logger.info(f"Synced entry {address}: {entry.status}")
     return {"address": address, "status": entry.status}

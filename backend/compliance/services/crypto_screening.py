@@ -16,9 +16,8 @@ from compliance.constants import (
 )
 from compliance.models import ComplianceAlert, TransactionScreening
 from integrations.kyc import get_kyc_provider
-from shared.utils.logging_utils import LoggingContext
 
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 SANCTIONS_KEYWORDS = ("sanctions", "sanctioned", "ofac", "sdn")
 
@@ -27,9 +26,9 @@ class CryptoScreeningService:
     def __init__(self):
         self.provider = get_kyc_provider()
         self.provider_name = self.provider.get_provider_name()
-        self.enabled = getattr(settings, "KYCAID_CRYPTO_MONITORING_ENABLED", False)
-        self.threshold_medium = getattr(settings, "CRYPTO_RISK_THRESHOLD_MEDIUM", 0.25)
-        self.threshold_high = getattr(settings, "CRYPTO_RISK_THRESHOLD_HIGH", 0.6)
+        self.enabled = settings.KYCAID_CRYPTO_MONITORING_ENABLED
+        self.threshold_medium = settings.CRYPTO_RISK_THRESHOLD_MEDIUM
+        self.threshold_high = settings.CRYPTO_RISK_THRESHOLD_HIGH
 
     def screen_transaction(self, transaction, user_account) -> TransactionScreening:
         existing = TransactionScreening.objects.filter(transaction=transaction).first()
@@ -49,13 +48,13 @@ class CryptoScreeningService:
             screening.status = SCREENING_STATUS_FAILED
             screening.error_message = blocker
             screening.save()
-            logger.warning(f"{LoggingContext.CRYPTO_SCREENING} Transaction {transaction.pk} not screened: {blocker}")
+            logger.warning(f"Transaction {transaction.pk} not screened: {blocker}")
             return screening
         return self._submit(screening)
 
     def retry_failed_screening(self, screening: TransactionScreening) -> TransactionScreening:
         if screening.status != SCREENING_STATUS_FAILED or not self.enabled:
-            logger.warning(f"{LoggingContext.CRYPTO_SCREENING} Cannot retry screening {screening.pk}")
+            logger.warning(f"Cannot retry screening {screening.pk}")
             return screening
         blocker = self._blocker(screening)
         if blocker:
@@ -70,7 +69,7 @@ class CryptoScreeningService:
 
     def process_webhook_result(self, screening: TransactionScreening, data: dict) -> None:
         self._process_screening_result(screening, data)
-        logger.info(f"{LoggingContext.CRYPTO_SCREENING} Processed webhook result for screening {screening.pk}")
+        logger.info(f"Processed webhook result for screening {screening.pk}")
 
     def _blocker(self, screening) -> str:
         """The reason the screening cannot be submitted to the provider, or '' when it can."""
@@ -99,7 +98,7 @@ class CryptoScreeningService:
             )
             self._process_screening_result(screening, response)
             logger.info(
-                f"{LoggingContext.CRYPTO_SCREENING} Screened transaction {transaction.pk}: "
+                f"Screened transaction {transaction.pk}: "
                 f"result={screening.result}, risk_score={screening.risk_score}"
             )
         except Exception as e:
@@ -107,7 +106,7 @@ class CryptoScreeningService:
             screening.error_message = str(e)
             screening.retry_count += 1
             screening.save()
-            logger.error(f"{LoggingContext.CRYPTO_SCREENING} Failed to screen transaction {transaction.pk}: {e}")
+            logger.error(f"Failed to screen transaction {transaction.pk}: {e}")
         return screening
 
     def _process_screening_result(self, screening: TransactionScreening, response: dict) -> None:
@@ -147,7 +146,7 @@ class CryptoScreeningService:
             },
         )
         logger.info(
-            f"{LoggingContext.CRYPTO_SCREENING} Created alert {alert.pk} for transaction {screening.transaction_id}: "
+            f"Created alert {alert.pk} for transaction {screening.transaction_id}: "
             f"type={alert.alert_type}, severity={severity}"
         )
         return alert

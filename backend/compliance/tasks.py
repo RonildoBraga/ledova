@@ -20,7 +20,7 @@ from compliance.constants import (
 )
 from ledova_backend.procrastinate_app import app
 
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 
 @app.periodic(cron="0 * * * *")

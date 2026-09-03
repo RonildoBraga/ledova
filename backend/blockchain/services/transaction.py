@@ -5,8 +5,6 @@ from typing import Any
 from django.db import transaction
 from django.utils import timezone
 
-from shared.utils.logging_utils import LoggingContext
-
 logger = logging.getLogger(__name__)
 
 
@@ -36,18 +34,16 @@ class TransactionMonitorService:
                             gas_used=receipt["gasUsed"],
                         )
                         confirmed += 1
-                        logger.info(f"{LoggingContext.BLOCKCHAIN_TX} Confirmed tx {tx.tx_hash[:10]}...")
+                        logger.info(f"Confirmed tx {tx.tx_hash[:10]}...")
                     else:
                         tx.mark_reverted("Transaction reverted on-chain")
                         failed += 1
-                        logger.warning(f"{LoggingContext.BLOCKCHAIN_TX} Reverted tx {tx.tx_hash[:10]}...")
+                        logger.warning(f"Reverted tx {tx.tx_hash[:10]}...")
                 checked += 1
             except Exception as e:
-                logger.error(f"{LoggingContext.BLOCKCHAIN_TX} Error checking tx {tx.tx_hash}: {e}")
+                logger.error(f"Error checking tx {tx.tx_hash}: {e}")
 
-        logger.info(
-            f"{LoggingContext.BLOCKCHAIN_TX} Checked {checked} transactions: " f"{confirmed} confirmed, {failed} failed"
-        )
+        logger.info(f"Checked {checked} transactions: {confirmed} confirmed, {failed} failed")
         return {"checked": checked, "confirmed": confirmed, "failed": failed}
 
     @staticmethod
@@ -63,5 +59,5 @@ class TransactionMonitorService:
             tx.mark_failed(f"Transaction timed out after {hours} hours")
             count += 1
 
-        logger.info(f"{LoggingContext.BLOCKCHAIN_TX} Marked {count} stale transactions as failed")
+        logger.info(f"Marked {count} stale transactions as failed")
         return {"cleaned": count}

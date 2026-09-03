@@ -1,7 +1,6 @@
 import logging
 from typing import Optional
 
-from shared.utils.logging_utils import LoggingContext
 from tokens.models import MintRequest, ShareIssuance, SwapOrder
 
 logger = logging.getLogger(__name__)
@@ -22,7 +21,7 @@ class TransactionHistoryService:
         no rows from those sources until the schema can enforce ownership.
         """
         if not wallet_ids:
-            logger.warning(f"{LoggingContext.TOKEN} No authorized wallets provided")
+            logger.warning("No authorized wallets provided")
             return {
                 "swap_orders": SwapOrder.objects.none(),
                 "mint_requests": MintRequest.objects.none(),

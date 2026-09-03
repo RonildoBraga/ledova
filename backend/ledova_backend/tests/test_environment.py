@@ -86,3 +86,11 @@ class V2WithdrawalTests(SimpleTestCase):
         env_example = (Path(settings.BASE_DIR) / ".env.example").read_text()
         self.assertNotIn("V2_ACCESS_SIGNING_KEY_B64", env_example)
         self.assertNotIn("V2_REFRESH_HMAC_KEY_B64", env_example)
+
+
+class LoggingTests(SimpleTestCase):
+    def test_modules_log_under_their_own_name_to_the_root_console_handler(self):
+        self.assertEqual(settings.LOGGING["root"], {"handlers": ["console"], "level": "INFO"})
+        self.assertNotIn("ledova_backend", settings.LOGGING["loggers"])
+        self.assertIn("{name}", settings.LOGGING["formatters"]["verbose"]["format"])
+        self.assertIsNone(find_spec("shared.utils.logging_utils"))

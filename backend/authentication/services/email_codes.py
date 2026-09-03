@@ -17,10 +17,9 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 
 from integrations.sendgrid_email import sendgrid_client
-from shared.utils.logging_utils import LoggingContext
 
 User = get_user_model()
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 CODE_LIFETIME = timedelta(minutes=10)
 MAX_ATTEMPTS = 5
@@ -58,13 +57,13 @@ class EmailCodeService:
             )
 
             if not result.get("success"):
-                logger.error(f"{LoggingContext.EMAIL_VERIFICATION} Verification email delivery failed")
+                logger.error("Verification email delivery failed")
                 return True
 
-            logger.info(f"{LoggingContext.EMAIL_VERIFICATION} Verification email accepted")
+            logger.info("Verification email accepted")
             return True
         except Exception:
-            logger.exception(f"{LoggingContext.EMAIL_VERIFICATION} Verification email delivery failed")
+            logger.exception("Verification email delivery failed")
             return False
 
     @staticmethod
@@ -79,7 +78,7 @@ class EmailCodeService:
             or timezone.now() - sent_at > CODE_LIFETIME
             or user.email_verification_attempts >= MAX_ATTEMPTS
         ):
-            logger.warning(f"{LoggingContext.EMAIL_VERIFICATION} Verification code missing, expired or exhausted")
+            logger.warning("Verification code missing, expired or exhausted")
             return False
 
         user.email_verification_attempts += 1
@@ -88,11 +87,11 @@ class EmailCodeService:
             user.email_verification_token = None
             user.email_verification_attempts = 0
             user.save(update_fields=["is_email_verified", "email_verification_token", "email_verification_attempts"])
-            logger.info(f"{LoggingContext.EMAIL_VERIFICATION} Email verified")
+            logger.info("Email verified")
             return True
 
         if user.email_verification_attempts >= MAX_ATTEMPTS:
             user.email_verification_token = None
         user.save(update_fields=["email_verification_token", "email_verification_attempts"])
-        logger.warning(f"{LoggingContext.EMAIL_VERIFICATION} Invalid verification code attempt")
+        logger.warning("Invalid verification code attempt")
         return False

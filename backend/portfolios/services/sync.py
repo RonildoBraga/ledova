@@ -9,11 +9,10 @@ from django.utils import timezone
 
 from assets.models import AssetSnapshot
 from portfolios.models import Portfolio, PortfolioSnapshot
-from shared.utils.logging_utils import LoggingContext
 from wallets.constants import SNAPSHOT_REASON_DAILY
 from wallets.models import Holding, HoldingSnapshot, Transaction
 
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 
 class PortfolioSyncService:
@@ -24,7 +23,7 @@ class PortfolioSyncService:
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
     ) -> dict[str, Any]:
-        logger.info(f"{LoggingContext.PORTFOLIOS} Syncing portfolio {portfolio.name}")
+        logger.info(f"Syncing portfolio {portfolio.name}")
 
         try:
             wallets = portfolio.account_wallets()
@@ -34,7 +33,7 @@ class PortfolioSyncService:
             PortfolioSyncService._ensure_holding_snapshots(wallets)
 
             start_date, end_date = PortfolioSyncService._determine_date_range(wallets, start_date, end_date)
-            logger.info(f"{LoggingContext.PORTFOLIOS} Date range: {start_date.date()} to {end_date.date()}")
+            logger.info(f"Date range: {start_date.date()} to {end_date.date()}")
 
             snapshots_created = 0
             current_date = start_date.date()
@@ -49,14 +48,11 @@ class PortfolioSyncService:
                         snapshots_created += 1
                     current_date += timedelta(days=1)
 
-            logger.info(
-                f"{LoggingContext.PORTFOLIOS} Sync completed for {portfolio.name} "
-                f"- Created {snapshots_created} snapshots"
-            )
+            logger.info(f"Sync completed for {portfolio.name} - Created {snapshots_created} snapshots")
             return {"status": "success", "snapshots_created": snapshots_created}
 
         except Exception as e:
-            logger.error(f"{LoggingContext.PORTFOLIOS} Failed to sync {portfolio.name}: {e}")
+            logger.error(f"Failed to sync {portfolio.name}: {e}")
             return {"status": "error", "error": str(e), "snapshots_created": 0}
 
     @staticmethod
@@ -91,7 +87,7 @@ class PortfolioSyncService:
                 current_date += timedelta(days=1)
 
         if created > 0:
-            logger.info(f"{LoggingContext.PORTFOLIOS} Created {created} holding snapshots for backfill")
+            logger.info(f"Created {created} holding snapshots for backfill")
         return created
 
     @staticmethod
@@ -149,7 +145,7 @@ class PortfolioSyncService:
             holdings_data=holdings_data,
             total_market_value=total_value if total_value > 0 else None,
         )
-        logger.info(f"{LoggingContext.PORTFOLIOS} Created snapshot for {portfolio.name} on {snapshot_date_only}")
+        logger.info(f"Created snapshot for {portfolio.name} on {snapshot_date_only}")
         return True
 
     @staticmethod

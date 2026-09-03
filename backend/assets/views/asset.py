@@ -1,4 +1,3 @@
-import logging
 from decimal import Decimal
 
 from rest_framework import status
@@ -14,11 +13,8 @@ from assets.serializers import (
     AssetSnapshotSerializer,
 )
 from assets.services import AssetSyncService, ExchangeRateService
-from shared.utils.logging_utils import LoggingContext
 from shared.utils.querysets import sample_evenly
 from shared.views.base import AuthenticatedReadOnlyViewSet
-
-logger = logging.getLogger("ledova_backend")
 
 
 class AssetViewSet(AuthenticatedReadOnlyViewSet):
@@ -39,10 +35,6 @@ class AssetViewSet(AuthenticatedReadOnlyViewSet):
     @action(detail=True, methods=["get"], url_path="snapshots")
     def snapshots(self, request, **kwargs):
         asset = self.get_object()
-
-        logger.debug(
-            f"{LoggingContext.ASSETS} Fetching snapshots for {asset.symbol} (params={dict(request.query_params)})"
-        )
 
         order_by = request.query_params.get("order_by", "-source_timestamp")
         if order_by not in {"source_timestamp", "-source_timestamp"}:
@@ -80,8 +72,6 @@ class AssetViewSet(AuthenticatedReadOnlyViewSet):
 
     @action(detail=False, methods=["post"], url_path="bulk-update-prices", permission_classes=[IsAdminUser])
     def bulk_update_prices(self, request):
-        logger.info(f"{LoggingContext.ASSETS} Bulk price update requested by {request.user.email}")
-
         price_updates = request.data.get("priceUpdates", [])
         source = request.data.get("source", "manual")
         create_snapshots = request.data.get("createSnapshots", True)

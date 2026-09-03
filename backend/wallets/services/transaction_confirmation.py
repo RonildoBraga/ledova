@@ -8,7 +8,6 @@ from django.utils import timezone
 from assets.models import Asset
 from compliance.services.transaction_monitoring import TransactionMonitoringService
 from shared.constants import get_native_asset_symbol, normalize_chain
-from shared.utils.logging_utils import LoggingContext
 from wallets.constants import (
     SNAPSHOT_REASON_TRANSACTION,
     TRANSACTION_STATUS_CONFIRMED,
@@ -18,7 +17,7 @@ from wallets.constants import (
 from wallets.models import Holding, HoldingSnapshot, Transaction, Wallet
 from wallets.services.chain import fetch_chain_balance
 
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 
 class TransactionConfirmationService:
@@ -37,8 +36,7 @@ class TransactionConfirmationService:
         asset = Asset.get_by_chain_and_contract(wallet.chain, token_contract) if token_contract else None
         if token_contract and asset is None:
             logger.warning(
-                f"{LoggingContext.WALLET_TRANSFER} Token contract not found: {token_contract} "
-                f"on {wallet.chain}, falling back to native asset"
+                f"Token contract not found: {token_contract} on {wallet.chain}, falling back to native asset"
             )
         if asset is None:
             asset = Asset.objects.native_for_chain(wallet.chain)
@@ -88,7 +86,7 @@ class TransactionConfirmationService:
             )
 
             logger.info(
-                f"{LoggingContext.WALLET_TRANSFER} Created pending transaction: "
+                "Created pending transaction: "
                 f"tx_hash={tx_hash}, wallet={wallet.address[:10]}..., "
                 f"amount={amount} {asset.symbol}, new_balance={holding.quantity}"
             )
@@ -110,11 +108,11 @@ class TransactionConfirmationService:
         try:
             tx = Transaction.objects.select_related("wallet", "asset").get(tx_hash=tx_hash)
         except Transaction.DoesNotExist:
-            logger.warning(f"{LoggingContext.WALLET_SYNC} Transaction not found for confirmation: {tx_hash}")
+            logger.warning(f"Transaction not found for confirmation: {tx_hash}")
             return {"status": "not_found", "tx_hash": tx_hash}
 
         if tx.status == TRANSACTION_STATUS_CONFIRMED:
-            logger.info(f"{LoggingContext.WALLET_SYNC} Transaction already confirmed: {tx_hash}")
+            logger.info(f"Transaction already confirmed: {tx_hash}")
             return {"status": "already_confirmed", "tx_hash": tx_hash}
 
         with transaction.atomic():
@@ -129,9 +127,7 @@ class TransactionConfirmationService:
 
             TransactionConfirmationService._update_snapshot_on_confirmation(tx)
 
-            logger.info(
-                f"{LoggingContext.WALLET_SYNC} Transaction confirmed: " f"tx_hash={tx_hash}, block={block_number}"
-            )
+            logger.info(f"Transaction confirmed: tx_hash={tx_hash}, block={block_number}")
 
         return {
             "status": "confirmed",
@@ -144,11 +140,11 @@ class TransactionConfirmationService:
         try:
             tx = Transaction.objects.select_related("wallet", "asset").get(tx_hash=tx_hash)
         except Transaction.DoesNotExist:
-            logger.warning(f"{LoggingContext.WALLET_SYNC} Transaction not found for failure: {tx_hash}")
+            logger.warning(f"Transaction not found for failure: {tx_hash}")
             return {"status": "not_found", "tx_hash": tx_hash}
 
         if tx.status != TRANSACTION_STATUS_PENDING:
-            logger.info(f"{LoggingContext.WALLET_SYNC} Transaction not pending, cannot fail: {tx_hash}")
+            logger.info(f"Transaction not pending, cannot fail: {tx_hash}")
             return {"status": "not_pending", "tx_hash": tx_hash, "current_status": tx.status}
 
         with transaction.atomic():
@@ -157,9 +153,7 @@ class TransactionConfirmationService:
 
             TransactionConfirmationService._revert_optimistic_holding(tx)
 
-            logger.info(
-                f"{LoggingContext.WALLET_SYNC} Transaction marked as failed: " f"tx_hash={tx_hash}, reason={reason}"
-            )
+            logger.info(f"Transaction marked as failed: tx_hash={tx_hash}, reason={reason}")
 
         return {
             "status": "failed",
@@ -175,10 +169,7 @@ class TransactionConfirmationService:
 
         holding = Holding.objects.filter(wallet=wallet, asset=asset).first()
         if holding and holding.quantity != blockchain_balance:
-            logger.warning(
-                f"{LoggingContext.WALLET_SYNC} Balance correction: "
-                f"{holding.quantity} -> {blockchain_balance} {asset.symbol}"
-            )
+            logger.warning(f"Balance correction: {holding.quantity} -> {blockchain_balance} {asset.symbol}")
             holding.quantity = blockchain_balance
             holding.last_synced_at = timezone.now()
             holding.save(update_fields=["quantity", "last_synced_at"])
@@ -226,7 +217,4 @@ class TransactionConfirmationService:
             },
         )
 
-        logger.info(
-            f"{LoggingContext.WALLET_SYNC} Reverted optimistic holding: "
-            f"+{total_reverted} {tx.asset.symbol}, new_balance={holding.quantity}"
-        )
+        logger.info(f"Reverted optimistic holding: +{total_reverted} {tx.asset.symbol}, new_balance={holding.quantity}")

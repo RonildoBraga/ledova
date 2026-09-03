@@ -1,9 +1,6 @@
-import logging
 from typing import Optional
 
 from tokens.models import TransferOrder, TransferOrderStatus, TransferOrderType
-
-logger = logging.getLogger(__name__)
 
 
 class MatchingService:

@@ -10,17 +10,16 @@ from authentication.email import normalize_email
 from authentication.managers.user import EmailLookupState
 from authentication.services import TokenService
 from portfolios.models import Portfolio
-from shared.utils.logging_utils import LoggingContext
 from users.models import FinancialProfile, UserAccount, UserPreferences, UserProfile
 from wallets.models import Transaction, Wallet
 
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 
 @transaction.atomic
 def delete_account(user):
     """Tombstone the login and blank the personal fields; shared accounts and their records stay."""
-    logger.info(f"{LoggingContext.USER_PROFILE} Account deletion requested")
+    logger.info("Account deletion requested")
 
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
     tombstone = normalize_email(f"deleted_{user.id}_{timestamp}_{uuid4().hex}@deleted.invalid")
@@ -44,13 +43,13 @@ def delete_account(user):
     except UserProfile.DoesNotExist:
         pass
 
-    logger.info(f"{LoggingContext.USER_PROFILE} Account successfully deleted")
+    logger.info("Account successfully deleted")
 
 
 def export_account_data(user):
     """Everything the user owns as one document; the camelCase renderer names the keys and
     DRF's encoder formats dates and UUIDs. Decimals stay strings so 18-decimal amounts are exact."""
-    logger.info(f"{LoggingContext.USER_PROFILE} Data export requested")
+    logger.info("Data export requested")
 
     data = {
         "exported_at": timezone.now(),
@@ -144,5 +143,5 @@ def export_account_data(user):
         Portfolio.objects.filter(user_account__in=accounts).values("uuid", "name", "is_active", "created_at")
     )
 
-    logger.info(f"{LoggingContext.USER_PROFILE} Data export completed")
+    logger.info("Data export completed")
     return data

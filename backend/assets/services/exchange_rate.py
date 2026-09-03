@@ -6,9 +6,8 @@ from django.db import transaction
 
 from assets.models import ExchangeRate
 from integrations.coingecko import CoinGeckoClient
-from shared.utils.logging_utils import LoggingContext
 
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 SUPPORTED_TARGET_CURRENCIES = ["AUD"]
 
@@ -24,7 +23,7 @@ class ExchangeRateService:
         for currency in SUPPORTED_TARGET_CURRENCIES:
             rate = client.fetch_exchange_rate(target_currency=currency.lower())
             if rate is None:
-                logger.warning(f"{LoggingContext.ASSETS} Could not fetch exchange rate for USD→{currency}")
+                logger.warning(f"Could not fetch exchange rate for USD→{currency}")
                 continue
 
             with transaction.atomic():
@@ -34,7 +33,7 @@ class ExchangeRateService:
                     defaults={"rate": rate},
                 )
 
-            logger.info(f"{LoggingContext.ASSETS} Updated exchange rate USD→{currency}: {rate}")
+            logger.info(f"Updated exchange rate USD→{currency}: {rate}")
             updated += 1
 
         return {"updated": updated, "total": len(SUPPORTED_TARGET_CURRENCIES)}

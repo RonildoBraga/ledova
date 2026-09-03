@@ -1,6 +1,5 @@
 import asyncio
 import json
-import logging
 from types import SimpleNamespace
 from uuid import UUID
 
@@ -12,8 +11,6 @@ from django.http import HttpResponse, StreamingHttpResponse
 from authentication.classes import HybridJWTAuthentication
 from tokens.events import TRADING_EVENT_TYPES, TRADING_EVENTS_CHANNEL
 from tokens.models import ShareToken
-
-logger = logging.getLogger(__name__)
 
 HEARTBEAT_INTERVAL = 30
 

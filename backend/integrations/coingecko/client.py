@@ -8,9 +8,7 @@ from typing import Any, Dict, List, Optional
 import requests
 from django.conf import settings
 
-from shared.utils.logging_utils import LoggingContext
-
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 
 class CoinGeckoClient:
@@ -56,7 +54,7 @@ class CoinGeckoClient:
             return response.json()
 
         except requests.RequestException as e:
-            logger.error(f"{LoggingContext.ASSETS} CoinGecko API error: {str(e)}")
+            logger.error(f"CoinGecko API error: {str(e)}")
             raise
 
     def fetch_prices_by_symbols(self, symbol_map: Dict[str, str]) -> Dict[str, Dict[str, Any]]:
@@ -104,9 +102,7 @@ class CoinGeckoClient:
             return None
 
         except requests.RequestException as e:
-            logger.error(
-                f"{LoggingContext.ASSETS} CoinGecko exchange rate error " f"(USD→{target_currency.upper()}): {str(e)}"
-            )
+            logger.error(f"CoinGecko exchange rate error (USD→{target_currency.upper()}): {str(e)}")
             return None
 
     def fetch_historical_prices_bulk(
@@ -147,14 +143,14 @@ class CoinGeckoClient:
                     )
 
                 logger.info(
-                    f"{LoggingContext.ASSETS} Fetched {len(result)} historical prices for "
+                    f"Fetched {len(result)} historical prices for "
                     f"{coin_id} from {start_date} to {end_date} using /market_chart"
                 )
 
                 return result
 
             except requests.RequestException as e:
-                logger.warning(f"{LoggingContext.ASSETS} /market_chart failed, trying /market_chart/range: {str(e)}")
+                logger.warning(f"/market_chart failed, trying /market_chart/range: {str(e)}")
 
         # Fall back to /market_chart/range (Pro API only, or if days > 365)
         from_timestamp = int(start_date.timestamp())
@@ -191,15 +187,12 @@ class CoinGeckoClient:
                 )
 
             logger.info(
-                f"{LoggingContext.ASSETS} Fetched {len(result)} historical prices for "
+                f"Fetched {len(result)} historical prices for "
                 f"{coin_id} from {start_date} to {end_date} using /market_chart/range"
             )
 
             return result
 
         except requests.RequestException as e:
-            logger.error(
-                f"{LoggingContext.ASSETS} CoinGecko bulk historical price error for "
-                f"{coin_id} ({start_date} to {end_date}): {str(e)}"
-            )
+            logger.error(f"CoinGecko bulk historical price error for {coin_id} ({start_date} to {end_date}): {str(e)}")
             raise

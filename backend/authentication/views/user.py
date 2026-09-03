@@ -1,4 +1,3 @@
-import logging
 from datetime import datetime
 
 from django.conf import settings
@@ -21,15 +20,11 @@ from authentication.services.email_codes import EmailCodeService
 from authentication.services.sessions import SessionService
 from authentication.services.tokens import TokenService
 from authentication.throttles import EmailRateThrottle
-from shared.utils.logging_utils import LoggingContext
 
 User = get_user_model()
 
-logger = logging.getLogger("ledova_backend")
-
 
 class TokenCookieMixin:
-
     def set_token_cookies(self, response, access_token, refresh_token):
         cookie = settings.AUTH_COOKIE
         pairs = (
@@ -171,7 +166,6 @@ class AuthViewSet(TokenCookieMixin, ViewSet):
             return Response({"message": "Email is already verified."}, status=status.HTTP_400_BAD_REQUEST)
 
         EmailCodeService.send(user)
-        logger.info(f"{LoggingContext.EMAIL_VERIFICATION} Resent verification email to {user.email}")
 
         return Response({"message": "Verification email sent successfully."}, status=status.HTTP_200_OK)
 
@@ -203,7 +197,5 @@ class AuthViewSet(TokenCookieMixin, ViewSet):
 
         user.set_password(new_password)
         user.save(update_fields=["password"])
-
-        logger.info(f"{LoggingContext.AUTH} Password changed successfully for user {user.email}")
 
         return Response({"message": "Password changed successfully."}, status=status.HTTP_200_OK)

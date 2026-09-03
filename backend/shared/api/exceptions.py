@@ -8,9 +8,7 @@ from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import exception_handler
 
-from shared.utils.logging_utils import LoggingContext
-
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 
 def custom_exception_handler(exc, context):
@@ -23,13 +21,13 @@ def custom_exception_handler(exc, context):
             messages = exc.message_dict if hasattr(exc, "message_dict") else exc.messages
             response = exception_handler(ValidationError(messages), context)
         elif isinstance(exc, DatabaseError):
-            logger.error(f"{LoggingContext.EXCEPTIONS} Database error: {exc}", exc_info=True)
+            logger.error(f"Database error: {exc}", exc_info=True)
             response = Response(
                 {"error": "Database error", "detail": "A database error occurred. Please try again later."},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
         else:
-            logger.error(f"{LoggingContext.EXCEPTIONS} Unhandled exception: {exc}", exc_info=True)
+            logger.error(f"Unhandled exception: {exc}", exc_info=True)
             response = Response(
                 {"error": "Internal server error", "detail": "An unexpected error occurred"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -53,8 +51,8 @@ def custom_exception_handler(exc, context):
         "user": getattr(getattr(request, "user", None), "pk", None),
     }
     if response.status_code >= 500:
-        logger.error(f"{LoggingContext.EXCEPTIONS} Server error: {log_data}", exc_info=True)
+        logger.error(f"Server error: {log_data}", exc_info=True)
     elif response.status_code >= 400:
-        logger.warning(f"{LoggingContext.EXCEPTIONS} Client error: {log_data}")
+        logger.warning(f"Client error: {log_data}")
 
     return response

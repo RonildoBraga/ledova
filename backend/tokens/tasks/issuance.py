@@ -3,7 +3,6 @@ import logging
 from procrastinate import RetryStrategy
 
 from ledova_backend.procrastinate_app import app
-from shared.utils.logging_utils import LoggingContext
 from tokens.models import ShareIssuance
 from tokens.services import ShareTokenService
 
@@ -16,11 +15,11 @@ def issue_shares_task(issuance_uuid: str):
     try:
         issuance = ShareIssuance.objects.select_related("token", "token__company").get(uuid=issuance_uuid)
     except ShareIssuance.DoesNotExist:
-        logger.error(f"{LoggingContext.TOKEN} Issuance not found: {issuance_uuid}")
+        logger.error(f"Issuance not found: {issuance_uuid}")
         return {"success": False, "error": "Issuance not found"}
 
     if not issuance.is_pending:
-        logger.warning(f"{LoggingContext.TOKEN} Issuance {issuance_uuid} not pending: {issuance.status}")
+        logger.warning(f"Issuance {issuance_uuid} not pending: {issuance.status}")
         return {"success": False, "error": "Issuance is not in pending state"}
 
     service = ShareTokenService()

@@ -52,10 +52,9 @@ from compliance.constants import (
 )
 from compliance.models import ComplianceAlert, CustomerRiskAssessment, MonitoringRule
 from compliance.services.crypto_screening import CryptoScreeningService
-from shared.utils.logging_utils import LoggingContext
 from wallets.models import FiatTransaction, Transaction
 
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 RULE_CODE_TO_ALERT_TYPE = {
     "MON-001": ALERT_TYPE_LARGE_TRANSACTION,
@@ -167,12 +166,9 @@ def _check_address(rule, transaction, user_account) -> RuleResult:
         return False, {}
     trigger = _screening_trigger(transaction, user_account)
     if trigger is None:
-        logger.debug(f"{LoggingContext.MONITORING} Skipping address screening for transaction {transaction.uuid}")
+        logger.debug(f"Skipping address screening for transaction {transaction.uuid}")
         return False, {}
-    logger.info(
-        f"{LoggingContext.MONITORING} Address screening triggered for transaction {transaction.uuid} "
-        f"(reason: {trigger})"
-    )
+    logger.info(f"Address screening triggered for transaction {transaction.uuid} (reason: {trigger})")
     screening = CryptoScreeningService().screen_transaction(transaction, user_account)
     if screening.status == SCREENING_STATUS_FAILED:
         verdict = "Crypto screening failed - address safety unverified"
@@ -341,7 +337,7 @@ def _check_extreme_risk(rule, transaction, user_account) -> RuleResult:
         "assessment_date": assessment.created_at.isoformat(),
         "reason": (
             f"Transaction by EXTREME risk customer (score: {assessment.total_risk_score}) "
-            f"requires manual review per Document 2 §4.2"
+            "requires manual review per Document 2 §4.2"
         ),
         "action_required": "Manual review required before processing",
     }
@@ -378,9 +374,9 @@ class TransactionMonitoringService:
         try:
             alerts = cls.check_transaction(transaction=tx, user_account=tx.wallet.user_account)
             if alerts:
-                logger.info(f"{LoggingContext.MONITORING} Created {len(alerts)} alert(s) for transaction {tx.uuid}")
+                logger.info(f"Created {len(alerts)} alert(s) for transaction {tx.uuid}")
         except Exception:
-            logger.exception(f"{LoggingContext.MONITORING} Error checking transaction {tx.uuid}")
+            logger.exception(f"Error checking transaction {tx.uuid}")
 
     @classmethod
     def check_transaction(cls, transaction, user_account) -> List[ComplianceAlert]:
@@ -390,7 +386,7 @@ class TransactionMonitoringService:
             if triggered:
                 alerts.append(cls._create_alert(rule, user_account, transaction, details))
                 logger.info(
-                    f"{LoggingContext.MONITORING} Rule {rule.rule_code} triggered for "
+                    f"Rule {rule.rule_code} triggered for "
                     f"user_account {user_account.uuid}, transaction {transaction.uuid}"
                 )
         return alerts
@@ -407,10 +403,7 @@ class TransactionMonitoringService:
             ).exists()
             if triggered and not already_open:
                 alerts.append(cls._create_alert(rule, user_account, None, details))
-                logger.info(
-                    f"{LoggingContext.MONITORING} Batch rule {rule.rule_code} triggered for "
-                    f"user_account {user_account.uuid}"
-                )
+                logger.info(f"Batch rule {rule.rule_code} triggered for user_account {user_account.uuid}")
         return alerts
 
     @staticmethod

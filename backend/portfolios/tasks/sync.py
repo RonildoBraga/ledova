@@ -4,16 +4,15 @@ from typing import Any, Dict
 from ledova_backend.procrastinate_app import app
 from portfolios.models.portfolio import Portfolio
 from portfolios.services.sync import PortfolioSyncService
-from shared.utils.logging_utils import LoggingContext
 
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 
 @app.periodic(cron="0 21 * * *")
 @app.task
 def sync_all_portfolios(timestamp: int) -> Dict[str, Any]:
     """Snapshot every active portfolio. Runs daily at 21:00 UTC."""
-    logger.info(f"{LoggingContext.PORTFOLIOS} Starting portfolio sync")
+    logger.info("Starting portfolio sync")
 
     portfolios = Portfolio.objects.filter(is_active=True)
 
@@ -40,11 +39,9 @@ def sync_all_portfolios(timestamp: int) -> Dict[str, Any]:
 
         except Exception as e:
             total_errors += 1
-            logger.error(f"{LoggingContext.PORTFOLIOS} Failed to sync portfolio {portfolio.name}: {e}")
+            logger.error(f"Failed to sync portfolio {portfolio.name}: {e}")
             results.append({"portfolio": portfolio.name, "status": "error", "error": str(e)})
 
-    logger.info(
-        f"{LoggingContext.PORTFOLIOS} Portfolio sync completed - Created: {total_created}, Errors: {total_errors}"
-    )
+    logger.info(f"Portfolio sync completed - Created: {total_created}, Errors: {total_errors}")
 
     return {"created": total_created, "errors": total_errors, "results": results}

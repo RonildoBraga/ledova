@@ -18,7 +18,6 @@ from companies.models import (
     CompanyStatus,
     ReviewDecision,
 )
-from shared.utils.logging_utils import LoggingContext
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -57,7 +56,7 @@ class ReviewService:
                 assigned_by=assigned_by,
             )
             reviews.append(review)
-            logger.info(f"{LoggingContext.COMPANY} Assigned reviewer {i}: {reviewer.email} for {company.name}")
+            logger.info(f"Assigned reviewer {i}: {reviewer.email} for {company.name}")
 
         return reviews
 
@@ -109,10 +108,7 @@ class ReviewService:
         else:
             raise InvalidReviewDecisionException(decision)
 
-        logger.info(
-            f"{LoggingContext.COMPANY} Reviewer {review.reviewer.email} "
-            f"decision for {review.company.name}: {decision}"
-        )
+        logger.info(f"Reviewer {review.reviewer.email} decision for {review.company.name}: {decision}")
 
         ReviewService.check_and_finalize(review.company)
 
@@ -127,17 +123,14 @@ class ReviewService:
         reviews = ApplicationReview.objects.filter(company=company).order_by("review_order")
 
         if reviews.count() != 2:
-            logger.warning(f"{LoggingContext.COMPANY} Company {company.name} does not have exactly 2 reviews assigned")
+            logger.warning(f"Company {company.name} does not have exactly 2 reviews assigned")
             return None
 
         decisions = list(reviews.values_list("decision", flat=True))
 
         recused_count = decisions.count(ReviewDecision.RECUSED)
         if recused_count > 0:
-            logger.info(
-                f"{LoggingContext.COMPANY} Company {company.name}: "
-                f"{recused_count} reviewer(s) recused, need replacement"
-            )
+            logger.info(f"Company {company.name}: {recused_count} reviewer(s) recused, need replacement")
             return "needs_replacement"
 
         if ReviewDecision.REJECTED in decisions:
@@ -146,15 +139,15 @@ class ReviewService:
                 reason=rejecting_review.decision_reason or "Rejected by reviewer",
                 rejected_by=rejecting_review.reviewer,
             )
-            logger.info(f"{LoggingContext.COMPANY} Company {company.name}: REJECTED by reviewer")
+            logger.info(f"Company {company.name}: REJECTED by reviewer")
             return "rejected"
 
         if decisions.count(ReviewDecision.APPROVED) == 2:
             approving_review = reviews.filter(decision=ReviewDecision.APPROVED).last()
             company.approve(approved_by=approving_review.reviewer)
-            logger.info(f"{LoggingContext.COMPANY} Company {company.name}: APPROVED by both reviewers")
+            logger.info(f"Company {company.name}: APPROVED by both reviewers")
             return "approved"
 
         pending_count = decisions.count(ReviewDecision.PENDING)
-        logger.info(f"{LoggingContext.COMPANY} Company {company.name}: {pending_count} review(s) still pending")
+        logger.info(f"Company {company.name}: {pending_count} review(s) still pending")
         return None

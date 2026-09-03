@@ -4,7 +4,6 @@ from django.db import transaction
 
 from companies.exceptions import MissingRequiredDocumentsException
 from companies.models import LISTING_REQUIRED_DOCUMENTS, Company, DocumentType
-from shared.utils.logging_utils import LoggingContext
 from users.models import UserProfile
 
 logger = logging.getLogger(__name__)
@@ -18,7 +17,7 @@ def register_company(owner, name: str, acn: str, primary_contact_data: dict, **k
     full_name = f"{primary_contact_data['first_name']} {primary_contact_data['last_name']}".strip()
     UserProfile.objects.update_or_create(user=owner, defaults={"full_name": full_name})
 
-    logger.info(f"{LoggingContext.COMPANY_REGISTRATION} Registered new company: {company.name} (ACN: {acn})")
+    logger.info(f"Registered new company: {company.name} (ACN: {acn})")
     return company
 
 
@@ -30,5 +29,5 @@ def submit_application(company: Company, submitted_by) -> Company:
         raise MissingRequiredDocumentsException(sorted(DocumentType(t).label for t in missing_types))
 
     company.submit(submitted_by=submitted_by)
-    logger.info(f"{LoggingContext.COMPANY} Application submitted: {company.name} by {submitted_by.email}")
+    logger.info(f"Application submitted: {company.name} by {submitted_by.email}")
     return company

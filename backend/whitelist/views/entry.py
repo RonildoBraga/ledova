@@ -1,5 +1,4 @@
 import csv
-import logging
 
 from django.http import Http404, HttpResponse
 from rest_framework import mixins, status, viewsets
@@ -7,7 +6,6 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 
-from shared.utils.logging_utils import LoggingContext
 from wallets.models import Wallet
 from whitelist.exceptions import (
     BatchEntriesRequiredException,
@@ -24,8 +22,6 @@ from whitelist.serializers import (
     WhitelistSyncResponseSerializer,
 )
 from whitelist.services import WhitelistService
-
-logger = logging.getLogger(__name__)
 
 
 class WhitelistEntryViewSet(
@@ -70,8 +66,6 @@ class WhitelistEntryViewSet(
             wait_for_receipt=True,
         )
 
-        logger.info(f"{LoggingContext.WHITELIST} Added {wallet_address} to whitelist (tx={tx_hash})")
-
         response_data = {
             "success": True,
             "tx_hash": tx_hash,
@@ -97,8 +91,6 @@ class WhitelistEntryViewSet(
             wait_for_receipt=True,
         )
 
-        logger.info(f"{LoggingContext.WHITELIST} Removed {wallet_address} from whitelist (tx={tx_hash})")
-
         response_data = {
             "success": True,
             "tx_hash": tx_hash,
@@ -119,8 +111,6 @@ class WhitelistEntryViewSet(
         service = WhitelistService()
 
         entry = service.sync_entry(address, wallet_uuid=wallet_ids[0])
-
-        logger.info(f"{LoggingContext.WHITELIST} Synced {address} with on-chain data")
 
         response_data = {
             "success": True,
@@ -204,7 +194,6 @@ class WhitelistEntryViewSet(
                 )
 
                 results["successful"] += 1
-                logger.info(f"{LoggingContext.WHITELIST_ADD} Added {wallet_address}")
 
             except ValueError as e:
                 results["failed"] += 1

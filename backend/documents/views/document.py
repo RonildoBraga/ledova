@@ -1,5 +1,3 @@
-import logging
-
 from rest_framework import mixins, status, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -10,8 +8,6 @@ from documents.serializers.document import (
     DocumentUploadSerializer,
 )
 from documents.tasks.extract import extract_document
-
-logger = logging.getLogger("ledova_backend")
 
 
 class DocumentViewSet(
@@ -49,6 +45,5 @@ class DocumentViewSet(
             file=upload,
         )
         extract_document.defer(document_uuid=str(document.uuid))
-        logger.info("documents: queued extraction for %s (%s)", document.uuid, document.document_type)
 
         return Response(DocumentSerializer(document).data, status=status.HTTP_202_ACCEPTED)

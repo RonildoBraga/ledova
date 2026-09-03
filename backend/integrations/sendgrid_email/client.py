@@ -8,9 +8,7 @@ from django.conf import settings
 from django.core.mail import send_mail
 from django.utils.html import strip_tags
 
-from shared.utils.logging_utils import LoggingContext
-
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 _LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "host.docker.internal"})
 
@@ -35,20 +33,20 @@ def _configured_api_url(value: str) -> str:
 
 class SendGridClient:
     def __init__(self):
-        self.api_key = getattr(settings, "SENDGRID_API_KEY", "")
-        self.api_url = _configured_api_url(getattr(settings, "SENDGRID_API_URL", ""))
-        self.from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "noreply@localhost")
-        self.timeout = int(getattr(settings, "SENDGRID_TIMEOUT", 10))
+        self.api_key = settings.SENDGRID_API_KEY
+        self.api_url = _configured_api_url(settings.SENDGRID_API_URL)
+        self.from_email = settings.DEFAULT_FROM_EMAIL
+        self.timeout = settings.SENDGRID_TIMEOUT
 
     def send_email(self, to_email, subject, html_content, from_email=None, text_content=None):
         sender = from_email or self.from_email
         if not self.api_key:
             # No SendGrid key: hand the message to Django's EMAIL_BACKEND (console in DEBUG).
             send_mail(subject, text_content or strip_tags(html_content), sender, [to_email], html_message=html_content)
-            logger.info(f"{LoggingContext.INTEGRATIONS} Email sent through EMAIL_BACKEND (no SendGrid key)")
+            logger.info("Email sent through EMAIL_BACKEND (no SendGrid key)")
             return {"success": True, "message_id": ""}
         if not self.api_url:
-            logger.error(f"{LoggingContext.INTEGRATIONS} SENDGRID_API_URL not configured or invalid")
+            logger.error("SENDGRID_API_URL not configured or invalid")
             return {"success": False, "error": "SENDGRID_API_URL not configured or invalid"}
 
         content = [{"type": "text/html", "value": html_content}]
@@ -70,15 +68,15 @@ class SendGridClient:
                 timeout=self.timeout,
             )
         except requests.RequestException:
-            logger.error(f"{LoggingContext.INTEGRATIONS} SendGrid request failed")
+            logger.error("SendGrid request failed")
             return {"success": False, "error": "SendGrid request failed"}
 
         if response.status_code == 202:
             message_id = response.headers.get("X-Message-Id", "")
-            logger.info(f"{LoggingContext.INTEGRATIONS} Email accepted by SendGrid")
+            logger.info("Email accepted by SendGrid")
             return {"success": True, "message_id": message_id}
 
-        logger.error(f"{LoggingContext.INTEGRATIONS} SendGrid rejected request with HTTP {response.status_code}")
+        logger.error(f"SendGrid rejected request with HTTP {response.status_code}")
         return {"success": False, "error": f"SendGrid rejected request with HTTP {response.status_code}"}
 
 

@@ -1,5 +1,3 @@
-import logging
-
 from django.db import transaction
 from rest_framework import status
 from rest_framework.generics import get_object_or_404
@@ -9,8 +7,6 @@ from shared.views.base import AuthenticatedModelViewSet
 from users.models.user_preferences import UserPreferences
 from users.models.user_profile import UserProfile
 from users.serializers.user_preferences import UserPreferencesSerializer
-
-logger = logging.getLogger("ledova_backend")
 
 
 class UserPreferencesViewSet(AuthenticatedModelViewSet):
