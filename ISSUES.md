@@ -11,12 +11,19 @@ item names where it lives in the code today.
    route, custom action, operator route and collection route is covered by
    `backend/shared/tests/test_cross_tenant_routes.py`, and global operator
    routes require `IsAdminUser`. PostgreSQL RLS is not planned.
-2. **Authentication hardening.** Done: refresh rotation and blacklist
-   (`authentication/services/tokens.py`), hashed expiring attempt-capped OTP
-   (`authentication/services/email_codes.py`), per-email throttle, no DEBUG
-   bypass, cookie flags from `settings.AUTH_COOKIE`. Open: CSRF on the cookie
-   transport, which needs the dashboard's axios client to send `X-CSRFToken`
-   from the `csrftoken` cookie before the backend can enforce it.
+2. **Authentication hardening — completed 2026-09-05.** Refresh rotation and
+   blacklist (`authentication/services/tokens.py`), hashed expiring
+   attempt-capped OTP (`authentication/services/email_codes.py`), per-email
+   throttle, no DEBUG bypass, cookie flags from `settings.AUTH_COOKIE`, and
+   CSRF on the cookie transport: `HybridJWTAuthentication` runs DRF's
+   `CSRFCheck` for cookie-sourced POST/PUT/PATCH/DELETE (403 `CSRF Failed`),
+   Bearer requests skip it and win over an `access` cookie sent beside them
+   (React Native's cookie jar replays it), `auth/verify`, sign-in and email
+   verification issue
+   the readable `csrftoken` cookie (scoped like the auth cookies), and the
+   dashboard's axios client echoes it as `X-CSRFToken` and replays once after a
+   CSRF 403 (`authentication/tests/test_csrf.py`,
+   `dashboard/src/services/apiClient.ts`).
 3. **SSE query JWTs.** `backend/tokens/views/trading_events.py` still accepts
    a bearer token in the `?auth=` query string as a fallback to the cookie and
    header; proxies, browser history and logs can retain it. Replace it with the

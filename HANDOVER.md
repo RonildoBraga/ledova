@@ -1,6 +1,6 @@
 # Project handover
 
-Last verified: 2026-09-03
+Last verified: 2026-09-05
 
 ## Project context
 
@@ -48,12 +48,19 @@ What the branch did, in order:
 - Docs: `backend/docs/CONVENTIONS.md` is the layering and style reference;
   restating comments, docstrings and section banners removed.
 
+Branch `claude/client-batch` (on top of `main` `1ecb687`) starts the client
+work: cookie-sourced POST/PUT/PATCH/DELETE now require the CSRF token
+(`HybridJWTAuthentication.enforce_csrf`; Bearer requests are exempt, and the
+Authorization header wins over the `access` cookie that React Native's cookie
+jar replays beside it), the
+`csrftoken` cookie is issued by `auth/verify`, sign-in and email verification
+with the auth cookies' domain and secure flag, and the dashboard's axios client
+sends `X-CSRFToken` and replays a request once after a `CSRF Failed` 403.
+
 ## Next work
 
-1. CSRF check for cookie-sourced unsafe requests, pending the dashboard change
-   (axios `xsrfCookieName`/`xsrfHeaderName`).
-2. Explicit native body-token endpoints for the mobile app.
-3. Replace the `?auth=` query-string JWT fallback in
+1. Explicit native body-token endpoints for the mobile app.
+2. Replace the `?auth=` query-string JWT fallback in
    `backend/tokens/views/trading_events.py` (ISSUES.md item 3).
 
 Decisions deferred during the simplification pass (each is a delete-or-keep

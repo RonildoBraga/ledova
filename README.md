@@ -65,6 +65,11 @@ Once the containers are ready:
 
 Stop the stack with `docker compose down`.
 
+The dashboard authenticates with cookies, so its origin must be listed in the
+backend's `DJANGO_CSRF_TRUSTED_ORIGINS` (the template already lists
+`http://localhost:5174`); cookie-authenticated writes from any other origin are
+rejected with `403 CSRF Failed`.
+
 Sign-up requires an email verification code. The local stack has no email
 provider configured: with `SENDGRID_API_KEY` empty the backend hands mail to
 Django's email backend, which under `DEBUG=true` (the local default) prints the
