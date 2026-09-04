@@ -48,7 +48,6 @@ export interface TokenRefreshResult {
 export interface AuthVerificationResponse {
   valid: boolean;
   expiresAt?: string;
-  reason?: 'no_token' | 'invalid_token';
 }
 
 export interface ChangePasswordRequest {

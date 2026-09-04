@@ -43,7 +43,7 @@ export function useTransferFlow(selectedWallet: Wallet | null) {
 
   const holdingsQuery = useQuery({
     queryKey: ['wallet-holdings', selectedWallet?.uuid],
-    queryFn: () => getWalletHoldings(apiClient, selectedWallet!.uuid, { include_asset: true }),
+    queryFn: () => getWalletHoldings(apiClient, selectedWallet!.uuid),
     enabled: !!selectedWallet?.uuid,
     staleTime: CACHE_TIMING.DEFAULT_STALE_TIME,
     select: (data) => data.data.results || data.data || [],

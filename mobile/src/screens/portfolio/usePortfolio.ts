@@ -30,7 +30,7 @@ export function usePortfolio() {
       ? []
       : wallets.map((wallet: Wallet) => ({
           queryKey: ['walletHoldings', wallet.uuid],
-          queryFn: () => getWalletHoldings(apiClient, wallet.uuid, { include_asset: true }),
+          queryFn: () => getWalletHoldings(apiClient, wallet.uuid),
           enabled: !!wallet.uuid,
           staleTime: CACHE_TIMING.SHORT_STALE_TIME,
           gcTime: CACHE_TIMING.MEDIUM_GC_TIME,

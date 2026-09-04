@@ -50,64 +50,69 @@ export interface UserFriendlyError extends Error {
   originalError?: unknown;
 }
 
+/** Mirrors backend `users.services.lifecycle.export_account_data`; both clients only JSON.stringify it. */
 export interface AccountExportData {
   exportedAt: string;
   user: {
     email: string;
-    dateJoined: string | null;
+    dateJoined: string;
     isEmailVerified: boolean;
   };
   profile: {
-    firstName: string;
-    middleName: string;
-    lastName: string;
+    fullName: string | null;
     dateOfBirth: string | null;
-    phoneNumber: string;
+    phoneCountryCode: string | null;
+    phoneNumber: string | null;
+    residentialAddress: string | null;
     citizenshipCountry: string | null;
-    createdAt: string | null;
+    isIdVerified: boolean;
+    createdAt: string;
   } | null;
   preferences: {
     selectedPortfolio: string | null;
     selectedAccount: string | null;
   } | null;
   financialProfile: {
-    employmentStatus: string;
-    annualIncome: string | null;
-    sourceOfFunds: string;
-    investmentExperience: string;
-    riskTolerance: string;
-    investmentObjective: string;
+    occupation: string | null;
+    sourceOfFunds: string[] | null;
+    sourceOfFundsOtherText: string | null;
+    intendedUse: string | null;
+    intendedUseOtherText: string | null;
   } | null;
   accounts: Array<{
     uuid: string;
     accountNumber: string;
     accountType: string;
-    createdAt: string | null;
+    activationDate: string | null;
+    createdAt: string;
   }>;
   wallets: Array<{
     uuid: string;
-    name: string;
+    name: string | null;
     chain: string;
     address: string;
-    balance: string;
+    nativeBalance: string;
+    marketValue: string;
     isVerified: boolean;
-    createdAt: string | null;
+    createdAt: string;
   }>;
   transactions: Array<{
     uuid: string;
     txHash: string;
-    type: string;
+    chain: string;
     status: string;
+    asset: string | null;
     amount: string;
-    fee: string;
+    transactionFee: string | null;
     fromAddress: string;
-    toAddress: string;
-    createdAt: string | null;
+    toAddress: string | null;
+    blockTimestamp: string | null;
+    createdAt: string;
   }>;
   portfolios: Array<{
     uuid: string;
     name: string;
-    description: string;
-    createdAt: string | null;
+    isActive: boolean;
+    createdAt: string;
   }>;
 }

@@ -1,6 +1,6 @@
 export type KYCProvider = 'sumsub' | 'kycaid';
 
-export type VerificationStatus = 'init' | 'pending' | 'queued' | 'completed' | 'onHold' | null;
+export type VerificationStatus = 'init' | 'pending' | 'queued' | 'completed' | 'onHold' | 'prechecked' | null;
 
 export type ReviewAnswer = 'GREEN' | 'RED' | 'YELLOW' | null;
 

@@ -60,6 +60,11 @@ The trading event stream no longer reads a JWT from the `?auth=` query string:
 the dashboard authenticates with the `access` cookie and mobile sends the
 `Authorization: Bearer` header through `react-native-sse`'s `headers` option
 (ISSUES.md item 3).
+The shared TypeScript types now mirror the simplified serializers
+(`UserProfile`, `AccountExportData`, `Portfolio`, `AuthVerificationResponse`),
+`getWalletHoldings` sends no query parameters (the backend ignored them since
+PR #68), and the mobile review screen reads the Terms and Privacy links from
+`config/publicLinks.ts`, so the localhost `EXTERNAL_URLS` constant is gone.
 
 ## Next work
 

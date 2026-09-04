@@ -33,7 +33,6 @@ export { getWallets, createWallet, updateWallet, deleteWallet } from './wallets'
 export { requestVerificationChallenge, verifyWalletSignature, syncWallet } from './wallet-verification';
 export { prepareTransfer, broadcastTransfer } from './wallet-transfers';
 export { getWalletHoldings, fetchBatchBalances } from './wallet-balances';
-export type { WalletHoldingsQueryParams } from './wallet-balances';
 export { getTransactions, getTransactionsNextPage } from './transactions';
 export { getOnRampWidgetUrl } from './onramp';
 export {

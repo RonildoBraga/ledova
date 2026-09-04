@@ -1,20 +1,17 @@
 import type { BaseEntity } from '../common';
 import type { TimeSeriesQueryParams } from '../api';
-import type { Wallet } from './wallet';
 
 export interface Portfolio extends BaseEntity {
   userAccount: string;
   name: string;
-  template: string | null;
   isActive: boolean;
   walletUuids: string[];
   walletCount: number;
-  totalValue: string;
-  wallets?: Wallet[];
 }
 
-export type CreatePortfolio = Omit<Portfolio, 'uuid' | 'createdAt' | 'updatedAt' | 'totalValue' | 'userAccount'>;
-export type UpdatePortfolio = Partial<Omit<Portfolio, 'uuid' | 'createdAt' | 'updatedAt' | 'totalValue'>>;
+/** `userAccount` is optional: the backend files the portfolio under the caller's selected account when absent. */
+export type CreatePortfolio = Pick<Portfolio, 'name'> & Partial<Pick<Portfolio, 'userAccount' | 'isActive'>>;
+export type UpdatePortfolio = Partial<Pick<Portfolio, 'name' | 'userAccount' | 'isActive'>>;
 
 export type PortfolioSnapshotReason = 'DAILY' | 'SWAP' | 'MANUAL';
 

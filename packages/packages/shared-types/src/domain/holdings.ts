@@ -17,7 +17,6 @@ export interface HoldingsQueryParams extends BaseQueryParams {
   wallet?: string;
   asset_type?: string;
   network?: string;
-  min_value?: number;
   max_value?: number;
 }
 

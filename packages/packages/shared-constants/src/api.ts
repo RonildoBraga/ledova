@@ -113,8 +113,3 @@ export const COMPANY_TOKEN_ENDPOINTS = {
   CAPITAL_INCREASE_DETAIL: (uuid: string) => `/api/v1/tokens/capital-increases/${uuid}/` as const,
   CAPITAL_INCREASE_SUBMIT: (uuid: string) => `/api/v1/tokens/capital-increases/${uuid}/submit/` as const,
 } as const;
-
-export const EXTERNAL_URLS = {
-  TERMS_OF_SERVICE: 'http://localhost:5173/terms-of-service',
-  PRIVACY_POLICY: 'http://localhost:5173/privacy-policy',
-} as const;
