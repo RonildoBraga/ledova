@@ -24,11 +24,14 @@ item names where it lives in the code today.
    dashboard's axios client echoes it as `X-CSRFToken` and replays once after a
    CSRF 403 (`authentication/tests/test_csrf.py`,
    `dashboard/src/services/apiClient.ts`).
-3. **SSE query JWTs.** `backend/tokens/views/trading_events.py` still accepts
-   a bearer token in the `?auth=` query string as a fallback to the cookie and
-   header; proxies, browser history and logs can retain it. Replace it with the
-   cookie for the dashboard `EventSource` and a header via fetch-based SSE for
-   mobile.
+3. **SSE query JWTs — completed 2026-09-05.** The trading event stream
+   (`backend/tokens/views/trading_events.py`) authenticates only through
+   `HybridJWTAuthentication`: the `access` cookie for the dashboard
+   `EventSource` (`withCredentials`) and the `Authorization: Bearer` header
+   for mobile (`react-native-sse` `headers` option). A JWT in the `?auth=`
+   query string is ignored and the request is rejected exactly like an
+   anonymous one (`tokens/tests/test_trading_events_authorization.py`), so
+   proxies, browser history and logs never see a token.
 4. **Signed-intent binding and replay.** `tokens/services/atomic_swap_service.py`
    signs a nonce and deadline per swap, but order create/cancel/modify messages
    (`tokens/services/trading_order_service.py`,

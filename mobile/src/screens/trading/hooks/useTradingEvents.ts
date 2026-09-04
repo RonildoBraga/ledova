@@ -25,9 +25,11 @@ export function useTradingEvents(tokenUuid: string | null | undefined) {
       if (!accessToken) return;
 
       const baseUrl = (process.env.EXPO_PUBLIC_API_URL || '').replace(/\/$/, '');
-      const url = `${baseUrl}${TRADING_ENDPOINTS.EVENTS.STREAM}?token=${tokenUuid}&auth=${accessToken}`;
+      const url = `${baseUrl}${TRADING_ENDPOINTS.EVENTS.STREAM}?token=${tokenUuid}`;
 
-      const es = new EventSource<SSEEventTypes>(url);
+      const es = new EventSource<SSEEventTypes>(url, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
 
       es.addEventListener('open', () => {
         reconnectDelayRef.current = TRADING_CONFIG.SSE_RECONNECT_DELAY;

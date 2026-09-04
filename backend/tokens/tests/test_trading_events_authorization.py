@@ -324,28 +324,34 @@ class TradingEventsAuthorizationTest(TestCase):
         event_stream.assert_not_called()
 
     @patch("tokens.views.trading_events._event_stream", side_effect=lambda _token_uuid: _empty_stream())
-    def test_active_query_token_remains_supported_until_issue_three(self, event_stream):
-        response = self.client.get(
-            self.endpoint,
-            {
-                "token": str(self.deployed_token.uuid),
-                "auth": self.investor_access,
-            },
-        )
-
-        self.assertEqual(response.status_code, 200)
-        event_stream.assert_called_once_with(str(self.deployed_token.uuid))
-
-    @patch("tokens.views.trading_events._event_stream", side_effect=lambda _token_uuid: _empty_stream())
-    def test_query_token_uses_the_normal_revocation_boundary(self, event_stream):
-        access_token = self.investor_access
-        TokenService.revoke(self.investor_refresh)
+    def test_valid_query_string_token_is_rejected_like_an_anonymous_request(self, event_stream):
+        anonymous = self.client.get(self.endpoint, {"token": str(self.deployed_token.uuid)})
 
         response = self.client.get(
             self.endpoint,
-            {"token": str(self.deployed_token.uuid), "auth": access_token},
+            {"token": str(self.deployed_token.uuid), "auth": self.investor_access},
         )
 
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.content, b"Unauthorized")
+        self.assertEqual((response.status_code, response.content), (anonymous.status_code, anonymous.content))
         event_stream.assert_not_called()
+
+    @patch("tokens.views.trading_events._event_stream", side_effect=lambda _token_uuid: _empty_stream())
+    def test_query_string_token_does_not_widen_or_narrow_cookie_and_header_transports(self, event_stream):
+        other_access = TokenService.issue(
+            User.objects.create_user(
+                email="other@sse.example.test",
+                password="pw-12345678",
+                is_active=True,
+            )
+        )[0]
+        params = {"token": str(self.deployed_token.uuid), "auth": other_access}
+
+        header_response = self.client.get(self.endpoint, params, HTTP_AUTHORIZATION=f"Bearer {self.investor_access}")
+        self._authenticate_cookie(self.investor_access)
+        cookie_response = self.client.get(self.endpoint, params)
+
+        self.assertEqual(header_response.status_code, 200)
+        self.assertEqual(cookie_response.status_code, 200)
+        self.assertEqual(event_stream.call_count, 2)

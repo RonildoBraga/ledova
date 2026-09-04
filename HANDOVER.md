@@ -56,12 +56,14 @@ jar replays beside it), the
 `csrftoken` cookie is issued by `auth/verify`, sign-in and email verification
 with the auth cookies' domain and secure flag, and the dashboard's axios client
 sends `X-CSRFToken` and replays a request once after a `CSRF Failed` 403.
+The trading event stream no longer reads a JWT from the `?auth=` query string:
+the dashboard authenticates with the `access` cookie and mobile sends the
+`Authorization: Bearer` header through `react-native-sse`'s `headers` option
+(ISSUES.md item 3).
 
 ## Next work
 
 1. Explicit native body-token endpoints for the mobile app.
-2. Replace the `?auth=` query-string JWT fallback in
-   `backend/tokens/views/trading_events.py` (ISSUES.md item 3).
 
 Decisions deferred during the simplification pass (each is a delete-or-keep
 call for the owner; the code is kept and working until decided):
