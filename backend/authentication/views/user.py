@@ -12,6 +12,7 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
 from rest_framework_simplejwt.exceptions import TokenError
 
+from authentication.classes import HybridJWTAuthentication
 from authentication.managers.user import EmailLookupState
 from authentication.serializers.user import (
     ChangePasswordSerializer,
@@ -63,7 +64,19 @@ class TokenCookieMixin:
         return self.set_token_cookies(response, access_token, refresh_token)
 
     def presented_refresh_token(self, request):
-        return request.COOKIES.get(settings.AUTH_COOKIE["refresh"]) or request.data.get("refresh")
+        """Body first (native transport, no CSRF exposure), then the cookie.
+
+        A refresh cookie is sent by the browser on its own, so using it on an
+        unsafe request needs the CSRF token unless a Bearer header authenticated
+        the request (installed mobile builds replay the cookie beside their token).
+        """
+        body_token = request.data.get("refresh") if hasattr(request.data, "get") else None
+        if body_token:
+            return body_token
+        cookie_token = request.COOKIES.get(settings.AUTH_COOKIE["refresh"])
+        if cookie_token and not HybridJWTAuthentication().get_header(request):
+            HybridJWTAuthentication.enforce_csrf(request)
+        return cookie_token
 
 
 class AuthViewSet(TokenCookieMixin, ViewSet):

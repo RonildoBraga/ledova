@@ -234,3 +234,56 @@ class CsrfCookieBootstrapTest(APITestCase):
         for name in ("access", "csrftoken"):
             self.assertEqual(response.cookies[name]["domain"], "example.test")
             self.assertTrue(response.cookies[name]["secure"])
+
+
+class RefreshTransportCsrfTest(APITestCase):
+    """The refresh cookie is also sent by the browser on its own, so rotating or
+    revoking with it needs the CSRF token unless a Bearer header is present."""
+
+    def setUp(self):
+        super().setUp()
+        cache.clear()
+        self.addCleanup(cache.clear)
+        self.user = create_member()
+        self.access, self.refresh = TokenService.issue(self.user)
+        self.client = APIClient(enforce_csrf_checks=True)
+
+    def csrf_token(self):
+        self.client.get("/api/auth/verify/")
+        return self.client.cookies["csrftoken"].value
+
+    def test_refresh_cookie_alone_needs_the_csrf_token(self):
+        self.client.cookies["refresh"] = self.refresh
+
+        response = self.client.post("/api/token/refresh/")
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn("CSRF Failed", response.json()["detail"])
+        _, rotated_access, _ = TokenService.rotate(self.refresh)
+        self.assertTrue(rotated_access)
+
+    def test_refresh_cookie_with_the_csrf_token_rotates(self):
+        self.client.cookies["refresh"] = self.refresh
+        token = self.csrf_token()
+
+        response = self.client.post("/api/token/refresh/", HTTP_X_CSRFTOKEN=token)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertNotEqual(response.json()["refresh"], self.refresh)
+        self.assertTrue({"access", "refresh"} <= set(response.cookies))
+
+    def test_body_refresh_needs_no_csrf_token(self):
+        response = self.client.post("/api/token/refresh/", {"refresh": self.refresh}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertNotEqual(response.json()["refresh"], self.refresh)
+
+    def test_signout_with_bearer_beside_the_refresh_cookie_needs_no_csrf_token(self):
+        self.client.cookies["refresh"] = self.refresh
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.access}")
+
+        response = self.client.post("/api/signout/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        with self.assertRaises(Exception):
+            TokenService.rotate(self.refresh)
