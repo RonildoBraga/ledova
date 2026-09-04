@@ -18,8 +18,6 @@ export const HOLDING_ASSET_TYPE = {
   SYNTHETIC: 'synthetic',
 } as const;
 
-export type HoldingAssetType = (typeof HOLDING_ASSET_TYPE)[keyof typeof HOLDING_ASSET_TYPE];
-
 const HOLDING_ASSET_TYPE_LABELS: Record<string, string> = {
   [HOLDING_ASSET_TYPE.NATIVE_CRYPTO]: 'Native Cryptocurrencies',
   [HOLDING_ASSET_TYPE.ERC20_TOKEN]: 'ERC-20 Tokens',

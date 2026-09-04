@@ -57,18 +57,6 @@ type UserProfileResponseOnly =
   | 'sumsubApplicantId'
   | 'sumsubVerificationStatus';
 
-export type CreateUserProfile = Omit<
-  UserProfile,
-  | UserProfileResponseOnly
-  | 'isSignupCompleted'
-  | 'termsAndConditions'
-  | 'citizenshipCountry'
-  | 'dateOfBirth'
-  | 'confirmedOver18'
-  | 'confirmedAustralianResident'
-  | 'confirmedIndividualAccount'
->;
-
 export type UpdateUserProfile = Partial<Omit<UserProfile, UserProfileResponseOnly>>;
 
 export type CompleteUserProfile = Pick<UserProfile, 'termsAndConditions' | 'isSignupCompleted'>;

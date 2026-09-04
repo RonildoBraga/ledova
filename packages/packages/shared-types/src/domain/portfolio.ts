@@ -11,7 +11,6 @@ export interface Portfolio extends BaseEntity {
 
 /** `userAccount` is optional: the backend files the portfolio under the caller's selected account when absent. */
 export type CreatePortfolio = Pick<Portfolio, 'name'> & Partial<Pick<Portfolio, 'userAccount' | 'isActive'>>;
-export type UpdatePortfolio = Partial<Pick<Portfolio, 'name' | 'userAccount' | 'isActive'>>;
 
 export type PortfolioSnapshotReason = 'DAILY' | 'SWAP' | 'MANUAL';
 

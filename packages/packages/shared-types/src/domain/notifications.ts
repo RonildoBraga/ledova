@@ -58,24 +58,6 @@ export interface UpdateNotificationPreferencesRequest {
 }
 /* eslint-enable @typescript-eslint/naming-convention */
 
-/**
- * Response type for device token operations.
- */
-export interface DeviceTokenResponse {
-  success: boolean;
-  data?: DeviceToken;
-  message?: string;
-}
-
-/**
- * Response type for notification preferences operations.
- */
-export interface NotificationPreferencesResponse {
-  success: boolean;
-  data?: NotificationPreferences;
-  message?: string;
-}
-
 // =====================================================
 // IN-APP NOTIFICATIONS
 // =====================================================

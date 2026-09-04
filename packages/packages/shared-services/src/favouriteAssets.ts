@@ -1,4 +1,4 @@
-import { AxiosInstance, AxiosResponse } from 'axios';
+import { AxiosInstance } from 'axios';
 import type {
   CreateFavouriteAsset,
   FavouriteAsset,
@@ -6,14 +6,9 @@ import type {
   PaginatedResponse,
 } from '@ledova/shared-types';
 import { FAVOURITE_ASSET_ENDPOINTS } from '@ledova/shared-constants';
-import { getNextPageParam } from '@ledova/shared-utils';
 
 export const getFavouriteAssets = (apiClient: AxiosInstance, params?: FavouriteAssetQueryParams) =>
   apiClient.get<PaginatedResponse<FavouriteAsset>>(FAVOURITE_ASSET_ENDPOINTS.BASE, { params });
-
-export const getFavouriteAssetsNextPage = (
-  lastPage: AxiosResponse<PaginatedResponse<FavouriteAsset>>,
-): number | undefined => getNextPageParam(lastPage.data);
 
 export const addFavouriteAsset = (apiClient: AxiosInstance, data: CreateFavouriteAsset) =>
   apiClient.post<FavouriteAsset>(FAVOURITE_ASSET_ENDPOINTS.BASE, data);

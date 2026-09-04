@@ -45,14 +45,6 @@ export type CreateWallet = {
   parentDerivationPath?: string;
 };
 
-export interface SyncBalanceResponse {
-  success: boolean;
-  balance?: string;
-  chain?: string;
-  lastSyncedAt?: string;
-  message?: string;
-}
-
 export interface SyncWalletResponse {
   success: boolean;
   message: string;

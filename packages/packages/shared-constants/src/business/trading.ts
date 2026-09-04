@@ -1,53 +1,21 @@
-export const ORDER_TYPE = {
-  BUY: 'buy',
-  SELL: 'sell',
-} as const;
+export type OrderType = 'buy' | 'sell';
 
-export type OrderType = (typeof ORDER_TYPE)[keyof typeof ORDER_TYPE];
+export type OrderStatus =
+  'open' | 'partially_filled' | 'matched' | 'pending_signature' | 'completed' | 'cancelled' | 'expired';
 
-export const ORDER_STATUS = {
-  OPEN: 'open',
-  PARTIALLY_FILLED: 'partially_filled',
-  MATCHED: 'matched',
-  PENDING_SIGNATURE: 'pending_signature',
-  COMPLETED: 'completed',
-  CANCELLED: 'cancelled',
-  EXPIRED: 'expired',
-} as const;
+export type SwapStatus =
+  'created' | 'seller_signed' | 'buyer_signed' | 'ready' | 'executing' | 'completed' | 'failed' | 'expired';
 
-export type OrderStatus = (typeof ORDER_STATUS)[keyof typeof ORDER_STATUS];
+export type SwapUserRole = 'seller' | 'buyer';
 
-export const SWAP_STATUS = {
-  CREATED: 'created',
-  SELLER_SIGNED: 'seller_signed',
-  BUYER_SIGNED: 'buyer_signed',
-  READY: 'ready',
-  EXECUTING: 'executing',
-  COMPLETED: 'completed',
-  FAILED: 'failed',
-  EXPIRED: 'expired',
-} as const;
-
-export type SwapStatus = (typeof SWAP_STATUS)[keyof typeof SWAP_STATUS];
-
-export const SWAP_USER_ROLE = {
-  SELLER: 'seller',
-  BUYER: 'buyer',
-} as const;
-
-export type SwapUserRole = (typeof SWAP_USER_ROLE)[keyof typeof SWAP_USER_ROLE];
-
-export const TRADING_EVENT_TYPES = {
-  ORDER_CREATED: 'order_created',
-  ORDER_CANCELLED: 'order_cancelled',
-  ORDER_MODIFIED: 'order_modified',
-  ORDER_MATCHED: 'order_matched',
-  SWAP_SIGNED: 'swap_signed',
-  SWAP_COMPLETED: 'swap_completed',
-  SWAP_FAILED: 'swap_failed',
-} as const;
-
-export type TradingEventType = (typeof TRADING_EVENT_TYPES)[keyof typeof TRADING_EVENT_TYPES];
+export type TradingEventType =
+  | 'order_created'
+  | 'order_cancelled'
+  | 'order_modified'
+  | 'order_matched'
+  | 'swap_signed'
+  | 'swap_completed'
+  | 'swap_failed';
 
 export const TRADING_EVENT_INVALIDATION_MAP: Record<TradingEventType, string[][]> = {
   order_created: [

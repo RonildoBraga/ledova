@@ -1,12 +1,3 @@
-export interface AuthState {
-  readonly isAuthenticated: boolean;
-  readonly isLoading: boolean;
-  readonly user: {
-    readonly hasProfile: boolean;
-    readonly profileCompleted: boolean;
-  } | null;
-}
-
 export interface SigninRequest {
   email: string;
   password: string;
@@ -23,23 +14,10 @@ export interface EmailVerificationRequest {
   email?: string;
 }
 
-export interface TokenRefreshResponse {
-  status?: number;
-  data?: {
-    access?: string;
-    refresh?: string;
-  };
-}
-
 export interface TokenRefreshRequest {
   refresh: string;
 }
 
-/**
- * Token refresh result containing the new access and refresh tokens.
- * Note: This is the actual response data, distinct from TokenRefreshResponse
- * which wraps it with HTTP response metadata.
- */
 export interface TokenRefreshResult {
   access: string;
   refresh: string;

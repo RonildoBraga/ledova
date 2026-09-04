@@ -65,6 +65,11 @@ The shared TypeScript types now mirror the simplified serializers
 `getWalletHoldings` sends no query parameters (the backend ignored them since
 PR #68), and the mobile review screen reads the Terms and Privacy links from
 `config/publicLinks.ts`, so the localhost `EXTERNAL_URLS` constant is gone.
+Shared-package exports no app imports (16 service functions, the unused
+types, constants and helpers) and the never-imported dashboard files
+(`company/tokens/[uuid].tsx`, `AllocationPieChart`, `TimeRangeSelector`,
+`useTransparency`, the `company/hooks` and mobile `components` barrels) are
+deleted; the three `/company/*` redirect routes stay for old bookmarks.
 
 ## Next work
 

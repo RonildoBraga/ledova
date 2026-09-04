@@ -9,11 +9,6 @@ export interface PaginatedResponse<T> {
   results: T[];
 }
 
-export interface BaseOperationResponse {
-  uuid: string;
-  message?: string;
-}
-
 export interface PaginationParams {
   page?: number;
   page_size?: number;
@@ -31,10 +26,6 @@ export interface OrderingParams {
 export interface DateRangeParams {
   start_date?: string;
   end_date?: string;
-}
-
-export interface SearchParams {
-  search?: string;
 }
 
 export type BaseQueryParams = PaginationParams & OrderingParams;

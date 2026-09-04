@@ -15,7 +15,7 @@ import {
 } from '@phosphor-icons/react';
 import { Panel } from '@components/Panel';
 import { Modal } from '@components/Modal';
-import { useCompany } from '../hooks';
+import { useCompany } from '../hooks/useCompany';
 import {
   getCompanyDocuments,
   uploadCompanyDocument,

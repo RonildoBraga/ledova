@@ -52,7 +52,6 @@ Examples:
 
 Examples:
 
-- `TokenRefreshResponse` ✅
 - `SyncWalletResponse` ✅
 - `PrepareTransferResponse` ✅
 

@@ -406,10 +406,5 @@ export { LIGHT_COLORS };
 
 // ── Exported Types ──────────────────────────────────────────────────────────
 
-export type Colors = typeof DESIGN_TOKENS.colors;
-export type Spacing = typeof DESIGN_TOKENS.spacing;
-export type BorderRadius = typeof DESIGN_TOKENS.borderRadius;
-export type FontSize = typeof DESIGN_TOKENS.fontSize;
-export type FontWeight = typeof DESIGN_TOKENS.fontWeight;
 export type Shadow = typeof DESIGN_TOKENS.shadows;
 export type Icon = typeof DESIGN_TOKENS.icon;

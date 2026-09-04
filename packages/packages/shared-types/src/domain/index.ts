@@ -1,7 +1,5 @@
-export * from './user-account';
 export * from './asset';
 export * from './favourite-asset';
-export * from './asset-allocation';
 export * from './auth';
 export * from './holdings';
 export * from './identity-verification';

@@ -16,16 +16,6 @@ export function createUserFriendlyError(message: string, originalError?: unknown
 }
 
 /**
- * Type guard to check if an error is a UserFriendlyError
- *
- * @param error - The error to check
- * @returns True if the error is a UserFriendlyError
- */
-export function isUserFriendlyError(error: unknown): error is UserFriendlyError {
-  return error instanceof Error && 'isUserFriendly' in error && (error as UserFriendlyError).isUserFriendly === true;
-}
-
-/**
  * Extracts a human-readable error message from various error types.
  * Handles axios errors, standard Error objects, strings, and unknown types.
  *

@@ -15,8 +15,6 @@ export {
   formatCryptoBalance,
   formatPercentage,
   getBlockchainShortName,
-  formatTokenAmount,
-  parseTokenAmount,
 } from './formatting';
 export {
   isNumericOnly,
@@ -30,20 +28,18 @@ export {
 export {
   validateWalletAddress,
   detectChainFromAddress,
-  isValidNonMainnetBitcoinAddress,
   isValidBitcoinNativeSegwitTestAddress,
   isBitcoinTestnetSigningPath,
   formatWalletAddressShort,
   formatWalletAddressMedium,
 } from './validation/wallets';
-export { hasActiveFilters, countActiveFilters } from './filters';
-export { getAssetType, getAssetTypeVariant } from './assets';
+export { hasActiveFilters } from './filters';
 export { parseAddress, getAddressDisplayLines } from './address';
 export { formatPhoneForDisplay, cleanPhoneNumber } from './phoneFormatting';
 export { formatSourceOfFunds, formatIntendedUse } from './formatting-labels';
 export { validateUserProfileField } from './user-validation';
 export { getUserVerificationStatus, type VerificationStatusType } from './user-verification';
 export { getNextPageParam } from './pagination';
-export { createUserFriendlyError, isUserFriendlyError, getErrorMessage } from './errors';
+export { createUserFriendlyError, getErrorMessage } from './errors';
 export { calculateHoldingsSummary, calculateAssetAllocation } from './holdings';
 export { calculateWalletTotals, filterWalletsByChain } from './wallet';

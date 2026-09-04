@@ -8,7 +8,6 @@ import type {
   CompanyRegistrationResponse,
   CompanyDocument,
   DocumentUpload,
-  ApplicationStatus,
   ApplicationResponse,
   PaginatedResponse,
 } from '@ledova/shared-types';
@@ -45,14 +44,5 @@ export const uploadCompanyDocument = (apiClient: AxiosInstance, companyUuid: str
 export const deleteCompanyDocument = (apiClient: AxiosInstance, companyUuid: string, documentUuid: string) =>
   apiClient.delete(COMPANY_ENDPOINTS.DOCUMENT_DETAIL(companyUuid, documentUuid));
 
-export const getApplicationStatus = (apiClient: AxiosInstance, companyUuid: string) =>
-  apiClient.get<ApplicationStatus>(COMPANY_ENDPOINTS.APPLICATION_STATUS(companyUuid));
-
 export const submitApplication = (apiClient: AxiosInstance, companyUuid: string) =>
   apiClient.post<ApplicationResponse>(COMPANY_ENDPOINTS.SUBMIT(companyUuid), { confirm: true });
-
-export const resubmitApplication = (apiClient: AxiosInstance, companyUuid: string, responseText: string) =>
-  apiClient.post<ApplicationResponse>(COMPANY_ENDPOINTS.RESUBMIT(companyUuid), { response: responseText });
-
-export const withdrawApplication = (apiClient: AxiosInstance, companyUuid: string, reason?: string) =>
-  apiClient.post<ApplicationResponse>(COMPANY_ENDPOINTS.WITHDRAW(companyUuid), { reason });
