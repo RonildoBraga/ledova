@@ -1,7 +1,3 @@
-"""
-Models package for portfolios app.
-"""
-
 from portfolios.models.portfolio import (
     AssetAllocation,
     Portfolio,

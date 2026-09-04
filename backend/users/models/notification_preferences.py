@@ -1,19 +1,11 @@
-"""
-Notification preferences model for push notifications.
-"""
-
 from django.db import models
 
 from shared.models import BaseModel
+from users.querysets.notification_preferences import NotificationPreferencesQuerySet
 
 
 class NotificationPreferences(BaseModel):
-    """
-    User notification preferences.
-
-    Controls which types of push notifications a user receives.
-    Each user profile has exactly one notification preferences record.
-    """
+    objects = NotificationPreferencesQuerySet.as_manager()
 
     user_profile = models.OneToOneField(
         "users.UserProfile",
@@ -43,15 +35,6 @@ class NotificationPreferences(BaseModel):
         return f"NotificationPreferences for {self.user_profile}"
 
     def can_receive_notification(self, notification_type: str) -> bool:
-        """
-        Check if user can receive a specific type of notification.
-
-        Args:
-            notification_type: Type of notification (transaction, price, marketing, general)
-
-        Returns:
-            True if the user should receive this notification type
-        """
         type_mapping = {
             "transaction": self.transaction_alerts,
             "price": self.price_alerts,

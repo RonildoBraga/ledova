@@ -1,5 +1,3 @@
-import logging
-
 from django.db import transaction
 from rest_framework import status
 from rest_framework.decorators import action
@@ -9,10 +7,7 @@ from portfolios.exceptions import PortfolioNotFoundException
 from portfolios.filters import AssetAllocationFilter
 from portfolios.models.portfolio import AssetAllocation, Portfolio
 from portfolios.serializers.portfolio import AssetAllocationSerializer
-from shared.utils.logging_utils import LoggingContext
 from shared.views.base import AuthenticatedModelViewSet
-
-logger = logging.getLogger("ledova_backend")
 
 
 class AssetAllocationViewSet(AuthenticatedModelViewSet):
@@ -27,15 +22,12 @@ class AssetAllocationViewSet(AuthenticatedModelViewSet):
         )
 
     def perform_create(self, serializer):
-        logger.info(f"{LoggingContext.PORTFOLIOS} Creating asset allocation")
         return serializer.save()
 
     def perform_update(self, serializer):
-        logger.info(f"{LoggingContext.PORTFOLIOS} Updating asset allocation")
         return serializer.save()
 
     def perform_destroy(self, instance):
-        logger.info(f"{LoggingContext.PORTFOLIOS} Deleting asset allocations")
         return super().perform_destroy(instance)
 
     @action(detail=False, methods=["delete"], url_path="by-portfolio/(?P<portfolio_uuid>[^/.]+)")
@@ -55,10 +47,6 @@ class AssetAllocationViewSet(AuthenticatedModelViewSet):
             )
 
         queryset.delete()
-
-        logger.info(
-            f"{LoggingContext.PORTFOLIOS} Deleted {allocations_count} allocations for portfolio {portfolio_uuid}"
-        )
 
         return Response(
             {"detail": f"Successfully deleted {allocations_count} allocations for portfolio {portfolio_uuid}"},

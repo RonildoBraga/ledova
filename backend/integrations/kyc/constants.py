@@ -1,13 +1,3 @@
-"""
-KYC/KYT constants used across all identity verification providers.
-
-Centralises magic strings so that webhook handlers, services, models,
-and views all reference a single source of truth.
-"""
-
-# =========================================================================
-# Review Results (provider-agnostic)
-# =========================================================================
 REVIEW_GREEN = "GREEN"
 REVIEW_RED = "RED"
 REVIEW_YELLOW = "YELLOW"
@@ -18,9 +8,6 @@ REVIEW_RESULT_CHOICES = [
     (REVIEW_YELLOW, "Retry"),
 ]
 
-# =========================================================================
-# Verification Status (provider-agnostic)
-# =========================================================================
 STATUS_INIT = "init"
 STATUS_PENDING = "pending"
 STATUS_QUEUED = "queued"
@@ -38,9 +25,6 @@ VERIFICATION_STATUS_CHOICES = [
     (STATUS_PRECHECKED, "Pre-checked"),
 ]
 
-# =========================================================================
-# KYC Providers
-# =========================================================================
 PROVIDER_KYCAID = "kycaid"
 PROVIDER_SUMSUB = "sumsub"
 
@@ -49,15 +33,9 @@ KYC_PROVIDER_CHOICES = [
     (PROVIDER_KYCAID, "KYCAID"),
 ]
 
-# =========================================================================
-# KYCAID Webhook Event Types
-# =========================================================================
 KYCAID_EVENT_VERIFICATION_COMPLETED = "VERIFICATION_COMPLETED"
 KYCAID_EVENT_VERIFICATION_STATUS_CHANGED = "VERIFICATION_STATUS_CHANGED"
 
-# =========================================================================
-# Sumsub Webhook Event Types
-# =========================================================================
 SUMSUB_EVENT_APPLICANT_CREATED = "applicantCreated"
 SUMSUB_EVENT_APPLICANT_PENDING = "applicantPending"
 SUMSUB_EVENT_APPLICANT_REVIEWED = "applicantReviewed"

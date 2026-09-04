@@ -1,6 +1,6 @@
 # Project handover
 
-Last verified: 2026-09-02
+Last verified: 2026-09-03
 
 ## Project context
 
@@ -13,42 +13,68 @@ tracked backlog unless a task explicitly changes that scope.
 
 ## Current checkpoint
 
-The tenant-isolation audit is complete through PR #37 and
-[Issue #1](https://github.com/RonildoBraga/ledova/issues/1) is closed. Guardian
-is removed; PostgreSQL RLS activation remains deferred by
-[ADR 0002](backend/docs/adr/0002-rls-tenant-isolation.md).
+Branch `claude/backend-simplification` (on top of `main` `d6c09ee`) is the
+backend simplification pass. The dashboard, mobile app and shared packages were
+frozen for the whole pass: every URL, response key, cookie and header they read
+is unchanged, and `backend/shared/tests/test_cross_tenant_routes.py` pins the
+scoped routes, the operator-only routes and the collection routes per actor.
 
-[Issue #2](https://github.com/RonildoBraga/ledova/issues/2) is implemented
-through [PR #65](https://github.com/RonildoBraga/ledova/pull/65). PRs #39–#48
-landed fail-closed characterization, session rotation/revocation, strict access
-JWTs, and active-session binding. PRs #50–#57 froze and implemented the v2
-challenge primitives, canonical email boundary, durable schema, and request
-source identity. PRs #58–#65 completed the schema correction, logging and query
-privacy guards, typed SendGrid adapter, PostgreSQL admission kernel, and atomic
-reservation/job coupling.
+What the branch did, in order:
 
-The last implementation checkpoint is
-`963c68656551a0d0dbbab463479f2efa119a31f6`; subsequent handover-only changes
-introduced no runtime code. Independent exact-diff review passed for the
-queue-coupling batch, and the latest
-[post-merge CI](https://github.com/RonildoBraga/ledova/actions/runs/33620614514)
-passed every JavaScript, Django, SQLite, and PostgreSQL stage. The v2 delivery
-task remains fixed-fail on an excluded hold queue: no provider worker, v2
-endpoint, CSRF boundary, client cutover, or legacy retirement is active.
+- Verified defects closed with regression tests; the company application
+  lifecycle fixed and given its first tests.
+- Dead code out: unused modules, exception classes, queryset/manager methods,
+  service methods, serializers, dependencies; every Django signal replaced by an
+  explicit call in the service that creates the row; the `tenancy` app
+  dissolved into per-app tests. Lint (`black`, `isort`, `flake8`) is a CI gate.
+- Tenant isolation: fail-closed `visible_to_user` / `manageable_by_user`
+  querysets on every customer-facing model, owner FKs NOT NULL, explicit
+  `company` on token creation, one route matrix. PostgreSQL RLS is not planned.
+- Authentication: one auth path, the legacy `AuthViewSet` hardened in place.
+  Sessions are simplejwt refresh tokens with the `token_blacklist` app
+  (`authentication/services/tokens.py`: refresh rotates and blacklists the
+  presented token, signout revokes one session, `signout-all` revokes every
+  session, the access token is bound to its refresh via `rjti`). The OTP is
+  hashed, expiring (10 minutes) and attempt-capped (5); sign-in, sign-up and
+  verification are throttled per address; the DEBUG `000000` bypass is gone;
+  cookie flags come from `settings.AUTH_COOKIE`; access tokens live 24 hours.
+- Per-app simplification with every feature kept: compliance (shared admin
+  helpers, seed modules, flat services), users (lifecycle service, one
+  preferences guard), tokens (deployment and mint services, one review
+  workflow, thin views, market-summary annotations), companies and whitelist
+  (table-driven admin transitions, whitelist transaction helper), wallets,
+  portfolios and assets (annotated balances, flat sync, thin admins), shared
+  and core (no `LoggingContext`, library country lookup, no KYC config layer).
+- Docs: `backend/docs/CONVENTIONS.md` is the layering and style reference;
+  restating comments, docstrings and section banners removed.
 
 ## Next work
 
-Add a disjoint, kernel-owned new-challenge path without weakening the existing
-`challenge is locked_scope` proof. The smallest first batch should create a
-password-reset challenge for an exact pre-clock locked user, derive all UUIDs
-and timestamps in the kernel, and roll back challenge, delivery, and queue job
-together. Keep absent-signup user creation and its uniqueness race as a separate
-typed batch.
+1. CSRF check for cookie-sourced unsafe requests, pending the dashboard change
+   (axios `xsrfCookieName`/`xsrfHeaderName`).
+2. Explicit native body-token endpoints for the mobile app.
+3. Replace the `?auth=` query-string JWT fallback in
+   `backend/tokens/views/trading_events.py` (ISSUES.md item 3).
 
-Then implement authoritative resend and worker claim/finalization before wiring
-public endpoints. Runtime authentication still needs request-derived transport
-classification, mixed cookie/Bearer rejection, typed `access_expired`, and the
-browser CSRF boundary before client cutover.
+Decisions deferred during the simplification pass (each is a delete-or-keep
+call for the owner; the code is kept and working until decided):
+
+- Client-less API surfaces: `/api/v1/tokens/orders/`, `yield-tokens/`,
+  `tokens/{uuid}/can-receive/`, wallets `batch-check-balances`,
+  `sync-holdings`, `{uuid}/transactions`, `{uuid}/balances` (PostgreSQL-only
+  `DISTINCT ON`), `/api/holding-snapshots/`, `assets/bulk-update-prices`,
+  `/api/countries/`, `/api/waitlist/`, anonymous company listing and `acn/`.
+- Models nothing writes or reads: `SignatureRequest`, `AssetAllocation`,
+  `FiatTransaction` persistence, the unread `Wallet`/`Holding` columns,
+  `NotificationPreferences` (foldable into `UserPreferences`).
+- The materialised `PortfolioSnapshot` table versus an on-read value series.
+- Bitcoin support end to end (`integrations/blockchain/bitcoin.py`).
+- The two-reviewer company approval workflow (`ApplicationReview`,
+  `ReviewNote`): finish wiring or delete.
+- Push notifications: nothing creates `Notification` rows or defers the send
+  tasks; wire one producer or keep the model as an admin-populated inbox.
+- Mobile app status and the collapse of the four shared TypeScript packages
+  into one; both are client-side work and were out of scope here.
 
 The remaining canonical backlog is [ISSUES.md](ISSUES.md).
 
@@ -58,6 +84,5 @@ The remaining canonical backlog is [ISSUES.md](ISSUES.md).
 - Use only synthetic data, local development, and supported public testnets.
 - Never add secrets, private operational artifacts, personal data, production
   identifiers, or private endpoints to this public handover or repository.
-- Keep trading disabled and do not deploy or activate runtime RLS as part of
-  deferred-hardening work.
+- Keep trading disabled as part of deferred-hardening work.
 - Keep this file short and update it when a checkpoint or next task changes.

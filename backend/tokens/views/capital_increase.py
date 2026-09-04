@@ -1,17 +1,11 @@
-import logging
-
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
-from shared.utils.logging_utils import LoggingContext
 from shared.views import AuthenticatedModelViewSet
-from tokens.exceptions import (
-    CapitalIncreaseSubmissionException,
-    InvalidTokenStateException,
-)
+from tokens.exceptions import InvalidTokenStateException
 from tokens.filters import CapitalIncreaseFilter
 from tokens.models import CapitalIncreaseRequest, ShareToken
 from tokens.serializers import (
@@ -21,7 +15,7 @@ from tokens.serializers import (
     CapitalIncreaseUpdateSerializer,
 )
 
-logger = logging.getLogger(__name__)
+MANAGE_ACTIONS = ("create", "update", "partial_update", "destroy", "submit")
 
 
 class CapitalIncreaseViewSet(AuthenticatedModelViewSet):
@@ -39,101 +33,37 @@ class CapitalIncreaseViewSet(AuthenticatedModelViewSet):
         return CapitalIncreaseDetailSerializer
 
     def get_queryset(self):
-        if self.action in ("create", "update", "partial_update", "destroy"):
-            return CapitalIncreaseRequest.objects.with_relations().manageable_by_user(self.request.user)
-        return CapitalIncreaseRequest.objects.with_relations().visible_to_user(self.request.user)
+        queryset = CapitalIncreaseRequest.objects.with_relations()
+        if self.action in MANAGE_ACTIONS:
+            return queryset.manageable_by_user(self.request.user)
+        return queryset.visible_to_user(self.request.user)
 
-    def get_manageable_queryset(self):
-        return CapitalIncreaseRequest.objects.with_relations().manageable_by_user(self.request.user)
+    def filter_queryset(self, queryset):
+        """Query params narrow the list only; a detail action is a uuid lookup and keeps its own params."""
+        if self.action == "list":
+            return super().filter_queryset(queryset)
+        return queryset
 
     def create(self, request, *args, **kwargs):
         token_uuid = request.data.get("token")
         if not token_uuid:
             raise ValidationError({"token": "Token UUID is required."})
+        token = get_object_or_404(ShareToken.objects.manageable_by_user(request.user), uuid=token_uuid)
 
-        manageable_tokens = ShareToken.objects.manageable_by_user(request.user)
-        token = get_object_or_404(manageable_tokens, uuid=token_uuid)
-
-        if token.status != "deployed":
-            raise InvalidTokenStateException("Capital increase requests can only be created for deployed tokens.")
-
-        serializer = self.get_serializer(data=request.data)
+        serializer = self.get_serializer(data=request.data, context={**self.get_serializer_context(), "token": token})
         serializer.is_valid(raise_exception=True)
-
-        additional_shares = serializer.validated_data["additional_shares"]
-        new_authorized_total = serializer.validated_data["new_authorized_total"]
-        current_supply = int(token.total_supply) if token.total_supply else 0
-
-        expected_new_total = current_supply + additional_shares
-        if new_authorized_total < expected_new_total:
-            raise ValidationError(
-                {
-                    "new_authorized_total": (
-                        f"Must be at least current supply ({current_supply}) + "
-                        f"additional shares ({additional_shares}) = {expected_new_total}"
-                    )
-                }
-            )
-
         capital_increase = serializer.save(token=token)
+        return Response(CapitalIncreaseDetailSerializer(capital_increase).data, status=status.HTTP_201_CREATED)
 
-        logger.info(
-            f"{LoggingContext.TOKEN} User {request.user.email} created capital increase request: "
-            f"+{capital_increase.additional_shares} {token.symbol} shares"
-        )
-
-        response_serializer = CapitalIncreaseDetailSerializer(capital_increase)
-        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
-
-    def update(self, request, *args, **kwargs):
-        instance = get_object_or_404(self.get_manageable_queryset(), uuid=kwargs.get("uuid"))
-
-        if not instance.can_be_edited:
-            raise InvalidTokenStateException("Only draft requests can be edited.")
-
-        partial = kwargs.pop("partial", False)
-        serializer = self.get_serializer(instance, data=request.data, partial=partial)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-
-        logger.info(
-            f"{LoggingContext.TOKEN} User {request.user.email} updated capital increase request: {instance.uuid}"
-        )
-
-        return Response(CapitalIncreaseDetailSerializer(instance).data)
-
-    def destroy(self, request, *args, **kwargs):
-        instance = get_object_or_404(self.get_manageable_queryset(), uuid=kwargs.get("uuid"))
-
+    def perform_destroy(self, instance):
         if not instance.can_be_edited:
             raise InvalidTokenStateException("Only draft requests can be deleted.")
-
-        logger.info(
-            f"{LoggingContext.TOKEN} User {request.user.email} deleted capital increase request: {instance.uuid}"
-        )
         instance.delete()
-
-        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=["post"])
     def submit(self, request, uuid=None):
-        capital_increase = get_object_or_404(self.get_manageable_queryset(), uuid=uuid)
-
-        if not capital_increase.can_be_submitted:
-            raise InvalidTokenStateException(
-                f"Cannot submit request with status '{capital_increase.get_status_display()}'."
-            )
-
-        try:
-            capital_increase.submit(request.user)
-        except ValueError as e:
-            raise CapitalIncreaseSubmissionException(str(e))
-
-        logger.info(
-            f"{LoggingContext.TOKEN} User {request.user.email} submitted capital increase request: "
-            f"+{capital_increase.additional_shares} {capital_increase.token.symbol} shares"
-        )
-
+        capital_increase = self.get_object()
+        capital_increase.submit(request.user)
         return Response(
             {
                 "message": "Capital increase request submitted for review.",

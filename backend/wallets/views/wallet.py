@@ -7,7 +7,6 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from shared.utils.logging_utils import LoggingContext
 from shared.views.base import AuthenticatedModelViewSet
 from wallets.constants import (
     WALLET_VERIFICATION_STATUS_PENDING,
@@ -17,19 +16,25 @@ from wallets.exceptions import (
     InvalidSignatureException,
     SignatureRequiredException,
     VerificationChallengeNotFoundException,
-    WalletAlreadyExistsException,
 )
 from wallets.filters import WalletFilter
-from wallets.models import Wallet
-from wallets.serializers import WalletSerializer
+from wallets.models import HoldingSnapshot, Transaction, Wallet
+from wallets.serializers import (
+    HoldingSerializer,
+    HoldingSnapshotSerializer,
+    TransactionSerializer,
+    WalletSerializer,
+)
 from wallets.services import (
     BalanceService,
     TransferService,
     generate_verification_challenge,
     verify_wallet_signature,
 )
+from wallets.services.sync import WalletSyncService
+from wallets.tasks import sync_wallet
 
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 
 class WalletViewSet(AuthenticatedModelViewSet):
@@ -39,24 +44,30 @@ class WalletViewSet(AuthenticatedModelViewSet):
     ordering_fields = ["created_at", "chain", "verification_status"]
 
     def get_queryset(self):
-        user = self.request.user
-        return Wallet.objects.visible_to_user(user).with_market_value()
+        queryset = Wallet.objects.visible_to_user(self.request.user)
+        if self.action in ("update", "partial_update"):
+            # Lock the row before validation runs; FOR UPDATE cannot be combined with the market-value aggregate.
+            return queryset.select_for_update(of=("self",))
+        return queryset.with_market_value()
+
+    @transaction.atomic
+    def update(self, request, *args, **kwargs):
+        return super().update(request, *args, **kwargs)
+
+    def perform_update(self, serializer):
+        wallet = serializer.save()
+        serializer.instance = Wallet.objects.with_market_value().get(pk=wallet.pk)
 
     def perform_create(self, serializer):
-        address = serializer.validated_data.get("address")
-        user_account = serializer.validated_data.get("user_account")
-
-        if Wallet.objects.filter(address=address, user_account=user_account).exists():
-            raise WalletAlreadyExistsException()
-
         wallet = serializer.save(verification_status=WALLET_VERIFICATION_STATUS_PENDING)
-
-        try:
-            from wallets.tasks import sync_wallet
-
-            sync_wallet.defer(wallet_uuid=str(wallet.uuid))
-        except Exception as e:
-            logger.error(f"{LoggingContext.WALLET_SYNC} Failed to queue sync: {e}")
+        # The saved instance carries no balance annotations; respond with the annotated row.
+        serializer.instance = Wallet.objects.with_market_value().get(pk=wallet.pk)
+        # A new wallet lands in the requester's selected portfolio; the UI has no
+        # other way to put wallets into portfolios.
+        preferences = getattr(getattr(self.request.user, "userprofile", None), "preferences", None)
+        portfolio = preferences.selected_portfolio if preferences else None
+        if portfolio and portfolio.user_account_id == wallet.user_account_id:
+            portfolio.wallets.add(wallet)
 
     @action(detail=True, methods=["post"], url_path="request-verification", url_name="request-verification")
     @transaction.atomic
@@ -105,11 +116,9 @@ class WalletViewSet(AuthenticatedModelViewSet):
             wallet.save(update_fields=["verification_status", "verification_signature", "verified_at"])
 
             try:
-                from wallets.tasks import sync_wallet
-
                 sync_wallet.defer(wallet_uuid=str(wallet.uuid))
             except Exception as e:
-                logger.error(f"{LoggingContext.WALLET_SYNC} Failed to queue sync: {e}")
+                logger.error(f"Failed to queue sync: {e}")
 
             return Response(
                 {
@@ -126,29 +135,16 @@ class WalletViewSet(AuthenticatedModelViewSet):
     @action(detail=True, methods=["post"], url_path="sync", url_name="sync")
     def sync(self, request, uuid=None):
         wallet = self.get_object()
-        from wallets.services.sync import WalletSyncService
-
-        try:
-            sync_data = WalletSyncService.sync_wallet(wallet)
-            wallet.refresh_from_db()
-            serializer = self.get_serializer(wallet)
-
-            return Response(
-                {"success": True, "wallet": serializer.data, "sync_result": sync_data},
-                status=status.HTTP_200_OK,
-            )
-        except Exception as e:
-            logger.error(f"{LoggingContext.WALLET_SYNC} Sync failed: {e}")
-            return Response(
-                {"success": False, "message": f"Wallet sync failed: {e}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
+        sync_data = WalletSyncService.sync_wallet(wallet)
+        wallet.refresh_from_db()
+        return Response(
+            {"success": True, "wallet": self.get_serializer(wallet).data, "sync_result": sync_data},
+            status=status.HTTP_200_OK,
+        )
 
     @action(detail=True, methods=["post"], url_path="sync-holdings", url_name="sync-holdings")
     def sync_holdings(self, request, uuid=None):
         wallet = self.get_object()
-        from wallets.tasks import sync_wallet
-
         job_id = sync_wallet.defer(wallet_uuid=str(wallet.uuid))
         serializer = self.get_serializer(wallet)
 
@@ -160,41 +156,12 @@ class WalletViewSet(AuthenticatedModelViewSet):
     @action(detail=True, methods=["get"], url_path="holdings", url_name="holdings")
     def holdings(self, request, uuid=None):
         wallet = self.get_object()
-
-        from wallets.models import Holding
-        from wallets.serializers import HoldingSerializer, HoldingSummarySerializer
-
-        include_asset = request.query_params.get("include_asset", "false").lower() == "true"
-        min_value_param = request.query_params.get("min_value", "0")
-
-        try:
-            min_value = float(min_value_param)
-        except ValueError:
-            min_value = 0
-
-        holdings = (
-            Holding.objects.filter(wallet=wallet, asset__is_active=True, asset__is_verified=True)
-            .select_related("asset")
-            .order_by("-quantity")
-        )
-
-        if min_value > 0:
-            holdings = [h for h in holdings if h.market_value and h.market_value >= min_value]
-
-        if include_asset:
-            serializer = HoldingSerializer(holdings, many=True)
-        else:
-            serializer = HoldingSummarySerializer(holdings, many=True)
-
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        holdings = wallet.holdings.filter(asset__is_active=True, asset__is_verified=True).select_related("asset")
+        return Response(HoldingSerializer(holdings, many=True).data, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["get"], url_path="balances", url_name="balances")
     def balances(self, request, uuid=None):
         wallet = self.get_object()
-
-        from wallets.models import HoldingSnapshot
-        from wallets.serializers import HoldingSnapshotSerializer
-
         snapshots = (
             HoldingSnapshot.objects.filter(
                 holding__wallet=wallet, holding__asset__is_active=True, holding__asset__is_verified=True
@@ -211,10 +178,6 @@ class WalletViewSet(AuthenticatedModelViewSet):
     @action(detail=True, methods=["get"], url_path="transactions", url_name="transactions")
     def transactions(self, request, uuid=None):
         wallet = self.get_object()
-
-        from wallets.models import Transaction
-        from wallets.serializers import TransactionSerializer
-
         start_date = request.query_params.get("start_date")
         end_date = request.query_params.get("end_date")
 

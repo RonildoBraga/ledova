@@ -39,7 +39,7 @@ class KYCProvider(ABC):
 
     @abstractmethod
     def get_applicant_status(self, applicant_id: str) -> Dict[str, Any]:
-        """Get applicant verification status."""
+        pass
 
     @abstractmethod
     def get_applicant_data(self, applicant_id: str) -> Dict[str, Any]:
@@ -47,7 +47,7 @@ class KYCProvider(ABC):
 
     @abstractmethod
     def verify_webhook_signature(self, payload: bytes, signature: str) -> bool:
-        """Verify the authenticity of an incoming webhook."""
+        pass
 
     @abstractmethod
     def normalize_webhook(self, webhook_data: dict) -> NormalizedVerificationResult:

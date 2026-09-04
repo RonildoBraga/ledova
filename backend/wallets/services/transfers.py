@@ -7,7 +7,6 @@ from web3 import Web3
 
 from integrations.blockchain import get_blockchain_client
 from shared.constants import SUPPORTED_CHAINS
-from shared.utils.logging_utils import LoggingContext
 from wallets.exceptions import (
     BlockchainAPIError,
     InsufficientBalanceException,
@@ -15,7 +14,7 @@ from wallets.exceptions import (
     UnsupportedChainException,
 )
 
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 
 class TransferService:
@@ -183,24 +182,15 @@ class TransferService:
         from assets.models import Asset
         from wallets.models import Holding
 
-        native_asset = Asset.objects.filter(
-            chain_deployments__chain=wallet.chain,
-            asset_type="native_crypto",
-            chain_deployments__contract_address__isnull=True,
-        ).first()
-        if not native_asset:
-            return Decimal("0")
-        holding = Holding.objects.filter(wallet=wallet, asset=native_asset).first()
-        return holding.quantity if holding else Decimal("0")
+        native_asset = Asset.objects.native_for_chain(wallet.chain)
+        quantity = Holding.objects.filter(wallet=wallet, asset=native_asset).values_list("quantity", flat=True).first()
+        return quantity or Decimal("0")
 
 
 def prepare_ethereum_transaction(
     from_address: str, to_address: str, amount_eth: Decimal, current_balance: Decimal
 ) -> Dict[str, Any]:
-    logger.info(
-        f"{LoggingContext.WALLET_TRANSFER} Preparing transaction: "
-        f"from={from_address[:8]}..., to={to_address[:8]}..., amount={amount_eth} ETH"
-    )
+    logger.info(f"Preparing transaction: from={from_address[:8]}..., to={to_address[:8]}..., amount={amount_eth} ETH")
 
     try:
         if not from_address or not to_address:
@@ -222,10 +212,7 @@ def prepare_ethereum_transaction(
         total_cost_eth = amount_eth + gas_cost_eth
 
         if current_balance < total_cost_eth:
-            logger.warning(
-                f"{LoggingContext.WALLET_TRANSFER} Insufficient balance: "
-                f"available={current_balance} ETH, required={total_cost_eth} ETH"
-            )
+            logger.warning(f"Insufficient balance: available={current_balance} ETH, required={total_cost_eth} ETH")
             raise InsufficientBalanceException(
                 f"Insufficient balance. Available: {current_balance} ETH, "
                 f"Required: {total_cost_eth} ETH (including {gas_cost_eth} ETH gas fee)"
@@ -244,7 +231,7 @@ def prepare_ethereum_transaction(
         }
 
         logger.info(
-            f"{LoggingContext.WALLET_TRANSFER} Transaction prepared: "
+            "Transaction prepared: "
             f"nonce={nonce}, gas_price={gas_price_wei} Wei, gas_limit={gas_limit}, "
             f"amount={amount_eth} ETH, gas_cost={gas_cost_eth} ETH, total={total_cost_eth} ETH"
         )
@@ -264,7 +251,7 @@ def prepare_ethereum_transaction(
     except (InsufficientBalanceException, InvalidTransactionException):
         raise
     except Exception as e:
-        logger.error(f"{LoggingContext.WALLET_TRANSFER} Error preparing transaction: {str(e)}", exc_info=True)
+        logger.error(f"Error preparing transaction: {str(e)}", exc_info=True)
         raise BlockchainAPIError(f"Failed to prepare transaction: {str(e)}")
 
 
@@ -272,8 +259,7 @@ def prepare_bitcoin_transaction(
     from_address: str, to_address: str, amount_btc: Decimal, current_balance: Decimal
 ) -> Dict[str, Any]:
     logger.info(
-        f"{LoggingContext.WALLET_TRANSFER} Preparing Bitcoin transaction: "
-        f"from={from_address[:8]}..., to={to_address[:8]}..., amount={amount_btc} BTC"
+        f"Preparing Bitcoin transaction: from={from_address[:8]}..., to={to_address[:8]}..., amount={amount_btc} BTC"
     )
 
     try:
@@ -293,10 +279,7 @@ def prepare_bitcoin_transaction(
         total_cost_btc = amount_btc + fee_btc
 
         if current_balance < total_cost_btc:
-            logger.warning(
-                f"{LoggingContext.WALLET_TRANSFER} Insufficient balance: "
-                f"available={current_balance} BTC, required={total_cost_btc} BTC"
-            )
+            logger.warning(f"Insufficient balance: available={current_balance} BTC, required={total_cost_btc} BTC")
             raise InsufficientBalanceException(
                 f"Insufficient balance. Available: {current_balance} BTC, "
                 f"Required: {total_cost_btc} BTC (including {fee_btc} BTC fee)"
@@ -305,7 +288,7 @@ def prepare_bitcoin_transaction(
         amount_satoshis = int(amount_btc * Decimal(10**8))
 
         logger.info(
-            f"{LoggingContext.WALLET_TRANSFER} Bitcoin transaction prepared: "
+            "Bitcoin transaction prepared: "
             f"fee_per_byte={fee_per_byte} sat/byte, estimated_size={estimated_tx_size} bytes, "
             f"amount={amount_btc} BTC, fee={fee_btc} BTC, total={total_cost_btc} BTC"
         )
@@ -326,37 +309,37 @@ def prepare_bitcoin_transaction(
     except (InsufficientBalanceException, InvalidTransactionException):
         raise
     except Exception as e:
-        logger.error(f"{LoggingContext.WALLET_TRANSFER} Error preparing Bitcoin transaction: {str(e)}", exc_info=True)
+        logger.error(f"Error preparing Bitcoin transaction: {str(e)}", exc_info=True)
         raise BlockchainAPIError(f"Failed to prepare Bitcoin transaction: {str(e)}")
 
 
 def broadcast_ethereum_transaction(signed_tx_hex: str) -> str:
     try:
-        logger.info(f"{LoggingContext.WALLET_TRANSFER} Broadcasting signed Ethereum transaction")
+        logger.info("Broadcasting signed Ethereum transaction")
 
         client = get_blockchain_client("ETH")
         tx_hash = client.broadcast_transaction(signed_tx_hex)
 
-        logger.info(f"{LoggingContext.WALLET_TRANSFER} Ethereum transaction broadcast successful: {tx_hash}")
+        logger.info(f"Ethereum transaction broadcast successful: {tx_hash}")
         return tx_hash
 
     except Exception as e:
-        logger.error(f"{LoggingContext.WALLET_TRANSFER} Failed to broadcast Ethereum transaction: {str(e)}")
+        logger.error(f"Failed to broadcast Ethereum transaction: {str(e)}")
         raise BlockchainAPIError(f"Failed to broadcast transaction: {str(e)}")
 
 
 def broadcast_bitcoin_transaction(signed_tx_hex: str) -> str:
     try:
-        logger.info(f"{LoggingContext.WALLET_TRANSFER} Broadcasting signed Bitcoin transaction")
+        logger.info("Broadcasting signed Bitcoin transaction")
 
         client = get_blockchain_client("BTC")
         tx_hash = client.broadcast_transaction(signed_tx_hex)
 
-        logger.info(f"{LoggingContext.WALLET_TRANSFER} Bitcoin transaction broadcast successful: {tx_hash}")
+        logger.info(f"Bitcoin transaction broadcast successful: {tx_hash}")
         return tx_hash
 
     except Exception as e:
-        logger.error(f"{LoggingContext.WALLET_TRANSFER} Failed to broadcast Bitcoin transaction: {str(e)}")
+        logger.error(f"Failed to broadcast Bitcoin transaction: {str(e)}")
         raise BlockchainAPIError(f"Failed to broadcast transaction: {str(e)}")
 
 
@@ -371,7 +354,7 @@ def prepare_erc20_transaction(
     token_decimals: int,
 ) -> Dict[str, Any]:
     logger.info(
-        f"{LoggingContext.WALLET_TRANSFER} Preparing ERC-20 transaction: "
+        "Preparing ERC-20 transaction: "
         f"from={from_address[:8]}..., to={to_address[:8]}..., amount={amount} {token_symbol}"
     )
 
@@ -384,7 +367,7 @@ def prepare_erc20_transaction(
 
         if token_balance < amount:
             logger.warning(
-                f"{LoggingContext.WALLET_TRANSFER} Insufficient token balance: "
+                "Insufficient token balance: "
                 f"available={token_balance} {token_symbol}, required={amount} {token_symbol}"
             )
             raise InsufficientBalanceException(
@@ -408,10 +391,7 @@ def prepare_erc20_transaction(
         gas_cost_eth = Decimal(from_wei(gas_cost_wei, "ether"))
 
         if eth_balance < gas_cost_eth:
-            logger.warning(
-                f"{LoggingContext.WALLET_TRANSFER} Insufficient ETH for gas: "
-                f"available={eth_balance} ETH, required={gas_cost_eth} ETH"
-            )
+            logger.warning(f"Insufficient ETH for gas: available={eth_balance} ETH, required={gas_cost_eth} ETH")
             raise InsufficientBalanceException(
                 f"Insufficient ETH for gas fees. Available: {eth_balance} ETH, Required: {gas_cost_eth} ETH"
             )
@@ -436,7 +416,7 @@ def prepare_erc20_transaction(
         }
 
         logger.info(
-            f"{LoggingContext.WALLET_TRANSFER} ERC-20 transaction prepared: "
+            "ERC-20 transaction prepared: "
             f"nonce={nonce}, gas_price={gas_price_wei} Wei, gas_limit={gas_limit}, "
             f"amount={amount} {token_symbol}, gas_cost={gas_cost_eth} ETH"
         )
@@ -458,5 +438,5 @@ def prepare_erc20_transaction(
     except (InsufficientBalanceException, InvalidTransactionException):
         raise
     except Exception as e:
-        logger.error(f"{LoggingContext.WALLET_TRANSFER} Error preparing ERC-20 transaction: {str(e)}", exc_info=True)
+        logger.error(f"Error preparing ERC-20 transaction: {str(e)}", exc_info=True)
         raise BlockchainAPIError(f"Failed to prepare ERC-20 transaction: {str(e)}")

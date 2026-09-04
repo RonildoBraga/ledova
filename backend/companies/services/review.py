@@ -10,9 +10,7 @@ from companies.exceptions import (
     InsufficientReviewersException,
     InvalidReviewDecisionException,
     InvalidReviewStateException,
-    NoRecusedReviewException,
     ReviewAlreadyCompletedException,
-    ReviewerAlreadyAssignedException,
 )
 from companies.models import (
     ApplicationReview,
@@ -20,7 +18,6 @@ from companies.models import (
     CompanyStatus,
     ReviewDecision,
 )
-from shared.utils.logging_utils import LoggingContext
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -59,7 +56,7 @@ class ReviewService:
                 assigned_by=assigned_by,
             )
             reviews.append(review)
-            logger.info(f"{LoggingContext.COMPANY_REVIEW} Assigned reviewer {i}: {reviewer.email} for {company.name}")
+            logger.info(f"Assigned reviewer {i}: {reviewer.email} for {company.name}")
 
         return reviews
 
@@ -111,10 +108,7 @@ class ReviewService:
         else:
             raise InvalidReviewDecisionException(decision)
 
-        logger.info(
-            f"{LoggingContext.COMPANY_REVIEW} Reviewer {review.reviewer.email} "
-            f"decision for {review.company.name}: {decision}"
-        )
+        logger.info(f"Reviewer {review.reviewer.email} decision for {review.company.name}: {decision}")
 
         ReviewService.check_and_finalize(review.company)
 
@@ -129,19 +123,14 @@ class ReviewService:
         reviews = ApplicationReview.objects.filter(company=company).order_by("review_order")
 
         if reviews.count() != 2:
-            logger.warning(
-                f"{LoggingContext.COMPANY_REVIEW} Company {company.name} does not have exactly 2 reviews assigned"
-            )
+            logger.warning(f"Company {company.name} does not have exactly 2 reviews assigned")
             return None
 
         decisions = list(reviews.values_list("decision", flat=True))
 
         recused_count = decisions.count(ReviewDecision.RECUSED)
         if recused_count > 0:
-            logger.info(
-                f"{LoggingContext.COMPANY_REVIEW} Company {company.name}: "
-                f"{recused_count} reviewer(s) recused, need replacement"
-            )
+            logger.info(f"Company {company.name}: {recused_count} reviewer(s) recused, need replacement")
             return "needs_replacement"
 
         if ReviewDecision.REJECTED in decisions:
@@ -150,99 +139,15 @@ class ReviewService:
                 reason=rejecting_review.decision_reason or "Rejected by reviewer",
                 rejected_by=rejecting_review.reviewer,
             )
-            logger.info(f"{LoggingContext.COMPANY_REVIEW} Company {company.name}: REJECTED by reviewer")
+            logger.info(f"Company {company.name}: REJECTED by reviewer")
             return "rejected"
 
         if decisions.count(ReviewDecision.APPROVED) == 2:
             approving_review = reviews.filter(decision=ReviewDecision.APPROVED).last()
             company.approve(approved_by=approving_review.reviewer)
-            logger.info(f"{LoggingContext.COMPANY_APPROVAL} Company {company.name}: APPROVED by both reviewers")
+            logger.info(f"Company {company.name}: APPROVED by both reviewers")
             return "approved"
 
         pending_count = decisions.count(ReviewDecision.PENDING)
-        logger.info(f"{LoggingContext.COMPANY_REVIEW} Company {company.name}: {pending_count} review(s) still pending")
+        logger.info(f"Company {company.name}: {pending_count} review(s) still pending")
         return None
-
-    @staticmethod
-    def get_review_status(company: Company) -> dict:
-        reviews = ApplicationReview.objects.filter(company=company).select_related("reviewer")
-
-        status = {
-            "company_status": company.status,
-            "total_reviews": reviews.count(),
-            "pending_count": 0,
-            "approved_count": 0,
-            "rejected_count": 0,
-            "recused_count": 0,
-            "reviews": [],
-        }
-
-        for review in reviews:
-            status["reviews"].append(
-                {
-                    "order": review.review_order,
-                    "reviewer_email": review.reviewer.email,
-                    "decision": review.decision,
-                    "decision_at": review.decision_at,
-                    "is_pending": review.is_pending,
-                }
-            )
-
-            if review.decision == ReviewDecision.PENDING:
-                status["pending_count"] += 1
-            elif review.decision == ReviewDecision.APPROVED:
-                status["approved_count"] += 1
-            elif review.decision == ReviewDecision.REJECTED:
-                status["rejected_count"] += 1
-            elif review.decision == ReviewDecision.RECUSED:
-                status["recused_count"] += 1
-
-        return status
-
-    @staticmethod
-    def can_be_finalized(company: Company) -> bool:
-        if company.status != CompanyStatus.REVIEW:
-            return False
-
-        pending = ApplicationReview.objects.filter(
-            company=company,
-            decision=ReviewDecision.PENDING,
-        ).count()
-
-        return pending == 0
-
-    @staticmethod
-    def replace_recused_reviewer(
-        company: Company,
-        new_reviewer: User,
-        assigned_by: Optional[User] = None,
-    ) -> ApplicationReview:
-        recused_review = ApplicationReview.objects.filter(
-            company=company,
-            decision=ReviewDecision.RECUSED,
-        ).first()
-
-        if not recused_review:
-            raise NoRecusedReviewException()
-
-        existing = ApplicationReview.objects.filter(
-            company=company,
-            reviewer=new_reviewer,
-        ).exists()
-
-        if existing:
-            raise ReviewerAlreadyAssignedException()
-
-        new_review = ApplicationReview.objects.create(
-            company=company,
-            reviewer=new_reviewer,
-            review_order=recused_review.review_order,
-            assigned_by=assigned_by,
-        )
-
-        logger.info(
-            f"{LoggingContext.COMPANY_REVIEW} Replaced recused reviewer {recused_review.reviewer.email} "
-            f"with {new_reviewer.email} for {company.name}"
-        )
-
-        return new_review

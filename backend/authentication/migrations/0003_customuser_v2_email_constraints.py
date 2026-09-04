@@ -2,7 +2,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.db import migrations, models
 
-import authentication.security.v2_email
+import authentication.email
 
 V2_EMAIL_PREFLIGHT_ERROR = "V2 email migration preflight failed."
 
@@ -60,21 +60,21 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="customuser",
             constraint=models.CheckConstraint(
-                condition=authentication.security.v2_email.V2EmailIsPrintableASCII(models.F("email")),
+                condition=authentication.email.EmailIsPrintableASCII(models.F("email")),
                 name="auth_user_email_v2_ascii_ck",
             ),
         ),
         migrations.AddConstraint(
             model_name="customuser",
             constraint=models.CheckConstraint(
-                condition=models.Q(email=authentication.security.v2_email.V2EmailDestinationKey(models.F("email"))),
+                condition=models.Q(email=authentication.email.EmailDestinationKey(models.F("email"))),
                 name="auth_user_email_v2_canon_ck",
             ),
         ),
         migrations.AddConstraint(
             model_name="customuser",
             constraint=models.UniqueConstraint(
-                authentication.security.v2_email.V2EmailDestinationKey(models.F("email")),
+                authentication.email.EmailDestinationKey(models.F("email")),
                 name="auth_user_email_v2_key_uniq",
             ),
         ),

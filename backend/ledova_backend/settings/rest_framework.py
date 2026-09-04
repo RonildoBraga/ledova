@@ -1,14 +1,5 @@
-"""
-Django REST Framework settings for ledova_backend project.
-"""
-
-# Django Rest Framework Configuration
-# --------------------------------------------------------
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": (
-        # Hybrid authentication that supports both cookies and headers
-        "authentication.classes.HybridJWTAuthentication",
-    ),
+    "DEFAULT_AUTHENTICATION_CLASSES": ("authentication.classes.HybridJWTAuthentication",),
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_FILTER_BACKENDS": [
         "django_filters.rest_framework.DjangoFilterBackend",
@@ -35,6 +26,7 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_THROTTLE_RATES": {
         "auth": "60/min",
+        "auth_email": "10/hour",
         "anon": "200/min",
         "user": "1000/min",
         "order_write": "30/min",

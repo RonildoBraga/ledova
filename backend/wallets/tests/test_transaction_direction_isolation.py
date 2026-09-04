@@ -26,7 +26,7 @@ class TransactionDirectionIsolationTest(APITestCase):
         self.actor_cases = (
             self._make_actor_case("direction-regular", "a"),
             self._make_actor_case("direction-staff", "b", is_staff=True),
-            self._make_actor_case("direction-super", "c", is_superuser=True),
+            self._make_actor_case("direction-super", "c", is_superuser=True, is_staff=True),
         )
         regular_wallet = self.actor_cases[0][1]
         self._make_transaction(

@@ -8,7 +8,6 @@ from integrations.base_chain.exceptions import (
     BaseChainContractError,
     BaseChainTransactionError,
 )
-from shared.utils.logging_utils import LoggingContext
 from tokens.exceptions import (
     InsufficientBalanceException,
     InvalidRecipientAddressException,
@@ -117,18 +116,15 @@ class TransferService:
             except Exception:
                 tx_data["gas"] = 100000
 
-            logger.info(
-                f"{LoggingContext.TOKEN_TRANSFER} Prepared transfer: {amount} {token.symbol} "
-                f"from {from_checksum} to {to_checksum}"
-            )
+            logger.info(f"Prepared transfer: {amount} {token.symbol} from {from_checksum} to {to_checksum}")
 
             return tx_data
 
         except (NotWhitelistedException, InsufficientBalanceException, TokenPausedException):
             raise
         except Exception as e:
-            logger.error(f"{LoggingContext.TOKEN_TRANSFER} Preparation failed: {e}")
-            raise TransferPreparationException(str(e)) from e
+            logger.error(f"Preparation failed: {e}")
+            raise TransferPreparationException(f"Transfer preparation failed: {e}") from e
 
     def broadcast_transfer(self, signed_tx: str) -> tuple[str, dict]:
         try:
@@ -140,16 +136,16 @@ class TransferService:
             tx_hash = self.chain_client.send_raw_transaction(signed_tx_bytes)
             receipt = self.chain_client.wait_for_receipt(tx_hash)
 
-            logger.info(f"{LoggingContext.TOKEN_TRANSFER} Broadcast successful: {tx_hash}")
+            logger.info(f"Broadcast successful: {tx_hash}")
 
             return tx_hash, dict(receipt)
 
         except (BaseChainTransactionError, BaseChainContractError) as e:
-            logger.error(f"{LoggingContext.TOKEN_TRANSFER} Broadcast failed: {e}")
-            raise TransferBroadcastException(str(e)) from e
+            logger.error(f"Broadcast failed: {e}")
+            raise TransferBroadcastException(f"Transfer broadcast failed: {e}") from e
         except ValueError as e:
-            logger.error(f"{LoggingContext.TOKEN_TRANSFER} Invalid transaction hex: {e}")
-            raise TransferBroadcastException("Invalid transaction format") from e
+            logger.error(f"Invalid transaction hex: {e}")
+            raise TransferBroadcastException("Transfer broadcast failed: Invalid transaction format") from e
 
     @transaction.atomic
     def match_orders(
@@ -214,7 +210,7 @@ class TransferService:
         )
 
         logger.info(
-            f"{LoggingContext.TOKEN_TRANSFER} Orders matched: buy={buy_order.uuid}, "
+            f"Orders matched: buy={buy_order.uuid}, "
             f"sell={sell_order.uuid}, qty={match_quantity}, price={execution_price}, swap={swap_order.uuid}"
         )
 

@@ -1,5 +1,3 @@
-import logging
-
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
@@ -8,8 +6,6 @@ from tokens.models import SwapOrder
 from tokens.serializers.swap_order import SwapOrderListSerializer
 from tokens.services import AtomicSwapService
 from tokens.trading_wallet_access import resolve_verified_evm_wallets
-
-logger = logging.getLogger(__name__)
 
 
 class SwapOrderViewSet(AuthenticatedListViewSet):

@@ -1,5 +1,4 @@
 from rest_framework.decorators import action
-from rest_framework.response import Response
 
 from shared.views import AuthenticatedReadOnlyViewSet
 from tokens.filters import TransferOrderFilter
@@ -11,12 +10,7 @@ from tokens.serializers import (
 
 
 class TransferOrderViewSet(AuthenticatedReadOnlyViewSet):
-    """
-    Authenticated ViewSet for transfer orders.
-
-    Provides owner-scoped legacy read access. Order mutations use the signed
-    trading endpoints only.
-    """
+    """Read-only: order mutations go through the signed /api/v1/trading/ endpoints."""
 
     filterset_class = TransferOrderFilter
     ordering = ["-created_at"]

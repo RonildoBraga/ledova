@@ -9,16 +9,10 @@ from django.db import transaction
 from django.utils import timezone
 from eth_account import Account
 from eth_account.messages import encode_typed_data
-from rest_framework.exceptions import PermissionDenied
 
 from blockchain.models import BlockchainTransaction, TransactionStatus, TransactionType
 from integrations.base_chain import get_base_chain_client
-from integrations.base_chain.exceptions import (
-    BaseChainContractError,
-    BaseChainTransactionError,
-)
 from shared.utils.blockchain import decode_exception_to_message
-from shared.utils.logging_utils import LoggingContext
 from tokens.exceptions import (
     AtomicSwapNotConfiguredException,
     InsufficientBalanceException,
@@ -297,10 +291,7 @@ class AtomicSwapService:
         buy_order.status = TransferOrderStatus.PENDING_SIGNATURE
         buy_order.save(update_fields=["status", "updated_at"])
 
-        logger.info(
-            f"{LoggingContext.TOKEN_TRANSFER} Created swap order {swap_order.uuid}: "
-            f"{share_amount} shares for {payment_amount} payment"
-        )
+        logger.info(f"Created swap order {swap_order.uuid}: {share_amount} shares for {payment_amount} payment")
 
         return swap_order
 
@@ -323,64 +314,34 @@ class AtomicSwapService:
         signature: str,
         signer_address: str,
     ) -> SwapOrder:
-        logger.info(
-            f"{LoggingContext.TOKEN_TRANSFER} submit_signature called - "
-            f"swap={swap_order.uuid}, signer={signer_address}"
-        )
-
         if swap_order.is_expired:
-            logger.warning(f"{LoggingContext.TOKEN_TRANSFER} Swap {swap_order.uuid} is expired")
             raise SwapExpiredException()
 
         signer_checksum = self.chain_client.to_checksum_address(signer_address)
-        seller_checksum = self.chain_client.to_checksum_address(swap_order.seller_address)
-        buyer_checksum = self.chain_client.to_checksum_address(swap_order.buyer_address)
-
-        logger.info(
-            f"{LoggingContext.TOKEN_TRANSFER} Address comparison - "
-            f"signer={signer_checksum}, seller={seller_checksum}, buyer={buyer_checksum}"
-        )
-
-        if signer_checksum == seller_checksum:
+        if signer_checksum == self.chain_client.to_checksum_address(swap_order.seller_address):
             expected_signer = swap_order.seller_address
             is_seller = True
-            logger.info(f"{LoggingContext.TOKEN_TRANSFER} Signer identified as SELLER")
-        elif signer_checksum == buyer_checksum:
+        elif signer_checksum == self.chain_client.to_checksum_address(swap_order.buyer_address):
             expected_signer = swap_order.buyer_address
             is_seller = False
-            logger.info(f"{LoggingContext.TOKEN_TRANSFER} Signer identified as BUYER")
         else:
-            logger.error(
-                f"{LoggingContext.TOKEN_TRANSFER} Signer {signer_checksum} is neither "
-                f"seller {seller_checksum} nor buyer {buyer_checksum}"
-            )
             raise SwapSignatureException("Signer is neither the buyer nor seller")
 
-        logger.info(f"{LoggingContext.TOKEN_TRANSFER} Verifying signature for {expected_signer}")
         if not self.verify_signature(swap_order, signature, expected_signer):
-            logger.error(
-                f"{LoggingContext.TOKEN_TRANSFER} Signature verification failed for "
-                f"swap={swap_order.uuid}, signer={expected_signer}"
-            )
             raise SwapSignatureException("Invalid signature")
-
-        logger.info(f"{LoggingContext.TOKEN_TRANSFER} Signature verified successfully")
 
         if is_seller:
             swap_order.add_seller_signature(signature)
-            logger.info(f"{LoggingContext.TOKEN_TRANSFER} Seller signed swap {swap_order.uuid}")
         else:
             swap_order.add_buyer_signature(signature)
-            logger.info(f"{LoggingContext.TOKEN_TRANSFER} Buyer signed swap {swap_order.uuid}")
-
-        logger.info(f"{LoggingContext.TOKEN_TRANSFER} Swap {swap_order.uuid} ready status: {swap_order.is_ready}")
+        logger.info(f"{'Seller' if is_seller else 'Buyer'} signed swap {swap_order.uuid} (ready={swap_order.is_ready})")
 
         from tokens.events import publish_trading_event
 
         publish_trading_event("swap_signed", str(swap_order.share_token.uuid))
 
         if swap_order.is_ready:
-            logger.info(f"{LoggingContext.TOKEN_TRANSFER} Both signatures present, executing swap")
+            logger.info(f"Both signatures present, executing swap {swap_order.uuid}")
             self.execute_swap(swap_order)
 
         return swap_order
@@ -460,7 +421,7 @@ class AtomicSwapService:
                     gas_used=receipt.get("gasUsed"),
                 )
                 swap_order.mark_completed()
-                logger.info(f"{LoggingContext.TOKEN_TRANSFER} Swap {swap_order.uuid} completed: {tx_hash}")
+                logger.info(f"Swap {swap_order.uuid} completed: {tx_hash}")
 
                 from tokens.events import publish_trading_event
 
@@ -468,7 +429,7 @@ class AtomicSwapService:
             else:
                 tx_record.mark_reverted("Transaction reverted")
                 swap_order.mark_failed("Transaction reverted")
-                logger.error(f"{LoggingContext.TOKEN_TRANSFER} Swap {swap_order.uuid} failed: {tx_hash}")
+                logger.error(f"Swap {swap_order.uuid} failed: {tx_hash}")
 
                 from tokens.events import publish_trading_event
 
@@ -476,17 +437,6 @@ class AtomicSwapService:
 
             return tx_hash
 
-        except (BaseChainContractError, BaseChainTransactionError) as e:
-            raw_error = str(e)
-            user_friendly_msg = decode_exception_to_message(e, "Swap execution failed")
-            tx_record.mark_failed(raw_error)
-            swap_order.mark_failed(raw_error)
-            logger.error(f"{LoggingContext.TOKEN_TRANSFER} Swap execution failed: {raw_error}")
-
-            from tokens.events import publish_trading_event
-
-            publish_trading_event("swap_failed", str(swap_order.share_token.uuid))
-            raise SwapExecutionException(user_friendly_msg) from e
         except InsufficientBalanceException:
             raise
         except Exception as e:
@@ -494,46 +444,19 @@ class AtomicSwapService:
             user_friendly_msg = decode_exception_to_message(e, "Swap execution failed")
             tx_record.mark_failed(raw_error)
             swap_order.mark_failed(raw_error)
-            logger.error(f"{LoggingContext.TOKEN_TRANSFER} Swap execution error: {raw_error}")
+            logger.error(f"Swap execution failed: {raw_error}")
 
             from tokens.events import publish_trading_event
 
             publish_trading_event("swap_failed", str(swap_order.share_token.uuid))
-            raise SwapExecutionException(user_friendly_msg) from e
+            raise SwapExecutionException(f"Swap execution failed: {user_friendly_msg}") from e
 
     def get_pending_swaps_for_wallet_ids(self, wallet_ids):
         """Return a lazy owner-bound queryset so the API can paginate in SQL."""
         return SwapOrder.objects.pending_for_wallet_ids(wallet_ids)
 
-    def determine_user_role(self, swap_order: SwapOrder, wallet_address: str) -> dict:
-        wallet_checksum = self.chain_client.to_checksum_address(wallet_address)
-        seller_checksum = self.chain_client.to_checksum_address(swap_order.seller_address)
-        buyer_checksum = self.chain_client.to_checksum_address(swap_order.buyer_address)
-
-        if wallet_checksum == seller_checksum:
-            return {
-                "role": "seller",
-                "has_signed": swap_order.seller_has_signed,
-                "is_valid": True,
-            }
-        elif wallet_checksum == buyer_checksum:
-            return {
-                "role": "buyer",
-                "has_signed": swap_order.buyer_has_signed,
-                "is_valid": True,
-            }
-        else:
-            raise PermissionDenied("Wallet address is not a party to this swap.")
-
     def find_swap_order_by_transfer_order(self, transfer_order: TransferOrder) -> Optional[SwapOrder]:
         return SwapOrder.objects.for_transfer_order(transfer_order)
-
-    def expire_stale_orders(self) -> int:
-        expired = SwapOrder.objects.stale_pending(timezone.now())
-        count = expired.count()
-        for order in expired:
-            order.mark_expired()
-        return count
 
     def is_share_token_approved(self, token_address: str) -> bool:
         try:
@@ -541,16 +464,7 @@ class AtomicSwapService:
             checksum = self.chain_client.to_checksum_address(token_address)
             return contract.functions.approvedShareTokens(checksum).call()
         except Exception as e:
-            logger.error(f"{LoggingContext.TOKEN} Error checking token approval: {e}")
-            return False
-
-    def is_payment_token_approved(self, token_address: str) -> bool:
-        try:
-            contract = self.chain_client.load_contract("AtomicSwap", self.contract_address)
-            checksum = self.chain_client.to_checksum_address(token_address)
-            return contract.functions.approvedPaymentTokens(checksum).call()
-        except Exception as e:
-            logger.error(f"{LoggingContext.TOKEN} Error checking payment token approval: {e}")
+            logger.error(f"Error checking token approval: {e}")
             return False
 
     def approve_share_token(self, token_address: str) -> Optional[str]:
@@ -558,10 +472,10 @@ class AtomicSwapService:
             checksum = self.chain_client.to_checksum_address(token_address)
 
             if self.is_share_token_approved(checksum):
-                logger.info(f"{LoggingContext.TOKEN} ShareToken {checksum} already approved in AtomicSwap")
+                logger.info(f"ShareToken {checksum} already approved in AtomicSwap")
                 return None
 
-            logger.info(f"{LoggingContext.TOKEN} Approving ShareToken {checksum} in AtomicSwap contract")
+            logger.info(f"Approving ShareToken {checksum} in AtomicSwap contract")
 
             contract = self.chain_client.load_contract("AtomicSwap", self.contract_address)
             approve_fn = contract.functions.setShareTokenApproval(checksum, True)
@@ -573,12 +487,12 @@ class AtomicSwapService:
             )
 
             if receipt and receipt.get("status") == 1:
-                logger.info(f"{LoggingContext.TOKEN} ShareToken {checksum} approved in AtomicSwap - tx: {tx_hash}")
+                logger.info(f"ShareToken {checksum} approved in AtomicSwap - tx: {tx_hash}")
                 return tx_hash
             else:
-                logger.error(f"{LoggingContext.TOKEN} ShareToken approval transaction reverted")
+                logger.error("ShareToken approval transaction reverted")
                 return None
 
         except Exception as e:
-            logger.error(f"{LoggingContext.TOKEN} Failed to approve ShareToken in AtomicSwap: {e}")
+            logger.error(f"Failed to approve ShareToken in AtomicSwap: {e}")
             return None

@@ -1,19 +1,13 @@
-"""
-Contains custom authentication classes for use with Django REST Framework.
-"""
-
 import logging
-import os
 
 from django.conf import settings
 from rest_framework import HTTP_HEADER_ENCODING
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.exceptions import InvalidToken
 
-from authentication.models.user_token import UserToken
-from shared.utils.logging_utils import LoggingContext
+from authentication.services.tokens import TokenService
 
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 
 class HybridJWTAuthentication(JWTAuthentication):
@@ -30,8 +24,7 @@ class HybridJWTAuthentication(JWTAuthentication):
     def _get_token_and_source(self, request):
         """Returns (raw_token, source) where source is 'cookie' or 'header'."""
         if hasattr(request, "COOKIES"):
-            cookie_access_name = os.getenv("COOKIE_ACCESS_NAME", "access")
-            token = request.COOKIES.get(cookie_access_name)
+            token = request.COOKIES.get(settings.AUTH_COOKIE["access"])
             if token:
                 return token, "cookie"
 
@@ -60,12 +53,12 @@ class HybridJWTAuthentication(JWTAuthentication):
         try:
             validated_token = self.get_validated_token(raw_token)
 
-            token_obj = UserToken.objects.get_by_active_access_token(raw_token)
-            if not token_obj:
+            # An access token is only as live as the refresh token it was issued with.
+            if not TokenService.is_session_live(validated_token.get("rjti")):
                 raise InvalidToken("Token has been revoked")
 
             return self.get_user(validated_token), validated_token
 
         except Exception as e:
-            logger.debug(f"{LoggingContext.AUTH} {source} auth failed, proceeding as anonymous: {e}")
+            logger.debug(f"{source} auth failed, proceeding as anonymous: {e}")
             return None

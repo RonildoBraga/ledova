@@ -4,9 +4,8 @@ from datetime import timedelta
 from django.utils import timezone
 from procrastinate import RetryStrategy
 
-from ledova_backend.procrastinate_app import app
 from blockchain.models import BlockchainTransaction, TransactionStatus, TransactionType
-from shared.utils.logging_utils import LoggingContext
+from ledova_backend.procrastinate_app import app
 from tokens.models import ShareIssuance, ShareToken, ShareTokenStatus
 from tokens.services import ShareTokenService
 
@@ -22,7 +21,7 @@ def deploy_share_token_task(token_uuid: str):
         token = ShareToken.objects.select_related("company").get(uuid=token_uuid)
 
         if token.status != ShareTokenStatus.DEPLOYING:
-            logger.warning(f"{LoggingContext.TOKEN_DEPLOYMENT} Token {token_uuid} not deployable: {token.status}")
+            logger.warning(f"Token {token_uuid} not deployable: {token.status}")
             return {"success": False, "error": "Token is not in deploying state"}
 
         company = token.company
@@ -30,7 +29,7 @@ def deploy_share_token_task(token_uuid: str):
 
         primary_wallet = company.get_primary_wallet()
         if not primary_wallet:
-            logger.error(f"{LoggingContext.TOKEN_DEPLOYMENT} No primary ETH wallet for {company.name}")
+            logger.error(f"No primary ETH wallet for {company.name}")
             token.status = ShareTokenStatus.DRAFT
             token.save(update_fields=["status", "updated_at"])
             return {"success": False, "error": "Company has no operator wallet or verified ETH wallet"}
@@ -61,7 +60,7 @@ def deploy_share_token_task(token_uuid: str):
         )
 
         issuance.mark_processing()
-        logger.info(f"{LoggingContext.TOKEN_DEPLOYMENT} Deploying {token.symbol} for {company.name}")
+        logger.info(f"Deploying {token.symbol} for {company.name}")
 
         service = ShareTokenService()
         result = service.deploy_share_token(
@@ -95,7 +94,7 @@ def deploy_share_token_task(token_uuid: str):
             transaction=tx_record,
         )
 
-        logger.info(f"{LoggingContext.TOKEN_DEPLOYMENT} Deployed {token.symbol} at {contract_address}")
+        logger.info(f"Deployed {token.symbol} at {contract_address}")
 
         try:
             from tokens.services import AtomicSwapService
@@ -103,13 +102,9 @@ def deploy_share_token_task(token_uuid: str):
             swap_service = AtomicSwapService()
             approval_tx = swap_service.approve_share_token(contract_address)
             if approval_tx:
-                logger.info(
-                    f"{LoggingContext.TOKEN_DEPLOYMENT} Auto-approved {token.symbol} for AtomicSwap - tx: {approval_tx}"
-                )
+                logger.info(f"Auto-approved {token.symbol} for AtomicSwap - tx: {approval_tx}")
         except Exception as e:
-            logger.warning(
-                f"{LoggingContext.TOKEN_DEPLOYMENT} Could not auto-approve {token.symbol} for AtomicSwap: {e}"
-            )
+            logger.warning(f"Could not auto-approve {token.symbol} for AtomicSwap: {e}")
 
         return {
             "success": True,
@@ -118,11 +113,11 @@ def deploy_share_token_task(token_uuid: str):
         }
 
     except ShareToken.DoesNotExist:
-        logger.error(f"{LoggingContext.TOKEN_DEPLOYMENT} Token not found: {token_uuid}")
+        logger.error(f"Token not found: {token_uuid}")
         return {"success": False, "error": "Token not found"}
 
     except Exception as exc:
-        logger.error(f"{LoggingContext.TOKEN_DEPLOYMENT} Deployment failed: {exc}")
+        logger.error(f"Deployment failed: {exc}")
 
         if tx_record:
             tx_record.mark_failed(str(exc))
@@ -161,10 +156,10 @@ def check_pending_token_deployments():
                 if contract_address:
                     token.mark_deployed(contract_address)
                     resolved += 1
-                    logger.info(f"{LoggingContext.TOKEN_DEPLOYMENT} Resolved {token.symbol} at {contract_address}")
+                    logger.info(f"Resolved {token.symbol} at {contract_address}")
             checked += 1
         except Exception as e:
-            logger.error(f"{LoggingContext.TOKEN_DEPLOYMENT} Check failed for {token.uuid}: {e}")
+            logger.error(f"Check failed for {token.uuid}: {e}")
 
-    logger.info(f"{LoggingContext.TASK} Pending deployments: checked={checked}, resolved={resolved}")
+    logger.info(f"Pending deployments: checked={checked}, resolved={resolved}")
     return {"checked": checked, "resolved": resolved}

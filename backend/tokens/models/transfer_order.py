@@ -25,18 +25,14 @@ class TransferOrder(BaseModel):
     wallet = models.ForeignKey(
         "wallets.Wallet",
         on_delete=models.PROTECT,
-        null=True,
-        blank=True,
         related_name="transfer_orders",
-        help_text="Verified tenant wallet that owns this order. Legacy unbound orders fail closed.",
+        help_text="Verified tenant wallet that owns this order.",
     )
     owner_account = models.ForeignKey(
         "users.UserAccount",
         on_delete=models.PROTECT,
-        null=True,
-        blank=True,
         related_name="transfer_orders",
-        help_text="Immutable tenant snapshot for this order. Legacy unbound orders fail closed.",
+        help_text="Immutable tenant snapshot for this order.",
     )
 
     order_type = models.CharField(
@@ -53,7 +49,6 @@ class TransferOrder(BaseModel):
     quantity = models.PositiveBigIntegerField()
     price_per_share = models.DecimalField(max_digits=18, decimal_places=2)
 
-    # Partial fill support
     min_quantity = models.PositiveBigIntegerField(
         default=0,
         help_text="Minimum quantity per fill. 0 means exact match only (min_quantity = remaining).",
@@ -63,7 +58,6 @@ class TransferOrder(BaseModel):
         help_text="Total quantity already filled across all partial fills.",
     )
 
-    # Modification tracking
     original_quantity = models.PositiveBigIntegerField(
         null=True,
         blank=True,
@@ -120,15 +114,6 @@ class TransferOrder(BaseModel):
             models.Index(fields=["wallet_address"]),
             models.Index(fields=["order_type", "status"]),
         ]
-        constraints = [
-            models.CheckConstraint(
-                condition=(
-                    models.Q(wallet__isnull=True, owner_account__isnull=True)
-                    | models.Q(wallet__isnull=False, owner_account__isnull=False)
-                ),
-                name="transfer_order_ownership_pair",
-            ),
-        ]
 
     def __str__(self):
         return f"{self.get_order_type_display()} {self.quantity} {self.token.symbol} @ ${self.price_per_share}"
@@ -139,30 +124,15 @@ class TransferOrder(BaseModel):
 
     @property
     def remaining_quantity(self):
-        """Quantity still available to be filled."""
         return self.quantity - self.filled_quantity
 
     @property
     def remaining_value(self):
-        """Value of remaining unfilled quantity."""
         return self.remaining_quantity * self.price_per_share
 
     @property
-    def is_fully_filled(self):
-        """Whether the order has been completely filled."""
-        return self.filled_quantity >= self.quantity
-
-    @property
-    def is_partially_filled(self):
-        """Whether the order has some fills but is not complete."""
-        return self.filled_quantity > 0 and self.filled_quantity < self.quantity
-
-    @property
     def effective_min_quantity(self):
-        """
-        The effective minimum quantity for matching.
-        If min_quantity is 0 (exact match mode), returns remaining_quantity.
-        """
+        """min_quantity of 0 means exact-match mode: the whole remaining quantity."""
         if self.min_quantity == 0:
             return self.remaining_quantity
         return min(self.min_quantity, self.remaining_quantity)
@@ -173,7 +143,6 @@ class TransferOrder(BaseModel):
 
     @property
     def can_be_modified(self):
-        """Whether this order can be modified."""
         return (
             self.status in [TransferOrderStatus.OPEN, TransferOrderStatus.PARTIALLY_FILLED]
             and not self.has_pending_swap
@@ -181,7 +150,6 @@ class TransferOrder(BaseModel):
 
     @property
     def has_pending_swap(self):
-        """Check if there's a pending swap that would block modification."""
         from .choices import SwapOrderStatus
 
         pending_statuses = [
@@ -196,27 +164,8 @@ class TransferOrder(BaseModel):
             or self.swap_as_buy.filter(status__in=pending_statuses).exists()
         )
 
-    def match_with(self, other_order: "TransferOrder"):
-        self.matched_order = other_order
-        self.status = TransferOrderStatus.MATCHED
-        self.save(update_fields=["matched_order", "status", "updated_at"])
-
-        other_order.matched_order = self
-        other_order.status = TransferOrderStatus.MATCHED
-        other_order.save(update_fields=["matched_order", "status", "updated_at"])
-
     def partial_match_with(self, other_order: "TransferOrder", match_quantity: int):
-        """
-        Record a partial match between two orders.
-
-        Updates filled_quantity and status for both orders based on the match quantity.
-        Full fills result in MATCHED status; partial fills result in PARTIALLY_FILLED.
-
-        Args:
-            other_order: The order to match with.
-            match_quantity: The quantity to match between the two orders.
-        """
-        # Update this order
+        """Full fills become MATCHED and partial fills PARTIALLY_FILLED on both orders."""
         self.filled_quantity = (self.filled_quantity or 0) + match_quantity
         self.matched_order = other_order
 
@@ -227,7 +176,6 @@ class TransferOrder(BaseModel):
 
         self.save(update_fields=["filled_quantity", "matched_order", "status", "updated_at"])
 
-        # Update the other order
         other_order.filled_quantity = (other_order.filled_quantity or 0) + match_quantity
         other_order.matched_order = self
 
@@ -237,11 +185,6 @@ class TransferOrder(BaseModel):
             other_order.status = TransferOrderStatus.PARTIALLY_FILLED
 
         other_order.save(update_fields=["filled_quantity", "matched_order", "status", "updated_at"])
-
-    def mark_pending_signature(self, signature_request):
-        self.signature_request = signature_request
-        self.status = TransferOrderStatus.PENDING_SIGNATURE
-        self.save(update_fields=["signature_request", "status", "updated_at"])
 
     def mark_executing(self, tx_hash: str):
         self.tx_hash = tx_hash
@@ -279,47 +222,8 @@ class TransferOrder(BaseModel):
         self.save(update_fields=["status", "updated_at"])
 
     def record_original_values(self):
-        """
-        Preserve original values on first modification.
-        Call this before applying any modifications.
-        """
+        """Snapshot the pre-modification values the first time an order is modified."""
         if self.original_quantity is None:
             self.original_quantity = self.quantity
         if self.original_price is None:
             self.original_price = self.price_per_share
-
-    def add_fill(self, fill_quantity: int):
-        """
-        Record a partial fill and update status accordingly.
-
-        Args:
-            fill_quantity: Number of units filled in this transaction.
-
-        Raises:
-            ValueError: If fill_quantity exceeds remaining quantity.
-        """
-        if fill_quantity > self.remaining_quantity:
-            raise ValueError(f"Fill quantity ({fill_quantity}) exceeds remaining quantity ({self.remaining_quantity})")
-
-        self.filled_quantity += fill_quantity
-
-        # Update status based on fill state
-        if self.is_fully_filled:
-            self.status = TransferOrderStatus.COMPLETED
-            self.completed_at = timezone.now()
-        elif self.is_partially_filled:
-            self.status = TransferOrderStatus.PARTIALLY_FILLED
-
-        self.save(update_fields=["filled_quantity", "status", "completed_at", "updated_at"])
-
-    def update_status_from_fill(self):
-        """Update status based on current fill state."""
-        if self.is_fully_filled:
-            if self.status != TransferOrderStatus.COMPLETED:
-                self.status = TransferOrderStatus.COMPLETED
-                self.completed_at = timezone.now()
-                self.save(update_fields=["status", "completed_at", "updated_at"])
-        elif self.is_partially_filled:
-            if self.status == TransferOrderStatus.OPEN:
-                self.status = TransferOrderStatus.PARTIALLY_FILLED
-                self.save(update_fields=["status", "updated_at"])

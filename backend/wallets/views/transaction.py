@@ -1,11 +1,7 @@
-import logging
-
 from shared.views import AuthenticatedReadOnlyViewSet
 from wallets.filters import TransactionFilter
 from wallets.models import Transaction
 from wallets.serializers import TransactionSerializer
-
-logger = logging.getLogger("ledova_backend")
 
 
 class TransactionViewSet(AuthenticatedReadOnlyViewSet):

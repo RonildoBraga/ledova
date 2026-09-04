@@ -1,18 +1,14 @@
-from django.conf import settings
 from eth_account import Account
 from rest_framework import serializers
 from web3 import Web3
 
 from tokens.models import (
-    OrderModificationLog,
     ShareToken,
     Stablecoin,
     TransferOrder,
     TransferOrderType,
 )
-from wallets.constants import WALLET_VERIFICATION_STATUS_VERIFIED
 from wallets.models import Wallet
-from wallets.models.wallet import Blockchain
 
 
 class TransferOrderListSerializer(serializers.ModelSerializer):
@@ -133,14 +129,10 @@ class TransferOrderCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError({"wallet_uuid": "An authenticated wallet owner is required."})
 
         wallet = (
-            Wallet.objects.select_related("user_account")
-            .filter(
-                uuid=data["wallet_uuid"],
-                user_account__user_profiles__user=request.user,
-                verification_status=WALLET_VERIFICATION_STATUS_VERIFIED,
-                chain__in=(Blockchain.ETHEREUM.value, Blockchain.BASE.value),
-            )
-            .distinct()
+            Wallet.objects.visible_to_user(request.user)
+            .verified_evm()
+            .select_related("user_account")
+            .filter(uuid=data["wallet_uuid"])
             .first()
         )
 
@@ -215,27 +207,9 @@ class BroadcastTransferSerializer(serializers.Serializer):
         if to_address is None:
             raise serializers.ValidationError("Contract creation transactions are not allowed")
 
-        known_addresses = set()
-        for attr in [
-            "WHITELIST_CONTRACT_ADDRESS",
-            "SHARE_TOKEN_FACTORY_ADDRESS",
-            "ATOMIC_SWAP_ADDRESS",
-            "STABLECOIN_CONTRACT_ADDRESS",
-            "SHARE_EXCHANGE_ADDRESS",
-        ]:
-            addr = getattr(settings, attr, "")
-            if addr:
-                known_addresses.add(addr.lower())
+        from tokens.services.contracts import known_contract_addresses
 
-        for token in ShareToken.objects.filter(contract_address__isnull=False).values_list(
-            "contract_address", flat=True
-        ):
-            known_addresses.add(token.lower())
-
-        for coin in Stablecoin.objects.filter(is_active=True).values_list("contract_address", flat=True):
-            known_addresses.add(coin.lower())
-
-        if to_address.lower() not in known_addresses:
+        if to_address.lower() not in known_contract_addresses():
             raise serializers.ValidationError("Transaction target is not a known Ledova contract")
 
         return value
@@ -253,16 +227,6 @@ class OrderModificationRequestSerializer(serializers.Serializer):
         return data
 
 
-class OrderModificationMessageResponseSerializer(serializers.Serializer):
-
-    message = serializers.CharField()
-    message_hash = serializers.CharField()
-    order_uuid = serializers.UUIDField()
-    nonce = serializers.IntegerField()
-    current_values = serializers.DictField()
-    new_values = serializers.DictField()
-
-
 class OrderModificationExecuteSerializer(serializers.Serializer):
 
     message = serializers.CharField()
@@ -274,27 +238,3 @@ class OrderModificationExecuteSerializer(serializers.Serializer):
         if len(value) != 132:  # 0x + 130 hex chars
             raise serializers.ValidationError("Invalid signature length")
         return value
-
-
-class OrderModificationLogSerializer(serializers.ModelSerializer):
-
-    class Meta:
-        model = OrderModificationLog
-        fields = [
-            "uuid",
-            "field_name",
-            "old_value",
-            "new_value",
-            "signer_address",
-            "created_at",
-        ]
-        read_only_fields = fields
-
-
-class OrderModificationHistorySerializer(serializers.Serializer):
-
-    order_uuid = serializers.UUIDField()
-    original_quantity = serializers.IntegerField(allow_null=True)
-    original_price = serializers.DecimalField(max_digits=18, decimal_places=2, allow_null=True)
-    modification_count = serializers.IntegerField()
-    modifications = OrderModificationLogSerializer(many=True)

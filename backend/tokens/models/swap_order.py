@@ -17,7 +17,6 @@ if TYPE_CHECKING:
 
 
 class SwapOrder(BaseModel):
-
     objects = SwapOrderQuerySet.as_manager()
 
     sell_order = models.ForeignKey(
@@ -166,16 +165,7 @@ class SwapOrder(BaseModel):
         self.save(update_fields=update_fields)
 
     def mark_completed(self):
-        """
-        Mark the swap as completed and update the transfer orders accordingly.
-
-        For partial fills, orders are marked as:
-        - COMPLETED if fully filled (filled_quantity >= quantity)
-        - OPEN if partially filled (still has remaining quantity)
-
-        Note: filled_quantity is already updated when the match is created
-        (in partial_match_with), so we don't update it here.
-        """
+        """filled_quantity was already applied in partial_match_with; only statuses change here."""
         self.status = SwapOrderStatus.COMPLETED
         self.completed_at = timezone.now()
         self.save(update_fields=["status", "completed_at", "updated_at"])
@@ -185,10 +175,7 @@ class SwapOrder(BaseModel):
         for order in [self.sell_order, self.buy_order]:
             order.tx_hash = self.tx_hash
 
-            # Determine the correct status based on fill state
-            # filled_quantity was already set when the match was created
             if order.filled_quantity >= order.quantity:
-                # Fully filled
                 order.status = TransferOrderStatus.COMPLETED
                 order.completed_at = self.completed_at
                 update_fields = ["status", "completed_at", "tx_hash", "updated_at"]
@@ -200,13 +187,7 @@ class SwapOrder(BaseModel):
             order.save(update_fields=update_fields)
 
     def mark_failed(self, error_message: str):
-        """
-        Mark the swap as failed.
-
-        For partial fills, this should revert the filled_quantity that was
-        optimistically set when the match was created, and return orders
-        to a matchable state (OPEN or PARTIALLY_FILLED).
-        """
+        """Revert the optimistically applied filled_quantity and return both orders to a matchable status."""
         self.status = SwapOrderStatus.FAILED
         self.error_message = error_message
         self.save(update_fields=["status", "error_message", "updated_at"])
@@ -217,10 +198,8 @@ class SwapOrder(BaseModel):
             if order.status in [TransferOrderStatus.FAILED, TransferOrderStatus.COMPLETED]:
                 continue
 
-            # Revert the filled_quantity that was optimistically set
             order.filled_quantity = max(0, (order.filled_quantity or 0) - self.share_amount)
 
-            # Return to appropriate matchable status
             if order.filled_quantity > 0:
                 order.status = TransferOrderStatus.PARTIALLY_FILLED
             else:
@@ -228,7 +207,3 @@ class SwapOrder(BaseModel):
 
             order.error_message = error_message
             order.save(update_fields=["filled_quantity", "status", "error_message", "updated_at"])
-
-    def mark_expired(self):
-        self.status = SwapOrderStatus.EXPIRED
-        self.save(update_fields=["status", "updated_at"])

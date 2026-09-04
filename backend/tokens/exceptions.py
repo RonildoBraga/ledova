@@ -7,12 +7,6 @@ class TokenFactoryNotConfiguredException(APIException):
     default_detail = "Token factory contract is not configured."
     default_code = "token_factory_not_configured"
 
-    def __init__(self, detail=None):
-        if detail:
-            super().__init__(detail=detail)
-        else:
-            super().__init__()
-
 
 class OperatorKeyNotConfiguredException(APIException):
     status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -25,41 +19,17 @@ class TokenDeploymentFailedException(APIException):
     default_detail = "Token deployment failed."
     default_code = "token_deployment_failed"
 
-    def __init__(self, detail=None):
-        if detail:
-            super().__init__(detail=f"Token deployment failed: {detail}")
-        else:
-            super().__init__()
-
-
-class TokenNotFoundException(APIException):
-    status_code = status.HTTP_404_NOT_FOUND
-    default_detail = "Token not found."
-    default_code = "token_not_found"
-
 
 class InvalidTokenStateException(APIException):
     status_code = status.HTTP_400_BAD_REQUEST
     default_detail = "Token is not in the required state for this operation."
     default_code = "invalid_token_state"
 
-    def __init__(self, detail=None):
-        if detail:
-            super().__init__(detail=detail)
-        else:
-            super().__init__()
-
 
 class CompanyNotReadyException(APIException):
     status_code = status.HTTP_400_BAD_REQUEST
     default_detail = "Company is not ready for this operation."
     default_code = "company_not_ready"
-
-    def __init__(self, detail=None):
-        if detail:
-            super().__init__(detail=detail)
-        else:
-            super().__init__()
 
 
 class InvalidTokenAddressException(APIException):
@@ -80,12 +50,6 @@ class InvalidHolderAddressException(APIException):
     default_code = "invalid_holder_address"
 
 
-class TokenInfoRetrievalException(APIException):
-    status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-    default_detail = "Failed to retrieve token information."
-    default_code = "token_info_retrieval_failed"
-
-
 class TokenBalanceRetrievalException(APIException):
     status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
     default_detail = "Failed to retrieve token balance."
@@ -96,12 +60,6 @@ class ContractLoadException(APIException):
     status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
     default_detail = "Failed to load contract."
     default_code = "contract_load_failed"
-
-    def __init__(self, detail=None):
-        if detail:
-            super().__init__(detail=f"Failed to load contract: {detail}")
-        else:
-            super().__init__()
 
 
 class NotWhitelistedException(APIException):
@@ -149,29 +107,11 @@ class TransferPreparationException(APIException):
     default_detail = "Failed to prepare transfer."
     default_code = "transfer_preparation_failed"
 
-    def __init__(self, detail=None):
-        if detail:
-            super().__init__(detail=f"Transfer preparation failed: {detail}")
-        else:
-            super().__init__()
-
 
 class TransferBroadcastException(APIException):
     status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
     default_detail = "Failed to broadcast transfer."
     default_code = "transfer_broadcast_failed"
-
-    def __init__(self, detail=None):
-        if detail:
-            super().__init__(detail=f"Transfer broadcast failed: {detail}")
-        else:
-            super().__init__()
-
-
-class OrderNotFoundException(APIException):
-    status_code = status.HTTP_404_NOT_FOUND
-    default_detail = "Order not found."
-    default_code = "order_not_found"
 
 
 class OrderCancellationException(APIException):
@@ -179,23 +119,11 @@ class OrderCancellationException(APIException):
     default_detail = "Order cannot be cancelled."
     default_code = "order_cancellation_failed"
 
-    def __init__(self, detail=None):
-        if detail:
-            super().__init__(detail=detail)
-        else:
-            super().__init__()
-
 
 class OrderModificationException(APIException):
     status_code = status.HTTP_400_BAD_REQUEST
     default_detail = "Order cannot be modified."
     default_code = "order_modification_failed"
-
-    def __init__(self, detail=None):
-        if detail:
-            super().__init__(detail=detail)
-        else:
-            super().__init__()
 
 
 class OrderModificationConflictException(APIException):
@@ -203,41 +131,11 @@ class OrderModificationConflictException(APIException):
     default_detail = "Order has a pending swap and cannot be modified."
     default_code = "order_modification_conflict"
 
-    def __init__(self, detail=None):
-        if detail:
-            super().__init__(detail=detail)
-        else:
-            super().__init__()
-
 
 class OrderMatchException(APIException):
     status_code = status.HTTP_400_BAD_REQUEST
     default_detail = "Order matching failed."
     default_code = "order_match_failed"
-
-    def __init__(self, detail=None):
-        if detail:
-            super().__init__(detail=detail)
-        else:
-            super().__init__()
-
-
-class CapitalIncreaseSubmissionException(APIException):
-    status_code = status.HTTP_400_BAD_REQUEST
-    default_detail = "Failed to submit capital increase request."
-    default_code = "capital_increase_submission_failed"
-
-    def __init__(self, detail=None):
-        if detail:
-            super().__init__(detail=detail)
-        else:
-            super().__init__()
-
-
-class SwapOrderNotFoundException(APIException):
-    status_code = status.HTTP_404_NOT_FOUND
-    default_detail = "Swap order not found."
-    default_code = "swap_order_not_found"
 
 
 class SwapSignatureException(APIException):
@@ -245,23 +143,11 @@ class SwapSignatureException(APIException):
     default_detail = "Invalid swap signature."
     default_code = "swap_signature_invalid"
 
-    def __init__(self, detail=None):
-        if detail:
-            super().__init__(detail=detail)
-        else:
-            super().__init__()
-
 
 class SwapExecutionException(APIException):
     status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
     default_detail = "Swap execution failed."
     default_code = "swap_execution_failed"
-
-    def __init__(self, detail=None):
-        if detail:
-            super().__init__(detail=f"Swap execution failed: {detail}")
-        else:
-            super().__init__()
 
 
 class SwapNotReadyException(APIException):
@@ -293,23 +179,11 @@ class StablecoinMintFailedException(APIException):
     default_detail = "Stablecoin minting failed."
     default_code = "stablecoin_mint_failed"
 
-    def __init__(self, detail=None):
-        if detail:
-            super().__init__(detail=f"Stablecoin minting failed: {detail}")
-        else:
-            super().__init__()
-
 
 class StablecoinBurnFailedException(APIException):
     status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
     default_detail = "Stablecoin burning failed."
     default_code = "stablecoin_burn_failed"
-
-    def __init__(self, detail=None):
-        if detail:
-            super().__init__(detail=f"Stablecoin burning failed: {detail}")
-        else:
-            super().__init__()
 
 
 class YieldTokenContractNotConfiguredException(APIException):
@@ -323,23 +197,11 @@ class YieldTokenMintFailedException(APIException):
     default_detail = "Yield token minting failed."
     default_code = "yield_token_mint_failed"
 
-    def __init__(self, detail=None):
-        if detail:
-            super().__init__(detail=f"Yield token minting failed: {detail}")
-        else:
-            super().__init__()
-
 
 class YieldTokenNAVUpdateFailedException(APIException):
     status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
     default_detail = "Yield token NAV update failed."
     default_code = "yield_token_nav_update_failed"
-
-    def __init__(self, detail=None):
-        if detail:
-            super().__init__(detail=f"NAV update failed: {detail}")
-        else:
-            super().__init__()
 
 
 class NotAuthorizedMinterException(APIException):
@@ -365,20 +227,8 @@ class InvalidSignatureException(APIException):
     default_detail = "Invalid signature - does not match the expected wallet address."
     default_code = "invalid_signature"
 
-    def __init__(self, detail=None):
-        if detail:
-            super().__init__(detail=detail)
-        else:
-            super().__init__()
-
 
 class ShareIssuanceFailedException(APIException):
     status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
     default_detail = "Share issuance failed."
     default_code = "share_issuance_failed"
-
-    def __init__(self, detail=None):
-        if detail:
-            super().__init__(detail=f"Share issuance failed: {detail}")
-        else:
-            super().__init__()

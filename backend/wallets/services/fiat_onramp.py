@@ -3,9 +3,8 @@ from decimal import Decimal
 
 from integrations.transak import TransakClient
 from integrations.transak.exceptions import TransakError
-from shared.utils.logging_utils import LoggingContext
 
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 
 def generate_transak_widget_url(
@@ -27,8 +26,7 @@ def generate_transak_widget_url(
 ) -> str:
     try:
         logger.info(
-            f"{LoggingContext.WALLET_TRANSAK} Generating Transak widget URL for "
-            f"address {wallet_address[:8]}... ({chain}/{crypto_currency_code})"
+            f"Generating Transak widget URL for address {wallet_address[:8]}... ({chain}/{crypto_currency_code})"
         )
 
         client = TransakClient()
@@ -50,12 +48,9 @@ def generate_transak_widget_url(
             partner_customer_id=partner_customer_id,
         )
 
-        logger.info(f"{LoggingContext.WALLET_TRANSAK} Successfully generated Transak widget URL")
+        logger.info("Successfully generated Transak widget URL")
         return widget_url
 
     except TransakError as e:
-        logger.error(
-            f"{LoggingContext.WALLET_TRANSAK} Failed to generate Transak widget URL "
-            f"({e.__class__.__name__}: {str(e)})"
-        )
+        logger.error(f"Failed to generate Transak widget URL ({e.__class__.__name__}: {str(e)})")
         raise

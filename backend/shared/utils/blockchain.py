@@ -1,20 +1,25 @@
+import re
 from typing import Optional, Tuple
 
+# keccak256 selectors of the custom errors declared in contracts/contracts/*.sol
+# (OpenZeppelin ERC20 + AtomicSwap, ShareToken, AUSG, WhitelistRegistry).
 ERROR_SELECTORS = {
     "0xe450d38c": ("ERC20InsufficientBalance", "Insufficient token balance"),
     "0xfb8f41b2": ("ERC20InsufficientAllowance", "Insufficient token allowance"),
-    "0x94280d62": ("ERC20InvalidReceiver", "Invalid token receiver address"),
+    "0xec442f05": ("ERC20InvalidReceiver", "Invalid token receiver address"),
+    "0x96c6fd1e": ("ERC20InvalidSender", "Invalid token sender address"),
+    "0x94280d62": ("ERC20InvalidSpender", "Invalid token spender address"),
     "0xe602df05": ("ERC20InvalidApprover", "Invalid token approver address"),
-    "0x96c6fd1e": ("ERC20InvalidSpender", "Invalid token spender address"),
-    "0xd92e233d": ("ZeroAddress", "Cannot use zero address"),
     "0x32da96a3": ("TokenNotApproved", "Share token is not approved for trading"),
     "0xa4b885b3": ("PaymentTokenNotApproved", "Payment token is not approved"),
-    "0xc64891a5": ("SellerNotWhitelisted", "Seller is not whitelisted"),
-    "0xdf8bf18b": ("BuyerNotWhitelisted", "Buyer is not whitelisted"),
-    "0xc5487b9a": ("SwapExpired", "Swap order has expired"),
-    "0xe9eded21": ("SwapAlreadyUsed", "Swap nonce has already been used"),
-    "0x162908e3": ("InvalidSignature", "Invalid signature provided"),
-    "0x8bdf9091": ("RecipientNotWhitelisted", "Recipient is not whitelisted for transfers"),
+    "0xdf17e316": ("NotWhitelisted", "Account is not whitelisted"),
+    "0xc56873ba": ("OrderExpired", "Swap order has expired"),
+    "0xe90aded4": ("NonceAlreadyUsed", "Swap nonce has already been used"),
+    "0x42d750dc": ("InvalidSignature", "Invalid signature provided"),
+    "0xab0b880c": ("RecipientNotWhitelisted", "Recipient is not whitelisted for transfers"),
+    "0xc64891a5": ("NotRelayer", "Caller is not the swap relayer"),
+    "0x0309d3fc": ("SameParty", "Buyer and seller must be different accounts"),
+    "0x2c5211c6": ("InvalidAmount", "Invalid amount"),
 }
 
 
@@ -52,41 +57,10 @@ def decode_revert_reason(error_data: str) -> Tuple[Optional[str], Optional[str],
     return error_name, base_message, params
 
 
-def format_balance_error(error_data: str, token_symbol: str = "tokens") -> str:
-    error_name, base_message, params = decode_revert_reason(error_data)
-
-    if error_name == "ERC20InsufficientBalance":
-        balance = params.get("balance", 0)
-        needed = params.get("needed", 0)
-        return f"Insufficient balance: you have {balance:,} {token_symbol} but need {needed:,}"
-
-    if error_name == "ERC20InsufficientAllowance":
-        allowance = params.get("allowance", 0)
-        needed = params.get("needed", 0)
-        return f"Insufficient allowance: approved {allowance:,} but need {needed:,} {token_symbol}"
-
-    if base_message:
-        return base_message
-
-    return f"Transaction failed: {error_data[:66]}..."
-
-
-def extract_error_data_from_exception(exception: Exception) -> Optional[str]:
-    error_str = str(exception)
-
-    import re
-
-    hex_pattern = r"0x[a-fA-F0-9]{8,}"
-    matches = re.findall(hex_pattern, error_str)
-
-    if matches:
-        return max(matches, key=len)
-
-    return None
-
-
 def decode_exception_to_message(exception: Exception, default_message: str = "Transaction failed") -> str:
-    error_data = extract_error_data_from_exception(exception)
+    # web3 surfaces custom-error reverts as the raw selector+args hex in the exception text.
+    matches = re.findall(r"0x[a-fA-F0-9]{8,}", str(exception))
+    error_data = max(matches, key=len) if matches else None
 
     if error_data:
         error_name, message, params = decode_revert_reason(error_data)

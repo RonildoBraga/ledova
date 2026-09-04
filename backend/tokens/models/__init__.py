@@ -1,9 +1,8 @@
 from .capital_increase import CapitalIncreaseRequest
 from .choices import (
-    CapitalIncreaseStatus,
-    IssuanceRequestStatus,
     IssuanceStatus,
     IssuanceType,
+    RequestStatus,
     ShareTokenStatus,
     ShareTokenType,
     SwapOrderStatus,
@@ -23,14 +22,13 @@ from .yield_token import YieldToken
 
 __all__ = [
     "CapitalIncreaseRequest",
-    "CapitalIncreaseStatus",
-    "IssuanceRequestStatus",
     "IssuanceStatus",
     "IssuanceType",
     "MintRequest",
     "MintRequestStatus",
     "NAVUpdate",
     "OrderModificationLog",
+    "RequestStatus",
     "ShareIssuance",
     "ShareIssuanceRequest",
     "ShareToken",

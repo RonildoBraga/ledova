@@ -1,5 +1,3 @@
-"""SumSub Identity Verification Integration."""
-
 from .client import SumSubService
 from .webhook import SumSubWebhookView
 

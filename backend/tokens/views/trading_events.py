@@ -1,6 +1,5 @@
 import asyncio
 import json
-import logging
 from types import SimpleNamespace
 from uuid import UUID
 
@@ -12,8 +11,6 @@ from django.http import HttpResponse, StreamingHttpResponse
 from authentication.classes import HybridJWTAuthentication
 from tokens.events import TRADING_EVENT_TYPES, TRADING_EVENTS_CHANNEL
 from tokens.models import ShareToken
-
-logger = logging.getLogger(__name__)
 
 HEARTBEAT_INTERVAL = 30
 
@@ -59,7 +56,7 @@ def _format_public_trading_event(event, token_uuid: str):
         return None
 
     event_type = event.get("event")
-    if event_type not in TRADING_EVENT_TYPES:
+    if not isinstance(event_type, str) or event_type not in TRADING_EVENT_TYPES:
         return None
 
     return _format_sse(event_type, {})
@@ -129,7 +126,6 @@ async def _event_stream(token_uuid: str):
 
 
 async def trading_events_stream(request):
-    """SSE endpoint for real-time trading updates."""
     user = await _authenticate(request)
     if user is None:
         return HttpResponse("Unauthorized", status=401, content_type="text/plain")

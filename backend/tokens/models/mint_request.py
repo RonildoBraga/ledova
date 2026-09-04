@@ -4,7 +4,6 @@ from django.db import models
 from django.utils import timezone
 
 from shared.models import BaseModel
-from tokens.querysets import MintRequestQuerySet
 
 
 class MintRequestStatus(models.TextChoices):
@@ -16,8 +15,6 @@ class MintRequestStatus(models.TextChoices):
 
 
 class MintRequest(BaseModel):
-
-    objects = MintRequestQuerySet.as_manager()
 
     stablecoin = models.ForeignKey(
         "tokens.Stablecoin",
@@ -148,15 +145,12 @@ class MintRequest(BaseModel):
 
     @property
     def can_be_executed(self) -> bool:
-        return self.status in [MintRequestStatus.PENDING, MintRequestStatus.APPROVED]
+        """Pending requests execute; failed ones may be retried."""
+        return self.status in (MintRequestStatus.PENDING, MintRequestStatus.APPROVED, MintRequestStatus.FAILED)
 
     @property
     def can_be_rejected(self) -> bool:
-        return self.status in [MintRequestStatus.PENDING, MintRequestStatus.APPROVED]
-
-    @property
-    def can_retry(self) -> bool:
-        return self.status == MintRequestStatus.FAILED
+        return self.status in (MintRequestStatus.PENDING, MintRequestStatus.APPROVED)
 
     def mark_executed(self, user, transaction):
         self.status = MintRequestStatus.EXECUTED
@@ -176,7 +170,3 @@ class MintRequest(BaseModel):
         self.executed_at = timezone.now()
         self.rejection_reason = reason
         self.save(update_fields=["status", "executed_by", "executed_at", "rejection_reason", "updated_at"])
-
-    def mark_approved(self):
-        self.status = MintRequestStatus.APPROVED
-        self.save(update_fields=["status", "updated_at"])

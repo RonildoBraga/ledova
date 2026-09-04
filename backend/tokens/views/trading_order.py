@@ -5,15 +5,9 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.response import Response
 
-from shared.utils import LoggingContext
+from shared.utils import get_client_ip
 from shared.views import AuthenticatedReadOnlyViewSet
-from tokens.exceptions import (
-    OrderModificationException,
-    SwapExpiredException,
-    SwapOrderNotFoundException,
-    SwapSignatureException,
-    TokenBalanceRetrievalException,
-)
+from tokens.exceptions import SwapExpiredException, TokenBalanceRetrievalException
 from tokens.filters import TransferOrderFilter
 from tokens.models import SwapOrder, TransferOrder
 from tokens.serializers import (
@@ -39,7 +33,6 @@ logger = logging.getLogger(__name__)
 
 
 class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
-
     serializer_class = TransferOrderListSerializer
     filterset_class = TransferOrderFilter
     ordering = ["-created_at"]
@@ -88,8 +81,6 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
         )
 
         response_data = TradingOrderService.build_order_response(order, match_result)
-
-        logger.info(f"{LoggingContext.ORDER_CREATE} Created {order.order_type} order: {order.uuid}")
 
         return Response(response_data, status=status.HTTP_201_CREATED)
 
@@ -155,7 +146,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
 
         swap_order = atomic_swap_service.find_swap_order_by_transfer_order(transfer_order)
         if not swap_order:
-            raise SwapOrderNotFoundException("No swap order found for this transfer order.")
+            raise NotFound("No swap order found for this transfer order.")
 
         serializer = SubmitSignatureSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -163,15 +154,11 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
         signature = serializer.validated_data["signature"]
         signer_address = serializer.validated_data["signer_address"]
 
-        try:
-            updated_order = atomic_swap_service.submit_signature(
-                swap_order=swap_order,
-                signature=signature,
-                signer_address=signer_address,
-            )
-        except Exception as e:
-            logger.error(f"{LoggingContext.TOKEN_TRANSFER} Signature submission failed: {e}")
-            raise SwapSignatureException(str(e))
+        updated_order = atomic_swap_service.submit_signature(
+            swap_order=swap_order,
+            signature=signature,
+            signer_address=signer_address,
+        )
 
         return Response(SwapOrderDetailSerializer(updated_order).data)
 
@@ -182,7 +169,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
         try:
             allowances = atomic_swap_service.check_swap_allowances(swap_order)
         except Exception as e:
-            logger.error(f"{LoggingContext.TOKEN_TRANSFER} Failed to check allowances: {e}")
+            logger.error(f"Failed to check allowances: {e}")
             raise TokenBalanceRetrievalException()
 
         user_allowance = allowances[user_role]
@@ -234,7 +221,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
             )
 
         except Exception as e:
-            logger.error(f"{LoggingContext.TOKEN_TRANSFER} Failed to get approval data: {e}")
+            logger.error(f"Failed to get approval data: {e}")
             raise TokenBalanceRetrievalException()
 
     def _get_authorized_swap_context(self, request):
@@ -247,7 +234,6 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
 
         if (
             transfer_order.wallet_id not in authorized_wallets.wallet_ids
-            or transfer_order.owner_account_id is None
             or transfer_order.wallet.user_account_id != transfer_order.owner_account_id
             or transfer_order.wallet.address.casefold() != transfer_order.wallet_address.casefold()
         ):
@@ -255,7 +241,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
 
         swap_order = SwapOrder.objects.for_transfer_order(transfer_order)
         if not swap_order:
-            raise SwapOrderNotFoundException("No swap order found for this transfer order.")
+            raise NotFound("No swap order found for this transfer order.")
 
         if (
             swap_order.sell_order_id == transfer_order.pk
@@ -283,21 +269,12 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        modification_service = OrderModificationService()
-
-        try:
-            result = modification_service.generate_modification_message(
-                order=order,
-                new_quantity=data.get("new_quantity"),
-                new_min_quantity=data.get("new_min_quantity"),
-                new_price=data.get("new_price_per_share"),
-            )
-        except OrderModificationException:
-            raise
-        except Exception as e:
-            raise ValidationError({"error": str(e)})
-
-        logger.info(f"{LoggingContext.ORDER} Generated modification message for order: {order.uuid}")
+        result = OrderModificationService().generate_modification_message(
+            order=order,
+            new_quantity=data.get("new_quantity"),
+            new_min_quantity=data.get("new_min_quantity"),
+            new_price=data.get("new_price_per_share"),
+        )
 
         return Response(result)
 
@@ -312,20 +289,13 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
         signature = serializer.validated_data["signature"]
 
         modification_service = OrderModificationService()
-
-        try:
-            modified_order, changes = modification_service.apply_modification(
-                order=order,
-                message=message,
-                signature=signature,
-                ip_address=self._get_client_ip(request),
-                user_agent=request.META.get("HTTP_USER_AGENT", ""),
-            )
-        except OrderModificationException:
-            raise
-        except Exception as e:
-            logger.error(f"{LoggingContext.ORDER} Order modification failed: {e}")
-            raise OrderModificationException("Modification failed due to an internal error")
+        modified_order, changes = modification_service.apply_modification(
+            order=order,
+            message=message,
+            signature=signature,
+            ip_address=get_client_ip(request),
+            user_agent=request.META.get("HTTP_USER_AGENT", ""),
+        )
 
         match_result = modification_service.check_for_matches_after_modification(modified_order)
 
@@ -342,14 +312,4 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
     @action(detail=True, methods=["get"], url_path="modifications")
     def modifications(self, request, uuid=None):
         order = self.get_object()
-
-        modification_service = OrderModificationService()
-        result = modification_service.get_modification_history(order)
-
-        return Response(result)
-
-    def _get_client_ip(self, request):
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for:
-            return x_forwarded_for.split(",")[0].strip()
-        return request.META.get("REMOTE_ADDR")
+        return Response(OrderModificationService().get_modification_history(order))

@@ -4,17 +4,15 @@ import secrets
 from hashlib import new as hashlib_new
 from hashlib import sha256
 
-import bech32
 import base58
+import bech32
 from bitcoin_message_tool import bmt
 from django.conf import settings
 from django.utils import timezone
 from eth_account.messages import encode_defunct
 from web3 import Web3
 
-from shared.utils.logging_utils import LoggingContext
-
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 
 def generate_verification_challenge(wallet_address: str) -> str:
@@ -27,7 +25,7 @@ def generate_verification_challenge(wallet_address: str) -> str:
         f"Timestamp: {timestamp}\n"
         f"Nonce: {nonce}\n\n"
         f"Please sign this message to verify wallet ownership.\n"
-        f"This request will expire in 5 minutes."
+        "This request will expire in 5 minutes."
     )
 
     return challenge
@@ -42,11 +40,11 @@ def verify_wallet_signature(wallet_address: str, challenge: str, signature: str,
         elif chain_upper in ["BTC", "BITCOIN"]:
             return verify_bitcoin_signature(wallet_address, challenge, signature)
         else:
-            logger.error(f"{LoggingContext.WALLET_VERIFICATION} Unsupported chain")
+            logger.error("Unsupported chain")
             return False
 
     except Exception:
-        logger.error(f"{LoggingContext.WALLET_VERIFICATION} Signature verification failed")
+        logger.error("Signature verification failed")
         return False
 
 
@@ -58,12 +56,12 @@ def verify_ethereum_signature(address: str, message: str, signature: str) -> boo
         is_valid = recovered_address.lower() == address.lower()
 
         if not is_valid:
-            logger.warning(f"{LoggingContext.WALLET_VERIFICATION} Ethereum signature verification failed")
+            logger.warning("Ethereum signature verification failed")
 
         return is_valid
 
     except Exception:
-        logger.error(f"{LoggingContext.WALLET_VERIFICATION} Ethereum signature verification error")
+        logger.error("Ethereum signature verification error")
         return False
 
 
@@ -71,7 +69,7 @@ def verify_bitcoin_signature(address: str, message: str, signature: str) -> bool
     try:
         network = settings.BITCOIN_NETWORK
         if not _is_allowed_bitcoin_address(address, network):
-            logger.warning(f"{LoggingContext.WALLET_VERIFICATION} Bitcoin address rejected by network policy")
+            logger.warning("Bitcoin address rejected by network policy")
             return False
 
         signature_bytes = base64.b64decode(signature, validate=True)
@@ -86,11 +84,11 @@ def verify_bitcoin_signature(address: str, message: str, signature: str) -> bool
         derived_address = _derive_bitcoin_address(bytes.fromhex(recovered_pubkey), header, network)
         is_valid = derived_address == address
         if not is_valid:
-            logger.warning(f"{LoggingContext.WALLET_VERIFICATION} Bitcoin signature verification failed")
+            logger.warning("Bitcoin signature verification failed")
         return is_valid
 
     except Exception:
-        logger.error(f"{LoggingContext.WALLET_VERIFICATION} Bitcoin signature verification error")
+        logger.error("Bitcoin signature verification error")
         return False
 
 

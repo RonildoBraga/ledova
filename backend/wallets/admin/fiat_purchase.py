@@ -1,7 +1,3 @@
-"""
-Admin configuration for FiatTransaction model.
-"""
-
 from django.contrib import admin
 
 from wallets.models import FiatTransaction
@@ -9,8 +5,6 @@ from wallets.models import FiatTransaction
 
 @admin.register(FiatTransaction)
 class FiatTransactionAdmin(admin.ModelAdmin):
-    """Admin interface for FiatTransaction model."""
-
     list_display = [
         "external_id",
         "user",
@@ -35,67 +29,3 @@ class FiatTransactionAdmin(admin.ModelAdmin):
         "transaction_hash",
         "provider_data",
     ]
-
-    fieldsets = (
-        (
-            "Purchase Information",
-            {
-                "fields": (
-                    "uuid",
-                    "provider",
-                    "external_id",
-                    "status",
-                )
-            },
-        ),
-        (
-            "User & Wallet",
-            {
-                "fields": (
-                    "user",
-                    "wallet",
-                )
-            },
-        ),
-        (
-            "Transaction Details",
-            {
-                "fields": (
-                    "fiat_amount",
-                    "fiat_currency",
-                    "crypto_amount",
-                    "crypto_currency",
-                    "payment_method",
-                    "transaction_hash",
-                )
-            },
-        ),
-        (
-            "Fees",
-            {
-                "fields": (
-                    "provider_fee",
-                    "network_fee",
-                )
-            },
-        ),
-        (
-            "Status & Timestamps",
-            {
-                "fields": (
-                    "created_at",
-                    "updated_at",
-                    "completed_at",
-                    "failed_at",
-                    "failure_reason",
-                )
-            },
-        ),
-        (
-            "Provider Data",
-            {
-                "fields": ("provider_data",),
-                "classes": ("collapse",),
-            },
-        ),
-    )

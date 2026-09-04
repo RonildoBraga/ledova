@@ -1,9 +1,7 @@
-import csv
 from decimal import Decimal
 
 from django import forms
 from django.contrib import admin, messages
-from django.http import HttpResponse
 from django.template.response import TemplateResponse
 
 from assets.models import Asset, AssetChainDeployment
@@ -48,27 +46,14 @@ class AssetAdmin(admin.ModelAdmin):
     list_per_page = 100
     readonly_fields = ("uuid", "created_at", "updated_at")
     inlines = [AssetChainDeploymentInline]
-
-    fieldsets = (
-        ("Basic Information", {"fields": ("uuid", "symbol", "name", "is_active", "is_verified")}),
-        ("Classification", {"fields": ("asset_type", "decimals")}),
-        ("Pricing", {"fields": ("current_price", "price_currency")}),
-        (
-            "Timestamps",
-            {
-                "fields": ("created_at", "updated_at"),
-                "classes": ("collapse",),
-            },
-        ),
-    )
+    actions = ["update_prices", "mark_as_active", "mark_as_inactive"]
 
     @admin.display(description="Chains")
     def display_chains(self, obj):
         chains = obj.chain_deployments.values_list("chain", flat=True)
         return ", ".join(chains) if chains else "—"
 
-    actions = ["update_prices", "mark_as_active", "mark_as_inactive", "export_to_csv"]
-
+    @admin.action(description="Update prices for selected assets")
     def update_prices(self, request, queryset):
         if "apply" in request.POST:
             form = PriceUpdateForm(request.POST)
@@ -119,60 +104,12 @@ class AssetAdmin(admin.ModelAdmin):
             },
         )
 
-    update_prices.short_description = "Update prices for selected assets"
-
+    @admin.action(description="Mark selected assets as active")
     def mark_as_active(self, request, queryset):
         updated = queryset.update(is_active=True)
         self.message_user(request, f"{updated} assets marked as active.")
 
-    mark_as_active.short_description = "Mark selected assets as active"
-
+    @admin.action(description="Mark selected assets as inactive")
     def mark_as_inactive(self, request, queryset):
         updated = queryset.update(is_active=False)
         self.message_user(request, f"{updated} assets marked as inactive.")
-
-    mark_as_inactive.short_description = "Mark selected assets as inactive"
-
-    def export_to_csv(self, request, queryset):
-        response = HttpResponse(content_type="text/csv")
-        response["Content-Disposition"] = 'attachment; filename="assets_export.csv"'
-
-        writer = csv.writer(response)
-
-        writer.writerow(
-            [
-                "UUID",
-                "Symbol",
-                "Name",
-                "Asset Type",
-                "Chain",
-                "Contract Address",
-                "Decimals",
-                "Current Price",
-                "Price Currency",
-                "Is Active",
-                "Created At",
-            ]
-        )
-
-        for asset in queryset:
-            writer.writerow(
-                [
-                    asset.uuid,
-                    asset.symbol,
-                    asset.name,
-                    asset.asset_type,
-                    asset.chain or "",
-                    asset.contract_address or "",
-                    asset.decimals,
-                    asset.current_price or "",
-                    asset.price_currency,
-                    "Yes" if asset.is_active else "No",
-                    asset.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-                ]
-            )
-
-        self.message_user(request, f"Exported {queryset.count()} assets to CSV.")
-        return response
-
-    export_to_csv.short_description = "Export selected assets to CSV"

@@ -85,22 +85,6 @@ class SwapOrderDetailSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class SwapTypedDataSerializer(serializers.Serializer):
-
-    types = serializers.DictField()
-    primaryType = serializers.CharField()
-    domain = serializers.DictField()
-    message = serializers.DictField()
-
-
-class SwapDataResponseSerializer(serializers.Serializer):
-
-    swap_order = SwapOrderDetailSerializer()
-    typed_data = SwapTypedDataSerializer()
-    user_role = serializers.ChoiceField(choices=["seller", "buyer"])
-    has_signed = serializers.BooleanField()
-
-
 class SubmitSignatureSerializer(serializers.Serializer):
 
     signature = serializers.CharField(min_length=130, max_length=132)

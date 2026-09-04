@@ -38,7 +38,8 @@ compliance or legal recognition is made.
 | `packages/` | Shared TypeScript constants, types, services, and utilities |
 
 The current verified checkpoint and next task are recorded in
-[HANDOVER.md](./HANDOVER.md).
+[HANDOVER.md](./HANDOVER.md). Backend layering and style rules live in
+[backend/docs/CONVENTIONS.md](./backend/docs/CONVENTIONS.md).
 
 ## Quick start
 
@@ -65,9 +66,12 @@ Once the containers are ready:
 Stop the stack with `docker compose down`.
 
 Sign-up requires an email verification code. The local stack has no email
-provider configured; with `DEBUG=true` (the local default) the code `000000`
-is accepted so the flow can be completed offline. Outside `DEBUG`, a real
-SendGrid configuration is required and the bypass is disabled.
+provider configured: with `SENDGRID_API_KEY` empty the backend hands mail to
+Django's email backend, which under `DEBUG=true` (the local default) prints the
+message, six-digit code included, to the backend log
+(`docker compose logs -f backend`). A code is valid for ten minutes and five
+attempts; request a new one with "Resend" if it lapses. Outside `DEBUG` a real
+SendGrid configuration is required.
 
 To run the contract suite independently:
 

@@ -1,8 +1,8 @@
-import logging
 from decimal import Decimal
 
 from rest_framework import status
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 
@@ -13,10 +13,8 @@ from assets.serializers import (
     AssetSnapshotSerializer,
 )
 from assets.services import AssetSyncService, ExchangeRateService
-from shared.utils.logging_utils import LoggingContext
+from shared.utils.querysets import sample_evenly
 from shared.views.base import AuthenticatedReadOnlyViewSet
-
-logger = logging.getLogger("ledova_backend")
 
 
 class AssetViewSet(AuthenticatedReadOnlyViewSet):
@@ -38,27 +36,22 @@ class AssetViewSet(AuthenticatedReadOnlyViewSet):
     def snapshots(self, request, **kwargs):
         asset = self.get_object()
 
-        logger.debug(
-            f"{LoggingContext.ASSETS} Fetching snapshots for {asset.symbol} (params={dict(request.query_params)})"
-        )
-
-        queryset = AssetSnapshot.objects.filter(asset=asset)
-        start_date = request.query_params.get("start_date")
-        end_date = request.query_params.get("end_date")
-        if start_date or end_date:
-            queryset = queryset.filter_by_date_range(start_date, end_date)
-        max_points = request.query_params.get("max_points")
-        if max_points:
-            queryset = queryset.sample_evenly(int(max_points))
         order_by = request.query_params.get("order_by", "-source_timestamp")
-        queryset = queryset.order_by(order_by)
+        if order_by not in {"source_timestamp", "-source_timestamp"}:
+            order_by = "-source_timestamp"
+        try:
+            queryset = AssetSnapshot.objects.filter(asset=asset).filter_by_date_range(
+                request.query_params.get("start_date"), request.query_params.get("end_date")
+            )
+        except ValueError:
+            raise ValidationError({"detail": "start_date and end_date must be YYYY-MM-DD."})
+        queryset = sample_evenly(queryset.order_by(order_by), request.query_params.get("max_points"))
 
         serializer = AssetSnapshotSerializer(queryset, many=True)
         return Response(serializer.data)
 
     @action(detail=False, methods=["get"], url_path="exchange-rates")
     def exchange_rates(self, request):
-        """Return current exchange rates for display currency conversion."""
         target = request.query_params.get("currency", "AUD")
         rate = ExchangeRateService.get_rate(target_currency=target.upper())
 
@@ -78,8 +71,6 @@ class AssetViewSet(AuthenticatedReadOnlyViewSet):
 
     @action(detail=False, methods=["post"], url_path="bulk-update-prices", permission_classes=[IsAdminUser])
     def bulk_update_prices(self, request):
-        logger.info(f"{LoggingContext.ASSETS} Bulk price update requested by {request.user.email}")
-
         price_updates = request.data.get("priceUpdates", [])
         source = request.data.get("source", "manual")
         create_snapshots = request.data.get("createSnapshots", True)

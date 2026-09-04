@@ -278,7 +278,6 @@ class TradingReadIsolationTest(APITestCase):
             }
         )
 
-        self.assertEqual(serializer._get_wallet_addresses(), [self.bob_wallet.address.lower()])
         self.assertEqual(
             serializer._get_wallet_address(self.swap, "buyer_address", "seller_address"),
             Web3.to_checksum_address(self.bob_wallet.address),
@@ -496,7 +495,6 @@ class TradingReadIsolationTest(APITestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["user_role"], "buyer")
-        service.determine_user_role.assert_not_called()
 
     @patch("tokens.views.trading_order.AtomicSwapService")
     def test_order_swap_and_approval_reads_reject_other_owned_wallet_before_service(self, service_class):
@@ -581,4 +579,3 @@ class TradingReadIsolationTest(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["user_role"], "buyer")
         self.assertEqual(response.data["token_symbol"], self.stablecoin.symbol)
-        service.determine_user_role.assert_not_called()

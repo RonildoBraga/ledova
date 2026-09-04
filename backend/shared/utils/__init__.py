@@ -1,5 +1,4 @@
-from shared.utils.logging_utils import LoggingContext
-from shared.utils.request import extract_request_metadata, get_client_ip
+from shared.utils.request import get_client_ip
 from shared.utils.signature import (
     generate_order_cancel_message,
     generate_order_create_message,
@@ -10,9 +9,7 @@ from shared.utils.signature import (
 )
 
 __all__ = [
-    "extract_request_metadata",
     "get_client_ip",
-    "LoggingContext",
     "generate_order_cancel_message",
     "generate_order_create_message",
     "generate_order_modify_message",

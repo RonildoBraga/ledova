@@ -1,5 +1,3 @@
-"""Static and media files settings for ledova_backend project."""
-
 import os
 
 from ledova_backend.environment import resolve_storage_backend

@@ -1,5 +1,7 @@
 import os
 
+from .base import DEBUG
+
 TRANSAK_API_KEY = os.getenv("TRANSAK_API_KEY", "")
 TRANSAK_API_SECRET = os.getenv("TRANSAK_API_SECRET", "")
 TRANSAK_API_URL = os.getenv("TRANSAK_API_URL", "")
@@ -11,14 +13,15 @@ COINGECKO_API_KEY = os.getenv("COINGECKO_API_KEY", "")  # Optional (for Pro tier
 COINGECKO_BASE_URL = os.getenv("COINGECKO_BASE_URL") or "https://api.coingecko.com/api/v3"
 COINGECKO_TIMEOUT = int(os.getenv("COINGECKO_TIMEOUT", "10"))  # seconds
 
-TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "")
-TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
-TWILIO_FROM_PHONE = os.getenv("TWILIO_FROM_PHONE", "")
-
 SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY", "")
 SENDGRID_API_URL = os.getenv("SENDGRID_API_URL", "")
 SENDGRID_TIMEOUT = int(os.getenv("SENDGRID_TIMEOUT", "10"))
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "noreply@localhost")
+# Used when SENDGRID_API_KEY is empty: the verification code is printed to the server log in
+# DEBUG, and goes to local SMTP otherwise.
+EMAIL_BACKEND = (
+    "django.core.mail.backends.console.EmailBackend" if DEBUG else "django.core.mail.backends.smtp.EmailBackend"
+)
 
 KYC_PROVIDER = os.environ.get("KYC_PROVIDER", "")  # Configure "sumsub" or "kycaid" explicitly.
 

@@ -1,4 +1,3 @@
-from django.db import models
 from django.db.models import QuerySet
 
 from shared.utils.datetime_utils import (
@@ -8,9 +7,7 @@ from shared.utils.datetime_utils import (
 
 
 class PortfolioSnapshotQuerySet(QuerySet):
-
     def filter_by_portfolio(self, portfolio):
-        """Filter by portfolio object or UUID. Kept for external callers."""
         if portfolio:
             if hasattr(portfolio, "uuid"):
                 return self.filter(portfolio__uuid=portfolio.uuid)
@@ -18,7 +15,7 @@ class PortfolioSnapshotQuerySet(QuerySet):
         return self
 
     def filter_by_date_range(self, start_date=None, end_date=None):
-        """Custom date range with timezone-aware parsing (snapshot_date uses __lt for end)."""
+        """End of range is exclusive (snapshot_date__lt)."""
         queryset = self
 
         if start_date:
@@ -36,51 +33,13 @@ class PortfolioSnapshotQuerySet(QuerySet):
             return self.none()
         return self.filter(portfolio__user_account__user_profiles__user=user)
 
-    def sample_evenly(self, max_points):
-        """Return evenly-distributed sample of max_points rows."""
-        if not max_points:
-            return self
-        try:
-            max_points = int(max_points)
-        except (ValueError, TypeError):
-            return self
-        if max_points <= 0:
-            return self
-
-        pks = list(self.values_list("pk", flat=True))
-        total = len(pks)
-        if total <= max_points:
-            return self
-
-        step = (total - 1) / (max_points - 1)
-        sampled_pks = [pks[round(i * step)] for i in range(max_points)]
-        # Preserve the original queryset ordering after filtering by sampled PKs
-        ordering = self.query.order_by or ("snapshot_date",)
-        return self.filter(pk__in=sampled_pks).order_by(*ordering)
-
     def with_optimized_data(self):
         return self.select_related("portfolio", "portfolio__user_account")
 
-    def latest_snapshot(self, portfolio=None):
-        queryset = self
-        if portfolio:
-            queryset = queryset.filter_by_portfolio(portfolio)
-        return queryset.order_by("-snapshot_date").first()
-
     def daily_snapshots(self):
         return self.filter(snapshot_reason="DAILY")
-
-    def calculate_value_range(self):
-        return self.aggregate(
-            min_value=models.Min("total_value"),
-            max_value=models.Max("total_value"),
-            avg_value=models.Avg("total_value"),
-        )
 
     def for_date(self, date):
         if date:
             return self.filter(snapshot_date=date)
         return self
-
-    def latest_for_date(self, date):
-        return self.for_date(date).order_by("-snapshot_date").first()

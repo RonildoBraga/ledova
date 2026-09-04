@@ -14,18 +14,25 @@
 {% block content %}
 <div class="admin-custom-form admin-custom-form--wide">
     <div class="alert alert-success">
-        <strong>Execute Mint Request</strong>
+        <strong>{% if mint_request.error_message %}Retry{% else %}Execute{% endif %} Mint Request</strong>
         <p class="mt-1 mb-0">
             You are about to mint <strong>{{ mint_request.amount_display }} {{ mint_request.token.symbol }}</strong> to <strong>{{ mint_request.recipient_name }}</strong>.
         </p>
     </div>
+
+    {% if mint_request.error_message %}
+    <div class="alert alert-danger">
+        <strong>Previous Error:</strong>
+        <p class="mt-1 mb-0 monospace">{{ mint_request.error_message }}</p>
+    </div>
+    {% endif %}
 
     <div class="admin-card">
         <div class="admin-card-header">Request Details</div>
         <div class="admin-card-body">
             <table class="admin-table">
                 <tr>
-                    <td class="label-col">Stablecoin</td>
+                    <td class="label-col">Token</td>
                     <td>{{ mint_request.token.name }} ({{ mint_request.token.symbol }})</td>
                 </tr>
                 <tr>

@@ -1,10 +1,3 @@
-"""
-ComplianceAlert model for alerts triggered by monitoring rules or manual flagging.
-
-AML/CTF Compliance:
-Implements alert generation from Document 3 (Transaction Monitoring Program).
-"""
-
 from django.db import models
 
 from compliance.constants import (
@@ -16,16 +9,11 @@ from compliance.constants import (
     INVESTIGATION_OUTCOME_CHOICES,
     SMR_TYPE_CHOICES,
 )
-from compliance.managers.compliance_alert import ComplianceAlertManager
 from shared.models.base import BaseModel
 
 
 class ComplianceAlert(BaseModel):
-    """
-    Compliance alert triggered by monitoring rules or manual flagging.
-
-    AML/CTF Compliance: Implements alert generation from Document 3.
-    """
+    """Alert raised by a monitoring rule, a crypto screening, the periodic-review task or an officer by hand."""
 
     user_account = models.ForeignKey(
         "users.UserAccount",
@@ -56,8 +44,6 @@ class ComplianceAlert(BaseModel):
         related_name="triggered_alerts",
         help_text="Rule that triggered this alert (null for manual alerts)",
     )
-
-    # Alert classification
     alert_type = models.CharField(
         max_length=50,
         choices=ALERT_TYPE_CHOICES,
@@ -75,8 +61,6 @@ class ComplianceAlert(BaseModel):
         default=dict,
         help_text="Additional data about the alert (thresholds, values, etc.)",
     )
-
-    # Status tracking
     status = models.CharField(
         max_length=20,
         choices=ALERT_STATUS_CHOICES,
@@ -93,8 +77,6 @@ class ComplianceAlert(BaseModel):
         null=True,
         blank=True,
     )
-
-    # Resolution
     resolution_notes = models.TextField(
         blank=True,
         help_text="Notes on how the alert was resolved",
@@ -110,8 +92,6 @@ class ComplianceAlert(BaseModel):
         blank=True,
         related_name="resolved_alerts",
     )
-
-    # Investigation outcome
     investigation_outcome = models.CharField(
         max_length=30,
         choices=INVESTIGATION_OUTCOME_CHOICES,
@@ -119,8 +99,6 @@ class ComplianceAlert(BaseModel):
         blank=True,
         help_text="Final outcome of the investigation",
     )
-
-    # SMR (Suspicious Matter Report) tracking
     smr_required = models.BooleanField(
         default=False,
         help_text="Whether an SMR needs to be filed",
@@ -143,8 +121,6 @@ class ComplianceAlert(BaseModel):
         blank=True,
         help_text="When the SMR was filed with AUSTRAC",
     )
-
-    # Account actions
     account_action = models.CharField(
         max_length=30,
         choices=ACCOUNT_ACTION_CHOICES,
@@ -157,9 +133,6 @@ class ComplianceAlert(BaseModel):
         blank=True,
         help_text="When the account action was applied",
     )
-
-
-    objects = ComplianceAlertManager()
 
     class Meta:
         ordering = ["-created_at"]
@@ -174,13 +147,3 @@ class ComplianceAlert(BaseModel):
 
     def __str__(self):
         return f"{self.triggered_rule} - {self.alert_type} ({self.status})"
-
-    @property
-    def is_open(self):
-        """Check if alert is still open (not closed)."""
-        return self.status != "closed"
-
-    @property
-    def smr_pending(self):
-        """Check if SMR is required but not yet filed."""
-        return self.smr_required and self.smr_filed_at is None

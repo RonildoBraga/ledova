@@ -13,7 +13,7 @@ from rest_framework.views import APIView
 from wallets.models import Transaction, Wallet
 from wallets.tasks import confirm_pending_transaction
 
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 
 def verify_alchemy_signature(payload: bytes, signature: str, signing_key: str) -> bool:
@@ -38,8 +38,11 @@ class AlchemyWebhookView(APIView):
         signature = request.headers.get("X-Alchemy-Signature", "")
         signing_key = getattr(settings, "ALCHEMY_WEBHOOK_SIGNING_KEY", "")
 
-        if signing_key and not verify_alchemy_signature(request.body, signature, signing_key):
-            logger.warning("[WEBHOOK:ALCHEMY] Invalid signature")
+        if not signing_key or not verify_alchemy_signature(request.body, signature, signing_key):
+            logger.warning(
+                "[WEBHOOK:ALCHEMY] Rejected webhook: %s",
+                "signing key not configured" if not signing_key else "invalid signature",
+            )
             return Response({"error": "Invalid signature"}, status=status.HTTP_401_UNAUTHORIZED)
 
         try:

@@ -1,13 +1,15 @@
+import sys
+from importlib.util import find_spec
+from pathlib import Path
 from unittest.mock import patch
 
+from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.test import SimpleTestCase
 
 from ledova_backend.chain_safety import parse_bitcoin_network, parse_evm_chain_id
 from ledova_backend.environment import (
-    parse_canonical_cidrs,
     read_bool,
-    read_canonical_cidr_list,
     read_choice,
     resolve_storage_backend,
 )
@@ -28,51 +30,6 @@ class EnvironmentParsingTests(SimpleTestCase):
             with self.assertRaises(ImproperlyConfigured):
                 read_choice("STORAGE_BACKEND", choices=("local", "s3"), default="local")
 
-    def test_canonical_cidr_lists_accept_empty_and_exact_values(self):
-        self.assertEqual(parse_canonical_cidrs([]), ())
-        self.assertEqual(
-            parse_canonical_cidrs(["192.0.2.0/24", "2001:db8::/32"]),
-            ("192.0.2.0/24", "2001:db8::/32"),
-        )
-        with patch.dict("os.environ", {"PROXIES": "192.0.2.0/24,2001:db8::/32"}):
-            self.assertEqual(
-                read_canonical_cidr_list("PROXIES"),
-                ("192.0.2.0/24", "2001:db8::/32"),
-            )
-        with patch.dict("os.environ", {}, clear=True):
-            self.assertEqual(read_canonical_cidr_list("PROXIES"), ())
-
-    def test_canonical_cidr_lists_reject_noncanonical_or_ambiguous_values(self):
-        invalid_lists = (
-            "192.0.2.0/24",
-            [""],
-            ["192.0.2.1"],
-            ["192.0.2.1/24"],
-            ["192.0.2.0/24 "],
-            ["192.0.2.0/24", "192.0.2.0/24"],
-            ["2001:DB8::/32"],
-            ["::ffff:192.0.2.0/120"],
-            ["192.0.2.0/24"] * 33,
-            [None],
-        )
-        for values in invalid_lists:
-            with self.subTest(values=values), self.assertRaises(ImproperlyConfigured):
-                parse_canonical_cidrs(values)
-
-    def test_canonical_cidr_environment_rejects_invalid_bounded_input_without_echo(self):
-        sensitive_value = "192.0.2.0/24," + "x" * 2049
-        for value in (
-            "192.0.2.0/24,",
-            "192.0.2.0/24, 198.51.100.0/24",
-            "2001:db8::/32\N{NO-BREAK SPACE}",
-            sensitive_value,
-        ):
-            with self.subTest(value_length=len(value)), patch.dict("os.environ", {"PROXIES": value}):
-                with self.assertRaises(ImproperlyConfigured) as raised:
-                    read_canonical_cidr_list("PROXIES")
-                self.assertEqual(str(raised.exception), "Invalid CIDR configuration.")
-                self.assertNotIn(value, repr(raised.exception))
-
     def test_local_storage_works_without_debug(self):
         with patch.dict("os.environ", {"STORAGE_BACKEND": "local"}):
             self.assertEqual(resolve_storage_backend(debug=False), "local")
@@ -92,3 +49,48 @@ class EnvironmentParsingTests(SimpleTestCase):
             parse_bitcoin_network("main")
         self.assertEqual(parse_bitcoin_network("test"), "test")
         self.assertEqual(parse_bitcoin_network("regtest"), "regtest")
+
+
+class AuthorizationConfigurationTests(SimpleTestCase):
+    def test_authentication_uses_django_model_backend(self):
+        self.assertEqual(settings.AUTHENTICATION_BACKENDS, ("django.contrib.auth.backends.ModelBackend",))
+
+    def test_default_api_permission_requires_authentication(self):
+        self.assertEqual(
+            settings.REST_FRAMEWORK["DEFAULT_PERMISSION_CLASSES"],
+            ("rest_framework.permissions.IsAuthenticated",),
+        )
+
+
+class V2WithdrawalTests(SimpleTestCase):
+    def test_trusted_proxy_and_log_filter_settings_are_gone(self):
+        self.assertFalse(hasattr(settings, "V2_TRUSTED_PROXY_CIDRS"))
+        self.assertNotIn("filters", settings.LOGGING)
+        self.assertNotIn("filters", settings.LOGGING["handlers"]["procrastinate_console"])
+        self.assertNotIn("ledova_backend.logging_filters", sys.modules)
+
+    def test_challenge_models_and_delivery_task_are_gone(self):
+        from django.apps import apps
+
+        from ledova_backend.procrastinate_app import app
+
+        names = {model.__name__ for model in apps.get_app_config("authentication").get_models()}
+        self.assertEqual(names, {"CustomUser"})
+        self.assertNotIn("authentication.deliver_v2_challenge", app.tasks)
+
+    def test_session_core_modules_and_key_material_are_gone(self):
+        self.assertIsNotNone(find_spec("authentication.email"))
+        for module in ("authentication.services.v2_sessions", "authentication.services.v2_access"):
+            with self.subTest(module=module):
+                self.assertIsNone(find_spec(module))
+        env_example = (Path(settings.BASE_DIR) / ".env.example").read_text()
+        self.assertNotIn("V2_ACCESS_SIGNING_KEY_B64", env_example)
+        self.assertNotIn("V2_REFRESH_HMAC_KEY_B64", env_example)
+
+
+class LoggingTests(SimpleTestCase):
+    def test_modules_log_under_their_own_name_to_the_root_console_handler(self):
+        self.assertEqual(settings.LOGGING["root"], {"handlers": ["console"], "level": "INFO"})
+        self.assertNotIn("ledova_backend", settings.LOGGING["loggers"])
+        self.assertIn("{name}", settings.LOGGING["formatters"]["verbose"]["format"])
+        self.assertIsNone(find_spec("shared.utils.logging_utils"))

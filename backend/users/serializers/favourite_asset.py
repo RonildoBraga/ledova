@@ -1,7 +1,3 @@
-"""
-Serializers for FavouriteAsset model.
-"""
-
 from rest_framework import serializers
 
 from assets.models import Asset
@@ -11,14 +7,6 @@ from users.models.user_account import UserAccount
 
 
 class FavouriteAssetSerializer(serializers.ModelSerializer):
-    """
-    Serializer for FavouriteAsset model.
-
-    - Accepts asset and user_account UUIDs on create
-    - Returns nested Asset data on read
-    - Validates user_account belongs to authenticated user
-    """
-
     asset = serializers.PrimaryKeyRelatedField(queryset=Asset.objects.filter(is_active=True))
     user_account = serializers.PrimaryKeyRelatedField(queryset=UserAccount.objects.none())
 
@@ -49,7 +37,6 @@ class FavouriteAssetSerializer(serializers.ModelSerializer):
         return fields
 
     def validate_user_account(self, value):
-        """Validate that the user_account belongs to the authenticated user."""
         request = self.context.get("request")
         if request and request.user:
             user_profile = getattr(request.user, "userprofile", None)
@@ -58,7 +45,6 @@ class FavouriteAssetSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
-        """Check for duplicate favourite."""
         user_account = attrs.get("user_account")
         asset = attrs.get("asset")
 
@@ -69,7 +55,6 @@ class FavouriteAssetSerializer(serializers.ModelSerializer):
         return attrs
 
     def to_representation(self, instance):
-        """Return nested Asset data on read."""
         data = super().to_representation(instance)
         data["asset"] = AssetSerializer(instance.asset).data
         return data

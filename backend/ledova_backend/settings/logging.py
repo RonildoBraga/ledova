@@ -1,22 +1,9 @@
-"""
-Logging settings for ledova_backend project.
-"""
-
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "filters": {
-        "v2_procrastinate_privacy": {
-            "()": "ledova_backend.logging_filters.V2ProcrastinateLogFilter",
-        },
-    },
     "formatters": {
         "verbose": {
-            "format": "{levelname} {asctime} {module} {message}",
-            "style": "{",
-        },
-        "simple": {
-            "format": "{levelname} {message}",
+            "format": "{levelname} {asctime} {name} {message}",
             "style": "{",
         },
     },
@@ -30,18 +17,14 @@ LOGGING = {
             "level": "WARNING",
             "class": "logging.StreamHandler",
             "formatter": "verbose",
-            "filters": ["v2_procrastinate_privacy"],
         },
     },
+    # Every module logs under its own __name__ and propagates to the root console handler.
+    "root": {"handlers": ["console"], "level": "INFO"},
     "loggers": {
         "django": {
             "handlers": ["console"],
-            "level": "DEBUG",
-            "propagate": True,
-        },
-        "ledova_backend": {
-            "handlers": ["console"],
-            "level": "DEBUG",
+            "level": "INFO",
             "propagate": False,
         },
         "procrastinate": {

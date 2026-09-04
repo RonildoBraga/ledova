@@ -1,11 +1,8 @@
-import logging
-
 from django.db import IntegrityError
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from shared.utils.logging_utils import LoggingContext
 from shared.views.base import AuthenticatedModelViewSet
 from users.models import DeviceToken
 from users.serializers import (
@@ -13,8 +10,6 @@ from users.serializers import (
     RegisterDeviceTokenSerializer,
     UnregisterDeviceTokenSerializer,
 )
-
-logger = logging.getLogger("ledova_backend")
 
 
 class DeviceTokenViewSet(AuthenticatedModelViewSet):
@@ -24,7 +19,7 @@ class DeviceTokenViewSet(AuthenticatedModelViewSet):
     ordering_fields = ["created_at"]
 
     def get_queryset(self):
-        return DeviceToken.objects.filter(user=self.request.user, is_active=True)
+        return DeviceToken.objects.visible_to_user(self.request.user).filter(is_active=True)
 
     @action(detail=False, methods=["post"], url_path="register")
     def register_token(self, request):
@@ -47,10 +42,8 @@ class DeviceTokenViewSet(AuthenticatedModelViewSet):
             )
 
         if created:
-            logger.info(f"{LoggingContext.DEVICE_TOKEN} Registered new token for user {request.user.email}")
             response_status = status.HTTP_201_CREATED
         else:
-            logger.info(f"{LoggingContext.DEVICE_TOKEN} Reactivated token for user {request.user.email}")
             response_status = status.HTTP_200_OK
 
         return Response(DeviceTokenSerializer(device_token).data, status=response_status)
@@ -62,12 +55,8 @@ class DeviceTokenViewSet(AuthenticatedModelViewSet):
 
         push_token = serializer.validated_data["push_token"]
 
-        deleted_count, _ = DeviceToken.objects.filter(
-            user=request.user,
-            push_token=push_token,
-        ).delete()
+        deleted_count, _ = DeviceToken.objects.visible_to_user(request.user).filter(push_token=push_token).delete()
         if deleted_count:
-            logger.info(f"{LoggingContext.DEVICE_TOKEN} Unregistered token for user {request.user.email}")
             return Response(status=status.HTTP_204_NO_CONTENT)
 
         return Response(

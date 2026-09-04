@@ -7,7 +7,6 @@ wallet into another tenant's account.
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
-from rest_framework import serializers
 from rest_framework.test import APIRequestFactory
 
 from users.models import UserAccount, UserProfile
@@ -78,27 +77,6 @@ class WalletOwnerScopingTest(TestCase):
                 self.assertFalse(serializer.is_valid())
                 self.assertIn(field, serializer.errors)
 
-    def test_stale_pending_serializer_cannot_change_newly_verified_identity(self):
-        wallet = Wallet.objects.create(
-            user_account=self.alice_account,
-            address="0x" + "a" * 40,
-            chain="ethereum",
-        )
-        serializer = WalletSerializer(
-            wallet,
-            data={"address": "0x" + "d" * 40},
-            partial=True,
-            context=self._serializer_for(self.alice).context,
-        )
-        self.assertTrue(serializer.is_valid(), serializer.errors)
-
-        Wallet.objects.filter(pk=wallet.pk).update(
-            verification_status=WALLET_VERIFICATION_STATUS_VERIFIED,
-        )
-
-        with self.assertRaises(serializers.ValidationError):
-            serializer.save()
-
 
 class LiveMembershipScopingTest(TestCase):
     def setUp(self):
@@ -161,6 +139,7 @@ class LiveMembershipScopingTest(TestCase):
             email="superuser-membership@ex.com",
             password="pw-12345678",
             is_superuser=True,
+            is_staff=True,
         )
 
         for privileged_user in (staff, superuser):

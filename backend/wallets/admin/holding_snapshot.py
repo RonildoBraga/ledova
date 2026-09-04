@@ -50,64 +50,19 @@ class HoldingSnapshotAdmin(admin.ModelAdmin):
     list_per_page = 50
     ordering = ["-snapshot_date", "-created_at"]
 
-    fieldsets = (
-        (
-            "Holding Information",
-            {
-                "fields": (
-                    "uuid",
-                    "holding",
-                    "quantity",
-                )
-            },
-        ),
-        (
-            "Snapshot Details",
-            {
-                "fields": (
-                    "snapshot_date",
-                    "snapshot_reason",
-                    "block_number",
-                )
-            },
-        ),
-        (
-            "Causality",
-            {
-                "fields": (
-                    "caused_by_transaction",
-                    "transaction_hash",
-                ),
-                "classes": ("collapse",),
-            },
-        ),
-        (
-            "Timestamps",
-            {
-                "fields": ("created_at", "updated_at"),
-                "classes": ("collapse",),
-            },
-        ),
-    )
-
+    @admin.display(description="Wallet", ordering="holding__wallet__address")
     def holding_wallet_short(self, obj):
         return f"{obj.holding.wallet.address[:10]}..."
 
-    holding_wallet_short.short_description = "Wallet"
-    holding_wallet_short.admin_order_field = "holding__wallet__address"
-
+    @admin.display(description="Asset", ordering="holding__asset__symbol")
     def holding_asset(self, obj):
         return obj.holding.asset.symbol
 
-    holding_asset.short_description = "Asset"
-    holding_asset.admin_order_field = "holding__asset__symbol"
-
+    @admin.display(description="Transaction Hash")
     def transaction_hash(self, obj):
         if obj.caused_by_transaction:
             return obj.caused_by_transaction.tx_hash
         return "-"
-
-    transaction_hash.short_description = "Transaction Hash"
 
     def has_add_permission(self, request):
         return False

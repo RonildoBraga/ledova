@@ -41,16 +41,14 @@ class DocumentSerializer(serializers.ModelSerializer):
         read_only_fields = ["uuid", "mime_type", "latest_extraction", "created_at", "updated_at"]
 
     def get_latest_extraction(self, obj: Document):
-        # `extractions` ordering = ['-created_at']
-        latest = obj.extractions.first()
+        # Newest first by model ordering; iterating the relation reuses the view's prefetch.
+        latest = next(iter(obj.extractions.all()), None)
         if not latest:
             return None
         return DocumentExtractionSerializer(latest).data
 
 
 class DocumentUploadSerializer(serializers.ModelSerializer):
-    """Only the fields a client can supply on create."""
-
     file = serializers.FileField(write_only=True)
 
     class Meta:

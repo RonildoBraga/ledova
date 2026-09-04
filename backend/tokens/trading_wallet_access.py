@@ -5,9 +5,7 @@ from django.db.models import Q
 from rest_framework.exceptions import NotFound
 from web3 import Web3
 
-from wallets.constants import WALLET_VERIFICATION_STATUS_VERIFIED
 from wallets.models import Wallet
-from wallets.models.wallet import Blockchain
 
 
 @dataclass(frozen=True)
@@ -38,11 +36,8 @@ def resolve_verified_evm_wallets(user, requested_addresses: list[str]) -> Author
 
     wallets = list(
         Wallet.objects.visible_to_user(user)
-        .filter(
-            address_query,
-            verification_status=WALLET_VERIFICATION_STATUS_VERIFIED,
-            chain__in=(Blockchain.ETHEREUM.value, Blockchain.BASE.value),
-        )
+        .verified_evm()
+        .filter(address_query)
         .only("uuid", "address")
         .order_by("uuid")
     )

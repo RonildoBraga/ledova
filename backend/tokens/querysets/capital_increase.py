@@ -1,6 +1,8 @@
 from django.db import models
 from django.db.models import QuerySet
 
+from tokens.models.choices import RequestStatus
+
 
 class CapitalIncreaseRequestQuerySet(QuerySet):
 
@@ -22,77 +24,9 @@ class CapitalIncreaseRequestQuerySet(QuerySet):
         user_companies = Company.objects.manageable_by_user(user)
         return self.filter(token__company__in=user_companies)
 
-    def draft(self):
-        from tokens.models.choices import CapitalIncreaseStatus
-
-        return self.filter(status=CapitalIncreaseStatus.DRAFT)
-
-    def submitted(self):
-        from tokens.models.choices import CapitalIncreaseStatus
-
-        return self.filter(status=CapitalIncreaseStatus.SUBMITTED)
-
-    def under_review(self):
-        from tokens.models.choices import CapitalIncreaseStatus
-
-        return self.filter(status=CapitalIncreaseStatus.UNDER_REVIEW)
-
-    def pending_review(self):
-        from tokens.models.choices import CapitalIncreaseStatus
-
-        return self.filter(
-            status__in=[
-                CapitalIncreaseStatus.SUBMITTED,
-                CapitalIncreaseStatus.UNDER_REVIEW,
-            ]
-        )
-
-    def approved(self):
-        from tokens.models.choices import CapitalIncreaseStatus
-
-        return self.filter(status=CapitalIncreaseStatus.APPROVED)
-
-    def rejected(self):
-        from tokens.models.choices import CapitalIncreaseStatus
-
-        return self.filter(status=CapitalIncreaseStatus.REJECTED)
-
-    def executing(self):
-        from tokens.models.choices import CapitalIncreaseStatus
-
-        return self.filter(status=CapitalIncreaseStatus.EXECUTING)
-
-    def executed(self):
-        from tokens.models.choices import CapitalIncreaseStatus
-
-        return self.filter(status=CapitalIncreaseStatus.EXECUTED)
-
-    def failed(self):
-        from tokens.models.choices import CapitalIncreaseStatus
-
-        return self.filter(status=CapitalIncreaseStatus.FAILED)
-
-    def actionable(self):
-        from tokens.models.choices import CapitalIncreaseStatus
-
-        return self.filter(
-            status__in=[
-                CapitalIncreaseStatus.DRAFT,
-                CapitalIncreaseStatus.SUBMITTED,
-                CapitalIncreaseStatus.UNDER_REVIEW,
-                CapitalIncreaseStatus.APPROVED,
-            ]
-        )
-
-    def ready_for_execution(self):
-        from tokens.models.choices import CapitalIncreaseStatus
-
-        return self.filter(status=CapitalIncreaseStatus.APPROVED)
-
-    def can_retry(self):
-        from tokens.models.choices import CapitalIncreaseStatus
-
-        return self.filter(status=CapitalIncreaseStatus.FAILED)
+    def pending(self):
+        """Requests still needing staff action: submitted, under review, or approved but not yet executed."""
+        return self.filter(status__in=[RequestStatus.SUBMITTED, RequestStatus.UNDER_REVIEW, RequestStatus.APPROVED])
 
     def with_relations(self):
         return self.select_related(

@@ -7,9 +7,6 @@ from tokens.models import MintRequest, ShareIssuance, SwapOrder
 
 
 class AuthorizedWalletContextMixin:
-    def _get_wallet_addresses(self) -> list[str]:
-        return [address.lower() for address in self.context.get("authorized_wallet_addresses", ())]
-
     def _get_wallet_address(self, obj, *address_fields: str) -> str:
         authorized_addresses = {
             address.lower(): address for address in self.context.get("authorized_wallet_addresses", ())

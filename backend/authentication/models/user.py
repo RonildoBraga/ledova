@@ -1,16 +1,12 @@
-"""
-Custom User model.
-"""
-
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.db import models
 from django.utils import timezone
 
-from authentication.managers.user import CustomUserManager
-from authentication.security.v2_email import (
-    V2EmailDestinationKey,
-    V2EmailIsPrintableASCII,
+from authentication.email import (
+    EmailDestinationKey,
+    EmailIsPrintableASCII,
 )
+from authentication.managers.user import CustomUserManager
 
 
 class CustomUser(AbstractBaseUser, PermissionsMixin):
@@ -20,34 +16,27 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     date_joined = models.DateTimeField(default=timezone.now)
     last_login = models.DateTimeField(blank=True, null=True)
 
-    # Email verification
+    # Email verification: the column holds sha256(pk:code), never the code itself
+    # (see authentication.services.email_codes).
     email_verification_token = models.CharField(max_length=100, blank=True, null=True)
     email_verification_sent_at = models.DateTimeField(blank=True, null=True)
+    email_verification_attempts = models.PositiveSmallIntegerField(default=0)
     is_email_verified = models.BooleanField(default=False)
-
-    # SMS verification
-    sms_verification_token = models.CharField(max_length=10, blank=True, null=True)
-    sms_verification_sent_at = models.DateTimeField(blank=True, null=True)
-    is_phone_verified = models.BooleanField(default=False)
-
-    # Password reset
-    password_reset_token = models.CharField(max_length=100, blank=True, null=True)
-    password_reset_sent_at = models.DateTimeField(blank=True, null=True)
 
     objects = CustomUserManager()
 
     class Meta:
         constraints = [
             models.CheckConstraint(
-                condition=V2EmailIsPrintableASCII(models.F("email")),
+                condition=EmailIsPrintableASCII(models.F("email")),
                 name="auth_user_email_v2_ascii_ck",
             ),
             models.CheckConstraint(
-                condition=models.Q(email=V2EmailDestinationKey(models.F("email"))),
+                condition=models.Q(email=EmailDestinationKey(models.F("email"))),
                 name="auth_user_email_v2_canon_ck",
             ),
             models.UniqueConstraint(
-                V2EmailDestinationKey(models.F("email")),
+                EmailDestinationKey(models.F("email")),
                 name="auth_user_email_v2_key_uniq",
             ),
         ]

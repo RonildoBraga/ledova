@@ -1,7 +1,3 @@
-"""
-Admin configuration for AssetSnapshot model (unified architecture).
-"""
-
 from django.contrib import admin
 
 from assets.models import AssetSnapshot
@@ -9,8 +5,6 @@ from assets.models import AssetSnapshot
 
 @admin.register(AssetSnapshot)
 class AssetSnapshotAdmin(admin.ModelAdmin):
-    """Admin for unified asset snapshots"""
-
     list_display = (
         "asset",
         "price",
@@ -41,9 +35,7 @@ class AssetSnapshotAdmin(admin.ModelAdmin):
     ]
 
     def has_add_permission(self, request):
-        """Snapshots should be created programmatically"""
         return False
 
     def has_change_permission(self, request, obj=None):
-        """Snapshots are immutable"""
         return False

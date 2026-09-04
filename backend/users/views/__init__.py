@@ -1,7 +1,3 @@
-"""
-Views package for users app.
-"""
-
 from users.views.device_token import DeviceTokenViewSet
 from users.views.favourite_asset import FavouriteAssetViewSet
 from users.views.financial_profile import FinancialProfileViewSet

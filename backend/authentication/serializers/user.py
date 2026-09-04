@@ -1,96 +1,49 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
-from authentication.models.user_token import UserToken
-from authentication.serializers.fields import V2EmailField
-from shared.constants import DATETIME_FORMAT
+from authentication.serializers.fields import NormalizedEmailField
 
 User = get_user_model()
 
 
-class UserTokenSerializer(serializers.ModelSerializer):
-    expires_at = serializers.DateTimeField(format=DATETIME_FORMAT, required=False)
-    last_used_at = serializers.DateTimeField(format=DATETIME_FORMAT, required=False, allow_null=True)
-    revoked_at = serializers.DateTimeField(format=DATETIME_FORMAT, required=False, allow_null=True)
-    created_at = serializers.DateTimeField(format=DATETIME_FORMAT, required=False, allow_null=True)
-    updated_at = serializers.DateTimeField(format=DATETIME_FORMAT, required=False, allow_null=True)
-
-    class Meta:
-        model = UserToken
-        exclude = ["uuid", "user"]
+def _identity(instance):
+    return {
+        "uuid": str(instance.userprofile.uuid) if hasattr(instance, "userprofile") else None,
+        "email": instance.email,
+        "is_email_verified": instance.is_email_verified,
+    }
 
 
 class EmailVerificationSerializer(serializers.Serializer):
     token = serializers.CharField(required=True)
-    email = V2EmailField(required=True)
+    email = NormalizedEmailField(required=True)
 
     def to_representation(self, instance):
-        representation = {
-            "uuid": str(instance.userprofile.uuid) if hasattr(instance, "userprofile") else None,
-            "email": instance.email,
-            "is_email_verified": instance.is_email_verified,
-            "is_phone_verified": getattr(instance, "is_phone_verified", False),
-        }
-
-        if hasattr(instance, "tokens"):
-            tokens_qs = instance.tokens.filter(is_active=True).order_by("-created_at")
-            representation["tokens"] = UserTokenSerializer(tokens_qs, many=True).data
-
-        return representation
+        return _identity(instance)
 
 
 class UserSignupSerializer(serializers.Serializer):
-    uuid = serializers.CharField(read_only=True, required=False)
-    email = V2EmailField(required=True)
+    email = NormalizedEmailField(required=True)
     password = serializers.CharField(max_length=255, write_only=True, required=True, style={"input_type": "password"})
     password_confirm = serializers.CharField(
         max_length=255, write_only=True, required=True, style={"input_type": "password"}
     )
-    email_verification_sent_at = serializers.DateTimeField(format=DATETIME_FORMAT, required=False, allow_null=True)
-    is_email_verified = serializers.BooleanField(required=False, default=False)
-    sms_verification_sent_at = serializers.DateTimeField(format=DATETIME_FORMAT, required=False, allow_null=True)
-    is_phone_verified = serializers.BooleanField(required=False, default=False)
 
     def validate_password(self, value):
-        """Basic password validation"""
         if len(value) < 8:
             raise serializers.ValidationError("Password must be at least 8 characters long.")
         return value
 
     def to_representation(self, instance):
-        representation = {
-            "uuid": str(instance.userprofile.uuid) if hasattr(instance, "userprofile") else None,
-            "email": instance.email,
-            "is_email_verified": instance.is_email_verified,
-            "is_phone_verified": getattr(instance, "is_phone_verified", False),
-        }
-        return representation
+        return _identity(instance)
 
 
 class UserSigninSerializer(serializers.Serializer):
-    email = V2EmailField(required=True)
+    email = NormalizedEmailField(required=True)
     password = serializers.CharField(max_length=255, write_only=True, required=True, style={"input_type": "password"})
-    tokens = UserTokenSerializer(many=True, read_only=True)
-
-    def validate_password(self, value):
-        """Basic password validation - authentication handled in service layer"""
-        if not value:
-            raise serializers.ValidationError("Password is required.")
-        return value
 
     def to_representation(self, instance):
-        representation = {
-            "uuid": str(instance.userprofile.uuid),
-            "email": instance.email,
-            "is_email_verified": instance.is_email_verified,
-            "is_phone_verified": getattr(instance, "is_phone_verified", False),
-        }
-
-        if hasattr(instance, "tokens"):
-            tokens_qs = instance.tokens.filter(is_active=True).order_by("-created_at")
-            representation["tokens"] = UserTokenSerializer(tokens_qs, many=True).data
-
-        return representation
+        return _identity(instance)
 
 
 class ChangePasswordSerializer(serializers.Serializer):
@@ -105,13 +58,11 @@ class ChangePasswordSerializer(serializers.Serializer):
     )
 
     def validate_new_password(self, value):
-        """Validate new password meets requirements"""
         if len(value) < 8:
             raise serializers.ValidationError("Password must be at least 8 characters long.")
         return value
 
     def validate(self, attrs):
-        """Cross-field validation"""
         if attrs["new_password"] != attrs["new_password_confirm"]:
             raise serializers.ValidationError({"new_password_confirm": "New passwords do not match."})
 

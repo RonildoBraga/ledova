@@ -2,6 +2,7 @@ import logging
 from typing import Any, Dict, Optional
 
 from django.utils import timezone
+from rest_framework.exceptions import APIException
 
 from integrations.kyc import get_kyc_provider
 from integrations.kyc.base import (
@@ -17,13 +18,15 @@ from integrations.kyc.constants import (
     REVIEW_YELLOW,
 )
 from shared.models.country import Country
-from shared.utils.logging_utils import LoggingContext
-from users.exceptions import (
-    VerificationTokenGenerationException,
-)
 from users.models.user_profile import UserProfile
 
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
+
+
+class VerificationTokenGenerationException(APIException):
+    status_code = 502
+    default_detail = "Unable to initialize verification. Please try again."
+    default_code = "verification_token_generation_failed"
 
 
 class IdentityVerificationService:
@@ -52,8 +55,7 @@ class IdentityVerificationService:
             return result
         except Exception as e:
             logger.error(
-                f"{LoggingContext.ID_VERIFICATION} Failed to create applicant for "
-                f"user profile {user_profile.uuid}: {e}",
+                f"Failed to create applicant for user profile {user_profile.uuid}: {e}",
                 exc_info=True,
             )
             raise VerificationTokenGenerationException("Unable to initialize verification. Please try again later.")
@@ -71,10 +73,7 @@ class IdentityVerificationService:
         try:
             return kyc_provider.generate_session(applicant_id, external_id)
         except Exception as e:
-            logger.warning(
-                f"{LoggingContext.ID_VERIFICATION} generate_session failed for applicant "
-                f"{applicant_id}, re-creating: {e}"
-            )
+            logger.warning(f"generate_session failed for applicant {applicant_id}, re-creating: {e}")
             provider_name = kyc_provider.get_provider_name()
             if provider_name == PROVIDER_KYCAID:
                 user_profile.kycaid_applicant_id = None
@@ -99,10 +98,7 @@ class IdentityVerificationService:
                 if normalized.review_result:
                     IdentityVerificationService.update_status_from_normalized(user_profile, normalized)
             except Exception as e:
-                logger.warning(
-                    f"{LoggingContext.ID_VERIFICATION} Failed to fetch live status for applicant "
-                    f"{applicant_id}, using cached data: {e}"
-                )
+                logger.warning(f"Failed to fetch live status for applicant {applicant_id}, using cached data: {e}")
 
         response_data = {
             "provider": user_profile.kyc_provider,
@@ -124,10 +120,7 @@ class IdentityVerificationService:
                 response_data["extractedData"] = extracted_data
                 IdentityVerificationService.populate_profile(user_profile, extracted_data)
             except Exception as e:
-                logger.warning(
-                    f"{LoggingContext.ID_VERIFICATION} Failed to extract verified data for applicant "
-                    f"{applicant_id}: {e}"
-                )
+                logger.warning(f"Failed to extract verified data for applicant {applicant_id}: {e}")
 
         return response_data
 
@@ -139,9 +132,6 @@ class IdentityVerificationService:
 
         if user_profile.kyc_provider == PROVIDER_SUMSUB:
             user_profile.sumsub_verification_status = normalized.verification_status
-            user_profile.sumsub_review_result = normalized.review_result
-            user_profile.sumsub_review_answer = normalized.review_result
-            user_profile.sumsub_rejection_labels = normalized.rejection_labels or None
 
         if normalized.document_type:
             user_profile.id_document_type = normalized.document_type
@@ -153,9 +143,7 @@ class IdentityVerificationService:
         if normalized.review_result == REVIEW_GREEN and not user_profile.is_id_verified:
             user_profile.is_id_verified = True
             user_profile.verified_at = timezone.now()
-            if user_profile.kyc_provider == PROVIDER_SUMSUB:
-                user_profile.sumsub_verified_at = timezone.now()
-            logger.info(f"{LoggingContext.ID_VERIFICATION} User {user_profile.user.id} verified successfully")
+            logger.info(f"User {user_profile.user.id} verified successfully")
         elif normalized.review_result in [REVIEW_RED, REVIEW_YELLOW]:
             user_profile.is_id_verified = False
             user_profile.verified_at = None
@@ -168,14 +156,6 @@ class IdentityVerificationService:
         return user_profile.is_id_verified
 
     @staticmethod
-    def update_status(user_profile: UserProfile, status_data: Dict[str, Any], log_prefix: str = "") -> bool:
-        from integrations.sumsub.client import SumSubService
-
-        sumsub = SumSubService()
-        normalized = sumsub.normalize_webhook(status_data)
-        return IdentityVerificationService.update_status_from_normalized(user_profile, normalized)
-
-    @staticmethod
     def _process_verified_customer(user_profile, pep_data: Dict[str, Any]) -> None:
         from compliance.constants import FATF_BLACKLIST_COUNTRIES, PEP_REJECTION_TYPES
         from users.constants import ACCOUNT_STATUS_ACTIVE, ACCOUNT_STATUS_REJECTED
@@ -184,58 +164,39 @@ class IdentityVerificationService:
 
         user_account = user_profile.user_accounts.first()
         if not user_account:
-            logger.warning(
-                f"{LoggingContext.ID_VERIFICATION} No user_account found for user_profile {user_profile.uuid}"
-            )
+            logger.warning(f"No user_account found for user_profile {user_profile.uuid}")
             return
 
         if pep_type in PEP_REJECTION_TYPES:
             user_account.account_status = ACCOUNT_STATUS_REJECTED
             user_account.rejection_reason = "pep_policy"
             user_account.save()
-            logger.info(f"{LoggingContext.ID_VERIFICATION} Account {user_account.uuid} rejected: PEP type {pep_type}")
+            logger.info(f"Account {user_account.uuid} rejected: PEP type {pep_type}")
             return
 
-        citizenship = getattr(user_profile, "citizenship_country", None)
-        if citizenship and citizenship.upper() in FATF_BLACKLIST_COUNTRIES:
+        citizenship = user_profile.citizenship_country
+        if citizenship and citizenship.code and citizenship.code.upper() in FATF_BLACKLIST_COUNTRIES:
             user_account.account_status = ACCOUNT_STATUS_REJECTED
             user_account.rejection_reason = "fatf_blacklist"
             user_account.save()
-            logger.info(
-                f"{LoggingContext.ID_VERIFICATION} Account {user_account.uuid} rejected: "
-                f"FATF black-list country {citizenship}"
-            )
+            logger.info(f"Account {user_account.uuid} rejected: FATF black-list country {citizenship.code}")
             return
 
         user_account.account_status = ACCOUNT_STATUS_ACTIVE
         user_account.save()
 
-        IdentityVerificationService._trigger_risk_assessment(user_profile, pep_data)
+        IdentityVerificationService._trigger_risk_assessment(user_account, pep_data)
 
     @staticmethod
-    def _trigger_risk_assessment(user_profile, pep_data: Dict[str, Any]) -> None:
+    def _trigger_risk_assessment(user_account, pep_data: Dict[str, Any]) -> None:
+        from compliance.services.risk_assessment import RiskAssessmentService
+
         try:
-            user_account = user_profile.user_accounts.first()
-            if not user_account:
-                logger.warning(
-                    f"{LoggingContext.ID_VERIFICATION} No user_account found for user_profile {user_profile.uuid}, "
-                    "skipping risk assessment"
-                )
-                return
-
-            from compliance.services.risk_assessment import RiskAssessmentService
-
-            RiskAssessmentService.calculate_and_create(
-                user_account=user_account,
-                pep_data=pep_data,
-            )
-            logger.info(
-                f"{LoggingContext.ID_VERIFICATION} Triggered risk assessment for user_profile {user_profile.uuid}"
-            )
+            RiskAssessmentService.calculate_and_create(user_account=user_account, pep_data=pep_data)
+            logger.info(f"Triggered risk assessment for account {user_account.uuid}")
         except Exception as e:
             logger.error(
-                f"{LoggingContext.ID_VERIFICATION} Error triggering risk assessment for user_profile "
-                f"{user_profile.uuid}: {e}",
+                f"Error triggering risk assessment for account {user_account.uuid}: {e}",
                 exc_info=True,
             )
 
@@ -261,11 +222,7 @@ class IdentityVerificationService:
             profile_updated = True
 
         if residence_country and not user_profile.residence_country:
-            country, _ = Country.objects.get_or_create(
-                code=residence_country,
-                defaults={"name": residence_country},
-            )
-            user_profile.residence_country = country
+            user_profile.residence_country = Country.get_or_create_for_code(residence_country)
             profile_updated = True
 
         if profile_updated:

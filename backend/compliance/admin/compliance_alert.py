@@ -1,22 +1,28 @@
-"""
-Admin for ComplianceAlert model.
-"""
-
 from django.contrib import admin
 from django.utils import timezone
-from django.utils.html import format_html
 
+from compliance.admin._helpers import (
+    GREEN,
+    GREY,
+    ORANGE,
+    RED,
+    SEVERITY_COLOURS,
+    TEAL,
+    YELLOW,
+    admin_link,
+    badge,
+    choice_badge,
+)
 from compliance.models import AlertChecklistItem, ComplianceAlert
+
+ALERT_STATUS_COLOURS = {"new": TEAL, "reviewing": YELLOW, "escalated": ORANGE, "closed": GREY}
 
 
 class AlertChecklistItemInline(admin.TabularInline):
-    """Inline for checklist items on the alert page."""
-
     model = AlertChecklistItem
     extra = 0
     can_delete = False
     ordering = ["step__order"]
-
     fields = [
         "step_order",
         "step_description",
@@ -35,46 +41,25 @@ class AlertChecklistItemInline(admin.TabularInline):
         "completed_at",
     ]
 
+    @admin.display(description="#")
     def step_order(self, obj):
         return f"Step {obj.step.order}"
 
-    step_order.short_description = "#"
-
+    @admin.display(description="Description")
     def step_description(self, obj):
         return obj.step.description
 
-    step_description.short_description = "Description"
-
+    @admin.display(description="Type")
     def is_required_badge(self, obj):
-        if obj.step.is_required:
-            return format_html(
-                '<span style="background-color: #dc3545; color: white; padding: 2px 6px; '
-                'border-radius: 4px; font-size: 10px;">Required</span>'
-            )
-        return format_html(
-            '<span style="background-color: #6c757d; color: white; padding: 2px 6px; '
-            'border-radius: 4px; font-size: 10px;">Optional</span>'
-        )
+        return badge("Required", RED) if obj.step.is_required else badge("Optional", GREY)
 
-    is_required_badge.short_description = "Type"
-
+    @admin.display(description="Status")
     def status_badge(self, obj):
         if obj.is_completed:
-            return format_html(
-                '<span style="background-color: #28a745; color: white; padding: 2px 6px; '
-                'border-radius: 4px; font-size: 10px;">✓ Completed</span>'
-            )
-        elif obj.is_skipped:
-            return format_html(
-                '<span style="background-color: #6c757d; color: white; padding: 2px 6px; '
-                'border-radius: 4px; font-size: 10px;">⊘ Skipped</span>'
-            )
-        return format_html(
-            '<span style="background-color: #ffc107; color: black; padding: 2px 6px; '
-            'border-radius: 4px; font-size: 10px;">☐ Pending</span>'
-        )
-
-    status_badge.short_description = "Status"
+            return badge("✓ Completed", GREEN)
+        if obj.is_skipped:
+            return badge("⊘ Skipped", GREY)
+        return badge("☐ Pending", YELLOW)
 
     def has_add_permission(self, request, obj=None):
         return False
@@ -82,16 +67,6 @@ class AlertChecklistItemInline(admin.TabularInline):
 
 @admin.register(ComplianceAlert)
 class ComplianceAlertAdmin(admin.ModelAdmin):
-    """
-    Admin for compliance alerts.
-
-    Allows AML Compliance Officer to:
-    - View alerts triggered by monitoring rules
-    - Assign alerts to team members
-    - Track alert status and resolution
-    - Navigate to related transactions and investigations
-    """
-
     list_display = [
         "triggered_rule",
         "user_account",
@@ -111,12 +86,7 @@ class ComplianceAlertAdmin(admin.ModelAdmin):
         "account_action",
         ("assigned_to", admin.RelatedOnlyFieldListFilter),
     ]
-    search_fields = [
-        "triggered_rule",
-        "description",
-        "user_account__account_number",
-        "user_account__uuid",
-    ]
+    search_fields = ["triggered_rule", "description", "user_account__account_number", "user_account__uuid"]
     readonly_fields = [
         "uuid",
         "created_at",
@@ -128,161 +98,45 @@ class ComplianceAlertAdmin(admin.ModelAdmin):
     ordering = ["-created_at"]
     date_hierarchy = "created_at"
     inlines = [AlertChecklistItemInline]
-
+    actions = ["assign_to_me", "mark_as_reviewing", "close_alerts"]
+    # The raw transaction FKs are replaced by links: the selects would list every transaction.
     fieldsets = (
-        (
-            "Alert Information",
-            {
-                "fields": (
-                    "user_account",
-                    "triggered_rule",
-                    "alert_type",
-                    "severity",
-                    "description",
-                    "alert_data",
-                ),
-            },
-        ),
-        (
-            "Related Transactions",
-            {
-                "fields": (
-                    "transaction_link",
-                    "fiat_transaction_link",
-                    "monitoring_rule",
-                ),
-            },
-        ),
-        (
-            "Status & Assignment",
-            {
-                "fields": (
-                    "status",
-                    "assigned_to",
-                    "assigned_at",
-                ),
-            },
-        ),
-        (
-            "Resolution",
-            {
-                "fields": (
-                    "investigation_outcome",
-                    "resolution_notes",
-                    "resolved_at",
-                    "resolved_by",
-                ),
-            },
-        ),
+        (None, {"fields": ("user_account", "triggered_rule", "alert_type", "severity", "description", "alert_data")}),
+        ("Related Transactions", {"fields": ("transaction_link", "fiat_transaction_link", "monitoring_rule")}),
+        ("Status & Assignment", {"fields": ("status", "assigned_to", "assigned_at")}),
+        ("Resolution", {"fields": ("investigation_outcome", "resolution_notes", "resolved_at", "resolved_by")}),
         (
             "SMR (Suspicious Matter Report)",
             {
-                "fields": (
-                    "smr_required",
-                    "smr_type",
-                    "smr_reference",
-                    "smr_filed_at",
-                ),
+                "fields": ("smr_required", "smr_type", "smr_reference", "smr_filed_at"),
                 "description": "Record SMR details after filing in AUSTRAC portal",
             },
         ),
-        (
-            "Account Action",
-            {
-                "fields": (
-                    "account_action",
-                    "account_action_at",
-                ),
-            },
-        ),
-        (
-            "System Information",
-            {
-                "fields": ("uuid", "created_at", "updated_at"),
-                "classes": ("collapse",),
-            },
-        ),
+        ("Account Action", {"fields": ("account_action", "account_action_at")}),
+        ("System Information", {"fields": ("uuid", "created_at", "updated_at"), "classes": ("collapse",)}),
     )
 
-    actions = ["assign_to_me", "mark_as_reviewing", "close_alerts"]
-
+    @admin.display(description="Severity", ordering="severity")
     def severity_badge(self, obj):
-        """Display severity as a colored badge."""
-        colors = {
-            "low": "#28a745",
-            "medium": "#ffc107",
-            "high": "#fd7e14",
-            "critical": "#dc3545",
-        }
-        color = colors.get(obj.severity, "#6c757d")
-        return format_html(
-            '<span style="background-color: {}; color: white; padding: 2px 8px; '
-            'border-radius: 4px; font-size: 11px;">{}</span>',
-            color,
-            obj.severity.upper(),
-        )
+        return choice_badge(obj.severity, SEVERITY_COLOURS)
 
-    severity_badge.short_description = "Severity"
-    severity_badge.admin_order_field = "severity"
-
+    @admin.display(description="Status", ordering="status")
     def status_badge(self, obj):
-        """Display status as a colored badge."""
-        colors = {
-            "new": "#17a2b8",
-            "reviewing": "#ffc107",
-            "escalated": "#fd7e14",
-            "closed": "#6c757d",
-        }
-        color = colors.get(obj.status, "#6c757d")
-        return format_html(
-            '<span style="background-color: {}; color: white; padding: 2px 8px; '
-            'border-radius: 4px; font-size: 11px;">{}</span>',
-            color,
-            obj.status.upper(),
-        )
+        return choice_badge(obj.status, ALERT_STATUS_COLOURS)
 
-    status_badge.short_description = "Status"
-    status_badge.admin_order_field = "status"
-
+    @admin.display(description="SMR")
     def smr_badge(self, obj):
-        """Display SMR status as a badge."""
-        if obj.smr_required:
-            if obj.smr_filed_at:
-                return format_html(
-                    '<span style="background-color: #28a745; color: white; padding: 2px 6px; '
-                    'border-radius: 4px; font-size: 10px;">✓ Filed</span>'
-                )
-            return format_html(
-                '<span style="background-color: #dc3545; color: white; padding: 2px 6px; '
-                'border-radius: 4px; font-size: 10px;">⚠ Pending</span>'
-            )
-        return "-"
+        if not obj.smr_required:
+            return "-"
+        return badge("✓ Filed", GREEN) if obj.smr_filed_at else badge("⚠ Pending", RED)
 
-    smr_badge.short_description = "SMR"
-
+    @admin.display(description="Crypto Transaction")
     def transaction_link(self, obj):
-        """Link to related crypto transaction."""
-        if obj.transaction:
-            return format_html(
-                '<a href="/admin/wallets/transaction/{}/change/">{}</a>',
-                obj.transaction.uuid,
-                str(obj.transaction)[:50],
-            )
-        return "-"
+        return admin_link(obj.transaction)
 
-    transaction_link.short_description = "Crypto Transaction"
-
+    @admin.display(description="Fiat Transaction")
     def fiat_transaction_link(self, obj):
-        """Link to related fiat transaction."""
-        if obj.fiat_transaction:
-            return format_html(
-                '<a href="/admin/wallets/fiattransaction/{}/change/">{}</a>',
-                obj.fiat_transaction.uuid,
-                str(obj.fiat_transaction)[:50],
-            )
-        return "-"
-
-    fiat_transaction_link.short_description = "Fiat Transaction"
+        return admin_link(obj.fiat_transaction)
 
     @admin.action(description="Assign selected alerts to me")
     def assign_to_me(self, request, queryset):
@@ -296,9 +150,5 @@ class ComplianceAlertAdmin(admin.ModelAdmin):
 
     @admin.action(description="Close selected alerts")
     def close_alerts(self, request, queryset):
-        count = queryset.update(
-            status="closed",
-            resolved_at=timezone.now(),
-            resolved_by=request.user,
-        )
+        count = queryset.update(status="closed", resolved_at=timezone.now(), resolved_by=request.user)
         self.message_user(request, f"{count} alert(s) closed.")

@@ -37,7 +37,6 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "confirmed_over_18",
             "confirmed_australian_resident",
             "confirmed_individual_account",
-            "pre_screening_completed_at",
             "is_id_verified",
             "terms_and_conditions",
             "is_signup_completed",
@@ -49,16 +48,11 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "kycaid_applicant_id",
             "sumsub_applicant_id",
             "sumsub_verification_status",
-            "sumsub_review_result",
-            "sumsub_review_answer",
-            "sumsub_rejection_labels",
-            "sumsub_verified_at",
         )
         read_only_fields = (
             "uuid",
             "is_id_verified",
             "residence_country",
-            "pre_screening_completed_at",
             "kyc_provider",
             "verification_status",
             "review_result",
@@ -67,34 +61,24 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "kycaid_applicant_id",
             "sumsub_applicant_id",
             "sumsub_verification_status",
-            "sumsub_review_result",
-            "sumsub_review_answer",
-            "sumsub_rejection_labels",
-            "sumsub_verified_at",
         )
 
     def get_is_active(self, obj):
-        """Get is_active status from the related user."""
         return obj.user.is_active if obj.user else None
 
     def get_is_staff(self, obj):
-        """Get is_staff status from the related user."""
         return obj.user.is_staff if obj.user else None
 
     def get_date_joined(self, obj):
-        """Get date_joined from the related user."""
         return obj.user.date_joined if obj.user else None
 
     def get_last_login(self, obj):
-        """Get last_login from the related user."""
         return obj.user.last_login if obj.user else None
 
     def get_citizenship_country_name(self, obj):
-        """Get the name of the citizenship country."""
         return obj.citizenship_country.name if obj.citizenship_country else None
 
     def get_residence_country_name(self, obj):
-        """Get the name of the residence country."""
         return obj.residence_country.name if obj.residence_country else None
 
     def validate(self, attrs):

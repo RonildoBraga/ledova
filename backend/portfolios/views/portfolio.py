@@ -1,5 +1,3 @@
-import logging
-
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
@@ -15,10 +13,9 @@ from portfolios.serializers.portfolio import (
 from portfolios.services import (
     PortfolioWalletService,
 )
-from shared.utils.logging_utils import LoggingContext
+from shared.utils.querysets import sample_evenly
 from shared.views.base import AuthenticatedModelViewSet
-
-logger = logging.getLogger("ledova_backend")
+from users.models import UserAccount
 
 
 class PortfolioViewSet(AuthenticatedModelViewSet):
@@ -32,22 +29,23 @@ class PortfolioViewSet(AuthenticatedModelViewSet):
         return qs
 
     def perform_create(self, serializer):
-        logger.info(f"{LoggingContext.PORTFOLIOS} Creating portfolio for user {self.request.user.email}")
-
-        user_profile = self.request.user.userprofile
-        user_account = user_profile.user_accounts.first()
-
-        if not user_account:
-            raise ValidationError({"userAccount": "User account not found for authenticated user."})
+        user_account = serializer.validated_data.get("user_account")
+        if user_account is None:
+            # Default to the caller's selected account, then to their only
+            # account; never guess between several with .first().
+            accounts = UserAccount.objects.visible_to_user(self.request.user)
+            preferences = getattr(self.request.user.userprofile, "preferences", None)
+            selected_id = getattr(preferences, "selected_account_id", None)
+            user_account = accounts.filter(pk=selected_id).first() if selected_id else None
+        if user_account is None:
+            candidates = list(accounts[:2])
+            if len(candidates) != 1:
+                raise ValidationError({"userAccount": "Select the account this portfolio belongs to."})
+            user_account = candidates[0]
 
         return serializer.save(user_account=user_account)
 
-    def perform_update(self, serializer):
-        logger.info(f"{LoggingContext.PORTFOLIOS} Updating portfolio")
-        return serializer.save()
-
     def perform_destroy(self, instance):
-        logger.info(f"{LoggingContext.PORTFOLIOS} Soft deleting portfolio {instance.uuid}")
         instance.is_active = False
         instance.save(update_fields=["is_active"])
 
@@ -60,7 +58,6 @@ class PortfolioViewSet(AuthenticatedModelViewSet):
             .filter_active_assets()
             .exclude_zero_allocations()
             .select_related("asset")
-            .with_holdings_data(portfolio)
         )
         serializer = AssetAllocationSerializer(allocations, many=True, context={"request": request})
         return Response(serializer.data)
@@ -113,9 +110,7 @@ class PortfolioViewSet(AuthenticatedModelViewSet):
         allowed_orderings = {"snapshot_date", "-snapshot_date"}
         if order_by not in allowed_orderings:
             order_by = "-snapshot_date"
-        snapshots = snapshots.order_by(order_by)
-        if params.get("max_points"):
-            snapshots = snapshots.sample_evenly(params["max_points"])
+        snapshots = sample_evenly(snapshots.order_by(order_by), params.get("max_points"))
 
         serializer = PortfolioSnapshotSerializer(snapshots, many=True, context={"request": request})
         return Response(serializer.data)

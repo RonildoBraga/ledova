@@ -1,14 +1,4 @@
-"""
-Payslip extraction schema.
-
-Mirror of scripts/llm-spike/schemas.py::PayslipExtraction — the shape
-we validated Qwen2.5-VL-7B against during Phase 0. Don't drift these
-two casually.
-"""
-
-from datetime import (
-    date as Date,  # aliased so we can also use 'date' as a field name if needed
-)
+from datetime import date
 from decimal import Decimal
 from typing import Annotated
 
@@ -19,6 +9,8 @@ Confidence = Annotated[float, Field(ge=0.0, le=1.0, description="Model's self-as
 
 
 class PayslipExtraction(BaseModel):
+    """The field set the prompt asks the model for; keep it small, accuracy drops as the schema grows."""
+
     employee_name: str | None = Field(None, description="Full name of the employee")
     employer_name: str | None = Field(None, description="Trading name of the employer")
     abn: str | None = Field(
@@ -26,9 +18,9 @@ class PayslipExtraction(BaseModel):
         description="Australian Business Number, 11 digits with spaces removed. Null if not present.",
     )
 
-    period_start: Date | None = Field(None, description="Pay period start date, YYYY-MM-DD")
-    period_end: Date | None = Field(None, description="Pay period end date, YYYY-MM-DD")
-    pay_date: Date | None = Field(None, description="Date the payment was made")
+    period_start: date | None = Field(None, description="Pay period start date, YYYY-MM-DD")
+    period_end: date | None = Field(None, description="Pay period end date, YYYY-MM-DD")
+    pay_date: date | None = Field(None, description="Date the payment was made")
 
     gross_pay: Money | None = Field(None, description="Gross pay for this period")
     net_pay: Money | None = Field(None, description="Net pay (take-home) for this period")

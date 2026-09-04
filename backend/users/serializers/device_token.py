@@ -1,19 +1,9 @@
-"""
-Serializers for device tokens.
-"""
-
 from rest_framework import serializers
 
 from users.models import DeviceToken
 
 
 class DeviceTokenSerializer(serializers.ModelSerializer):
-    """
-    Serializer for the DeviceToken model.
-
-    Used for reading device token data.
-    """
-
     class Meta:
         model = DeviceToken
         fields = (
@@ -28,12 +18,6 @@ class DeviceTokenSerializer(serializers.ModelSerializer):
 
 
 class RegisterDeviceTokenSerializer(serializers.Serializer):
-    """
-    Serializer for registering a new device token.
-
-    Validates the push token format and device type.
-    """
-
     push_token = serializers.CharField(
         max_length=255,
         help_text="Expo push token (e.g., ExponentPushToken[xxx])",
@@ -44,8 +28,7 @@ class RegisterDeviceTokenSerializer(serializers.Serializer):
     )
 
     def validate_push_token(self, value):
-        """Validate the push token format."""
-        if not DeviceToken.validate_expo_token(value):
+        if not (value.startswith("ExponentPushToken[") and value.endswith("]")):
             raise serializers.ValidationError(
                 "Invalid Expo push token format. Token must start with 'ExponentPushToken[' and end with ']'."
             )
@@ -53,10 +36,6 @@ class RegisterDeviceTokenSerializer(serializers.Serializer):
 
 
 class UnregisterDeviceTokenSerializer(serializers.Serializer):
-    """
-    Serializer for unregistering a device token.
-    """
-
     push_token = serializers.CharField(
         max_length=255,
         help_text="Expo push token to unregister",

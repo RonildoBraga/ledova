@@ -29,19 +29,11 @@ class IssuanceType(models.TextChoices):
     TRANSFER = "transfer", "Transfer (Re-issuance)"
 
 
-class CapitalIncreaseStatus(models.TextChoices):
+class RequestStatus(models.TextChoices):
+    """Review workflow shared by CapitalIncreaseRequest and ShareIssuanceRequest."""
+
     DRAFT = "draft", "Draft"
     SUBMITTED = "submitted", "Submitted"
-    UNDER_REVIEW = "under_review", "Under Review"
-    APPROVED = "approved", "Approved"
-    REJECTED = "rejected", "Rejected"
-    EXECUTING = "executing", "Executing"
-    EXECUTED = "executed", "Executed"
-    FAILED = "failed", "Failed"
-
-
-class IssuanceRequestStatus(models.TextChoices):
-    PENDING_APPROVAL = "pending_approval", "Pending Approval"
     UNDER_REVIEW = "under_review", "Under Review"
     APPROVED = "approved", "Approved"
     REJECTED = "rejected", "Rejected"

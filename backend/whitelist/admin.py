@@ -1,5 +1,3 @@
-import logging
-
 from django import forms
 from django.contrib import admin, messages
 from django.http import HttpResponseRedirect
@@ -10,8 +8,6 @@ from django.utils.safestring import mark_safe
 
 from wallets.models import Wallet
 from whitelist.models import WhitelistEntry, WhitelistStatus
-
-logger = logging.getLogger(__name__)
 
 
 class WhitelistEntryAddForm(forms.ModelForm):

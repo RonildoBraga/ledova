@@ -11,6 +11,7 @@ from django.core.exceptions import ValidationError
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework import status
+from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -27,27 +28,16 @@ from integrations.sumsub import SumSubService
 from users.models.user_profile import UserProfile
 from users.services import IdentityVerificationService
 
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 
 @method_decorator(csrf_exempt, name="dispatch")
 class SumSubWebhookView(APIView):
-    """
-    Handle webhooks from SumSub.
-
-    POST /api/users/webhooks/sumsub/
-
-    Webhook Types:
-    - applicantCreated
-    - applicantPending
-    - applicantReviewed
-    - applicantOnHold
-    - applicantActionPending
-    - applicantActionReviewed
-    """
-
     authentication_classes = []
     permission_classes = []
+    # SumSub sends camelCase keys (applicantId, externalUserId, reviewResult, reviewStatus); the
+    # project-wide CamelCase parser would underscore them, so this view reads the payload verbatim.
+    parser_classes = [JSONParser]
 
     def post(self, request):
         signature = request.headers.get("X-Payload-Digest", "")
@@ -64,8 +54,8 @@ class SumSubWebhookView(APIView):
         try:
             data = request.data
             webhook_type = data.get("type")
-            applicant_id = data.get("applicant_id")
-            external_user_id = data.get("external_user_id")
+            applicant_id = data.get("applicantId")
+            external_user_id = data.get("externalUserId")
 
             logger.info(
                 f"[WEBHOOK] Received SumSub webhook: {webhook_type} for applicant {applicant_id}, "
@@ -97,7 +87,9 @@ class SumSubWebhookView(APIView):
                 user_profile.save()
 
             elif webhook_type == SUMSUB_EVENT_APPLICANT_REVIEWED:
-                IdentityVerificationService.update_status(user_profile, data, log_prefix="[WEBHOOK]")
+                IdentityVerificationService.update_status_from_normalized(
+                    user_profile, sumsub_service.normalize_webhook(data)
+                )
                 logger.info(f"[WEBHOOK] Processed applicantReviewed for {applicant_id}")
 
             elif webhook_type == SUMSUB_EVENT_APPLICANT_ON_HOLD:

@@ -39,7 +39,6 @@ class FiatTransactionViewSet(AuthenticatedReadOnlyViewSet):
 
         chain = wallet.chain
 
-        # Fiat settings
         fiat_currency = request.data.get("fiat_currency")
         default_fiat_currency = request.data.get("default_fiat_currency", "AUD")
         fiat_amount = request.data.get("fiat_amount")

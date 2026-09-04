@@ -1,12 +1,8 @@
-import logging
-
 from django.db import transaction
 
 from shared.views.base import AuthenticatedModelViewSet
 from users.models.financial_profile import FinancialProfile
 from users.serializers.financial_profile import FinancialProfileSerializer
-
-logger = logging.getLogger("ledova_backend")
 
 
 class FinancialProfileViewSet(AuthenticatedModelViewSet):

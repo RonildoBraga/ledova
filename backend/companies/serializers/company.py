@@ -2,6 +2,7 @@ from rest_framework import serializers
 
 from companies.models import Company, CompanyStatus
 from companies.serializers.document import CompanyDocumentSerializer
+from companies.services.company import register_company
 
 
 class _CompanyUserProfileSerializer(serializers.Serializer):
@@ -147,16 +148,10 @@ class CompanyRegistrationSerializer(serializers.ModelSerializer):
         return abn
 
     def create(self, validated_data):
-        from companies.services import CompanyService
-
         contact_data = validated_data.pop("primary_contact")
         user = self.context["request"].user
 
-        return CompanyService.register_company(
-            owner=user,
-            primary_contact_data=contact_data,
-            **validated_data,
-        )
+        return register_company(owner=user, primary_contact_data=contact_data, **validated_data)
 
 
 class CompanyUpdateSerializer(serializers.ModelSerializer):
@@ -220,7 +215,6 @@ class CompanyStatusUpdateSerializer(serializers.Serializer):
     reason = serializers.CharField(required=False, allow_blank=True)
 
     def validate(self, data):
-        instance = self.context.get("instance")
         new_status = data["status"]
 
         if new_status in [
@@ -231,14 +225,6 @@ class CompanyStatusUpdateSerializer(serializers.Serializer):
             CompanyStatus.INFO_REQUIRED,
         ] and not data.get("reason"):
             raise serializers.ValidationError({"reason": f"Reason is required when changing status to {new_status}."})
-
-        if new_status == CompanyStatus.ACTIVE:
-            if instance and instance.status != CompanyStatus.APPROVED:
-                raise serializers.ValidationError({"status": "Company must be approved before activation."})
-
-        if new_status == CompanyStatus.APPROVED:
-            if instance and instance.status != CompanyStatus.REVIEW:
-                raise serializers.ValidationError({"status": "Only applications under review can be approved."})
 
         return data
 
@@ -255,30 +241,6 @@ class ApplicationSubmitSerializer(serializers.Serializer):
             raise serializers.ValidationError("You must confirm that all information is accurate and complete.")
         return value
 
-    def validate(self, data):
-        company = self.context.get("company")
-        if not company:
-            raise serializers.ValidationError("Company context is required.")
-
-        if company.status != CompanyStatus.DRAFT:
-            raise serializers.ValidationError(
-                f"Only draft applications can be submitted. Current status: {company.get_status_display()}"
-            )
-
-        from companies.models import LISTING_REQUIRED_DOCUMENTS
-
-        uploaded_types = set(company.documents.values_list("document_type", flat=True))
-        required_types = set(dt.value for dt in LISTING_REQUIRED_DOCUMENTS)
-        missing_types = required_types - uploaded_types
-
-        if missing_types:
-            from companies.models import DocumentType
-
-            missing_names = [dict(DocumentType.choices).get(t, t) for t in missing_types]
-            raise serializers.ValidationError({"documents": f"Missing required documents: {', '.join(missing_names)}"})
-
-        return data
-
 
 class ApplicationResubmitSerializer(serializers.Serializer):
 
@@ -286,19 +248,6 @@ class ApplicationResubmitSerializer(serializers.Serializer):
         required=True,
         help_text="Response to the information request.",
     )
-
-    def validate(self, data):
-        company = self.context.get("company")
-        if not company:
-            raise serializers.ValidationError("Company context is required.")
-
-        if company.status != CompanyStatus.INFO_REQUIRED:
-            raise serializers.ValidationError(
-                "Only applications awaiting information can be resubmitted. "
-                f"Current status: {company.get_status_display()}"
-            )
-
-        return data
 
 
 class ApplicationWithdrawSerializer(serializers.Serializer):
@@ -308,22 +257,6 @@ class ApplicationWithdrawSerializer(serializers.Serializer):
         allow_blank=True,
         help_text="Optional reason for withdrawal.",
     )
-
-    def validate(self, data):
-        company = self.context.get("company")
-        if not company:
-            raise serializers.ValidationError("Company context is required.")
-
-        if company.status not in [
-            CompanyStatus.DRAFT,
-            CompanyStatus.SUBMITTED,
-            CompanyStatus.INFO_REQUIRED,
-        ]:
-            raise serializers.ValidationError(
-                f"Only pending applications can be withdrawn. Current status: {company.get_status_display()}"
-            )
-
-        return data
 
 
 class ApplicationStatusSerializer(serializers.ModelSerializer):

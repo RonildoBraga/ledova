@@ -6,12 +6,21 @@ from portfolios.models.portfolio import (
     Portfolio,
     PortfolioSnapshot,
 )
+from users.models import UserAccount
 
 
 class PortfolioSerializer(serializers.ModelSerializer):
-    user_account = serializers.PrimaryKeyRelatedField(read_only=True)
+    user_account = serializers.PrimaryKeyRelatedField(queryset=UserAccount.objects.none(), required=False)
     wallet_uuids = serializers.SerializerMethodField()
     wallet_count = serializers.SerializerMethodField()
+
+    def get_fields(self):
+        fields = super().get_fields()
+        # Scope the writable owner FK to the caller's own accounts so a
+        # portfolio can never be filed under another tenant's account.
+        request = self.context.get("request")
+        fields["user_account"].queryset = UserAccount.objects.visible_to_user(getattr(request, "user", None))
+        return fields
 
     def get_wallet_uuids(self, obj):
         return [str(wallet.uuid) for wallet in obj.account_wallets()]
@@ -33,7 +42,6 @@ class PortfolioSerializer(serializers.ModelSerializer):
         )
         read_only_fields = (
             "uuid",
-            "user_account",
             "wallet_uuids",
             "wallet_count",
             "created_at",

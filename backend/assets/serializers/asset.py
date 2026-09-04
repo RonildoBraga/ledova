@@ -5,7 +5,6 @@ from assets.models import (
     AssetChainDeployment,
     AssetSnapshot,
 )
-from shared.models.country import Country
 
 
 class AssetChainDeploymentSerializer(serializers.ModelSerializer):
@@ -13,20 +12,6 @@ class AssetChainDeploymentSerializer(serializers.ModelSerializer):
     class Meta:
         model = AssetChainDeployment
         fields = ("uuid", "chain", "contract_address", "decimals", "is_active")
-        read_only_fields = ("uuid",)
-
-
-class CountrySerializer(serializers.ModelSerializer):
-
-    class Meta:
-        model = Country
-        fields = (
-            "uuid",
-            "name",
-            "code",
-            "dial_code",
-            "is_available",
-        )
         read_only_fields = ("uuid",)
 
 

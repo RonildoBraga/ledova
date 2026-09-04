@@ -8,7 +8,7 @@ from django.core.cache import cache
 
 from integrations.transak.exceptions import TransakApiError, TransakConfigurationError
 
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 # Cache key for the partner access token
 TRANSAK_ACCESS_TOKEN_CACHE_KEY = "transak:partner_access_token"
@@ -37,19 +37,17 @@ def _configured_service_url(setting_name: str, value: str | None) -> str:
 class TransakClient:
 
     def __init__(self, api_key: str = None, api_secret: str = None):
-        self.api_key = api_key or getattr(settings, "TRANSAK_API_KEY", None)
-        self.api_secret = api_secret or getattr(settings, "TRANSAK_API_SECRET", None)
+        self.api_key = api_key or settings.TRANSAK_API_KEY
+        self.api_secret = api_secret or settings.TRANSAK_API_SECRET
 
         if not self.api_key:
             raise TransakConfigurationError("TRANSAK_API_KEY is not configured")
         if not self.api_secret:
             raise TransakConfigurationError("TRANSAK_API_SECRET is not configured")
 
-        self.api_url = _configured_service_url("TRANSAK_API_URL", getattr(settings, "TRANSAK_API_URL", ""))
-        self.api_gateway_url = _configured_service_url(
-            "TRANSAK_API_GATEWAY_URL", getattr(settings, "TRANSAK_API_GATEWAY_URL", "")
-        )
-        self.referrer_domain = getattr(settings, "TRANSAK_REFERRER_DOMAIN", "localhost")
+        self.api_url = _configured_service_url("TRANSAK_API_URL", settings.TRANSAK_API_URL)
+        self.api_gateway_url = _configured_service_url("TRANSAK_API_GATEWAY_URL", settings.TRANSAK_API_GATEWAY_URL)
+        self.referrer_domain = settings.TRANSAK_REFERRER_DOMAIN
 
     def _get_access_token(self) -> str:
         """Get a cached partner access token, refreshing if needed."""

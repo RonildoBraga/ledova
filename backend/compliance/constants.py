@@ -1,8 +1,6 @@
 from decimal import Decimal
 
-# =============================================================================
 # THRESHOLDS & TIME PERIODS
-# =============================================================================
 
 ALERT_THRESHOLD_AUD = Decimal("10000")
 SCREENING_THRESHOLD_AUD = Decimal("5000")
@@ -14,6 +12,9 @@ RISK_THRESHOLD_HIGH = 8
 NEW_CUSTOMER_DAYS = 30
 RISK_REVIEW_PERIOD_MONTHS = 24
 BATCH_MONITORING_LOOKBACK_HOURS = 2
+# Only transactions mined within this window are screened on creation; older ones
+# arrive through historical wallet syncs and are handled by the batch task.
+TRANSACTION_MONITORING_WINDOW_HOURS = 1
 
 DOMESTIC_PEP_RISK_ADJUSTMENT = 2
 
@@ -27,9 +28,7 @@ ROUND_AMOUNT_DIVISOR = Decimal("5000")
 ROUND_AMOUNT_COUNT_THRESHOLD = 3
 ROUND_AMOUNT_PERIOD_DAYS = 30
 
-# =============================================================================
 # CUSTOMER RISK ASSESSMENT
-# =============================================================================
 
 ASSESSMENT_STATUS_PENDING = "pending"
 ASSESSMENT_STATUS_COMPLETE = "complete"
@@ -55,9 +54,7 @@ RISK_RATING_CHOICES = [
 
 HIGH_RISK_RATINGS = [RISK_RATING_HIGH, RISK_RATING_EXTREME]
 
-# =============================================================================
 # MONITORING RULES
-# =============================================================================
 
 RULE_TYPE_THRESHOLD = "threshold"
 RULE_TYPE_RAPID_TRANSACTIONS = "rapid_transactions"
@@ -83,9 +80,7 @@ RULE_TYPE_CHOICES = [
     (RULE_TYPE_EXTREME_RISK, "Extreme Risk Customer"),
 ]
 
-# =============================================================================
 # COMPLIANCE ALERTS
-# =============================================================================
 
 # Transaction-based alerts
 ALERT_TYPE_LARGE_TRANSACTION = "large_transaction"
@@ -184,9 +179,7 @@ ALERT_STATUS_CHOICES = [
     (ALERT_STATUS_CLOSED, "Closed"),
 ]
 
-# =============================================================================
 # TRANSACTION SCREENING
-# =============================================================================
 
 SCREENING_STATUS_PENDING = "pending"
 SCREENING_STATUS_COMPLETED = "completed"
@@ -208,9 +201,7 @@ SCREENING_RESULT_CHOICES = [
     (SCREENING_RESULT_REJECTED, "Rejected"),
 ]
 
-# =============================================================================
 # INVESTIGATIONS & SMR
-# =============================================================================
 
 INVESTIGATION_OUTCOME_FALSE_POSITIVE = "false_positive"
 INVESTIGATION_OUTCOME_LEGITIMATE = "legitimate_activity"
@@ -250,9 +241,7 @@ ACCOUNT_ACTION_CHOICES = [
     (ACCOUNT_ACTION_TERMINATED, "Account Terminated"),
 ]
 
-# =============================================================================
 # PEP (POLITICALLY EXPOSED PERSONS)
-# =============================================================================
 
 PEP_TYPE_NONE = "none"
 PEP_TYPE_DOMESTIC = "domestic"
@@ -277,15 +266,11 @@ PEP_REJECTION_TYPES = [
     PEP_TYPE_ASSOCIATE,
 ]
 
-# =============================================================================
 # GEOGRAPHIC RISK (FATF BLACKLIST)
-# =============================================================================
 
 FATF_BLACKLIST_COUNTRIES = ["KP", "IR", "MM"]
 
-# =============================================================================
 # HIGH-RISK OCCUPATIONS
-# =============================================================================
 
 HIGH_RISK_OCCUPATIONS = [
     "politician",
@@ -302,9 +287,7 @@ HIGH_RISK_OCCUPATIONS = [
     "arms_dealer",
 ]
 
-# =============================================================================
 # ALERT PROCEDURE TEMPLATES
-# =============================================================================
 
 PROCEDURE_PRIORITY_CRITICAL = "critical"
 PROCEDURE_PRIORITY_HIGH = "high"
@@ -345,11 +328,3 @@ ESCALATION_TIMEFRAME_CHOICES = [
     (ESCALATION_TIMEFRAME_BEFORE_ACTION, "Before action taken"),
     (ESCALATION_TIMEFRAME_IF_CONCERNS, "Only if concerns arise"),
 ]
-
-# Response timeframes in hours (for system use)
-RESPONSE_TIMEFRAME_MAP = {
-    PROCEDURE_PRIORITY_CRITICAL: 1,
-    PROCEDURE_PRIORITY_HIGH: 24,
-    PROCEDURE_PRIORITY_MEDIUM: 72,
-    PROCEDURE_PRIORITY_LOW: 168,  # 7 days
-}

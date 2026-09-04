@@ -6,7 +6,7 @@ import django.db.models.lookups
 from django.conf import settings
 from django.db import migrations, models
 
-import authentication.security.v2_email
+import authentication.email
 
 
 class Migration(migrations.Migration):
@@ -239,7 +239,7 @@ class Migration(migrations.Migration):
             constraint=models.CheckConstraint(
                 condition=models.Q(
                     ("target_email__isnull", True),
-                    authentication.security.v2_email.V2EmailIsPrintableASCII(models.F("target_email")),
+                    authentication.email.EmailIsPrintableASCII(models.F("target_email")),
                     _connector="OR",
                 ),
                 name="auth_chal_target_ascii",
@@ -250,7 +250,7 @@ class Migration(migrations.Migration):
             constraint=models.CheckConstraint(
                 condition=models.Q(
                     ("target_email__isnull", True),
-                    ("target_email", authentication.security.v2_email.V2EmailDestinationKey(models.F("target_email"))),
+                    ("target_email", authentication.email.EmailDestinationKey(models.F("target_email"))),
                     _connector="OR",
                 ),
                 name="auth_chal_target_canon",

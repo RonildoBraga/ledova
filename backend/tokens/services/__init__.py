@@ -1,5 +1,5 @@
 from .atomic_swap_service import AtomicSwapService
-from .base_token_service import BaseTokenService, get_multi_chain_supply
+from .base_token_service import BaseTokenService
 from .market_data_service import MarketDataService
 from .matching_service import MatchingService
 from .order_modification_service import OrderModificationService
@@ -22,5 +22,4 @@ __all__ = [
     "TransactionHistoryService",
     "TransferService",
     "YieldTokenService",
-    "get_multi_chain_supply",
 ]

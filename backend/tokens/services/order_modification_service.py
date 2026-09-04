@@ -7,7 +7,6 @@ from django.db import transaction
 from django.utils import timezone
 from web3 import Web3
 
-from shared.utils.logging_utils import LoggingContext
 from shared.utils.signature import (
     generate_order_modify_message,
     parse_order_modify_message,
@@ -49,13 +48,11 @@ class OrderModificationService:
         effective_price = new_price if new_price is not None else order.price_per_share
 
         if effective_quantity <= order.filled_quantity:
-            errors.append(
-                f"New quantity ({effective_quantity}) must exceed " f"filled amount ({order.filled_quantity})"
-            )
+            errors.append(f"New quantity ({effective_quantity}) must exceed filled amount ({order.filled_quantity})")
 
         remaining = effective_quantity - order.filled_quantity
         if effective_min_qty > remaining:
-            errors.append(f"Min quantity ({effective_min_qty}) cannot exceed " f"remaining ({remaining})")
+            errors.append(f"Min quantity ({effective_min_qty}) cannot exceed remaining ({remaining})")
 
         if effective_min_qty < 0:
             errors.append("Min quantity cannot be negative")
@@ -68,8 +65,7 @@ class OrderModificationService:
             available_balance = self._get_available_balance(order)
             if additional_needed > available_balance:
                 errors.append(
-                    f"Insufficient token balance. "
-                    f"Need {additional_needed} more, have {available_balance} available."
+                    f"Insufficient token balance. Need {additional_needed} more, have {available_balance} available."
                 )
 
         return errors
@@ -152,6 +148,7 @@ class OrderModificationService:
 
         try:
             modifications = parse_order_modify_message(message)
+            new_price = Decimal(modifications.get("new_price_per_share", str(order.price_per_share)))
         except Exception as e:
             raise OrderModificationException(f"Invalid message format: {str(e)}")
 
@@ -160,7 +157,6 @@ class OrderModificationService:
 
         new_quantity = modifications.get("new_quantity", order.quantity)
         new_min_quantity = modifications.get("new_min_quantity", order.min_quantity)
-        new_price = Decimal(modifications.get("new_price_per_share", str(order.price_per_share)))
 
         errors = self.validate_modifications(order, new_quantity, new_min_quantity, new_price)
         if errors:
@@ -205,18 +201,22 @@ class OrderModificationService:
         order.current_signature = signature
         order.save()
 
-        if changes:
-            OrderModificationLog.log_multiple_modifications(
+        OrderModificationLog.objects.bulk_create(
+            OrderModificationLog(
                 order=order,
-                changes=[(c["field"], c["old"], c["new"]) for c in changes],
-                message=message,
+                field_name=change["field"],
+                old_value=change["old"],
+                new_value=change["new"],
+                modification_message=message,
                 signature=signature,
                 signer_address=signer,
                 ip_address=ip_address,
-                user_agent=user_agent,
+                user_agent=(user_agent or "")[:500],
             )
+            for change in changes
+        )
 
-        logger.info(f"{LoggingContext.ORDER} Modified order {order.uuid}: " f"{len(changes)} field(s) changed")
+        logger.info(f"Modified order {order.uuid}: {len(changes)} field(s) changed")
 
         from tokens.events import publish_trading_event
 
@@ -245,7 +245,7 @@ class OrderModificationService:
             token_service = ShareTokenService()
             total_balance = token_service.get_token_balance(order.token.contract_address, order.wallet_address)
         except Exception as e:
-            logger.error(f"{LoggingContext.ORDER} Could not fetch balance for {order.wallet_address}: {e}")
+            logger.error(f"Could not fetch balance for {order.wallet_address}: {e}")
             raise OrderModificationException("Unable to verify token balance. Please try again later.")
 
         committed = TransferOrder.objects.committed_sell_quantity(

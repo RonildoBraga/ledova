@@ -1,7 +1,3 @@
-"""
-Models package for users app.
-"""
-
 from users.models.device_token import DeviceToken
 from users.models.favourite_asset import FavouriteAsset
 from users.models.financial_profile import FinancialProfile

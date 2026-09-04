@@ -1,7 +1,3 @@
-"""
-Database settings for ledova_backend project.
-"""
-
 import os
 
 DATABASES = {

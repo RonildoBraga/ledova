@@ -1,4 +1,4 @@
-"""PostgreSQL settings for the isolated RLS proof tests."""
+"""PostgreSQL settings for the full test suite (the CI PostgreSQL stage)."""
 
 from copy import deepcopy
 
@@ -10,13 +10,11 @@ from .test import *  # noqa: F401,F403
 # environment-driven PostgreSQL configuration.
 DATABASES = deepcopy(POSTGRES_DATABASES)
 
-# Use a fresh normally migrated test database. The proof test creates and
-# removes its temporary role and policies itself; no runtime RLS migration is
-# shipped.
+# Run real migrations so the schema under test is the shipped one.
 try:
     del MIGRATION_MODULES  # noqa: F821
 except NameError:
     pass
 
-# Session state must never survive between proof-test connections.
+# Session state must never survive between test connections.
 DATABASES["default"]["CONN_MAX_AGE"] = 0

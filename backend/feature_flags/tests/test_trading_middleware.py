@@ -4,7 +4,10 @@ from django.db import OperationalError
 from django.http import HttpResponse
 from django.test import RequestFactory, TestCase
 
-from feature_flags.middleware import TRADING_WRITE_PREFIXES, TradingFeatureFlagMiddleware
+from feature_flags.middleware import (
+    TRADING_WRITE_PREFIXES,
+    TradingFeatureFlagMiddleware,
+)
 from feature_flags.models import FeatureFlag
 
 
@@ -27,13 +30,13 @@ class TradingFeatureFlagMiddlewareTests(TestCase):
         self.assertEqual(self.downstream_calls, 0)
 
     def test_disabled_flag_blocks_sensitive_prefix(self):
-        FeatureFlag.objects.create(name="trading_enabled", enabled=False)
+        FeatureFlag.objects.update_or_create(name="trading_enabled", defaults={"enabled": False})
         response = self.middleware(self.factory.post("/api/v1/trading/orders/"))
         self.assertEqual(response.status_code, 403)
         self.assertEqual(self.downstream_calls, 0)
 
     def test_enabled_flag_preserves_original_route(self):
-        FeatureFlag.objects.create(name="trading_enabled", enabled=True)
+        FeatureFlag.objects.update_or_create(name="trading_enabled", defaults={"enabled": True})
         response = self.middleware(self.factory.post("/api/v1/trading/orders/"))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self.downstream_calls, 1)

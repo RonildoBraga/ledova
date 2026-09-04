@@ -3,10 +3,6 @@ from .base import (
     AuthenticatedListViewSet,
     AuthenticatedModelViewSet,
     AuthenticatedReadOnlyViewSet,
-    PublicAPIView,
-    PublicGenericViewSet,
-    PublicListViewSet,
-    PublicReadOnlyViewSet,
 )
 
 __all__ = [
@@ -14,8 +10,4 @@ __all__ = [
     "AuthenticatedListViewSet",
     "AuthenticatedModelViewSet",
     "AuthenticatedReadOnlyViewSet",
-    "PublicAPIView",
-    "PublicGenericViewSet",
-    "PublicListViewSet",
-    "PublicReadOnlyViewSet",
 ]

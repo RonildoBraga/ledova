@@ -1,5 +1,3 @@
-"""Background tasks for push notifications."""
-
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -9,7 +7,7 @@ from authentication.models import CustomUser
 from ledova_backend.procrastinate_app import app
 from users.services.notifications import NotificationService
 
-logger = logging.getLogger("ledova_backend")
+logger = logging.getLogger(__name__)
 
 
 @app.task(retry=RetryStrategy(max_attempts=4, wait=60))
@@ -20,7 +18,6 @@ def send_push_notification(
     data: Optional[Dict[str, Any]] = None,
     notification_type: str = "general",
 ) -> Dict[str, Any]:
-    """Send a push notification to a user."""
     try:
         user = CustomUser.objects.get(pk=user_id)
     except CustomUser.DoesNotExist:
@@ -46,7 +43,6 @@ def send_transaction_notification(
     transaction_id: str,
     event_type: str,
 ) -> Dict[str, Any]:
-    """Send a transaction notification to a user."""
     from wallets.models import Transaction
 
     try:

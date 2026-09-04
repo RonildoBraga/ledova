@@ -1,14 +1,3 @@
-"""
-AlertProcedureTemplate model for defining standard procedures for each alert type.
-
-AML/CTF Compliance:
-Maps alert types to their associated investigation procedures per:
-- Document 3 (Transaction Monitoring Program)
-- Document 5 (Enhanced Due Diligence Procedures)
-
-This standalone source release does not include an external policy document.
-"""
-
 from django.db import models
 
 from compliance.constants import (
@@ -20,17 +9,12 @@ from compliance.constants import (
     SMR_REQUIREMENT_ASSESS,
     SMR_REQUIREMENT_CHOICES,
 )
-from compliance.managers.alert_procedure_template import AlertProcedureTemplateManager
 from shared.models.base import BaseModel
 
 
 class AlertProcedureTemplate(BaseModel):
-    """
-    Template defining the standard procedure for each alert type.
-
-    AML/CTF Compliance: Maps alert types to investigation procedures.
-    Each alert type has one procedure template with associated steps.
-    """
+    """One investigation procedure per alert type. Policy references such as "Doc 3 §7" point at the
+    operator's AML/CTF programme documents, which this source release does not include."""
 
     alert_type = models.CharField(
         max_length=50,
@@ -45,8 +29,6 @@ class AlertProcedureTemplate(BaseModel):
     description = models.TextField(
         help_text="Description of when this procedure applies",
     )
-
-    # Priority and response time
     priority = models.CharField(
         max_length=20,
         choices=PROCEDURE_PRIORITY_CHOICES,
@@ -56,14 +38,10 @@ class AlertProcedureTemplate(BaseModel):
     response_time_hours = models.PositiveIntegerField(
         help_text="Maximum response time in hours",
     )
-
-    # Policy references
     policy_references = models.JSONField(
         default=list,
         help_text="List of policy document references (e.g., ['Doc 3 §7', 'Doc 5 §12'])",
     )
-
-    # SMR requirements
     smr_requirement = models.CharField(
         max_length=20,
         choices=SMR_REQUIREMENT_CHOICES,
@@ -75,8 +53,6 @@ class AlertProcedureTemplate(BaseModel):
         blank=True,
         help_text="SMR deadline in hours (24 for TF, 72 for ML)",
     )
-
-    # Escalation
     escalation_required = models.BooleanField(
         default=False,
         help_text="Whether escalation to Director is required",
@@ -87,32 +63,22 @@ class AlertProcedureTemplate(BaseModel):
         default=ESCALATION_TIMEFRAME_IF_CONCERNS,
         help_text="When escalation should occur",
     )
-
-    # Customer notification
     customer_notification_allowed = models.BooleanField(
         default=True,
         help_text="Whether customer can be notified (false for tipping-off risk)",
     )
-
-    # Documentation requirements
     required_documentation = models.JSONField(
         default=list,
         help_text="List of required documentation items for this alert type",
     )
-
-    # Outcome options
     outcome_options = models.JSONField(
         default=list,
         help_text="List of possible outcomes with their actions",
     )
-
-    # Active status
     is_active = models.BooleanField(
         default=True,
         help_text="Whether this template is currently in use",
     )
-
-    objects = AlertProcedureTemplateManager()
 
     class Meta:
         ordering = ["priority", "alert_type"]
@@ -124,10 +90,8 @@ class AlertProcedureTemplate(BaseModel):
 
     @property
     def step_count(self):
-        """Return the number of steps in this procedure."""
         return self.steps.count()
 
     @property
     def required_step_count(self):
-        """Return the number of required steps in this procedure."""
         return self.steps.filter(is_required=True).count()

@@ -1,15 +1,10 @@
-"""
-Exceptions for Transak API integration.
-"""
-
-
 class TransakError(Exception):
-    """Base exception for Transak errors."""
+    pass
 
 
 class TransakConfigurationError(TransakError):
-    """Exception raised when Transak is not properly configured."""
+    pass
 
 
 class TransakApiError(TransakError):
-    """Exception raised when a Transak API call fails."""
+    pass

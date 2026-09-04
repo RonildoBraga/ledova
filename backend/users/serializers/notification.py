@@ -1,7 +1,3 @@
-"""
-Serializers for Notification model.
-"""
-
 from rest_framework import serializers
 
 from users.models.notification import Notification

@@ -1,7 +1,3 @@
-"""
-Serializers package for users app.
-"""
-
 from users.serializers.device_token import (
     DeviceTokenSerializer,
     RegisterDeviceTokenSerializer,
@@ -10,14 +6,11 @@ from users.serializers.device_token import (
 from users.serializers.favourite_asset import FavouriteAssetSerializer
 from users.serializers.financial_profile import FinancialProfileSerializer
 from users.serializers.notification import NotificationSerializer
-from users.serializers.notification_preferences import (
-    NotificationPreferencesSerializer,
-    UpdateNotificationPreferencesSerializer,
-)
+from users.serializers.notification_preferences import NotificationPreferencesSerializer
 from users.serializers.user_account import UserAccountSerializer
 from users.serializers.user_preferences import UserPreferencesSerializer
 from users.serializers.user_profile import UserProfileSerializer
-from users.serializers.waitlist import WaitlistCreateSerializer, WaitlistSerializer
+from users.serializers.waitlist import WaitlistCreateSerializer
 
 __all__ = [
     "DeviceTokenSerializer",
@@ -27,10 +20,8 @@ __all__ = [
     "NotificationPreferencesSerializer",
     "RegisterDeviceTokenSerializer",
     "UnregisterDeviceTokenSerializer",
-    "UpdateNotificationPreferencesSerializer",
     "UserAccountSerializer",
     "UserPreferencesSerializer",
     "UserProfileSerializer",
     "WaitlistCreateSerializer",
-    "WaitlistSerializer",
 ]

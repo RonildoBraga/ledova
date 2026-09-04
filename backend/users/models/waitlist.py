@@ -1,17 +1,9 @@
-"""
-Waitlist model for capturing early member signups.
-"""
-
 from django.db import models
 
 from shared.models import BaseModel
 
 
 class Waitlist(BaseModel):
-    """
-    Model to store waitlist signups for early access.
-    """
-
     email = models.EmailField(
         unique=True,
         help_text="Email address of the user signing up for the waitlist",

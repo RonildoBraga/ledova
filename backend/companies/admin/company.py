@@ -3,18 +3,145 @@ from django.contrib import admin, messages
 from django.contrib.auth import get_user_model
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
-from django.urls import path, reverse
+from django.urls import path, re_path, reverse
 from django.utils.html import format_html
-from django.utils.safestring import mark_safe
 
+from companies.exceptions import InvalidStatusTransitionException
 from companies.models import (
     ApplicationReview,
     Company,
     CompanyDocument,
     CompanyStatus,
 )
+from tokens.admin._helpers import action_buttons, status_badge
 
 User = get_user_model()
+
+STATUS_COLORS = {
+    CompanyStatus.DRAFT: "#6c757d",
+    CompanyStatus.SUBMITTED: "#17a2b8",
+    CompanyStatus.REVIEW: "#007bff",
+    CompanyStatus.INFO_REQUIRED: "#fd7e14",
+    CompanyStatus.APPROVED: "#20c997",
+    CompanyStatus.ACTIVE: "#28a745",
+    CompanyStatus.WARNING: ("#ffc107", "black"),
+    CompanyStatus.SUSPENDED: "#dc3545",
+    CompanyStatus.DELISTED: "#343a40",
+    CompanyStatus.REJECTED: "#6c757d",
+    CompanyStatus.WITHDRAWN: "#adb5bd",
+}
+
+# URL slug -> the Company transition it drives. Entries with a `label` ask for a reason on a form page first;
+# `actor` names the kwarg that receives the acting staff user; `level` is the message level on success.
+TRANSITIONS = {
+    "start-review": dict(method="start_review", done="Review started for '{name}'."),
+    "approve": dict(method="approve", actor="approved_by", done="Company '{name}' has been approved."),
+    "activate": dict(method="activate", done="Company '{name}' is now active on the platform."),
+    "resolve-warning": dict(method="resolve_warning", done="Warning resolved for '{name}'. Company is now active."),
+    "reinstate": dict(method="reinstate", done="Company '{name}' has been reinstated and is now active."),
+    "request-info": dict(
+        method="request_info",
+        title="Request Information",
+        alert="warning",
+        heading="Information Request",
+        intro=(
+            "You are requesting additional information from {name} (ACN: {acn}). The company will be notified "
+            'and the application status will change to "Additional Information Required".'
+        ),
+        legend="Information Request Details",
+        label="Information Requested",
+        help="Describe what additional information is needed from the company.",
+        button=("Request Information", "btn-warning"),
+        done="Additional information requested from '{name}'.",
+    ),
+    "reject": dict(
+        method="reject",
+        actor="rejected_by",
+        title="Reject Application",
+        alert="warning",
+        heading="Warning",
+        intro=(
+            "You are about to reject the company registration for {name} (ACN: {acn}). "
+            "This action will notify the company that their registration has been rejected."
+        ),
+        legend="Rejection Details",
+        label="Rejection Reason",
+        help="Provide a clear reason for rejecting this company application.",
+        button=("Reject Company", "btn-danger"),
+        done="Company '{name}' application has been rejected.",
+    ),
+    "issue-warning": dict(
+        method="issue_warning",
+        title="Issue Warning",
+        alert="warning",
+        heading="Compliance Warning",
+        intro=(
+            "You are issuing a compliance warning to {name} (ACN: {acn}). The company will be notified "
+            'and their status will change to "Compliance Warning".'
+        ),
+        legend="Warning Details",
+        label="Warning Reason",
+        help="Describe the compliance issue.",
+        button=("Issue Warning", "btn-warning"),
+        done="Warning issued to '{name}'.",
+        level=messages.WARNING,
+    ),
+    "suspend": dict(
+        method="suspend",
+        title="Suspend Company",
+        alert="warning",
+        heading="Warning",
+        intro=(
+            "You are about to suspend the company {name}. "
+            "A suspended company cannot perform any operations until reactivated."
+        ),
+        legend="Suspension Details",
+        label="Suspension Reason",
+        help="Provide a reason for suspending this company.",
+        button=("Suspend Company", "btn-warning"),
+        done="Company '{name}' has been suspended.",
+        level=messages.WARNING,
+    ),
+    "delist": dict(
+        method="delist",
+        title="Delist Company",
+        alert="danger",
+        heading="PERMANENT ACTION",
+        intro=(
+            "You are about to permanently delist {name} (ACN: {acn}). This action cannot be undone. "
+            "The company will be removed from the platform and will no longer be able to operate."
+        ),
+        legend="Delisting Details",
+        label="Delisting Reason",
+        help="Provide a reason for permanently delisting this company.",
+        button=("Permanently Delist Company", "btn-dark"),
+        done="Company '{name}' has been permanently delisted.",
+        level=messages.ERROR,
+    ),
+}
+
+ASSIGN_REVIEWERS = ("👥 Assign Reviewers", "assign-reviewers", "#6f42c1")
+REJECT = ("✗ Reject", "reject", "#dc3545")
+SUSPEND = ("⏸ Suspend", "suspend", "#dc3545")
+DELIST = ("✗ Delist", "delist", "#343a40")
+STATUS_BUTTONS = {
+    CompanyStatus.SUBMITTED: [ASSIGN_REVIEWERS, ("▶ Start Review", "start-review", "#007bff"), REJECT],
+    CompanyStatus.REVIEW: [
+        ASSIGN_REVIEWERS,
+        ("? Request Info", "request-info", "#fd7e14"),
+        ("✓ Approve", "approve", "#20c997"),
+        REJECT,
+    ],
+    CompanyStatus.INFO_REQUIRED: [("⏳ Awaiting Response", None, "#fd7e14")],
+    CompanyStatus.APPROVED: [("✓ Activate Company", "activate", "#28a745")],
+    CompanyStatus.ACTIVE: [("⚠ Issue Warning", "issue-warning", "#ffc107", "black"), SUSPEND, DELIST],
+    CompanyStatus.WARNING: [("✓ Resolve Warning", "resolve-warning", "#28a745"), SUSPEND, DELIST],
+    CompanyStatus.SUSPENDED: [("↻ Reinstate", "reinstate", "#28a745"), DELIST],
+    CompanyStatus.DRAFT: [("Draft - Not Submitted", None, "#e9ecef", "#6c757d")],
+    CompanyStatus.REJECTED: [("Application Rejected", None, "#e9ecef", "#6c757d")],
+    CompanyStatus.WITHDRAWN: [("Application Withdrawn", None, "#e9ecef", "#6c757d")],
+    CompanyStatus.DELISTED: [("Permanently Delisted", None, "#e9ecef", "#6c757d")],
+}
 
 
 class CompanyDocumentInline(admin.TabularInline):
@@ -62,44 +189,13 @@ class AssignReviewersForm(forms.Form):
         return cleaned_data
 
 
-class RequestInfoForm(forms.Form):
-    reason = forms.CharField(
-        widget=forms.Textarea(attrs={"rows": 4, "cols": 60}),
-        label="Information Requested",
-        help_text="Describe what additional information is needed from the company.",
-    )
+class ReasonForm(forms.Form):
+    reason = forms.CharField(widget=forms.Textarea(attrs={"rows": 4, "cols": 60}))
 
-
-class RejectCompanyForm(forms.Form):
-    reason = forms.CharField(
-        widget=forms.Textarea(attrs={"rows": 4, "cols": 60}),
-        label="Rejection Reason",
-        help_text="Provide a clear reason for rejecting this company application.",
-    )
-
-
-class SuspendCompanyForm(forms.Form):
-    reason = forms.CharField(
-        widget=forms.Textarea(attrs={"rows": 4, "cols": 60}),
-        label="Suspension Reason",
-        help_text="Provide a reason for suspending this company.",
-    )
-
-
-class WarningForm(forms.Form):
-    reason = forms.CharField(
-        widget=forms.Textarea(attrs={"rows": 4, "cols": 60}),
-        label="Warning Reason",
-        help_text="Describe the compliance issue.",
-    )
-
-
-class DelistForm(forms.Form):
-    reason = forms.CharField(
-        widget=forms.Textarea(attrs={"rows": 4, "cols": 60}),
-        label="Delisting Reason",
-        help_text="Provide a reason for permanently delisting this company.",
-    )
+    def __init__(self, *args, label, help_text, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["reason"].label = label
+        self.fields["reason"].help_text = help_text
 
 
 @admin.register(Company)
@@ -252,410 +348,76 @@ class CompanyAdmin(admin.ModelAdmin):
 
     actions = ["start_review_action", "approve_action", "activate_action"]
 
+    status_badge = status_badge(STATUS_COLORS)
+
     def get_urls(self):
-        urls = super().get_urls()
         custom_urls = [
-            path(
-                "<uuid:uuid>/start-review/",
-                self.admin_site.admin_view(self.start_review_view),
-                name="companies_company_start_review",
-            ),
-            path(
-                "<uuid:uuid>/request-info/",
-                self.admin_site.admin_view(self.request_info_view),
-                name="companies_company_request_info",
-            ),
-            path(
-                "<uuid:uuid>/approve/",
-                self.admin_site.admin_view(self.approve_view),
-                name="companies_company_approve",
-            ),
-            path(
-                "<uuid:uuid>/activate/",
-                self.admin_site.admin_view(self.activate_view),
-                name="companies_company_activate",
-            ),
-            path(
-                "<uuid:uuid>/reject/",
-                self.admin_site.admin_view(self.reject_view),
-                name="companies_company_reject",
-            ),
-            path(
-                "<uuid:uuid>/issue-warning/",
-                self.admin_site.admin_view(self.issue_warning_view),
-                name="companies_company_issue_warning",
-            ),
-            path(
-                "<uuid:uuid>/resolve-warning/",
-                self.admin_site.admin_view(self.resolve_warning_view),
-                name="companies_company_resolve_warning",
-            ),
-            path(
-                "<uuid:uuid>/suspend/",
-                self.admin_site.admin_view(self.suspend_view),
-                name="companies_company_suspend",
-            ),
-            path(
-                "<uuid:uuid>/reinstate/",
-                self.admin_site.admin_view(self.reinstate_view),
-                name="companies_company_reinstate",
-            ),
-            path(
-                "<uuid:uuid>/delist/",
-                self.admin_site.admin_view(self.delist_view),
-                name="companies_company_delist",
-            ),
             path(
                 "<uuid:uuid>/assign-reviewers/",
                 self.admin_site.admin_view(self.assign_reviewers_view),
                 name="companies_company_assign_reviewers",
             ),
+            re_path(
+                rf"^(?P<uuid>[0-9a-f-]+)/(?P<action>{'|'.join(TRANSITIONS)})/$",
+                self.admin_site.admin_view(self.transition_view),
+                name="companies_company_transition",
+            ),
         ]
-        return custom_urls + urls
-
-    def status_badge(self, obj):
-        colors = {
-            CompanyStatus.DRAFT: "#6c757d",
-            CompanyStatus.SUBMITTED: "#17a2b8",
-            CompanyStatus.REVIEW: "#007bff",
-            CompanyStatus.INFO_REQUIRED: "#fd7e14",
-            CompanyStatus.APPROVED: "#20c997",
-            CompanyStatus.ACTIVE: "#28a745",
-            CompanyStatus.WARNING: "#ffc107",
-            CompanyStatus.SUSPENDED: "#dc3545",
-            CompanyStatus.DELISTED: "#343a40",
-            CompanyStatus.REJECTED: "#6c757d",
-            CompanyStatus.WITHDRAWN: "#adb5bd",
-        }
-        color = colors.get(obj.status, "#777777")
-        text_color = "black" if obj.status == CompanyStatus.WARNING else "white"
-        return format_html(
-            '<span style="background-color: {}; color: {}; padding: 3px 8px; '
-            'border-radius: 3px; font-size: 11px;">{}</span>',
-            color,
-            text_color,
-            obj.get_status_display(),
-        )
-
-    status_badge.short_description = "Status"
-    status_badge.admin_order_field = "status"
+        return custom_urls + super().get_urls()
 
     def owner_email(self, obj):
-        return obj.email if obj.owner else "-"
+        return obj.email
 
     owner_email.short_description = "Email"
     owner_email.admin_order_field = "owner__email"
 
+    def _action_url(self, obj, slug):
+        if slug is None:
+            return None
+        if slug == "assign-reviewers":
+            return reverse("admin:companies_company_assign_reviewers", args=[obj.uuid])
+        return reverse("admin:companies_company_transition", args=[obj.uuid, slug])
+
+    @admin.display(description="Quick Actions")
     def status_actions(self, obj):
         if obj.pk is None:
             return "-"
-
-        buttons = []
-        base_style = (
-            "display: inline-block; padding: 6px 12px; margin: 2px; "
-            "text-decoration: none; border-radius: 4px; font-size: 12px; font-weight: bold;"
+        return action_buttons(
+            [
+                (label, self._action_url(obj, slug), *colors)
+                for label, slug, *colors in STATUS_BUTTONS.get(obj.status, [])
+            ]
         )
 
-        if obj.status == CompanyStatus.SUBMITTED:
-            assign_reviewers_url = reverse("admin:companies_company_assign_reviewers", args=[obj.uuid])
-            start_review_url = reverse("admin:companies_company_start_review", args=[obj.uuid])
-            reject_url = reverse("admin:companies_company_reject", args=[obj.uuid])
-            buttons.append(
-                f'<a href="{assign_reviewers_url}" style="{base_style} background-color: #6f42c1; color: white;">'
-                "👥 Assign Reviewers</a>"
-            )
-            buttons.append(
-                f'<a href="{start_review_url}" style="{base_style} background-color: #007bff; color: white;">'
-                "▶ Start Review</a>"
-            )
-            buttons.append(
-                f'<a href="{reject_url}" style="{base_style} background-color: #dc3545; color: white;">' "✗ Reject</a>"
-            )
-
-        elif obj.status == CompanyStatus.REVIEW:
-            assign_reviewers_url = reverse("admin:companies_company_assign_reviewers", args=[obj.uuid])
-            request_info_url = reverse("admin:companies_company_request_info", args=[obj.uuid])
-            approve_url = reverse("admin:companies_company_approve", args=[obj.uuid])
-            reject_url = reverse("admin:companies_company_reject", args=[obj.uuid])
-            buttons.append(
-                f'<a href="{assign_reviewers_url}" style="{base_style} background-color: #6f42c1; color: white;">'
-                "👥 Assign Reviewers</a>"
-            )
-            buttons.append(
-                f'<a href="{request_info_url}" style="{base_style} background-color: #fd7e14; color: white;">'
-                "? Request Info</a>"
-            )
-            buttons.append(
-                f'<a href="{approve_url}" style="{base_style} background-color: #20c997; color: white;">'
-                "✓ Approve</a>"
-            )
-            buttons.append(
-                f'<a href="{reject_url}" style="{base_style} background-color: #dc3545; color: white;">' "✗ Reject</a>"
-            )
-
-        elif obj.status == CompanyStatus.INFO_REQUIRED:
-            buttons.append(
-                f'<span style="{base_style} background-color: #fd7e14; color: white;">' "⏳ Awaiting Response</span>"
-            )
-
-        elif obj.status == CompanyStatus.APPROVED:
-            activate_url = reverse("admin:companies_company_activate", args=[obj.uuid])
-            buttons.append(
-                f'<a href="{activate_url}" style="{base_style} background-color: #28a745; color: white;">'
-                "✓ Activate Company</a>"
-            )
-
-        elif obj.status == CompanyStatus.ACTIVE:
-            warning_url = reverse("admin:companies_company_issue_warning", args=[obj.uuid])
-            suspend_url = reverse("admin:companies_company_suspend", args=[obj.uuid])
-            delist_url = reverse("admin:companies_company_delist", args=[obj.uuid])
-            buttons.append(
-                f'<a href="{warning_url}" style="{base_style} background-color: #ffc107; color: black;">'
-                "⚠ Issue Warning</a>"
-            )
-            buttons.append(
-                f'<a href="{suspend_url}" style="{base_style} background-color: #dc3545; color: white;">'
-                "⏸ Suspend</a>"
-            )
-            buttons.append(
-                f'<a href="{delist_url}" style="{base_style} background-color: #343a40; color: white;">' "✗ Delist</a>"
-            )
-
-        elif obj.status == CompanyStatus.WARNING:
-            resolve_url = reverse("admin:companies_company_resolve_warning", args=[obj.uuid])
-            suspend_url = reverse("admin:companies_company_suspend", args=[obj.uuid])
-            delist_url = reverse("admin:companies_company_delist", args=[obj.uuid])
-            buttons.append(
-                f'<a href="{resolve_url}" style="{base_style} background-color: #28a745; color: white;">'
-                "✓ Resolve Warning</a>"
-            )
-            buttons.append(
-                f'<a href="{suspend_url}" style="{base_style} background-color: #dc3545; color: white;">'
-                "⏸ Suspend</a>"
-            )
-            buttons.append(
-                f'<a href="{delist_url}" style="{base_style} background-color: #343a40; color: white;">' "✗ Delist</a>"
-            )
-
-        elif obj.status == CompanyStatus.SUSPENDED:
-            reinstate_url = reverse("admin:companies_company_reinstate", args=[obj.uuid])
-            delist_url = reverse("admin:companies_company_delist", args=[obj.uuid])
-            buttons.append(
-                f'<a href="{reinstate_url}" style="{base_style} background-color: #28a745; color: white;">'
-                "↻ Reinstate</a>"
-            )
-            buttons.append(
-                f'<a href="{delist_url}" style="{base_style} background-color: #343a40; color: white;">' "✗ Delist</a>"
-            )
-
-        elif obj.status in [
-            CompanyStatus.DRAFT,
-            CompanyStatus.REJECTED,
-            CompanyStatus.WITHDRAWN,
-            CompanyStatus.DELISTED,
-        ]:
-            status_labels = {
-                CompanyStatus.DRAFT: "Draft - Not Submitted",
-                CompanyStatus.REJECTED: "Application Rejected",
-                CompanyStatus.WITHDRAWN: "Application Withdrawn",
-                CompanyStatus.DELISTED: "Permanently Delisted",
-            }
-            buttons.append(
-                f'<span style="{base_style} background-color: #e9ecef; color: #6c757d;">'
-                f"{status_labels.get(obj.status, obj.get_status_display())}</span>"
-            )
-
-        if not buttons:
-            return "-"
-
-        return mark_safe(" ".join(buttons))
-
-    status_actions.short_description = "Quick Actions"
-
-    def start_review_view(self, request, uuid):
+    def transition_view(self, request, uuid, action):
         company = get_object_or_404(Company, uuid=uuid)
+        spec = TRANSITIONS[action]
+        change_url = reverse("admin:companies_company_change", args=[company.pk])
+        kwargs = {spec["actor"]: request.user} if "actor" in spec else {}
 
-        if company.status != CompanyStatus.SUBMITTED:
-            messages.error(request, f"Cannot start review: status is '{company.get_status_display()}'")
-            return HttpResponseRedirect(reverse("admin:companies_company_change", args=[company.pk]))
+        if "label" in spec:
+            form = ReasonForm(request.POST or None, label=spec["label"], help_text=spec["help"])
+            if request.method != "POST" or not form.is_valid():
+                context = {
+                    **self.admin_site.each_context(request),
+                    "title": f"{spec['title']}: {company.name}",
+                    "subtitle": None,
+                    "opts": self.opts,
+                    "company": company,
+                    "form": form,
+                    "transition": spec,
+                    "intro": spec["intro"].format(name=company.name, acn=company.acn),
+                }
+                return render(request, "admin/companies/company/transition_form.html", context)
+            kwargs["reason"] = form.cleaned_data["reason"]
 
-        company.start_review()
-        messages.success(request, f"Review started for '{company.name}'.")
-        return HttpResponseRedirect(reverse("admin:companies_company_change", args=[company.pk]))
-
-    def request_info_view(self, request, uuid):
-        company = get_object_or_404(Company, uuid=uuid)
-
-        if company.status != CompanyStatus.REVIEW:
-            messages.error(request, f"Cannot request info: status is '{company.get_status_display()}'")
-            return HttpResponseRedirect(reverse("admin:companies_company_change", args=[company.pk]))
-
-        if request.method == "POST":
-            form = RequestInfoForm(request.POST)
-            if form.is_valid():
-                company.request_info(reason=form.cleaned_data["reason"])
-                messages.success(request, f"Additional information requested from '{company.name}'.")
-                return HttpResponseRedirect(reverse("admin:companies_company_change", args=[company.pk]))
+        try:
+            getattr(company, spec["method"])(**kwargs)
+        except InvalidStatusTransitionException as exc:
+            messages.error(request, str(exc.detail))
         else:
-            form = RequestInfoForm()
-
-        context = {
-            **self.admin_site.each_context(request),
-            "title": f"Request Information: {company.name}",
-            "subtitle": None,
-            "company": company,
-            "form": form,
-            "opts": self.model._meta,
-        }
-        return render(request, "admin/companies/company/request_info_form.html", context)
-
-    def approve_view(self, request, uuid):
-        company = get_object_or_404(Company, uuid=uuid)
-
-        if company.status != CompanyStatus.REVIEW:
-            messages.error(request, f"Cannot approve: status is '{company.get_status_display()}'")
-            return HttpResponseRedirect(reverse("admin:companies_company_change", args=[company.pk]))
-
-        company.approve(approved_by=request.user)
-        messages.success(request, f"Company '{company.name}' has been approved.")
-        return HttpResponseRedirect(reverse("admin:companies_company_change", args=[company.pk]))
-
-    def activate_view(self, request, uuid):
-        company = get_object_or_404(Company, uuid=uuid)
-
-        if company.status != CompanyStatus.APPROVED:
-            messages.error(request, f"Cannot activate: status is '{company.get_status_display()}'")
-            return HttpResponseRedirect(reverse("admin:companies_company_change", args=[company.pk]))
-
-        company.activate()
-        messages.success(request, f"Company '{company.name}' is now active on the platform.")
-        return HttpResponseRedirect(reverse("admin:companies_company_change", args=[company.pk]))
-
-    def reject_view(self, request, uuid):
-        company = get_object_or_404(Company, uuid=uuid)
-
-        if company.status not in [CompanyStatus.SUBMITTED, CompanyStatus.REVIEW]:
-            messages.error(request, f"Cannot reject: status is '{company.get_status_display()}'")
-            return HttpResponseRedirect(reverse("admin:companies_company_change", args=[company.pk]))
-
-        if request.method == "POST":
-            form = RejectCompanyForm(request.POST)
-            if form.is_valid():
-                company.reject(reason=form.cleaned_data["reason"], rejected_by=request.user)
-                messages.success(request, f"Company '{company.name}' application has been rejected.")
-                return HttpResponseRedirect(reverse("admin:companies_company_change", args=[company.pk]))
-        else:
-            form = RejectCompanyForm()
-
-        context = {
-            **self.admin_site.each_context(request),
-            "title": f"Reject Application: {company.name}",
-            "subtitle": None,
-            "company": company,
-            "form": form,
-            "opts": self.model._meta,
-        }
-        return render(request, "admin/companies/company/reject_form.html", context)
-
-    def issue_warning_view(self, request, uuid):
-        company = get_object_or_404(Company, uuid=uuid)
-
-        if company.status != CompanyStatus.ACTIVE:
-            messages.error(request, f"Cannot issue warning: status is '{company.get_status_display()}'")
-            return HttpResponseRedirect(reverse("admin:companies_company_change", args=[company.pk]))
-
-        if request.method == "POST":
-            form = WarningForm(request.POST)
-            if form.is_valid():
-                company.issue_warning(reason=form.cleaned_data["reason"])
-                messages.warning(request, f"Warning issued to '{company.name}'.")
-                return HttpResponseRedirect(reverse("admin:companies_company_change", args=[company.pk]))
-        else:
-            form = WarningForm()
-
-        context = {
-            **self.admin_site.each_context(request),
-            "title": f"Issue Warning: {company.name}",
-            "subtitle": None,
-            "company": company,
-            "form": form,
-            "opts": self.model._meta,
-        }
-        return render(request, "admin/companies/company/warning_form.html", context)
-
-    def resolve_warning_view(self, request, uuid):
-        company = get_object_or_404(Company, uuid=uuid)
-
-        if company.status != CompanyStatus.WARNING:
-            messages.error(request, f"Cannot resolve warning: status is '{company.get_status_display()}'")
-            return HttpResponseRedirect(reverse("admin:companies_company_change", args=[company.pk]))
-
-        company.resolve_warning()
-        messages.success(request, f"Warning resolved for '{company.name}'. Company is now active.")
-        return HttpResponseRedirect(reverse("admin:companies_company_change", args=[company.pk]))
-
-    def suspend_view(self, request, uuid):
-        company = get_object_or_404(Company, uuid=uuid)
-
-        if company.status not in [CompanyStatus.ACTIVE, CompanyStatus.WARNING]:
-            messages.error(request, f"Cannot suspend: status is '{company.get_status_display()}'")
-            return HttpResponseRedirect(reverse("admin:companies_company_change", args=[company.pk]))
-
-        if request.method == "POST":
-            form = SuspendCompanyForm(request.POST)
-            if form.is_valid():
-                company.suspend(reason=form.cleaned_data["reason"])
-                messages.warning(request, f"Company '{company.name}' has been suspended.")
-                return HttpResponseRedirect(reverse("admin:companies_company_change", args=[company.pk]))
-        else:
-            form = SuspendCompanyForm()
-
-        context = {
-            **self.admin_site.each_context(request),
-            "title": f"Suspend Company: {company.name}",
-            "subtitle": None,
-            "company": company,
-            "form": form,
-            "opts": self.model._meta,
-        }
-        return render(request, "admin/companies/company/suspend_form.html", context)
-
-    def reinstate_view(self, request, uuid):
-        company = get_object_or_404(Company, uuid=uuid)
-
-        if company.status != CompanyStatus.SUSPENDED:
-            messages.error(request, f"Cannot reinstate: status is '{company.get_status_display()}'")
-            return HttpResponseRedirect(reverse("admin:companies_company_change", args=[company.pk]))
-
-        company.reinstate()
-        messages.success(request, f"Company '{company.name}' has been reinstated and is now active.")
-        return HttpResponseRedirect(reverse("admin:companies_company_change", args=[company.pk]))
-
-    def delist_view(self, request, uuid):
-        company = get_object_or_404(Company, uuid=uuid)
-
-        if company.status in [CompanyStatus.DRAFT, CompanyStatus.REJECTED, CompanyStatus.WITHDRAWN]:
-            messages.error(request, "Cannot delist: company was never active")
-            return HttpResponseRedirect(reverse("admin:companies_company_change", args=[company.pk]))
-
-        if request.method == "POST":
-            form = DelistForm(request.POST)
-            if form.is_valid():
-                company.delist(reason=form.cleaned_data["reason"])
-                messages.error(request, f"Company '{company.name}' has been permanently delisted.")
-                return HttpResponseRedirect(reverse("admin:companies_company_change", args=[company.pk]))
-        else:
-            form = DelistForm()
-
-        context = {
-            **self.admin_site.each_context(request),
-            "title": f"Delist Company: {company.name}",
-            "subtitle": None,
-            "company": company,
-            "form": form,
-            "opts": self.model._meta,
-        }
-        return render(request, "admin/companies/company/delist_form.html", context)
+            messages.add_message(request, spec.get("level", messages.SUCCESS), spec["done"].format(name=company.name))
+        return HttpResponseRedirect(change_url)
 
     def assign_reviewers_view(self, request, uuid):
         company = get_object_or_404(Company, uuid=uuid)

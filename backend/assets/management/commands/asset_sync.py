@@ -28,18 +28,12 @@ class Command(BaseCommand):
         else:
             self.stdout.write(f"\nStarting full asset sync (backfill {days} days)...\n")
 
-        result = AssetSyncService.sync_assets(
-            backfill_days=days,
-            today_only=today_only,
-        )
+        AssetSyncService.ensure_supported_assets()
+        result = AssetSyncService.sync_assets(backfill_days=days, today_only=today_only)
 
         if result["status"] == "success":
             self.stdout.write(self.style.SUCCESS("\n✓ Asset sync completed successfully"))
-            self.stdout.write(f"  Assets created: {result['assets_created']}")
-            self.stdout.write(f"  Assets updated: {result['assets_updated']}")
             self.stdout.write(f"  Prices updated: {result['prices_updated']}")
-            self.stdout.write(f"  Current snapshots: {result['snapshots_created']}")
-            self.stdout.write(f"  Historical snapshots: {result['historical_snapshots']}")
-            self.stdout.write(f"  Operations: {', '.join(result['operations_completed'])}\n")
+            self.stdout.write(f"  Historical snapshots: {result['historical_snapshots']}\n")
         else:
             self.stdout.write(self.style.ERROR(f"\n✗ Asset sync failed: {result.get('error')}\n"))

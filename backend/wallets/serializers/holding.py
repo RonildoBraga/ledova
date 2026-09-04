@@ -31,21 +31,3 @@ class HoldingSerializer(serializers.ModelSerializer):
             "updated_at",
         )
         read_only_fields = fields
-
-
-class HoldingSummarySerializer(serializers.ModelSerializer):
-    asset_symbol = serializers.CharField(source="asset.symbol", read_only=True)
-    asset_name = serializers.CharField(source="asset.name", read_only=True)
-    market_value = serializers.DecimalField(max_digits=40, decimal_places=2, read_only=True)
-
-    class Meta:
-        model = Holding
-        fields = (
-            "uuid",
-            "asset_symbol",
-            "asset_name",
-            "quantity",
-            "market_value",
-            "last_synced_at",
-        )
-        read_only_fields = fields

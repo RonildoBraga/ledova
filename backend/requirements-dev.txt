@@ -5,3 +5,4 @@ isort>=8.0.1
 flake8>=7.3.0
 autoflake>=2.3.3
 debugpy>=1.8.20
+ipython>=9.12.0

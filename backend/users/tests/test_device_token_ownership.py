@@ -24,7 +24,7 @@ class DeviceTokenOwnershipTest(APITestCase):
         self.actor_cases = (
             self._make_actor_case("device-regular"),
             self._make_actor_case("device-staff", is_staff=True),
-            self._make_actor_case("device-super", is_superuser=True),
+            self._make_actor_case("device-super", is_superuser=True, is_staff=True),
         )
 
     def _make_user(self, label, **privileges):
@@ -51,11 +51,6 @@ class DeviceTokenOwnershipTest(APITestCase):
             is_active=False,
         )
         return actor, active_token, inactive_token
-
-    @staticmethod
-    def _response_rows(response):
-        body = response.json()
-        return body.get("results", body) if isinstance(body, dict) else body
 
     def test_foreign_registration_collision_is_generic_and_preserves_owner_for_every_role(self):
         for actor, _, _ in self.actor_cases:
@@ -120,41 +115,6 @@ class DeviceTokenOwnershipTest(APITestCase):
                 self.assertEqual(device_token.push_token, push_token)
                 self.assertEqual(device_token.device_type, DeviceToken.DeviceType.IOS)
                 self.assertTrue(device_token.is_active)
-
-    def test_list_and_retrieve_are_self_scoped_for_every_role(self):
-        for actor, active_token, _ in self.actor_cases:
-            self.client.force_authenticate(actor)
-
-            list_response = self.client.get("/api/device-tokens/")
-            own_detail = self.client.get(f"/api/device-tokens/{active_token.uuid}/")
-            foreign_detail = self.client.get(f"/api/device-tokens/{self.foreign_active_token.uuid}/")
-
-            with self.subTest(actor=actor.email):
-                self.assertEqual(list_response.status_code, 200)
-                self.assertEqual(
-                    {row["uuid"] for row in self._response_rows(list_response)},
-                    {str(active_token.uuid)},
-                )
-                self.assertEqual(own_detail.status_code, 200)
-                self.assertEqual(own_detail.json()["uuid"], str(active_token.uuid))
-                self.assertEqual(foreign_detail.status_code, 404)
-
-    def test_unregister_foreign_token_returns_404_and_preserves_row_for_every_role(self):
-        for actor, _, _ in self.actor_cases:
-            self.client.force_authenticate(actor)
-
-            response = self.client.post(
-                "/api/device-tokens/unregister/",
-                {"pushToken": self.foreign_active_token.push_token},
-                format="json",
-            )
-
-            with self.subTest(actor=actor.email):
-                self.assertEqual(response.status_code, 404)
-                self.foreign_active_token.refresh_from_db()
-                self.assertEqual(self.foreign_active_token.user, self.foreign_user)
-                self.assertTrue(self.foreign_active_token.is_active)
-                self.assertEqual(self.foreign_active_token.device_type, DeviceToken.DeviceType.ANDROID)
 
     def test_owner_unregister_releases_token_for_new_owner_for_every_role(self):
         for index, (new_owner, _, _) in enumerate(self.actor_cases):

@@ -1,5 +1,3 @@
-"""KYC provider abstraction layer."""
-
 from .base import KYCProvider, NormalizedVerificationResult
 from .factory import get_kyc_provider
 

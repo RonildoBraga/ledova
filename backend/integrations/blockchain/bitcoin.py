@@ -1,9 +1,6 @@
-"""
-Bitcoin blockchain client implementation using Alchemy JSON-RPC.
+"""Bitcoin client over Alchemy JSON-RPC.
 
-Bitcoin uses UTXO (Unspent Transaction Output) model. Standard Bitcoin RPC
-supports transaction operations but requires address indexing for balance
-and history queries.
+The UTXO node has no address index, so balance and history come from the Blockstream API.
 """
 
 import logging
@@ -11,9 +8,9 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
-import requests
 import base58
 import bech32
+import requests
 from django.conf import settings
 
 from .base import BlockchainClient
@@ -43,15 +40,7 @@ def is_bitcoin_address_valid(address: str, network: str) -> bool:
 
 
 class BitcoinClient(BlockchainClient):
-    """
-    Bitcoin blockchain client using Alchemy JSON-RPC provider.
-
-    Supports transaction broadcasting, queries, fee estimation, and address validation.
-    Balance and transaction history queries require external block explorer APIs.
-    """
-
     def __init__(self, rpc_url: str, expected_network: str):
-        """Initialize a Bitcoin client for an explicit test network."""
         self.rpc_url = rpc_url
         self.expected_network = expected_network
         self.session = requests.Session()
@@ -97,7 +86,6 @@ class BitcoinClient(BlockchainClient):
             raise ConnectionError("Bitcoin RPC request failed") from e
 
     def get_current_block(self) -> int:
-        """Get latest block height."""
         try:
             block_height = self._rpc_call("getblockcount")
             logger.debug(f"Current block: {block_height}")
@@ -107,7 +95,6 @@ class BitcoinClient(BlockchainClient):
             raise
 
     def get_transaction(self, tx_hash: str) -> Dict[str, Any]:
-        """Get transaction details by hash."""
         try:
             tx_data = self._rpc_call("getrawtransaction", [tx_hash, True])
             logger.debug(f"Retrieved transaction: {tx_hash}")
@@ -117,7 +104,6 @@ class BitcoinClient(BlockchainClient):
             raise
 
     def get_transaction_receipt(self, tx_hash: str) -> Optional[Dict[str, Any]]:
-        """Get transaction confirmation status."""
         try:
             tx = self.get_transaction(tx_hash)
             confirmations = tx.get("confirmations", 0)
@@ -136,7 +122,6 @@ class BitcoinClient(BlockchainClient):
             return None
 
     def broadcast_transaction(self, signed_tx: str) -> str:
-        """Broadcast signed transaction to network."""
         try:
             self.assert_expected_network()
             tx_hash = self._rpc_call("sendrawtransaction", [signed_tx])
@@ -151,15 +136,7 @@ class BitcoinClient(BlockchainClient):
             raise
 
     def estimate_gas(self, tx_params: Dict[str, Any]) -> int:
-        """
-        Estimate transaction fee in satoshis.
-
-        Args:
-            tx_params: May include 'conf_target' (blocks) and 'size' (bytes)
-
-        Returns:
-            Estimated fee in satoshis
-        """
+        """Estimated fee in satoshis; tx_params may carry 'conf_target' (blocks) and 'size' (bytes)."""
         try:
             conf_target = tx_params.get("conf_target", 6)
             fee_estimate = self._rpc_call("estimatesmartfee", [conf_target])
@@ -196,12 +173,7 @@ class BitcoinClient(BlockchainClient):
             logger.error(f"Error getting fee rate: {str(e)}")
             return 20
 
-    def is_address_valid(self, address: str) -> bool:
-        """Validate Bitcoin address format."""
-        return is_bitcoin_address_valid(address, self.expected_network)
-
     def wait_for_transaction_receipt(self, tx_hash: str, timeout: int = 120) -> Dict[str, Any]:
-        """Wait for transaction confirmation."""
         import time
 
         logger.info(f"Waiting for transaction {tx_hash} confirmation")
@@ -236,7 +208,6 @@ class BitcoinClient(BlockchainClient):
             spent = Decimal(str(chain_stats.get("spent_txo_sum", 0)))
             balance_satoshis = funded - spent
 
-            # Convert to BTC
             balance_btc = balance_satoshis / Decimal(10**8)
             logger.debug(f"Address {address[:10]}... balance: {balance_btc} BTC")
             return balance_btc
