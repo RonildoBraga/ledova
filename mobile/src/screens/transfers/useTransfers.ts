@@ -96,7 +96,7 @@ export function useTransfers() {
 
   const holdingsQuery = useQuery({
     queryKey: ['wallet-holdings', state.wallet?.uuid],
-    queryFn: () => getWalletHoldings(apiClient, state.wallet!.uuid, { include_asset: true }),
+    queryFn: () => getWalletHoldings(apiClient, state.wallet!.uuid),
     enabled: !USE_MOCK_DATA && !!state.wallet?.uuid,
     staleTime: CACHE_TIMING.DEFAULT_STALE_TIME,
   });

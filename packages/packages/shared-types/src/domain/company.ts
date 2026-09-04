@@ -1,5 +1,4 @@
 import type { BaseEntity } from '../common';
-import type { BaseQueryParams } from '../api';
 
 export type CompanyStatus =
   | 'draft'
@@ -33,8 +32,6 @@ export type DocumentType =
   | 'tax_return'
   | 'bank_statement'
   | 'other';
-
-export type ContactType = 'primary' | 'admin' | 'compliance' | 'technical' | 'billing' | 'other';
 
 export interface CompanyDocument {
   uuid: string;
@@ -98,20 +95,6 @@ export interface Company extends BaseEntity {
   canIssueTokens: boolean;
   primaryContact: CompanyUserProfile | null;
   documents: CompanyDocument[];
-}
-
-export interface CompanyContact {
-  uuid: string;
-  company: string;
-  contactType: ContactType;
-  contactTypeDisplay: string;
-  firstName: string;
-  lastName: string;
-  fullName: string;
-  email: string;
-  phone: string | null;
-  isPrimary: boolean;
-  createdAt: string;
 }
 
 export interface CompanyUpdate {
@@ -178,8 +161,4 @@ export interface DocumentUpload {
   documentType: DocumentType;
   name: string;
   file: File;
-}
-
-export interface CompanyQueryParams extends BaseQueryParams {
-  status?: CompanyStatus;
 }

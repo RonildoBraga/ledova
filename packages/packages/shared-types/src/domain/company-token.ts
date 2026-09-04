@@ -54,16 +54,6 @@ export interface TokenHoldersResponse {
   totalHolders: number;
 }
 
-export interface TokenTransfer {
-  uuid: string;
-  fromAddress: string;
-  toAddress: string;
-  amount: string;
-  txHash: string;
-  blockNumber: number;
-  timestamp: string;
-}
-
 export interface TokenIssuance {
   uuid: string;
   token: string;
@@ -136,34 +126,4 @@ export interface CapitalIncreaseResponse {
   count: number;
   page?: number;
   pageSize?: number;
-}
-
-export interface ShareIssuanceRequest {
-  recipient: string;
-  amount: number;
-  reason?: string;
-}
-
-export interface ShareIssuanceResponse {
-  message: string;
-  token: CompanyShareToken;
-  issuance: {
-    recipient: string;
-    amount: number;
-    reason: string;
-  };
-}
-
-export interface AggregatedHolder {
-  address: string;
-  name: string | null;
-  totalBalance: number;
-  tokens: Array<{
-    uuid: string;
-    name: string;
-    symbol: string;
-    balance: number;
-    percentage: number;
-  }>;
-  source: 'blockchain' | 'issuances';
 }

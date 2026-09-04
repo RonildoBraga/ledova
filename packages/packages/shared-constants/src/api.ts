@@ -19,10 +19,6 @@ export const CACHE_TIMING = {
   EXTRA_LONG_GC_TIME: 24 * 60 * 60 * 1000,
 } as const;
 
-export const USER_ACCOUNT_ENDPOINTS = {
-  BASE: '/api/user-accounts/',
-  DETAIL: (uuid: string) => `/api/user-accounts/${uuid}/` as const,
-} as const;
 export const AUTH_ENDPOINTS = {
   SIGNIN: '/api/signin/',
   SIGNOUT: '/api/signout/',
@@ -32,10 +28,6 @@ export const AUTH_ENDPOINTS = {
   RESEND_VERIFICATION: '/api/resend-verification/',
   TOKEN_REFRESH: '/api/token/refresh/',
   VERIFY: '/api/auth/verify/',
-} as const;
-export const COUNTRY_ENDPOINTS = {
-  BASE: '/api/countries/',
-  DETAIL: (uuid: string) => `/api/countries/${uuid}/` as const,
 } as const;
 export const ASSET_ENDPOINTS = {
   BASE: '/api/assets/',
@@ -112,9 +104,4 @@ export const COMPANY_TOKEN_ENDPOINTS = {
   CAPITAL_INCREASES: '/api/v1/tokens/capital-increases/',
   CAPITAL_INCREASE_DETAIL: (uuid: string) => `/api/v1/tokens/capital-increases/${uuid}/` as const,
   CAPITAL_INCREASE_SUBMIT: (uuid: string) => `/api/v1/tokens/capital-increases/${uuid}/submit/` as const,
-} as const;
-
-export const EXTERNAL_URLS = {
-  TERMS_OF_SERVICE: 'http://localhost:5173/terms-of-service',
-  PRIVACY_POLICY: 'http://localhost:5173/privacy-policy',
 } as const;

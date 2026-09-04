@@ -110,18 +110,6 @@ export interface DateRangeParams {
 
 **Use when:** Endpoint filters results by date range.
 
-### SearchParams
-
-For searchable endpoints:
-
-```typescript
-export interface SearchParams {
-  search?: string;
-}
-```
-
-**Use when:** Endpoint supports text search across fields.
-
 ## Composed Base Types
 
 These pre-composed types cover the most common endpoint patterns:
@@ -227,11 +215,6 @@ export interface TransactionQueryParams extends BaseQueryParams, DateRangeParams
   chain?: string;
 }
 
-// Time-series with search (rare but possible)
-export interface LogQueryParams extends TimeSeriesQueryParams, SearchParams {
-  level?: 'INFO' | 'WARN' | 'ERROR';
-}
-
 // Simple sorted list
 export interface WidgetQueryParams extends OrderingParams {
   user_account?: string;
@@ -288,17 +271,6 @@ export interface PortfolioSnapshotQueryParams extends TimeSeriesQueryParams {
   user_account?: string;
   user_profile?: string;
   snapshot_reason?: PortfolioSnapshotReason;
-}
-```
-
-### Example 5: User Preferences (No Pagination)
-
-```typescript
-// Single record per user, just sorting
-export interface UserPreferencesQueryParams extends OrderingParams {
-  userProfile?: string;
-  withFavoriteAccount?: boolean;
-  withFavoritePortfolio?: boolean;
 }
 ```
 
@@ -405,7 +377,6 @@ export interface TransactionQueryParams extends BaseQueryParams, DateRangeParams
 | `LimitParams`           | `limit`, `offset`                                       | Limit-based pagination   |
 | `OrderingParams`        | `order_by`                                              | Sorting                  |
 | `DateRangeParams`       | `start_date`, `end_date`                                | Date filtering           |
-| `SearchParams`          | `search`                                                | Text search              |
 | `BaseQueryParams`       | `page`, `page_size`, `order_by`                         | Standard paginated lists |
 | `TimeSeriesQueryParams` | `limit`, `offset`, `order_by`, `start_date`, `end_date` | Time-series/snapshots    |
 

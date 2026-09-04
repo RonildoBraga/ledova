@@ -1,6 +1,5 @@
 import asyncio
 import json
-from types import SimpleNamespace
 from uuid import UUID
 
 import redis.asyncio as aioredis
@@ -16,9 +15,8 @@ HEARTBEAT_INTERVAL = 30
 
 
 def _authenticate_sync(request):
-    """Use the normal JWT lifecycle, retaining the tracked query fallback."""
-    authentication = HybridJWTAuthentication()
-    result = authentication.authenticate(request)
+    """Cookie (dashboard) or Authorization header (mobile) only; never the query string."""
+    result = HybridJWTAuthentication().authenticate(request)
     if result is not None:
         return result[0]
 
@@ -28,16 +26,6 @@ def _authenticate_sync(request):
             return user
     except Exception:
         pass
-
-    query_token = request.GET.get("auth")
-    if query_token:
-        query_request = SimpleNamespace(
-            COOKIES={},
-            META={**request.META, "HTTP_AUTHORIZATION": f"Bearer {query_token}"},
-        )
-        result = authentication.authenticate(query_request)
-        if result is not None:
-            return result[0]
 
     return None
 

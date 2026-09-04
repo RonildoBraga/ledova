@@ -48,3 +48,11 @@ AUTH_COOKIE = {
     "secure": read_bool("COOKIE_SECURE", default=not DEBUG),
     "samesite": "Lax",
 }
+
+# The dashboard reads `csrftoken` from document.cookie and echoes it as X-CSRFToken on every unsafe
+# cookie-authenticated request (HybridJWTAuthentication.enforce_csrf), so the cookie shares the auth
+# cookies' scope and must stay readable. CSRF_TRUSTED_ORIGINS lives in cors.py.
+CSRF_COOKIE_DOMAIN = AUTH_COOKIE["domain"]
+CSRF_COOKIE_SECURE = AUTH_COOKIE["secure"]
+CSRF_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_HTTPONLY = False

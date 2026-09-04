@@ -280,39 +280,9 @@ export interface OrderModificationResponse {
   matchDetails?: OrderModificationMatchDetails | null;
 }
 
-export interface OrderModificationLogEntry {
-  uuid: string;
-  fieldName: string;
-  oldValue: string;
-  newValue: string;
-  signerAddress: string;
-  createdAt: string;
-}
-
-export interface OrderModificationHistoryResponse {
-  orderUuid: string;
-  originalQuantity: number | null;
-  originalPrice: string | null;
-  modificationCount: number;
-  modifications: OrderModificationLogEntry[];
-}
-
 // ============================================================================
 // Direct Share Token Transfer Types
 // ============================================================================
-
-/**
- * Request to prepare a direct share token transfer.
- * Uses snake_case to match backend API format.
- */
-/* eslint-disable @typescript-eslint/naming-convention */
-export interface ShareTokenTransferPrepareRequest {
-  token: string;
-  from_address: string;
-  to_address: string;
-  amount: number;
-}
-/* eslint-enable @typescript-eslint/naming-convention */
 
 /**
  * Token info included in transfer prepare response.
@@ -346,15 +316,6 @@ export interface ShareTokenTransferPrepareResponse {
   toAddress: string;
   amount: number;
   transactionData: ShareTokenTransferTransactionData;
-}
-
-/**
- * Response from broadcast share token transfer endpoint.
- */
-export interface ShareTokenTransferBroadcastResponse {
-  txHash: string;
-  blockNumber?: number;
-  gasUsed?: number;
 }
 
 // ============================================================================

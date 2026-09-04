@@ -3,14 +3,10 @@ export const WALLET_VERIFICATION_STATUS = {
   VERIFIED: 'VERIFIED',
 } as const;
 
-export type WalletVerificationStatus = (typeof WALLET_VERIFICATION_STATUS)[keyof typeof WALLET_VERIFICATION_STATUS];
-
 export const WALLET_TYPE = {
   HARDWARE: 'hardware',
   SOFTWARE: 'software',
 } as const;
-
-export type WalletTypeValue = (typeof WALLET_TYPE)[keyof typeof WALLET_TYPE];
 
 export const BLOCKCHAIN = {
   ETHEREUM: 'ethereum',

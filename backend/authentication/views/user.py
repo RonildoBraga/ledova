@@ -2,6 +2,9 @@ from datetime import datetime
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.middleware.csrf import get_token
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -9,6 +12,7 @@ from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
 from rest_framework_simplejwt.exceptions import TokenError
 
+from authentication.classes import HybridJWTAuthentication
 from authentication.managers.user import EmailLookupState
 from authentication.serializers.user import (
     ChangePasswordSerializer,
@@ -50,15 +54,29 @@ class TokenCookieMixin:
             response.delete_cookie(name, path="/", domain=cookie["domain"], samesite=cookie["samesite"])
         return response
 
-    def session_response(self, data, access_token, refresh_token):
+    def session_response(self, request, data, access_token, refresh_token):
         """Cookies for the dashboard plus the same pair in the body for the mobile app (which reads
-        `tokens[0]`); the body carries raw tokens, so it must never be cached."""
+        `tokens[0]`); the body carries raw tokens, so it must never be cached. `get_token` makes
+        CsrfViewMiddleware send a fresh `csrftoken` cookie with the auth cookies."""
+        get_token(request)
         data["tokens"] = [{"access_token": access_token, "refresh_token": refresh_token}]
         response = Response(data, status=status.HTTP_200_OK, headers={"Cache-Control": "no-store"})
         return self.set_token_cookies(response, access_token, refresh_token)
 
     def presented_refresh_token(self, request):
-        return request.COOKIES.get(settings.AUTH_COOKIE["refresh"]) or request.data.get("refresh")
+        """Body first (native transport, no CSRF exposure), then the cookie.
+
+        A refresh cookie is sent by the browser on its own, so using it on an
+        unsafe request needs the CSRF token unless a Bearer header authenticated
+        the request (installed mobile builds replay the cookie beside their token).
+        """
+        body_token = request.data.get("refresh") if hasattr(request.data, "get") else None
+        if body_token:
+            return body_token
+        cookie_token = request.COOKIES.get(settings.AUTH_COOKIE["refresh"])
+        if cookie_token and not HybridJWTAuthentication().get_header(request):
+            HybridJWTAuthentication.enforce_csrf(request)
+        return cookie_token
 
 
 class AuthViewSet(TokenCookieMixin, ViewSet):
@@ -101,7 +119,7 @@ class AuthViewSet(TokenCookieMixin, ViewSet):
 
         user = SessionService.login(email, password)
         access_token, refresh_token = TokenService.issue(user)
-        return self.session_response(UserSigninSerializer(instance=user).data, access_token, refresh_token)
+        return self.session_response(request, UserSigninSerializer(instance=user).data, access_token, refresh_token)
 
     @action(detail=False, methods=["post"], url_path="signout")
     def signout(self, request):
@@ -156,7 +174,9 @@ class AuthViewSet(TokenCookieMixin, ViewSet):
             )
 
         access_token, refresh_token = TokenService.issue(user)
-        return self.session_response(EmailVerificationSerializer(instance=user).data, access_token, refresh_token)
+        return self.session_response(
+            request, EmailVerificationSerializer(instance=user).data, access_token, refresh_token
+        )
 
     @action(detail=False, methods=["post"], url_path="resend-verification")
     def resend_verification(self, request):
@@ -170,6 +190,7 @@ class AuthViewSet(TokenCookieMixin, ViewSet):
         return Response({"message": "Verification email sent successfully."}, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=["get"], url_path="auth/verify")
+    @method_decorator(ensure_csrf_cookie)
     def verify(self, request):
         if request.user.is_authenticated and request.auth:
             return Response(

@@ -11,17 +11,27 @@ item names where it lives in the code today.
    route, custom action, operator route and collection route is covered by
    `backend/shared/tests/test_cross_tenant_routes.py`, and global operator
    routes require `IsAdminUser`. PostgreSQL RLS is not planned.
-2. **Authentication hardening.** Done: refresh rotation and blacklist
-   (`authentication/services/tokens.py`), hashed expiring attempt-capped OTP
-   (`authentication/services/email_codes.py`), per-email throttle, no DEBUG
-   bypass, cookie flags from `settings.AUTH_COOKIE`. Open: CSRF on the cookie
-   transport, which needs the dashboard's axios client to send `X-CSRFToken`
-   from the `csrftoken` cookie before the backend can enforce it.
-3. **SSE query JWTs.** `backend/tokens/views/trading_events.py` still accepts
-   a bearer token in the `?auth=` query string as a fallback to the cookie and
-   header; proxies, browser history and logs can retain it. Replace it with the
-   cookie for the dashboard `EventSource` and a header via fetch-based SSE for
-   mobile.
+2. **Authentication hardening — completed 2026-09-05.** Refresh rotation and
+   blacklist (`authentication/services/tokens.py`), hashed expiring
+   attempt-capped OTP (`authentication/services/email_codes.py`), per-email
+   throttle, no DEBUG bypass, cookie flags from `settings.AUTH_COOKIE`, and
+   CSRF on the cookie transport: `HybridJWTAuthentication` runs DRF's
+   `CSRFCheck` for cookie-sourced POST/PUT/PATCH/DELETE (403 `CSRF Failed`),
+   Bearer requests skip it and win over an `access` cookie sent beside them
+   (React Native's cookie jar replays it), `auth/verify`, sign-in and email
+   verification issue
+   the readable `csrftoken` cookie (scoped like the auth cookies), and the
+   dashboard's axios client echoes it as `X-CSRFToken` and replays once after a
+   CSRF 403 (`authentication/tests/test_csrf.py`,
+   `dashboard/src/services/apiClient.ts`).
+3. **SSE query JWTs — completed 2026-09-05.** The trading event stream
+   (`backend/tokens/views/trading_events.py`) authenticates only through
+   `HybridJWTAuthentication`: the `access` cookie for the dashboard
+   `EventSource` (`withCredentials`) and the `Authorization: Bearer` header
+   for mobile (`react-native-sse` `headers` option). A JWT in the `?auth=`
+   query string is ignored and the request is rejected exactly like an
+   anonymous one (`tokens/tests/test_trading_events_authorization.py`), so
+   proxies, browser history and logs never see a token.
 4. **Signed-intent binding and replay.** `tokens/services/atomic_swap_service.py`
    signs a nonce and deadline per swap, but order create/cancel/modify messages
    (`tokens/services/trading_order_service.py`,

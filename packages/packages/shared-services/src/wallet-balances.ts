@@ -2,12 +2,8 @@ import { AxiosInstance } from 'axios';
 import { getChainName } from '@ledova/shared-constants';
 import type { WalletHolding, PaginatedResponse, BatchBalanceResponse } from '@ledova/shared-types';
 
-export interface WalletHoldingsQueryParams {
-  include_asset?: boolean;
-}
-
-export const getWalletHoldings = (apiClient: AxiosInstance, uuid: string, params?: WalletHoldingsQueryParams) =>
-  apiClient.get<PaginatedResponse<WalletHolding>>(`/api/wallets/${uuid}/holdings/`, { params });
+export const getWalletHoldings = (apiClient: AxiosInstance, uuid: string) =>
+  apiClient.get<PaginatedResponse<WalletHolding>>(`/api/wallets/${uuid}/holdings/`);
 
 export const fetchBatchBalances = async (
   apiClient: AxiosInstance,

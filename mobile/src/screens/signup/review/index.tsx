@@ -15,7 +15,7 @@ import {
   formatSourceOfFunds,
   formatIntendedUse,
 } from '@ledova/shared-utils';
-import { EXTERNAL_URLS } from '@ledova/shared-constants';
+import { PUBLIC_LINKS } from '../../../config/publicLinks';
 
 export function ReviewScreen() {
   const theme = useAppTheme();
@@ -198,11 +198,11 @@ export function ReviewScreen() {
 
   const handleOpenTerms = async () => {
     try {
-      const supported = await Linking.canOpenURL(EXTERNAL_URLS.TERMS_OF_SERVICE);
+      const supported = await Linking.canOpenURL(PUBLIC_LINKS.termsOfService);
       if (supported) {
-        await Linking.openURL(EXTERNAL_URLS.TERMS_OF_SERVICE);
+        await Linking.openURL(PUBLIC_LINKS.termsOfService);
       } else {
-        Alert.alert('Error', `Unable to open URL: ${EXTERNAL_URLS.TERMS_OF_SERVICE}`);
+        Alert.alert('Error', `Unable to open URL: ${PUBLIC_LINKS.termsOfService}`);
       }
     } catch {
       Alert.alert('Error', 'Failed to open Terms of Service');
@@ -211,11 +211,11 @@ export function ReviewScreen() {
 
   const handleOpenPrivacyPolicy = async () => {
     try {
-      const supported = await Linking.canOpenURL(EXTERNAL_URLS.PRIVACY_POLICY);
+      const supported = await Linking.canOpenURL(PUBLIC_LINKS.privacyPolicy);
       if (supported) {
-        await Linking.openURL(EXTERNAL_URLS.PRIVACY_POLICY);
+        await Linking.openURL(PUBLIC_LINKS.privacyPolicy);
       } else {
-        Alert.alert('Error', `Unable to open URL: ${EXTERNAL_URLS.PRIVACY_POLICY}`);
+        Alert.alert('Error', `Unable to open URL: ${PUBLIC_LINKS.privacyPolicy}`);
       }
     } catch {
       Alert.alert('Error', 'Failed to open Privacy Policy');

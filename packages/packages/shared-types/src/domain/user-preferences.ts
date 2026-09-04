@@ -1,5 +1,4 @@
 import type { BaseEntity } from '../common';
-import type { OrderingParams } from '../api';
 
 /**
  * Nested account data returned in user preferences response.
@@ -35,34 +34,9 @@ export interface UserPreferences extends BaseEntity {
   displayCurrency: DisplayCurrency;
 }
 
-export interface UserPreferencesValidationError {
-  selectedAccount?: string;
-  selectedPortfolio?: string;
-  general?: string;
-}
-
-/**
- * Query parameters for user preferences endpoints.
- * Extends OrderingParams for sorting (single record per user, no pagination needed).
- *
- * NAMING CONVENTION: Query params use snake_case following REST API URL standards.
- */
-export interface UserPreferencesQueryParams extends OrderingParams {
-  userProfile?: string;
-  withSelectedAccount?: boolean;
-  withSelectedPortfolio?: boolean;
-}
-
 export interface UpdateUserPreferences {
   selectedAccount?: string | null;
   selectedPortfolio?: string | null;
   theme?: Theme;
   displayCurrency?: DisplayCurrency;
-}
-
-export interface UserPreferencesResponse {
-  success: boolean;
-  data?: UserPreferences;
-  errors?: UserPreferencesValidationError;
-  message?: string;
 }

@@ -22,19 +22,12 @@ import type {
   OrderModificationMessageResponse,
   SignedOrderModificationRequest,
   OrderModificationResponse,
-  OrderModificationHistoryResponse,
-  ShareTokenTransferPrepareRequest,
-  ShareTokenTransferPrepareResponse,
-  ShareTokenTransferBroadcastResponse,
   ApprovalStatusResponse,
   ApprovalDataResponse,
 } from '@ledova/shared-types';
 
 export const getShareTokens = (apiClient: AxiosInstance) =>
   apiClient.get<PaginatedResponse<ShareToken>>(TRADING_ENDPOINTS.TOKENS.LIST);
-
-export const getShareToken = (apiClient: AxiosInstance, uuid: string) =>
-  apiClient.get<ShareToken>(TRADING_ENDPOINTS.TOKENS.DETAIL(uuid));
 
 export const getOrderBook = (apiClient: AxiosInstance, tokenUuid: string) =>
   apiClient.get<OrderBook>(TRADING_ENDPOINTS.TOKENS.ORDER_BOOK(tokenUuid));
@@ -44,14 +37,6 @@ export const getMarketData = (apiClient: AxiosInstance, tokenUuid: string) =>
 
 export const getOrders = (apiClient: AxiosInstance, params?: GetOrdersParams) =>
   apiClient.get<PaginatedResponse<TransferOrder>>(TRADING_ENDPOINTS.ORDERS.LIST, { params });
-
-export const getOrder = (apiClient: AxiosInstance, uuid: string) =>
-  apiClient.get<TransferOrder>(TRADING_ENDPOINTS.ORDERS.DETAIL(uuid));
-
-export const getOpenOrders = (apiClient: AxiosInstance, tokenUuid: string) =>
-  apiClient.get<PaginatedResponse<TransferOrder>>(TRADING_ENDPOINTS.ORDERS.LIST, {
-    params: { token: tokenUuid, status: 'OPEN' },
-  });
 
 export const getUserOrders = (apiClient: AxiosInstance, walletAddress: string) =>
   apiClient.get<PaginatedResponse<TransferOrder>>(TRADING_ENDPOINTS.ORDERS.LIST, {
@@ -94,25 +79,6 @@ export const cancelOrder = (apiClient: AxiosInstance, uuid: string, data: Signed
 export const getWalletBalances = (apiClient: AxiosInstance, walletAddress: string) =>
   apiClient.get<WalletTokenBalancesResponse>(TRADING_ENDPOINTS.WALLETS.BALANCES, {
     params: { wallet_address: walletAddress },
-  });
-
-// ============================================================================
-// Direct Share Token Transfer Functions
-// ============================================================================
-
-/**
- * Prepare a direct share token transfer.
- * Returns unsigned transaction data for signing.
- */
-export const prepareShareTokenTransfer = (apiClient: AxiosInstance, data: ShareTokenTransferPrepareRequest) =>
-  apiClient.post<ShareTokenTransferPrepareResponse>(TRADING_ENDPOINTS.TRANSFERS.PREPARE, data);
-
-/**
- * Broadcast a signed share token transfer transaction.
- */
-export const broadcastShareTokenTransfer = (apiClient: AxiosInstance, signedTx: string) =>
-  apiClient.post<ShareTokenTransferBroadcastResponse>(TRADING_ENDPOINTS.TRANSFERS.BROADCAST, {
-    signed_transaction: signedTx,
   });
 
 export const getWhitelistStatus = (apiClient: AxiosInstance, walletAddress: string) =>
@@ -172,12 +138,6 @@ export const modifyOrder = (apiClient: AxiosInstance, orderUuid: string, data: S
     message: data.message,
     signature: data.signature,
   });
-
-/**
- * Get the modification history for an order.
- */
-export const getOrderModificationHistory = (apiClient: AxiosInstance, orderUuid: string) =>
-  apiClient.get<OrderModificationHistoryResponse>(TRADING_ENDPOINTS.ORDERS.MODIFICATIONS(orderUuid));
 
 export function parseTradingError(error: unknown): string {
   if (!error) return 'An unknown error occurred';

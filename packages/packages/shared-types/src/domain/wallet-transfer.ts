@@ -70,17 +70,7 @@ export interface BroadcastTransferResponse {
   } | null;
 }
 
-export interface ExtendedPrepareTransferResponse extends PrepareTransferResponse {
-  amountBtc?: string;
-  feeBtc?: string;
-  totalCostBtc?: string;
-  feePerByte?: string;
-  estimatedTxSize?: number;
-}
-
 export type TransferStepSimple = 'select-wallet' | 'enter-details' | 'review' | 'sign' | 'broadcast' | 'success';
-export type TransferStepHardware =
-  'form' | 'scan-address' | 'review' | 'show-transaction-qr' | 'scan-signature' | 'broadcast' | 'success';
 
 export interface TransactionData {
   transaction: string;

@@ -545,7 +545,7 @@ class CookieSettingsTest(LegacyAuthProtocolTestCase):
         response = self.client.post("/api/signin/", {"email": user.email, "password": self.password}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(set(response.cookies), {"sid", "rid"})
+        self.assertEqual(set(response.cookies), {"sid", "rid", "csrftoken"})
         for name in ("sid", "rid"):
             self.assertEqual(response.cookies[name]["domain"], "example.test")
             self.assertFalse(response.cookies[name]["secure"])

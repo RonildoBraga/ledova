@@ -40,17 +40,3 @@ export function formatPercentage(value: number, decimals: number = 2): string {
   if (value === undefined || value === null || isNaN(value)) return '—';
   return `${value.toFixed(decimals)}%`;
 }
-
-export function formatTokenAmount(rawAmount: string | number, decimals: number): string {
-  const raw = typeof rawAmount === 'string' ? parseInt(rawAmount, 10) : rawAmount;
-  if (isNaN(raw) || decimals === 0) return raw.toString();
-  const divisor = Math.pow(10, decimals);
-  return (raw / divisor).toFixed(decimals);
-}
-
-export function parseTokenAmount(displayAmount: string, decimals: number): number {
-  const parsed = parseFloat(displayAmount);
-  if (isNaN(parsed)) return 0;
-  const multiplier = Math.pow(10, decimals);
-  return Math.round(parsed * multiplier);
-}

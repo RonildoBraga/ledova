@@ -11,6 +11,9 @@ const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  // Auth is the Bearer header from SecureStore. React Native's XMLHttpRequest defaults
+  // withCredentials to true, which stores the sign-in cookies and replays them beside the header.
+  withCredentials: false,
 });
 
 apiClient.interceptors.request.use(async (config) => {

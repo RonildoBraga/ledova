@@ -11,15 +11,7 @@ export {
 export { getAssets, getAssetsNextPage, getAssetByUuid } from './assets';
 export { getAssetSnapshots } from './assetSnapshots';
 export { createFinancialProfile, updateFinancialProfile, getFinancialProfiles } from './financialProfile';
-export {
-  getPortfolios,
-  createPortfolio,
-  updatePortfolio,
-  deletePortfolio,
-  getPortfolioSnapshots as getPortfolioSnapshotsTimeSeries,
-  addWalletToPortfolio,
-  removeWalletFromPortfolio,
-} from './portfolios';
+export { getPortfolios, getPortfolioSnapshots as getPortfolioSnapshotsTimeSeries } from './portfolios';
 export {
   updateUserProfile,
   updateUserProfileCompletion,
@@ -33,15 +25,9 @@ export { getWallets, createWallet, updateWallet, deleteWallet } from './wallets'
 export { requestVerificationChallenge, verifyWalletSignature, syncWallet } from './wallet-verification';
 export { prepareTransfer, broadcastTransfer } from './wallet-transfers';
 export { getWalletHoldings, fetchBatchBalances } from './wallet-balances';
-export type { WalletHoldingsQueryParams } from './wallet-balances';
 export { getTransactions, getTransactionsNextPage } from './transactions';
 export { getOnRampWidgetUrl } from './onramp';
-export {
-  getFavouriteAssets,
-  getFavouriteAssetsNextPage,
-  addFavouriteAsset,
-  removeFavouriteAsset,
-} from './favouriteAssets';
+export { getFavouriteAssets, addFavouriteAsset, removeFavouriteAsset } from './favouriteAssets';
 export {
   registerDeviceToken,
   unregisterDeviceToken,
@@ -55,12 +41,9 @@ export {
 } from './notifications';
 export {
   getShareTokens,
-  getShareToken,
   getOrderBook,
   getMarketData,
   getOrders,
-  getOrder,
-  getOpenOrders,
   getUserOrders,
   getOrderCreateMessage,
   getOrderCancelMessage,
@@ -76,9 +59,6 @@ export {
   getOrderSwapApprovalData,
   getOrderModificationMessage,
   modifyOrder,
-  getOrderModificationHistory,
-  prepareShareTokenTransfer,
-  broadcastShareTokenTransfer,
 } from './trading';
 export {
   getCompanies,
@@ -89,10 +69,7 @@ export {
   getCompanyDocuments,
   uploadCompanyDocument,
   deleteCompanyDocument,
-  getApplicationStatus,
   submitApplication,
-  resubmitApplication,
-  withdrawApplication,
 } from './companies';
 export {
   getCompanyTokens,
