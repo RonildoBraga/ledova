@@ -3,6 +3,7 @@ import {
   isBitcoinTestnetSigningPath,
   isValidBitcoinNativeSegwitTestAddress,
   isValidNonMainnetBitcoinAddress,
+  normalizeBitcoinRawTransactionHex,
   validateWalletAddress,
 } from '../src/validation/wallets';
 
@@ -32,4 +33,18 @@ describe('test-network wallet validation', () => {
     expect(isBitcoinTestnetSigningPath("m/84'/1'/0'/0/0")).toBe(true);
     expect(isBitcoinTestnetSigningPath("m/84'/0'/0'/0/0")).toBe(false);
   });
+});
+
+describe('normalizeBitcoinRawTransactionHex', () => {
+  it('strips an optional 0x prefix and whitespace and lower-cases the hex', () => {
+    expect(normalizeBitcoinRawTransactionHex('0x0200000001AB')).toBe('0200000001ab');
+    expect(normalizeBitcoinRawTransactionHex('  0200 0000\n01ab  ')).toBe('0200000001ab');
+  });
+
+  it.each(['', '   ', '0x', '0200000001a', '0200zz', '0x0x02'])(
+    'rejects input that is not whole bytes of hex: %j',
+    (input) => {
+      expect(normalizeBitcoinRawTransactionHex(input)).toBeNull();
+    },
+  );
 });

@@ -165,6 +165,22 @@ export function ReviewTransaction({ transactionData, chainShortName }: ReviewTra
           </View>
         </View>
       )}
+
+      {transactionData.feePerByte && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Fee Details</Text>
+          <View style={styles.chainDetailsCard}>
+            <View style={styles.chainDetailRow}>
+              <Text style={styles.chainDetailLabel}>Fee Rate</Text>
+              <Text style={styles.chainDetailValue}>{transactionData.feePerByte} sat/vB</Text>
+            </View>
+            <View style={styles.chainDetailRow}>
+              <Text style={styles.chainDetailLabel}>Estimated Size</Text>
+              <Text style={styles.chainDetailValue}>{transactionData.estimatedTxSize} vB</Text>
+            </View>
+          </View>
+        </View>
+      )}
     </ScrollView>
   );
 }

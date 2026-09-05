@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getWhitelistStatus, getWalletHoldings } from '@ledova/shared-services';
-import { CACHE_TIMING, BLOCKCHAIN, getChainShortCode } from '@ledova/shared-constants';
+import { CACHE_TIMING, BLOCKCHAIN, getChainShortCode, getBlockchainDisplayName } from '@ledova/shared-constants';
 import { formatCryptoBalance } from '@ledova/shared-utils';
 import apiClient from '@services/apiClient';
 import type { Wallet } from '@ledova/shared-types';
@@ -39,7 +39,7 @@ export function useTransferFlow(selectedWallet: Wallet | null) {
   const [isSigningModalOpen, setIsSigningModalOpen] = useState(false);
   const [pendingTransfer, setPendingTransfer] = useState<{ toAddress: string; amount: string } | null>(null);
 
-  const isEthWallet = selectedWallet?.chain === BLOCKCHAIN.ETHEREUM;
+  const isEvmWallet = selectedWallet?.chain === BLOCKCHAIN.ETHEREUM || selectedWallet?.chain === BLOCKCHAIN.BASE;
 
   const holdingsQuery = useQuery({
     queryKey: ['wallet-holdings', selectedWallet?.uuid],
@@ -52,7 +52,7 @@ export function useTransferFlow(selectedWallet: Wallet | null) {
   const senderWhitelistQuery = useQuery({
     queryKey: ['whitelistStatus', selectedWallet?.address],
     queryFn: () => getWhitelistStatus(apiClient, selectedWallet!.address),
-    enabled: !!selectedWallet?.address && isEthWallet,
+    enabled: !!selectedWallet?.address && isEvmWallet,
     staleTime: CACHE_TIMING.DEFAULT_STALE_TIME,
     select: (data) => data.data,
   });
@@ -76,11 +76,11 @@ export function useTransferFlow(selectedWallet: Wallet | null) {
       id: `native-${selectedWallet.chain}`,
       type: 'crypto',
       symbol: chainShortCode,
-      name: selectedWallet.chain === BLOCKCHAIN.ETHEREUM ? 'Ethereum' : 'Bitcoin',
+      name: getBlockchainDisplayName(chainShortCode),
       balance: selectedWallet.nativeBalance,
       displayBalance: formatCryptoBalance(selectedWallet.nativeBalance, chainShortCode),
       marketValue: selectedWallet.nativeMarketValue,
-      decimals: selectedWallet.chain === BLOCKCHAIN.ETHEREUM ? 18 : 8,
+      decimals: isEvmWallet ? 18 : 8,
     });
 
     if (holdingsQuery.data) {
@@ -106,7 +106,7 @@ export function useTransferFlow(selectedWallet: Wallet | null) {
     }
 
     return assetList;
-  }, [selectedWallet, holdingsQuery.data]);
+  }, [selectedWallet, isEvmWallet, holdingsQuery.data]);
 
   const isSenderWhitelisted =
     selectedAsset?.type === 'share_token' ? (senderWhitelistQuery.data?.isWhitelisted ?? false) : true;
@@ -145,11 +145,6 @@ export function useTransferFlow(selectedWallet: Wallet | null) {
     signing.reset();
   }, [signing]);
 
-  const getChainType = useCallback((): 'ethereum' | 'bitcoin' => {
-    if (!selectedWallet) return 'ethereum';
-    return selectedWallet.chain === 'bitcoin' ? 'bitcoin' : 'ethereum';
-  }, [selectedWallet]);
-
   const getTransferType = useCallback((): 'crypto' | 'stablecoin' | 'share_token' => {
     return selectedAsset?.type || 'crypto';
   }, [selectedAsset]);
@@ -176,7 +171,6 @@ export function useTransferFlow(selectedWallet: Wallet | null) {
     handleCloseSigningModal,
     handleTransferSuccess,
     setToAddress,
-    getChainType,
     getTransferType,
   };
 }

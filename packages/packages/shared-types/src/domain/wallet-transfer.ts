@@ -3,9 +3,13 @@ import type { Wallet } from './wallet';
 export interface PrepareTransferRequest {
   toAddress: string;
   amountEth?: string;
-  amountBtc?: string;
   amountToken?: string;
   tokenContract?: string;
+}
+
+export interface PrepareBitcoinTransferRequest {
+  toAddress: string;
+  amountBtc: string;
 }
 
 export interface TransferableAsset {
@@ -48,6 +52,22 @@ export interface PrepareTransferResponse {
   fromAddress: string;
   toAddress: string;
 }
+
+/** prepare_bitcoin_transaction: amounts and the fee estimate only; the user builds and signs the transaction elsewhere. */
+export interface PrepareBitcoinTransferResponse {
+  fromAddress: string;
+  toAddress: string;
+  amountBtc: string;
+  amountSatoshis: number;
+  feePerByte: string;
+  estimatedTxSize: number;
+  feeSatoshis: number;
+  feeBtc: string;
+  totalCostBtc: string;
+  network: 'BTC';
+}
+
+export type PreparedWalletTransfer = PrepareTransferResponse | PrepareBitcoinTransferResponse;
 
 export interface BroadcastTransferRequest {
   signedTransaction: string;

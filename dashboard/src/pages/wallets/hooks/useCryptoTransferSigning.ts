@@ -1,8 +1,9 @@
 import { useState, useCallback } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { prepareTransfer, broadcastTransfer } from '@ledova/shared-services';
+import { prepareTransfer, prepareBitcoinTransfer, broadcastTransfer } from '@ledova/shared-services';
+import { BLOCKCHAIN } from '@ledova/shared-constants';
 import apiClient from '@services/apiClient';
-import type { Wallet, PrepareTransferResponse } from '@ledova/shared-types';
+import type { Wallet, PreparedWalletTransfer } from '@ledova/shared-types';
 
 interface UseCryptoTransferSigningParams {
   wallet: Wallet | null;
@@ -12,7 +13,7 @@ interface UseCryptoTransferSigningParams {
 }
 
 interface UseCryptoTransferSigningResult {
-  preparedTransaction: PrepareTransferResponse | null;
+  preparedTransaction: PreparedWalletTransfer | null;
   isPreparing: boolean;
   isBroadcasting: boolean;
   prepareError: string | null;
@@ -29,13 +30,17 @@ export function useCryptoTransferSigning({
   tokenContract,
 }: UseCryptoTransferSigningParams): UseCryptoTransferSigningResult {
   const queryClient = useQueryClient();
-  const [preparedTransaction, setPreparedTransaction] = useState<PrepareTransferResponse | null>(null);
+  const [preparedTransaction, setPreparedTransaction] = useState<PreparedWalletTransfer | null>(null);
   const [prepareError, setPrepareError] = useState<string | null>(null);
   const [broadcastError, setBroadcastError] = useState<string | null>(null);
 
   const prepareMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (): Promise<PreparedWalletTransfer> => {
       if (!wallet) throw new Error('No wallet selected');
+      if (wallet.chain === BLOCKCHAIN.BITCOIN) {
+        const response = await prepareBitcoinTransfer(apiClient, wallet.uuid, { toAddress, amountBtc: amount });
+        return response.data;
+      }
       const data = tokenContract ? { toAddress, amountToken: amount, tokenContract } : { toAddress, amountEth: amount };
       const response = await prepareTransfer(apiClient, wallet.uuid, data);
       return response.data;

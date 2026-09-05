@@ -1,9 +1,9 @@
 import React from 'react';
-import { View, Text } from 'react-native';
-import { CheckCircleIcon } from 'phosphor-react-native';
+import { View, Text, TouchableOpacity, Linking } from 'react-native';
+import { CheckCircleIcon, ArrowSquareOutIcon } from 'phosphor-react-native';
 import { CustomModal } from '../../../components/modal';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
-import { getBlockchainDisplayName } from '@ledova/shared-constants';
+import { getBlockchainDisplayName, getBlockExplorerTxUrl } from '@ledova/shared-constants';
 
 interface SuccessModalProps {
   visible: boolean;
@@ -55,8 +55,21 @@ export function SuccessModal({ visible, txHash, chainShortName, onDone }: Succes
       fontFamily: 'monospace',
       color: theme.colors.text.primary,
     },
+    explorerLink: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: theme.spacing.xs,
+      paddingVertical: theme.spacing.sm,
+    },
+    explorerText: {
+      fontSize: theme.fontSize.sm,
+      fontWeight: theme.fontWeight.semibold,
+      color: theme.colors.interactive.active,
+    },
   }));
   const handleOverlayClose = () => {};
+  const explorerUrl = txHash ? getBlockExplorerTxUrl(chainShortName, txHash) : '';
 
   return (
     <CustomModal
@@ -87,6 +100,12 @@ export function SuccessModal({ visible, txHash, chainShortName, onDone }: Succes
               {txHash}
             </Text>
           </View>
+          {explorerUrl ? (
+            <TouchableOpacity style={styles.explorerLink} onPress={() => Linking.openURL(explorerUrl)}>
+              <Text style={styles.explorerText}>View on block explorer</Text>
+              <ArrowSquareOutIcon size={theme.icon.sizes.sm} color={theme.colors.interactive.active} />
+            </TouchableOpacity>
+          ) : null}
         </View>
       )}
     </CustomModal>

@@ -1,9 +1,16 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Alert } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getWallets, prepareTransfer, broadcastTransfer, getWalletHoldings } from '@ledova/shared-services';
+import {
+  getWallets,
+  prepareTransfer,
+  prepareBitcoinTransfer,
+  broadcastTransfer,
+  getWalletHoldings,
+} from '@ledova/shared-services';
 import {
   CACHE_TIMING,
+  getBlockchainDisplayName,
   getChainShortCode,
   getEstimatedFee,
   isBitcoinChain,
@@ -19,6 +26,7 @@ import { generateMockWalletsData } from '../wallets/_mock/mock';
 import type {
   Wallet,
   PrepareTransferRequest,
+  PrepareBitcoinTransferRequest,
   BroadcastTransferRequest,
   TransferState,
   TransactionData,
@@ -47,11 +55,11 @@ function buildTransferableAssets(wallet: Wallet, holdings: WalletHolding[]): Tra
     assets.push({
       uuid: `native-${wallet.uuid}`,
       symbol: chainShortCode,
-      name: chainShortCode === 'ETH' ? 'Ethereum' : chainShortCode === 'BTC' ? 'Bitcoin' : chain,
+      name: getBlockchainDisplayName(chainShortCode),
       balance: wallet.nativeBalance,
       marketValue: wallet.nativeMarketValue,
       isNative: true,
-      decimals: chainShortCode === 'BTC' ? 8 : 18,
+      decimals: isBitcoinChain(chainShortCode) ? 8 : 18,
       chain,
     });
   }
@@ -120,11 +128,11 @@ export function useTransfers() {
       const nativeAsset: TransferableAsset = {
         uuid: `native-${state.wallet.uuid}`,
         symbol: chainShortCode,
-        name: chainShortCode === 'ETH' ? 'Ethereum' : chainShortCode === 'BTC' ? 'Bitcoin' : state.wallet.chain,
+        name: getBlockchainDisplayName(chainShortCode),
         balance: state.wallet.nativeBalance,
         marketValue: state.wallet.nativeMarketValue,
         isNative: true,
-        decimals: chainShortCode === 'BTC' ? 8 : 18,
+        decimals: isBitcoinChain(chainShortCode) ? 8 : 18,
         chain: state.wallet.chain,
       };
       setTransferableAssets([nativeAsset]);
@@ -133,8 +141,8 @@ export function useTransfers() {
   }, [state.wallet, holdingsQuery.data, USE_MOCK_DATA]);
 
   const prepareTransferMutation = useMutation({
-    mutationFn: ({ uuid, data }: { uuid: string; data: PrepareTransferRequest }) =>
-      prepareTransfer(apiClient, uuid, data),
+    mutationFn: ({ uuid, data }: { uuid: string; data: PrepareTransferRequest | PrepareBitcoinTransferRequest }) =>
+      'amountBtc' in data ? prepareBitcoinTransfer(apiClient, uuid, data) : prepareTransfer(apiClient, uuid, data),
     onSuccess: (response) => {
       setState((prev) => ({
         ...prev,
@@ -266,11 +274,12 @@ export function useTransfers() {
     }
 
     const chain = getChainShortCode(state.wallet.chain);
-    let data: PrepareTransferRequest;
+    let data: PrepareTransferRequest | PrepareBitcoinTransferRequest;
 
     if (state.selectedAsset.isNative) {
-      const amountField = isBitcoinChain(chain) ? 'amountBtc' : 'amountEth';
-      data = { toAddress: state.toAddress, [amountField]: state.amount };
+      data = isBitcoinChain(chain)
+        ? { toAddress: state.toAddress, amountBtc: state.amount }
+        : { toAddress: state.toAddress, amountEth: state.amount };
     } else {
       data = {
         toAddress: state.toAddress,

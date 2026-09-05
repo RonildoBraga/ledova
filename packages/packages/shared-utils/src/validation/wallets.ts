@@ -19,6 +19,13 @@ export const isValidBitcoinNativeSegwitTestAddress = (address: string): boolean 
 /** Native-SegWit address-key path on the BIP44 testnet coin type (1). */
 export const isBitcoinTestnetSigningPath = (path: string): boolean => /^(?:m\/)?84'\/1'\/\d+'\/[01]\/\d+$/.test(path);
 
+/** Signed raw transaction as `sendrawtransaction` wants it: whitespace and an optional 0x prefix removed, lower-case hex of whole bytes. */
+export const normalizeBitcoinRawTransactionHex = (input: string): string | null => {
+  const hex = input.replace(/\s+/g, '').replace(/^0x/i, '');
+  if (hex.length === 0 || hex.length % 2 !== 0 || !/^[0-9a-fA-F]+$/.test(hex)) return null;
+  return hex.toLowerCase();
+};
+
 export const validateWalletAddress = (address: string, chainType: string): boolean => {
   const chain = chainType.toLowerCase();
   if (['ethereum', 'eth', 'polygon', 'matic', 'arbitrum', 'optimism', 'base'].includes(chain))

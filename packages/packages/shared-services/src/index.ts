@@ -23,7 +23,7 @@ export { getIdentityVerificationToken, getIdentityVerificationStatus } from './i
 export { getCurrentUserPreferences, upsertCurrentUserPreferences } from './userPreferences';
 export { getWallets, createWallet, updateWallet, deleteWallet } from './wallets';
 export { requestVerificationChallenge, verifyWalletSignature, syncWallet } from './wallet-verification';
-export { prepareTransfer, broadcastTransfer } from './wallet-transfers';
+export { prepareTransfer, prepareBitcoinTransfer, broadcastTransfer } from './wallet-transfers';
 export { getWalletHoldings, fetchBatchBalances } from './wallet-balances';
 export { getTransactions, getTransactionsNextPage } from './transactions';
 export { getOnRampWidgetUrl } from './onramp';
