@@ -11,10 +11,12 @@ from .share_issuance import ShareIssuance
 class ReviewableRequest(BaseModel):
     """Staff review workflow (submit, review, approve or reject, execute) shared by the two share-request models.
 
-    Each concrete model adds its own fields plus `share_delta`, the number of shares the request would mint.
+    Each concrete model adds its own fields plus `share_delta`, the number of shares the request adds (minted for
+    an issuance, authorized for a capital increase).
     """
 
     share_delta: int
+    EXECUTABLE_STATUSES = (RequestStatus.APPROVED, RequestStatus.FAILED)
 
     status = models.CharField(
         max_length=20,
@@ -76,7 +78,7 @@ class ReviewableRequest(BaseModel):
     @property
     def can_be_executed(self) -> bool:
         """Approved requests execute; failed ones may be retried."""
-        return self.status in (RequestStatus.APPROVED, RequestStatus.FAILED)
+        return self.status in self.EXECUTABLE_STATUSES
 
     def calculate_dilution(self) -> float:
         current_supply = ShareIssuance.objects.completed_supply(self.token)
@@ -108,16 +110,30 @@ class ReviewableRequest(BaseModel):
         self.save(update_fields=["status", "reviewed_by", "reviewed_at", *fields, "updated_at"])
 
     def mark_executing(self) -> None:
-        if not self.can_be_executed:
+        """Claim the request with a compare-and-set on the stored status, so only one executor ever wins."""
+        now = timezone.now()
+        claimed = (
+            type(self)
+            .objects.filter(pk=self.pk, status__in=self.EXECUTABLE_STATUSES)
+            .update(status=RequestStatus.EXECUTING, updated_at=now)
+        )
+        if not claimed:
+            self.refresh_from_db(fields=["status"])
             raise ValueError(f"Cannot execute request with status '{self.get_status_display()}'")
         self.status = RequestStatus.EXECUTING
-        self.save(update_fields=["status", "updated_at"])
+        self.updated_at = now
 
-    def mark_executed(self, issuance) -> None:
+    def mark_executed(self, issuance=None) -> None:
+        """A capital increase mints nothing, so it executes without an issuance."""
         self.status = RequestStatus.EXECUTED
         self.executed_issuance = issuance
         self.executed_at = timezone.now()
         self.save(update_fields=["status", "executed_issuance", "executed_at", "updated_at"])
+
+    def mark_refused(self, reason: str) -> None:
+        """Refused before any transaction: the request stays executable and the notes say why."""
+        self.review_notes = f"Execution refused: {reason}"
+        self.save(update_fields=["review_notes", "updated_at"])
 
     def mark_failed(self, error: str) -> None:
         self.status = RequestStatus.FAILED

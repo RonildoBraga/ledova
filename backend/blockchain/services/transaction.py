@@ -4,6 +4,7 @@ from typing import Any
 
 from django.db import transaction
 from django.utils import timezone
+from web3 import Web3
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ class TransactionMonitorService:
                         tx.mark_confirmed(
                             block_number=receipt["blockNumber"],
                             block_hash=(
-                                receipt["blockHash"].hex()
+                                Web3.to_hex(receipt["blockHash"])
                                 if hasattr(receipt["blockHash"], "hex")
                                 else str(receipt["blockHash"])
                             ),

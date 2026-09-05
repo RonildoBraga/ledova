@@ -4,144 +4,42 @@ from datetime import timedelta
 from django.utils import timezone
 from procrastinate import RetryStrategy
 
-from blockchain.models import BlockchainTransaction, TransactionStatus, TransactionType
 from ledova_backend.procrastinate_app import app
-from tokens.models import ShareIssuance, ShareToken, ShareTokenStatus
+from tokens.models import ShareToken, ShareTokenStatus
 from tokens.services import ShareTokenService
 
 logger = logging.getLogger(__name__)
 
+PENDING_DEPLOYMENT_AGE = timedelta(minutes=10)
+
 
 @app.task(retry=RetryStrategy(max_attempts=4, wait=30))
 def deploy_share_token_task(token_uuid: str):
-    issuance = None
-    tx_record = None
+    """Create the share token on chain; the service owns the DRAFT / DEPLOYING / DEPLOYED transitions.
 
-    try:
-        token = ShareToken.objects.select_related("company").get(uuid=token_uuid)
-
-        if token.status != ShareTokenStatus.DEPLOYING:
-            logger.warning(f"Token {token_uuid} not deployable: {token.status}")
-            return {"success": False, "error": "Token is not in deploying state"}
-
-        company = token.company
-        identifier = company.abn or company.acn
-
-        primary_wallet = company.get_primary_wallet()
-        if not primary_wallet:
-            logger.error(f"No primary ETH wallet for {company.name}")
-            token.status = ShareTokenStatus.DRAFT
-            token.save(update_fields=["status", "updated_at"])
-            return {"success": False, "error": "Company has no operator wallet or verified ETH wallet"}
-
-        issuance = ShareIssuance.objects.create(
-            token=token,
-            recipient_address=primary_wallet.address,
-            recipient_name=f"{company.name} Primary Wallet",
-            amount=str(token.total_supply),
-            issuance_type="initial",
-            reason="Initial supply minted at deployment",
-        )
-
-        tx_record = BlockchainTransaction.objects.create(
-            tx_type=TransactionType.TOKEN_MINT,
-            status=TransactionStatus.PENDING,
-            from_address="",
-            to_address="",
-            function_name="mint",
-            function_args={
-                "recipient": primary_wallet.address,
-                "amount": str(token.total_supply),
-                "tokenName": token.name,
-                "tokenSymbol": token.symbol,
-            },
-            related_model="tokens.ShareIssuance",
-            related_uuid=issuance.uuid,
-        )
-
-        issuance.mark_processing()
-        logger.info(f"Deploying {token.symbol} for {company.name}")
-
-        service = ShareTokenService()
-        result = service.deploy_share_token(
-            name=token.name,
-            symbol=token.symbol,
-            identifier=identifier,
-            authorized_shares=int(token.total_supply),
-            company_wallet_address=primary_wallet.address,
-        )
-
-        contract_address = result["contract_address"]
-        mint_result = result["mint_result"]
-
-        tx_record.to_address = contract_address
-        tx_record.save(update_fields=["to_address", "updated_at"])
-        tx_record.mark_submitted(mint_result["tx_hash"])
-
-        if mint_result.get("block_number") and mint_result.get("gas_used"):
-            tx_record.mark_confirmed(
-                block_number=mint_result["block_number"],
-                block_hash="",
-                gas_used=mint_result["gas_used"],
-            )
-
-        token.mark_deployed(contract_address)
-
-        issuance.mark_completed(
-            tx_hash=mint_result["tx_hash"],
-            block_number=mint_result["block_number"],
-            gas_used=mint_result["gas_used"],
-            transaction=tx_record,
-        )
-
-        logger.info(f"Deployed {token.symbol} at {contract_address}")
-
-        try:
-            from tokens.services import AtomicSwapService
-
-            swap_service = AtomicSwapService()
-            approval_tx = swap_service.approve_share_token(contract_address)
-            if approval_tx:
-                logger.info(f"Auto-approved {token.symbol} for AtomicSwap - tx: {approval_tx}")
-        except Exception as e:
-            logger.warning(f"Could not auto-approve {token.symbol} for AtomicSwap: {e}")
-
-        return {
-            "success": True,
-            "contract_address": contract_address,
-            "mint_tx_hash": mint_result["tx_hash"],
-        }
-
-    except ShareToken.DoesNotExist:
+    A retry after a sent transaction adopts the address the factory already holds for the token's identifier, or
+    waits on the recorded transaction; it never sends a second create and never returns the token to DRAFT.
+    """
+    token = ShareToken.objects.select_related("company").filter(uuid=token_uuid).first()
+    if token is None:
         logger.error(f"Token not found: {token_uuid}")
         return {"success": False, "error": "Token not found"}
+    if token.status != ShareTokenStatus.DEPLOYING:
+        logger.warning(f"Token {token_uuid} not deployable: {token.status}")
+        return {"success": False, "error": "Token is not in deploying state"}
 
-    except Exception as exc:
-        logger.error(f"Deployment failed: {exc}")
-
-        if tx_record:
-            tx_record.mark_failed(str(exc))
-
-        if issuance:
-            issuance.mark_failed(str(exc))
-
-        try:
-            token = ShareToken.objects.get(uuid=token_uuid)
-            token.status = ShareTokenStatus.DRAFT
-            token.save(update_fields=["status", "updated_at"])
-        except Exception:
-            pass
-
-        raise
+    result = ShareTokenService().deploy_token(token)
+    logger.info(f"Deployed {token.symbol} at {result['contract_address']}")
+    return {"success": True, **result}
 
 
+@app.periodic(cron="*/5 * * * *")
 @app.task
-def check_pending_token_deployments():
-    cutoff = timezone.now() - timedelta(minutes=10)
-
+def check_pending_token_deployments(timestamp: int = 0):
+    """Resolve tokens left DEPLOYING by a lost receipt or a crashed task through the factory's identifier lookup."""
     pending = ShareToken.objects.filter(
         status=ShareTokenStatus.DEPLOYING,
-        updated_at__lt=cutoff,
+        updated_at__lt=timezone.now() - PENDING_DEPLOYMENT_AGE,
     ).select_related("company")
 
     service = ShareTokenService()
@@ -149,17 +47,15 @@ def check_pending_token_deployments():
     resolved = 0
 
     for token in pending:
+        checked += 1
         try:
-            identifier = token.company.abn or token.company.acn
-            if identifier:
-                contract_address = service.get_token_by_identifier(identifier)
-                if contract_address:
-                    token.mark_deployed(contract_address)
-                    resolved += 1
-                    logger.info(f"Resolved {token.symbol} at {contract_address}")
-            checked += 1
+            contract_address = service.resolve_pending_deployment(token)
         except Exception as e:
             logger.error(f"Check failed for {token.uuid}: {e}")
+            continue
+        if contract_address:
+            resolved += 1
+            logger.info(f"Resolved {token.symbol} at {contract_address}")
 
     logger.info(f"Pending deployments: checked={checked}, resolved={resolved}")
     return {"checked": checked, "resolved": resolved}

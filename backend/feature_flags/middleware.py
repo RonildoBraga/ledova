@@ -1,4 +1,8 @@
-"""Fail-closed boundary for the experimental trading mutation APIs."""
+"""Fail-closed boundary for the experimental trading mutation APIs.
+
+The whitelist status route is deliberately outside the gate: it is a read-only eligibility check the wallet Send
+flow needs while trading is off.
+"""
 
 from django.db import OperationalError, ProgrammingError
 from django.http import JsonResponse
@@ -10,7 +14,6 @@ TRADING_WRITE_PREFIXES = (
     "/api/v1/trading/wallets/",
     "/api/v1/trading/transfers/",
     "/api/v1/trading/swaps/",
-    "/api/v1/trading/whitelist/",
     "/api/v1/trading/events/",
 )
 

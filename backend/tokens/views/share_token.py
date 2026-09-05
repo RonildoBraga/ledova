@@ -4,8 +4,9 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
 from companies.models import Company
+from integrations.base_chain.exceptions import BaseChainConnectionError
 from shared.views import AuthenticatedModelViewSet
-from tokens.exceptions import InvalidTokenStateException
+from tokens.exceptions import TokenPauseFailedException
 from tokens.filters import ShareTokenFilter
 from tokens.models import ShareIssuance, ShareToken
 from tokens.serializers import (
@@ -63,20 +64,23 @@ class ShareTokenViewSet(AuthenticatedModelViewSet):
         ShareTokenService.start_deployment(token)
         return Response({"message": "Token deployment initiated.", "token": ShareTokenDetailSerializer(token).data})
 
+    @staticmethod
+    def _chain_service() -> ShareTokenService:
+        try:
+            return ShareTokenService()
+        except BaseChainConnectionError as exc:
+            raise TokenPauseFailedException(f"Chain unreachable: {exc}") from exc
+
     @action(detail=True, methods=["post"])
     def pause(self, request, uuid=None):
         token = self.get_object()
-        if token.status != "deployed":
-            raise InvalidTokenStateException("Only deployed tokens can be paused.")
-        token.mark_paused()
+        self._chain_service().pause(token)
         return Response({"message": "Token paused successfully.", "token": ShareTokenDetailSerializer(token).data})
 
     @action(detail=True, methods=["post"])
     def unpause(self, request, uuid=None):
         token = self.get_object()
-        if token.status != "paused":
-            raise InvalidTokenStateException("Only paused tokens can be unpaused.")
-        token.mark_unpaused()
+        self._chain_service().unpause(token)
         return Response({"message": "Token unpaused successfully.", "token": ShareTokenDetailSerializer(token).data})
 
     @action(detail=True, methods=["post"])

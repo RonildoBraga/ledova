@@ -2,6 +2,7 @@ from typing import Optional
 
 from django.conf import settings
 from django.db import transaction
+from web3 import Web3
 
 from blockchain.models import BlockchainTransaction, TransactionStatus
 from integrations.base_chain import get_base_chain_client
@@ -106,7 +107,7 @@ class BaseTokenService:
             if receipt:
                 tx_record.mark_confirmed(
                     block_number=receipt["blockNumber"],
-                    block_hash=receipt["blockHash"].hex(),
+                    block_hash=Web3.to_hex(receipt["blockHash"]),
                     gas_used=receipt["gasUsed"],
                 )
 
@@ -147,7 +148,7 @@ class BaseTokenService:
         if receipt:
             tx_record.mark_confirmed(
                 block_number=receipt["blockNumber"],
-                block_hash=receipt["blockHash"].hex(),
+                block_hash=Web3.to_hex(receipt["blockHash"]),
                 gas_used=receipt["gasUsed"],
             )
 

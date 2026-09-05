@@ -5,6 +5,7 @@ from typing import Optional
 
 from django.conf import settings
 from django.utils import timezone
+from web3 import Web3
 
 from blockchain.models import BlockchainTransaction, TransactionStatus, TransactionType
 from integrations.base_chain import BaseChainClient, get_base_chain_client
@@ -118,7 +119,7 @@ class WhitelistService:
         if receipt:
             tx_record.mark_confirmed(
                 block_number=receipt["blockNumber"],
-                block_hash=receipt["blockHash"].hex(),
+                block_hash=Web3.to_hex(receipt["blockHash"]),
                 gas_used=receipt["gasUsed"],
             )
         logger.info(f"{function_name}({checksum_address}) sent (tx={tx_hash})")

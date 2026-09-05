@@ -78,7 +78,9 @@ class ReviewRequestAdminTest(TestCase):
                 with patch("tokens.admin.review_workflow.execute_review_request_task") as task:
                     executed = self.client.post(url(obj, "execute"))
                 self.assertRedirects(executed, url(obj, "change"), fetch_redirect_response=False)
-                task.defer.assert_called_once_with(model_label=obj._meta.label, request_uuid=str(obj.uuid))
+                task.defer.assert_called_once_with(
+                    model_label=obj._meta.label, request_uuid=str(obj.uuid), executed_by=self.admin.pk
+                )
                 self.assertContains(self.client.get(url(obj, "change")), "execution started for")
 
     def test_reject_needs_a_reason_and_closes_the_request(self):

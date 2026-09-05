@@ -3,6 +3,7 @@ from rest_framework import serializers
 from companies.models import Company, CompanyStatus
 from companies.serializers.document import CompanyDocumentSerializer
 from companies.services.company import register_company
+from wallets.models import Wallet
 
 
 class _CompanyUserProfileSerializer(serializers.Serializer):
@@ -58,6 +59,7 @@ class CompanyDetailSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(read_only=True)
     primary_contact = _CompanyUserProfileSerializer(read_only=True)
     documents = CompanyDocumentSerializer(many=True, read_only=True)
+    operator_wallet = serializers.SlugRelatedField(slug_field="uuid", read_only=True)
 
     class Meta:
         model = Company
@@ -80,6 +82,7 @@ class CompanyDetailSerializer(serializers.ModelSerializer):
             "state",
             "postcode",
             "country",
+            "operator_wallet",
             "submitted_at",
             "review_started_at",
             "approved_at",
@@ -155,6 +158,12 @@ class CompanyRegistrationSerializer(serializers.ModelSerializer):
 
 
 class CompanyUpdateSerializer(serializers.ModelSerializer):
+    """operator_wallet takes the uuid of one of the caller's verified EVM wallets (the deployment chain or Ethereum)."""
+
+    operator_wallet = serializers.SlugRelatedField(
+        slug_field="uuid", queryset=Wallet.objects.none(), required=False, allow_null=True
+    )
+
     class Meta:
         model = Company
         fields = [
@@ -171,7 +180,16 @@ class CompanyUpdateSerializer(serializers.ModelSerializer):
             "phone",
             "description",
             "industry",
+            "operator_wallet",
         ]
+
+    def get_fields(self):
+        fields = super().get_fields()
+        request = self.context.get("request")
+        fields["operator_wallet"].queryset = Wallet.objects.visible_to_user(
+            getattr(request, "user", None)
+        ).verified_evm()
+        return fields
 
     def validate_acn(self, value):
         instance = self.instance

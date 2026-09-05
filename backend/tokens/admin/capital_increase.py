@@ -48,7 +48,4 @@ class CapitalIncreaseAdmin(ReviewWorkflowAdmin):
         ]
 
     def execution_steps(self, obj):
-        return [
-            f"setAuthorizedShares({obj.new_authorized_total}) - Increase the authorized share cap",
-            f"mint(companyWallet, {obj.additional_shares}) - Mint new shares to company wallet",
-        ]
+        return [f"setAuthorizedShares({obj.new_authorized_total}) - Raise the authorized share cap; nothing is minted"]

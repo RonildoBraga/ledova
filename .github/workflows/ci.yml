@@ -85,3 +85,22 @@ jobs:
           POSTGRES_DB: ledova
           POSTGRES_USER: ledova
         run: python manage.py test --settings=ledova_backend.settings.test_postgres --noinput
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.15.1
+          cache: npm
+          cache-dependency-path: contracts/package-lock.json
+      - name: Install contract dependencies
+        working-directory: contracts
+        run: npm ci
+      - name: Real-chain test (Hardhat node, deploy core contracts, tokens.tests.test_chain_integration)
+        working-directory: .
+        run: make chain-test PYTHON=python
+      - name: Real-chain test on PostgreSQL (adds the two-worker capital-increase row-lock case)
+        working-directory: .
+        env:
+          POSTGRES_HOST: 127.0.0.1
+          POSTGRES_PORT: '5432'
+          POSTGRES_DB: ledova
+          POSTGRES_USER: ledova
+        run: make chain-test PYTHON=python CHAIN_TEST_SETTINGS=ledova_backend.settings.test_postgres

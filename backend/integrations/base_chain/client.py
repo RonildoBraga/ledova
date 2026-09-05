@@ -210,7 +210,7 @@ class BaseChainClient:
     def send_raw_transaction(self, signed_tx: bytes) -> str:
         self.assert_expected_chain()
         tx_hash = self.w3.eth.send_raw_transaction(signed_tx)
-        return tx_hash.hex()
+        return Web3.to_hex(tx_hash)
 
     def wait_for_receipt(self, tx_hash: str, timeout: int = 120) -> TxReceipt:
         try:

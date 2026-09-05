@@ -8,6 +8,7 @@ from django.utils.html import format_html
 from companies.exceptions import InvalidStatusTransitionException
 from companies.models import Company, CompanyDocument, CompanyStatus
 from tokens.admin._helpers import action_buttons, status_badge
+from wallets.models import Wallet
 
 STATUS_COLORS = {
     CompanyStatus.DRAFT: "#6c757d",
@@ -248,6 +249,16 @@ class CompanyAdmin(admin.ModelAdmin):
             },
         ),
         (
+            "Token Operations",
+            {
+                "fields": ["operator_wallet"],
+                "description": (
+                    "Issuer wallet recorded on share-token deployments: one of the owner's verified EVM wallets "
+                    "(set it after the company exists, the add form offers none)."
+                ),
+            },
+        ),
+        (
             "Contact Information",
             {
                 "fields": [
@@ -316,6 +327,16 @@ class CompanyAdmin(admin.ModelAdmin):
             ),
         ]
         return custom_urls + super().get_urls()
+
+    def get_form(self, request, obj=None, **kwargs):
+        request._operator_wallet_owner = obj.owner if obj is not None else None
+        return super().get_form(request, obj, **kwargs)
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == "operator_wallet":
+            owner = getattr(request, "_operator_wallet_owner", None)
+            kwargs["queryset"] = Wallet.objects.visible_to_user(owner).verified_evm().select_related("user_account")
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
     def owner_email(self, obj):
         return obj.email

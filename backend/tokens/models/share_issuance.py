@@ -170,9 +170,17 @@ class ShareIssuance(BaseModel):
         self.save(update_fields=update_fields)
 
     def mark_failed(self, error_message: str) -> None:
+        """Failed after or before sending; a recorded tx_hash is kept so a retry can resume on it."""
         self.status = IssuanceStatus.FAILED
         self.error_message = error_message
         self.save(update_fields=["status", "error_message", "updated_at"])
+
+    def mark_reverted(self, error_message: str) -> None:
+        """The recorded mint was mined and reverted: nothing was minted, so the hash is forgotten for a fresh mint."""
+        self.status = IssuanceStatus.FAILED
+        self.error_message = error_message
+        self.tx_hash = None
+        self.save(update_fields=["status", "error_message", "tx_hash", "updated_at"])
 
     def save(self, *args, **kwargs):
         if self.recipient_address:

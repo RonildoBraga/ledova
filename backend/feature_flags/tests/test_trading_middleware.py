@@ -41,12 +41,19 @@ class TradingFeatureFlagMiddlewareTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self.downstream_calls, 1)
 
-    def test_read_only_market_and_unrelated_routes_are_not_gated(self):
-        for path in ("/api/v1/trading/tokens/", "/api/v1/trading/stablecoins/", "/api/v1/companies/"):
+    def test_read_only_market_whitelist_status_and_unrelated_routes_are_not_gated(self):
+        paths = (
+            "/api/v1/trading/tokens/",
+            "/api/v1/trading/stablecoins/",
+            "/api/v1/trading/whitelist/0x0000000000000000000000000000000000000001/status/",
+            "/api/v1/companies/",
+        )
+        for path in paths:
             with self.subTest(path=path):
                 response = self.middleware(self.factory.get(path))
                 self.assertEqual(response.status_code, 200)
-        self.assertEqual(self.downstream_calls, 3)
+        self.assertEqual(self.downstream_calls, 4)
+        self.assertNotIn("/api/v1/trading/whitelist/", TRADING_WRITE_PREFIXES)
 
     def test_database_error_fails_closed(self):
         with patch("feature_flags.middleware.FeatureFlag.objects.filter", side_effect=OperationalError):

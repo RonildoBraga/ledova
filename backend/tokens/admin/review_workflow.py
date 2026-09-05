@@ -180,7 +180,9 @@ class ReviewWorkflowAdmin(admin.ModelAdmin):
         if not obj.can_be_executed:
             return self._refuse(request, obj, "execute")
         if request.method == "POST":
-            execute_review_request_task.defer(model_label=self.opts.label, request_uuid=str(obj.uuid))
+            execute_review_request_task.defer(
+                model_label=self.opts.label, request_uuid=str(obj.uuid), executed_by=request.user.pk
+            )
             messages.info(
                 request,
                 f"{self.label} execution started for {obj.token.symbol}. The task is running in the background.",

@@ -286,7 +286,8 @@ class Company(BaseModel):
         return getattr(self.owner, "userprofile", None)
 
     def get_primary_wallet(self, chain: str | None = None):
+        """The issuer wallet recorded on token deployments: operator_wallet, else the owner's newest verified one."""
         chain = chain or Blockchain.BASE.value
-        if self.operator_wallet and self.operator_wallet.chain == chain:
+        if self.operator_wallet:
             return self.operator_wallet
         return Wallet.objects.visible_to_user(self.owner).for_chain_with_l2_fallback(chain)

@@ -17,7 +17,7 @@
         <strong>Deployment Confirmation</strong>
         <p class="mt-1 mb-0">
             You are about to deploy the <strong>{{ token.name }} ({{ token.symbol }})</strong> token to the blockchain.
-            This action will create a smart contract on the Hyperledger Besu network.
+            This action will create a smart contract on the configured EVM network (a local Hardhat node or Base Sepolia).
         </p>
     </div>
 
@@ -38,7 +38,7 @@
                     <td>{{ token.get_token_type_display }}</td>
                 </tr>
                 <tr>
-                    <td class="label-col">Total Supply</td>
+                    <td class="label-col">Authorized Shares (cap)</td>
                     <td>{{ token.total_supply }}</td>
                 </tr>
                 <tr>
@@ -74,7 +74,7 @@
                     <td>{{ token.company.get_status_display }}</td>
                 </tr>
                 <tr>
-                    <td class="label-col">Company Wallet</td>
+                    <td class="label-col">Issuer Wallet (recorded, receives nothing)</td>
                     <td class="monospace">{{ primary_wallet.address }}</td>
                 </tr>
             </table>
@@ -86,7 +86,9 @@
         <ul>
             <li>This action cannot be undone</li>
             <li>The deployment may take 10-30 seconds to confirm on the blockchain</li>
-            <li>The token will be created with the company as the initial owner</li>
+            <li>The operator key owns the contract; no shares are minted at deployment</li>
+            <li>Shares are issued to whitelisted wallets through issuance requests, up to the authorized cap</li>
+            <li>Transferable and Divisible are stored for display only; the contract has no such flags</li>
         </ul>
     </div>
 
