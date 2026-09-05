@@ -46,6 +46,10 @@ class UserSigninSerializer(serializers.Serializer):
         return _identity(instance)
 
 
+class ResendVerificationSerializer(serializers.Serializer):
+    email = NormalizedEmailField(required=False)
+
+
 class ChangePasswordSerializer(serializers.Serializer):
     current_password = serializers.CharField(
         max_length=255, write_only=True, required=True, style={"input_type": "password"}

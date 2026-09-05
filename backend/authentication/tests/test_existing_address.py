@@ -15,6 +15,7 @@ from authentication.managers.user import (
 )
 from authentication.serializers.user import (
     EmailVerificationSerializer,
+    ResendVerificationSerializer,
     UserSigninSerializer,
     UserSignupSerializer,
 )
@@ -138,6 +139,7 @@ class EmailSerializerBoundaryTests(ExistingAddressTestCase):
                 "password_confirm": self.password,
             },
         )
+        resend = ResendVerificationSerializer(data={"email": "member@example.test\t"})
 
         self.assertFalse(signin.is_valid())
         self.assertEqual(signin.errors, {"email": ["Enter a valid email address."]})
@@ -145,6 +147,9 @@ class EmailSerializerBoundaryTests(ExistingAddressTestCase):
         self.assertEqual(verification.errors, {"email": ["Enter a valid email address."]})
         self.assertFalse(signup.is_valid())
         self.assertEqual(signup.errors, {"email": ["Enter a valid email address."]})
+        self.assertFalse(resend.is_valid())
+        self.assertEqual(resend.errors, {"email": ["Enter a valid email address."]})
+        self.assertTrue(ResendVerificationSerializer(data={}).is_valid())
 
 
 class EmailModelBackendTests(ExistingAddressTestCase):

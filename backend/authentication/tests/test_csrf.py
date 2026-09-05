@@ -128,6 +128,15 @@ class CookieTransportCsrfTest(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
+    def test_transport_header_without_a_bearer_token_does_not_bypass_csrf(self):
+        response = self.cookie_client().post(
+            "/api/change-password/", CHANGE_PASSWORD_BODY, format="json", HTTP_X_AUTH_TRANSPORT="bearer"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(response.json()["detail"].startswith("CSRF Failed"))
+        self.assert_password_unchanged()
+
 
 class BearerBesideCookieTest(APITestCase):
     """React Native's cookie jar replays the access cookie set at sign-in next to the mobile app's
@@ -277,6 +286,16 @@ class RefreshTransportCsrfTest(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertNotEqual(response.json()["refresh"], self.refresh)
+
+    def test_transport_header_does_not_let_the_refresh_cookie_rotate_without_csrf(self):
+        self.client.cookies["refresh"] = self.refresh
+
+        response = self.client.post("/api/token/refresh/", HTTP_X_AUTH_TRANSPORT="bearer")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.json(), {"error": "Refresh token not found."})
+        _, rotated_access, _ = TokenService.rotate(self.refresh)
+        self.assertTrue(rotated_access)
 
     def test_signout_with_bearer_beside_the_refresh_cookie_needs_no_csrf_token(self):
         self.client.cookies["refresh"] = self.refresh

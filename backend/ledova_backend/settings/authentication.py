@@ -24,10 +24,12 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-# Access tokens live 24 hours because neither client refreshes on 401 yet; drop the default to
-# 900 seconds once they do. Refresh tokens live 7 days and rotate on every use.
+# Both tokens default to 7 days. The access token carries its refresh jti (`rjti`) and
+# HybridJWTAuthentication checks that session is live on every request, so a long access lifetime
+# does not weaken revocation: signout, signout-all, a password change and account deletion take
+# effect immediately. The refresh token rotates on every use.
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(seconds=int(os.environ.get("ACCESS_TOKEN_LIFETIME", 86400))),
+    "ACCESS_TOKEN_LIFETIME": timedelta(seconds=int(os.environ.get("ACCESS_TOKEN_LIFETIME", 604800))),
     "REFRESH_TOKEN_LIFETIME": timedelta(seconds=int(os.environ.get("REFRESH_TOKEN_LIFETIME", 604800))),
     "ALGORITHM": "HS256",
     "SIGNING_KEY": SECRET_KEY,

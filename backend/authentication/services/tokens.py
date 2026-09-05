@@ -48,6 +48,9 @@ class TokenService:
         return OutstandingToken.objects.filter(jti=jti, blacklistedtoken__isnull=True).exists()
 
     @staticmethod
-    def revoke_all(user):
+    def revoke_all(user, keep_jti=None):
+        """Every live session of `user` except `keep_jti` (the caller's own session on a password change)."""
         outstanding = OutstandingToken.objects.filter(user=user, blacklistedtoken__isnull=True)
+        if keep_jti:
+            outstanding = outstanding.exclude(jti=keep_jti)
         BlacklistedToken.objects.bulk_create([BlacklistedToken(token=token) for token in outstanding])
