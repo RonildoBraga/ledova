@@ -41,6 +41,7 @@ coverage/
 vendor/
 
 media/
+private-media/
 
 *.css.map
 *.js.map

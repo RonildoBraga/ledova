@@ -1,0 +1,88 @@
+{% extends "admin/base_custom.html" %}
+{% load i18n admin_urls %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_label|capfirst }}</a>
+    &rsaquo; <a href="{% url 'admin:users_investorclassification_changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+    &rsaquo; <a href="{% url 'admin:users_investorclassification_change' classification.pk %}">{{ classification.uuid }}</a>
+    &rsaquo; {{ transition.title }}
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="admin-custom-form">
+    <div class="alert alert-{{ transition.alert }}">
+        <strong>&#9888; {{ transition.heading }}:</strong> {{ intro }}
+    </div>
+
+    <div class="admin-card">
+        <div class="admin-card-header">Claim Details</div>
+        <div class="admin-card-body">
+            <table class="admin-table">
+                <tr>
+                    <td class="label-col">Account</td>
+                    <td><strong>{{ classification.user_account }}</strong></td>
+                </tr>
+                <tr>
+                    <td class="label-col">Category</td>
+                    <td>{{ classification.get_category_display }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Issuer</td>
+                    <td>{{ classification.company|default:"Every offering" }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Status</td>
+                    <td>{{ classification.get_status_display }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Submitted</td>
+                    <td>{{ classification.submitted_at|date:"N j, Y, P"|default:"N/A" }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Declared Basis</td>
+                    <td>{{ classification.declared_basis|default:"-" }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Evidence</td>
+                    <td>
+                        {% if classification.evidence_file %}
+                        <a href="{% url 'admin:users_investorclassification_evidence' classification.uuid %}" target="_blank">Open evidence</a>
+                        {% else %}-{% endif %}
+                    </td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <form method="post" class="admin-form">
+        {% csrf_token %}
+        <fieldset>
+            <legend>{{ transition.legend }}</legend>
+            {% for field in form %}
+            <div class="form-group">
+                <label for="{{ field.id_for_label }}" class="required">{{ field.label }}</label>
+                {{ field }}
+                {% if field.help_text %}
+                <p class="help-text">{{ field.help_text }}</p>
+                {% endif %}
+                {% if field.errors %}
+                <ul class="errorlist">
+                    {% for error in field.errors %}
+                    <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </fieldset>
+
+        <div class="action-row">
+            <button type="submit" class="btn {{ transition.button.1 }}">{{ transition.button.0 }}</button>
+            <a href="{% url 'admin:users_investorclassification_change' classification.pk %}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -22,6 +22,7 @@ import { UserProfileScreen } from '../screens/user-profile';
 import { CompanyStackNavigator } from './CompanyStackNavigator';
 import type { CompanyStackParamList } from './CompanyStackNavigator';
 import { ListingScreen } from '../screens/listing';
+import { InvestorEligibilityScreen } from '../screens/investor-eligibility';
 import { getMainHeaderStyle, MainHeader } from './headers';
 import type { WalletsStackParamList } from './WalletsStackNavigator';
 import type { BuyStackParamList } from './BuyStackNavigator';
@@ -42,6 +43,7 @@ export type BottomTabParamList = {
   Profile: undefined;
   Company: NavigatorScreenParams<CompanyStackParamList>;
   Listing: undefined;
+  InvestorEligibility: undefined;
 };
 
 const Tab = createBottomTabNavigator<BottomTabParamList>();
@@ -220,6 +222,15 @@ export function BottomTabNavigator({ onNotifications, unreadCount }: BottomTabNa
         component={ListingScreen}
         options={{
           title: 'Listing',
+          tabBarItemStyle: { display: 'none' },
+        }}
+      />
+
+      <Tab.Screen
+        name="InvestorEligibility"
+        component={InvestorEligibilityScreen}
+        options={{
+          title: 'Eligibility',
           tabBarItemStyle: { display: 'none' },
         }}
       />

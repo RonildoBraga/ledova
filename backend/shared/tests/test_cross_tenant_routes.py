@@ -90,6 +90,9 @@ ROUTES = (
     Route("get", "/api/notifications/{notification}/"),
     Route("patch", "/api/notifications/{notification}/", {"isRead": True}),
     Route("get", "/api/notification-preferences/{notification_preferences}/"),
+    Route("get", "/api/investor-classifications/{investor_classification}/"),
+    Route("get", "/api/investor-classifications/{investor_classification}/evidence/"),
+    Route("delete", "/api/investor-classifications/{investor_classification}/"),
     Route("patch", "/api/notification-preferences/{notification_preferences}/", {"marketing": True}),
     Route("get", "/api/wallets/{wallet}/"),
     Route(
@@ -215,6 +218,7 @@ LIST_ROUTES = (
     ("/api/favourite-assets/", ("favourite",)),
     ("/api/device-tokens/", ("device_token",)),
     ("/api/notifications/", ("notification",)),
+    ("/api/investor-classifications/", ("investor_classification",)),
     ("/api/wallets/", ("wallet", "spare_wallet")),
     ("/api/wallets/{wallet}/holdings/", ("holding",)),
     ("/api/transactions/", ("transaction",)),
@@ -233,6 +237,10 @@ SINGLETON_ROUTES = (
 )
 
 GLOBAL_ROUTES = ("/api/operator/",)
+
+
+def _body(response):
+    return b"<streamed file>" if response.streaming else response.content
 
 
 def _fill(value, context):
@@ -301,7 +309,7 @@ class CrossTenantRouteMatrixTest(APITestCase):
 
     @staticmethod
     def masked(response, context):
-        text = response.content.decode()
+        text = _body(response).decode()
         for value in context.values():
             text = text.replace(value, "<target>")
         return text
@@ -337,7 +345,7 @@ class CrossTenantRouteMatrixTest(APITestCase):
                             route.prepare(actor)
                         response = self.send(route, actor, own)
                         transaction.set_rollback(True)
-                    self.assertIn(response.status_code, (200, 201, 202, 204), response.content)
+                    self.assertIn(response.status_code, (200, 201, 202, 204), _body(response))
 
     def test_operator_routes_are_staff_only_and_reach_every_tenant(self):
         foreign = route_context(self.other)

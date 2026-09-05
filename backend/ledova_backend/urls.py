@@ -25,6 +25,9 @@ router.register(r"user-profiles", user_views.UserProfileViewSet, basename="user-
 router.register(r"user-preferences", user_views.UserPreferencesViewSet, basename="user-preferences")
 router.register(r"financial-profiles", user_views.FinancialProfileViewSet, basename="financial-profiles")
 router.register(r"user-accounts", user_views.UserAccountViewSet, basename="user-accounts")
+router.register(
+    r"investor-classifications", user_views.InvestorClassificationViewSet, basename="investor-classifications"
+)
 router.register(r"device-tokens", user_views.DeviceTokenViewSet, basename="device-tokens")
 router.register(
     r"notification-preferences", user_views.NotificationPreferencesViewSet, basename="notification-preferences"

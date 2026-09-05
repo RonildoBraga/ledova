@@ -4,6 +4,7 @@ import type { UpdateUserProfile } from '@ledova/shared';
 import { apiClient } from '../../../services/apiClient';
 
 export const usePreScreening = () => {
+  const [acknowledgedWholesaleOnly, setAcknowledgedWholesaleOnly] = useState(false);
   const [form, setForm] = useState<UpdateUserProfile>({
     confirmedOver18: false,
     confirmedAustralianResident: false,
@@ -56,7 +57,12 @@ export const usePreScreening = () => {
   };
 
   const validateForm = (): boolean => {
-    if (!form.confirmedOver18 || !form.confirmedAustralianResident || !form.confirmedIndividualAccount) {
+    if (
+      !form.confirmedOver18 ||
+      !form.confirmedAustralianResident ||
+      !form.confirmedIndividualAccount ||
+      !acknowledgedWholesaleOnly
+    ) {
       setGeneralError('You must confirm all requirements to continue.');
       return false;
     }
@@ -100,10 +106,21 @@ export const usePreScreening = () => {
     loadUserProfile();
   };
 
-  const isFormValid = form.confirmedOver18 && form.confirmedAustralianResident && form.confirmedIndividualAccount;
+  const isFormValid =
+    form.confirmedOver18 &&
+    form.confirmedAustralianResident &&
+    form.confirmedIndividualAccount &&
+    acknowledgedWholesaleOnly;
+
+  const toggleWholesaleOnly = () => {
+    setAcknowledgedWholesaleOnly((previous) => !previous);
+    setGeneralError('');
+  };
 
   return {
     form,
+    acknowledgedWholesaleOnly,
+    toggleWholesaleOnly,
     generalError,
     isLoading,
     isSubmitting,

@@ -43,8 +43,9 @@ Complete.
 
 ## Phase 1 — Investor directory and primary offering
 
-Not started. No investor directory and no primary offering exist in the code
-today; the only directory that does exist is the market one, `GET
+Under way. The investor classification and the one eligibility predicate are
+shipped. No investor directory and no primary offering exist in the code yet;
+the only directory that does exist is the market one, `GET
 /api/v1/trading/tokens/`, which lists deployed tokens.
 
 - An investor directory: who the operator and issuers can see, and on what
@@ -55,9 +56,54 @@ today; the only directory that does exist is the market one, `GET
   tokens, not of investors; whether it stays unscoped is an open Phase 1
   decision (see [docs/ARCHITECTURE.md](ARCHITECTURE.md#tenancy-model)).
 - An `InvestorClassification` model: the recorded basis on which an investor
-  qualifies as wholesale or sophisticated, its evidence and its expiry. Phase 2
-  gates read it; Phase 1 has to be able to record it before the first offering
-  can be made.
+  qualifies as wholesale or sophisticated, its evidence and its expiry. Shipped.
+  Four categories only — `product_value` (s708(8)(a)), `accountant_certificate`
+  (s708(8)(c)), `professional_investor` (s708(11) / s761G(7)(d)) and
+  `associated_person` (s708(12)). The experienced-investor category
+  (s708(10) / s761GA) is deliberately absent: it is the only one that turns on
+  the operator holding an AFSL, and there is no evidence this deployment does.
+  Adding it later is one `TextChoices` row, one migration and one form branch.
+  Expiry is derived from `expires_at`, so there is no stored expired status and
+  no nightly sweep. `users.services.eligibility` is the one predicate, with two
+  subjects. `investor_eligibility(user)` answers a question about a person and
+  is what the directory asks: may this user see offerings at all. Everything
+  that binds a specific account — a subscription, a whitelist entry — asks
+  `account_eligibility(account)` / `require_subscription_eligibility(account,
+  company, amount)` instead, because a user with two investor accounts earns a
+  `True` on one of them and must not spend it on the other. The predicate never
+  infers the account from the user for those callers; the caller names it.
+- An account may hold more than one live claim, so eligibility asks whether
+  *any* live claim supports the offer, not what the newest one says. A live
+  `professional_investor` claim qualifies a AUD 1,000 subscription even when a
+  `product_value` claim was recorded more recently, and the AUD 500,000 floor
+  still refuses an account whose only live claim is `product_value`. Where no
+  amount is in play the newest live claim is the one reported.
+- Classification evidence is not served from `MEDIA_URL`, and the bytes do not
+  live under `MEDIA_ROOT` at all. On the local backend they are written to
+  `PRIVATE_MEDIA_ROOT` (`backend/private-media`) through
+  `shared.storage.PrivateMediaStorage`, which has no `base_url`, so
+  `evidence_file.url` raises rather than handing anyone a path; on S3 and GCS
+  the same private, signed bucket configuration as every other upload. Hiding
+  the link was not enough: `django.conf.urls.static` serves the whole of
+  `MEDIA_ROOT` to anonymous callers whenever `DEBUG` is true, which is the
+  configuration `docker-compose.yml` and `backend/.env.example` ship, so a
+  net-asset statement under `MEDIA_ROOT` is one copied URL away from the public.
+  Reading it goes through the storage backend's `open()` in both places — the
+  submitting account over the API scoped by `visible_to_user`, staff through the
+  admin — so local disk and S3 behave identically and no presign is needed. The
+  admin change form shows only that streaming link; the raw `FileField` is not
+  in `fieldsets`, and putting it in `readonly_fields` would not do, because
+  Django renders a readonly `FileField` as an `<a href>` on `value.url`.
+- `CompanyDocument.get_file_url` still returns a plain `MEDIA_URL` path, so on a
+  deployment running `DEBUG=true` every uploaded ASIC extract and constitution
+  is readable with no session. Lower sensitivity than net-asset evidence and
+  left standing because repointing it breaks the mobile client, which
+  authenticates with a bearer token an `<img>` cannot send — but it is an
+  exposure, not merely a rough edge, and closing it means giving the clients a
+  streaming endpoint the way classification evidence has one.
+- There is no retention or auto-deletion rule for rejected and expired
+  classifications. Evidence is kept until someone decides the rule. Account
+  deletion behaviour is unchanged. Flagged for the owner and counsel.
 - A primary offering: a company publishes an offer, an investor subscribes, the
   operator records the payment (AUD bank transfer against the reference prefix,
   or a supported stablecoin to the receiving wallet) and allots the shares.
@@ -68,13 +114,22 @@ today; the only directory that does exist is the market one, `GET
 
 ## Phase 2 — Eligibility and the register
 
-Not started.
+Not started, except that the Phase 1 predicate already reads the investor
+switch.
 
-- Turn `investor_kyc_required` and `issuer_kyc_required` from stored
-  configuration into actual gates. Today nothing reads them. The gate is
-  eligibility, not identity alone: it refuses anyone without a current
-  `InvestorClassification` recorded in Phase 1, because the wholesale and
-  sophisticated carve-outs are what the first offerings rely on.
+- `investor_kyc_required` is now read, by
+  `users.services.eligibility.investor_eligibility`: while it is on, an account
+  still `pending` is refused and every holder on the account must be
+  `is_id_verified`; while it is off, `pending` passes, because
+  `IdentityVerificationService._process_verified_customer` is the only writer of
+  `active` and it runs only on a green KYC result. `issuer_kyc_required` is
+  still read by nothing.
+- The eligibility predicate has one production reader so far, the whitelist
+  admin's read-only column and add-form warning. The directory and the
+  subscription flow are the enforcing callers and neither exists yet. When the
+  directory lands, a refusal must narrow the queryset to
+  `ShareToken.objects.none()` and answer 404 — never 403, which would tell an
+  ineligible caller that the offering exists.
 - A share register that is the authoritative record, reconciled against the
   chain rather than derived from it ad hoc.
 - Director authority, ownership immutability, ACN and ABN validation and

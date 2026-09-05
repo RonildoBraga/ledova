@@ -4,10 +4,12 @@ from .base import (
     AuthenticatedModelViewSet,
     AuthenticatedReadOnlyViewSet,
 )
+from .files import stream_stored_file
 
 __all__ = [
     "AuthenticatedGenericViewSet",
     "AuthenticatedListViewSet",
     "AuthenticatedModelViewSet",
     "AuthenticatedReadOnlyViewSet",
+    "stream_stored_file",
 ]

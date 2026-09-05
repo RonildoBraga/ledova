@@ -45,7 +45,7 @@ package of per-concern modules re-exported by `settings/__init__.py`.
 | --- | --- |
 | `operators` | The single `Operator` configuration row and `GET /api/operator/` |
 | `authentication` | `CustomUser`, the `AuthViewSet`, JWT sessions, email verification codes |
-| `users` | Profiles, accounts, preferences, financial profiles, device tokens, notifications, favourite assets |
+| `users` | Profiles, accounts, preferences, financial profiles, device tokens, notifications, favourite assets, `InvestorClassification` and the investor-eligibility predicate |
 | `companies` | `Company`, its application lifecycle, and company `Document` records |
 | `tokens` | `ShareToken`, `ShareIssuanceRequest`, `ShareIssuance`, `CapitalIncreaseRequest`, `MintRequest`, `YieldToken`, and the trading models |
 | `whitelist` | `WhitelistEntry` and the on-chain allowlist sync |

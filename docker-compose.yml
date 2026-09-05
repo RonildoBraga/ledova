@@ -62,6 +62,7 @@ services:
       - "127.0.0.1:8000:8000"
     volumes:
       - media_data:/usr/src/app/media
+      - private_media_data:/usr/src/app/private-media
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -81,6 +82,7 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - media_data:/usr/src/app/media
+      - private_media_data:/usr/src/app/private-media
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -109,5 +111,6 @@ services:
 
 volumes:
   media_data:
+  private_media_data:
   postgres_data:
   redis_data:

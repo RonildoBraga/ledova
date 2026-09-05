@@ -53,6 +53,12 @@ export const IDENTITY_VERIFICATION_ENDPOINTS = {
   TOKEN: '/api/users/identity-verification/token/',
   STATUS: '/api/users/identity-verification/status/',
 } as const;
+export const INVESTOR_CLASSIFICATION_ENDPOINTS = {
+  BASE: '/api/investor-classifications/',
+  DETAIL: (uuid: string) => `/api/investor-classifications/${uuid}/` as const,
+  EVIDENCE: (uuid: string) => `/api/investor-classifications/${uuid}/evidence/` as const,
+  ELIGIBILITY: '/api/investor-classifications/eligibility/',
+} as const;
 export const FAVOURITE_ASSET_ENDPOINTS = {
   BASE: '/api/favourite-assets/',
   DETAIL: (uuid: string) => `/api/favourite-assets/${uuid}/` as const,

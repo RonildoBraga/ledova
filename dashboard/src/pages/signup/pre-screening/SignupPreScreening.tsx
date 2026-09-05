@@ -10,8 +10,18 @@ const ICON_MD = DESIGN_TOKENS.icon.sizes.md;
 
 export function SignupPreScreening() {
   const navigate = useNavigate();
-  const { form, generalError, isLoading, isSubmitting, isFormValid, setFieldValue, handleSubmit, retryLoad } =
-    useSignupPreScreening();
+  const {
+    form,
+    acknowledgedWholesaleOnly,
+    toggleWholesaleOnly,
+    generalError,
+    isLoading,
+    isSubmitting,
+    isFormValid,
+    setFieldValue,
+    handleSubmit,
+    retryLoad,
+  } = useSignupPreScreening();
 
   const handleContinue = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,6 +138,27 @@ export function SignupPreScreening() {
               <div className="ml-3 flex-1">
                 <p className="text-base font-medium text-text-primary mb-1">I am acting on my own behalf</p>
                 <p className="text-xs text-text-subtle">Not for a business, trust, or on behalf of someone else</p>
+              </div>
+            </label>
+
+            <label className="flex items-start cursor-pointer" onClick={() => !isSubmitting && toggleWholesaleOnly()}>
+              <div className="flex items-center h-6">
+                <div
+                  className={`w-6 h-6 rounded-sm border-2 flex items-center justify-center transition-colors ${
+                    acknowledgedWholesaleOnly ? 'bg-brand-mid border-brand-mid' : 'bg-surface-tertiary border-border'
+                  }`}
+                >
+                  {acknowledgedWholesaleOnly && <CheckCircleIcon size={ICON_MD} className="text-white" />}
+                </div>
+              </div>
+              <div className="ml-3 flex-1">
+                <p className="text-base font-medium text-text-primary mb-1">
+                  I understand share offerings here are wholesale only
+                </p>
+                <p className="text-xs text-text-subtle">
+                  Offers are made without a disclosure document to wholesale and sophisticated investors. You will need
+                  to evidence that status before you can subscribe.
+                </p>
               </div>
             </label>
 

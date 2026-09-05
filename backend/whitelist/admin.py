@@ -7,11 +7,30 @@ from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 from web3 import Web3
 
+from users.services.eligibility import account_eligibility
 from wallets.models import Wallet
 from whitelist.models import WhitelistEntry, WhitelistStatus
 
 
+def entry_eligibility(wallet):
+    if wallet is None:
+        return None
+    return account_eligibility(wallet.user_account)
+
+
+def eligibility_warning(wallet):
+    outcome = entry_eligibility(wallet)
+    if outcome is None or outcome.is_eligible:
+        return ""
+    return (
+        "This wallet's account is not an eligible wholesale investor "
+        f"({', '.join(outcome.reasons)}). Whitelisting the address does not make it one."
+    )
+
+
 class WhitelistEntryAddForm(forms.ModelForm):
+
+    eligibility_warning = ""
 
     wallet_address = forms.CharField(
         max_length=100,
@@ -45,6 +64,7 @@ class WhitelistEntryAddForm(forms.ModelForm):
                 f"Wallet '{cleaned['wallet_address']}' not found. Give the entry a label to whitelist it as a "
                 "treasury or custodian address.",
             )
+        self.eligibility_warning = eligibility_warning(getattr(self, "_wallet", None))
         return cleaned
 
     def save(self, commit=True):
@@ -61,6 +81,7 @@ class WhitelistEntryAdmin(admin.ModelAdmin):
     list_display = [
         "short_address",
         "wallet_owner",
+        "investor_eligibility",
         "label",
         "status",
         "is_whitelisted",
@@ -146,6 +167,21 @@ class WhitelistEntryAdmin(admin.ModelAdmin):
 
     wallet_owner.short_description = "Owner"
     wallet_owner.admin_order_field = "wallet__user_account__uuid"
+
+    @admin.display(description="Investor Eligibility")
+    def investor_eligibility(self, obj):
+        outcome = entry_eligibility(obj.wallet if obj.wallet_id else None)
+        if outcome is None:
+            return "-"
+        if outcome.is_eligible:
+            return format_html('<span style="color: #28a745;">Eligible</span>')
+        return format_html('<span style="color: #dc3545;">{}</span>', ", ".join(outcome.reasons))
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        warning = getattr(form, "eligibility_warning", "")
+        if warning:
+            messages.warning(request, warning)
 
     def get_urls(self):
         urls = super().get_urls()

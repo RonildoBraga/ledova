@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 from django.contrib.auth import get_user_model
+from django.core.files.base import ContentFile
 from django.db import models
 from django.utils import timezone
 
@@ -25,6 +26,8 @@ from users.models import (
     DeviceToken,
     FavouriteAsset,
     FinancialProfile,
+    InvestorCategory,
+    InvestorClassification,
     Notification,
     NotificationPreferences,
     UserAccount,
@@ -134,6 +137,19 @@ def make_tenant(label, *, staff=False, superuser=False):
     device_token = DeviceToken.objects.create(user=user, push_token=f"ExponentPushToken[{label}]", device_type="ios")
     notification = Notification.objects.create(user=user, title=f"For {label}", body="Body")
     notification_preferences = NotificationPreferences.objects.create(user_profile=profile)
+    investor_classification = InvestorClassification.objects.create(
+        user_account=account,
+        category=InvestorCategory.PROFESSIONAL_INVESTOR,
+        declaration_accepted=True,
+        declaration_text="Declared",
+        declared_basis=f"{label} basis",
+        evidence_file_size=len(label),
+        evidence_mime_type="application/pdf",
+        submitted_at=timezone.now(),
+    )
+    investor_classification.evidence_file.save(
+        f"{label}-evidence.pdf", ContentFile(f"evidence for {label}".encode()), save=True
+    )
 
     company = Company.objects.create(
         owner=user,
@@ -214,6 +230,7 @@ def make_tenant(label, *, staff=False, superuser=False):
         device_token=device_token,
         notification=notification,
         notification_preferences=notification_preferences,
+        investor_classification=investor_classification,
         company=company,
         company_document=company_document,
         token=token,

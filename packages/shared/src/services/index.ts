@@ -87,6 +87,12 @@ export {
   createCapitalIncrease,
   submitCapitalIncrease,
 } from './company-tokens';
+export {
+  getInvestorClassifications,
+  getInvestorEligibility,
+  submitInvestorClassification,
+  deleteInvestorClassification,
+} from './investorClassifications';
 export { getFeatureFlags } from './featureFlags';
 export { getOperator } from './operator';
 export { getExchangeRate } from './exchangeRates';
