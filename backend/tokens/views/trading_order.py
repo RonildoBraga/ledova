@@ -1,5 +1,3 @@
-import logging
-
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, ValidationError
@@ -7,7 +5,7 @@ from rest_framework.response import Response
 
 from shared.utils import get_client_ip
 from shared.views import AuthenticatedReadOnlyViewSet
-from tokens.exceptions import SwapExpiredException, TokenBalanceRetrievalException
+from tokens.exceptions import SwapExpiredException
 from tokens.filters import TransferOrderFilter
 from tokens.models import SwapOrder, TransferOrder
 from tokens.serializers import (
@@ -28,8 +26,6 @@ from tokens.services import (
     TransferService,
 )
 from tokens.trading_wallet_access import resolve_verified_evm_wallets
-
-logger = logging.getLogger(__name__)
 
 
 class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
@@ -166,13 +162,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
     def swap_approval_status(self, request, uuid=None):
         atomic_swap_service, swap_order, user_role, _has_signed = self._get_authorized_swap_context(request)
 
-        try:
-            allowances = atomic_swap_service.check_swap_allowances(swap_order)
-        except Exception as e:
-            logger.error(f"Failed to check allowances: {e}")
-            raise TokenBalanceRetrievalException()
-
-        user_allowance = allowances[user_role]
+        user_allowance = atomic_swap_service.check_swap_allowances(swap_order)[user_role]
 
         return Response(
             {
@@ -191,38 +181,32 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
     def swap_approval_data(self, request, uuid=None):
         atomic_swap_service, swap_order, user_role, _has_signed = self._get_authorized_swap_context(request)
 
-        try:
-            allowances = atomic_swap_service.check_swap_allowances(swap_order)
-            user_allowance = allowances[user_role]
+        user_allowance = atomic_swap_service.check_swap_allowances(swap_order)[user_role]
 
-            if user_allowance["has_sufficient_allowance"]:
-                return Response(
-                    {
-                        "needs_approval": False,
-                        "message": "User already has sufficient allowance",
-                        "current_allowance": user_allowance["current_allowance"],
-                        "required_amount": user_allowance["required_amount"],
-                    }
-                )
-
-            approval_data = atomic_swap_service.get_approval_transaction_data(
-                swap_order=swap_order,
-                user_role=user_role,
-                unlimited=True,
-            )
-
+        if user_allowance["has_sufficient_allowance"]:
             return Response(
                 {
-                    "needs_approval": True,
-                    "swap_uuid": str(swap_order.uuid),
-                    "user_role": user_role,
-                    **approval_data,
+                    "needs_approval": False,
+                    "message": "User already has sufficient allowance",
+                    "current_allowance": user_allowance["current_allowance"],
+                    "required_amount": user_allowance["required_amount"],
                 }
             )
 
-        except Exception as e:
-            logger.error(f"Failed to get approval data: {e}")
-            raise TokenBalanceRetrievalException()
+        approval_data = atomic_swap_service.get_approval_transaction_data(
+            swap_order=swap_order,
+            user_role=user_role,
+            unlimited=True,
+        )
+
+        return Response(
+            {
+                "needs_approval": True,
+                "swap_uuid": str(swap_order.uuid),
+                "user_role": user_role,
+                **approval_data,
+            }
+        )
 
     def _get_authorized_swap_context(self, request):
         wallet_address = request.query_params.get("wallet_address")
@@ -288,8 +272,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
         message = serializer.validated_data["message"]
         signature = serializer.validated_data["signature"]
 
-        modification_service = OrderModificationService()
-        modified_order, changes = modification_service.apply_modification(
+        modified_order, changes = OrderModificationService().apply_modification(
             order=order,
             message=message,
             signature=signature,
@@ -297,15 +280,11 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
             user_agent=request.META.get("HTTP_USER_AGENT", ""),
         )
 
-        match_result = modification_service.check_for_matches_after_modification(modified_order)
-
         return Response(
             {
                 "order": TransferOrderDetailSerializer(modified_order).data,
                 "modification_count": modified_order.modification_count,
                 "changes": changes,
-                "match_found": match_result is not None,
-                "match_details": match_result,
             }
         )
 

@@ -1,6 +1,13 @@
 from rest_framework import serializers
 
-from tokens.models import ShareIssuanceRequest
+from tokens.models import IssuanceType, ShareIssuanceRequest
+
+
+class ShareIssuanceCreateSerializer(serializers.Serializer):
+    recipient = serializers.CharField(trim_whitespace=True)
+    amount = serializers.IntegerField(min_value=1)
+    reason = serializers.CharField(required=False, allow_blank=True, default="")
+    issuance_type = serializers.ChoiceField(choices=IssuanceType.choices, default=IssuanceType.ADDITIONAL)
 
 
 class ShareIssuanceRequestSerializer(serializers.ModelSerializer):

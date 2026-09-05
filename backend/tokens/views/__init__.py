@@ -5,7 +5,6 @@ from tokens.views.trading_order import TradingOrderViewSet
 from tokens.views.trading_token import TradingStablecoinViewSet, TradingTokenViewSet
 from tokens.views.trading_transfer import TradingTransferViewSet
 from tokens.views.trading_wallet import TradingWalletViewSet
-from tokens.views.transaction import TransactionHistoryViewSet
 
 __all__ = [
     "CapitalIncreaseViewSet",
@@ -16,5 +15,4 @@ __all__ = [
     "TradingTokenViewSet",
     "TradingTransferViewSet",
     "TradingWalletViewSet",
-    "TransactionHistoryViewSet",
 ]

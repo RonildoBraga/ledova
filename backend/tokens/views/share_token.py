@@ -9,6 +9,7 @@ from tokens.exceptions import InvalidTokenStateException
 from tokens.filters import ShareTokenFilter
 from tokens.models import ShareIssuance, ShareToken
 from tokens.serializers import (
+    ShareIssuanceCreateSerializer,
     ShareIssuanceListSerializer,
     ShareIssuanceRequestSerializer,
     ShareTokenCreateSerializer,
@@ -81,13 +82,10 @@ class ShareTokenViewSet(AuthenticatedModelViewSet):
     @action(detail=True, methods=["post"])
     def issue(self, request, uuid=None):
         token = self.get_object()
+        serializer = ShareIssuanceCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
         issuance_request = ShareTokenService().create_issuance_request(
-            token=token,
-            recipient=request.data.get("recipient", "").strip(),
-            amount=int(request.data.get("amount", 0)),
-            user=request.user,
-            reason=request.data.get("reason", ""),
-            issuance_type=request.data.get("issuance_type", "additional"),
+            token=token, user=request.user, **serializer.validated_data
         )
         return Response(
             {
