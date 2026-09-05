@@ -7,6 +7,17 @@ on:
     branches: [main]
 
 jobs:
+  comments:
+    name: No comments or docstrings in source
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Comment and docstring gate
+        run: python scripts/check-comments.py
+
   javascript:
     name: Build & test (JS workspaces + contracts)
     runs-on: ubuntu-latest

@@ -47,7 +47,7 @@ not a fork.
 | `marketing/` | Static project site |
 | `packages/` | `@ledova/shared`, the TypeScript constants, types, services and utilities both clients use, and `packages/scripts/` which generates the CSS design tokens |
 | `docs/` | Architecture, operations and roadmap |
-| `scripts/` | Local environment bootstrapper |
+| `scripts/` | Local environment bootstrapper and the comment gate |
 
 ## Quick start
 
@@ -95,7 +95,8 @@ Common Makefile targets, from the repository root:
 | `make install` | `npm ci` for the root workspace, `contracts`, `marketing` and `mobile` |
 | `make install-backend` | Install the backend development dependencies |
 | `make build` | Build the dashboard, the marketing site and the contracts |
-| `make check` | Install the backend development dependencies (`requirements-dev.txt`), then type-check every workspace and run Django's `manage.py check` |
+| `make check` | Run `check-comments`, install the backend development dependencies (`requirements-dev.txt`), then type-check every workspace and run Django's `manage.py check` |
+| `make check-comments` | Fail on any comment or docstring in the source trees that carry none |
 | `make test` | Workspace and contract tests |
 | `make chain-test` | The real-chain backend test against a Hardhat node |
 | `make generate-tokens` | Regenerate the CSS design tokens from `packages/shared` |

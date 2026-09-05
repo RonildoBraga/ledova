@@ -4,7 +4,7 @@
 NPM ?= npm
 PYTHON ?= python3
 
-.PHONY: help install install-backend init-local check-local-env build generate-tokens check test \
+.PHONY: help install install-backend init-local check-local-env build generate-tokens check check-comments test \
 	dev-up dev-down dev-logs contracts-compile contracts-test contracts-deploy-local \
 	contracts-deploy-testnet chain-test
 
@@ -24,6 +24,7 @@ help:
 	@echo "  make build                    Build dashboard, marketing, and contracts"
 	@echo "  make generate-tokens          Regenerate the CSS design tokens from packages/shared"
 	@echo "  make check                    Run static checks, including mobile and Django"
+	@echo "  make check-comments           Fail on any comment or docstring in source"
 	@echo "  make test                     Run workspace and contract tests"
 	@echo "  make dev-up                   Start the local Docker Compose stack"
 	@echo "  make dev-down                 Stop the local Docker Compose stack"
@@ -55,11 +56,14 @@ build:
 generate-tokens:
 	$(NPM) exec -- tsx packages/scripts/generate-css-tokens.mjs
 
-check: install-backend
+check: check-comments install-backend
 	$(NPM) run typecheck
 	$(NPM) --prefix marketing run type-check
 	$(NPM) --prefix mobile run type-check
 	cd backend && SECRET_KEY="$$( $(PYTHON) -c 'import secrets; print(secrets.token_urlsafe(32))')" STORAGE_BACKEND=local $(PYTHON) manage.py check
+
+check-comments:
+	$(PYTHON) scripts/check-comments.py
 
 test:
 	$(NPM) test

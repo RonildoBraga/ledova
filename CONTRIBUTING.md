@@ -57,8 +57,11 @@ Local compilation and the contract tests need no credentials.
    [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#coding-rules). The one that
    surprises people most: **source carries no comments and no docstrings**. Only
    functional directives the tooling reads (`# noqa`, `eslint-disable`,
-   `// SPDX-License-Identifier` and the rest of the list) are allowed.
-   Configuration and documentation files keep their comments.
+   `// SPDX-License-Identifier` and the rest of the list) are allowed, and that
+   list is closed. There is no "unless it is really needed" exception: if a line
+   seems to need explaining, rename it or add a test. `make check-comments`
+   fails on anything else, so run it before you push. Configuration and
+   documentation files keep their comments.
 5. Write a clear pull request description: what changed, why, and how you
    verified it. Reference the issue it addresses (`Closes #12`).
 
@@ -69,6 +72,7 @@ exceptions are noted below the table.
 
 | Area | Command |
 | --- | --- |
+| Comments and docstrings | `make check-comments` from the root (no dependencies needed) |
 | Everything JavaScript | `make build`, `make check`, `make test` from the root |
 | Design tokens | `make generate-tokens`, then confirm `dashboard/src/styles/tokens.css` and `marketing/src/tokens.css` are unchanged |
 | Backend | from `backend/`: `make lint` (black, isort, flake8), `make check`, `make test` |
@@ -82,7 +86,9 @@ CI's `make test` runs `npm test` and `npm --prefix contracts test` only; root
 `npm run lint` is not a gate either.
 
 CI additionally runs the whole Django suite on PostgreSQL, the SQLite migration
-tests, and `make chain-test` twice, the second time on PostgreSQL.
+tests, and `make chain-test` twice, the second time on PostgreSQL. The comment
+gate is its own CI job, running `python scripts/check-comments.py` directly, so
+a stray comment fails the pipeline without waiting for anything to be built.
 
 ## Reporting security issues
 

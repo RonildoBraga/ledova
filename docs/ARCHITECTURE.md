@@ -15,7 +15,7 @@ models, and the coding rules the repository enforces.
 | `packages/shared/` | `@ledova/shared`: TypeScript constants, types, API services, utilities used by both clients |
 | `packages/scripts/` | `generate-css-tokens.mjs`, the CSS design-token generator |
 | `marketing/` | Static React + Vite public site |
-| `scripts/` | `init-local-env.py`, the local environment bootstrapper |
+| `scripts/` | `init-local-env.py`, the local environment bootstrapper, and `check-comments.py`, the comment gate |
 
 ## Contracts
 
@@ -218,7 +218,13 @@ the ORM, not in PostgreSQL: row-level security is not planned.
 
 ## Coding rules
 
-These are enforced by review, by CI lint, or by both.
+These are held by review, with two exceptions that fail a build on their own:
+the comment rule, through `make check-comments`, and the "one migration per
+model change" half of the migrations rule, through CI's `makemigrations --check
+--dry-run`. The generated design tokens are gated too, by the `git diff
+--exit-code` step, though that rule is stated under [Clients and the shared
+package](#clients-and-the-shared-package). For every other rule here, a green
+pipeline means nobody checked.
 
 - No Django signals. A side effect is an explicit call in the service (or in
   `perform_create`) that creates the row.
@@ -236,22 +242,29 @@ These are enforced by review, by CI lint, or by both.
 - Constants: `TextChoices` next to the model, numeric thresholds as module
   constants in the app's `constants.py`.
 - **No comments and no docstrings in source.** Names and tests carry the
-  meaning; if a line needs a comment, rename it or add a test. The rule covers
-  the trees the sweep took: every `.py` under `backend/`, `dashboard/src`,
-  `mobile/src` and the `mobile/` root `.ts`/`.js` config files,
-  `packages/shared`, `packages/scripts`, `marketing/src`, `contracts/contracts`,
-  `contracts/scripts` and `contracts/test`. The root `scripts/` bootstrapper is
-  outside those trees and still carries a module docstring. The only comment
+  meaning. There is no "unless it is really needed" clause: wanting to explain a
+  line is the signal to rename the thing or add a test, never a licence to
+  comment it. `make check-comments` enforces this, and
+  [the gate](#the-comment-gate) below is the authority on what it covers. The
+  rule covers `backend/`, `dashboard/src`, `mobile/src` and the `mobile/` root
+  `.ts`/`.js` config files, `packages/shared`, `packages/scripts`,
+  `marketing/src`, `contracts/contracts`, `contracts/scripts` and
+  `contracts/test`, each by the extensions the gate lists. The root `scripts/`
+  tree is outside them: both files there carry a module docstring. The only comment
   lines permitted are functional directives the tooling reads: `# noqa`,
   `# type:`, `# pragma`, `# fmt:`, `# isort` and the shebang/coding lines in
   Python; `eslint-disable`/`eslint-enable`, `@ts-ignore`/`@ts-expect-error`/
   `@ts-nocheck`, `prettier-ignore`, `/// <reference`,
   `@vitest-environment`/`@jest-environment`, `istanbul`/`c8`/`v8` coverage
   pragmas, `/* global */` and `biome-ignore` in TypeScript and JavaScript; and
-  `// SPDX-License-Identifier` in Solidity. No section banners, no Args/Returns
-  blocks, no `help_text` that restates a field name. Configuration and
-  documentation files (`.env.example`, YAML, Makefiles, Dockerfiles, Markdown)
-  are documentation and keep their comments.
+  `// SPDX-License-Identifier` in Solidity. That list is closed: a directive not
+  on it is a comment, however useful it looks. No section banners, no
+  Args/Returns blocks, no `help_text` that restates a field name, and no note
+  explaining a swallowed error — `no-empty` carries `allowEmptyCatch: true` in
+  the dashboard, mobile and `packages/shared` ESLint configs precisely so an
+  ignored `catch` can stay empty. Configuration and documentation files
+  (`.env.example`, YAML, Makefiles, Dockerfiles, Markdown) are documentation and
+  keep their comments.
 - Tests: `APITestCase` under `<app>/tests/`, superusers via `create_superuser`.
   `make test` runs on SQLite; CI also runs the migration-stage tests and the
   whole suite on PostgreSQL.
@@ -273,6 +286,40 @@ These are enforced by review, by CI lint, or by both.
 - The dashboard, the mobile app and `packages/shared` are first-class clients:
   every response key, status code and URL they read is a contract the backend
   keeps.
+
+[CONTRIBUTING.md](../CONTRIBUTING.md#gates) lists the commands that gate a pull
+request, and which of them CI does not run for you.
+
+### The comment gate
+
+`scripts/check-comments.py` is the mechanical half of the no-comments rule.
+`make check-comments` runs it, `make check` includes it, and CI runs it as its
+own job. It needs no dependencies and no installed environment: Python 3 and a
+checkout are enough.
+
+It parses rather than greps. A `//` inside a URL string, a regex literal like
+`/^[mM]\//`, and a URL or an apostrophe in JSX text are not comments, while a
+`/* ... */` inside a `${...}` substitution or a `{...}` JSX expression is one.
+`.tsx` and `.jsx` are scanned with a JSX mode, so a closing tag does not hide
+the rest of its line. Python goes through `tokenize` for comments and `ast` for
+docstrings, which also catches a bare string statement sitting where a docstring
+would.
+
+What it covers, by extension: `.py` and `.css` under `backend/`; `.ts`, `.tsx`,
+`.js`, `.jsx`, `.mjs` and `.cjs` in the client, shared and contract-script
+trees, plus `.css` in `dashboard/src` and `marketing/src`; `.sol` under
+`contracts/contracts`. `TREES` at the top of the script is the machine-readable
+copy of that list — change it and this section together.
+
+Two things sit outside it:
+
+- `dashboard/vite.config.ts` and `contracts/hardhat.config.ts` are one directory
+  above a covered tree and keep explanatory comments. Being outside the gate is
+  not permission to add more.
+- The admin templates under `backend/*/templates/` are not checked. They carry
+  no comments today; keep it that way.
+
+A green CI run is evidence for the trees in `TREES` and nothing else.
 
 ### Shared TypeScript types
 

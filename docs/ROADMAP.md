@@ -139,8 +139,9 @@ deployment configuration is deliberately absent.
   rules live outside this repository.
 - **One shared package, consumed from source.** `@ledova/shared` has no build
   step, and both clients compile its TypeScript themselves.
-- **No comments and no docstrings in source.** See the coding rules in
-  [ARCHITECTURE.md](ARCHITECTURE.md).
+- **No comments and no docstrings in source.** Settled, and now mechanically
+  gated by `make check-comments` rather than held by review alone. See the
+  coding rules in [ARCHITECTURE.md](ARCHITECTURE.md#coding-rules).
 
 ## Open questions
 
