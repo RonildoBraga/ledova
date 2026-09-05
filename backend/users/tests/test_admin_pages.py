@@ -9,6 +9,8 @@ from users.models import (
     DeviceToken,
     FavouriteAsset,
     FinancialProfile,
+    InvestorCategory,
+    InvestorClassification,
     Notification,
     NotificationPreferences,
     UserAccount,
@@ -47,6 +49,12 @@ class UsersAdminPagesTest(TestCase):
             FavouriteAsset.objects.create(user_account=account, asset=asset),
             DeviceToken.objects.create(user=user, push_token="ExponentPushToken[admin]", device_type="ios"),
             Notification.objects.create(user=user, title="Hello", body="Body"),
+            InvestorClassification.objects.create(
+                user_account=account,
+                category=InvestorCategory.PROFESSIONAL_INVESTOR,
+                declaration_accepted=True,
+                declaration_text="Declared",
+            ),
         ]
 
     def test_every_users_model_is_registered_and_renders(self):

@@ -4,6 +4,7 @@ export * from './auth';
 export * from './holdings';
 export * from './identity-verification';
 export * from './investment';
+export * from './investor-classification';
 export * from './notifications';
 export * from './portfolio';
 export * from './user';

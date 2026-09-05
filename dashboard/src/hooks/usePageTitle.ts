@@ -14,6 +14,10 @@ const PAGE_INFO: Record<string, PageInfo> = {
   '/asset-prices': { title: 'Market', subtitle: 'Browse asset prices' },
   '/user-profile': { title: 'Profile', subtitle: 'Manage your account' },
   '/settings': { title: 'Settings', subtitle: 'Configure your preferences' },
+  '/investor-eligibility': {
+    title: 'Eligibility',
+    subtitle: 'Evidence your wholesale investor status',
+  },
   '/signin': { title: 'Sign In' },
   '/signup': { title: 'Sign Up' },
   '/signup/email-confirmation': { title: 'Email Confirmation' },

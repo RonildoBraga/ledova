@@ -43,8 +43,9 @@ Complete.
 
 ## Phase 1 — Investor directory and primary offering
 
-Not started. No investor directory and no primary offering exist in the code
-today; the only directory that does exist is the market one, `GET
+Under way. The investor classification and the one eligibility predicate are
+shipped. No investor directory and no primary offering exist in the code yet;
+the only directory that does exist is the market one, `GET
 /api/v1/trading/tokens/`, which lists deployed tokens.
 
 - An investor directory: who the operator and issuers can see, and on what
@@ -55,9 +56,28 @@ today; the only directory that does exist is the market one, `GET
   tokens, not of investors; whether it stays unscoped is an open Phase 1
   decision (see [docs/ARCHITECTURE.md](ARCHITECTURE.md#tenancy-model)).
 - An `InvestorClassification` model: the recorded basis on which an investor
-  qualifies as wholesale or sophisticated, its evidence and its expiry. Phase 2
-  gates read it; Phase 1 has to be able to record it before the first offering
-  can be made.
+  qualifies as wholesale or sophisticated, its evidence and its expiry. Shipped.
+  Four categories only — `product_value` (s708(8)(a)), `accountant_certificate`
+  (s708(8)(c)), `professional_investor` (s708(11) / s761G(7)(d)) and
+  `associated_person` (s708(12)). The experienced-investor category
+  (s708(10) / s761GA) is deliberately absent: it is the only one that turns on
+  the operator holding an AFSL, and there is no evidence this deployment does.
+  Adding it later is one `TextChoices` row, one migration and one form branch.
+  Expiry is derived from `expires_at`, so there is no stored expired status and
+  no nightly sweep. `users.services.eligibility.investor_eligibility` is the one
+  predicate; the directory and the subscription flow call it, they do not
+  re-derive it.
+- Classification evidence is not served from `MEDIA_URL`. It streams through an
+  authenticated view scoped by `visible_to_user`, so the submitting account
+  reads it over the API and staff read it in the admin; both go through the
+  storage backend's `open()`, so local disk and S3 behave identically and no
+  presign infrastructure is needed. `CompanyDocument.get_file_url` still returns
+  a plain `MEDIA_URL` path — a pre-existing exposure on ASIC extracts and
+  constitutions, left standing because repointing it breaks the mobile client,
+  which authenticates with a bearer token an `<img>` cannot send.
+- There is no retention or auto-deletion rule for rejected and expired
+  classifications. Evidence is kept until someone decides the rule. Account
+  deletion behaviour is unchanged. Flagged for the owner and counsel.
 - A primary offering: a company publishes an offer, an investor subscribes, the
   operator records the payment (AUD bank transfer against the reference prefix,
   or a supported stablecoin to the receiving wallet) and allots the shares.
@@ -68,13 +88,16 @@ today; the only directory that does exist is the market one, `GET
 
 ## Phase 2 — Eligibility and the register
 
-Not started.
+Not started, except that the Phase 1 predicate already reads the investor
+switch.
 
-- Turn `investor_kyc_required` and `issuer_kyc_required` from stored
-  configuration into actual gates. Today nothing reads them. The gate is
-  eligibility, not identity alone: it refuses anyone without a current
-  `InvestorClassification` recorded in Phase 1, because the wholesale and
-  sophisticated carve-outs are what the first offerings rely on.
+- `investor_kyc_required` is now read, by
+  `users.services.eligibility.investor_eligibility`: while it is on, an account
+  still `pending` is refused and every holder on the account must be
+  `is_id_verified`; while it is off, `pending` passes, because
+  `IdentityVerificationService._process_verified_customer` is the only writer of
+  `active` and it runs only on a green KYC result. `issuer_kyc_required` is
+  still read by nothing.
 - A share register that is the authoritative record, reconciled against the
   chain rather than derived from it ad hoc.
 - Director authority, ownership immutability, ACN and ABN validation and

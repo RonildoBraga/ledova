@@ -20,6 +20,7 @@ import AssetPricesPage from '@pages/asset-prices';
 import SettingsPage from '@pages/settings';
 import TradingPage from '@pages/trading';
 import CompanyPage from '@pages/company';
+import InvestorEligibilityPage from '@pages/investor-eligibility';
 
 import ListingPage from '@pages/company/listing';
 import { SignupAccountType } from '@pages/signup/account-type';
@@ -158,6 +159,15 @@ function App() {
           element={
             <ProtectedRoute>
               <UserProfilePage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/investor-eligibility"
+          element={
+            <ProtectedRoute>
+              <InvestorEligibilityPage />
             </ProtectedRoute>
           }
         />

@@ -1,8 +1,7 @@
-import os
-
 from rest_framework import serializers
 
 from companies.models import CompanyDocument
+from shared.uploads import validate_upload
 
 
 class CompanyDocumentSerializer(serializers.ModelSerializer):
@@ -48,10 +47,6 @@ class CompanyDocumentSerializer(serializers.ModelSerializer):
             return url
         return obj.external_url
 
-    MAX_FILE_SIZE = 10 * 1024 * 1024
-    ALLOWED_MIME_TYPES = {"application/pdf", "image/png", "image/jpeg"}
-    ALLOWED_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg"}
-
     def validate(self, data):
         file = data.get("file")
         external_url = data.get("external_url")
@@ -60,19 +55,7 @@ class CompanyDocumentSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Either 'file' or 'external_url' must be provided.")
 
         if file:
-            if file.size > self.MAX_FILE_SIZE:
-                raise serializers.ValidationError({"file": "File size must not exceed 10 MB."})
-
-            mime = file.content_type or ""
-            if mime not in self.ALLOWED_MIME_TYPES:
-                raise serializers.ValidationError({"file": "Only PDF and image files (PNG, JPEG) are allowed."})
-
-            ext = os.path.splitext(file.name)[1].lower()
-            if ext not in self.ALLOWED_EXTENSIONS:
-                raise serializers.ValidationError({"file": "Only .pdf, .png, .jpg, .jpeg files are allowed."})
-
-            data["file_size"] = file.size
-            data["mime_type"] = mime
+            data["file_size"], data["mime_type"] = validate_upload(file)
         elif external_url:
             if not data.get("file_size"):
                 raise serializers.ValidationError({"file_size": "This field is required when using external_url."})

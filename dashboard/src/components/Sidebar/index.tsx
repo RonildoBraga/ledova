@@ -16,6 +16,7 @@ import {
   PaperPlaneTiltIcon,
   BuildingsIcon,
   FileTextIcon,
+  ShieldCheckIcon,
 } from '@phosphor-icons/react';
 import { signout, DESIGN_TOKENS } from '@ledova/shared';
 import apiClient from '@services/apiClient';
@@ -82,6 +83,7 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
       items.push(
         { label: 'Transactions', path: '/transactions', icon: LinkIcon },
         { label: 'Market', path: '/asset-prices', icon: ChartBarIcon },
+        { label: 'Eligibility', path: '/investor-eligibility', icon: ShieldCheckIcon },
       );
     }
 

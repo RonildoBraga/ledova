@@ -178,8 +178,18 @@ export function PreScreeningScreen() {
     },
   }));
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
-  const { form, generalError, isLoading, isSubmitting, isFormValid, setFieldValue, handleSubmit, retryLoad } =
-    usePreScreening();
+  const {
+    form,
+    acknowledgedWholesaleOnly,
+    toggleWholesaleOnly,
+    generalError,
+    isLoading,
+    isSubmitting,
+    isFormValid,
+    setFieldValue,
+    handleSubmit,
+    retryLoad,
+  } = usePreScreening();
 
   const handleContinue = async () => {
     await handleSubmit(() => {
@@ -312,6 +322,30 @@ export function PreScreeningScreen() {
                 <View style={styles.checkboxTextContainer}>
                   <Text style={styles.checkboxLabel}>I am acting on my own behalf</Text>
                   <Text style={styles.checkboxHelper}>Not for a business, trust, or on behalf of someone else</Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.checkboxContainer}
+                onPress={toggleWholesaleOnly}
+                disabled={isSubmitting}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.checkbox, acknowledgedWholesaleOnly && styles.checkboxChecked]}>
+                  {acknowledgedWholesaleOnly && (
+                    <CheckCircleIcon
+                      size={theme.icon.sizes.md}
+                      color={theme.colors.utility.white}
+                      weight={theme.icon.weights.regular}
+                    />
+                  )}
+                </View>
+                <View style={styles.checkboxTextContainer}>
+                  <Text style={styles.checkboxLabel}>I understand share offerings here are wholesale only</Text>
+                  <Text style={styles.checkboxHelper}>
+                    Offers are made without a disclosure document to wholesale and sophisticated investors. You will
+                    need to evidence that status before you can subscribe.
+                  </Text>
                 </View>
               </TouchableOpacity>
 
