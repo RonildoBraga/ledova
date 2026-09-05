@@ -1,7 +1,14 @@
+from datetime import date, datetime
+
 from django.test import RequestFactory, SimpleTestCase
+from django.utils import timezone
 
 from shared.utils import get_client_ip
 from shared.utils.blockchain import decode_exception_to_message, decode_revert_reason
+from shared.utils.datetime_utils import (
+    parse_date_to_timezone_aware,
+    parse_end_date_inclusive,
+)
 
 
 class DecodeRevertReasonTests(SimpleTestCase):
@@ -37,3 +44,13 @@ class GetClientIpTests(SimpleTestCase):
     def test_falls_back_to_remote_addr(self):
         request = RequestFactory().get("/", REMOTE_ADDR="9.9.9.9")
         self.assertEqual(get_client_ip(request), "9.9.9.9")
+
+
+class DateBoundsTests(SimpleTestCase):
+    def test_string_date_and_datetime_all_become_the_start_of_that_day(self):
+        expected = timezone.make_aware(datetime(2026, 9, 1))
+        for value in ("2026-09-01", date(2026, 9, 1), datetime(2026, 9, 1)):
+            with self.subTest(value=value):
+                self.assertEqual(parse_date_to_timezone_aware(value), expected)
+        self.assertEqual(parse_end_date_inclusive(date(2026, 9, 1)), timezone.make_aware(datetime(2026, 9, 2)))
+        self.assertIsNone(parse_date_to_timezone_aware(None))

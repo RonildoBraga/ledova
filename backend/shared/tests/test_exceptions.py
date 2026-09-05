@@ -1,4 +1,8 @@
-from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
+from django.core.exceptions import (
+    ImproperlyConfigured,
+    ObjectDoesNotExist,
+    PermissionDenied,
+)
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import DatabaseError
 from django.http import Http404
@@ -87,3 +91,13 @@ class CustomExceptionHandlerTests(SimpleTestCase):
     def test_log_line_without_user_reports_none(self):
         _, output = self.handle(ObjectDoesNotExist("missing"))
         self.assertIn("'user': None", output)
+
+    def test_improperly_configured_becomes_503_without_naming_the_setting(self):
+        response, output = self.handle(ImproperlyConfigured("KYC_PROVIDER is ''; set it to sumsub or kycaid."))
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(
+            response.data,
+            {"error": "Service not configured", "detail": "This feature is not configured on this server."},
+        )
+        self.assertNotIn("KYC_PROVIDER", str(response.data))
+        self.assertIn("Service not configured: KYC_PROVIDER is ''", output)

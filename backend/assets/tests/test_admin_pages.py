@@ -45,17 +45,21 @@ class AssetsAdminPagesTest(TestCase):
                 )
         self.assertEqual(self.client.get(reverse("admin:assets_asset_add")).status_code, 200)
 
-    def test_actions_are_the_three_that_survive(self):
+    def test_actions_are_the_five_that_survive(self):
         url = reverse("admin:assets_asset_changelist")
         self.assertEqual(
             list(admin.site._registry[Asset].get_actions(self.client.get(url).wsgi_request)),
-            ["delete_selected", "update_prices", "mark_as_active", "mark_as_inactive"],
+            ["delete_selected", "update_prices", "mark_as_active", "mark_as_inactive", "mark_as_verified"],
         )
 
         self.client.post(url, {"action": "mark_as_inactive", "_selected_action": [self.asset.pk]})
         self.assertFalse(Asset.objects.get(pk=self.asset.pk).is_active)
         self.client.post(url, {"action": "mark_as_active", "_selected_action": [self.asset.pk]})
         self.assertTrue(Asset.objects.get(pk=self.asset.pk).is_active)
+
+        self.assertFalse(self.asset.is_verified)  # a quarantined token until an operator allowlists it
+        self.client.post(url, {"action": "mark_as_verified", "_selected_action": [self.asset.pk]})
+        self.assertTrue(Asset.objects.get(pk=self.asset.pk).is_verified)
 
     def test_update_prices_shows_the_form_then_writes_the_price(self):
         url = reverse("admin:assets_asset_changelist")

@@ -52,6 +52,11 @@ docker compose up --build
 
 With Docker images already cached, the local demo should start in under five
 minutes. A first run may take longer while Docker downloads and builds images.
+The `migrate` service also seeds the compliance monitoring rules, the alert
+procedure templates and the supported assets on every start; if you run the
+backend outside Docker (`make run` in `backend/`), run `python manage.py migrate`,
+`python manage.py sync_monitoring_rules`, `python manage.py sync_procedure_templates`
+and `python manage.py asset_sync --seed-only` once first.
 
 The initializer creates ignored, owner-only local environment files and
 generates the required development secrets without printing them. It never

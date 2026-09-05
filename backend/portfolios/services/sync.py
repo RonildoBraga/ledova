@@ -156,7 +156,7 @@ class PortfolioSyncService:
         for wallet in wallets:
             snapshots = (
                 HoldingSnapshot.objects.filter_by_wallet(wallet)
-                .filter(holding__asset__is_active=True)
+                .filter(holding__asset__is_active=True, holding__asset__is_verified=True)
                 .filter_by_date_range(end_date=snapshot_date)
                 .with_optimized_data()
                 .order_by("holding__asset_id", "-snapshot_date")

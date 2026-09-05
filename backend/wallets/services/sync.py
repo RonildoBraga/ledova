@@ -8,13 +8,13 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 from assets.models import Asset, AssetSnapshot
+from assets.services.identity import native_asset_for_chain, quarantine_unknown_token
 from compliance.services.transaction_monitoring import TransactionMonitoringService
 from integrations.blockchain import get_blockchain_client
 from shared.constants import normalize_chain
 from wallets.constants import SNAPSHOT_REASON_TRANSACTION
 from wallets.models import Holding, HoldingSnapshot, Transaction, Wallet
 from wallets.services.chain import fetch_chain_balance
-from wallets.utils.scam_detection import is_scam_token
 
 logger = logging.getLogger(__name__)
 
@@ -75,57 +75,7 @@ class WalletSyncService:
     @staticmethod
     def _process_single_transaction(wallet: Wallet, tx_data: Dict) -> Dict[str, bool]:
         result = {"tx": False, "snapshot": False}
-
-        asset_symbol = tx_data.get("asset_symbol", tx_data.get("asset", "UNKNOWN"))
-        contract_address = tx_data.get("contract_address")
-        token_decimals = tx_data.get("token_decimals")
-        category = tx_data.get("category", "external")
-
-        scam_result = is_scam_token(asset_symbol, contract_address)
-        if scam_result.is_scam:
-            impersonating = f" (impersonating {scam_result.matched_token})" if scam_result.matched_token else ""
-            logger.warning(
-                "Skipping potential scam token: "
-                f"'{asset_symbol}' (contract: {contract_address or 'N/A'}) - "
-                f"{scam_result.reason}{impersonating}"
-            )
-            return result
-
-        if contract_address and category == "erc20":
-            asset = Asset.get_by_chain_and_contract(wallet.chain, contract_address)
-            if asset:
-                logger.debug(f"Found ERC-20 asset by contract: {asset.symbol} ({contract_address[:10]}...)")
-            else:
-                asset, created = Asset.objects.get_or_create(
-                    symbol=asset_symbol,
-                    defaults={
-                        "name": asset_symbol,
-                        "asset_type": "erc20_token",
-                        "decimals": token_decimals or 18,
-                    },
-                )
-                if created:
-                    from assets.models import AssetChainDeployment
-
-                    AssetChainDeployment.objects.get_or_create(
-                        asset=asset,
-                        chain=wallet.chain,
-                        defaults={
-                            "contract_address": contract_address,
-                            "decimals": token_decimals or 18,
-                        },
-                    )
-                logger.info(
-                    f"{'Created' if created else 'Found'} ERC-20 asset: {asset_symbol} ({contract_address[:10]}...)"
-                )
-        else:
-            asset, _ = Asset.objects.get_or_create(
-                symbol=asset_symbol,
-                defaults={
-                    "name": asset_symbol,
-                    "asset_type": "native_crypto",
-                },
-            )
+        asset = WalletSyncService._resolve_asset(wallet, tx_data)
 
         block_timestamp = tx_data["block_timestamp"]
         if isinstance(block_timestamp, str):
@@ -176,6 +126,22 @@ class WalletSyncService:
             logger.info(f"Skipping holding for unverified asset: {asset.symbol} (tx recorded for audit)")
 
         return result
+
+    @staticmethod
+    def _resolve_asset(wallet: Wallet, tx_data: Dict) -> Asset:
+        """Identity is (chain, contract address), never the self-declared symbol; an unknown contract is quarantined."""
+        contract_address = tx_data.get("contract_address")
+        if not contract_address:
+            return native_asset_for_chain(wallet.chain)
+        asset = Asset.get_by_chain_and_contract(wallet.chain, contract_address)
+        if asset is None:
+            asset = quarantine_unknown_token(
+                chain=wallet.chain,
+                contract_address=contract_address,
+                symbol=tx_data.get("asset_symbol", tx_data.get("asset")),
+                decimals=tx_data.get("token_decimals"),
+            )
+        return asset
 
     @staticmethod
     def _sync_holdings_from_blockchain(wallet: Wallet) -> int:

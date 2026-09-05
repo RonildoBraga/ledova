@@ -8,7 +8,7 @@ class HoldingQuerySet(QuerySet):
         return self
 
     def active_assets_only(self):
-        return self.filter(asset__is_active=True)
+        return self.filter(asset__is_active=True, asset__is_verified=True)
 
     def with_optimized_data(self):
         return self.select_related("wallet", "asset")

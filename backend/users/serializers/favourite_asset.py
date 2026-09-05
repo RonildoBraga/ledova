@@ -7,7 +7,7 @@ from users.models.user_account import UserAccount
 
 
 class FavouriteAssetSerializer(serializers.ModelSerializer):
-    asset = serializers.PrimaryKeyRelatedField(queryset=Asset.objects.filter(is_active=True))
+    asset = serializers.PrimaryKeyRelatedField(queryset=Asset.objects.active().verified())
     user_account = serializers.PrimaryKeyRelatedField(queryset=UserAccount.objects.none())
 
     class Meta:

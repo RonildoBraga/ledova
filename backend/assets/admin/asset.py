@@ -46,7 +46,7 @@ class AssetAdmin(admin.ModelAdmin):
     list_per_page = 100
     readonly_fields = ("uuid", "created_at", "updated_at")
     inlines = [AssetChainDeploymentInline]
-    actions = ["update_prices", "mark_as_active", "mark_as_inactive"]
+    actions = ["update_prices", "mark_as_active", "mark_as_inactive", "mark_as_verified"]
 
     @admin.display(description="Chains")
     def display_chains(self, obj):
@@ -113,3 +113,8 @@ class AssetAdmin(admin.ModelAdmin):
     def mark_as_inactive(self, request, queryset):
         updated = queryset.update(is_active=False)
         self.message_user(request, f"{updated} assets marked as inactive.")
+
+    @admin.action(description="Mark selected assets as verified (allowlist a quarantined token)")
+    def mark_as_verified(self, request, queryset):
+        updated = queryset.update(is_verified=True)
+        self.message_user(request, f"{updated} assets marked as verified.")
