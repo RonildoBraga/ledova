@@ -48,6 +48,12 @@ class WhitelistEntry(BaseModel):
                 condition=models.Q(wallet__isnull=False) | ~models.Q(address=""),
                 name="whitelist_entry_wallet_or_address",
             ),
+            # Wallet-backed entries are unique through the wallet; a treasury address is unique on its own.
+            models.UniqueConstraint(
+                fields=["address"],
+                condition=models.Q(wallet__isnull=True),
+                name="whitelist_entry_unique_treasury_address",
+            ),
         ]
 
     def __str__(self) -> str:

@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from django.contrib.admin.sites import AdminSite
 from django.contrib.auth import get_user_model
-from django.db import connection
+from django.db import connection, transaction
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from procrastinate.contrib.django.models import ProcrastinateJob
@@ -245,15 +245,12 @@ class ApplicationNotificationJobRowTest(TestCase):
         self.assertEqual((row.args["user_id"], row.args["title"]), (str(self.owner.pk), "Application approved"))
 
     def test_a_failure_after_the_defer_rolls_the_job_row_back_with_the_status(self):
-        original = Company.approve
-
-        def approve_then_fail(company, **kwargs):
-            original(company, **kwargs)
-            raise RuntimeError("after the transition")
-
-        with patch.object(Company, "approve", approve_then_fail):
-            with self.assertRaises(RuntimeError):
+        """The defer writes through the request connection, so an enclosing block that fails takes the row with it."""
+        with self.assertRaises(RuntimeError):
+            with transaction.atomic():
                 transition_company(self.company, "approve", approved_by=self.owner)
+                self.assertEqual(self.job_rows().count(), 1)
+                raise RuntimeError("after the defer")
 
         self.assertEqual(self.job_rows().count(), 0)
         self.company.refresh_from_db()

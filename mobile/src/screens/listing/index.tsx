@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Linking } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Linking, TextInput } from 'react-native';
 import {
   CheckCircleIcon,
   CircleIcon,
@@ -9,14 +9,19 @@ import {
   InfoIcon,
   FileTextIcon,
   EyeIcon,
+  ClockIcon,
+  XCircleIcon,
 } from 'phosphor-react-native';
 import * as DocumentPicker from 'expo-document-picker';
-import type { DocumentType } from '@ledova/shared';
+import { useQuery } from '@tanstack/react-query';
+import { getOperator, getErrorMessage, CACHE_TIMING } from '@ledova/shared';
+import type { Company, DocumentType } from '@ledova/shared';
 import { useAppTheme, useThemedStyles } from '../../contexts';
 import { GradientBackground } from '../../components/GradientBackground';
 import { Panel } from '../../components/panel';
 import { CustomModal } from '../../components/modal';
-import { PrimaryButton } from '../../components/buttons';
+import { PrimaryButton, SecondaryButton } from '../../components/buttons';
+import { apiClient } from '../../services/apiClient';
 import { useCompanyDocuments } from './useCompanyDocuments';
 
 const REQUIRED_DOCUMENTS: { type: DocumentType; label: string }[] = [
@@ -40,6 +45,12 @@ const OPTIONAL_DOCUMENTS: { type: DocumentType; label: string }[] = [
   { type: 'bank_statement', label: 'Bank Statement' },
 ];
 
+// The backend accepts withdraw from draft, submitted and info_required; once review has started the
+// application stays with the reviewer, so the screen offers Withdraw only for the pending states it can act on.
+const WITHDRAWABLE_STATUSES: Company['status'][] = ['submitted', 'info_required'];
+
+const ACTION_ERROR_FALLBACK = 'The request was refused. Please try again.';
+
 export function ListingScreen() {
   const theme = useAppTheme();
   const styles = useStyles();
@@ -55,11 +66,32 @@ export function ListingScreen() {
     isDeleting,
     submitApplication,
     isSubmitting,
+    resubmitApplication,
+    isResubmitting,
+    withdrawApplication,
+    isWithdrawing,
   } = useCompanyDocuments();
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [infoResponse, setInfoResponse] = useState('');
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [withdrawReason, setWithdrawReason] = useState('');
 
+  const { data: operator } = useQuery({
+    queryKey: ['operator'],
+    queryFn: () => getOperator(apiClient).then((res) => res.data),
+    staleTime: CACHE_TIMING.EXTRA_LONG_GC_TIME,
+  });
+  const operatorName = operator?.name || 'The operator';
+
+  const status = company?.status;
+  const isInfoRequired = status === 'info_required';
+  const canWithdraw = !!status && WITHDRAWABLE_STATUSES.includes(status);
   const missingRequired = REQUIRED_DOCUMENTS.filter((d) => !uploadedTypes.has(d.type));
-  const canSubmit = canEdit && missingRequired.length === 0;
+  const hasRequiredDocuments = missingRequired.length === 0;
+  const isActing = isSubmitting || isResubmitting || isWithdrawing;
+
+  const showRefusal = (error: unknown) =>
+    Alert.alert('Request Refused', getErrorMessage(error, ACTION_ERROR_FALLBACK) || ACTION_ERROR_FALLBACK);
 
   const handlePickAndUpload = async (documentType: DocumentType) => {
     const result = await DocumentPicker.getDocumentAsync({
@@ -94,6 +126,51 @@ export function ListingScreen() {
     }
   };
 
+  const handleSubmit = async () => {
+    if (!hasRequiredDocuments) {
+      Alert.alert(
+        'Documents Required',
+        `Please upload all ${missingRequired.length} required document${missingRequired.length > 1 ? 's' : ''} before submitting your application.`,
+      );
+      return;
+    }
+    try {
+      await submitApplication();
+    } catch (error) {
+      showRefusal(error);
+    }
+  };
+
+  const handleResubmit = async () => {
+    if (!hasRequiredDocuments) {
+      Alert.alert(
+        'Documents Required',
+        `Please upload all ${missingRequired.length} required document${missingRequired.length > 1 ? 's' : ''} before resubmitting your application.`,
+      );
+      return;
+    }
+    if (!infoResponse.trim()) {
+      Alert.alert('Response Required', 'Describe how you addressed the information request before resubmitting.');
+      return;
+    }
+    try {
+      await resubmitApplication(infoResponse.trim());
+      setInfoResponse('');
+    } catch (error) {
+      showRefusal(error);
+    }
+  };
+
+  const confirmWithdraw = async () => {
+    setShowWithdrawModal(false);
+    try {
+      await withdrawApplication(withdrawReason.trim());
+      setWithdrawReason('');
+    } catch (error) {
+      showRefusal(error);
+    }
+  };
+
   if (isLoading) {
     return (
       <GradientBackground>
@@ -115,22 +192,51 @@ export function ListingScreen() {
     );
   }
 
-  // Application already submitted
-  if (!canEdit && company.status !== 'draft') {
+  const withdrawModal = (
+    <CustomModal
+      visible={showWithdrawModal}
+      onClose={() => setShowWithdrawModal(false)}
+      showFooter
+      confirmLabel="Withdraw"
+      onConfirm={confirmWithdraw}
+      confirmLoading={isWithdrawing}
+    >
+      <View style={styles.modalContent}>
+        <Text style={styles.modalTitle}>Withdraw Application</Text>
+        <Text style={styles.modalText}>
+          Withdrawing takes your application out of the review queue. You will need to register again to list your
+          company later.
+        </Text>
+        <Text style={styles.fieldLabel}>Reason (optional)</Text>
+        <TextInput
+          value={withdrawReason}
+          onChangeText={setWithdrawReason}
+          placeholder="Let the operator know why you are withdrawing"
+          placeholderTextColor={theme.colors.text.muted}
+          style={styles.textArea}
+          multiline
+        />
+      </View>
+    </CustomModal>
+  );
+
+  // Read-only states: the application is with the operator or has reached an outcome
+  if (!canEdit) {
     return (
       <GradientBackground>
         <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
           <Panel>
-            <View style={styles.submittedContainer}>
-              <CheckCircleIcon size={48} color={theme.colors.status.success.icon} weight="duotone" />
-              <Text style={styles.submittedTitle}>Application Submitted</Text>
-              <Text style={styles.submittedText}>
-                Your listing application has been submitted and is currently{' '}
-                <Text style={styles.statusHighlight}>{company.statusDisplay || company.status}</Text>.
-              </Text>
-            </View>
+            <ApplicationStatusView company={company} operatorName={operatorName} theme={theme} styles={styles} />
+            {canWithdraw && (
+              <View style={styles.submittedActions}>
+                <SecondaryButton onPress={() => setShowWithdrawModal(true)} loading={isWithdrawing} fullWidth>
+                  Withdraw Application
+                </SecondaryButton>
+              </View>
+            )}
           </Panel>
         </ScrollView>
+        {withdrawModal}
       </GradientBackground>
     );
   }
@@ -139,12 +245,20 @@ export function ListingScreen() {
     <GradientBackground>
       <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
         {/* Info Required Warning */}
-        {company.status === 'info_required' && company.infoRequestReason && (
+        {isInfoRequired && (
           <View style={styles.warningBanner}>
             <WarningIcon size={20} color={theme.colors.status.warning.icon} weight="fill" />
             <View style={styles.warningTextContainer}>
               <Text style={styles.warningTitle}>Additional Information Required</Text>
-              <Text style={styles.warningMessage}>{company.infoRequestReason}</Text>
+              {company.infoRequestReason ? (
+                <Text style={styles.warningMessage}>{company.infoRequestReason}</Text>
+              ) : null}
+              {company.additionalInfoResponse ? (
+                <View style={styles.previousResponse}>
+                  <Text style={styles.previousResponseLabel}>Your previous response</Text>
+                  <Text style={styles.previousResponseText}>{company.additionalInfoResponse}</Text>
+                </View>
+              ) : null}
             </View>
           </View>
         )}
@@ -191,14 +305,33 @@ export function ListingScreen() {
           })}
         </Panel>
 
+        {/* Response to the information request */}
+        {isInfoRequired && (
+          <Panel title="Your Response">
+            <View style={styles.responseContainer}>
+              <Text style={styles.responseHint}>
+                Answer the request above, upload any documents it asks for, then resubmit your application.
+              </Text>
+              <TextInput
+                value={infoResponse}
+                onChangeText={setInfoResponse}
+                placeholder="Describe what you changed or provide the information requested"
+                placeholderTextColor={theme.colors.text.muted}
+                style={styles.textArea}
+                multiline
+              />
+            </View>
+          </Panel>
+        )}
+
         {/* What Happens Next */}
         <Panel title="What Happens Next" icon={<InfoIcon />}>
           <View style={styles.stepsContainer}>
             {[
               'Submit your application with all required documents',
-              'Ledova staff reviews your application (2-5 business days)',
-              'We may contact you for additional information',
-              'Once approved, your share token is created on the blockchain',
+              `${operatorName} reviews your application (2-5 business days)`,
+              'You may be asked for additional information',
+              'Once approved, you deploy your share token on the blockchain',
               'Your company is activated on the platform',
             ].map((step, i) => (
               <View key={i} style={styles.stepRow}>
@@ -209,24 +342,22 @@ export function ListingScreen() {
           </View>
         </Panel>
 
-        {/* Submit Button */}
+        {/* Submit / Resubmit / Withdraw */}
         <View style={styles.submitSection}>
-          <PrimaryButton
-            onPress={() => {
-              if (!canSubmit) {
-                Alert.alert(
-                  'Documents Required',
-                  `Please upload all ${missingRequired.length} required document${missingRequired.length > 1 ? 's' : ''} before submitting your application.`,
-                );
-                return;
-              }
-              submitApplication();
-            }}
-            loading={isSubmitting}
-            fullWidth
-          >
-            Submit Application
-          </PrimaryButton>
+          {isInfoRequired ? (
+            <PrimaryButton onPress={handleResubmit} loading={isResubmitting} disabled={isActing} fullWidth>
+              Resubmit Application
+            </PrimaryButton>
+          ) : (
+            <PrimaryButton onPress={handleSubmit} loading={isSubmitting} disabled={isActing} fullWidth>
+              Submit Application
+            </PrimaryButton>
+          )}
+          {canWithdraw && (
+            <TouchableOpacity onPress={() => setShowWithdrawModal(true)} disabled={isActing} hitSlop={8}>
+              <Text style={styles.withdrawLink}>Withdraw application</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Delete Confirmation Modal */}
@@ -245,7 +376,88 @@ export function ListingScreen() {
           </View>
         </CustomModal>
       </ScrollView>
+      {withdrawModal}
     </GradientBackground>
+  );
+}
+
+/** Read-only view for every state the owner cannot edit. */
+function ApplicationStatusView({
+  company,
+  operatorName,
+  theme,
+  styles,
+}: {
+  company: Company;
+  operatorName: string;
+  theme: ReturnType<typeof useAppTheme>;
+  styles: ReturnType<typeof useStyles>;
+}) {
+  const statusLabel = company.statusDisplay || company.status;
+  const outcome = (() => {
+    switch (company.status) {
+      case 'approved':
+      case 'active':
+        return {
+          icon: <CheckCircleIcon size={48} color={theme.colors.status.success.icon} weight="duotone" />,
+          title: company.status === 'active' ? 'Company Active' : 'Application Approved',
+          body: `Your listing application was approved and your company is ${statusLabel}.`,
+        };
+      case 'rejected':
+        return {
+          icon: <XCircleIcon size={48} color={theme.colors.status.error.icon} weight="duotone" />,
+          title: 'Application Rejected',
+          body: company.rejectionReason
+            ? `${operatorName} rejected the application: ${company.rejectionReason}`
+            : `${operatorName} rejected the application.`,
+        };
+      case 'withdrawn':
+        return {
+          icon: <XCircleIcon size={48} color={theme.colors.text.muted} weight="duotone" />,
+          title: 'Application Withdrawn',
+          body: company.withdrawalReason
+            ? `You withdrew this application: ${company.withdrawalReason}`
+            : 'You withdrew this application.',
+        };
+      case 'review':
+        return {
+          icon: <ClockIcon size={48} color={theme.colors.status.info.icon} weight="duotone" />,
+          title: 'Under Review',
+          body: `${operatorName} is reviewing your application. Withdrawal is no longer available once the review has started.`,
+        };
+      case 'submitted':
+        return {
+          icon: <ClockIcon size={48} color={theme.colors.status.info.icon} weight="duotone" />,
+          title: 'Application Submitted',
+          body: `Your listing application is waiting for ${operatorName} to start the review.`,
+        };
+      default:
+        return {
+          icon: <InfoIcon size={48} color={theme.colors.text.muted} weight="duotone" />,
+          title: statusLabel,
+          body: `Your company is currently ${statusLabel}.`,
+        };
+    }
+  })();
+
+  return (
+    <View style={styles.submittedContainer}>
+      {outcome.icon}
+      <Text style={styles.submittedTitle}>{outcome.title}</Text>
+      <Text style={styles.submittedText}>{outcome.body}</Text>
+      {company.additionalInfoResponse ? (
+        <View style={styles.previousResponse}>
+          {company.infoRequestReason ? (
+            <>
+              <Text style={styles.previousResponseLabel}>Information requested</Text>
+              <Text style={styles.previousResponseText}>{company.infoRequestReason}</Text>
+            </>
+          ) : null}
+          <Text style={styles.previousResponseLabel}>Your response</Text>
+          <Text style={styles.previousResponseText}>{company.additionalInfoResponse}</Text>
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -459,6 +671,59 @@ function useStyles() {
       alignItems: 'center',
       gap: theme.spacing.sm,
       paddingTop: theme.spacing.sm,
+    },
+    submittedActions: {
+      paddingHorizontal: theme.spacing.md,
+      paddingBottom: theme.spacing.md,
+    },
+    withdrawLink: {
+      fontSize: theme.fontSize.sm,
+      fontWeight: theme.fontWeight.medium,
+      color: theme.colors.text.muted,
+      paddingVertical: theme.spacing.xs,
+    },
+    // Information request response
+    previousResponse: {
+      marginTop: theme.spacing.sm,
+      padding: theme.spacing.sm,
+      borderRadius: theme.borderRadius.md,
+      backgroundColor: theme.colors.surface.tertiary,
+      gap: theme.spacing.xs,
+      alignSelf: 'stretch',
+    },
+    previousResponseLabel: {
+      fontSize: theme.fontSize.xs,
+      fontWeight: theme.fontWeight.medium,
+      color: theme.colors.text.muted,
+    },
+    previousResponseText: {
+      fontSize: theme.fontSize.sm,
+      color: theme.colors.text.secondary,
+    },
+    responseContainer: {
+      padding: theme.spacing.md,
+      gap: theme.spacing.sm,
+    },
+    responseHint: {
+      fontSize: theme.fontSize.sm,
+      color: theme.colors.text.secondary,
+    },
+    fieldLabel: {
+      fontSize: theme.fontSize.sm,
+      fontWeight: theme.fontWeight.medium,
+      color: theme.colors.text.primary,
+    },
+    textArea: {
+      minHeight: 96,
+      textAlignVertical: 'top',
+      borderWidth: 1,
+      borderColor: theme.colors.border.default,
+      borderRadius: theme.borderRadius.md,
+      backgroundColor: theme.colors.surface.tertiary,
+      paddingHorizontal: theme.spacing.sm,
+      paddingVertical: theme.spacing.sm,
+      color: theme.colors.text.primary,
+      fontSize: theme.fontSize.sm,
     },
     // Modal
     modalContent: {

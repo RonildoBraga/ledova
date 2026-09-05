@@ -44,6 +44,7 @@ export interface ChainConfig {
   shortName: string;
   isActive: boolean;
   explorerTxUrl: string;
+  explorerAddressUrl: string;
   addressPlaceholder: string;
   confirmationTime: string;
 }
@@ -55,6 +56,7 @@ export const SUPPORTED_CHAINS: ChainConfig[] = [
     shortName: 'ETH',
     isActive: true,
     explorerTxUrl: 'https://sepolia.etherscan.io/tx/',
+    explorerAddressUrl: 'https://sepolia.etherscan.io/address/',
     addressPlaceholder: '0x...',
     confirmationTime: '~2-3 minutes',
   },
@@ -64,6 +66,7 @@ export const SUPPORTED_CHAINS: ChainConfig[] = [
     shortName: 'BTC',
     isActive: true,
     explorerTxUrl: 'https://blockstream.info/testnet/tx/',
+    explorerAddressUrl: 'https://blockstream.info/testnet/address/',
     addressPlaceholder: 'm..., n..., 2..., tb1... or bcrt1...',
     confirmationTime: '~10 minutes',
   },
@@ -73,6 +76,7 @@ export const SUPPORTED_CHAINS: ChainConfig[] = [
     shortName: 'BASE',
     isActive: true,
     explorerTxUrl: 'https://sepolia.basescan.org/tx/',
+    explorerAddressUrl: 'https://sepolia.basescan.org/address/',
     addressPlaceholder: '0x...',
     confirmationTime: '~2 seconds',
   },
@@ -82,6 +86,7 @@ export const SUPPORTED_CHAINS: ChainConfig[] = [
     shortName: 'MATIC',
     isActive: false,
     explorerTxUrl: '',
+    explorerAddressUrl: '',
     addressPlaceholder: '0x...',
     confirmationTime: '~2 minutes',
   },
@@ -91,6 +96,7 @@ export const SUPPORTED_CHAINS: ChainConfig[] = [
     shortName: 'SOL',
     isActive: false,
     explorerTxUrl: '',
+    explorerAddressUrl: '',
     addressPlaceholder: 'Enter address',
     confirmationTime: '~1 minute',
   },
@@ -100,6 +106,7 @@ export const SUPPORTED_CHAINS: ChainConfig[] = [
     shortName: 'AVAX',
     isActive: false,
     explorerTxUrl: '',
+    explorerAddressUrl: '',
     addressPlaceholder: '0x...',
     confirmationTime: '~2 minutes',
   },
@@ -153,14 +160,23 @@ export function getAddressPlaceholder(chainShortCode: string): string {
   return chainByShortName.get(chainShortCode)?.addressPlaceholder || 'Enter address';
 }
 
-export function getBlockExplorerTxUrl(chain: string, txHash: string): string {
+function resolveChainConfig(chain: string): ChainConfig | undefined {
   const normalized = chain?.toLowerCase() || '';
-  let config = chainByCode.get(normalized as BlockchainType);
-  if (!config) {
-    const aliases: Record<string, BlockchainType> = { btc: BLOCKCHAIN.BITCOIN, eth: BLOCKCHAIN.ETHEREUM };
-    if (aliases[normalized]) config = chainByCode.get(aliases[normalized]);
-  }
+  const config = chainByCode.get(normalized as BlockchainType);
+  if (config) return config;
+  const aliases: Record<string, BlockchainType> = { btc: BLOCKCHAIN.BITCOIN, eth: BLOCKCHAIN.ETHEREUM };
+  return aliases[normalized] ? chainByCode.get(aliases[normalized]) : undefined;
+}
+
+export function getBlockExplorerTxUrl(chain: string, txHash: string): string {
+  const config = resolveChainConfig(chain);
   return config?.explorerTxUrl ? `${config.explorerTxUrl}${txHash}` : '';
+}
+
+/** Public-testnet explorer page for an address or contract; empty when the chain has no explorer. */
+export function getBlockExplorerAddressUrl(chain: string, address: string): string {
+  const config = resolveChainConfig(chain);
+  return config?.explorerAddressUrl ? `${config.explorerAddressUrl}${address}` : '';
 }
 
 export interface BuyableAssetConfig {

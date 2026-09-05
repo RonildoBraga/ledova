@@ -357,6 +357,60 @@ re-reads the status under the token row lock and returns without writing when
 another worker finished first; the admin pause / unpause buttons confirm on
 GET and call the contract on POST, like "Retry Deployment".
 
+**Phase 0 checkpoint, bundle P0b (branch `claude/p0-client-roundtrips`, on
+`claude/p0-operator` `7e42fa4`): the clients complete the application round
+trip and issuers control their tokens from the dashboard.** The shared
+package has `resubmitApplication(apiClient, uuid, { response })`,
+`withdrawApplication(apiClient, uuid, { reason })`, `getOperator(apiClient)`
+(`OPERATOR_ENDPOINTS.BASE`, the `Operator` type mirrors the serializer's key
+set), `Company.additionalInfoResponse` and
+`getBlockExplorerAddressUrl(chain, address)` next to the tx variant. Both
+listing pages branch on `company.status`: DRAFT shows Submit; INFO_REQUIRED
+shows the request reason, the previous answer when there is one, a response
+box and Resubmit (plus a Withdraw link); SUBMITTED is read-only with a
+confirm-and-reason Withdraw; REVIEW, APPROVED, ACTIVE, REJECTED and
+WITHDRAWN are read-only with the outcome and the stored response. Withdraw is
+offered only where `Company.withdraw()` accepts it (draft, submitted,
+info_required), so a company under review sees why the button is gone instead
+of a 400. Every refused transition surfaces the backend `detail` (dashboard
+banner, mobile alert) instead of being swallowed. The dashboard token modal
+now renders the issuer controls the hooks already wired: Deploy for DRAFT
+tokens (disabled with a tooltip while the company is not ACTIVE; the
+backend's `CompanyNotReadyException` text shows when it still refuses), Pause
+/ Unpause for DEPLOYED / PAUSED, a capital-increase form (additional shares,
+purpose, board resolution reference, optional shareholder approval reference;
+`new_authorized_total` is computed as current cap + additional) that creates a
+draft request, the request list with "Submit for review" on drafts, and the
+contract address / deployment hash linked to the explorer. Explorer links for
+share tokens assume the Base testnet (`TOKEN_CHAIN`), the backend's default
+issuer chain; the token serializer carries no chain field. Mobile token detail
+shows the contract link and a Deploy button with a confirm (the mobile hook
+already had the mutation pattern). Dashboard wallet broadcasts now send
+`toAddress`, `amount`, `transactionFee` (from the prepared transaction) and
+`tokenContract` with the signed transaction, as mobile does, so the backend
+writes the pending transaction and schedules confirmation. The mobile Send tab
+lists Base wallets (holdings included) and hands a Bitcoin wallet to the
+Wallets stack's `TransferDetails` screen, the manual-signing flow that was
+registered but unreachable. Copy: the account-type screens no longer promise
+crypto trading, the send form attributes "not whitelisted" to the operator's
+allowlist rather than KYC, and the mobile company empty state points at
+registration instead of support. The operator name (`GET /api/operator/`)
+appears in the dashboard footer, the mobile Help "About" card and both
+listing pages' "What happens next" steps.
+
+Carried from the P0a-2 review: `Company.request_info()` clears
+`additional_info_response` (tested), so a second question never shows the
+previous answer. `WhitelistEntry` has a partial unique constraint on `address`
+where `wallet` is null (migration `whitelist/0003`), so a treasury address
+cannot be duplicated at the database level; the admin form's old refusal for
+"a wallet not assigned to any user" is not restored because
+`Wallet.user_account` is NOT NULL, so that branch could never run (recorded
+here, not re-added). The PostgreSQL notification test named "a failure after
+the defer rolls the job row back" now raises after `transition_company`
+returned inside an enclosing atomic block, proving the deferred
+`procrastinate_jobs` row is written on the request connection and rolls back
+with the status.
+
 The remaining canonical backlog is [ISSUES.md](ISSUES.md).
 
 ## Working rules

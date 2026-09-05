@@ -5,6 +5,7 @@ import {
   getCompanyTokenIssuances,
   getCapitalIncreases,
   issueCompanyShares,
+  deployCompanyToken,
 } from '@ledova/shared';
 import type { CompanyShareToken, TokenHolder, TokenIssuance, CapitalIncreaseRequest } from '@ledova/shared';
 import { apiClient } from '../../services/apiClient';
@@ -52,6 +53,14 @@ export function useTokenDetail(uuid: string) {
     },
   });
 
+  const deployMutation = useMutation({
+    mutationFn: () => deployCompanyToken(apiClient, uuid),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['company-token', uuid] });
+      queryClient.invalidateQueries({ queryKey: ['company-tokens'] });
+    },
+  });
+
   return {
     token: tokenQuery.data || null,
     isLoading: tokenQuery.isLoading,
@@ -69,6 +78,8 @@ export function useTokenDetail(uuid: string) {
     isIssuing: issueMutation.isPending,
     issueError: issueMutation.error,
     resetIssueError: issueMutation.reset,
+    deploy: deployMutation.mutateAsync,
+    isDeploying: deployMutation.isPending,
     refetch: async () => {
       await Promise.all([
         tokenQuery.refetch(),

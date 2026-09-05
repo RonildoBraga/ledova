@@ -15,6 +15,7 @@ import {
   isBitcoinChain,
   isEthereumChain,
   WALLET_VERIFICATION_STATUS,
+  BLOCKCHAIN,
   getErrorMessage,
 } from '@ledova/shared';
 import { apiClient } from '../../services/apiClient';
@@ -65,7 +66,8 @@ function buildTransferableAssets(wallet: Wallet, holdings: WalletHolding[]): Tra
     });
   }
 
-  if (isEthereumChain(chainShortCode)) {
+  // ERC-20 holdings exist on both EVM chains the backend serves (Ethereum and Base).
+  if (isEthereumChain(chainShortCode) || chain === BLOCKCHAIN.BASE) {
     for (const holding of holdings) {
       const balance = parseFloat(holding.quantity) || 0;
       if (balance > 0 && holding.asset?.contractAddress) {

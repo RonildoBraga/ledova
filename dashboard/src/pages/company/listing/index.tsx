@@ -12,6 +12,8 @@ import {
   EyeIcon,
   XIcon,
   FileIcon,
+  ClockIcon,
+  XCircleIcon,
 } from '@phosphor-icons/react';
 import { Panel } from '@components/Panel';
 import { Modal } from '@components/Modal';
@@ -21,9 +23,13 @@ import {
   uploadCompanyDocument,
   deleteCompanyDocument,
   submitApplication,
+  resubmitApplication,
+  withdrawApplication,
+  getOperator,
+  getErrorMessage,
   CACHE_TIMING,
 } from '@ledova/shared';
-import type { CompanyDocument, DocumentType } from '@ledova/shared';
+import type { Company, CompanyDocument, DocumentType } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 
 const REQUIRED_DOCUMENTS: { type: DocumentType; label: string }[] = [
@@ -47,12 +53,22 @@ const OPTIONAL_DOCUMENTS: { type: DocumentType; label: string }[] = [
   { type: 'bank_statement', label: 'Bank Statement' },
 ];
 
+// The backend accepts withdraw from draft, submitted and info_required; once review has started the
+// application stays with the reviewer, so the page offers Withdraw only for the pending states it can act on.
+const WITHDRAWABLE_STATUSES: Company['status'][] = ['submitted', 'info_required'];
+
+const ACTION_ERROR_FALLBACK = 'The request was refused. Please try again.';
+
 export default function ListingPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { company, companyUuid, isLoading: isLoadingCompany } = useCompany();
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [selectedDocType, setSelectedDocType] = useState<DocumentType | null>(null);
+  const [infoResponse, setInfoResponse] = useState('');
+  const [withdrawModalOpen, setWithdrawModalOpen] = useState(false);
+  const [withdrawReason, setWithdrawReason] = useState('');
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const { data: docsData, isLoading: isLoadingDocs } = useQuery({
     queryKey: ['company-documents', companyUuid],
@@ -61,13 +77,49 @@ export default function ListingPage() {
     refetchInterval: CACHE_TIMING.SIGNED_URL_REFETCH_INTERVAL,
   });
 
+  const { data: operatorData } = useQuery({
+    queryKey: ['operator'],
+    queryFn: () => getOperator(apiClient),
+    staleTime: CACHE_TIMING.EXTRA_LONG_GC_TIME,
+  });
+  const operatorName = operatorData?.data?.name || 'The operator';
+
   const documents = docsData?.data?.results || [];
+
+  const invalidateCompany = () => {
+    queryClient.invalidateQueries({ queryKey: ['company', companyUuid] });
+    queryClient.invalidateQueries({ queryKey: ['companies'] });
+  };
+  const surfaceError = (error: unknown) => setActionError(getErrorMessage(error, ACTION_ERROR_FALLBACK));
 
   const submitMutation = useMutation({
     mutationFn: () => submitApplication(apiClient, companyUuid!),
+    onMutate: () => setActionError(null),
+    onSuccess: invalidateCompany,
+    onError: surfaceError,
+  });
+
+  const resubmitMutation = useMutation({
+    mutationFn: () => resubmitApplication(apiClient, companyUuid!, { response: infoResponse.trim() }),
+    onMutate: () => setActionError(null),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['company', companyUuid] });
-      queryClient.invalidateQueries({ queryKey: ['companies'] });
+      setInfoResponse('');
+      invalidateCompany();
+    },
+    onError: surfaceError,
+  });
+
+  const withdrawMutation = useMutation({
+    mutationFn: () => withdrawApplication(apiClient, companyUuid!, { reason: withdrawReason.trim() }),
+    onMutate: () => setActionError(null),
+    onSuccess: () => {
+      setWithdrawModalOpen(false);
+      setWithdrawReason('');
+      invalidateCompany();
+    },
+    onError: (error: unknown) => {
+      setWithdrawModalOpen(false);
+      surfaceError(error);
     },
   });
 
@@ -77,10 +129,16 @@ export default function ListingPage() {
   });
 
   const isLoading = isLoadingCompany || isLoadingDocs;
-  const canEdit = company?.status === 'draft' || company?.status === 'info_required';
+  const status = company?.status;
+  const isInfoRequired = status === 'info_required';
+  const canEdit = status === 'draft' || isInfoRequired;
+  const canWithdraw = !!status && WITHDRAWABLE_STATUSES.includes(status);
   const uploadedTypes = new Set(documents.map((d: CompanyDocument) => d.documentType));
   const missingRequired = REQUIRED_DOCUMENTS.filter((d) => !uploadedTypes.has(d.type));
-  const canSubmit = canEdit && missingRequired.length === 0;
+  const hasRequiredDocuments = missingRequired.length === 0;
+  const canSubmit = status === 'draft' && hasRequiredDocuments;
+  const canResubmit = isInfoRequired && hasRequiredDocuments && infoResponse.trim() !== '';
+  const isActing = submitMutation.isPending || resubmitMutation.isPending || withdrawMutation.isPending;
 
   if (isLoading) {
     return (
@@ -104,31 +162,80 @@ export default function ListingPage() {
     );
   }
 
-  if (!canEdit && company.status !== 'draft') {
+  const withdrawModal = (
+    <Modal
+      isOpen={withdrawModalOpen}
+      onClose={() => setWithdrawModalOpen(false)}
+      title="Withdraw Application"
+      showFooter
+      confirmLabel={withdrawMutation.isPending ? 'Withdrawing...' : 'Withdraw Application'}
+      onConfirm={() => withdrawMutation.mutate()}
+      confirmDisabled={withdrawMutation.isPending}
+      confirmLoading={withdrawMutation.isPending}
+    >
+      <div className="space-y-3">
+        <p className="text-sm text-text-secondary">
+          Withdrawing takes your application out of the review queue. You will need to register again to list your
+          company later.
+        </p>
+        <label className="block">
+          <span className="text-sm font-medium text-text-primary">Reason (optional)</span>
+          <textarea
+            value={withdrawReason}
+            onChange={(e) => setWithdrawReason(e.target.value)}
+            rows={3}
+            className="mt-1 w-full rounded-lg border border-border bg-surface-raised px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-mid focus:outline-none focus:ring-1 focus:ring-brand-mid"
+            placeholder="Let the operator know why you are withdrawing"
+          />
+        </label>
+      </div>
+    </Modal>
+  );
+
+  const errorBanner = actionError && (
+    <div className="flex items-start gap-3 p-4 rounded-lg bg-error-light/10 border border-error-light/30">
+      <XCircleIcon size={20} className="text-error-light flex-shrink-0 mt-0.5" weight="fill" />
+      <p className="text-sm text-error-light">{actionError}</p>
+    </div>
+  );
+
+  if (!canEdit) {
     return (
       <PageWrapper>
+        {errorBanner}
         <Panel>
-          <div className="py-8 text-center">
-            <CheckCircleIcon size={48} className="text-success-light mx-auto mb-4" weight="duotone" />
-            <h3 className="text-lg font-semibold text-text-primary mb-2">Application Submitted</h3>
-            <p className="text-text-muted">
-              Your listing application has been submitted and is currently{' '}
-              <span className="font-medium text-text-primary">{company.statusDisplay || company.status}</span>.
-            </p>
-          </div>
+          <ApplicationStatusView
+            company={company}
+            operatorName={operatorName}
+            canWithdraw={canWithdraw}
+            onWithdraw={() => setWithdrawModalOpen(true)}
+          />
         </Panel>
+        {withdrawModal}
       </PageWrapper>
     );
   }
 
   return (
     <PageWrapper>
-      {company.status === 'info_required' && company.infoRequestReason && (
+      {errorBanner}
+
+      {isInfoRequired && (
         <div className="flex items-start gap-3 p-4 rounded-lg bg-warning-light/10 border border-warning-light/30">
           <WarningIcon size={20} className="text-warning-light flex-shrink-0 mt-0.5" weight="fill" />
-          <div>
+          <div className="min-w-0 flex-1">
             <p className="text-sm font-medium text-warning-light">Additional Information Required</p>
-            <p className="text-sm text-warning-light opacity-80 mt-1">{company.infoRequestReason}</p>
+            {company.infoRequestReason && (
+              <p className="text-sm text-warning-light opacity-80 mt-1 whitespace-pre-wrap">
+                {company.infoRequestReason}
+              </p>
+            )}
+            {company.additionalInfoResponse && (
+              <div className="mt-3 rounded-lg bg-surface-raised/60 border border-border-subtle p-3">
+                <p className="text-xs font-medium text-text-muted mb-1">Your previous response</p>
+                <p className="text-sm text-text-secondary whitespace-pre-wrap">{company.additionalInfoResponse}</p>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -163,15 +270,13 @@ export default function ListingPage() {
                           <EyeIcon size={16} />
                         </a>
                       )}
-                      {canEdit && (
-                        <button
-                          onClick={() => deleteMutation.mutate(uploaded.uuid)}
-                          className="text-error-light hover:text-error-light p-1"
-                          disabled={deleteMutation.isPending}
-                        >
-                          <TrashIcon size={16} />
-                        </button>
-                      )}
+                      <button
+                        onClick={() => deleteMutation.mutate(uploaded.uuid)}
+                        className="text-error-light hover:text-error-light p-1"
+                        disabled={deleteMutation.isPending}
+                      >
+                        <TrashIcon size={16} />
+                      </button>
                     </>
                   ) : (
                     <button
@@ -221,15 +326,13 @@ export default function ListingPage() {
                           <EyeIcon size={16} />
                         </a>
                       )}
-                      {canEdit && (
-                        <button
-                          onClick={() => deleteMutation.mutate(uploaded.uuid)}
-                          className="text-error-light hover:text-error-light p-1"
-                          disabled={deleteMutation.isPending}
-                        >
-                          <TrashIcon size={16} />
-                        </button>
-                      )}
+                      <button
+                        onClick={() => deleteMutation.mutate(uploaded.uuid)}
+                        className="text-error-light hover:text-error-light p-1"
+                        disabled={deleteMutation.isPending}
+                      >
+                        <TrashIcon size={16} />
+                      </button>
                     </>
                   ) : (
                     <button
@@ -249,13 +352,30 @@ export default function ListingPage() {
         </div>
       </Panel>
 
+      {isInfoRequired && (
+        <Panel title="Your Response">
+          <div className="px-6 py-4 space-y-2">
+            <p className="text-sm text-text-secondary">
+              Answer the request above, upload any documents it asks for, then resubmit your application.
+            </p>
+            <textarea
+              value={infoResponse}
+              onChange={(e) => setInfoResponse(e.target.value)}
+              rows={4}
+              className="w-full rounded-lg border border-border bg-surface-raised px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-mid focus:outline-none focus:ring-1 focus:ring-brand-mid"
+              placeholder="Describe what you changed or provide the information requested"
+            />
+          </div>
+        </Panel>
+      )}
+
       <Panel title="What Happens Next" icon={<InfoIcon size={20} />}>
         <div className="px-6 py-4">
           <ol className="list-decimal list-inside space-y-2 text-sm text-text-secondary">
             <li>Submit your application with all required documents</li>
-            <li>Ledova staff reviews your application (typically 2-5 business days)</li>
-            <li>We may contact you for additional information</li>
-            <li>Once approved, your share token is created on the blockchain</li>
+            <li>{operatorName} reviews your application (typically 2-5 business days)</li>
+            <li>You may be asked for additional information</li>
+            <li>Once approved, you deploy your share token on the blockchain</li>
             <li>Your company is activated on the platform</li>
           </ol>
         </div>
@@ -273,15 +393,36 @@ export default function ListingPage() {
           {missingRequired.length > 0 && (
             <span className="text-sm text-error-light">{missingRequired.length} required document(s) missing</span>
           )}
-          <button
-            onClick={() => submitMutation.mutate()}
-            disabled={!canSubmit || submitMutation.isPending}
-            className="bg-brand-mid hover:bg-brand disabled:bg-surface-disabled disabled:cursor-not-allowed text-white font-semibold py-2.5 px-6 rounded-lg transition-colors"
-          >
-            {submitMutation.isPending ? 'Submitting...' : 'Submit Application'}
-          </button>
+          {canWithdraw && (
+            <button
+              onClick={() => setWithdrawModalOpen(true)}
+              disabled={isActing}
+              className="text-sm font-medium text-text-muted hover:text-error-light disabled:opacity-50 transition-colors"
+            >
+              Withdraw
+            </button>
+          )}
+          {isInfoRequired ? (
+            <button
+              onClick={() => resubmitMutation.mutate()}
+              disabled={!canResubmit || isActing}
+              className="bg-brand-mid hover:bg-brand disabled:bg-surface-disabled disabled:cursor-not-allowed text-white font-semibold py-2.5 px-6 rounded-lg transition-colors"
+            >
+              {resubmitMutation.isPending ? 'Resubmitting...' : 'Resubmit Application'}
+            </button>
+          ) : (
+            <button
+              onClick={() => submitMutation.mutate()}
+              disabled={!canSubmit || isActing}
+              className="bg-brand-mid hover:bg-brand disabled:bg-surface-disabled disabled:cursor-not-allowed text-white font-semibold py-2.5 px-6 rounded-lg transition-colors"
+            >
+              {submitMutation.isPending ? 'Submitting...' : 'Submit Application'}
+            </button>
+          )}
         </div>
       </div>
+
+      {withdrawModal}
 
       <UploadModal
         isOpen={uploadModalOpen}
@@ -294,6 +435,94 @@ export default function ListingPage() {
         }}
       />
     </PageWrapper>
+  );
+}
+
+/** Read-only view for every state the owner cannot edit; Withdraw appears only while the backend accepts it. */
+function ApplicationStatusView({
+  company,
+  operatorName,
+  canWithdraw,
+  onWithdraw,
+}: {
+  company: Company;
+  operatorName: string;
+  canWithdraw: boolean;
+  onWithdraw: () => void;
+}) {
+  const statusLabel = company.statusDisplay || company.status;
+  const outcome = (() => {
+    switch (company.status) {
+      case 'approved':
+      case 'active':
+        return {
+          icon: <CheckCircleIcon size={48} className="text-success-light mx-auto mb-4" weight="duotone" />,
+          title: company.status === 'active' ? 'Company Active' : 'Application Approved',
+          body: `Your listing application was approved and your company is ${statusLabel}.`,
+        };
+      case 'rejected':
+        return {
+          icon: <XCircleIcon size={48} className="text-error-light mx-auto mb-4" weight="duotone" />,
+          title: 'Application Rejected',
+          body: company.rejectionReason
+            ? `${operatorName} rejected the application: ${company.rejectionReason}`
+            : `${operatorName} rejected the application.`,
+        };
+      case 'withdrawn':
+        return {
+          icon: <XCircleIcon size={48} className="text-text-muted mx-auto mb-4" weight="duotone" />,
+          title: 'Application Withdrawn',
+          body: company.withdrawalReason
+            ? `You withdrew this application: ${company.withdrawalReason}`
+            : 'You withdrew this application.',
+        };
+      case 'review':
+        return {
+          icon: <ClockIcon size={48} className="text-info-light mx-auto mb-4" weight="duotone" />,
+          title: 'Under Review',
+          body: `${operatorName} is reviewing your application. Withdrawal is no longer available once the review has started.`,
+        };
+      case 'submitted':
+        return {
+          icon: <ClockIcon size={48} className="text-info-light mx-auto mb-4" weight="duotone" />,
+          title: 'Application Submitted',
+          body: `Your listing application is waiting for ${operatorName} to start the review.`,
+        };
+      default:
+        return {
+          icon: <InfoIcon size={48} className="text-text-muted mx-auto mb-4" weight="duotone" />,
+          title: statusLabel,
+          body: `Your company is currently ${statusLabel}.`,
+        };
+    }
+  })();
+
+  return (
+    <div className="py-8 px-6 text-center">
+      {outcome.icon}
+      <h3 className="text-lg font-semibold text-text-primary mb-2">{outcome.title}</h3>
+      <p className="text-text-muted">{outcome.body}</p>
+      {company.additionalInfoResponse && (
+        <div className="mt-6 mx-auto max-w-xl text-left rounded-lg bg-surface-raised/60 border border-border-subtle p-4">
+          {company.infoRequestReason && (
+            <>
+              <p className="text-xs font-medium text-text-muted mb-1">Information requested</p>
+              <p className="text-sm text-text-secondary whitespace-pre-wrap mb-3">{company.infoRequestReason}</p>
+            </>
+          )}
+          <p className="text-xs font-medium text-text-muted mb-1">Your response</p>
+          <p className="text-sm text-text-secondary whitespace-pre-wrap">{company.additionalInfoResponse}</p>
+        </div>
+      )}
+      {canWithdraw && (
+        <button
+          onClick={onWithdraw}
+          className="mt-6 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-primary hover:bg-surface-tertiary transition-colors"
+        >
+          Withdraw Application
+        </button>
+      )}
+    </div>
   );
 }
 

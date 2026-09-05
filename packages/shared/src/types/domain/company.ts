@@ -80,6 +80,8 @@ export interface Company extends BaseEntity {
   activatedAt: string | null;
   infoRequestedAt: string | null;
   infoRequestReason: string;
+  /** The owner's answer to the last information request; cleared with the reason on approval. */
+  additionalInfoResponse: string;
   rejectionAt: string | null;
   rejectionReason: string;
   withdrawnAt: string | null;
@@ -155,6 +157,14 @@ export interface ApplicationStatus {
 export interface ApplicationResponse {
   message: string;
   company: ApplicationStatus;
+}
+
+export interface ApplicationResubmit {
+  response: string;
+}
+
+export interface ApplicationWithdraw {
+  reason?: string;
 }
 
 export interface DocumentUpload {

@@ -209,7 +209,8 @@ export function SendFormModal({
                 <div className="flex items-center gap-2">
                   <ShieldWarningIcon size={ICON_SM} className="text-warning-light" />
                   <p className="text-xs text-warning-light">
-                    Your wallet is not whitelisted. Complete KYC to transfer tokenized assets.
+                    Your wallet is not whitelisted. The operator must whitelist it before you can transfer tokenized
+                    assets.
                   </p>
                 </div>
               </div>
@@ -314,7 +315,8 @@ export function SendFormModal({
         {isShareToken && isValidAddress && !isRecipientWhitelisted && recipientWhitelistStatus !== undefined && (
           <div className="p-3 rounded-lg bg-error-light/10 border border-error-light/20">
             <p className="text-sm text-error-light">
-              The recipient address is not whitelisted. They must complete KYC verification to receive tokenized assets.
+              The recipient address is not whitelisted. The operator must whitelist it before it can receive tokenized
+              assets.
             </p>
           </div>
         )}

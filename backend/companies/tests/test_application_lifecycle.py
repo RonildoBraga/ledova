@@ -164,6 +164,23 @@ class ApplicationLifecycleTest(APITestCase):
         self.assertEqual(self.company.status, CompanyStatus.DELISTED)
         self.assertEqual(self.company.delisting_reason, "Wound up")
 
+    def test_a_second_information_request_clears_the_previous_answer(self):
+        self.upload_required_documents()
+        self.company.submit(submitted_by=self.owner)
+        self.company.start_review()
+        self.company.request_info("Latest share register")
+        self.company.resubmit("Uploaded it")
+        self.company.start_review()
+
+        self.company.request_info("Auditor report too")
+
+        self.company.refresh_from_db()
+        self.assertEqual(self.company.status, CompanyStatus.INFO_REQUIRED)
+        self.assertEqual(self.company.info_request_reason, "Auditor report too")
+        self.assertEqual(self.company.additional_info_response, "")
+        self.client.force_authenticate(self.owner)
+        self.assertEqual(self.client.get(self.url).data["additional_info_response"], "")
+
     def test_status_update_rejects_invalid_transitions(self):
         response = self.set_status("approved", expect=400)
         self.assertEqual(str(response.data["detail"]), "Cannot transition from 'Draft' to 'Approved'.")
