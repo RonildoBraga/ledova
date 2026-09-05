@@ -82,7 +82,15 @@ deleted; the three `/company/*` redirect routes stay for old bookmarks.
 4. Deploy note: `companies/0003_delete_review_and_signature_models` (with
    `tokens/0013_remove_transferorder_signature_request` before it) drops the
    three unused tables `ApplicationReview`, `ReviewNote` and
-   `SignatureRequest`; both migrations are reversible with `migrate`.
+   `SignatureRequest`; both migrations are reversible with `migrate`. The
+   dead-models bundle adds `portfolios/0004_delete_assetallocation`,
+   `compliance/0005_remove_fiat_transaction_and_high_risk_country`,
+   `wallets/0006_delete_fiattransaction_drop_unread_columns` (depends on
+   compliance/0005) and `users/0017_delete_waitlist`: they drop the
+   `asset_allocations`, `fiat_transactions` and `accounts_waitlist` tables and
+   ten columns (nine on `wallets`, `holdings.last_synced_block`); all four are
+   reversible with `migrate`. Export any `accounts_waitlist` rows you want to
+   keep before applying.
 
 Decisions deferred during the simplification pass (each is a delete-or-keep
 call for the owner; the code is kept and working until decided):
@@ -90,11 +98,11 @@ call for the owner; the code is kept and working until decided):
 - Client-less API surfaces: removed in the dead-routes bundle. Wallets
   `batch-check-balances` is a LIVE client contract (dashboard AddWalletModal,
   mobile `useFetchBalances`, both through shared-services `fetchBatchBalances`)
-  and stays. `/api/waitlist/` and `/api/asset-allocations/` are handled in the
-  dead-models bundle together with their models.
-- Models nothing writes or reads: `AssetAllocation`,
-  `FiatTransaction` persistence, the unread `Wallet`/`Holding` columns,
-  `NotificationPreferences` (foldable into `UserPreferences`).
+  and stays. `/api/waitlist/`, `/api/asset-allocations/` and the fiat-purchase
+  rows were removed in the dead-models bundle together with their models; only
+  `POST /api/fiat-purchases/transak-widget-url/` remains.
+- `NotificationPreferences`: fold into `UserPreferences` with the next
+  settings-screen change.
 - The materialised `PortfolioSnapshot` table versus an on-read value series.
 - Bitcoin support end to end (`integrations/blockchain/bitcoin.py`).
 - Push notifications: nothing creates `Notification` rows or defers the send

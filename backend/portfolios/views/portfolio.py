@@ -4,9 +4,8 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
 from portfolios.filters import PortfolioFilter
-from portfolios.models.portfolio import AssetAllocation, Portfolio, PortfolioSnapshot
+from portfolios.models.portfolio import Portfolio, PortfolioSnapshot
 from portfolios.serializers.portfolio import (
-    AssetAllocationSerializer,
     PortfolioSerializer,
     PortfolioSnapshotSerializer,
 )
@@ -48,19 +47,6 @@ class PortfolioViewSet(AuthenticatedModelViewSet):
     def perform_destroy(self, instance):
         instance.is_active = False
         instance.save(update_fields=["is_active"])
-
-    @action(detail=True, methods=["get"], url_path="allocations")
-    def allocations(self, request, *args, **kwargs):
-        portfolio = self.get_object()
-        allocations = (
-            AssetAllocation.objects.filter_by_portfolio(portfolio)
-            .visible_to_user(request.user)
-            .filter_active_assets()
-            .exclude_zero_allocations()
-            .select_related("asset")
-        )
-        serializer = AssetAllocationSerializer(allocations, many=True, context={"request": request})
-        return Response(serializer.data)
 
     @action(detail=True, methods=["post"], url_path="add-wallet")
     def add_wallet(self, request, *args, **kwargs):

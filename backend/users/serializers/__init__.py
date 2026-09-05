@@ -10,7 +10,6 @@ from users.serializers.notification_preferences import NotificationPreferencesSe
 from users.serializers.user_account import UserAccountSerializer
 from users.serializers.user_preferences import UserPreferencesSerializer
 from users.serializers.user_profile import UserProfileSerializer
-from users.serializers.waitlist import WaitlistCreateSerializer
 
 __all__ = [
     "DeviceTokenSerializer",
@@ -23,5 +22,4 @@ __all__ = [
     "UserAccountSerializer",
     "UserPreferencesSerializer",
     "UserProfileSerializer",
-    "WaitlistCreateSerializer",
 ]

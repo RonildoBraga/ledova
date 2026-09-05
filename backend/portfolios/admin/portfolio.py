@@ -1,11 +1,7 @@
 from django.contrib import admin
 from django.db.models import Count
 
-from portfolios.models.portfolio import (
-    AssetAllocation,
-    Portfolio,
-    PortfolioSnapshot,
-)
+from portfolios.models.portfolio import Portfolio, PortfolioSnapshot
 
 
 @admin.register(Portfolio)
@@ -22,14 +18,6 @@ class PortfolioAdmin(admin.ModelAdmin):
     @admin.display(description="Wallets", ordering="wallet_count")
     def wallet_count(self, obj):
         return obj.wallet_count
-
-
-@admin.register(AssetAllocation)
-class AssetAllocationAdmin(admin.ModelAdmin):
-    list_display = ["uuid", "portfolio", "asset", "percentage", "created_at", "updated_at"]
-    list_filter = ["portfolio", "asset"]
-    search_fields = ["portfolio__name", "asset__name", "asset__symbol"]
-    readonly_fields = ["uuid", "created_at", "updated_at"]
 
 
 @admin.register(PortfolioSnapshot)

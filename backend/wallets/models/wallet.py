@@ -12,14 +12,6 @@ from wallets.constants import (
 from wallets.querysets.wallet import WalletQuerySet
 
 
-class CustodyModel(str, Enum):
-    NON_CUSTODIAL = "non_custodial"
-
-    @classmethod
-    def choices(cls):
-        return [(item.value, item.name.replace("_", " ").title()) for item in cls]
-
-
 class WalletType(str, Enum):
     HARDWARE = "hardware"
     SOFTWARE = "software"
@@ -55,11 +47,6 @@ class Wallet(BaseModel):
         choices=Blockchain.choices(),
         db_index=True,
     )
-    custody_model = models.CharField(
-        max_length=16,
-        choices=CustodyModel.choices(),
-        default=CustodyModel.NON_CUSTODIAL.value,
-    )
     wallet_type = models.CharField(
         max_length=16,
         choices=WalletType.choices(),
@@ -71,23 +58,7 @@ class Wallet(BaseModel):
     verification_challenge = models.TextField(null=True, blank=True)
     verification_signature = models.TextField(null=True, blank=True)
     verified_at = models.DateTimeField(null=True, blank=True)
-    is_whitelisted_for_securities = models.BooleanField(default=False)
-    whitelisted_at = models.DateTimeField(null=True, blank=True)
-    whitelisting_authority = models.CharField(max_length=255, null=True, blank=True)
     last_synced_at = models.DateTimeField(null=True, blank=True)
-    last_synced_block = models.BigIntegerField(null=True, blank=True)
-    reconstruction_complete = models.BooleanField(default=False)
-    reconstruction_completed_at = models.DateTimeField(null=True, blank=True)
-    reconstruction_status = models.CharField(
-        max_length=20,
-        choices=[
-            ("pending", "Pending"),
-            ("in_progress", "In Progress"),
-            ("completed", "Completed"),
-            ("failed", "Failed"),
-        ],
-        default="pending",
-    )
     derivation_path = models.CharField(
         max_length=100,
         null=True,
@@ -122,10 +93,6 @@ class Wallet(BaseModel):
         null=True,
         blank=True,
         help_text="Derivation path of the parent key (e.g., m/44'/60'/0'/0)",
-    )
-    is_operator = models.BooleanField(
-        default=False,
-        help_text="Designates this wallet as a company operator wallet for signing token operations",
     )
 
     objects = WalletQuerySet.as_manager()

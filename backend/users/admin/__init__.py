@@ -6,4 +6,3 @@ import users.admin.notification_preferences
 import users.admin.user_account
 import users.admin.user_preferences
 import users.admin.user_profile
-import users.admin.waitlist

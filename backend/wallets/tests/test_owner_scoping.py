@@ -43,7 +43,6 @@ class WalletOwnerScopingTest(TestCase):
                 "user_account": str(self.bob_account.uuid),
                 "address": "0x" + "c" * 40,
                 "chain": "ethereum",
-                "custody_model": "non_custodial",
                 "wallet_type": "software",
             },
             context=self._serializer_for(self.alice).context,

@@ -26,7 +26,6 @@ class WalletsAdminPagesTest(TestCase):
             self.tenant.holding,
             self.tenant.holding_snapshot,
             self.tenant.transaction,
-            self.tenant.fiat_purchase,
         ]
 
     def test_every_wallets_model_is_registered_and_renders(self):

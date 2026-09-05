@@ -9,7 +9,6 @@ class Holding(BaseModel):
     wallet = models.ForeignKey("wallets.Wallet", on_delete=models.CASCADE, related_name="holdings")
     asset = models.ForeignKey("assets.Asset", on_delete=models.CASCADE, related_name="holdings")
     quantity = models.DecimalField(max_digits=40, decimal_places=18)
-    last_synced_block = models.BigIntegerField(null=True, blank=True)
     last_synced_at = models.DateTimeField(null=True, blank=True)
 
     objects = HoldingQuerySet.as_manager()

@@ -25,7 +25,6 @@ class HoldingSerializer(serializers.ModelSerializer):
             "asset",
             "quantity",
             "market_value",
-            "last_synced_block",
             "last_synced_at",
             "created_at",
             "updated_at",

@@ -3,7 +3,6 @@ from uuid import UUID
 
 from django.db import models
 
-from portfolios.querysets.asset_allocation import AssetAllocationQuerySet
 from portfolios.querysets.portfolio import PortfolioQuerySet
 from portfolios.querysets.portfolio_snapshot import PortfolioSnapshotQuerySet
 from shared.models import BaseModel
@@ -30,23 +29,6 @@ class Portfolio(BaseModel):
     def account_wallets(self):
         """Return only wallet links that agree with the portfolio's tenant."""
         return self.wallets.filter(user_account_id=self.user_account_id)
-
-
-class AssetAllocation(BaseModel):
-    portfolio = models.ForeignKey(Portfolio, on_delete=models.CASCADE, related_name="allocations")
-    asset = models.ForeignKey("assets.Asset", on_delete=models.CASCADE)
-    percentage = models.DecimalField(max_digits=5, decimal_places=2)
-
-    objects = AssetAllocationQuerySet.as_manager()
-
-    class Meta:
-        db_table = "asset_allocations"
-        unique_together = ["portfolio", "asset"]
-        verbose_name = "Asset Allocation"
-        verbose_name_plural = "Asset Allocations"
-
-    def __str__(self):
-        return f"{self.portfolio} - {self.asset.symbol}: {self.percentage}%"
 
 
 class PortfolioSnapshot(BaseModel):

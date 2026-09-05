@@ -1,6 +1,6 @@
 import django_filters
 
-from portfolios.models import AssetAllocation, Portfolio
+from portfolios.models import Portfolio
 
 
 class PortfolioFilter(django_filters.FilterSet):
@@ -10,13 +10,4 @@ class PortfolioFilter(django_filters.FilterSet):
 
     class Meta:
         model = Portfolio
-        fields = []
-
-
-class AssetAllocationFilter(django_filters.FilterSet):
-    portfolio_uuid = django_filters.UUIDFilter(field_name="portfolio__uuid")
-    asset_uuid = django_filters.UUIDFilter(field_name="asset__uuid")
-
-    class Meta:
-        model = AssetAllocation
         fields = []

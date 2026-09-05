@@ -7,7 +7,6 @@ from users.views.notification_preferences import NotificationPreferencesViewSet
 from users.views.user_account import UserAccountViewSet
 from users.views.user_preferences import UserPreferencesViewSet
 from users.views.user_profile import UserProfileViewSet
-from users.views.waitlist import waitlist_signup
 
 __all__ = [
     "DeviceTokenViewSet",
@@ -19,5 +18,4 @@ __all__ = [
     "UserAccountViewSet",
     "UserPreferencesViewSet",
     "UserProfileViewSet",
-    "waitlist_signup",
 ]

@@ -6,7 +6,6 @@ from users.models.notification_preferences import NotificationPreferences
 from users.models.user_account import UserAccount
 from users.models.user_preferences import UserPreferences
 from users.models.user_profile import UserProfile
-from users.models.waitlist import Waitlist
 
 __all__ = [
     "DeviceToken",
@@ -17,5 +16,4 @@ __all__ = [
     "UserAccount",
     "UserPreferences",
     "UserProfile",
-    "Waitlist",
 ]
