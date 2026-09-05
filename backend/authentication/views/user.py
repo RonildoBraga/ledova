@@ -17,6 +17,7 @@ from authentication.managers.user import EmailLookupState
 from authentication.serializers.user import (
     ChangePasswordSerializer,
     EmailVerificationSerializer,
+    ResendVerificationSerializer,
     UserSigninSerializer,
     UserSignupSerializer,
 )
@@ -26,6 +27,15 @@ from authentication.services.tokens import TokenService
 from authentication.throttles import EmailRateThrottle
 
 User = get_user_model()
+
+TRANSPORT_HEADER = "X-Auth-Transport"
+
+
+def bearer_transport(request):
+    """`X-Auth-Transport: bearer` (the mobile app) asks for the tokens in the body and no cookies.
+    Without the header the cookies are set and, until that client build ships the header, the body
+    still carries the same pair."""
+    return request.headers.get(TRANSPORT_HEADER, "").strip().lower() == "bearer"
 
 
 class TokenCookieMixin:
@@ -55,23 +65,26 @@ class TokenCookieMixin:
         return response
 
     def session_response(self, request, data, access_token, refresh_token):
-        """Cookies for the dashboard plus the same pair in the body for the mobile app (which reads
-        `tokens[0]`); the body carries raw tokens, so it must never be cached. `get_token` makes
-        CsrfViewMiddleware send a fresh `csrftoken` cookie with the auth cookies."""
-        get_token(request)
+        """The body carries raw tokens (the mobile app reads `tokens[0]`), so it must never be cached.
+        On the cookie transport `get_token` makes CsrfViewMiddleware send a fresh `csrftoken` cookie
+        with the auth cookies."""
         data["tokens"] = [{"access_token": access_token, "refresh_token": refresh_token}]
         response = Response(data, status=status.HTTP_200_OK, headers={"Cache-Control": "no-store"})
+        if bearer_transport(request):
+            return response
+        get_token(request)
         return self.set_token_cookies(response, access_token, refresh_token)
 
     def presented_refresh_token(self, request):
-        """Body first (native transport, no CSRF exposure), then the cookie.
+        """Body first (native transport, no CSRF exposure), then the cookie, which the bearer
+        transport never reads.
 
         A refresh cookie is sent by the browser on its own, so using it on an
         unsafe request needs the CSRF token unless a Bearer header authenticated
         the request (installed mobile builds replay the cookie beside their token).
         """
         body_token = request.data.get("refresh") if hasattr(request.data, "get") else None
-        if body_token:
+        if body_token or bearer_transport(request):
             return body_token
         cookie_token = request.COOKIES.get(settings.AUTH_COOKIE["refresh"])
         if cookie_token and not HybridJWTAuthentication().get_header(request):
@@ -90,7 +103,7 @@ class AuthViewSet(TokenCookieMixin, ViewSet):
         return throttles
 
     def get_permissions(self):
-        if self.action in ["resend_verification", "change_password", "signout_all"]:
+        if self.action in ["change_password", "signout_all"]:
             return [IsAuthenticated()]
         return [AllowAny()]
 
@@ -143,18 +156,19 @@ class AuthViewSet(TokenCookieMixin, ViewSet):
         if not refresh_token:
             return Response({"error": "Refresh token not found."}, status=status.HTTP_400_BAD_REQUEST)
 
+        bearer = bearer_transport(request)
         try:
             _, access_token, refresh_token = TokenService.rotate(refresh_token)
         except TokenError:
             resp = Response({"error": "Invalid refresh token."}, status=status.HTTP_401_UNAUTHORIZED)
-            return self.clear_token_cookies(resp)
+            return resp if bearer else self.clear_token_cookies(resp)
 
         response = Response(
             {"access": access_token, "refresh": refresh_token},
             status=status.HTTP_200_OK,
             headers={"Cache-Control": "no-store"},
         )
-        return self.set_token_cookies(response, access_token, refresh_token)
+        return response if bearer else self.set_token_cookies(response, access_token, refresh_token)
 
     @action(detail=False, methods=["post"], url_path="email-verification")
     def email_verification(self, request):
@@ -180,14 +194,28 @@ class AuthViewSet(TokenCookieMixin, ViewSet):
 
     @action(detail=False, methods=["post"], url_path="resend-verification")
     def resend_verification(self, request):
-        user = request.user
+        """Signup issues no session, so the address comes in the body; an authenticated caller without
+        one is served by its own address (the current client builds). The reply never says whether the
+        address exists or is verified: signup already reveals registration and nothing more is added."""
+        serializer = ResendVerificationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
 
-        if user.is_email_verified:
-            return Response({"message": "Email is already verified."}, status=status.HTTP_400_BAD_REQUEST)
+        email = serializer.validated_data.get("email")
+        if email:
+            lookup = User.objects.resolve_email(email)
+            user = lookup.user if lookup.state is EmailLookupState.UNIQUE else None
+        elif request.user.is_authenticated:
+            user = request.user
+        else:
+            return Response({"email": ["This field is required."]}, status=status.HTTP_400_BAD_REQUEST)
 
-        EmailCodeService.send(user)
+        if user is not None and not user.is_email_verified:
+            EmailCodeService.send(user)
 
-        return Response({"message": "Verification email sent successfully."}, status=status.HTTP_200_OK)
+        return Response(
+            {"message": "A verification code has been sent if the address needs verification."},
+            status=status.HTTP_200_OK,
+        )
 
     @action(detail=False, methods=["get"], url_path="auth/verify")
     @method_decorator(ensure_csrf_cookie)
@@ -218,5 +246,6 @@ class AuthViewSet(TokenCookieMixin, ViewSet):
 
         user.set_password(new_password)
         user.save(update_fields=["password"])
+        TokenService.revoke_all(user, keep_jti=request.auth.get("rjti"))
 
         return Response({"message": "Password changed successfully."}, status=status.HTTP_200_OK)

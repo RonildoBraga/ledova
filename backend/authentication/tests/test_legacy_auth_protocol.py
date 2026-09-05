@@ -530,8 +530,8 @@ class LegacyRefreshLogoutTest(LegacyAuthProtocolTestCase):
 
 
 class TokenLifetimeDefaultsTest(SimpleTestCase):
-    def test_access_lives_a_day_and_refresh_a_week_by_default(self):
-        self.assertEqual(settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"], timedelta(days=1))
+    def test_access_and_refresh_each_live_a_week_by_default(self):
+        self.assertEqual(settings.SIMPLE_JWT["ACCESS_TOKEN_LIFETIME"], timedelta(days=7))
         self.assertEqual(settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"], timedelta(days=7))
 
 
@@ -619,6 +619,22 @@ class EmailThrottleTest(LegacyAuthProtocolTestCase):
         self.assertEqual(throttled.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
         self.assertEqual(send_email.call_count, 10)
 
+    def test_anonymous_resend_is_throttled_per_body_address(self):
+        user = self.create_user(verified=False)
+
+        with patch("authentication.views.user.EmailCodeService.send") as send_email:
+            for _ in range(10):
+                response = self.client.post(
+                    "/api/resend-verification/", {"email": " Member@EXAMPLE.com "}, format="json"
+                )
+                self.assertEqual(response.status_code, status.HTTP_200_OK)
+            throttled = self.client.post("/api/resend-verification/", {"email": user.email}, format="json")
+
+        self.assertEqual(throttled.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertEqual(send_email.call_count, 10)
+        other = self.client.post("/api/resend-verification/", {"email": "other@example.com"}, format="json")
+        self.assertEqual(other.status_code, status.HTTP_200_OK)
+
     def test_refresh_and_signout_are_not_address_throttled(self):
         user = self.create_completed_user()
         for _ in range(10):
@@ -670,25 +686,206 @@ class LegacyCredentialMutationTest(LegacyAuthProtocolTestCase):
         user.refresh_from_db()
         self.assertTrue(user.check_password(self.password))
         self.assertFalse(user.check_password("replacement-password-456"))
+        self.assertTrue(self.verify_with_cookie(access)["valid"])
 
-    def test_legacy_resend_for_authenticated_unverified_user_invokes_delivery(self):
+    def test_change_password_revokes_every_other_session_and_keeps_the_current_one(self):
+        user = self.create_completed_user()
+        current_access, current_refresh = TokenService.issue(user)
+        other_access, other_refresh = TokenService.issue(user)
+        bystander = self.create_completed_user(email="bystander@example.com")
+        bystander_access, _ = TokenService.issue(bystander)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {current_access}")
+
+        response = self.client.post(
+            "/api/change-password/",
+            {
+                "currentPassword": self.password,
+                "newPassword": "replacement-password-456",
+                "newPasswordConfirm": "replacement-password-456",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json(), {"message": "Password changed successfully."})
+        self.assertTrue(is_blacklisted(other_refresh))
+        self.assertFalse(is_blacklisted(current_refresh))
+        self.assertEqual(self.verify_with_cookie(other_access), {"valid": False})
+        self.assertTrue(self.verify_with_bearer(current_access)["valid"])
+        self.assertTrue(self.verify_with_cookie(bystander_access)["valid"])
+        self.assertEqual(OutstandingToken.objects.filter(user=user, blacklistedtoken__isnull=True).count(), 1)
+        rotated = self.client.post("/api/token/refresh/", {"refresh": current_refresh}, format="json")
+        self.assertEqual(rotated.status_code, status.HTTP_200_OK)
+
+
+class ResendVerificationTest(LegacyAuthProtocolTestCase):
+    """Signup issues no session, so the address may come in the body (AllowAny); an authenticated
+    caller with no body keeps today's behaviour. The reply is the same 200 whatever the address."""
+
+    generic_reply = {"message": "A verification code has been sent if the address needs verification."}
+
+    def resend(self, body):
+        with patch("authentication.views.user.EmailCodeService.send") as send_email:
+            response = self.client.post("/api/resend-verification/", body, format="json")
+        return response, send_email
+
+    def test_authenticated_unverified_caller_without_a_body_gets_its_own_code(self):
         user = self.create_user(verified=False)
         access, _ = TokenService.issue(user)
         self.client.cookies["access"] = access
 
-        with patch("authentication.views.user.EmailCodeService.send") as send_email:
-            response = self.client.post("/api/resend-verification/", {}, format="json")
+        response, send_email = self.resend({})
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json(), self.generic_reply)
         send_email.assert_called_once_with(user)
 
-    def test_legacy_resend_rejects_an_already_verified_user_without_delivery(self):
+    def test_authenticated_verified_caller_gets_the_same_reply_without_delivery(self):
         user = self.create_user(verified=True)
         access, _ = TokenService.issue(user)
         self.client.cookies["access"] = access
 
-        with patch("authentication.views.user.EmailCodeService.send") as send_email:
-            response = self.client.post("/api/resend-verification/", {}, format="json")
+        response, send_email = self.resend({})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json(), self.generic_reply)
+        send_email.assert_not_called()
+
+    def test_anonymous_caller_with_a_pending_address_gets_the_code(self):
+        user = self.create_direct_user("pending.member@example.test", verified=False)
+
+        response, send_email = self.resend({"email": " Pending.Member@EXAMPLE.TEST "})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json(), self.generic_reply)
+        send_email.assert_called_once()
+        self.assertEqual(send_email.call_args.args[0].pk, user.pk)
+        self.assertNotIn("access", response.cookies)
+        self.assertFalse(OutstandingToken.objects.exists())
+
+    def test_unknown_verified_and_ambiguous_addresses_get_the_same_reply_without_delivery(self):
+        self.create_user(email="verified@example.com", verified=True)
+        replies = []
+
+        for email in ("unknown@example.com", "verified@example.com"):
+            response, send_email = self.resend({"email": email})
+            send_email.assert_not_called()
+            replies.append((response.status_code, response.json(), list(response.cookies)))
+        with patch.object(type(User.objects), "resolve_email", return_value=self.ambiguous_email_result()) as resolve:
+            response, send_email = self.resend({"email": "collision@example.com"})
+        send_email.assert_not_called()
+        resolve.assert_called_once_with("collision@example.com")
+        replies.append((response.status_code, response.json(), list(response.cookies)))
+
+        self.assertEqual(replies, [replies[0]] * 3)
+        self.assertEqual(replies[0], (status.HTTP_200_OK, self.generic_reply, []))
+
+    def test_body_address_wins_over_the_authenticated_caller(self):
+        caller = self.create_user(email="caller@example.com", verified=False)
+        target = self.create_user(email="target@example.com", verified=False)
+        access, _ = TokenService.issue(caller)
+        self.client.cookies["access"] = access
+
+        response, send_email = self.resend({"email": target.email})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        send_email.assert_called_once_with(target)
+
+    def test_anonymous_caller_without_an_address_is_rejected_without_delivery(self):
+        self.create_user(verified=False)
+
+        response, send_email = self.resend({})
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data, {"email": ["This field is required."]})
         send_email.assert_not_called()
+
+    def test_noncanonical_raw_address_is_rejected_without_delivery(self):
+        self.create_user(email="pending@example.com", verified=False)
+
+        response, send_email = self.resend({"email": "pending@example.com\t"})
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data, {"email": ["Enter a valid email address."]})
+        send_email.assert_not_called()
+
+
+class BearerTransportTest(LegacyAuthProtocolTestCase):
+    """`X-Auth-Transport: bearer` (the mobile app once it ships the header): tokens in the body, no
+    cookies set, and the refresh cookie never read. Without the header every shape above is kept."""
+
+    def setUp(self):
+        super().setUp()
+        self.client.credentials(HTTP_X_AUTH_TRANSPORT="bearer")
+
+    def assert_body_only_session(self, response, user):
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(list(response.cookies), [])
+        payload = response.json()
+        self.assertEqual(set(payload), IDENTITY_KEYS | {"tokens"})
+        self.assertEqual(payload["email"], user.email)
+        self.assertEqual(set(payload["tokens"][0]), {"accessToken", "refreshToken"})
+        self.assertEqual(response["Cache-Control"], "no-store")
+        self.assertTrue(self.verify_with_bearer(payload["tokens"][0]["accessToken"])["valid"])
+        return payload["tokens"][0]
+
+    def test_signin_returns_the_pair_in_the_body_and_sets_no_cookie(self):
+        user = self.create_completed_user()
+
+        response = self.client.post("/api/signin/", {"email": user.email, "password": self.password}, format="json")
+
+        tokens = self.assert_body_only_session(response, user)
+        self.assertEqual(OutstandingToken.objects.filter(user=user).count(), 1)
+        self.assertEqual(jti_of(tokens["refreshToken"]), OutstandingToken.objects.get(user=user).jti)
+
+    def test_email_verification_returns_the_pair_in_the_body_and_sets_no_cookie(self):
+        user = self.create_user(verified=False)
+
+        with patch("authentication.views.user.EmailCodeService.verify", return_value=True):
+            response = self.client.post(
+                "/api/email-verification/", {"email": user.email, "token": "123456"}, format="json"
+            )
+
+        self.assert_body_only_session(response, user)
+
+    def test_refresh_reads_the_body_and_answers_in_the_body_only(self):
+        user = self.create_completed_user()
+        _, old_refresh = TokenService.issue(user)
+
+        response = self.client.post("/api/token/refresh/", {"refresh": old_refresh}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(list(response.cookies), [])
+        self.assertEqual(set(response.json()), {"access", "refresh"})
+        self.assertEqual(response["Cache-Control"], "no-store")
+        self.assertTrue(is_blacklisted(old_refresh))
+        self.assertTrue(self.verify_with_bearer(response.json()["access"])["valid"])
+
+    def test_refresh_never_reads_the_cookie(self):
+        user = self.create_completed_user()
+        _, refresh = TokenService.issue(user)
+        self.client.cookies["refresh"] = refresh
+
+        response = self.client.post("/api/token/refresh/", {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.json(), {"error": "Refresh token not found."})
+        self.assertFalse(is_blacklisted(refresh))
+        self.assertEqual(OutstandingToken.objects.filter(user=user).count(), 1)
+
+    def test_invalid_refresh_is_rejected_without_touching_cookies(self):
+        response = self.client.post("/api/token/refresh/", {"refresh": "invalid-refresh-token"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response.json(), {"error": "Invalid refresh token."})
+        self.assertEqual(list(response.cookies), [])
+
+    def test_any_other_header_value_keeps_the_cookie_transport(self):
+        user = self.create_completed_user()
+        self.client.credentials(HTTP_X_AUTH_TRANSPORT="cookie")
+
+        response = self.client.post("/api/signin/", {"email": user.email, "password": self.password}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assert_session_body(response, user)
+        self.assertEqual(set(response.cookies), {"access", "refresh", "csrftoken"})

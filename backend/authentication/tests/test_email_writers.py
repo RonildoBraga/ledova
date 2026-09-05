@@ -1,11 +1,18 @@
 from django.contrib import admin
 from django.contrib.auth import get_user_model
-from django.test import RequestFactory, TestCase
+from django.test import RequestFactory, TestCase, override_settings
+from django.urls import reverse
 
 from authentication.admin.user import CustomUserAdmin, CustomUserCreationForm
 from authentication.email import EMAIL_ERROR, EmailError
+from authentication.services.tokens import TokenService
 
 User = get_user_model()
+
+TEST_STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+}
 
 
 class EmailManagerWriterTests(TestCase):
@@ -111,19 +118,78 @@ class EmailAdminWriterTests(TestCase):
         self.assertEqual(collision.errors["email"], ["Email is unavailable."])
         self.assertEqual(User.objects.count(), 1)
 
-    def test_existing_user_email_is_absent_from_the_change_form(self):
-        superuser = User.objects.create_superuser(
-            email="admin@example.test",
-            password=self.password,
-        )
-        target = User.objects.create_user(
-            email="member@example.test",
-            password=self.password,
-        )
+
+@override_settings(STORAGES=TEST_STORAGES)
+class EmailAdminChangeTests(TestCase):
+    """Staff can correct an address; the change form applies the same canonical validation as the API
+    (never the DB constraint as a 500) and a changed address ends every session."""
+
+    password = "writer-password-123"
+
+    def setUp(self):
+        super().setUp()
+        self.superuser = User.objects.create_superuser(email="admin@example.test", password=self.password)
+        self.target = User.objects.create_user(email="member@example.test", password=self.password)
+        self.other = User.objects.create_user(email="legacy.owner@example.test", password=self.password)
+        self.change_url = reverse("admin:authentication_customuser_change", args=[self.target.pk])
+        self.client.force_login(self.superuser)
+
+    @staticmethod
+    def change_data(email):
+        return {"email": email, "date_joined_0": "2026-01-01", "date_joined_1": "00:00:00", "is_active": "on"}
+
+    def issue_sessions(self):
+        return [TokenService.issue(self.target)[1] for _ in range(2)]
+
+    def assert_sessions_live(self, refresh_tokens, live):
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        for raw in refresh_tokens:
+            self.assertIs(TokenService.is_session_live(RefreshToken(raw, verify=False)["jti"]), live)
+
+    def test_email_is_editable_on_the_change_form(self):
         request = RequestFactory().get("/")
-        request.user = superuser
+        request.user = self.superuser
         model_admin = CustomUserAdmin(User, admin.site)
 
-        self.assertIn("email", model_admin.get_readonly_fields(request, target))
-        form_class = model_admin.get_form(request, target)
-        self.assertNotIn("email", form_class.base_fields)
+        self.assertNotIn("email", model_admin.get_readonly_fields(request, self.target))
+        self.assertIn("email", model_admin.get_form(request, self.target).base_fields)
+
+    def test_change_normalises_the_address_and_revokes_every_session(self):
+        sessions = self.issue_sessions()
+
+        response = self.client.post(self.change_url, self.change_data(" Member.Renamed@EXAMPLE.TEST "))
+
+        self.assertEqual(response.status_code, 302)
+        self.target.refresh_from_db()
+        self.assertEqual(self.target.email, "member.renamed@example.test")
+        self.assert_sessions_live(sessions, False)
+
+    def test_same_address_in_another_spelling_changes_nothing_and_keeps_sessions(self):
+        sessions = self.issue_sessions()
+
+        response = self.client.post(self.change_url, self.change_data(" Member@EXAMPLE.TEST "))
+
+        self.assertEqual(response.status_code, 302)
+        self.target.refresh_from_db()
+        self.assertEqual(self.target.email, "member@example.test")
+        self.assert_sessions_live(sessions, True)
+
+    def test_colliding_and_invalid_addresses_are_form_errors_not_constraint_failures(self):
+        sessions = self.issue_sessions()
+        cases = (
+            (" Legacy.Owner@EXAMPLE.TEST ", ["Email is unavailable."]),
+            ("member@example.test\t", ["Enter a valid email address."]),
+            ("not-an-email", ["Enter a valid email address."]),
+        )
+
+        for email, errors in cases:
+            with self.subTest(email=repr(email)):
+                response = self.client.post(self.change_url, self.change_data(email))
+
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.context["adminform"].form.errors["email"], errors)
+        self.target.refresh_from_db()
+        self.assertEqual(self.target.email, "member@example.test")
+        self.assertEqual(User.objects.count(), 3)
+        self.assert_sessions_live(sessions, True)

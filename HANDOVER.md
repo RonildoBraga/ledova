@@ -37,7 +37,7 @@ What the branch did, in order:
   session, the access token is bound to its refresh via `rjti`). The OTP is
   hashed, expiring (10 minutes) and attempt-capped (5); sign-in, sign-up and
   verification are throttled per address; the DEBUG `000000` bypass is gone;
-  cookie flags come from `settings.AUTH_COOKIE`; access tokens live 24 hours.
+  cookie flags come from `settings.AUTH_COOKIE`; both tokens live 7 days.
 - Per-app simplification with every feature kept: compliance (shared admin
   helpers, seed modules, flat services), users (lifecycle service, one
   preferences guard), tokens (deployment and mint services, one review
@@ -71,15 +71,41 @@ types, constants and helpers) and the never-imported dashboard files
 `useTransparency`, the `company/hooks` and mobile `components` barrels) are
 deleted; the three `/company/*` redirect routes stay for old bookmarks.
 
+Branch `claude/b5-auth-backend` is the auth backend bundle, backward compatible
+with the client builds as they are: the token transport is negotiated with the
+`X-Auth-Transport: bearer` request header (sign-in, email verification and
+`token/refresh` answer in the body only, set no cookie and never read the
+refresh cookie; without the header the cookies are set and the body still
+carries the pair), `resend-verification` is `AllowAny` and takes `{ email }`
+in the body (an authenticated caller without one is still served by its own
+address; the reply is a generic 200), `change-password` revokes every other
+session (`TokenService.revoke_all(user, keep_jti=...)`), and the admin change
+form lets staff change a user's email with the API's canonical validation
+(a colliding address is a form error, not a constraint failure) and revokes
+every session of that user on a change. No self-service email change: both
+clients show it read-only by design.
+
 ## Next work
 
-1. Explicit native body-token endpoints for the mobile app.
+1. Client bundle for the header-negotiated transport: mobile
+   `src/services/apiClient.ts` sends `X-Auth-Transport: bearer` from
+   `axios.create`, and both signup email-confirmation screens (shared-services
+   `resendVerificationCode`) post `{ email }` to `resend-verification`. Once
+   the mobile build with the header is out, drop the body `tokens` from the
+   cookie transport so dashboard JavaScript never sees a refresh token.
 2. Client bundle: drop the shared-constants `TRADING_ENDPOINTS.TRANSACTIONS`
    key and the shared-types `OrderModificationMatchDetails`, `matchFound` and
    `matchDetails` entries; the trading cleanup removed the endpoint and fields.
 3. Product call: should modifying an order re-run matching automatically?
    Creation matches; modification no longer reports a candidate match.
-4. Deploy note: `companies/0003_delete_review_and_signature_models` (with
+4. Deploy note: `ACCESS_TOKEN_LIFETIME` defaults to 7 days again (604800, the
+   same as the refresh token). This is safe because the access token carries
+   its refresh jti (`rjti`) and `HybridJWTAuthentication` checks that session
+   is live on every request, so signout, signout-all, a password change,
+   an admin email change and account deletion revoke it immediately; the
+   24-hour value only signed dashboard users out daily. Remove any
+   `ACCESS_TOKEN_LIFETIME=86400` override to pick the default up.
+5. Deploy note: `companies/0003_delete_review_and_signature_models` (with
    `tokens/0013_remove_transferorder_signature_request` before it) drops the
    three unused tables `ApplicationReview`, `ReviewNote` and
    `SignatureRequest`; both migrations are reversible with `migrate`. The
