@@ -1,6 +1,4 @@
 import logging
-from concurrent.futures import ThreadPoolExecutor
-from concurrent.futures import TimeoutError as ReadTimeout
 
 from django.contrib import admin, messages
 from django.http import HttpResponseRedirect
@@ -16,12 +14,10 @@ from tokens.exceptions import (
 from tokens.models import IssuanceStatus, ShareIssuance, ShareToken, ShareTokenStatus
 from tokens.services import ShareTokenService
 
-from ._helpers import action_buttons, hex_column, status_badge
+from ._helpers import action_buttons, bounded_chain_read, hex_column, status_badge
 
 logger = logging.getLogger(__name__)
 
-
-PAUSED_READ_TIMEOUT = 5
 
 ISSUANCE_COLORS = {
     IssuanceStatus.PENDING: "#6c757d",
@@ -214,19 +210,7 @@ class ShareTokenAdmin(admin.ModelAdmin):
 
     @staticmethod
     def _paused_on_chain(obj):
-        executor = ThreadPoolExecutor(max_workers=1)
-        try:
-            return executor.submit(lambda: ShareTokenService().read_paused(obj)).result(timeout=PAUSED_READ_TIMEOUT)
-        except ReadTimeout:
-            logger.warning(
-                f"paused() of {obj.symbol} not answered within {PAUSED_READ_TIMEOUT}s; offering both buttons"
-            )
-            return None
-        except Exception as exc:
-            logger.warning(f"paused() of {obj.symbol} could not be read: {exc}")
-            return None
-        finally:
-            executor.shutdown(wait=False)
+        return bounded_chain_read(lambda: ShareTokenService().read_paused(obj), f"paused() of {obj.symbol}")
 
     def deploy_view(self, request, uuid):
         token = get_object_or_404(ShareToken, uuid=uuid)

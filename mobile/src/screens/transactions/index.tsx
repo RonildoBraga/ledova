@@ -119,6 +119,7 @@ export function TransactionsScreen() {
     transactions,
     ethWallets,
     btcWallets,
+    baseWallets,
     isLoading,
     filters,
     hasActiveFilters,
@@ -339,6 +340,7 @@ export function TransactionsScreen() {
         filters={filters}
         ethWallets={ethWallets}
         btcWallets={btcWallets}
+        baseWallets={baseWallets}
         onClose={() => setShowFiltersDialog(false)}
         onUpdateFilters={updateFilters}
         onApplyFilters={(filtersToApply) => {

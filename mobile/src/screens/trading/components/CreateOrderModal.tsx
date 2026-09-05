@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView } from 'react-native';
 import { ShoppingCartIcon, TagIcon, WalletIcon, ShieldWarningIcon } from 'phosphor-react-native';
 import { formatWalletAddressShort, formatCurrency } from '@ledova/shared';
-import type { ShareToken, CreateOrderRequest, Wallet, OrderType } from '@ledova/shared';
+import type { ShareToken, CreateOrderRequest, Wallet, OrderType, WhitelistStatus } from '@ledova/shared';
 import { CustomModal } from '../../../components/modal';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
 
@@ -15,6 +15,7 @@ interface CreateOrderModalProps {
   walletsWithHoldings: { walletAddress: string; balance: string }[];
   onSubmit: (data: CreateOrderRequest) => void;
   isWalletWhitelisted: (address: string) => boolean;
+  getWhitelistStatus: (address: string) => WhitelistStatus | undefined;
   isLoadingWhitelistStatus: boolean;
 }
 
@@ -27,6 +28,7 @@ export function CreateOrderModal({
   walletsWithHoldings,
   onSubmit,
   isWalletWhitelisted,
+  getWhitelistStatus,
   isLoadingWhitelistStatus,
 }: CreateOrderModalProps) {
   const theme = useAppTheme();
@@ -213,6 +215,9 @@ export function CreateOrderModal({
   }, [quantity, minQuantity, pricePerShare, selectedWallet, isBuy, currentWalletBalance]);
 
   const walletIsWhitelisted = selectedWallet ? isWalletWhitelisted(selectedWallet.address) : false;
+  const whitelistStatusUnknown = selectedWallet
+    ? getWhitelistStatus(selectedWallet.address)?.status === 'unknown'
+    : false;
   const isConfirmDisabled = !isValid || (!walletIsWhitelisted && !isLoadingWhitelistStatus);
 
   useEffect(() => {
@@ -292,9 +297,13 @@ export function CreateOrderModal({
           <View style={styles.warningBox}>
             <ShieldWarningIcon size={theme.icon.sizes.md} color={theme.colors.status.warning.icon} />
             <View style={styles.warningTextContainer}>
-              <Text style={styles.warningTitle}>Wallet Not Verified</Text>
+              <Text style={styles.warningTitle}>
+                {whitelistStatusUnknown ? 'Allowlist Status Unavailable' : 'Wallet Not Allowlisted'}
+              </Text>
               <Text style={styles.warningDesc}>
-                Your wallet is not verified for trading. Complete KYC verification before placing orders.
+                {whitelistStatusUnknown
+                  ? 'We could not reach the network to check your allowlist status. Orders are held until the check succeeds - please try again shortly.'
+                  : 'The operator must add your wallet to the allowlist before you can place orders.'}
               </Text>
             </View>
           </View>

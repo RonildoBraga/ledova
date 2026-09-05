@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import { Dropdown } from 'react-native-element-dropdown';
 import { CurrencyBtcIcon, CurrencyEthIcon, CaretDownIcon, WalletIcon } from 'phosphor-react-native';
 import { useAppTheme, useThemedStyles } from '../../../../contexts';
-import { formatWalletAddressShort } from '@ledova/shared';
+import { BLOCKCHAIN, formatWalletAddressShort } from '@ledova/shared';
 import { CustomModal } from '../../../../components/modal';
 import { DatePickerField } from '../../../../components/date-picker';
 import { NumberField } from '../../../../components/number-field';
@@ -15,6 +15,7 @@ interface TransactionFiltersModalProps {
   filters: TransactionQueryParams;
   ethWallets: Wallet[];
   btcWallets: Wallet[];
+  baseWallets: Wallet[];
   onClose: () => void;
   onUpdateFilters: (filters: TransactionQueryParams) => void;
   onApplyFilters: (filters: TransactionQueryParams) => void;
@@ -22,13 +23,14 @@ interface TransactionFiltersModalProps {
 }
 
 type DirectionOption = 'all' | 'incoming' | 'outgoing';
-type ChainOption = 'all' | 'BTC' | 'ETH';
+type ChainOption = 'all' | typeof BLOCKCHAIN.BITCOIN | typeof BLOCKCHAIN.ETHEREUM | typeof BLOCKCHAIN.BASE;
 
 export function TransactionFiltersModal({
   isOpen,
   filters,
   ethWallets,
   btcWallets,
+  baseWallets,
   onClose,
   onUpdateFilters,
   onApplyFilters,
@@ -160,7 +162,7 @@ export function TransactionFiltersModal({
   const [endDate, setEndDate] = useState<Date | undefined>();
   const prevIsOpenRef = useRef(isOpen);
 
-  const allWallets = [...ethWallets, ...btcWallets];
+  const allWallets = [...ethWallets, ...btcWallets, ...baseWallets];
 
   useEffect(() => {
     if (isOpen && !prevIsOpenRef.current) {
@@ -243,13 +245,18 @@ export function TransactionFiltersModal({
   const chainOptions: { value: ChainOption; label: string; icon?: React.ReactNode }[] = [
     { value: 'all', label: 'All' },
     {
-      value: 'BTC',
+      value: BLOCKCHAIN.BITCOIN,
       label: 'BTC',
       icon: <CurrencyBtcIcon size={14} weight={theme.icon.weights.bold} color="currentColor" />,
     },
     {
-      value: 'ETH',
+      value: BLOCKCHAIN.ETHEREUM,
       label: 'ETH',
+      icon: <CurrencyEthIcon size={14} weight={theme.icon.weights.bold} color="currentColor" />,
+    },
+    {
+      value: BLOCKCHAIN.BASE,
+      label: 'BASE',
       icon: <CurrencyEthIcon size={14} weight={theme.icon.weights.bold} color="currentColor" />,
     },
   ];
@@ -348,9 +355,9 @@ export function TransactionFiltersModal({
             )}
             renderItem={(item) => (
               <View style={styles.dropdownItem}>
-                {item.chain === 'ethereum' ? (
+                {item.chain === BLOCKCHAIN.ETHEREUM || item.chain === BLOCKCHAIN.BASE ? (
                   <CurrencyEthIcon size={14} color={theme.colors.text.muted} weight={theme.icon.weights.regular} />
-                ) : item.chain === 'bitcoin' ? (
+                ) : item.chain === BLOCKCHAIN.BITCOIN ? (
                   <CurrencyBtcIcon size={14} color={theme.colors.text.muted} weight={theme.icon.weights.regular} />
                 ) : (
                   <WalletIcon size={14} color={theme.colors.text.muted} weight={theme.icon.weights.regular} />

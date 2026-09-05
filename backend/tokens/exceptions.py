@@ -27,7 +27,7 @@ class InvalidTokenStateException(APIException):
 
 
 class TokenPauseFailedException(APIException):
-    status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
     default_detail = "Token pause or unpause failed on chain."
     default_code = "token_pause_failed"
 

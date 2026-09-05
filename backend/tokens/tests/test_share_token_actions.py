@@ -65,7 +65,7 @@ class ShareTokenActionTest(APITestCase):
         failure = TokenPauseFailedException("Token pause failed: execution reverted")
         with patch("tokens.services.share_token_service.ShareTokenService._set_paused", side_effect=failure):
             response = self.client.post(f"/api/v1/tokens/{deployed.uuid}/pause/")
-        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.status_code, 503)
         self.assertEqual(response.json()["detail"], "Token pause failed: execution reverted")
         deployed.refresh_from_db()
         self.assertEqual(deployed.status, ShareTokenStatus.DEPLOYED)
@@ -73,7 +73,7 @@ class ShareTokenActionTest(APITestCase):
     @patch("tokens.services.share_token_service.get_base_chain_client", side_effect=BaseChainConnectionError("down"))
     def test_unreachable_chain_answers_with_detail_instead_of_crashing(self, chain_client):
         response = self.client.post(f"/api/v1/tokens/{self.tenant.deployed_token.uuid}/pause/")
-        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.status_code, 503)
         self.assertEqual(response.json()["detail"], "Chain unreachable: down")
 
     @patch("tokens.tasks.deploy_share_token_task")

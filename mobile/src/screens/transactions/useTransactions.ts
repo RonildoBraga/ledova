@@ -29,6 +29,7 @@ export function useTransactions() {
 
   const ethWallets = useMemo(() => wallets.filter((w) => w.chain === BLOCKCHAIN.ETHEREUM), [wallets]);
   const btcWallets = useMemo(() => wallets.filter((w) => w.chain === BLOCKCHAIN.BITCOIN), [wallets]);
+  const baseWallets = useMemo(() => wallets.filter((w) => w.chain === BLOCKCHAIN.BASE), [wallets]);
 
   const {
     data: transactionsData,
@@ -87,6 +88,7 @@ export function useTransactions() {
       wallets: [],
       ethWallets: [],
       btcWallets: [],
+      baseWallets: [],
       isLoading: false,
       isLoadingMore: false,
       filters,
@@ -138,6 +140,7 @@ export function useTransactions() {
     wallets,
     ethWallets,
     btcWallets,
+    baseWallets,
     isLoading,
     isLoadingMore: isFetchingNextPage,
     filters,

@@ -34,7 +34,7 @@ export const namingConventionRules = {
   ],
 };
 
-export const noEntityPayloadRule = {
+export const restrictedTypeSyntaxRules = {
   'no-restricted-syntax': [
     'error',
     {
@@ -43,23 +43,11 @@ export const noEntityPayloadRule = {
       message:
         'Avoid creating *Payload interfaces for entities. Use TypeScript utility types instead (e.g., Omit<Entity, "uuid">). See Resource Types Philosophy.',
     },
-  ],
-};
-
-export const useUtilityTypesRule = {
-  'no-restricted-syntax': [
-    'warn',
     {
-      selector: 'TSInterfaceDeclaration[id.name=/^(Create|Update)[A-Z].*/]',
+      selector: 'TSInterfaceDeclaration[id.name=/^(Create|Update)[A-Z].*(?<!Request)(?<!Response)$/]',
       message:
-        'Consider using TypeScript utility types (e.g., type CreateEntity = Omit<Entity, "uuid">) instead of interfaces for entity variations.',
+        'Use TypeScript utility types (e.g., type CreateEntity = Omit<Entity, "uuid">) instead of interfaces for entity variations. API request and response shapes, named *Request or *Response, are exempt.',
     },
-  ],
-};
-
-export const queryParamNamingRule = {
-  'no-restricted-syntax': [
-    'warn',
     {
       selector:
         'TSInterfaceDeclaration[id.name=/.*(?:QueryParams|Filters)$/] TSPropertySignature[key.name=/^(minValue|maxValue|startDate|endDate|searchQuery|orderBy|pageSize)$/]',
@@ -72,9 +60,7 @@ export const queryParamNamingRule = {
 export const namingConventions = {
   rules: {
     ...namingConventionRules,
-    ...noEntityPayloadRule,
-    ...useUtilityTypesRule,
-    ...queryParamNamingRule,
+    ...restrictedTypeSyntaxRules,
   },
 };
 

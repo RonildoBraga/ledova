@@ -26,8 +26,9 @@ const directionOptions = [
 
 const chainOptions = [
   { value: '', label: 'All', icon: null },
-  { value: 'ethereum', label: 'ETH', icon: <CurrencyEthIcon size={ICON_SM} /> },
-  { value: 'bitcoin', label: 'BTC', icon: <CurrencyBtcIcon size={ICON_SM} /> },
+  { value: BLOCKCHAIN.ETHEREUM, label: 'ETH', icon: <CurrencyEthIcon size={ICON_SM} /> },
+  { value: BLOCKCHAIN.BITCOIN, label: 'BTC', icon: <CurrencyBtcIcon size={ICON_SM} /> },
+  { value: BLOCKCHAIN.BASE, label: 'BASE', icon: <CurrencyEthIcon size={ICON_SM} /> },
 ];
 
 export function TransactionFilterModal({
@@ -42,6 +43,7 @@ export function TransactionFilterModal({
 }: TransactionFilterModalProps) {
   const ethWallets = wallets.filter((w) => w.chain === BLOCKCHAIN.ETHEREUM);
   const btcWallets = wallets.filter((w) => w.chain === BLOCKCHAIN.BITCOIN);
+  const baseWallets = wallets.filter((w) => w.chain === BLOCKCHAIN.BASE);
 
   return (
     <Modal
@@ -85,7 +87,7 @@ export function TransactionFilterModal({
 
         <div className="space-y-2">
           <p className="text-xs font-medium text-text-subtle uppercase tracking-wide">Chain</p>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-4 gap-2">
             {chainOptions.map((option) => {
               const isSelected = (filters.chain || '') === option.value;
               return (
@@ -127,6 +129,15 @@ export function TransactionFilterModal({
             {btcWallets.length > 0 && (
               <optgroup label="Bitcoin">
                 {btcWallets.map((wallet) => (
+                  <option key={wallet.uuid} value={wallet.uuid}>
+                    {wallet.name || `${wallet.address.slice(0, 8)}...${wallet.address.slice(-6)}`}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {baseWallets.length > 0 && (
+              <optgroup label="Base">
+                {baseWallets.map((wallet) => (
                   <option key={wallet.uuid} value={wallet.uuid}>
                     {wallet.name || `${wallet.address.slice(0, 8)}...${wallet.address.slice(-6)}`}
                   </option>

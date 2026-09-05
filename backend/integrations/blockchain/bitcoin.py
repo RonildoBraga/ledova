@@ -114,6 +114,14 @@ class BitcoinClient(BlockchainClient):
             logger.error(f"Error getting receipt for {tx_hash}: {str(e)}")
             return None
 
+    def get_block_timestamp(self, block_hash: str) -> Optional[int]:
+        try:
+            header = self._rpc_call("getblockheader", [block_hash])
+            return header.get("time") if header else None
+        except Exception as e:
+            logger.error(f"Error getting block header {block_hash}: {str(e)}")
+            return None
+
     def broadcast_transaction(self, signed_tx: str) -> str:
         try:
             self.assert_expected_network()

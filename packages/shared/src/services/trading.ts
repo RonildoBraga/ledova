@@ -139,12 +139,12 @@ export function parseTradingError(error: unknown): string {
     const data = axiosError.response.data;
 
     if (data.code === 'not_whitelisted') {
-      return 'Your wallet is not verified for trading. Please complete KYC verification to trade tokenized securities.';
+      return 'Your wallet is not on the trading allowlist. The operator must add it before you can place orders.';
     }
 
     if (data.detail) {
       if (data.detail.includes('not whitelisted')) {
-        return 'Your wallet is not verified for trading. Please complete KYC verification to trade tokenized securities.';
+        return 'Your wallet is not on the trading allowlist. The operator must add it before you can place orders.';
       }
       return data.detail;
     }
@@ -153,12 +153,12 @@ export function parseTradingError(error: unknown): string {
   }
 
   if (axiosError.response?.status === 403) {
-    return 'Your wallet is not authorized to trade. Please ensure your wallet is verified and whitelisted.';
+    return 'Your wallet is not authorized to trade. The operator must add it to the trading allowlist.';
   }
 
   if (axiosError.message) {
     if (axiosError.message.includes('403')) {
-      return 'Your wallet is not authorized to trade. Please ensure your wallet is verified and whitelisted.';
+      return 'Your wallet is not authorized to trade. The operator must add it to the trading allowlist.';
     }
     return axiosError.message;
   }

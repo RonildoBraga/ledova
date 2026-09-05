@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.conf import settings
 from rest_framework import serializers
 from web3 import Web3
@@ -99,7 +101,7 @@ class TransferOrderCreateSerializer(serializers.Serializer):
         default=0,
         help_text="Minimum quantity per fill. 0 means accept any partial fill.",
     )
-    price_per_share = serializers.DecimalField(max_digits=18, decimal_places=2, min_value=0.01)
+    price_per_share = serializers.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0.01"))
 
     def validate_token(self, value):
         try:
@@ -221,7 +223,9 @@ class OrderModificationRequestSerializer(serializers.Serializer):
 
     new_quantity = serializers.IntegerField(required=False, min_value=1)
     new_min_quantity = serializers.IntegerField(required=False, min_value=0)
-    new_price_per_share = serializers.DecimalField(required=False, max_digits=18, decimal_places=2, min_value=0.01)
+    new_price_per_share = serializers.DecimalField(
+        required=False, max_digits=18, decimal_places=2, min_value=Decimal("0.01")
+    )
 
     def validate(self, data):
         if not data:

@@ -24,3 +24,11 @@ export function getErrorMessage(error: unknown, defaultMessage = 'An error occur
 
   return defaultMessage;
 }
+
+export function hasServiceErrorDetail(error: unknown): boolean {
+  if (!error || typeof error !== 'object' || !('response' in error)) return false;
+  const data = (error as { response?: { data?: unknown } }).response?.data;
+  if (!data || typeof data !== 'object') return false;
+  const detail = (data as { detail?: unknown }).detail;
+  return typeof detail === 'string' && detail.trim().length > 0;
+}

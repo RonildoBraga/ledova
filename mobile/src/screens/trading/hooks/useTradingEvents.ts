@@ -1,10 +1,10 @@
 import { useEffect, useRef } from 'react';
 import { AppState } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
-import * as SecureStore from 'expo-secure-store';
 import EventSource from 'react-native-sse';
 import { TRADING_ENDPOINTS, TRADING_CONFIG, TRADING_EVENT_INVALIDATION_MAP } from '@ledova/shared';
 import type { TradingEventType } from '@ledova/shared';
+import { getAccessToken } from '../../../services/tokenStorage';
 
 type SSEEventTypes = TradingEventType | 'connected';
 
@@ -20,7 +20,7 @@ export function useTradingEvents(tokenUuid: string | null | undefined) {
 
       esRef.current?.close();
 
-      const accessToken = await SecureStore.getItemAsync('accessToken');
+      const accessToken = await getAccessToken();
       if (!accessToken) return;
 
       const baseUrl = (process.env.EXPO_PUBLIC_API_URL || '').replace(/\/$/, '');

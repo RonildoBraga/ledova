@@ -27,7 +27,7 @@ a share token, enforced by the contract on every transfer.
 ## Two deployment modes
 
 The operator row records which shape a deployment is
-(`/admin/operators/operator/1/change/`):
+(`/admin/operators/operator/`, which seeds the row and redirects to it):
 
 - **Single issuer** — one company runs its own instance for its own shares.
 - **Registry** — a provider hosts many companies on one instance. This is the
@@ -95,7 +95,7 @@ Common Makefile targets, from the repository root:
 | `make install` | `npm ci` for the root workspace, `contracts`, `marketing` and `mobile` |
 | `make install-backend` | Install the backend development dependencies |
 | `make build` | Build the dashboard, the marketing site and the contracts |
-| `make check` | Type-check every workspace and run Django's `manage.py check` |
+| `make check` | Install the backend development dependencies (`requirements-dev.txt`), then type-check every workspace and run Django's `manage.py check` |
 | `make test` | Workspace and contract tests |
 | `make chain-test` | The real-chain backend test against a Hardhat node |
 | `make generate-tokens` | Regenerate the CSS design tokens from `packages/shared` |

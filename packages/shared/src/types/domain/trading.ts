@@ -52,11 +52,6 @@ export interface CreateOrderRequest {
   pricePerShare: string;
 }
 
-export interface BroadcastResponse {
-  txHash: string;
-  status: string;
-}
-
 export interface OrderBookEntry {
   price: string;
   quantity: number;
@@ -78,13 +73,13 @@ export interface GetOrdersParams {
 }
 /* eslint-enable @typescript-eslint/naming-convention */
 
+export type WhitelistStatusState = 'whitelisted' | 'not_whitelisted' | 'unknown';
+
 export interface WhitelistStatus {
   address: string;
   isWhitelisted: boolean;
-  investorType: number;
-  investorTypeDisplay: string;
-  kycTimestamp: number;
   canReceive: boolean;
+  status: WhitelistStatusState;
 }
 
 export interface WalletTokenBalance {

@@ -16,6 +16,7 @@ import {
   DESIGN_TOKENS,
   getAddressPlaceholder,
   getBlockchainDisplayName,
+  getEstimatedFee,
   formatWalletAddressShort,
   validateWalletAddress,
 } from '@ledova/shared';
@@ -41,7 +42,7 @@ interface SendFormModalProps {
   isSenderWhitelisted: boolean;
   isRecipientWhitelisted: boolean;
   isCheckingRecipientWhitelist: boolean;
-  senderWhitelistStatus: unknown;
+  senderWhitelistStatus?: WhitelistStatus;
   recipientWhitelistStatus?: WhitelistStatus;
   onBack: () => void;
   onTransfer: (asset: UnifiedAsset, toAddress: string, amount: string) => void;
@@ -112,6 +113,9 @@ export function SendFormModal({
     qrboxSize: 200,
   });
 
+  const isSenderWhitelistUnknown = senderWhitelistStatus?.status === 'unknown';
+  const isRecipientWhitelistUnknown = recipientWhitelistStatus?.status === 'unknown';
+
   const isShareToken = selectedAsset?.type === 'share_token';
   const isCrypto = selectedAsset?.type === 'crypto';
 
@@ -130,7 +134,7 @@ export function SendFormModal({
     if (!selectedAsset) return;
     if (isCrypto) {
       const balance = parseFloat(wallet.nativeBalance);
-      const estimatedFee = isBitcoin ? 0.00001 : 0.001;
+      const estimatedFee = getEstimatedFee(chainShortCode);
       const maxAmount = Math.max(0, balance - estimatedFee);
       setAmount(maxAmount.toString());
     } else {
@@ -209,8 +213,9 @@ export function SendFormModal({
                 <div className="flex items-center gap-2">
                   <ShieldWarningIcon size={ICON_SM} className="text-warning-light" />
                   <p className="text-xs text-warning-light">
-                    Your wallet is not whitelisted. The operator must whitelist it before you can transfer tokenized
-                    assets.
+                    {isSenderWhitelistUnknown
+                      ? 'We could not reach the network to check your allowlist status. Transfers of tokenized assets are held until the check succeeds - please try again shortly.'
+                      : 'Your wallet is not whitelisted. The operator must whitelist it before you can transfer tokenized assets.'}
                   </p>
                 </div>
               </div>
@@ -303,6 +308,11 @@ export function SendFormModal({
                 <ShieldCheckIcon size={ICON_SM} />
                 Recipient is whitelisted
               </span>
+            ) : isRecipientWhitelistUnknown ? (
+              <span className="flex items-center gap-1 text-xs text-warning-light">
+                <ShieldWarningIcon size={ICON_SM} />
+                Allowlist status unavailable
+              </span>
             ) : (
               <span className="flex items-center gap-1 text-xs text-error-light">
                 <ShieldWarningIcon size={ICON_SM} />
@@ -313,10 +323,17 @@ export function SendFormModal({
         )}
 
         {isShareToken && isValidAddress && !isRecipientWhitelisted && recipientWhitelistStatus !== undefined && (
-          <div className="p-3 rounded-lg bg-error-light/10 border border-error-light/20">
-            <p className="text-sm text-error-light">
-              The recipient address is not whitelisted. The operator must whitelist it before it can receive tokenized
-              assets.
+          <div
+            className={
+              isRecipientWhitelistUnknown
+                ? 'p-3 rounded-lg bg-warning-light/10 border border-warning-light/20'
+                : 'p-3 rounded-lg bg-error-light/10 border border-error-light/20'
+            }
+          >
+            <p className={isRecipientWhitelistUnknown ? 'text-sm text-warning-light' : 'text-sm text-error-light'}>
+              {isRecipientWhitelistUnknown
+                ? 'We could not reach the network to check the recipient allowlist status. The transfer is held until the check succeeds - please try again shortly.'
+                : 'The recipient address is not whitelisted. The operator must whitelist it before it can receive tokenized assets.'}
             </p>
           </div>
         )}

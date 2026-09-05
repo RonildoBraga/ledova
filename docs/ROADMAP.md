@@ -43,22 +43,38 @@ Complete.
 
 ## Phase 1 — Investor directory and primary offering
 
-Not started. Neither exists in the code today.
+Not started. No investor directory and no primary offering exist in the code
+today; the only directory that does exist is the market one, `GET
+/api/v1/trading/tokens/`, which lists deployed tokens.
 
 - An investor directory: who the operator and issuers can see, and on what
-  terms.
+  terms. Scoped by the wholesale/sophisticated decision below — the directory
+  holds only investors who qualify under Corporations Act s708 and s761G, and
+  the operator and issuers see only that population. What the directory is
+  today, `GET /api/v1/trading/tokens/`, is a market directory of deployed
+  tokens, not of investors; whether it stays unscoped is an open Phase 1
+  decision (see [docs/ARCHITECTURE.md](ARCHITECTURE.md#tenancy-model)).
+- An `InvestorClassification` model: the recorded basis on which an investor
+  qualifies as wholesale or sophisticated, its evidence and its expiry. Phase 2
+  gates read it; Phase 1 has to be able to record it before the first offering
+  can be made.
 - A primary offering: a company publishes an offer, an investor subscribes, the
   operator records the payment (AUD bank transfer against the reference prefix,
   or a supported stablecoin to the receiving wallet) and allots the shares.
-- The payment rails on the operator row exist for this and are rendered as
-  instructions; nothing consumes them yet.
+- The payment rails on the operator row exist for this. Nothing renders them:
+  `paymentInstructions` appears only as a type
+  (`packages/shared/src/types/domain/operator.ts`), with no reader in
+  `dashboard/src` or `mobile/src`.
 
 ## Phase 2 — Eligibility and the register
 
 Not started.
 
 - Turn `investor_kyc_required` and `issuer_kyc_required` from stored
-  configuration into actual gates. Today nothing reads them.
+  configuration into actual gates. Today nothing reads them. The gate is
+  eligibility, not identity alone: it refuses anyone without a current
+  `InvestorClassification` recorded in Phase 1, because the wholesale and
+  sophisticated carve-outs are what the first offerings rely on.
 - A share register that is the authoritative record, reconciled against the
   chain rather than derived from it ad hoc.
 - Director authority, ownership immutability, ACN and ABN validation and
@@ -85,10 +101,21 @@ concurrency and idempotency designs are fixed and independently reviewed.
 ## Not on the roadmap
 
 There is no off-ramp. There is no investor directory and no primary offering
-yet. Mainnet deployment configuration is deliberately absent.
+yet: no route lists investors, and `GET /api/v1/trading/tokens/` is a directory
+of deployed tokens, not of people. Retail offerings are out of scope for the
+first releases (see the wholesale/sophisticated decision below). Mainnet
+deployment configuration is deliberately absent.
 
 ## Decisions taken
 
+- **Wholesale and sophisticated investors only, for the first offerings.** The
+  owner has decided the first offerings are made only to investors who qualify
+  under the Corporations Act 2001 (Cth) wholesale-client and sophisticated-
+  investor exceptions, s708 for offers and s761G for financial-product advice,
+  so no retail disclosure document is required. This is the constraint the
+  Phase 1 investor directory and the Phase 2 eligibility gate are built to:
+  Phase 1 records the classification, Phase 2 enforces it. Nothing in the code
+  enforces it today.
 - **Two deployment modes, one row.** `deployment_mode` is recorded
   configuration on the operator row
   ([docs/OPERATIONS.md](OPERATIONS.md#operator-configuration)); it does not
