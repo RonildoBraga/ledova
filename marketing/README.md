@@ -1,44 +1,37 @@
-# Ledova Marketing Site
+# Marketing site
 
-React + TypeScript + Vite site for the Ledova experimental reference implementation.
+The public Ledova site: React, TypeScript and Vite, static output, no API calls.
 
----
-
-## Local Development
+## Local development
 
 ```bash
-# Install dependencies (first time only)
-make install
-
-# Create public local configuration
-cp .env.example .env
-
-# Start dev server at http://localhost:5173
-make dev
+make install          # npm ci
+cp .env.example .env  # or run scripts/init-local-env.py from the repository root
+make dev              # http://localhost:5173
 ```
 
-The `VITE_` values in `.env` are embedded in browser code. Do not put secrets in
-them. The local `.env` file is ignored by Git.
+The `VITE_` values in `.env` are embedded in the browser bundle. Do not put a
+secret in one. The local `.env` is gitignored.
 
----
+`src/tokens.css` is generated from `packages/shared` by `make generate-tokens`
+at the repository root. Do not edit it: CI regenerates it and fails on drift.
 
-## Production Build
+## Commands
 
-Run `make build` to create the static bundle in `dist/`. This repository does
-not include a deployment workflow; hosting and release authorization are the
-responsibility of the environment owner.
+| Command | Does |
+| --- | --- |
+| `make install` | Install dependencies |
+| `make dev` | Start the Vite dev server |
+| `make build` | Production build into `dist/` |
+| `make preview` | Serve the built `dist/` locally |
+| `make typecheck` | `tsc --noEmit` |
+| `make lint` | ESLint |
 
-The production container serves the Vite single-page application through
-nginx and falls back to `index.html` for client-side routes.
+`npm run format` and `npm run format:check` run Prettier over the package.
 
----
+## Production build
 
-## Useful Commands
-
-| Command      | Description                                 |
-| ------------ | ------------------------------------------- |
-| `make dev`   | Start local dev server                      |
-| `make build` | Production build (output in `dist/`)        |
-| `make lint`  | Format + lint with auto-fix                 |
-| `make check` | Full local check (format, lint, type-check) |
-| `make test`  | Check the production nginx configuration    |
+`make build` writes the static bundle to `dist/`. `.deployment/Dockerfile.prod`
+serves it through nginx with an `index.html` fallback for client-side routes.
+This repository ships no deployment workflow: hosting and release authorization
+belong to the environment owner.
