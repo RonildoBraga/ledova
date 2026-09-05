@@ -1,8 +1,8 @@
 # Roadmap
 
 Where Ledova is going, phase by phase, and the product decisions already taken.
-Security and correctness work deferred from the current release is in
-[ISSUES.md](../ISSUES.md), not here.
+Security and correctness work deferred from the current release is tracked in
+the [`deferred-hardening`](https://github.com/RonildoBraga/ledova/issues?q=is%3Aopen+label%3Adeferred-hardening) issues on GitHub, not here.
 
 ## Direction
 
@@ -144,8 +144,8 @@ Not started.
 
 ## Phase 4 — Secondary transfers
 
-Not started, and gated on the trading work in
-[ISSUES.md](../ISSUES.md). While the `trading_enabled` flag is off,
+Not started, and gated on the trading work in the
+[`deferred-hardening`](https://github.com/RonildoBraga/ledova/issues?q=is%3Aopen+label%3Adeferred-hardening) issues. While the `trading_enabled` flag is off,
 `feature_flags/middleware.py` refuses with 403 any request, of any method, whose
 path starts with one of five prefixes
 (`/api/v1/trading/{orders,wallets,transfers,swaps,events}/`); the read-only

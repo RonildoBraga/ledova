@@ -18,9 +18,8 @@ Ledova is an experimental, unaudited reference implementation intended for local
 and public-testnet use only. It is not operated as a hosted service, and it
 makes no production-security or compliance claims.
 
-Known, deliberately deferred security work is tracked publicly in
-[ISSUES.md](ISSUES.md) and in the issues labeled
-[`deferred-hardening`](https://github.com/RonildoBraga/ledova/issues?q=label%3Adeferred-hardening).
+Known, deliberately deferred security work is tracked publicly in the issues
+labeled [`deferred-hardening`](https://github.com/RonildoBraga/ledova/issues?q=is%3Aopen+label%3Adeferred-hardening).
 Reports that duplicate an item already listed there are still welcome, but will
 likely be folded into the existing issue rather than fixed immediately.
 

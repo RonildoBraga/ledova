@@ -16,18 +16,18 @@ before opening your first pull request.
 - **No secrets, ever.** No `.env` files, private keys, seed phrases, API tokens,
   real personal data or internal infrastructure identifiers. Only `.env.example`
   templates with blank values belong in the repository.
-- **Trading routes are disabled by default** while the items in
-  [ISSUES.md](ISSUES.md) are open. That default is containment, not a bug to
-  "fix" by enabling them.
+- **Trading routes are disabled by default** while the
+  [`deferred-hardening`](https://github.com/RonildoBraga/ledova/issues?q=is%3Aopen+label%3Adeferred-hardening) issues are open. That default is containment,
+  not a bug to "fix" by enabling them.
 - Be respectful and constructive. Assume good faith.
   See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
 ## Where to start
 
-- Browse the
-  [open issues](https://github.com/RonildoBraga/ledova/issues). The ones
-  labeled `deferred-hardening` are the known high-risk work described in
-  [ISSUES.md](ISSUES.md); they need redesigns, not patches.
+- Issues are tracked on GitHub, not in this repository. Browse the
+  [open issues](https://github.com/RonildoBraga/ledova/issues); the ones labeled
+  [`deferred-hardening`](https://github.com/RonildoBraga/ledova/issues?q=is%3Aopen+label%3Adeferred-hardening) are the known high-risk work, each naming
+  where it lives in the code. They need redesigns, not patches.
 - For anything substantial, open an issue to discuss the approach first.
 
 ## Development setup
