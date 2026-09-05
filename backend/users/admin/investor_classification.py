@@ -5,8 +5,9 @@ from django.shortcuts import get_object_or_404, render
 from django.urls import path, re_path, reverse
 from django.utils.html import format_html
 
+from shared.utils.admin_display import action_buttons
 from shared.views import stream_stored_file
-from tokens.admin._helpers import action_buttons, status_badge
+from tokens.admin._helpers import status_badge
 from users.exceptions import InvalidClassificationTransitionException
 from users.models import InvestorClassification, InvestorClassificationStatus
 from users.services import transition_classification
