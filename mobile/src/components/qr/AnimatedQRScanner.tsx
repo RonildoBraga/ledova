@@ -101,14 +101,12 @@ export function AnimatedQRScanner({ onComplete }: AnimatedQRScannerProps) {
 
       if (decoderRef.current.isComplete()) {
         const ur = decoderRef.current.resultUR();
-        // Use a large fragment size to ensure the entire UR fits in one part
+
         const encoder = new UREncoder(ur, 100000);
         const completeURString = encoder.nextPart();
         onComplete(completeURString);
       }
-    } catch {
-      // Silently handle error
-    }
+    } catch {}
   };
 
   if (!permission) {

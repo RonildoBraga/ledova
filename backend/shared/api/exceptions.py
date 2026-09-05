@@ -21,7 +21,7 @@ def custom_exception_handler(exc, context):
             messages = exc.message_dict if hasattr(exc, "message_dict") else exc.messages
             response = exception_handler(ValidationError(messages), context)
         elif isinstance(exc, ImproperlyConfigured):
-            # The message names the setting; keep that server-side.
+
             logger.error(f"Service not configured: {exc}")
             response = Response(
                 {"error": "Service not configured", "detail": "This feature is not configured on this server."},

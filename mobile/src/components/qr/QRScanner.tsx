@@ -94,7 +94,7 @@ export function QRScanner({ visible, onClose, onScan, title = 'Scan QR Code', su
   }));
   const [permission, requestPermission] = useCameraPermissions();
   const [hasScanned, setHasScanned] = useState(false);
-  // Use ref to immediately block subsequent scans (state updates are async)
+
   const scanLockRef = useRef(false);
 
   useEffect(() => {
@@ -112,7 +112,6 @@ export function QRScanner({ visible, onClose, onScan, title = 'Scan QR Code', su
 
   const handleBarCodeScanned = useCallback(
     ({ data }: { data: string }) => {
-      // Use ref for immediate check (synchronous) to prevent multiple calls
       if (scanLockRef.current) return;
       scanLockRef.current = true;
       setHasScanned(true);

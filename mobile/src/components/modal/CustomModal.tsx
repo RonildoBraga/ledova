@@ -42,7 +42,7 @@ export function CustomModal({
       width: '90%',
       maxWidth: 400,
       borderRadius: theme.borderRadius.lg,
-      // Shadow for iOS
+
       shadowColor: theme.colors.utility.black,
       shadowOffset: {
         width: 0,
@@ -50,7 +50,7 @@ export function CustomModal({
       },
       shadowOpacity: 0.5,
       shadowRadius: 12,
-      // Elevation for Android
+
       elevation: 10,
     },
     modal: {
@@ -124,7 +124,6 @@ export function CustomModal({
       <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
         <View style={styles.modalContainer}>
           <TouchableOpacity activeOpacity={1} style={styles.modal}>
-            {/* Content */}
             <ScrollView
               style={styles.modalContent}
               contentContainerStyle={styles.modalContentContainer}
@@ -133,7 +132,6 @@ export function CustomModal({
               {children}
             </ScrollView>
 
-            {/* Footer */}
             {showFooter && (
               <View style={styles.footer}>
                 {showCancelButton && (

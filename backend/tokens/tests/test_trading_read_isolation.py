@@ -1,5 +1,3 @@
-"""Owner-bound regressions for trading endpoints that accept wallet addresses."""
-
 from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch

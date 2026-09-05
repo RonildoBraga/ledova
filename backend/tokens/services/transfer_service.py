@@ -230,7 +230,7 @@ class TransferService:
                 .sell_orders()
                 .filter(
                     token=order.token,
-                    price_per_share__lte=order.price_per_share,  # Sell price <= buy price
+                    price_per_share__lte=order.price_per_share,
                 )
             )
             qs = qs.order_by("price_per_share", "created_at")
@@ -241,7 +241,7 @@ class TransferService:
                 .buy_orders()
                 .filter(
                     token=order.token,
-                    price_per_share__gte=order.price_per_share,  # Buy price >= sell price
+                    price_per_share__gte=order.price_per_share,
                 )
             )
             qs = qs.order_by("-price_per_share", "created_at")

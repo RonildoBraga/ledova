@@ -18,7 +18,6 @@ export function useTradingEvents(tokenUuid: string | null | undefined) {
     async function connect() {
       if (!tokenUuid) return;
 
-      // Close previous connection
       esRef.current?.close();
 
       const accessToken = await SecureStore.getItemAsync('accessToken');
@@ -35,7 +34,6 @@ export function useTradingEvents(tokenUuid: string | null | undefined) {
         reconnectDelayRef.current = TRADING_CONFIG.SSE_RECONNECT_DELAY;
       });
 
-      // Listen for each trading event type and invalidate the corresponding queries
       for (const [eventType, queryKeys] of Object.entries(TRADING_EVENT_INVALIDATION_MAP)) {
         es.addEventListener(eventType as TradingEventType, () => {
           for (const queryKey of queryKeys) {
@@ -57,7 +55,6 @@ export function useTradingEvents(tokenUuid: string | null | undefined) {
 
     connect();
 
-    // Reconnect when app comes to foreground
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         esRef.current?.close();

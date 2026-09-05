@@ -11,8 +11,6 @@ from authentication.services.tokens import TokenService
 
 
 def clean_destination_key(raw_email, owner_pk=None):
-    """The stored address must be canonical and unique (model constraints); only `owner_pk` may
-    already hold it, so a change form accepts its own address and a creation form none."""
     try:
         destination_key = normalize_email(raw_email)
     except EmailError:
@@ -72,8 +70,6 @@ class CustomUserAdmin(UserAdmin):
     )
 
     def save_model(self, request, obj, form, change):
-        """A changed address ends every session and must be proven again at the next sign-in:
-        the old one may no longer belong to this person and the new one is unverified."""
         email_changed = change and form.initial.get("email") != obj.email
         if email_changed:
             obj.is_email_verified = False

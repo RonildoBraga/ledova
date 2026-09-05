@@ -36,7 +36,6 @@ export function PortfolioLineChart({
   const LINE_COLOR = theme.colors.chartUI.portfolioLine;
   const GRID_COLOR = theme.colors.chartUI.gridColor;
 
-  // scrollContent padding (sm) + Panel content padding (sm) on each side
   const horizontalPadding = 2 * (theme.spacing.sm + theme.spacing.sm);
   const chartWidth = screenWidth - horizontalPadding;
 

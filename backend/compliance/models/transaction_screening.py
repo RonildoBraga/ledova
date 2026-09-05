@@ -10,7 +10,6 @@ from shared.models.base import BaseModel
 
 
 class TransactionScreening(BaseModel):
-    """Blockchain-analytics result for one transaction's destination address (sanctions, mixers, darknet...)."""
 
     transaction = models.OneToOneField(
         "wallets.Transaction",

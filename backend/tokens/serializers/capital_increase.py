@@ -77,7 +77,6 @@ class CapitalIncreaseDetailSerializer(serializers.ModelSerializer):
 
 
 class CapitalIncreaseCreateSerializer(serializers.ModelSerializer):
-    """The view resolves the caller's token and passes it as context["token"]."""
 
     class Meta:
         model = CapitalIncreaseRequest

@@ -11,8 +11,7 @@ class PortfolioSerializer(serializers.ModelSerializer):
 
     def get_fields(self):
         fields = super().get_fields()
-        # Scope the writable owner FK to the caller's own accounts so a
-        # portfolio can never be filed under another tenant's account.
+
         request = self.context.get("request")
         fields["user_account"].queryset = UserAccount.objects.visible_to_user(getattr(request, "user", None))
         return fields
@@ -45,7 +44,6 @@ class PortfolioSerializer(serializers.ModelSerializer):
 
 
 class PortfolioValuePointSerializer(serializers.Serializer):
-    """One computed day of the value series, under the keys the stored snapshot rows carried."""
 
     uuid = serializers.CharField()
     portfolio = serializers.UUIDField()

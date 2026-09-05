@@ -208,7 +208,6 @@ export function SignUpScreen() {
       <SafeAreaView style={styles.container}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardView}>
           <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-            {/* Header */}
             <View style={styles.header}>
               <View style={styles.iconContainer}>
                 <UserPlusIcon
@@ -220,9 +219,7 @@ export function SignUpScreen() {
               <Text style={styles.title}>Create Your Account</Text>
             </View>
 
-            {/* Form Container */}
             <View style={styles.formContainer}>
-              {/* General Error */}
               {generalError && (
                 <View style={styles.errorContainer}>
                   <WarningCircleIcon
@@ -234,7 +231,6 @@ export function SignUpScreen() {
                 </View>
               )}
 
-              {/* Email Field */}
               <View style={styles.fieldContainer}>
                 <Text style={styles.label}>Email</Text>
                 <View style={styles.inputWrapper}>
@@ -258,7 +254,6 @@ export function SignUpScreen() {
                 {errors.email && !generalError && <Text style={styles.fieldError}>{errors.email.join(' ')}</Text>}
               </View>
 
-              {/* Password Field */}
               <View style={styles.fieldContainer}>
                 <Text style={styles.label}>Password</Text>
                 <View style={styles.inputWrapper}>
@@ -290,7 +285,6 @@ export function SignUpScreen() {
                   </TouchableOpacity>
                 </View>
 
-                {/* Password Requirements */}
                 <View style={styles.passwordRequirements}>
                   <Text style={styles.requirementsTitle}>Password must:</Text>
                   <View style={styles.requirement}>
@@ -330,7 +324,6 @@ export function SignUpScreen() {
                 {errors.password && !generalError && <Text style={styles.fieldError}>{errors.password.join(' ')}</Text>}
               </View>
 
-              {/* Continue Button */}
               <PrimaryButton
                 onPress={handleSignUp}
                 loading={isLoading}
@@ -345,14 +338,12 @@ export function SignUpScreen() {
               </PrimaryButton>
             </View>
 
-            {/* Divider */}
             <View style={styles.divider}>
               <View style={styles.dividerLine} />
               <Text style={styles.dividerText}>or</Text>
               <View style={styles.dividerLine} />
             </View>
 
-            {/* Sign In Section */}
             <View style={styles.signInSection}>
               <Text style={styles.signInText}>
                 Already have an account?{' '}

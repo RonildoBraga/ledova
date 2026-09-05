@@ -98,7 +98,7 @@ class ComplianceAlertAdmin(admin.ModelAdmin):
     date_hierarchy = "created_at"
     inlines = [AlertChecklistItemInline]
     actions = ["assign_to_me", "mark_as_reviewing", "close_alerts"]
-    # The raw transaction FK is replaced by a link: the select would list every transaction.
+
     fieldsets = (
         (None, {"fields": ("user_account", "triggered_rule", "alert_type", "severity", "description", "alert_data")}),
         ("Related Transactions", {"fields": ("transaction_link", "monitoring_rule")}),

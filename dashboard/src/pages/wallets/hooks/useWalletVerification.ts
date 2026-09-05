@@ -13,18 +13,15 @@ import { encodeEthereumMessage, encodeBitcoinMessage } from '@utils/keystone/urE
 export type VerificationStep = 'instructions' | 'show-challenge-qr' | 'scan-signature' | 'success';
 
 interface UseWalletVerificationReturn {
-  // State
   verificationStep: VerificationStep;
   verificationChallenge: string | null;
   challengeQrData: string | null;
   verificationError: string | null;
   verificationSuccess: boolean;
 
-  // Loading states
   isRequestingChallenge: boolean;
   isVerifying: boolean;
 
-  // Actions
   startVerification: (wallet: Wallet) => Promise<void>;
   proceedToScanSignature: () => void;
   handleSignatureScanned: (signature: string) => Promise<void>;
@@ -42,7 +39,6 @@ export function useWalletVerification(): UseWalletVerificationReturn {
   const [verificationSuccess, setVerificationSuccess] = useState(false);
   const [currentWallet, setCurrentWallet] = useState<Wallet | null>(null);
 
-  // Request challenge mutation
   const challengeMutation = useMutation({
     mutationFn: async (wallet: Wallet) => {
       const response = await requestVerificationChallenge(apiClient, wallet.uuid);
@@ -52,7 +48,6 @@ export function useWalletVerification(): UseWalletVerificationReturn {
       const challenge = data.challenge;
       setVerificationChallenge(challenge);
 
-      // Encode the challenge as a QR code based on chain type
       let qrData: { urString: string } | null = null;
 
       const evmChainId = getWalletVerificationEvmChainId(wallet.chain);
@@ -81,7 +76,6 @@ export function useWalletVerification(): UseWalletVerificationReturn {
     },
   });
 
-  // Verify signature mutation
   const verifyMutation = useMutation({
     mutationFn: async ({ walletUuid, signature }: { walletUuid: string; signature: string }) => {
       const response = await verifyWalletSignature(apiClient, walletUuid, { signature });
@@ -90,7 +84,7 @@ export function useWalletVerification(): UseWalletVerificationReturn {
     onSuccess: () => {
       setVerificationSuccess(true);
       setVerificationStep('success');
-      // Invalidate wallets query to refresh the list
+
       queryClient.invalidateQueries({ queryKey: ['wallets'] });
       queryClient.invalidateQueries({ queryKey: ['home-wallets'] });
     },
@@ -107,7 +101,6 @@ export function useWalletVerification(): UseWalletVerificationReturn {
       setChallengeQrData(null);
       setVerificationChallenge(null);
 
-      // Check if wallet has required derivation data
       if (!wallet.derivationPath || !wallet.masterFingerprint) {
         setVerificationError('This wallet cannot be verified. Missing hardware wallet data.');
         return;

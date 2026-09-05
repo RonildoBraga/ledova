@@ -1,9 +1,3 @@
-/**
- * OrderModificationModal Component
- * Modal for modifying open orders with hardware wallet signing.
- * Follows the two-step flow: generate message → sign → execute.
- */
-
 import { useEffect, useCallback, useState, useMemo } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import {
@@ -46,22 +40,18 @@ interface OrderModificationModalProps {
 }
 
 export function OrderModificationModal({ isOpen, onClose, order, wallet, onSuccess }: OrderModificationModalProps) {
-  // Form state
   const [newQuantity, setNewQuantity] = useState('');
   const [newMinQuantity, setNewMinQuantity] = useState('');
   const [newPricePerShare, setNewPricePerShare] = useState('');
 
-  // Flow state
   const [step, setStep] = useState<ModificationStep>('form');
   const [messageData, setMessageData] = useState<OrderModificationMessageResponse | null>(null);
   const [qrData, setQrData] = useState<{ cborHex: string; type: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Mutations
   const modificationMessageMutation = useOrderModificationMessage();
   const executeModificationMutation = useExecuteOrderModification();
 
-  // Reset form when modal opens with new order
   useEffect(() => {
     if (isOpen && order) {
       setNewQuantity(order.quantity.toString());
@@ -74,7 +64,6 @@ export function OrderModificationModal({ isOpen, onClose, order, wallet, onSucce
     }
   }, [isOpen, order]);
 
-  // Parse order details
   const orderDetails = useMemo(() => {
     if (!order) return null;
 
@@ -89,7 +78,6 @@ export function OrderModificationModal({ isOpen, onClose, order, wallet, onSucce
     };
   }, [order]);
 
-  // Calculate quantity change details
   const quantityChange = useMemo(() => {
     if (!order || !orderDetails) return null;
 
@@ -107,7 +95,6 @@ export function OrderModificationModal({ isOpen, onClose, order, wallet, onSucce
     };
   }, [order, orderDetails, newQuantity]);
 
-  // Validate form
   const formValidation = useMemo(() => {
     if (!order || !orderDetails) return { isValid: false, hasChanges: false, errors: [] as string[] };
 
@@ -116,12 +103,10 @@ export function OrderModificationModal({ isOpen, onClose, order, wallet, onSucce
     const minQty = parseInt(newMinQuantity, 10) || 0;
     const price = parseFloat(newPricePerShare) || 0;
 
-    // Quantity must exceed filled amount
     if (qty <= orderDetails.filledQuantity) {
       errors.push(`Quantity must be greater than filled amount (${orderDetails.filledQuantity})`);
     }
 
-    // Min quantity must be achievable
     const newRemaining = qty - orderDetails.filledQuantity;
     if (minQty > newRemaining) {
       errors.push(`Min quantity (${minQty}) cannot exceed remaining (${newRemaining})`);
@@ -135,14 +120,12 @@ export function OrderModificationModal({ isOpen, onClose, order, wallet, onSucce
       errors.push('Price must be positive');
     }
 
-    // Check if anything changed
     const hasChanges =
       qty !== order.quantity || minQty !== (order.minQuantity || 0) || price !== parseFloat(order.pricePerShare);
 
     return { isValid: errors.length === 0 && hasChanges, hasChanges, errors };
   }, [order, orderDetails, newQuantity, newMinQuantity, newPricePerShare]);
 
-  // Handle form submission - generate modification message
   const handleFormSubmit = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
@@ -185,7 +168,6 @@ export function OrderModificationModal({ isOpen, onClose, order, wallet, onSucce
     [order, formValidation.isValid, newQuantity, newMinQuantity, newPricePerShare, modificationMessageMutation],
   );
 
-  // Generate QR code for signing
   const generateQrCode = useCallback(() => {
     if (!messageData || !wallet) {
       setError('Missing message data or wallet');
@@ -211,7 +193,6 @@ export function OrderModificationModal({ isOpen, onClose, order, wallet, onSucce
     setStep('show-qr');
   }, [messageData, wallet]);
 
-  // Handle signature scanned
   const handleSignatureScanned = useCallback(
     (signature: string) => {
       if (!messageData || !order) return;
@@ -252,14 +233,12 @@ export function OrderModificationModal({ isOpen, onClose, order, wallet, onSucce
     enabled: step === 'scan-signature',
   });
 
-  // Handle modal close
   const handleClose = useCallback(() => {
     if (step === 'submitting') return;
     stopScanner();
     onClose();
   }, [onClose, step, stopScanner]);
 
-  // Auto-close on success
   useEffect(() => {
     if (step === 'success') {
       const timer = setTimeout(() => {
@@ -291,7 +270,6 @@ export function OrderModificationModal({ isOpen, onClose, order, wallet, onSucce
 
         return (
           <form onSubmit={handleFormSubmit} className="space-y-5">
-            {/* Order Details */}
             <div className="space-y-0">
               <div className="flex items-center justify-between py-2.5 border-b border-border-subtle">
                 <span className="text-sm text-text-muted">Filled:</span>
@@ -309,9 +287,7 @@ export function OrderModificationModal({ isOpen, onClose, order, wallet, onSucce
               </div>
             </div>
 
-            {/* Form Inputs */}
             <div className="space-y-4 pt-2">
-              {/* Quantity */}
               <div className="space-y-2">
                 <label htmlFor="modify-quantity" className="text-sm font-medium text-text-primary">
                   Total Quantity (shares)
@@ -326,7 +302,6 @@ export function OrderModificationModal({ isOpen, onClose, order, wallet, onSucce
                   placeholder="Enter total number of shares"
                   className="w-full bg-surface-tertiary border border-border rounded-lg px-3 py-3 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-brand-mid"
                 />
-                {/* Quantity change summary */}
                 {quantityChange && quantityChange.hasChanged && quantityChange.newRemaining > 0 && (
                   <div className="flex items-center justify-between text-xs text-text-muted">
                     <span>
@@ -349,7 +324,6 @@ export function OrderModificationModal({ isOpen, onClose, order, wallet, onSucce
                 </p>
               </div>
 
-              {/* Min Quantity */}
               <div className="space-y-2">
                 <label htmlFor="modify-min-quantity" className="text-sm font-medium text-text-primary">
                   Minimum Fill Quantity (optional)
@@ -367,7 +341,6 @@ export function OrderModificationModal({ isOpen, onClose, order, wallet, onSucce
                 <p className="text-xs text-text-muted">Hint: Leave empty or 0 to accept any partial fill</p>
               </div>
 
-              {/* Price */}
               <div className="space-y-2">
                 <label htmlFor="modify-price" className="text-sm font-medium text-text-primary">
                   Price per Share (AUD)
@@ -385,7 +358,6 @@ export function OrderModificationModal({ isOpen, onClose, order, wallet, onSucce
               </div>
             </div>
 
-            {/* Footer Buttons */}
             <div className="flex gap-3 pt-2">
               <button
                 type="button"
@@ -417,12 +389,10 @@ export function OrderModificationModal({ isOpen, onClose, order, wallet, onSucce
       case 'instructions':
         return (
           <div className="space-y-5">
-            {/* Description */}
             <p className="text-sm text-text-muted">
               Sign this modification with your hardware wallet to authorize the changes.
             </p>
 
-            {/* Changes Summary */}
             {messageData && (
               <div className="bg-surface-tertiary rounded-lg p-4 space-y-3">
                 <div className="flex items-center gap-2 text-sm font-medium text-text-primary">
@@ -458,7 +428,6 @@ export function OrderModificationModal({ isOpen, onClose, order, wallet, onSucce
               </div>
             )}
 
-            {/* Instructions */}
             <div className="space-y-3">
               <div className="flex items-start gap-3 p-3 bg-surface-tertiary rounded-lg">
                 <span className="flex-shrink-0 w-6 h-6 bg-brand-mid text-white text-sm font-semibold rounded-full flex items-center justify-center">
@@ -480,7 +449,6 @@ export function OrderModificationModal({ isOpen, onClose, order, wallet, onSucce
               </div>
             </div>
 
-            {/* Footer Buttons */}
             <div className="flex gap-3 pt-2">
               <button
                 type="button"
@@ -504,7 +472,6 @@ export function OrderModificationModal({ isOpen, onClose, order, wallet, onSucce
       case 'show-qr':
         return (
           <div className="space-y-5">
-            {/* Description */}
             <p className="text-sm text-text-muted">
               Scan this QR code with your hardware wallet to sign the modification.
             </p>
@@ -515,7 +482,6 @@ export function OrderModificationModal({ isOpen, onClose, order, wallet, onSucce
               </div>
             )}
 
-            {/* Footer Buttons */}
             <div className="flex gap-3 pt-2">
               <button
                 type="button"
@@ -538,14 +504,12 @@ export function OrderModificationModal({ isOpen, onClose, order, wallet, onSucce
       case 'scan-signature':
         return (
           <div className="space-y-5">
-            {/* Description */}
             <p className="text-sm text-text-muted">
               Point your camera at the signature QR code on your hardware wallet.
             </p>
 
             <QRScannerView scannerId="modify-qr-scanner" error={scannerError} />
 
-            {/* Footer Button */}
             <div className="flex gap-3 pt-2">
               <button
                 type="button"
@@ -618,7 +582,6 @@ export function OrderModificationModal({ isOpen, onClose, order, wallet, onSucce
   return (
     <Transition show={isOpen}>
       <Dialog onClose={handleClose} className="relative z-50">
-        {/* Backdrop */}
         <Transition.Child
           enter="ease-out duration-200"
           enterFrom="opacity-0"
@@ -630,7 +593,6 @@ export function OrderModificationModal({ isOpen, onClose, order, wallet, onSucce
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" />
         </Transition.Child>
 
-        {/* Modal */}
         <div className="fixed inset-0 overflow-y-auto">
           <div className="flex min-h-full items-center justify-center p-4">
             <Transition.Child
@@ -642,7 +604,6 @@ export function OrderModificationModal({ isOpen, onClose, order, wallet, onSucce
               leaveTo="opacity-0 scale-95"
             >
               <Dialog.Panel className="w-full max-w-md bg-surface-raised rounded-xl border border-border shadow-xl overflow-hidden">
-                {/* Header */}
                 <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
                   <Dialog.Title className="text-lg font-semibold text-text-primary flex items-center gap-2">
                     <PencilSimpleIcon size={ICON_MD} className="text-brand-light" />
@@ -665,7 +626,6 @@ export function OrderModificationModal({ isOpen, onClose, order, wallet, onSucce
                   </button>
                 </div>
 
-                {/* Content */}
                 <div className="p-4">{renderStepContent()}</div>
               </Dialog.Panel>
             </Transition.Child>

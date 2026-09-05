@@ -9,8 +9,8 @@ export const useAuth = () => {
     staleTime: CACHE_TIMING.DEFAULT_STALE_TIME,
     gcTime: CACHE_TIMING.EXTRA_LONG_GC_TIME,
     retry: false,
-    refetchOnWindowFocus: false, // Mobile doesn't have window focus
-    refetchOnReconnect: true, // But should refetch on network reconnect
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
   });
 
   return {

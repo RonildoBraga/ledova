@@ -46,9 +46,12 @@ export function Home() {
           <div className="text-center">
             <h2 className="text-3xl font-bold text-text-primary">See it in action</h2>
             <p className="mt-4 text-lg text-text-muted">
-              A one-minute walkthrough of the local development stack: sign-up, onboarding, watch-only wallets, and
-              live market data. Recorded against synthetic data — run it yourself with{' '}
-              <code className="rounded bg-surface-raised px-1.5 py-0.5 text-sm text-brand-light">docker compose up</code>.
+              A one-minute walkthrough of the local development stack: sign-up, onboarding, watch-only wallets, and live
+              market data. Recorded against synthetic data — run it yourself with{' '}
+              <code className="rounded bg-surface-raised px-1.5 py-0.5 text-sm text-brand-light">
+                docker compose up
+              </code>
+              .
             </p>
           </div>
           <video

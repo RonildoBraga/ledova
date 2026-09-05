@@ -24,7 +24,6 @@ import { useNotificationPreferences } from './useNotificationPreferences';
 import { useSettings } from './useSettings';
 import { apiClient } from '../../services/apiClient';
 
-// Toggle row component - extracted to avoid recreating on each render
 interface ToggleRowProps {
   label: string;
   description?: string;
@@ -96,7 +95,6 @@ function ToggleRow({ label, description, value, onValueChange, disabled = false,
   );
 }
 
-// Navigation row component - extracted to avoid recreating on each render
 interface NavRowProps {
   label: string;
   onPress: () => void;
@@ -301,7 +299,7 @@ export function SettingsScreen() {
       marginLeft: theme.spacing.xs,
     },
   }));
-  // Theme & Currency
+
   const { themeMode, toggleTheme } = useThemeMode();
   const { preferences } = useUserPreferences();
   const queryClient = useQueryClient();
@@ -315,7 +313,6 @@ export function SettingsScreen() {
     },
   });
 
-  // App Lock context (for biometrics)
   const {
     isEnabled: appLockEnabled,
     setEnabled: setAppLockEnabled,
@@ -326,7 +323,6 @@ export function SettingsScreen() {
     biometricType,
   } = useAppLock();
 
-  // Notification preferences
   const {
     transactionAlerts,
     priceAlerts,
@@ -337,7 +333,6 @@ export function SettingsScreen() {
     isUpdating,
   } = useNotificationPreferences();
 
-  // Settings actions
   const {
     changeUserPassword,
     isChangingPassword,
@@ -349,12 +344,10 @@ export function SettingsScreen() {
     shareApp,
   } = useSettings();
 
-  // Modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
 
-  // Change password form state
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -362,7 +355,6 @@ export function SettingsScreen() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // App Lock toggle handler
   const handleAppLockToggle = useCallback(
     async (value: boolean) => {
       const success = await setAppLockEnabled(value);
@@ -375,11 +367,9 @@ export function SettingsScreen() {
     [setAppLockEnabled, biometricType],
   );
 
-  // Biometric Login toggle handler
   const handleBiometricLoginToggle = useCallback(
     async (value: boolean) => {
       if (value) {
-        // Stores a biometric-gated copy of the current session's refresh token; the password is never stored
         const success = await enableBiometricLogin();
         if (!success) {
           Alert.alert('Authentication Failed', `Could not enable ${biometricType} sign in. Please try again.`, [
@@ -406,7 +396,6 @@ export function SettingsScreen() {
     [enableBiometricLogin, disableBiometricLogin, biometricType],
   );
 
-  // Change password handler
   const handleChangePassword = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
       Alert.alert('Error', 'Please fill in all fields.');
@@ -430,7 +419,6 @@ export function SettingsScreen() {
     }
   };
 
-  // Export handler
   const handleExportData = async () => {
     const success = await exportData();
     if (success) {
@@ -438,7 +426,6 @@ export function SettingsScreen() {
     }
   };
 
-  // Delete handler
   const handleDeleteAccount = async () => {
     await deleteUserAccount();
     setShowDeleteModal(false);
@@ -449,7 +436,6 @@ export function SettingsScreen() {
       <View style={styles.container}>
         <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
           <View style={styles.content}>
-            {/* Security Section */}
             <Panel title="Security" icon={<LockIcon />}>
               <ToggleRow
                 label={`${biometricType} Sign In`}
@@ -468,7 +454,6 @@ export function SettingsScreen() {
               />
             </Panel>
 
-            {/* Notifications Section */}
             <Panel title="Notifications" icon={<BellIcon />}>
               <ToggleRow
                 label="Transaction Alerts"
@@ -494,14 +479,12 @@ export function SettingsScreen() {
               />
             </Panel>
 
-            {/* Account Section */}
             <Panel title="Account" icon={<UserGearIcon />}>
               <NavRow label="Change Password" onPress={() => setShowChangePasswordModal(true)} />
               <NavRow label="Export Data" onPress={() => setShowExportModal(true)} />
               <NavRow label="Delete Account" onPress={() => setShowDeleteModal(true)} danger isLast />
             </Panel>
 
-            {/* Appearance Section */}
             <Panel title="Appearance" icon={themeMode === 'dark' ? <MoonIcon /> : <SunIcon />}>
               <ToggleRow
                 label="Light Mode"
@@ -516,7 +499,6 @@ export function SettingsScreen() {
               />
             </Panel>
 
-            {/* App Section */}
             <Panel title="App" icon={<AppWindowIcon />}>
               <NavRow label="Rate the App" onPress={rateApp} />
               <NavRow label="Share with Friends" onPress={shareApp} isLast />
@@ -525,7 +507,6 @@ export function SettingsScreen() {
         </ScrollView>
       </View>
 
-      {/* Export Data Modal */}
       <CustomModal
         visible={showExportModal}
         onClose={() => setShowExportModal(false)}
@@ -544,7 +525,6 @@ export function SettingsScreen() {
         </View>
       </CustomModal>
 
-      {/* Delete Account Modal */}
       <CustomModal
         visible={showDeleteModal}
         onClose={() => setShowDeleteModal(false)}
@@ -564,7 +544,6 @@ export function SettingsScreen() {
         </View>
       </CustomModal>
 
-      {/* Change Password Modal */}
       <CustomModal
         visible={showChangePasswordModal}
         onClose={() => {
@@ -582,7 +561,6 @@ export function SettingsScreen() {
           <Text style={styles.modalTitle}>Change Password</Text>
           <Text style={styles.modalText}>Enter your current password and choose a new one.</Text>
 
-          {/* Current Password */}
           <View style={styles.inputContainer}>
             <Text style={styles.inputLabel}>Current Password</Text>
             <View style={styles.inputWrapper}>
@@ -605,7 +583,6 @@ export function SettingsScreen() {
             </View>
           </View>
 
-          {/* New Password */}
           <View style={styles.inputContainer}>
             <Text style={styles.inputLabel}>New Password</Text>
             <View style={styles.inputWrapper}>
@@ -628,7 +605,6 @@ export function SettingsScreen() {
             </View>
           </View>
 
-          {/* Confirm New Password */}
           <View style={styles.inputContainer}>
             <Text style={styles.inputLabel}>Confirm New Password</Text>
             <View style={styles.inputWrapper}>

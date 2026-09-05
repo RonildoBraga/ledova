@@ -27,15 +27,12 @@ export function BrandingPanel() {
 
   return (
     <div className="relative w-full bg-surface-raised flex flex-col justify-center items-center p-12 overflow-hidden">
-      {/* Gradient overlay */}
       <div className="absolute inset-0 bg-gradient-to-br from-brand-mid/10 via-transparent to-brand/5 pointer-events-none" />
 
-      {/* Decorative blur elements */}
       <div className="absolute top-1/4 right-0 w-64 h-64 bg-brand-mid/10 rounded-full blur-3xl" />
       <div className="absolute bottom-1/4 left-0 w-48 h-48 bg-brand-light/10 rounded-full blur-3xl" />
 
       <div className="relative z-10 max-w-md text-center space-y-8">
-        {/* Logo/Brand */}
         <div className="space-y-4">
           <h2 className="text-3xl font-bold text-text-primary">
             Your assets,
@@ -45,19 +42,16 @@ export function BrandingPanel() {
           <p className="text-text-secondary">A smart wallet that puts you in charge of your digital assets.</p>
         </div>
 
-        {/* App Screenshot */}
         <div className="relative mx-auto">
           <img
             src="/images/app-screenshot-portfolio.png"
             alt="Ledova app"
             className="w-48 h-auto rounded-[2rem] shadow-2xl border-4 border-surface-tertiary mx-auto"
           />
-          {/* Decorative elements around screenshot */}
           <div className="absolute -top-3 -right-3 w-16 h-16 bg-brand-mid/10 rounded-full blur-xl" />
           <div className="absolute -bottom-3 -left-3 w-20 h-20 bg-brand-light/10 rounded-full blur-xl" />
         </div>
 
-        {/* Feature Highlights */}
         <div className="space-y-3">
           {highlights.map((item) => (
             <div
@@ -75,7 +69,6 @@ export function BrandingPanel() {
           ))}
         </div>
 
-        {/* Supported blockchains */}
         <div className="flex items-center justify-center gap-4 pt-2">
           <div className="flex items-center gap-1.5">
             <div

@@ -119,7 +119,6 @@ export function AssetSortModal({ visible, selectedSort, onClose, onSelectSort }:
       cancelLabel="Close"
       onCancel={onClose}
     >
-      {/* Header */}
       <View style={styles.header}>
         <SortAscendingIcon
           size={theme.icon.sizes.xl}
@@ -131,7 +130,6 @@ export function AssetSortModal({ visible, selectedSort, onClose, onSelectSort }:
         <Text style={styles.subtitle}>Choose how to organize your asset list</Text>
       </View>
 
-      {/* Sort Options */}
       <View style={styles.optionsContainer}>
         {sortOptions.map((option) => {
           const isSelected = selectedSort === option.id;

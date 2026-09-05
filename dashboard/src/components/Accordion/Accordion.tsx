@@ -7,22 +7,12 @@ const ICON_MD = DESIGN_TOKENS.icon.sizes.md;
 interface AccordionProps {
   title: string | ReactNode;
   icon?: ReactNode;
-  /**
-   * Optional actions to display on the right side of the header (next to the caret).
-   */
+
   actions?: ReactNode;
-  /**
-   * Content to display when expanded.
-   * NOTE: Do NOT add padding to children - Accordion handles all padding automatically
-   * to ensure consistent alignment across all sections.
-   */
+
   children: ReactNode;
   defaultExpanded?: boolean;
-  /**
-   * Visual variant:
-   * - "card" (default): Standalone card with background, border, and rounded corners.
-   * - "inline": No container styling — for nesting inside an existing card.
-   */
+
   variant?: 'card' | 'inline';
 }
 
@@ -46,7 +36,6 @@ export function Accordion({
           : 'border-b border-border last:border-b-0'
       }
     >
-      {/* Header */}
       <button
         type="button"
         className={`w-full flex items-center justify-between py-4 transition-colors gap-3 text-left ${
@@ -75,7 +64,6 @@ export function Accordion({
         </div>
       </button>
 
-      {/* Content */}
       <div
         className={`transition-all duration-200 ease-in-out overflow-hidden ${
           isExpanded ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'

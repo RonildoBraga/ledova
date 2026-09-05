@@ -1,5 +1,3 @@
-"""A portfolio's daily value series, computed on read from HoldingSnapshot x AssetSnapshot."""
-
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any, Optional
@@ -15,14 +13,6 @@ from wallets.models import HoldingSnapshot
 def portfolio_value_series(
     portfolio: Portfolio, start_date: Optional[date] = None, end_date: Optional[date] = None
 ) -> list[dict[str, Any]]:
-    """One point per day from the first holding snapshot of the portfolio's wallets to today,
-    clipped to [start_date, end_date]; nothing before that first snapshot.
-
-    Each holding carries its latest snapshot quantity forward and each asset is priced (USD)
-    with its latest AssetSnapshot at or before the end of that day. Only active, verified
-    assets count; an unpriced asset has no market value and a day where nothing is priced
-    has a null total.
-    """
     last = min(end_date, timezone.now().date()) if end_date else timezone.now().date()
     wallets = list(portfolio.account_wallets())
     holding_rows = list(

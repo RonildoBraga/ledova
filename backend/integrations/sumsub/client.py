@@ -288,8 +288,7 @@ class SumSubService(KYCProvider):
 
     def verify_webhook_signature(self, payload: bytes, signature: str) -> bool:
         if not settings.SUMSUB_WEBHOOK_SECRET:
-            # Fail closed: with no secret we cannot verify the caller, so we must
-            # reject rather than trust an unauthenticated KYC-status update.
+
             logger.error("SUMSUB_WEBHOOK_SECRET not configured; rejecting webhook (cannot verify signature)")
             return False
 

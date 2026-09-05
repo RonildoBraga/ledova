@@ -13,11 +13,6 @@ export interface OnRampWebViewParams {
   url: string;
 }
 
-/**
- * JS injected into the Transak WebView to listen for order events.
- * Transak dispatches events via window.postMessage internally.
- * We intercept them and forward to React Native via window.ReactNativeWebView.postMessage().
- */
 const INJECTED_JS = `
   (function() {
     window.addEventListener('message', function(event) {
@@ -81,9 +76,7 @@ export function OnRampWebViewScreen() {
           navigation.goBack();
         }
       }
-    } catch {
-      // Ignore non-JSON messages
-    }
+    } catch {}
   };
 
   return (

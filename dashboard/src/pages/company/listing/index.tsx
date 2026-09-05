@@ -53,8 +53,6 @@ const OPTIONAL_DOCUMENTS: { type: DocumentType; label: string }[] = [
   { type: 'bank_statement', label: 'Bank Statement' },
 ];
 
-// The backend accepts withdraw from draft, submitted and info_required; once review has started the
-// application stays with the reviewer, so the page offers Withdraw only for the pending states it can act on.
 const WITHDRAWABLE_STATUSES: Company['status'][] = ['submitted', 'info_required'];
 
 const ACTION_ERROR_FALLBACK = 'The request was refused. Please try again.';
@@ -438,7 +436,6 @@ export default function ListingPage() {
   );
 }
 
-/** Read-only view for every state the owner cannot edit; Withdraw appears only while the backend accepts it. */
 function ApplicationStatusView({
   company,
   operatorName,
@@ -556,7 +553,6 @@ function UploadModal({
       setFile(null);
       onSuccess();
     } catch {
-      // Keep the form open so the user can retry the upload.
     } finally {
       setIsUploading(false);
     }

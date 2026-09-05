@@ -66,19 +66,16 @@ export function AppLockScreen() {
   const { isLocked, unlock, biometricType } = useAppLock();
   const hasAutoPrompted = useRef(false);
 
-  // Auto-prompt for biometrics once when screen appears
   useEffect(() => {
     if (isLocked && !hasAutoPrompted.current) {
       hasAutoPrompted.current = true;
 
-      // Small delay to ensure the lock screen is visible first
       const timer = setTimeout(() => {
         unlock();
       }, 500);
       return () => clearTimeout(timer);
     }
 
-    // Reset the flag when unlocked
     if (!isLocked) {
       hasAutoPrompted.current = false;
     }
@@ -97,22 +94,18 @@ export function AppLockScreen() {
       <GradientBackground>
         <View style={styles.container}>
           <View style={styles.content}>
-            {/* App Logo */}
             <View style={styles.logoContainer}>
               {/* eslint-disable-next-line @typescript-eslint/no-require-imports */}
               <Image source={require('../../../assets/icon.png')} style={styles.logo} resizeMode="contain" />
             </View>
 
-            {/* Lock Icon */}
             <View style={styles.lockIconContainer}>
               <LockKeyIcon size={64} color={theme.colors.interactive.default} weight="regular" />
             </View>
 
-            {/* Title */}
             <Text style={styles.title}>App Locked</Text>
             <Text style={styles.subtitle}>Use {biometricType} to unlock Ledova</Text>
 
-            {/* Unlock Button */}
             <TouchableOpacity style={styles.unlockButton} onPress={handleUnlock} activeOpacity={0.8}>
               <Text style={styles.unlockButtonText}>Unlock with {biometricType}</Text>
             </TouchableOpacity>

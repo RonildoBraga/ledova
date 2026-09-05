@@ -57,7 +57,6 @@ const generateAmount = (assetSymbol: string): string => {
   const range = baseAmounts[assetSymbol] || { min: 1, max: 1000 };
   const amount = Math.random() * (range.max - range.min) + range.min;
 
-  // More decimal places for smaller amounts
   const decimals = amount < 1 ? 8 : amount < 100 ? 4 : 2;
   return amount.toFixed(decimals);
 };
@@ -85,7 +84,7 @@ export const generateMockTransactionsData = (pageSize = 20, page = 1): MockTrans
   const transactions: Transaction[] = [];
 
   for (let i = startIndex; i < endIndex; i++) {
-    const daysAgo = Math.floor(i / 3); // Roughly 3 transactions per day
+    const daysAgo = Math.floor(i / 3);
     const asset = ASSETS[Math.floor(Math.random() * ASSETS.length)];
     const chain = CHAINS[Math.floor(Math.random() * CHAINS.length)];
     const direction = TRANSACTION_TYPES[Math.floor(Math.random() * 2)];

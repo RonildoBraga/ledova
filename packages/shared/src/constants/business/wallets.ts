@@ -173,7 +173,6 @@ export function getBlockExplorerTxUrl(chain: string, txHash: string): string {
   return config?.explorerTxUrl ? `${config.explorerTxUrl}${txHash}` : '';
 }
 
-/** Public-testnet explorer page for an address or contract; empty when the chain has no explorer. */
 export function getBlockExplorerAddressUrl(chain: string, address: string): string {
   const config = resolveChainConfig(chain);
   return config?.explorerAddressUrl ? `${config.explorerAddressUrl}${address}` : '';

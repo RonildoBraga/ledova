@@ -1,5 +1,3 @@
-"""Wallet verification: the challenge round-trip and what a valid signature persists and enqueues."""
-
 from unittest.mock import patch
 
 from rest_framework.test import APITestCase

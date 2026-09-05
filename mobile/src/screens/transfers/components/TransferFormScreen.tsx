@@ -112,7 +112,6 @@ export function TransferFormScreen({ route, navigation }: Props) {
     reset,
   } = useTransfers();
 
-  // Initialize the hook with the wallet from route params
   useEffect(() => {
     if (routeWallet) {
       selectWallet(routeWallet);
@@ -124,7 +123,6 @@ export function TransferFormScreen({ route, navigation }: Props) {
   const isBitcoin = isBitcoinChain(chainShortName);
   const canSubmit = !!toAddress && !!amount && !!selectedAsset && !isPreparing;
 
-  // Encode transaction as UR for QR display
   const urEncodedTransaction = useMemo(() => {
     if (!transactionData || !wallet || !isEthereum) return null;
 
@@ -186,7 +184,6 @@ export function TransferFormScreen({ route, navigation }: Props) {
     setSignedHexError(null);
   }, []);
 
-  // Bitcoin: the user signed elsewhere; validate the pasted hex and hand it to the broadcast step
   const handleBroadcastSignedHex = useCallback(() => {
     const normalized = normalizeBitcoinRawTransactionHex(signedHexInput);
     if (!normalized) {
@@ -197,7 +194,6 @@ export function TransferFormScreen({ route, navigation }: Props) {
     handleSignature(normalized);
   }, [signedHexInput, handleSignature]);
 
-  // Handle back navigation based on current step
   const handleBack = useCallback(() => {
     if (step === 'review') {
       reset();
@@ -215,7 +211,6 @@ export function TransferFormScreen({ route, navigation }: Props) {
   }, [reset, navigation]);
 
   const renderContent = () => {
-    // Waiting for wallet to be set in hook
     if (!wallet || step === 'select-wallet') {
       return (
         <View style={styles.placeholderContainer}>
@@ -298,11 +293,9 @@ export function TransferFormScreen({ route, navigation }: Props) {
   };
 
   const renderFooter = () => {
-    // These steps handle their own UI
     if (step === 'success' || step === 'select-wallet') return null;
     if (!wallet) return null;
 
-    // A failed broadcast keeps the error on screen; Back returns to the review step
     if (step === 'broadcast') {
       if (!broadcastError) return null;
       return (
@@ -401,7 +394,6 @@ export function TransferFormScreen({ route, navigation }: Props) {
         subtitle="Scan the QR code of the destination wallet address"
       />
 
-      {/* Signature QR Scanner (EVM hardware wallets only) */}
       {!isSoftwareWallet && !isBitcoin && (
         <QRScanner
           visible={showSignatureScanner}

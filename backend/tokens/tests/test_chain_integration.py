@@ -1,11 +1,3 @@
-"""The issuer flow against a live Hardhat node; skipped unless the chain-test environment is set.
-
-`make chain-test` from the repository root starts the node, deploys the core contracts and exports the variables.
-The chain is never mocked: the end-to-end test runs unpatched, and the crash and resume tests only patch the
-backend side (`BaseChainClient.wait_for_receipt` to lose a receipt, `get_token_by_identifier` to hide a lookup,
-`_complete_issuance` to kill the worker) so that every transaction, receipt and read still comes from the node.
-"""
-
 import os
 import secrets
 import threading
@@ -110,7 +102,6 @@ class ChainTestMixin:
         return f"{self.token.company.acn}:{self.token.symbol}"
 
     def _signer_nonce(self):
-        """Transactions sent by the operator so far, whether mined or still in the mempool."""
         signer = self.service.chain_client.get_address_from_private_key(self.service.signer_key)
         return self.w3.eth.get_transaction_count(signer, "pending")
 
@@ -121,7 +112,6 @@ class ChainTestMixin:
 
     @staticmethod
     def _crash_after_send():
-        """The worker dies right after the create transaction is sent, before its receipt arrives."""
 
         def crash(client, tx_hash, timeout=120):
             raise BaseChainTransactionError("worker crashed after send")
@@ -130,7 +120,6 @@ class ChainTestMixin:
 
     @staticmethod
     def _lost_receipt():
-        """The RPC drops the receipt call after the transaction mined."""
         real = BaseChainClient.wait_for_receipt
 
         def lose(client, tx_hash, timeout=120):
@@ -555,7 +544,6 @@ class ShareTokenChainTest(ChainTestMixin, APITestCase):
 @chain_available
 @override_settings(**CHAIN_SETTINGS)
 class ShareTokenChainConcurrencyTest(ChainTestMixin, APITransactionTestCase):
-    """Two workers executing two approved increases in one block window; needs a database that honours row locks."""
 
     def setUp(self):
         if connection.vendor != "postgresql":
@@ -569,7 +557,6 @@ class ShareTokenChainConcurrencyTest(ChainTestMixin, APITransactionTestCase):
             time.sleep(0.05)
 
     def test_two_increases_executed_in_one_block_window_cannot_lower_the_cap(self):
-        """'big' (+1000) sends and waits unmined while 'small' (+50) blocks on the token row until 'big' commits."""
         self._deployed()
         big = self._increase(1000)
         small = self._increase(50)

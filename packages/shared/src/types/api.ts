@@ -41,7 +41,6 @@ export interface UserFriendlyError extends Error {
   originalError?: unknown;
 }
 
-/** Mirrors backend `users.services.lifecycle.export_account_data`; both clients only JSON.stringify it. */
 export interface AccountExportData {
   exportedAt: string;
   user: {

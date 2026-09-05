@@ -15,7 +15,6 @@ class NotificationType(models.TextChoices):
 
 
 class Notification(BaseModel):
-    """Persisted for every NotificationService send, regardless of push preferences."""
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,

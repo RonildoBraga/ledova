@@ -50,7 +50,7 @@ export function EmailConfirmationScreen() {
     successContainer: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: `${theme.colors.status.success.icon}20`, // Light green with opacity
+      backgroundColor: `${theme.colors.status.success.icon}20`,
       borderWidth: 1,
       borderColor: theme.colors.badge.success.background,
       borderRadius: theme.borderRadius.md,

@@ -57,7 +57,7 @@ export const AppNavigator = () => {
           component={SignInScreen}
           options={{
             headerShown: false,
-            animation: 'slide_from_left', // Back animation when returning to SignIn
+            animation: 'slide_from_left',
           }}
         />
         <Stack.Screen

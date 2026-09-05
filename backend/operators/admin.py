@@ -7,7 +7,6 @@ from operators.models import Operator
 
 @admin.register(Operator)
 class OperatorAdmin(admin.ModelAdmin):
-    """One change page: the changelist lands on the singleton, which is created on first visit."""
 
     readonly_fields = ["created_at", "updated_at"]
     filter_horizontal = ["supported_settlement_assets"]

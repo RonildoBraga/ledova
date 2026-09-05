@@ -1,9 +1,6 @@
 import { AxiosInstance } from 'axios';
 import type { GetOnRampWidgetRequest, OnRampWidgetResponse } from '../types';
 
-/**
- * Get Transak widget URL for buying crypto
- */
 export const getOnRampWidgetUrl = (apiClient: AxiosInstance, request: GetOnRampWidgetRequest) =>
   apiClient.post<OnRampWidgetResponse>('/api/fiat-purchases/transak-widget-url/', {
     wallet_uuid: request.walletUuid,

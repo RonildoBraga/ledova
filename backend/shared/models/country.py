@@ -18,7 +18,6 @@ class Country(BaseModel):
 
     @classmethod
     def get_or_create_for_code(cls, code):
-        """Row for an ISO 3166-1 alpha-2/alpha-3 code; the name is resolved once, at creation."""
         code = code.strip().upper()
         match = pycountry.countries.get(alpha_2=code) if len(code) == 2 else pycountry.countries.get(alpha_3=code)
         name = (getattr(match, "common_name", None) or match.name) if match else code

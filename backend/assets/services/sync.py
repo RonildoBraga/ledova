@@ -89,8 +89,6 @@ class AssetSyncService:
 
     @staticmethod
     def ensure_supported_assets() -> None:
-        """Upsert the SUPPORTED_ASSETS rows and their chain deployments. Never re-activates an asset
-        the admin switched off and never overwrites a hand-entered contract address."""
         for symbol, meta in SUPPORTED_ASSETS.items():
             asset, _ = Asset.objects.update_or_create(
                 symbol=symbol,
@@ -123,9 +121,7 @@ class AssetSyncService:
 
             snapshot = None
             if create_snapshot:
-                # One row per asset per day: a manual price overwrites today's midnight row
-                # (same key the periodic sync writes) instead of adding an intraday duplicate.
-                # market_data is deliberately not in defaults so an existing NAV row keeps its provenance.
+
                 snapshot, _ = AssetSnapshot.objects.update_or_create(
                     asset=asset,
                     source_timestamp=_midnight(timezone.now()),
@@ -136,9 +132,6 @@ class AssetSyncService:
 
     @staticmethod
     def _current_prices() -> Dict[str, Tuple[Decimal, str]]:
-        """(price, data_source) per symbol: fixed pegs, yield-token NAVs, then one CoinGecko call
-        for every active, verified priced asset the symbol map knows (a quarantined row that took
-        a CoinGecko-known symbol is never priced)."""
         from tokens.models import YieldToken
 
         prices: Dict[str, Tuple[Decimal, str]] = {}

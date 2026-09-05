@@ -36,8 +36,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
     throttle_scope = "order_write"
 
     def get_queryset(self):
-        # Scope to the requesting tenant. Without this, retrieve/list are IDORs:
-        # any authenticated user could read any order by UUID.
+
         return TransferOrder.objects.with_relations().visible_to_user(self.request.user)
 
     def get_serializer_class(self):

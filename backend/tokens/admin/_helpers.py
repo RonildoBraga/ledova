@@ -1,5 +1,3 @@
-"""Display helpers shared by the tokens admins: badges, short hashes, action buttons and the mint form."""
-
 from decimal import Decimal
 
 from django import forms
@@ -24,7 +22,6 @@ def _badge(color, label):
 
 
 def status_badge(colors):
-    """A list_display column colouring `obj.status`; a colour may be (background, text) for dark text."""
 
     def badge(_admin, obj):
         return _badge(colors.get(obj.status, "#777777"), obj.get_status_display())
@@ -46,7 +43,6 @@ def short_hex(value, head=10, tail=6):
 
 
 def hex_column(field, description, tail=6):
-    """A list_display column showing a shortened address or hash."""
 
     def column(_admin, obj):
         return short_hex(getattr(obj, field), tail=tail)
@@ -56,7 +52,6 @@ def hex_column(field, description, tail=6):
 
 
 def format_units(raw, decimals):
-    """Raw token units as a human amount, e.g. 12345 with 2 decimals -> 123.45."""
     return f"{raw / (10**decimals):,.{decimals}f}"
 
 
@@ -68,14 +63,12 @@ def _button(label, url, background, text="white"):
 
 
 def action_buttons(items):
-    """Render (label, url, background[, text]) tuples as buttons; a None url renders a static label."""
     if not items:
         return "-"
     return format_html_join(" ", "{}", ((_button(*item),) for item in items))
 
 
 class MintForm(forms.Form):
-    """Admin mint form; `decimals` and `symbol` shape the amount field, which cleans to raw token units."""
 
     recipient_address = forms.CharField(
         max_length=42,

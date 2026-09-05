@@ -96,17 +96,14 @@ export const useSignupFinancialProfile = () => {
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {};
 
-    // Occupation validation (optional but if provided must be 2-200 chars)
     if (form.occupation && (form.occupation.length < 2 || form.occupation.length > 200)) {
       newErrors.occupation = ['Occupation must be between 2 and 200 characters'];
     }
 
-    // Source of funds "Other" text required if "other" selected
     if (form.sourceOfFunds.includes('other') && !form.sourceOfFundsOtherText?.trim()) {
       newErrors.sourceOfFundsOtherText = ['Please specify your source of funds'];
     }
 
-    // Intended use "Other" text required if "other" selected
     if (form.intendedUse === 'other' && !form.intendedUseOtherText?.trim()) {
       newErrors.intendedUseOtherText = ['Please specify your intended use'];
     }

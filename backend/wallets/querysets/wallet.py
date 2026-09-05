@@ -14,14 +14,12 @@ class WalletQuerySet(QuerySet):
         return self.filter(user_account__user_profiles__user=user)
 
     def verified_evm(self):
-        """Wallets that may sign trading messages: verified and on a chain the trading contracts live on."""
         return self.filter(
             verification_status=WALLET_VERIFICATION_STATUS_VERIFIED,
             chain__in=(BLOCKCHAIN_ETHEREUM, BLOCKCHAIN_BASE),
         )
 
     def with_market_value(self):
-        """Annotate the three balance figures WalletSerializer exposes, in one aggregate query."""
         tradable = Q(holdings__asset__is_active=True, holdings__asset__is_verified=True)
         native = Q(holdings__asset__asset_type="native_crypto")
         holding_value = F("holdings__quantity") * F("holdings__asset__current_price")
@@ -41,7 +39,6 @@ class WalletQuerySet(QuerySet):
         return self.filter(address__iexact=address)
 
     def for_chain_with_l2_fallback(self, chain):
-        """Newest verified wallet on the chain, falling back to an Ethereum wallet for the Base L2."""
         from wallets.models.wallet import Blockchain
 
         verified = self.filter(verification_status=WALLET_VERIFICATION_STATUS_VERIFIED)

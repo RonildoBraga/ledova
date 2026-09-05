@@ -1,5 +1,3 @@
-"""The admin token buttons (deploy, retry deployment, pause, unpause) go through ShareTokenService like the API."""
-
 import time
 from unittest.mock import patch
 

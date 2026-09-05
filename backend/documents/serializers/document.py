@@ -41,7 +41,7 @@ class DocumentSerializer(serializers.ModelSerializer):
         read_only_fields = ["uuid", "mime_type", "latest_extraction", "created_at", "updated_at"]
 
     def get_latest_extraction(self, obj: Document):
-        # Newest first by model ordering; iterating the relation reuses the view's prefetch.
+
         latest = next(iter(obj.extractions.all()), None)
         if not latest:
             return None

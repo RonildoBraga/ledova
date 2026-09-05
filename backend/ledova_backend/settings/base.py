@@ -24,20 +24,20 @@ INSTALLED_APPS = [
     "corsheaders",
     "django_filters",
     "storages",
-    "operators",  # the hosting operator: one admin-editable configuration row
+    "operators",
     "authentication",
-    "users",  # depends on authentication (includes UserAccount model)
-    "portfolios",  # depends on users
+    "users",
+    "portfolios",
     "integrations",
     "assets",
-    "wallets",  # depends on users (crypto-native finance)
-    "compliance",  # configurable example risk workflows
-    "blockchain",  # blockchain transaction tracking
-    "companies",  # company registration and listing
-    "tokens",  # share tokens, P2P trading, stablecoins
-    "whitelist",  # on-chain allowlist example
+    "wallets",
+    "compliance",
+    "blockchain",
+    "companies",
+    "tokens",
+    "whitelist",
     "feature_flags",
-    "documents",  # uploaded financial docs + LLM extraction
+    "documents",
     "shared",
 ]
 
@@ -83,9 +83,8 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 USE_X_FORWARDED_HOST = True
 USE_X_FORWARDED_PORT = True
 
-# Redis is used only for the trading-events pub/sub channel
-# (backend/tokens/events.py). Background tasks run on procrastinate (Postgres).
+
 REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
 
-# Name of the lazily created Operator row (backend/operators); everything else is set in the admin.
+
 OPERATOR_NAME = os.environ.get("OPERATOR_NAME") or "Ledova operator"

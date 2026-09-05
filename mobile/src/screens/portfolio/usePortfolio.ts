@@ -23,7 +23,7 @@ export function usePortfolio() {
   const { selectedPortfolio } = useUserPreferences();
   const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>('3M');
   const { start_date, end_date } = getDateRange(selectedTimeRange);
-  // Fetch all wallets (always called to satisfy React Hooks rules)
+
   const { data: walletsResponse, isLoading: isLoadingWallets } = useQuery({
     queryKey: ['wallets'],
     queryFn: () => getWallets(apiClient),
@@ -33,7 +33,6 @@ export function usePortfolio() {
 
   const wallets = walletsResponse?.data?.results || [];
 
-  // Fetch holdings for all wallets using useQueries (always called to satisfy React Hooks rules)
   const holdingsQueries = useQueries({
     queries: USE_MOCK_DATA
       ? []
@@ -46,7 +45,6 @@ export function usePortfolio() {
         })),
   });
 
-  // Fetch portfolio snapshots for chart data
   const portfolioSnapshotsQuery = useQuery({
     queryKey: ['portfolio-snapshots', selectedPortfolio?.uuid, start_date, end_date],
     queryFn: () =>
@@ -87,7 +85,6 @@ export function usePortfolio() {
     },
   });
 
-  // Return mock data if flag is enabled
   if (USE_MOCK_DATA) {
     const mockChartData = generateMockPortfolioChartData(selectedTimeRange);
     return {
@@ -99,7 +96,6 @@ export function usePortfolio() {
     };
   }
 
-  // Combine all holdings with wallet information
   const holdings: HoldingWithWallet[] = holdingsQueries.flatMap((query, index) => {
     const responseData = (
       query.data as
@@ -122,10 +118,8 @@ export function usePortfolio() {
     }));
   });
 
-  // Calculate summary with asset type breakdown
   const summary = calculateHoldingsSummary(holdings, wallets.length);
 
-  // Calculate asset allocation (grouped by asset, not by wallet)
   const assetAllocation = calculateAssetAllocation(holdings, summary.totalValue);
 
   const isLoading = isLoadingWallets || holdingsQueries.some((query) => query.isLoading);

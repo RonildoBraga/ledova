@@ -5,7 +5,6 @@ from shared.models.base import BaseModel
 
 
 class AlertChecklistItem(BaseModel):
-    """Audit trail of one procedure step for one alert: who completed or skipped it, and when."""
 
     alert = models.ForeignKey(
         "compliance.ComplianceAlert",
@@ -80,7 +79,6 @@ class AlertChecklistItem(BaseModel):
 
     @property
     def is_overdue(self):
-        """A required, unfinished step is overdue once the template's response time has elapsed since the alert."""
         if self.is_completed or self.is_skipped or not self.step.is_required:
             return False
         deadline = self.alert.created_at + timezone.timedelta(hours=self.step.template.response_time_hours)

@@ -9,7 +9,6 @@ interface FooterProps {
   minimal?: boolean;
 }
 
-/** The operator's name from GET /api/operator/; the route needs a session, so public pages show nothing. */
 function useOperatorName(): string | null {
   const { isAuthenticated } = useAuth();
   const query = useQuery({

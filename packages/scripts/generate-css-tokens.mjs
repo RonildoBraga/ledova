@@ -1,17 +1,5 @@
 #!/usr/bin/env node
 
-/**
- * Generates Tailwind CSS v4 @theme tokens from DESIGN_TOKENS.
- *
- * Single source of truth: packages/shared/src/constants/ui/design-tokens.ts
- * Outputs:  dashboard/src/styles/tokens.css
- *           marketing/src/tokens.css
- *
- * Usage: make generate-tokens
- *        (npx tsx packages/scripts/generate-css-tokens.mjs; tsx loads the .ts source directly)
- * CI regenerates both files and fails when they differ from the committed copies.
- */
-
 import { writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -19,21 +7,8 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '../..');
 
-// Imported straight from the TypeScript source (run through tsx)
 const { DESIGN_TOKENS, LIGHT_COLORS } = await import('../shared/src/constants/ui/design-tokens.ts');
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Flatten a nested color object into CSS custom properties.
- * Keys named "default" collapse into the parent name:
- *   brand.default  → --color-brand
- *   brand.hover    → --color-brand-hover
- *
- * Skips non-string leaves (objects/arrays are recursed or skipped).
- */
 function flattenColors(obj, prefix, lines) {
   for (const [key, value] of Object.entries(obj)) {
     const name = key === 'default' ? prefix : `${prefix}-${key}`;
@@ -42,44 +17,39 @@ function flattenColors(obj, prefix, lines) {
     } else if (typeof value === 'object' && !Array.isArray(value)) {
       flattenColors(value, name, lines);
     }
-    // Arrays (chart palettes) are skipped — consumed via JS only
   }
 }
 
-function section(lines, title) {
-  lines.push(`\n  /* === ${title} === */`);
+function section(lines) {
+  lines.push('');
 }
 
 function add(lines, varName, value) {
   lines.push(`  ${varName}: ${value};`);
 }
 
-// ---------------------------------------------------------------------------
-// Generate color variables from a color object
-// ---------------------------------------------------------------------------
-
 function generateColorVars(colors) {
   const lines = [];
 
-  section(lines, 'SURFACES');
+  section(lines);
   flattenColors(colors.surface, 'surface', lines);
 
-  section(lines, 'TEXT');
+  section(lines);
   flattenColors(colors.text, 'text', lines);
 
-  section(lines, 'BRAND');
+  section(lines);
   flattenColors(colors.brand, 'brand', lines);
 
-  section(lines, 'BORDERS');
+  section(lines);
   flattenColors(colors.border, 'border', lines);
 
-  section(lines, 'STATUS');
+  section(lines);
   flattenColors(colors.success, 'success', lines);
   flattenColors(colors.error, 'error', lines);
   flattenColors(colors.warning, 'warning', lines);
   flattenColors(colors.info, 'info', lines);
 
-  section(lines, 'UTILITY');
+  section(lines);
   for (const [key, value] of Object.entries(colors.utility)) {
     add(lines, `--color-${key}`, value);
   }
@@ -87,58 +57,46 @@ function generateColorVars(colors) {
   return lines;
 }
 
-// ---------------------------------------------------------------------------
-// Generate shared (non-color) tokens
-// ---------------------------------------------------------------------------
-
 function generateSharedVars() {
   const lines = [];
 
-  // Spacing (token name → Tailwind numeric scale: value / 4)
-  section(lines, 'SPACING');
+  section(lines);
   for (const [, value] of Object.entries(DESIGN_TOKENS.spacing)) {
     add(lines, `--spacing-${value / 4}`, `${value}px`);
   }
 
-  // Border Radius
-  section(lines, 'BORDER RADIUS');
+  section(lines);
   for (const [key, value] of Object.entries(DESIGN_TOKENS.borderRadius)) {
     const unit = value === 0 ? '0' : typeof value === 'number' ? `${value}px` : value;
     add(lines, `--border-radius-${key}`, unit);
   }
 
-  // Font Sizes
-  section(lines, 'FONT SIZES');
+  section(lines);
   for (const [key, value] of Object.entries(DESIGN_TOKENS.fontSize)) {
     add(lines, `--font-size-${key}`, `${value}px`);
   }
 
-  // Font Weights
-  section(lines, 'FONT WEIGHTS');
+  section(lines);
   for (const [key, value] of Object.entries(DESIGN_TOKENS.fontWeight)) {
     add(lines, `--font-weight-${key}`, value);
   }
 
-  // Line Heights
-  section(lines, 'LINE HEIGHTS');
+  section(lines);
   for (const [key, value] of Object.entries(DESIGN_TOKENS.lineHeight)) {
     add(lines, `--line-height-${key}`, value);
   }
 
-  // Shadows
-  section(lines, 'SHADOWS');
+  section(lines);
   for (const [key, shadow] of Object.entries(DESIGN_TOKENS.shadows)) {
     add(lines, `--shadow-${key}`, shadow.web);
   }
 
-  // Z-Index
-  section(lines, 'Z-INDEX');
+  section(lines);
   for (const [key, value] of Object.entries(DESIGN_TOKENS.zIndex)) {
     add(lines, `--z-${key}`, value);
   }
 
-  // Animation Durations
-  section(lines, 'ANIMATION');
+  section(lines);
   for (const [key, value] of Object.entries(DESIGN_TOKENS.animation.duration)) {
     add(lines, `--duration-${key}`, `${value}ms`);
   }
@@ -146,27 +104,12 @@ function generateSharedVars() {
   return lines;
 }
 
-// ---------------------------------------------------------------------------
-// Output
-// ---------------------------------------------------------------------------
-
 const darkColorVars = generateColorVars(DESIGN_TOKENS.colors);
 const lightColorVars = generateColorVars(LIGHT_COLORS);
 const sharedVars = generateSharedVars();
 
-const css = `/**
- * AUTO-GENERATED — DO NOT EDIT
- *
- * Source of truth: packages/shared/src/constants/ui/design-tokens.ts
- * Regenerate:      make generate-tokens (from the repo root)
- */
-
-@theme {${[...darkColorVars, ...sharedVars].join('\n')}
+const css = `@theme {${[...darkColorVars, ...sharedVars].join('\n')}
 }
-
-/* ── Light theme ───────────────────────────────────────────────────────────
- * Activates via OS preference or .theme-light class on <html>.
- * Only color variables change; spacing, typography, etc. are shared. */
 
 @media (prefers-color-scheme: light) {
   :root:not(.theme-dark) {

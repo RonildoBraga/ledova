@@ -43,7 +43,7 @@ describe("AUSG", function () {
 
     it("Should set initial NAV to $1.00", async function () {
       const { ausg } = await loadFixture(deployFixture);
-      expect(await ausg.navPerToken()).to.equal(1000000); // $1.00 in 6 decimals
+      expect(await ausg.navPerToken()).to.equal(1000000);
     });
 
     it("Should set whitelist registry", async function () {
@@ -88,7 +88,7 @@ describe("AUSG", function () {
   describe("NAV Updates", function () {
     it("Should update NAV", async function () {
       const { ausg, navUpdater } = await loadFixture(deployFixture);
-      await ausg.connect(navUpdater).updateNAV(1005000, 50000000000); // NAV = $1.005, reserve = $50,000
+      await ausg.connect(navUpdater).updateNAV(1005000, 50000000000);
 
       expect(await ausg.navPerToken()).to.equal(1005000);
       expect(await ausg.totalReserveValue()).to.equal(50000000000);
@@ -119,7 +119,7 @@ describe("AUSG", function () {
   describe("Minting", function () {
     it("Should mint tokens to whitelisted investor", async function () {
       const { ausg, minter, investor1 } = await loadFixture(deployFixture);
-      const amount = 1000000000; // 1000 tokens (6 decimals)
+      const amount = 1000000000;
 
       await ausg.connect(minter).mint(investor1.address, amount);
       expect(await ausg.balanceOf(investor1.address)).to.equal(amount);
@@ -150,10 +150,10 @@ describe("AUSG", function () {
   describe("Redemption", function () {
     it("Should create a redemption request and burn tokens", async function () {
       const { ausg, minter, investor1 } = await loadFixture(deployFixture);
-      const mintAmount = 1000000000; // 1000 tokens
+      const mintAmount = 1000000000;
 
       await ausg.connect(minter).mint(investor1.address, mintAmount);
-      const redeemAmount = 500000000; // 500 tokens
+      const redeemAmount = 500000000;
 
       await ausg.connect(investor1).redeem(redeemAmount);
 
@@ -167,8 +167,8 @@ describe("AUSG", function () {
       const request = await ausg.redemptionRequests(0);
       expect(request.investor).to.equal(investor1.address);
       expect(request.tokenAmount).to.equal(redeemAmount);
-      expect(request.navAtRedemption).to.equal(1000000); // $1.00
-      expect(request.audAmount).to.equal(500000000); // $500 in 6 decimals
+      expect(request.navAtRedemption).to.equal(1000000);
+      expect(request.audAmount).to.equal(500000000);
       expect(request.processed).to.be.false;
     });
 
@@ -184,11 +184,11 @@ describe("AUSG", function () {
     it("Should calculate correct AUD amount with updated NAV", async function () {
       const { ausg, minter, navUpdater, investor1 } =
         await loadFixture(deployFixture);
-      await ausg.connect(minter).mint(investor1.address, 1000000000); // 1000 tokens
+      await ausg.connect(minter).mint(investor1.address, 1000000000);
 
       await ausg.connect(navUpdater).updateNAV(1005000, 50000000000);
 
-      await ausg.connect(investor1).redeem(1000000000); // Redeem all
+      await ausg.connect(investor1).redeem(1000000000);
 
       const request = await ausg.redemptionRequests(0);
       expect(request.audAmount).to.equal(1005000000);

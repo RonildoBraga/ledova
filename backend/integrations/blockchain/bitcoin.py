@@ -1,8 +1,3 @@
-"""Bitcoin client over Alchemy JSON-RPC.
-
-The UTXO node has no address index, so balance and history come from the Blockstream API.
-"""
-
 import logging
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -19,7 +14,6 @@ logger = logging.getLogger(__name__)
 
 
 def is_bitcoin_address_valid(address: str, network: str) -> bool:
-    """Apply the repository's testnet/regtest-only Bitcoin address policy."""
     if not address:
         return False
     try:
@@ -63,7 +57,6 @@ class BitcoinClient(BlockchainClient):
         return actual_network
 
     def _rpc_call(self, method: str, params: Optional[List] = None) -> Any:
-        """Make JSON-RPC call to Alchemy Bitcoin API."""
         payload = {"jsonrpc": "2.0", "id": 1, "method": method, "params": params or []}
 
         try:
@@ -136,7 +129,6 @@ class BitcoinClient(BlockchainClient):
             raise
 
     def estimate_gas(self, tx_params: Dict[str, Any]) -> int:
-        """Estimated fee in satoshis; tx_params may carry 'conf_target' (blocks) and 'size' (bytes)."""
         try:
             conf_target = tx_params.get("conf_target", 6)
             fee_estimate = self._rpc_call("estimatesmartfee", [conf_target])
@@ -158,7 +150,6 @@ class BitcoinClient(BlockchainClient):
             return 5000
 
     def get_gas_price(self) -> int:
-        """Get current fee rate in satoshis per byte."""
         try:
             fee_estimate = self._rpc_call("estimatesmartfee", [6])
 
@@ -193,7 +184,6 @@ class BitcoinClient(BlockchainClient):
         raise TimeoutError(f"Transaction {tx_hash} not confirmed within {timeout}s")
 
     def get_native_balance(self, address: str) -> Decimal:
-        """Get BTC balance for address using Blockstream API."""
         try:
             blockstream_url = getattr(settings, "BLOCKSTREAM_API_URL", "https://blockstream.info/testnet/api")
             blockstream_timeout = getattr(settings, "BLOCKSTREAM_TIMEOUT", 30)
@@ -202,7 +192,6 @@ class BitcoinClient(BlockchainClient):
             response.raise_for_status()
             data = response.json()
 
-            # Balance in satoshis = funded - spent
             chain_stats = data.get("chain_stats", {})
             funded = Decimal(str(chain_stats.get("funded_txo_sum", 0)))
             spent = Decimal(str(chain_stats.get("spent_txo_sum", 0)))
@@ -217,19 +206,16 @@ class BitcoinClient(BlockchainClient):
             raise
 
     def get_token_balance(self, address: str, contract_address: str, decimals: int) -> Decimal:
-        """Get token balance - not supported on Bitcoin."""
         _ = address, contract_address, decimals
         raise NotImplementedError("Bitcoin does not support tokens")
 
     def get_total_supply(self, contract_address: str, decimals: int) -> Decimal:
-        """Get total token supply - not supported on Bitcoin."""
         _ = contract_address, decimals
         raise NotImplementedError("Bitcoin does not support tokens")
 
     def get_transaction_history(
         self, address: str, from_block: Optional[int] = None, to_block: Optional[int] = None
     ) -> List[Dict[str, Any]]:
-        """Get transaction history for address using Blockstream API."""
         try:
             blockstream_url = getattr(settings, "BLOCKSTREAM_API_URL", "https://blockstream.info/testnet/api")
             blockstream_timeout = getattr(settings, "BLOCKSTREAM_TIMEOUT", 30)

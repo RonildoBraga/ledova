@@ -1,5 +1,3 @@
-"""Idempotent loader for compliance/seeds/monitoring_rules.py; safe to run repeatedly."""
-
 from django.core.management.base import BaseCommand
 
 from compliance.models import MonitoringRule

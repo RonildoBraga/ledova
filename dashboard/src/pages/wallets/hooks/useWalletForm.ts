@@ -37,7 +37,6 @@ export function useWalletForm({ userAccountUuid, onSubmit, onBatchSubmit, presel
   const [scanProgress, setScanProgress] = useState<{ received: number; total: number } | null>(null);
   const [scannerError, setScannerError] = useState<string | null>(null);
 
-  // Scanner refs
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const urDecoderRef = useRef<URDecoder | null>(null);
   const processedPartsRef = useRef<Set<string>>(new Set());
@@ -111,20 +110,18 @@ export function useWalletForm({ userAccountUuid, onSubmit, onBatchSubmit, presel
     [selectedChain, errors.address],
   );
 
-  // Handle QR scan result
   const handleQRScanResult = useCallback(
     (data: string) => {
       const dataLower = data.toLowerCase();
       const isBCUR = dataLower.startsWith('ur:');
 
       if (isBCUR) {
-        // Hardware wallet animated QR code
         if (!urDecoderRef.current) {
           urDecoderRef.current = new URDecoder();
         }
 
         if (processedPartsRef.current.has(dataLower)) {
-          return; // Already processed this part
+          return;
         }
 
         processedPartsRef.current.add(dataLower);
@@ -141,23 +138,19 @@ export function useWalletForm({ userAccountUuid, onSubmit, onBatchSubmit, presel
 
           if (urDecoderRef.current.isComplete()) {
             const ur = urDecoderRef.current.resultUR();
-            // Use a large fragment size to ensure the entire UR fits in one part
+
             const encoder = new UREncoder(ur, 100000);
             const completeURString = encoder.nextPart();
 
-            // Stop scanner
             stopScanner();
             setScannedURString(completeURString);
             setShowScanner(false);
             setStep('selectAddresses');
           }
-        } catch {
-          // Continue scanning, ignore errors
-        }
+        } catch {}
         return;
       }
 
-      // Plain address - stop scanner and use the address
       stopScanner();
       setAddress(data);
       setShowScanner(false);
@@ -177,7 +170,6 @@ export function useWalletForm({ userAccountUuid, onSubmit, onBatchSubmit, presel
     [errors.address],
   );
 
-  // Stop QR scanner
   const stopScanner = useCallback(() => {
     if (html5QrCodeRef.current) {
       html5QrCodeRef.current.stop().catch(() => {});
@@ -189,7 +181,6 @@ export function useWalletForm({ userAccountUuid, onSubmit, onBatchSubmit, presel
     setScannerError(null);
   }, []);
 
-  // Initialize QR scanner
   const startScanner = useCallback(() => {
     if (html5QrCodeRef.current) return;
 
@@ -216,10 +207,8 @@ export function useWalletForm({ userAccountUuid, onSubmit, onBatchSubmit, presel
       });
   }, [handleQRScanResult]);
 
-  // Effect to start/stop scanner when showScanner changes
   useEffect(() => {
     if (showScanner) {
-      // Small delay to ensure DOM element exists
       const timer = setTimeout(startScanner, 100);
       return () => clearTimeout(timer);
     } else {
@@ -227,7 +216,6 @@ export function useWalletForm({ userAccountUuid, onSubmit, onBatchSubmit, presel
     }
   }, [showScanner, startScanner, stopScanner]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       stopScanner();
@@ -269,7 +257,6 @@ export function useWalletForm({ userAccountUuid, onSubmit, onBatchSubmit, presel
   }, []);
 
   return {
-    // State
     step,
     name,
     address,
@@ -281,10 +268,8 @@ export function useWalletForm({ userAccountUuid, onSubmit, onBatchSubmit, presel
     scannerError,
     isSelectingAddresses: step === 'selectAddresses' && !!scannedURString,
 
-    // Setters
     setName,
 
-    // Actions
     reset,
     handleAddressChange,
     handleAddressSelection,

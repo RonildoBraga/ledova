@@ -108,7 +108,6 @@ const CAPITAL_INCREASE_STATUS_COLORS: Record<CapitalIncreaseStatus, string> = {
   failed: 'bg-error-light/20 text-error-light',
 };
 
-// Share tokens deploy through the factory on the Base testnet (the backend's default issuer chain).
 const TOKEN_CHAIN = BLOCKCHAIN.BASE;
 
 const INPUT_CLASS =
@@ -133,7 +132,6 @@ export default function CompanyPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [selectedTokenUuid, setSelectedTokenUuid] = useState<string | null>(null);
 
-  // Create token modal state
   const [newToken, setNewToken] = useState<TokenCreate>({
     name: '',
     symbol: '',
@@ -179,9 +177,7 @@ export default function CompanyPage() {
     try {
       await tokensList.createToken({ ...newToken, company: companyUuid });
       setNewToken({ name: '', symbol: '', tokenType: 'ordinary', totalSupply: '' });
-    } catch {
-      // Error handled by mutation state
-    }
+    } catch {}
   };
 
   const handleCloseCreateModal = () => {
@@ -256,9 +252,7 @@ export default function CompanyPage() {
         </div>
       )}
 
-      {/* Two-column layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left: Company Profile */}
         <Panel
           title={company.name}
           icon={<BuildingsIcon size={ICON_MD} />}
@@ -292,7 +286,6 @@ export default function CompanyPage() {
           </div>
         </Panel>
 
-        {/* Right: Share Tokens */}
         <Panel title={`Share Tokens${stats ? ` (${stats.totalTokens})` : ''}`} icon={<CoinIcon size={ICON_MD} />}>
           {tokensList.isLoading ? (
             <div className="flex items-center justify-center py-12">
@@ -350,7 +343,6 @@ export default function CompanyPage() {
         </Panel>
       </div>
 
-      {/* Edit Company Modal */}
       <Modal
         isOpen={isEditModalOpen}
         onClose={() => {
@@ -372,7 +364,6 @@ export default function CompanyPage() {
         />
       </Modal>
 
-      {/* Create Token Modal */}
       <Modal
         isOpen={tokensList.isCreateModalOpen}
         onClose={handleCloseCreateModal}
@@ -439,7 +430,6 @@ export default function CompanyPage() {
         </div>
       </Modal>
 
-      {/* Token Detail Modal */}
       {selectedTokenUuid && (
         <TokenDetailModal
           uuid={selectedTokenUuid}
@@ -450,8 +440,6 @@ export default function CompanyPage() {
     </PageWrapper>
   );
 }
-
-// --- Token Detail Modal ---
 
 const ACTION_ERROR_FALLBACK = 'The request was refused. Please try again.';
 
@@ -524,7 +512,6 @@ function TokenDetailModal({
     setTimeout(() => setCopiedField(null), 2000);
   };
 
-  // Every issuer control reports the backend's refusal (400 detail) instead of swallowing it.
   const runAction = async (action: () => Promise<unknown>, successMessage: string) => {
     setActionError(null);
     setActionMessage(null);
@@ -585,7 +572,6 @@ function TokenDetailModal({
       'Capital increase request created. Submit it for review when the paperwork is ready.',
     );
 
-  // Info sub-modal
   if (isInfoOpen) {
     return (
       <Modal isOpen onClose={() => setIsInfoOpen(false)} title="Token Details">
@@ -655,7 +641,6 @@ function TokenDetailModal({
     );
   }
 
-  // Issue sub-modal
   if (isIssueOpen) {
     return (
       <Modal
@@ -720,7 +705,6 @@ function TokenDetailModal({
     );
   }
 
-  // Capital increase sub-modal: the request is created as a draft; the list below offers "Submit for review".
   if (showCapitalIncreaseForm) {
     return (
       <Modal
@@ -814,11 +798,9 @@ function TokenDetailModal({
       ? 'Deployment is starting...'
       : undefined;
 
-  // Main token detail modal
   return (
     <Modal isOpen onClose={onClose} size="2xl">
       <div className="space-y-5">
-        {/* Hero header */}
         <div className="flex items-start gap-4">
           <div className="w-12 h-12 rounded-xl bg-brand-mid/15 flex items-center justify-center flex-shrink-0">
             <CoinIcon size={ICON_LG} className="text-brand-light" weight="duotone" />
@@ -884,7 +866,6 @@ function TokenDetailModal({
           </div>
         )}
 
-        {/* Cap Table */}
         <div>
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-semibold text-text-primary flex items-center gap-1.5">
@@ -949,7 +930,6 @@ function TokenDetailModal({
           )}
         </div>
 
-        {/* Recent Issuances */}
         <div>
           <h3 className="text-sm font-semibold text-text-primary flex items-center gap-1.5 mb-2">
             <ListBulletsIcon size={ICON_SM} className="text-text-muted" />
@@ -998,7 +978,6 @@ function TokenDetailModal({
           )}
         </div>
 
-        {/* Capital Increases */}
         {(isDeployed || isPaused || capitalIncreaseCount > 0) && (
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -1069,7 +1048,6 @@ function TokenDetailModal({
           </div>
         )}
 
-        {/* Action buttons */}
         <div className="flex flex-wrap gap-3 pt-1">
           {isDraft && (
             <span className="flex-1" title={deployDisabledReason}>

@@ -4,7 +4,6 @@ from django.db import migrations, models
 
 
 def require_every_company_to_have_an_owner(apps, schema_editor):
-    """Stop instead of deleting: an owner-less company must be assigned by hand before this runs."""
     Company = apps.get_model("companies", "Company")
     orphans = list(Company.objects.filter(owner__isnull=True).values_list("acn", flat=True))
     if orphans:

@@ -1,5 +1,3 @@
-"""WalletSyncService.sync_wallet talks to the chain client directly; the chain key it stamps is load-bearing."""
-
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 

@@ -1,8 +1,5 @@
 import type { BaseEntity } from '../common';
 
-/**
- * Nested account data returned in user preferences response.
- */
 export interface SelectedAccount {
   uuid: string;
   accountNumber: string;
@@ -10,9 +7,6 @@ export interface SelectedAccount {
   activationDate: string | null;
 }
 
-/**
- * Nested portfolio data returned in user preferences response.
- */
 export interface SelectedPortfolio {
   uuid: string;
   name: string;
@@ -20,9 +14,6 @@ export interface SelectedPortfolio {
   isActive: boolean;
 }
 
-/**
- * User preferences with full nested objects for selected account and portfolio.
- */
 export type Theme = 'dark' | 'light';
 export type DisplayCurrency = 'AUD' | 'USD';
 

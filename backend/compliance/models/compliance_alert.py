@@ -13,7 +13,6 @@ from shared.models.base import BaseModel
 
 
 class ComplianceAlert(BaseModel):
-    """Alert raised by a monitoring rule, a crypto screening, the periodic-review task or an officer by hand."""
 
     user_account = models.ForeignKey(
         "users.UserAccount",

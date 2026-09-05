@@ -1,10 +1,3 @@
-"""
-Per-document-type extraction prompts.
-
-The prompt enumerates exact field names and relies on the server's JSON mode plus a separate pydantic pass;
-passing the schema as the response format made the model rename fields.
-"""
-
 _RULES = """
 Rules:
   - All amounts must be plain numbers without currency symbols or commas

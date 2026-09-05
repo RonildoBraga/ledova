@@ -70,12 +70,6 @@ export function useWalletVerification({ wallet }: UseWalletVerificationProps) {
     [verificationChallenge, verifySignatureMutation],
   );
 
-  /**
-   * Auto-verify for software wallets:
-   * 1. Request challenge from backend
-   * 2. Sign challenge locally with biometric auth
-   * 3. Submit signature to backend
-   */
   const autoVerify = useCallback(async () => {
     if (autoVerifyingRef.current) return;
     if (wallet.walletType !== 'software') return;
@@ -87,12 +81,10 @@ export function useWalletVerification({ wallet }: UseWalletVerificationProps) {
     setAutoVerifyLoading(true);
 
     try {
-      // Step 1: Request challenge
       const challengeResponse = await requestVerificationChallenge(apiClient, wallet.uuid, selectedAccount?.uuid);
       const challenge = challengeResponse.data.challenge;
       setVerificationChallenge(challenge);
 
-      // Step 2: Retrieve seed and sign locally
       const seedId = wallet.masterFingerprint;
       const mnemonic = await getSeedPhrase(seedId);
       if (!mnemonic) {
@@ -106,7 +98,6 @@ export function useWalletVerification({ wallet }: UseWalletVerificationProps) {
         ? await signBitcoinMessage(mnemonic, wallet.derivationPath, challenge)
         : await signEthereumMessage(mnemonic, wallet.derivationPath, challenge);
 
-      // Step 3: Submit signature directly (avoid stale mutation closure)
       await verifyWalletSignature(apiClient, wallet.uuid, { signature }, selectedAccount?.uuid);
       queryClient.refetchQueries({ queryKey: ['wallets'] });
       setAutoVerifySuccess(true);
@@ -132,22 +123,18 @@ export function useWalletVerification({ wallet }: UseWalletVerificationProps) {
   }, []);
 
   return {
-    // State
     verificationChallenge,
     verificationStep,
 
-    // Loading states
     isRequestingChallenge: requestChallengeMutation.isPending || autoVerifyLoading,
     isVerifying: verifySignatureMutation.isPending || autoVerifyLoading,
 
-    // Result states
     verificationError:
       autoVerifyError ||
       getErrorMessage(requestChallengeMutation.error) ||
       getErrorMessage(verifySignatureMutation.error),
     verificationSuccess: verifySignatureMutation.isSuccess || autoVerifySuccess,
 
-    // Actions
     requestChallenge,
     proceedToScanSignature,
     goBackVerificationStep,

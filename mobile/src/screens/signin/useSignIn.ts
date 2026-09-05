@@ -140,10 +140,6 @@ export const useSignIn = () => {
     }
   };
 
-  /**
-   * Biometric sign in: exchanges the refresh token unlocked by the OS prompt for a new session.
-   * The backend rejects it after a sign-out (revoked) or once it expired; the password form takes over.
-   */
   const loginWithRefreshToken = async (refreshToken: string, onSuccess?: () => void): Promise<boolean> => {
     setGeneralError(null);
     setIsLoading(true);

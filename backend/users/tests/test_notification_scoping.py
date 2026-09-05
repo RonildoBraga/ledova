@@ -1,5 +1,3 @@
-"""Behaviour tests for notifications, notification preferences, device tokens and identity verification."""
-
 from types import SimpleNamespace
 from unittest.mock import patch
 

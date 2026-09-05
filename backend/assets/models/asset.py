@@ -12,12 +12,12 @@ from shared.models import BaseModel
 
 class AssetType(str, Enum):
 
-    NATIVE_CRYPTO = "native_crypto"  # BTC, ETH, SOL (chain-native coins)
-    ERC20_TOKEN = "erc20_token"  # LINK, UNI, AAVE (ERC-20 tokens on Ethereum)
-    STABLECOIN = "stablecoin"  # USDC, USDT, DAI
-    TOKENIZED_SECURITY = "tokenized_security"  # AAPL.t, VAS.t
-    TOKENIZED_RWA = "tokenized_rwa"  # US Treasuries, bonds
-    SYNTHETIC = "synthetic"  # Synthetic tracking tokens
+    NATIVE_CRYPTO = "native_crypto"
+    ERC20_TOKEN = "erc20_token"
+    STABLECOIN = "stablecoin"
+    TOKENIZED_SECURITY = "tokenized_security"
+    TOKENIZED_RWA = "tokenized_rwa"
+    SYNTHETIC = "synthetic"
 
     @classmethod
     def choices(cls):

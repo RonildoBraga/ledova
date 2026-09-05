@@ -1,5 +1,3 @@
-"""Authorization and disclosure regressions for the trading SSE endpoint."""
-
 import json
 from unittest.mock import Mock, patch
 from uuid import uuid4

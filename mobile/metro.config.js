@@ -4,7 +4,6 @@ const { getDefaultConfig } = require('expo/metro-config');
 
 const config = getDefaultConfig(__dirname);
 
-// Add polyfills for Node.js modules
 config.resolver.extraNodeModules = {
   crypto: require.resolve('crypto-browserify'),
   stream: require.resolve('stream-browserify'),
@@ -18,7 +17,6 @@ config.resolver.extraNodeModules = {
 const path = require('path');
 const workspacePackages = path.resolve(__dirname, '../packages');
 
-// Follow the file:../packages/shared link so Metro bundles the shared sources.
 config.watchFolders = [workspacePackages];
 
 module.exports = config;

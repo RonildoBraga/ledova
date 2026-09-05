@@ -40,9 +40,7 @@ export function useQRScanner({
         if (state === 2 || state === 3) {
           scanner.stop().catch(() => {});
         }
-      } catch {
-        // Scanner may not be initialized
-      }
+      } catch {}
       html5QrCodeRef.current = null;
     }
     setIsScanning(false);

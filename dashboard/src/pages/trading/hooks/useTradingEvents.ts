@@ -11,7 +11,6 @@ export function useTradingEvents(tokenUuid: string | null | undefined) {
   const connect = useCallback(() => {
     if (!tokenUuid) return;
 
-    // Close any existing connection
     eventSourceRef.current?.close();
 
     const baseUrl = (import.meta.env.VITE_API_URL as string).replace(/\/$/, '');
@@ -22,7 +21,6 @@ export function useTradingEvents(tokenUuid: string | null | undefined) {
       reconnectDelayRef.current = TRADING_CONFIG.SSE_RECONNECT_DELAY;
     };
 
-    // Listen for each trading event type and invalidate the corresponding queries
     for (const [eventType, queryKeys] of Object.entries(TRADING_EVENT_INVALIDATION_MAP)) {
       es.addEventListener(eventType, () => {
         for (const queryKey of queryKeys) {

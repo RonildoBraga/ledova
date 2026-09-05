@@ -64,8 +64,8 @@ const generateMockEthereumTransactionData = (
   amount: string,
   isNative: boolean = true,
 ): TransactionData => {
-  const gasPrice = '20000000000'; // 20 Gwei
-  const gasLimit = isNative ? 21000 : 65000; // Higher gas for token transfers
+  const gasPrice = '20000000000';
+  const gasLimit = isNative ? 21000 : 65000;
   const gasCost = (parseInt(gasPrice) * gasLimit) / 1e18;
   const gasPriceGwei = (parseInt(gasPrice) / 1e9).toString();
 
@@ -100,8 +100,8 @@ const generateMockBitcoinTransactionData = (
   toAddress: string,
   amount: string,
 ): TransactionData => {
-  const feeRate = 50; // sats/vByte
-  const estimatedSize = 250; // bytes (typical P2WPKH transaction)
+  const feeRate = 50;
+  const estimatedSize = 250;
   const feeSats = feeRate * estimatedSize;
   const feeBtc = feeSats / 1e8;
 
@@ -110,13 +110,13 @@ const generateMockBitcoinTransactionData = (
       {
         txid: 'abc123def456...',
         vout: 0,
-        value: '50000000', // 0.5 BTC in satoshis
+        value: '50000000',
       },
     ],
     outputs: [
       {
         address: toAddress,
-        value: (parseFloat(amount) * 1e8).toString(), // Convert to satoshis
+        value: (parseFloat(amount) * 1e8).toString(),
       },
     ],
     feeRate,

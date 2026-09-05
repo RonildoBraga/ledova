@@ -10,7 +10,6 @@ from shared.models.base import BaseModel
 
 
 class MonitoringRule(BaseModel):
-    """Transaction monitoring rule; stored in the database so thresholds can change without a deploy."""
 
     rule_code = models.CharField(
         max_length=20,
@@ -24,8 +23,7 @@ class MonitoringRule(BaseModel):
         choices=RULE_TYPE_CHOICES,
         help_text="Type of check: threshold, velocity, pattern, address, etc.",
     )
-    # Per rule_type, e.g. threshold {"amount": 10000, "currency": "AUD"},
-    # pattern {"min_transactions": 3, "max_each": 9500, "period_hours": 48}.
+
     parameters = models.JSONField(
         default=dict,
         help_text="Rule-specific parameters (thresholds, timeframes, etc.)",

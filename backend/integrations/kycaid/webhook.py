@@ -1,10 +1,3 @@
-"""
-KYCAID Webhook Handler
-
-Receives verification status updates from KYCAID.
-Documentation: https://docs.kycaid.com/#webhooks
-"""
-
 import logging
 
 from django.core.exceptions import ValidationError
@@ -68,7 +61,6 @@ class KYCAIDWebhookView(APIView):
                 IdentityVerificationService.update_status_from_normalized(user_profile, normalized)
                 logger.info(f"Processed VERIFICATION_COMPLETED for {applicant_id}")
 
-                # Populate profile with verified data after approval
                 if normalized.review_result == REVIEW_GREEN:
                     try:
                         applicant_data = kycaid_service.get_applicant_data(applicant_id)

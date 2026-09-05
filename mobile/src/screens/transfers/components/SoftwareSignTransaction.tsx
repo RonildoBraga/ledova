@@ -100,20 +100,17 @@ export function SoftwareSignTransaction({
       setSigningState('authenticating');
       setError(null);
 
-      // Retrieve seed phrase (triggers biometric auth)
       const seedId = wallet.masterFingerprint;
       const mnemonic = await getSeedPhrase(seedId);
       if (!mnemonic) {
         setSigningState('ready');
-        return; // User cancelled biometric
+        return;
       }
 
       setSigningState('signing');
 
-      // Parse and validate transaction before signing
       const unsignedTx = JSON.parse(transactionData.transaction);
 
-      // For native transfers (no contract call), verify the recipient matches what was displayed
       const txData = unsignedTx.data as string | undefined;
       const isNativeTransfer = !txData || txData === '0x' || txData === '0x00';
       if (isNativeTransfer && unsignedTx.to && transactionData.toAddress) {
@@ -126,7 +123,6 @@ export function SoftwareSignTransaction({
 
       setSigningState('success');
 
-      // Brief delay to show success state before proceeding
       setTimeout(() => {
         onSignComplete(signedTx);
       }, 500);
@@ -136,7 +132,6 @@ export function SoftwareSignTransaction({
     }
   }, [wallet, transactionData, onSignComplete]);
 
-  // Trigger signing when signTrigger changes (from parent button press)
   useEffect(() => {
     if (signTrigger > 0) {
       handleSign();
@@ -149,7 +144,6 @@ export function SoftwareSignTransaction({
       contentContainerStyle={styles.scrollContentContainer}
       showsVerticalScrollIndicator={false}
     >
-      {/* Transaction Summary */}
       <View style={styles.summarySection}>
         <Text style={styles.sectionTitle}>Transaction Summary</Text>
 
@@ -178,7 +172,6 @@ export function SoftwareSignTransaction({
         )}
       </View>
 
-      {/* Signing Status */}
       <View style={styles.statusSection}>
         {signingState === 'ready' && (
           <>

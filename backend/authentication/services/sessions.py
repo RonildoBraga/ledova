@@ -54,10 +54,6 @@ class SessionService:
     @staticmethod
     @transaction.atomic
     def signup(email, password, password_confirmation):
-        """Create the user without issuing tokens; tokens are issued after email verification.
-
-        A repeated signup for an incomplete account never touches the stored row: knowing the
-        address is not proof of ownership, so the caller only gets the verification code resent."""
         if not email or not password:
             raise serializers.ValidationError({"error": ["Email and password are required."]})
 
@@ -82,7 +78,6 @@ class SessionService:
 
     @staticmethod
     def logout(refresh_token=None, refresh_jti=None):
-        """End one session: the presented refresh token, else the session the access token belongs to."""
         if refresh_token:
             TokenService.revoke(refresh_token)
         elif refresh_jti:

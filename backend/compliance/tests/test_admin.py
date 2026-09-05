@@ -1,5 +1,3 @@
-"""Every compliance ModelAdmin renders its changelist and change page, and each bulk action still works."""
-
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
@@ -33,7 +31,7 @@ from wallets.models import Transaction, Wallet
 
 User = get_user_model()
 
-# The manifest static storage has no manifest under test; plain storage lets the admin templates render.
+
 TEST_STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},

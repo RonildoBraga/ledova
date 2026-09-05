@@ -138,7 +138,7 @@ class TransferService:
             TransactionConfirmationService,
         )
 
-        if token_contract:  # refuse an unknown or quarantined contract while the funds are still here
+        if token_contract:
             TransactionConfirmationService.resolve_transfer_asset(wallet, token_contract)
 
         if chain in EVM_BLOCKCHAINS:

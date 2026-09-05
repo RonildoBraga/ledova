@@ -38,7 +38,6 @@ class WalletAdmin(admin.ModelAdmin):
         "verified_at",
         "created_at",
         "updated_at",
-        # HD wallet fields (set programmatically from hardware wallet import)
         "address_index",
         "parent_public_key",
         "parent_chain_code",
@@ -47,7 +46,7 @@ class WalletAdmin(admin.ModelAdmin):
     actions = ["verify_wallets", "sync_holdings_action"]
 
     def get_queryset(self, request):
-        # distinct: the e-mail search joins user_profiles, which would multiply the count.
+
         return (
             super()
             .get_queryset(request)

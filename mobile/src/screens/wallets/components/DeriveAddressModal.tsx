@@ -126,7 +126,6 @@ export function DeriveAddressModal({
   useEffect(() => {
     if (visible && wallet?.parentPublicKey && wallet?.parentChainCode && wallet?.parentDerivationPath) {
       try {
-        // Derive the next address (current index + 1)
         const nextIndex = (wallet.addressIndex ?? 0) + 1;
         const newAddress = deriveAddressFromParentKey(
           wallet.parentPublicKey,

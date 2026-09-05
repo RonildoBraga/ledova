@@ -51,11 +51,6 @@ CAP_NOT_RAISED = (
 
 
 class ShareTokenService:
-    """Share tokens on chain: shares are minted on allotment only, never at deployment.
-
-    On-chain `authorizedShares` is the cap (`ShareToken.total_supply`); `totalSupply` is the issued amount and grows
-    only through executed issuance requests. The operator key owns every token, the factory and the registry.
-    """
 
     def __init__(self):
         self.chain_client = get_base_chain_client()
@@ -92,16 +87,10 @@ class ShareTokenService:
 
     @staticmethod
     def token_identifier(token: ShareToken) -> str:
-        """The factory key `<acn>:<symbol>`: unique per token so a company can hold several share classes.
-
-        The ACN is required and unique; the ABN is optional and editable, so keying on it would change the
-        identifier of a deployed token once the company fills its ABN in and a re-run would create a second token.
-        """
         return f"{token.company.acn}:{token.symbol}"
 
     @staticmethod
     def require_deployable(token: ShareToken):
-        """Raise unless the draft token's active company has an issuer wallet; return that wallet."""
         if token.status != ShareTokenStatus.DRAFT:
             raise InvalidTokenStateException(
                 f"Cannot deploy token with status '{token.get_status_display()}'. Token must be in draft status."
@@ -117,7 +106,6 @@ class ShareTokenService:
 
     @staticmethod
     def start_deployment(token: ShareToken) -> None:
-        """The one deployment entry point for the API and the admin; the chain work runs in the task."""
         from tokens.tasks import deploy_share_token_task
 
         ShareTokenService.require_deployable(token)
@@ -126,7 +114,6 @@ class ShareTokenService:
 
     @staticmethod
     def require_retryable(token: ShareToken) -> None:
-        """Raise unless the token is stuck DEPLOYING; only such a token may have its deployment re-queued."""
         if token.status != ShareTokenStatus.DEPLOYING:
             raise InvalidTokenStateException(
                 f"Cannot retry deployment of a token with status '{token.get_status_display()}'."
@@ -134,11 +121,6 @@ class ShareTokenService:
 
     @staticmethod
     def retry_deployment(token: ShareToken) -> None:
-        """Re-queue the deployment task for a token stuck DEPLOYING (job lost, or the worker killed mid-way).
-
-        The task adopts the factory's address, resumes on the recorded create transaction or, when nothing was
-        ever sent, sends the create; it never sends a second create for a token that has one on chain.
-        """
         from tokens.tasks import deploy_share_token_task
 
         ShareTokenService.require_retryable(token)
@@ -160,11 +142,6 @@ class ShareTokenService:
     def _mint_to(
         self, contract_address: str, recipient: str, amount: int, on_sent: Callable[[str], None] | None = None
     ) -> dict:
-        """Send mint(recipient, amount) and wait for it.
-
-        `on_sent` receives the hash as soon as the transaction is out, before the wait, so a receipt lost afterwards
-        can be resumed on that hash instead of minting again.
-        """
         token_contract = self.load_share_token(contract_address)
         recipient_checksum = self.chain_client.to_checksum_address(recipient)
 
@@ -194,15 +171,7 @@ class ShareTokenService:
         checksum = self.chain_client.to_checksum_address(contract_address)
         return self.chain_client.load_contract("ShareToken", checksum)
 
-    # Deployment
-
     def deploy_token(self, token: ShareToken) -> dict:
-        """Create the token through the factory, or adopt the address the factory already holds for it.
-
-        A failure before any create transaction is sent puts the token back to DRAFT. Once a transaction is recorded
-        on the token it never returns to DRAFT: a retry waits on that transaction instead of sending a second create,
-        and `resolve_pending_deployment` picks the address up later if the retries run out.
-        """
         identifier = self.token_identifier(token)
         try:
             contract_address = self.get_token_by_identifier(identifier)
@@ -225,7 +194,6 @@ class ShareTokenService:
         return {"contract_address": contract_address, "identifier": identifier, "adopted": adopted}
 
     def resolve_pending_deployment(self, token: ShareToken) -> Optional[str]:
-        """Finish a DEPLOYING token whose create transaction has since been mined."""
         contract_address = self.get_token_by_identifier(self.token_identifier(token))
         if contract_address:
             self._warn_on_cap_mismatch(token, contract_address)
@@ -235,7 +203,6 @@ class ShareTokenService:
         return contract_address
 
     def _confirm_deployment_transaction(self, token: ShareToken) -> None:
-        """Bring the recorded create transaction (left FAILED by a lost receipt) in line with the deployed token."""
         tx_record = token.deployment_transaction
         if tx_record is None or tx_record.status == TransactionStatus.CONFIRMED:
             return
@@ -257,12 +224,6 @@ class ShareTokenService:
 
     @staticmethod
     def _abandon_unless_sent(token: ShareToken) -> None:
-        """Return the token to DRAFT only while no create transaction was sent; a recorded hash keeps it DEPLOYING.
-
-        A DRAFT token can be edited and redeployed under a new identifier, which would orphan a token the recorded
-        transaction may have created on chain. The decision is taken on the stored row, not on this copy: a second
-        worker whose copy has no hash must not draft a token the first worker has just bound to a sent create.
-        """
         if not token.mark_draft_unless_sent():
             logger.warning(f"{token.symbol} stays deploying: create transaction {token.deployment_tx_hash} was sent")
 
@@ -285,11 +246,6 @@ class ShareTokenService:
         return events[0]["args"]["tokenAddress"]
 
     def _resume_share_token(self, token: ShareToken, identifier: str) -> Optional[str]:
-        """Wait on the create transaction recorded on the token rather than sending another.
-
-        Returns the created address, or None when that transaction was mined and reverted (nothing exists on chain
-        for it, so a fresh create is safe). A transaction still unconfirmed keeps the token DEPLOYING and raises.
-        """
         tx_hash = token.deployment_tx_hash
         tx_record = token.deployment_transaction
         try:
@@ -390,8 +346,6 @@ class ShareTokenService:
         address = self.factory_contract.functions.getTokenByIdentifier(identifier).call()
         return None if address == ZERO_ADDRESS else address
 
-    # Issuance and capital
-
     def create_issuance_request(
         self, token, recipient: str, amount: int, user, reason: str = "", issuance_type: str = "additional"
     ) -> ShareIssuanceRequest:
@@ -425,7 +379,6 @@ class ShareTokenService:
         return issuance_request
 
     def share_supply(self, contract_address: str) -> tuple[int, int]:
-        """(authorizedShares, totalSupply) of the token: the cap and the shares issued so far."""
         token_contract = self.load_share_token(contract_address)
         return token_contract.functions.authorizedShares().call(), token_contract.functions.totalSupply().call()
 
@@ -435,13 +388,6 @@ class ShareTokenService:
         return WhitelistService().is_whitelisted(address)
 
     def execute_request(self, request, executed_by=None) -> dict:
-        """Run an approved (or failed and retried) review request on chain.
-
-        Chain failures mark the request (and the issuance) failed before re-raising so the task can retry; a refusal
-        raised before any transaction leaves the request executable and stores the reason in its review notes.
-        A paused token still executes a capital increase (setAuthorizedShares is not gated by pause) but refuses
-        an issuance, since mint is.
-        """
         token = request.token
         if not request.can_be_executed:
             raise InvalidTokenStateException(f"Cannot execute request with status '{request.get_status_display()}'")
@@ -455,30 +401,22 @@ class ShareTokenService:
 
     @staticmethod
     def issuance_key(request: ShareIssuanceRequest) -> str:
-        """One ShareIssuance per request: the row that records the mint sent for it, whatever its outcome."""
         return f"issuance-request:{request.uuid}"
 
     @staticmethod
     def _start_execution(request) -> None:
-        """Claim the request (a compare-and-set on its status) so two Execute submits cannot both reach the chain."""
         try:
             request.mark_executing()
         except ValueError as exc:
             raise InvalidTokenStateException(str(exc)) from exc
 
     def _refuse_if_paused(self, request: ShareIssuanceRequest) -> None:
-        """mint() is whenNotPaused: refuse on the DB status, or on the chain when the DB still says deployed."""
         token = request.token
         if token.status == ShareTokenStatus.PAUSED or self.read_paused(token):
             request.mark_refused(TOKEN_PAUSED)
             raise IssuanceRefusedException(TOKEN_PAUSED)
 
     def _execute_issuance(self, request: ShareIssuanceRequest, executed_by) -> dict:
-        """Mint the request's shares once.
-
-        The mint hash is written to the request's issuance before the receipt is awaited, so a retry after a lost
-        receipt finishes from that hash (or, when it reverted, mints afresh) rather than minting a second time.
-        """
         token = request.token
         recipient = self._validate_address(request.recipient_address)
         issuance = ShareIssuance.objects.filter(idempotency_key=self.issuance_key(request)).first()
@@ -528,12 +466,6 @@ class ShareTokenService:
         return result
 
     def _resume_issuance(self, request: ShareIssuanceRequest, issuance: ShareIssuance) -> Optional[dict]:
-        """Finish the mint already sent for the request instead of sending another.
-
-        Returns the result when that transaction succeeded (nothing is sent); None when it was mined and reverted,
-        so nothing was minted and a fresh mint is safe. A transaction still unconfirmed is waited on; if the wait
-        fails the issuance and request are marked failed again and the error re-raises for the next retry.
-        """
         tx_hash = issuance.tx_hash
         if issuance.status == IssuanceStatus.COMPLETED:
             logger.info(f"mint {tx_hash} for request {request.uuid} already completed; nothing to send or wait on")
@@ -569,11 +501,6 @@ class ShareTokenService:
         logger.info(f"Issuance executed for {request.token.symbol}: {result['tx_hash']}")
 
     def resolve_executing_issuance(self, request: ShareIssuanceRequest) -> Optional[str]:
-        """Finish a request a killed worker left EXECUTING after its mint was sent; nothing is sent here.
-
-        Returns "executed" when the recorded mint mined, "reverted" when it mined and reverted (the request is
-        marked failed so a retry mints afresh), None when it is still pending or no mint was recorded.
-        """
         issuance = (
             ShareIssuance.objects.filter(idempotency_key=self.issuance_key(request))
             .exclude(tx_hash__isnull=True)
@@ -597,21 +524,6 @@ class ShareTokenService:
         return "executed"
 
     def _execute_capital_increase(self, request: CapitalIncreaseRequest) -> dict:
-        """setAuthorizedShares(new_authorized_total), refused unless that raises the cap the chain holds now.
-
-        The serializer validates the total against the DB cap at creation; two increases approved against the
-        same cap would otherwise let the second lower it (the contract only forbids going below totalSupply).
-        Increases are serialised per token: the cap is read, the call sent and waited on, and the DB cap written
-        under a row lock on the token, so a second executor reads the cap only after the first has mined and
-        committed (the client takes the `pending` nonce, so two workers in one block window would otherwise both
-        pass the guard and the later-mined one would land last). SQLite ignores the lock. The request status is
-        re-read under the lock, so a stale copy of a request another executor already finished is refused instead
-        of overwriting its notes. The setAuthorizedShares hash is recorded on a BlockchainTransaction for the
-        request before the receipt is awaited, and a retry resumes on it: mined completes without sending,
-        reverted sends afresh, still pending waits. The refusal and failure writes happen inside the transaction
-        and the exception is raised after it, so the request is never committed EXECUTING with its failure still
-        to be written.
-        """
         token = request.token
         refused = False
         failure = None
@@ -633,8 +545,7 @@ class ShareTokenService:
                 authorized, _ = self.share_supply(token.contract_address)
                 token.refresh_from_db(fields=["total_supply"])
                 if authorized == request.new_authorized_total and int(token.total_supply) < authorized:
-                    # The call mined but nothing recorded it (a worker killed between the send and the hash write):
-                    # the chain holds exactly this request's cap, so adopt it instead of refusing forever.
+
                     logger.warning(
                         f"{token.symbol} authorized shares are already {authorized} on chain with the DB cap at "
                         f"{token.total_supply}; adopting the chain cap for request {request.uuid} without sending"
@@ -672,10 +583,6 @@ class ShareTokenService:
 
     @staticmethod
     def _recorded_increase(request: CapitalIncreaseRequest) -> Optional[BlockchainTransaction]:
-        """The latest setAuthorizedShares sent for the request and not reverted.
-
-        A CONFIRMED record whose completion writes were lost counts too: the retry resumes on it without sending.
-        """
         return (
             BlockchainTransaction.objects.filter(
                 related_model=CapitalIncreaseRequest._meta.label,
@@ -692,12 +599,6 @@ class ShareTokenService:
     def _resume_capital_increase(
         self, request: CapitalIncreaseRequest, tx_record: BlockchainTransaction
     ) -> Optional[dict]:
-        """Finish the setAuthorizedShares already sent for the request instead of sending another.
-
-        Returns the result when that transaction succeeded (nothing is sent); None when it was mined and reverted,
-        so the cap is untouched and a fresh call is safe. A transaction still unconfirmed is claimed and waited on;
-        if the wait fails the record is marked failed again and the error re-raises for the next retry.
-        """
         tx_hash = tx_record.tx_hash
         try:
             receipt = self.chain_client.get_transaction_receipt(tx_hash)
@@ -725,7 +626,6 @@ class ShareTokenService:
 
     @staticmethod
     def _complete_capital_increase(request: CapitalIncreaseRequest, result: dict) -> None:
-        """Write the cap and execute the request; a resumed increase never lowers a cap a later one has raised."""
         token = request.token
         token.refresh_from_db(fields=["total_supply"])
         token.total_supply = str(max(int(token.total_supply), request.new_authorized_total))
@@ -734,10 +634,6 @@ class ShareTokenService:
         logger.info(f"Capital increase executed for {token.symbol}: {result['tx_hash'] or 'adopted from chain'}")
 
     def resolve_executing_capital_increase(self, request: CapitalIncreaseRequest) -> Optional[str]:
-        """Finish a capital increase left EXECUTING after its setAuthorizedShares was sent; nothing is sent here.
-
-        Same outcomes as `resolve_executing_issuance`; the cap write takes the token row lock like an execution.
-        """
         tx_record = self._recorded_increase(request)
         if tx_record is None:
             logger.warning(
@@ -770,12 +666,6 @@ class ShareTokenService:
         return "executed"
 
     def increase_authorized_shares(self, request: CapitalIncreaseRequest) -> dict:
-        """setAuthorizedShares to the validated new cap; nothing is minted.
-
-        The call is recorded as a BlockchainTransaction for the request and its hash written there before the
-        receipt is awaited, so a receipt lost after the call mined is resumed on that hash by the retry instead of
-        stranding the request with the chain cap raised and the DB cap behind it.
-        """
         token = request.token
         new_authorized_total = request.new_authorized_total
         tx_record = None
@@ -812,11 +702,8 @@ class ShareTokenService:
         self._confirm_record(tx_record, receipt)
         return {**self._tx_result(tx_hash, receipt), "new_authorized_total": new_authorized_total}
 
-    # Pause
-
     @staticmethod
     def require_pausable(token: ShareToken, paused: bool) -> None:
-        """The database half of the pause/unpause guard; the admin confirm pages check it before offering the form."""
         if paused and token.status != ShareTokenStatus.DEPLOYED:
             raise InvalidTokenStateException("Only deployed tokens can be paused.")
         if not paused and token.status not in (ShareTokenStatus.PAUSED, ShareTokenStatus.DEPLOYED):
@@ -827,7 +714,6 @@ class ShareTokenService:
         self._set_paused(token, True)
 
     def unpause(self, token: ShareToken) -> None:
-        """Unpause a PAUSED token, or a DEPLOYED one the chain reports paused (a pause whose receipt was lost)."""
         self.require_pausable(token, False)
         if token.status == ShareTokenStatus.PAUSED or self.read_paused(token):
             self._set_paused(token, False)
@@ -842,11 +728,6 @@ class ShareTokenService:
             raise TokenPauseFailedException(f"Token paused state could not be read: {exc}") from exc
 
     def _set_paused(self, token: ShareToken, paused: bool) -> None:
-        """Send pause()/unpause() and wait for it; the DB status moves once the chain is in the target state.
-
-        The chain is read before sending and again after a failed send, so a token already in the target state (a
-        receipt lost after the call mined, or a pause sent outside the app) is reconciled instead of stranded.
-        """
         function_name = "pause" if paused else "unpause"
         if self.read_paused(token) == paused:
             logger.warning(f"{token.symbol} is already {function_name}d on chain; reconciling the database status")
@@ -868,13 +749,10 @@ class ShareTokenService:
             token.mark_unpaused()
 
     def _paused_state_is(self, token: ShareToken, paused: bool) -> bool:
-        """Whether the chain already reports the target state; a read failure counts as not there."""
         try:
             return self.read_paused(token) == paused
         except TokenPauseFailedException:
             return False
-
-    # Reads
 
     def get_token_balance(self, contract_address: str, holder: str) -> int:
         try:

@@ -2,10 +2,6 @@ from django.db.models import QuerySet
 
 
 def sample_evenly(rows, max_points):
-    """At most `max_points` rows spread evenly over a queryset or sequence in its current order.
-
-    A missing, non-numeric or non-positive `max_points` returns the rows untouched.
-    """
     try:
         max_points = int(max_points)
     except (TypeError, ValueError):

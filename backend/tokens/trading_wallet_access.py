@@ -15,7 +15,6 @@ class AuthorizedEVMWallets:
 
 
 def resolve_verified_evm_wallets(user, requested_addresses: list[str]) -> AuthorizedEVMWallets:
-    """Resolve caller-visible verified EVM wallets without leaking misses."""
     address_keys = []
     address_query = Q()
 

@@ -39,7 +39,7 @@ class SendGridClient:
     def send_email(self, to_email, subject, html_content, from_email=None, text_content=None):
         sender = from_email or self.from_email
         if not self.api_key:
-            # No SendGrid key: hand the message to Django's EMAIL_BACKEND (console in DEBUG).
+
             send_mail(subject, text_content or strip_tags(html_content), sender, [to_email], html_message=html_content)
             logger.info("Email sent through EMAIL_BACKEND (no SendGrid key)")
             return {"success": True, "message_id": ""}

@@ -73,7 +73,6 @@ export function WalletActionScreen() {
       padding: theme.spacing.sm,
     },
 
-    // Address value (copyable)
     addressValue: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -82,7 +81,6 @@ export function WalletActionScreen() {
       flex: 1,
     },
 
-    // Hero section (market value)
     heroSection: {
       alignItems: 'center',
       gap: theme.spacing.sm,
@@ -95,7 +93,6 @@ export function WalletActionScreen() {
       color: theme.colors.text.primary,
     },
 
-    // Detail rows
     detailsCard: {
       gap: theme.spacing.xs,
     },
@@ -124,7 +121,6 @@ export function WalletActionScreen() {
       textAlign: 'right',
     },
 
-    // Type row
     typeValue: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -142,7 +138,6 @@ export function WalletActionScreen() {
       padding: 4,
     },
 
-    // Verification row
     verificationValue: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -153,7 +148,6 @@ export function WalletActionScreen() {
       fontWeight: theme.fontWeight.medium,
     },
 
-    // Name section (at bottom of details)
     nameSection: {
       paddingHorizontal: theme.spacing.sm,
       paddingTop: theme.spacing.md,
@@ -182,13 +176,11 @@ export function WalletActionScreen() {
       color: theme.colors.text.muted,
     },
 
-    // Save button
     saveRow: {
       paddingHorizontal: theme.spacing.sm,
       paddingTop: theme.spacing.sm,
     },
 
-    // Action bar
     actionBar: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -323,7 +315,6 @@ export function WalletActionScreen() {
           <Panel fullHeight>
             <View style={styles.panelContent}>
               <View style={styles.infoSection}>
-                {/* 1. Market Value (hero) */}
                 <View style={styles.heroSection}>
                   <ChainIcon
                     size={theme.icon.sizes.xxl}
@@ -333,9 +324,7 @@ export function WalletActionScreen() {
                   <Text style={styles.heroValue}>{formatDisplayCurrency(marketValue)}</Text>
                 </View>
 
-                {/* 2-7. Detail rows (same order as dashboard) */}
                 <View style={styles.detailsCard}>
-                  {/* 2. Address */}
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Address</Text>
                     <TouchableOpacity
@@ -352,7 +341,6 @@ export function WalletActionScreen() {
                     </TouchableOpacity>
                   </View>
 
-                  {/* 3. Balance */}
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Balance</Text>
                     <Text style={styles.detailValue}>
@@ -360,7 +348,6 @@ export function WalletActionScreen() {
                     </Text>
                   </View>
 
-                  {/* 4. Type */}
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Type</Text>
                     <View style={styles.typeValue}>
@@ -375,13 +362,11 @@ export function WalletActionScreen() {
                     </View>
                   </View>
 
-                  {/* 5. Last Sync */}
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Last Sync</Text>
                     <Text style={styles.detailValue}>{formatDate(wallet.lastSyncedAt)}</Text>
                   </View>
 
-                  {/* 6. Verification */}
                   <View style={[styles.detailRow, styles.lastDetailRow]}>
                     <Text style={styles.detailLabel}>Verification</Text>
                     <View style={styles.verificationValue}>
@@ -412,7 +397,6 @@ export function WalletActionScreen() {
                   </View>
                 </View>
 
-                {/* 7. Name (editable, at bottom) */}
                 <View style={styles.nameSection}>
                   <Text style={styles.nameSectionLabel}>Wallet Name</Text>
                   <TextInput
@@ -428,7 +412,6 @@ export function WalletActionScreen() {
                 </View>
               </View>
 
-              {/* Save button (only when name changed) */}
               {canSave && (
                 <View style={styles.saveRow}>
                   <PrimaryButton
@@ -444,7 +427,6 @@ export function WalletActionScreen() {
                 </View>
               )}
 
-              {/* Action bar (matches dashboard pattern) */}
               <View style={styles.actionBar}>
                 <TouchableOpacity
                   style={[styles.actionButton, isVerified && styles.actionButtonDisabled]}

@@ -18,7 +18,7 @@ class WalletSerializer(serializers.ModelSerializer):
     uuid = serializers.CharField(read_only=True)
     user_account = serializers.PrimaryKeyRelatedField(queryset=UserAccount.objects.none())
     chain = serializers.ChoiceField(choices=sorted(SUPPORTED_CHAINS))
-    # Sourced from WalletQuerySet.with_market_value(); the view always serializes annotated rows.
+
     native_balance = serializers.DecimalField(
         source="annotated_native_balance", read_only=True, max_digits=40, decimal_places=18
     )
@@ -68,10 +68,7 @@ class WalletSerializer(serializers.ModelSerializer):
 
     def get_fields(self):
         fields = super().get_fields()
-        # Scope the writable owner FK to the caller's own accounts. With
-        # UserAccount.objects.all() a tenant could assign a wallet into another
-        # tenant's account (mass-assignment); the scoped queryset rejects any
-        # user_account the requester does not own.
+
         request = self.context.get("request")
         if request is not None and request.user.is_authenticated:
             fields["user_account"].queryset = UserAccount.objects.visible_to_user(request.user)

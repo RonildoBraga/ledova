@@ -61,8 +61,6 @@ export function TransactionListItem({ transaction, onPress }: TransactionListIte
     },
   }));
   const isIncoming = (): boolean => {
-    // Check direction from the perspective of THIS transaction's wallet
-    // For internal transfers, the same tx appears twice with different wallets
     const walletAddr = transaction.walletAddress?.toLowerCase() || '';
     const toAddress = transaction.toAddress?.toLowerCase() || '';
     return toAddress === walletAddr;

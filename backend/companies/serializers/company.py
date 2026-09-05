@@ -160,7 +160,6 @@ class CompanyRegistrationSerializer(serializers.ModelSerializer):
 
 
 class CompanyUpdateSerializer(serializers.ModelSerializer):
-    """operator_wallet takes the uuid of one of the caller's verified EVM wallets (the deployment chain or Ethereum)."""
 
     operator_wallet = serializers.SlugRelatedField(
         slug_field="uuid", queryset=Wallet.objects.none(), required=False, allow_null=True

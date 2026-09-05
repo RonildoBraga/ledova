@@ -13,7 +13,6 @@ export function BuyCryptoWidgetModal({ isOpen, onClose, onComplete, widgetUrl }:
     if (!isOpen) return;
 
     const handleMessage = (event: MessageEvent) => {
-      // Transak sends events via postMessage from the iframe
       if (event.origin !== 'https://global.transak.com') return;
 
       const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;

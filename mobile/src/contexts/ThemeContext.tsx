@@ -56,7 +56,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const { preferences } = useUserPreferences();
   const queryClient = useQueryClient();
 
-  // Load from AsyncStorage on mount
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY).then((stored) => {
       if (stored === 'light' || stored === 'dark') {
@@ -65,7 +64,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  // Sync from API when preferences load
   useEffect(() => {
     if (preferences?.theme === 'light' || preferences?.theme === 'dark') {
       setThemeMode(preferences.theme);
@@ -96,24 +94,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
-/**
- * Returns the theme object for the current theme mode.
- */
 export function useAppTheme() {
   return useContext(ThemeContext).theme;
 }
 
-/**
- * Returns theme mode and toggle function (for settings/toggle UI).
- */
 export function useThemeMode() {
   const { themeMode, toggleTheme } = useContext(ThemeContext);
   return { themeMode, toggleTheme };
 }
 
-/**
- * Creates theme-aware styles. Styles are memoized and only recompute when the theme changes.
- */
 export function useThemedStyles<T extends StyleSheet.NamedStyles<T>>(stylesFn: (theme: ThemeObject) => T): T {
   const theme = useContext(ThemeContext).theme;
 

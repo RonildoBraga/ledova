@@ -30,7 +30,6 @@ def _get_redis_client():
 
 
 def publish_trading_event(event_type: str, token_uuid: str):
-    """Publish an identifier-free cache-invalidation event."""
     if event_type not in TRADING_EVENT_TYPES:
         logger.error("Refusing unsupported trading event type")
         return

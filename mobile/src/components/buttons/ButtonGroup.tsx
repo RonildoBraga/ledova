@@ -5,9 +5,6 @@ import { SecondaryButton } from './SecondaryButton';
 import { useAppTheme, useThemedStyles } from '../../contexts';
 
 interface ButtonGroupProps {
-  /**
-   * Props for the secondary (left) button
-   */
   secondaryButton?: {
     label: string;
     onPress: () => void;
@@ -16,9 +13,7 @@ interface ButtonGroupProps {
     icon?: React.ReactNode;
     smallText?: boolean;
   };
-  /**
-   * Props for the primary (right) button
-   */
+
   primaryButton: {
     label: string;
     onPress: () => void;
@@ -27,13 +22,9 @@ interface ButtonGroupProps {
     icon?: React.ReactNode;
     smallText?: boolean;
   };
-  /**
-   * Size of both buttons
-   */
+
   size?: 'small' | 'medium' | 'large';
-  /**
-   * Optional container style
-   */
+
   style?: ViewStyle;
 }
 

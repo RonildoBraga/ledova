@@ -452,7 +452,6 @@ class AtomicSwapService:
             raise SwapExecutionException(f"Swap execution failed: {user_friendly_msg}") from e
 
     def get_pending_swaps_for_wallet_ids(self, wallet_ids):
-        """Return a lazy owner-bound queryset so the API can paginate in SQL."""
         return SwapOrder.objects.pending_for_wallet_ids(wallet_ids)
 
     def find_swap_order_by_transfer_order(self, transfer_order: TransferOrder) -> Optional[SwapOrder]:

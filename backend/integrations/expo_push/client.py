@@ -1,5 +1,3 @@
-"""Expo Push API client: https://docs.expo.dev/push-notifications/sending-notifications/"""
-
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -15,10 +13,9 @@ class ExpoPushError(Exception):
 
 
 class ExpoPushClient:
-    """The Expo Push API needs no authentication."""
 
     EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
-    MAX_BATCH_SIZE = 100  # Expo recommends max 100 messages per request
+    MAX_BATCH_SIZE = 100
 
     def __init__(self):
         self.session = requests.Session()
@@ -34,10 +31,6 @@ class ExpoPushClient:
         return token.startswith("ExponentPushToken[") and token.endswith("]")
 
     def send_batch(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Each message is {"to": "ExponentPushToken[...]", "title", "body"}.
-
-        Optional keys: data, badge, sound, priority.
-        """
         if not messages:
             return []
 

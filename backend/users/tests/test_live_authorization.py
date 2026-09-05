@@ -1,5 +1,3 @@
-"""Application-level user-data isolation through live ownership relationships."""
-
 from types import SimpleNamespace
 
 from django.contrib.auth import get_user_model

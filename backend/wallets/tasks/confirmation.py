@@ -110,7 +110,6 @@ def confirm_pending_transaction(tx_hash: str, wallet_uuid: str) -> Dict[str, Any
 @app.periodic(cron="*/5 * * * *")
 @app.task
 def check_all_pending_transactions(timestamp: int) -> Dict[str, Any]:
-    """Queue a confirmation job for every pending transaction older than 2 min."""
     pending_cutoff = timezone.now() - timedelta(minutes=2)
     pending_txs = Transaction.objects.filter(
         status=TRANSACTION_STATUS_PENDING,
@@ -136,7 +135,6 @@ def check_all_pending_transactions(timestamp: int) -> Dict[str, Any]:
 @app.periodic(cron="0 3 * * *")
 @app.task
 def cleanup_stale_pending_transactions(timestamp: int) -> Dict[str, Any]:
-    """Mark pending transactions older than 24h as failed."""
     stale_cutoff = timezone.now() - timedelta(hours=24)
     stale_txs = Transaction.objects.filter(
         status=TRANSACTION_STATUS_PENDING,

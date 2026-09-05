@@ -22,14 +22,6 @@ STALE_EXECUTION_AGE = timedelta(minutes=10)
 
 @app.task(retry=RetryStrategy(max_attempts=4, wait=30))
 def execute_review_request_task(model_label: str, request_uuid: str, executed_by: int | None = None):
-    """Execute a CapitalIncreaseRequest or ShareIssuanceRequest (model_label picks which) on-chain.
-
-    `executed_by` is the pk of the staff user who pressed Execute; it becomes the issuance's initiated_by.
-    State guards, refusals and a malformed recipient address answer with a result dict; chain failures re-raise so
-    procrastinate retries the request, which execute_request has already marked failed (an unreadable paused()
-    or supply happens before the claim, so the request stays approved for the retry). A retry never mints twice:
-    the mint hash is on the request's ShareIssuance before the receipt is awaited and the retry resumes on it.
-    """
     model = apps.get_model(model_label)
     request = model.objects.select_related("token", "token__company").filter(uuid=request_uuid).first()
     if request is None:
@@ -49,13 +41,6 @@ def execute_review_request_task(model_label: str, request_uuid: str, executed_by
 @app.periodic(cron="*/5 * * * *")
 @app.task
 def check_executing_issuance_requests(timestamp: int = 0):
-    """Finish issuance and capital-increase requests a killed worker left EXECUTING after the call was sent.
-
-    A worker dying between the call and the completion writes leaves the request EXECUTING (not executable) with
-    the hash recorded (a PROCESSING issuance for a mint, a submitted BlockchainTransaction for setAuthorizedShares).
-    The receipt decides: mined completes it, reverted marks it failed so it can be retried, still pending is checked
-    again next run. A request with nothing recorded is only logged.
-    """
     service = ShareTokenService()
     cutoff = timezone.now() - STALE_EXECUTION_AGE
     resolvers = (

@@ -297,7 +297,6 @@ export function OrdersCard({
 
   const normalizedAddresses = useMemo(() => walletAddresses.map((a) => a.toLowerCase()), [walletAddresses]);
 
-  // Order book
   const { asks, bids, maxQuantity, spread } = useMemo(() => {
     if (!orderBook)
       return {
@@ -316,7 +315,6 @@ export function OrdersCard({
     return { asks: asksSorted, bids: bidsSorted, maxQuantity: max, spread: s };
   }, [orderBook]);
 
-  // User orders filtered to selected token
   const openOrders = userOrders.filter(
     (o) => (o.status === 'open' || o.status === 'partially_filled') && o.tokenSymbol === tokenSymbol,
   );
@@ -345,7 +343,6 @@ export function OrdersCard({
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <View>
           <Text style={styles.headerTitle}>{tokenSymbol} Orders</Text>
@@ -357,7 +354,6 @@ export function OrdersCard({
         )}
       </View>
 
-      {/* Order Book */}
       {isLoadingOrderBook ? (
         <View style={styles.emptyBook}>
           <ActivityIndicator size="small" color={theme.colors.interactive.default} />
@@ -370,7 +366,6 @@ export function OrdersCard({
         </View>
       ) : (
         <View style={styles.bookContainer}>
-          {/* Bids */}
           <View style={styles.bookSide}>
             <View style={styles.columnHeaders}>
               <Text style={[styles.columnHeader, { flex: 1, color: theme.colors.status.success.icon }]}>Price</Text>
@@ -390,7 +385,6 @@ export function OrdersCard({
 
           <View style={styles.bookDivider} />
 
-          {/* Asks */}
           <View style={styles.bookSide}>
             <View style={styles.columnHeaders}>
               <Text style={[styles.columnHeader, { flex: 1, color: theme.colors.status.error.icon }]}>Price</Text>
@@ -410,7 +404,6 @@ export function OrdersCard({
         </View>
       )}
 
-      {/* Your Orders */}
       {(isLoadingUserOrders || isLoadingSwaps || hasUserActivity) && (
         <>
           <View style={styles.sectionHeader}>

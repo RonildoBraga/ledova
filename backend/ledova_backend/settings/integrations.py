@@ -7,23 +7,23 @@ TRANSAK_API_SECRET = os.getenv("TRANSAK_API_SECRET", "")
 TRANSAK_API_URL = os.getenv("TRANSAK_API_URL", "")
 TRANSAK_API_GATEWAY_URL = os.getenv("TRANSAK_API_GATEWAY_URL", "")
 TRANSAK_REFERRER_DOMAIN = os.getenv("TRANSAK_REFERRER_DOMAIN", "localhost")
-TRANSAK_THEME_COLOR = os.getenv("TRANSAK_THEME_COLOR", "6366f1")  # Ledova indigo (no # prefix)
+TRANSAK_THEME_COLOR = os.getenv("TRANSAK_THEME_COLOR", "6366f1")
 
-COINGECKO_API_KEY = os.getenv("COINGECKO_API_KEY", "")  # Optional (for Pro tier)
+COINGECKO_API_KEY = os.getenv("COINGECKO_API_KEY", "")
 COINGECKO_BASE_URL = os.getenv("COINGECKO_BASE_URL") or "https://api.coingecko.com/api/v3"
-COINGECKO_TIMEOUT = int(os.getenv("COINGECKO_TIMEOUT", "10"))  # seconds
+COINGECKO_TIMEOUT = int(os.getenv("COINGECKO_TIMEOUT", "10"))
 
 SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY", "")
 SENDGRID_API_URL = os.getenv("SENDGRID_API_URL", "")
 SENDGRID_TIMEOUT = int(os.getenv("SENDGRID_TIMEOUT", "10"))
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "noreply@localhost")
-# Used when SENDGRID_API_KEY is empty: the verification code is printed to the server log in
-# DEBUG, and goes to local SMTP otherwise.
+
+
 EMAIL_BACKEND = (
     "django.core.mail.backends.console.EmailBackend" if DEBUG else "django.core.mail.backends.smtp.EmailBackend"
 )
 
-KYC_PROVIDER = os.environ.get("KYC_PROVIDER", "")  # Configure "sumsub" or "kycaid" explicitly.
+KYC_PROVIDER = os.environ.get("KYC_PROVIDER", "")
 
 KYCAID_API_TOKEN = os.environ.get("KYCAID_API_TOKEN", "")
 KYCAID_BASE_URL = os.environ.get("KYCAID_BASE_URL", "")
@@ -46,10 +46,9 @@ ALCHEMY_WEBHOOK_SIGNING_KEY = os.environ.get("ALCHEMY_WEBHOOK_SIGNING_KEY", "")
 ALCHEMY_WEBHOOK_NETWORK = os.environ.get("ALCHEMY_WEBHOOK_NETWORK", "").strip().upper()
 
 BLOCKSTREAM_API_URL = os.environ.get("BLOCKSTREAM_API_URL", "https://blockstream.info/testnet/api")
-BLOCKSTREAM_TIMEOUT = int(os.environ.get("BLOCKSTREAM_TIMEOUT", "30"))  # seconds
+BLOCKSTREAM_TIMEOUT = int(os.environ.get("BLOCKSTREAM_TIMEOUT", "30"))
 
-# LLM extraction is deliberately restricted to a local Ollama-compatible
-# endpoint. The client rejects every non-loopback host.
+
 LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "http://host.docker.internal:11434/v1")
 LLM_MODEL = os.environ.get("LLM_MODEL", "qwen2.5vl:7b")
 

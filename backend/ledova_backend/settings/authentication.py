@@ -24,10 +24,7 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-# Both tokens default to 7 days. The access token carries its refresh jti (`rjti`) and
-# HybridJWTAuthentication checks that session is live on every request, so a long access lifetime
-# does not weaken revocation: signout, signout-all, a password change and account deletion take
-# effect immediately. The refresh token rotates on every use.
+
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(seconds=int(os.environ.get("ACCESS_TOKEN_LIFETIME", 604800))),
     "REFRESH_TOKEN_LIFETIME": timedelta(seconds=int(os.environ.get("REFRESH_TOKEN_LIFETIME", 604800))),
@@ -42,7 +39,7 @@ SIMPLE_JWT = {
     "JTI_CLAIM": "jti",
 }
 
-# The dashboard's session cookies; the mobile app sends the same tokens as a Bearer header.
+
 AUTH_COOKIE = {
     "access": os.environ.get("COOKIE_ACCESS_NAME", "access"),
     "refresh": os.environ.get("COOKIE_REFRESH_NAME", "refresh"),
@@ -51,9 +48,7 @@ AUTH_COOKIE = {
     "samesite": "Lax",
 }
 
-# The dashboard reads `csrftoken` from document.cookie and echoes it as X-CSRFToken on every unsafe
-# cookie-authenticated request (HybridJWTAuthentication.enforce_csrf), so the cookie shares the auth
-# cookies' scope and must stay readable. CSRF_TRUSTED_ORIGINS lives in cors.py.
+
 CSRF_COOKIE_DOMAIN = AUTH_COOKIE["domain"]
 CSRF_COOKIE_SECURE = AUTH_COOKIE["secure"]
 CSRF_COOKIE_SAMESITE = "Lax"

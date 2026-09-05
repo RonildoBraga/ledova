@@ -20,12 +20,6 @@ import { layout } from '../../../styles';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
 import { SOURCE_OF_FUNDS_OPTIONS, INTENDED_USE_OPTIONS } from '@ledova/shared';
 
-/**
- * Financial Profile Screen - AML/CTF Compliance
- *
- * Collects source of funds, occupation, and intended use as required by
- * Ledova AML/CTF Program (Part B, Section 16.1, Step 4).
- */
 export function FinancialProfileScreen() {
   const theme = useAppTheme();
   const styles = useThemedStyles((theme) => ({
@@ -322,7 +316,6 @@ export function FinancialProfileScreen() {
       <SafeAreaView style={styles.container}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardView}>
           <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-            {/* Header */}
             <View style={styles.header}>
               <View style={styles.iconContainer}>
                 <ChartBarIcon
@@ -335,9 +328,7 @@ export function FinancialProfileScreen() {
               <Text style={styles.subtitle}>AML/CTF compliance information</Text>
             </View>
 
-            {/* Form Container */}
             <View style={styles.formContainer}>
-              {/* General Error */}
               {generalError && (
                 <View style={styles.errorContainer}>
                   <WarningCircleIcon
@@ -349,7 +340,6 @@ export function FinancialProfileScreen() {
                 </View>
               )}
 
-              {/* Source of Funds - AML/CTF Required */}
               <View style={styles.fieldContainer}>
                 <Text style={styles.label}>What is your primary source of funds?</Text>
                 <Text style={styles.labelHint}>select all that apply</Text>
@@ -380,7 +370,6 @@ export function FinancialProfileScreen() {
                 {errors.sourceOfFunds && <Text style={styles.fieldError}>{errors.sourceOfFunds.join(' ')}</Text>}
               </View>
 
-              {/* Source of Funds - Other Specification */}
               {form.sourceOfFunds.includes('other') && (
                 <View style={styles.fieldContainer}>
                   <Text style={styles.label}>Please specify your source of funds</Text>
@@ -398,7 +387,6 @@ export function FinancialProfileScreen() {
                 </View>
               )}
 
-              {/* Intended Use - AML/CTF Required */}
               <View style={styles.fieldContainer}>
                 <Text style={styles.label}>What is your intended use of the platform?</Text>
                 <View style={styles.radioGroup}>
@@ -419,7 +407,6 @@ export function FinancialProfileScreen() {
                 {errors.intendedUse && <Text style={styles.fieldError}>{errors.intendedUse.join(' ')}</Text>}
               </View>
 
-              {/* Intended Use - Other Specification */}
               {form.intendedUse === 'other' && (
                 <View style={styles.fieldContainer}>
                   <Text style={styles.label}>Please specify your intended use</Text>
@@ -437,7 +424,6 @@ export function FinancialProfileScreen() {
                 </View>
               )}
 
-              {/* Occupation - AML/CTF Required (moved to bottom) */}
               <View style={styles.fieldContainer}>
                 <Text style={styles.label}>What is your occupation?</Text>
                 <TextInput
@@ -451,20 +437,17 @@ export function FinancialProfileScreen() {
                 {errors.occupation && <Text style={styles.fieldError}>{errors.occupation.join(' ')}</Text>}
               </View>
 
-              {/* Continue Button - Primary Action */}
               <PrimaryButton onPress={handleContinue} loading={isSubmitting} fullWidth style={styles.continueButton}>
                 Continue
               </PrimaryButton>
             </View>
 
-            {/* Divider */}
             <View style={styles.divider}>
               <View style={styles.dividerLine} />
               <Text style={styles.dividerText}>or</Text>
               <View style={styles.dividerLine} />
             </View>
 
-            {/* Go Back Section */}
             <View style={styles.backSection}>
               <Text style={styles.backText}>
                 <Text style={styles.backLink} onPress={() => !isSubmitting && handleBack()}>

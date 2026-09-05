@@ -1,10 +1,7 @@
-"""Populate generic KYC fields from existing Sumsub data."""
-
 from django.db import migrations
 
 
 def populate_generic_fields(apps, schema_editor):
-    """Copy existing Sumsub-specific fields to provider-agnostic fields."""
     UserProfile = apps.get_model("users", "UserProfile")
 
     profiles_with_sumsub = UserProfile.objects.filter(
@@ -29,7 +26,7 @@ def populate_generic_fields(apps, schema_editor):
 
 
 def reverse_populate(apps, schema_editor):
-    """No-op reverse — the Sumsub fields still contain the data."""
+    pass
 
 
 class Migration(migrations.Migration):

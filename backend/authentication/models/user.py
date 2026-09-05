@@ -16,8 +16,6 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     date_joined = models.DateTimeField(default=timezone.now)
     last_login = models.DateTimeField(blank=True, null=True)
 
-    # Email verification: the column holds sha256(pk:code), never the code itself
-    # (see authentication.services.email_codes).
     email_verification_token = models.CharField(max_length=100, blank=True, null=True)
     email_verification_sent_at = models.DateTimeField(blank=True, null=True)
     email_verification_attempts = models.PositiveSmallIntegerField(default=0)

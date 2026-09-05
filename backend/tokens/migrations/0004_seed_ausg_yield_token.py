@@ -2,8 +2,7 @@ from django.db import migrations
 
 
 def create_ausg_yield_token(apps, schema_editor):
-    # Contract addresses are local/testnet deployment outputs and must be
-    # registered explicitly after deployment, never baked into source history.
+
     pass
 
 

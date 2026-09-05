@@ -1,5 +1,3 @@
-"""Source of funds, occupation and intended use: LEDOVA AML/CTF Program Part B, Section 16.1, Step 4."""
-
 from django.contrib import admin
 
 from users.models.financial_profile import FinancialProfile

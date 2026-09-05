@@ -40,7 +40,6 @@ export function useTheme() {
     return apiTheme || getStoredTheme();
   }, [preferencesQuery.data?.data?.theme]);
 
-  // Sync API preference to localStorage on fetch
   useEffect(() => {
     const apiTheme = preferencesQuery.data?.data?.theme;
     if (apiTheme) {
@@ -48,7 +47,6 @@ export function useTheme() {
     }
   }, [preferencesQuery.data?.data?.theme]);
 
-  // Apply theme on mount (from localStorage, before API responds)
   useEffect(() => {
     applyTheme(getStoredTheme());
   }, []);

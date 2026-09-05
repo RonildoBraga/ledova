@@ -30,14 +30,12 @@ export const OrderForm = forwardRef<OrderFormRef, OrderFormProps>(function Order
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [selectedWalletUuid, setSelectedWalletUuid] = useState(defaultWalletUuid ?? '');
 
-  // Update selected wallet when default changes
   useEffect(() => {
     if (defaultWalletUuid && !selectedWalletUuid) {
       setSelectedWalletUuid(defaultWalletUuid);
     }
   }, [defaultWalletUuid, selectedWalletUuid]);
 
-  // Set default price to last traded price
   useEffect(() => {
     if (token.lastPrice && !pricePerShare) {
       setPricePerShare(token.lastPrice);
@@ -55,7 +53,6 @@ export const OrderForm = forwardRef<OrderFormRef, OrderFormProps>(function Order
     [wallets, selectedWalletUuid],
   );
 
-  // Get current wallet's balance for sell orders
   const currentWalletBalance =
     selectedWallet && getWalletBalance ? getWalletBalance(selectedWallet.address) : undefined;
 
@@ -64,13 +61,10 @@ export const OrderForm = forwardRef<OrderFormRef, OrderFormProps>(function Order
     const minQty = parseFloat(minQuantity) || 0;
     const price = parseFloat(pricePerShare) || 0;
 
-    // Basic validation
     if (qty <= 0 || price <= 0 || !selectedWallet) return false;
 
-    // Min quantity cannot exceed quantity
     if (minQty > qty) return false;
 
-    // For sell orders, check if quantity exceeds balance
     if (orderType === 'sell' && currentWalletBalance) {
       const balance = parseInt(currentWalletBalance, 10);
       if (qty > balance) return false;
@@ -79,7 +73,6 @@ export const OrderForm = forwardRef<OrderFormRef, OrderFormProps>(function Order
     return true;
   }, [quantity, minQuantity, pricePerShare, selectedWallet, orderType, currentWalletBalance]);
 
-  // Notify parent of validation changes
   useEffect(() => {
     onValidationChange?.(isValid);
   }, [isValid, onValidationChange]);
@@ -101,7 +94,6 @@ export const OrderForm = forwardRef<OrderFormRef, OrderFormProps>(function Order
     });
   };
 
-  // Expose submit method and validation state to parent
   useImperativeHandle(ref, () => ({
     submit: handleSubmit,
     isValid,
@@ -111,9 +103,7 @@ export const OrderForm = forwardRef<OrderFormRef, OrderFormProps>(function Order
 
   return (
     <div className="space-y-4">
-      {/* Order Details */}
       <div className="space-y-0">
-        {/* Last Price */}
         {token.lastPrice && (
           <div className="flex items-center justify-between py-2.5 border-b border-border-subtle">
             <span className="text-sm text-text-muted">Last Price:</span>
@@ -121,7 +111,6 @@ export const OrderForm = forwardRef<OrderFormRef, OrderFormProps>(function Order
           </div>
         )}
 
-        {/* Wallet Selection */}
         <div className="flex items-center justify-between py-2.5 border-b border-border-subtle">
           <span className="text-sm text-text-muted">{isBuy ? 'Delivery Wallet:' : 'Source Wallet:'}</span>
           {wallets.length === 1 ? (
@@ -146,7 +135,6 @@ export const OrderForm = forwardRef<OrderFormRef, OrderFormProps>(function Order
           )}
         </div>
 
-        {/* Available Balance (for sell orders) */}
         {!isBuy && currentWalletBalance && (
           <div className="flex items-center justify-between py-2.5 border-b border-border-subtle">
             <span className="text-sm text-text-muted">Available:</span>
@@ -154,7 +142,6 @@ export const OrderForm = forwardRef<OrderFormRef, OrderFormProps>(function Order
           </div>
         )}
 
-        {/* Total Value */}
         <div className="flex items-center justify-between py-2.5 border-b border-border-subtle">
           <span className="text-sm text-text-muted">Total Value:</span>
           <span className={`text-sm font-semibold ${totalValue > 0 ? 'text-text-primary' : 'text-text-muted'}`}>
@@ -163,9 +150,7 @@ export const OrderForm = forwardRef<OrderFormRef, OrderFormProps>(function Order
         </div>
       </div>
 
-      {/* Form Inputs */}
       <div className="space-y-4 pt-2">
-        {/* Quantity */}
         <div className="space-y-2">
           <label className="text-sm font-medium text-text-primary">Quantity (shares)</label>
           <input
@@ -192,7 +177,6 @@ export const OrderForm = forwardRef<OrderFormRef, OrderFormProps>(function Order
           )}
         </div>
 
-        {/* Advanced Options */}
         <div>
           <button
             type="button"
@@ -223,7 +207,6 @@ export const OrderForm = forwardRef<OrderFormRef, OrderFormProps>(function Order
           )}
         </div>
 
-        {/* Price per Share */}
         <div className="space-y-2">
           <label className="text-sm font-medium text-text-primary">Price per Share (AUD)</label>
           <input

@@ -1,10 +1,3 @@
-"""SumSub webhook must fail closed when the signing secret is unset.
-
-Regression for the confirmed CRITICAL: an unset SUMSUB_WEBHOOK_SECRET
-previously made signature verification return True, letting any
-unauthenticated caller post a forged KYC status update.
-"""
-
 from django.test import TestCase, override_settings
 
 from integrations.sumsub.client import SumSubService

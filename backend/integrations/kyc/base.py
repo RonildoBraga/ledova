@@ -10,15 +10,15 @@ class VerificationSession:
 
     provider: str
     applicant_id: str
-    access_token: Optional[str] = None  # Sumsub only
-    form_url: Optional[str] = None  # KYCAID only
+    access_token: Optional[str] = None
+    form_url: Optional[str] = None
 
 
 @dataclass
 class NormalizedVerificationResult:
 
-    verification_status: str  # init|pending|completed|onHold
-    review_result: str  # GREEN|RED|YELLOW
+    verification_status: str
+    review_result: str
     is_verified: bool
     rejection_labels: list = field(default_factory=list)
     document_type: Optional[str] = None
@@ -31,11 +31,11 @@ class KYCProvider(ABC):
 
     @abstractmethod
     def get_provider_name(self) -> str:
-        """Return the provider identifier (e.g. 'sumsub', 'kycaid')."""
+        pass
 
     @abstractmethod
     def create_applicant(self, external_user_id: str, **profile_data) -> dict:
-        """Create an applicant in the KYC provider. Returns dict with at least 'applicant_id'."""
+        pass
 
     @abstractmethod
     def get_applicant_status(self, applicant_id: str) -> Dict[str, Any]:
@@ -43,7 +43,7 @@ class KYCProvider(ABC):
 
     @abstractmethod
     def get_applicant_data(self, applicant_id: str) -> Dict[str, Any]:
-        """Get full applicant data including extracted document information."""
+        pass
 
     @abstractmethod
     def verify_webhook_signature(self, payload: bytes, signature: str) -> bool:
@@ -51,15 +51,15 @@ class KYCProvider(ABC):
 
     @abstractmethod
     def normalize_webhook(self, webhook_data: dict) -> NormalizedVerificationResult:
-        """Convert provider-specific webhook/status data to a NormalizedVerificationResult."""
+        pass
 
     @abstractmethod
     def generate_session(self, applicant_id: str, external_user_id: str) -> VerificationSession:
-        """Generate session credentials (token or form URL) for an existing applicant."""
+        pass
 
     @abstractmethod
     def extract_verified_data(self, applicant_data: dict) -> dict:
-        """Extract verified profile data (fullName, dateOfBirth, address) from applicant data."""
+        pass
 
     def submit_crypto_transaction(
         self,

@@ -49,14 +49,12 @@ export function AssetFilterModal({
       onCancel={onClear}
       size="sm"
     >
-      {/* Header */}
       <div className="flex flex-col items-center pb-3">
         <FunnelIcon size={ICON_LG} className="text-brand-mid mb-1" />
         <h3 className="text-lg font-semibold text-text-primary">Filter Assets</h3>
       </div>
 
       <div className="space-y-4">
-        {/* Search */}
         <div className="space-y-2">
           <p className="text-xs font-medium text-text-subtle uppercase tracking-wide">Search</p>
           <input
@@ -68,7 +66,6 @@ export function AssetFilterModal({
           />
         </div>
 
-        {/* Sort */}
         <div className="space-y-2">
           <p className="text-xs font-medium text-text-subtle uppercase tracking-wide">Sort By</p>
           <div className="grid grid-cols-2 gap-2">
@@ -92,7 +89,6 @@ export function AssetFilterModal({
           </div>
         </div>
 
-        {/* Asset Type */}
         <div className="space-y-2">
           <p className="text-xs font-medium text-text-subtle uppercase tracking-wide">Asset Type</p>
           <select

@@ -2,19 +2,12 @@ import { ethers } from 'ethers';
 import { HDKey } from 'ethereum-cryptography/hdkey';
 import { mnemonicToSeedSync } from 'ethereum-cryptography/bip39';
 
-/**
- * Zero out Uint8Arrays to remove sensitive key material from memory.
- */
 function wipe(...arrays: (Uint8Array | null | undefined)[]): void {
   for (const arr of arrays) {
     if (arr) arr.fill(0);
   }
 }
 
-/**
- * Derive a private key from mnemonic and HD path, wiping all intermediates.
- * Caller MUST call cleanup() when done with the key.
- */
 function deriveKey(mnemonic: string, derivationPath: string) {
   const seed = mnemonicToSeedSync(mnemonic);
   const masterKey = HDKey.fromMasterSeed(seed);
@@ -31,9 +24,6 @@ function deriveKey(mnemonic: string, derivationPath: string) {
   return { privateKey, cleanup: () => wipe(privateKey) };
 }
 
-/**
- * Execute a signing operation with a derived Ethereum wallet, ensuring key cleanup.
- */
 async function withEthereumSigner<T>(
   mnemonic: string,
   derivationPath: string,
@@ -48,9 +38,6 @@ async function withEthereumSigner<T>(
   }
 }
 
-/**
- * Derive the Ethereum address for a mnemonic + derivation path.
- */
 export function deriveAddress(mnemonic: string, derivationPath: string): string {
   const { privateKey, cleanup } = deriveKey(mnemonic, derivationPath);
   try {

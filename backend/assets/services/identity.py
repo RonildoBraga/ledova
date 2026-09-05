@@ -1,5 +1,3 @@
-"""Which Asset row a chain transfer belongs to: (chain, contract) for tokens, the chain's native coin otherwise."""
-
 import logging
 from typing import Optional
 
@@ -17,11 +15,6 @@ RESERVED_SYMBOLS = frozenset(symbol.upper() for symbol in (*SUPPORTED_ASSETS, *C
 
 
 def native_asset_for_chain(chain: str) -> Asset:
-    """The chain's native coin; before the seed has run, a native_crypto row under the native symbol.
-
-    A row that owns the native symbol but is not the native coin (a quarantined token can never
-    take it, see RESERVED_SYMBOLS, so only hand-entered data) refuses the transfer with ValueError.
-    """
     asset = Asset.objects.native_for_chain(chain)
     if asset is None:
         symbol = get_native_asset_symbol(chain)
@@ -36,25 +29,6 @@ def native_asset_for_chain(chain: str) -> Asset:
 def quarantine_unknown_token(
     chain: str, contract_address: str, symbol: Optional[str], decimals: Optional[int]
 ) -> Asset:
-    """Record a contract the allowlist does not know as an unverified Asset plus its deployment.
-
-    Identity is (chain, contract address), never the declared symbol, so the deployment is looked
-    up before any symbol logic and a row that does not carry it is never returned:
-    - a deployment of this contract on this chain that an operator switched off refuses the
-      transfer (ValueError; the wallet sync skips and logs it) instead of resolving to its row;
-    - the same address on another chain is another contract (same-address contracts on other
-      EVM chains are attacker-reachable through deterministic deployers and pre-EIP-155 replay)
-      and gets its own unverified row; an operator adds a second chain's deployment by hand;
-    - otherwise a new unverified row is created under a symbol no other row owns, compared
-      case-insensitively: the declared symbol, else the symbol plus a hex prefix of the contract
-      that grows until it is free.
-    Neither a fake "USDC", "usdc" nor "USDC-a0b866" can therefore book against someone else's
-    row, whichever of the two contracts the chain shows first. Unverified rows stay hidden from
-    every customer read until an operator marks them verified. Every SUPPORTED_ASSETS symbol and
-    every chain's native symbol counts as taken even before ensure_supported_assets has seeded
-    it, so the seed's update_or_create(symbol=...) and native_asset_for_chain can never land on
-    a quarantined row.
-    """
     deployment = (
         AssetChainDeployment.objects.select_related("asset")
         .filter(chain=chain, contract_address__iexact=contract_address)
@@ -84,10 +58,6 @@ def quarantine_unknown_token(
 
 
 def _free_symbol(declared: str, contract_address: str) -> str:
-    """The declared symbol when no row owns it (case-insensitively), else declared-<hex prefix of
-    the contract> with the prefix growing one character at a time until the symbol is free; the
-    declared part is trimmed to fit. Raises ValueError when even the longest prefix that fits is
-    taken."""
     hex_part = (contract_address[2:] if contract_address[:2].lower() == "0x" else contract_address).lower()
     longest = min(len(hex_part), SYMBOL_MAX_LENGTH - 1)
     candidate = declared

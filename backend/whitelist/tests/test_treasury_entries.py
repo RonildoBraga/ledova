@@ -1,5 +1,3 @@
-"""Whitelist entries for operator-held addresses no user wallet backs: admin add form, service and read routes."""
-
 from unittest.mock import Mock
 
 from django.contrib.auth import get_user_model

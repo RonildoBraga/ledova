@@ -11,7 +11,6 @@ logger = logging.getLogger(__name__)
 
 
 class WhitelistStatusView(APIView):
-    """Return bounded eligibility for a sender-owned wallet or transfer recipient."""
 
     permission_classes = [IsAuthenticated]
 

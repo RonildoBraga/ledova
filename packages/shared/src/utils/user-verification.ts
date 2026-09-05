@@ -28,11 +28,6 @@ function statusOf(type: VerificationStatusType): VerificationStatus {
   return { type, label: STATUS_LABELS[type] };
 }
 
-/**
- * Maps the provider-agnostic `verificationStatus` / `reviewResult` pair the backend writes
- * (`integrations/kyc/constants.py`) to the account-status badge. A bare string is read as the
- * `verificationStatus` alone.
- */
 export function getUserVerificationStatus(profile?: UserProfile | string | null): VerificationStatus {
   if (typeof profile === 'object' && profile?.isIdVerified) return statusOf('verified');
 

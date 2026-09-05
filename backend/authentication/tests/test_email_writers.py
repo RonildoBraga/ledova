@@ -121,8 +121,6 @@ class EmailAdminWriterTests(TestCase):
 
 @override_settings(STORAGES=TEST_STORAGES)
 class EmailAdminChangeTests(TestCase):
-    """Staff can correct an address; the change form applies the same canonical validation as the API
-    (never the DB constraint as a 500) and a changed address ends every session."""
 
     password = "writer-password-123"
 

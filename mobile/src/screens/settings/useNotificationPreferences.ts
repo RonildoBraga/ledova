@@ -26,9 +26,6 @@ export function useNotificationPreferences() {
 
   const preferences: NotificationPreferences | undefined = preferencesQuery.data?.data;
 
-  /**
-   * Toggle transaction alerts preference.
-   */
   const toggleTransactionAlerts = useCallback(
     async (value: boolean) => {
       try {
@@ -40,9 +37,6 @@ export function useNotificationPreferences() {
     [updateMutation],
   );
 
-  /**
-   * Toggle price alerts preference.
-   */
   const togglePriceAlerts = useCallback(
     async (value: boolean) => {
       try {
@@ -54,9 +48,6 @@ export function useNotificationPreferences() {
     [updateMutation],
   );
 
-  /**
-   * Toggle marketing notifications preference.
-   */
   const toggleMarketing = useCallback(
     async (value: boolean) => {
       try {
@@ -73,7 +64,6 @@ export function useNotificationPreferences() {
     priceAlerts: preferences?.priceAlerts ?? false,
     marketing: preferences?.marketing ?? false,
 
-    // Toggle handlers
     toggleTransactionAlerts,
     togglePriceAlerts,
     toggleMarketing,

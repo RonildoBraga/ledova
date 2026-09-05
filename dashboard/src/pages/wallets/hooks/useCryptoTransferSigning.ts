@@ -58,8 +58,7 @@ export function useCryptoTransferSigning({
   const broadcastMutation = useMutation({
     mutationFn: async (signedTx: string) => {
       if (!wallet) throw new Error('No wallet selected');
-      // toAddress, amount and the fee let the backend write the pending transaction and schedule its
-      // confirmation, as the mobile send flow does; the fee comes from the prepared transaction.
+
       const prepared = preparedTransaction;
       const transactionFee = prepared ? ('feeBtc' in prepared ? prepared.feeBtc : prepared.gasCostEth) : undefined;
       const response = await broadcastTransfer(apiClient, wallet.uuid, {

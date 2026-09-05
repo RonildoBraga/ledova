@@ -337,7 +337,6 @@ def _check_extreme_risk(rule, transaction, user_account) -> RuleResult:
     }
 
 
-# Every checker takes (rule, transaction, user_account); transaction is None during the batch pattern sweep.
 RULE_CHECKS = {
     RULE_TYPE_THRESHOLD: _check_threshold,
     RULE_TYPE_RAPID_TRANSACTIONS: _check_rapid_transactions,
@@ -360,8 +359,6 @@ def check_rule(rule: MonitoringRule, transaction, user_account) -> RuleResult:
 class TransactionMonitoringService:
     @classmethod
     def check_new_transaction(cls, tx) -> None:
-        """Screen a just-created wallet transaction. Never raises: a monitoring
-        failure must not roll back the sync or transfer that created the row."""
         cutoff = timezone.now() - timedelta(hours=TRANSACTION_MONITORING_WINDOW_HOURS)
         if tx.block_timestamp and tx.block_timestamp < cutoff:
             return

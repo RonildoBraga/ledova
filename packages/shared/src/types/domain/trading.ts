@@ -31,11 +31,11 @@ export interface TransferOrder {
   updatedAt?: string;
   matchedOrder?: string;
   matchedAt?: string;
-  // Partial fill support
+
   minQuantity?: number;
   filledQuantity?: number;
   remainingQuantity?: number;
-  // Modification tracking
+
   modificationCount?: number;
   lastModifiedAt?: string;
   originalQuantity?: number;
@@ -222,10 +222,6 @@ export interface SignedCancelOrderRequest {
   signature: string;
 }
 
-// ============================================================================
-// Order Modification Types
-// ============================================================================
-
 export interface OrderModificationRequest {
   newQuantity?: number;
   newMinQuantity?: number;
@@ -272,13 +268,6 @@ export interface OrderModificationResponse {
   changes: OrderModificationChange[];
 }
 
-// ============================================================================
-// Direct Share Token Transfer Types
-// ============================================================================
-
-/**
- * Token info included in transfer prepare response.
- */
 export interface ShareTokenTransferTokenInfo {
   uuid: string;
   symbol: string;
@@ -286,9 +275,6 @@ export interface ShareTokenTransferTokenInfo {
   contractAddress: string;
 }
 
-/**
- * Transaction data for signing a share token transfer.
- */
 export interface ShareTokenTransferTransactionData {
   to: string;
   data: string;
@@ -299,9 +285,6 @@ export interface ShareTokenTransferTransactionData {
   gas: number;
 }
 
-/**
- * Response from prepare share token transfer endpoint.
- */
 export interface ShareTokenTransferPrepareResponse {
   token: ShareTokenTransferTokenInfo;
   fromAddress: string;
@@ -310,14 +293,6 @@ export interface ShareTokenTransferPrepareResponse {
   transactionData: ShareTokenTransferTransactionData;
 }
 
-// ============================================================================
-// Swap Approval Types
-// ============================================================================
-
-/**
- * Response from swap approval status endpoint.
- * Indicates whether the user needs to approve token spending.
- */
 export interface ApprovalStatusResponse {
   swapUuid: string;
   userRole: string;
@@ -329,9 +304,6 @@ export interface ApprovalStatusResponse {
   spender: string;
 }
 
-/**
- * Transaction data for token approval.
- */
 export interface ApprovalTransaction {
   to: string;
   from: string;
@@ -343,10 +315,6 @@ export interface ApprovalTransaction {
   chainId: string;
 }
 
-/**
- * Response from swap approval data endpoint.
- * Contains transaction data for signing if approval is needed.
- */
 export interface ApprovalDataResponse {
   needsApproval: boolean;
   swapUuid?: string;

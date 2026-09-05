@@ -1,10 +1,3 @@
-"""
-Remove Banxa and Coinbase from OnRampProvider choices.
-
-Clears any existing 'banxa' or 'coinbase' preferred_onramp_provider values
-to NULL, then updates the field choices to Transak-only.
-"""
-
 from django.db import migrations, models
 
 

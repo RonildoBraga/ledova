@@ -9,8 +9,7 @@ from users.tasks.notifications import send_push_notification
 
 logger = logging.getLogger(__name__)
 
-# Company transition -> (title, body) of the owner's notification; `{name}` is the company, `{reason}` the
-# transition's reason. Transitions absent here (warning, suspension, reinstatement, delisting) notify nobody.
+
 APPLICANT_NOTIFICATIONS = {
     "submit": ("Application submitted", "{name} was submitted for review."),
     "resubmit": ("Application resubmitted", "{name} was resubmitted with your response."),
@@ -26,8 +25,6 @@ APPLICANT_NOTIFICATIONS = {
 def register_company(owner, name: str, acn: str, primary_contact_data: dict, **kwargs) -> Company:
     company = Company.objects.create(owner=owner, name=name, acn=acn, **kwargs)
 
-    # primary_contact_data['phone'] is the owner's own profile phone echoed back by the
-    # clients as "<country_code> <number>", so it is deliberately not written to the profile.
     full_name = f"{primary_contact_data['first_name']} {primary_contact_data['last_name']}".strip()
     UserProfile.objects.update_or_create(user=owner, defaults={"full_name": full_name})
 
@@ -37,12 +34,6 @@ def register_company(owner, name: str, acn: str, primary_contact_data: dict, **k
 
 @transaction.atomic
 def transition_company(company: Company, method: str, **kwargs) -> Company:
-    """Run one Company transition; application events also queue the owner's notification in the same block.
-
-    The admin buttons and bulk actions, the staff status route and the owner's submit/resubmit/withdraw all come
-    through here, so a transition is announced exactly once. A job that cannot be deferred rolls the transition
-    back with it.
-    """
     getattr(company, method)(**kwargs)
     message = APPLICANT_NOTIFICATIONS.get(method)
     if message:

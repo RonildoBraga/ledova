@@ -87,13 +87,6 @@ class ShareToken(BaseModel):
         self.save(update_fields=update_fields)
 
     def bind_deployment_transaction(self, tx_hash: str, transaction: BlockchainTransaction) -> bool:
-        """Record the create transaction unless one is already recorded; returns whether this one was taken.
-
-        Two workers that both found nothing recorded and both sent a create (a "Retry Deployment" click while the
-        original worker was still alive) must not overwrite each other: the first hash written is kept so the
-        token always points at a sent transaction a retry can resume on. The worker whose create confirms then
-        rebinds the token to that transaction, since a later create for the same identifier reverts.
-        """
         now = timezone.now()
         bound = (
             type(self)
@@ -120,11 +113,6 @@ class ShareToken(BaseModel):
         self.save(update_fields=["status", "updated_at"])
 
     def mark_draft_unless_sent(self) -> bool:
-        """Return to DRAFT unless the stored row carries a create transaction; returns whether it did.
-
-        A worker whose copy has no hash (a second deploy worker, or one whose lookup failed before the send) must not
-        draft a token another worker has just bound to a sent create, so the decision is a conditional update.
-        """
         now = timezone.now()
         drafted = (
             type(self)
@@ -140,7 +128,6 @@ class ShareToken(BaseModel):
         return bool(drafted)
 
     def discard_deployment_transaction(self) -> None:
-        """Forget a create transaction that was mined and reverted: nothing exists on chain for it."""
         self.deployment_tx_hash = None
         self.deployment_transaction = None
         self.save(update_fields=["deployment_tx_hash", "deployment_transaction", "updated_at"])

@@ -6,7 +6,6 @@ from users.querysets.device_token import DeviceTokenQuerySet
 
 
 class DeviceToken(BaseModel):
-    """Expo push tokens, format ExponentPushToken[...]."""
 
     objects = DeviceTokenQuerySet.as_manager()
 

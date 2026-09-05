@@ -92,7 +92,7 @@ describe("WhitelistRegistry", function () {
     it("Should skip zero address entries in batch", async function () {
       const investors = [
         investor1.address,
-        ethers.ZeroAddress, // Should be skipped
+        ethers.ZeroAddress,
         investor2.address,
       ];
 

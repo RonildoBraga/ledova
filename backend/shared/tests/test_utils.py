@@ -27,7 +27,7 @@ class DecodeRevertReasonTests(SimpleTestCase):
         )
 
     def test_unknown_selector_and_no_hex_fall_back(self):
-        stale_selector = "0xc5487b9a"  # the pre-fix table mislabelled this as SwapExpired
+        stale_selector = "0xc5487b9a"
         self.assertEqual(
             decode_exception_to_message(Exception(stale_selector)), f"Unknown error (selector: {stale_selector})"
         )

@@ -1,10 +1,3 @@
-"""
-KYCAID Crypto Screening Webhook Handler
-
-Receives async crypto address/transaction screening results from KYCAID.
-Documentation: https://docs.kycaid.com/#crypto-services
-"""
-
 import logging
 
 from django.utils.decorators import method_decorator
@@ -53,9 +46,6 @@ class KYCAIDCryptoWebhookView(APIView):
                 logger.warning(f"Screening not found for request_id: {request_id}")
                 return Response({"success": True}, status=status.HTTP_200_OK)
 
-            # Normalize KYCAID payload to the format expected by the service
-            # KYCAID: {"result": {"risk_score": 0.85, "signals": [...]}}
-            # Service expects: {"riskScore": 0.85, "signals": [...]}
             normalized_data = {
                 "riskScore": result.get("risk_score", 0),
                 "signals": result.get("signals", []),

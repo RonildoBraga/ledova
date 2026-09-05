@@ -165,7 +165,6 @@ class SwapOrder(BaseModel):
         self.save(update_fields=update_fields)
 
     def mark_completed(self):
-        """filled_quantity was already applied in partial_match_with; only statuses change here."""
         self.status = SwapOrderStatus.COMPLETED
         self.completed_at = timezone.now()
         self.save(update_fields=["status", "completed_at", "updated_at"])
@@ -180,14 +179,13 @@ class SwapOrder(BaseModel):
                 order.completed_at = self.completed_at
                 update_fields = ["status", "completed_at", "tx_hash", "updated_at"]
             else:
-                # Partially filled - return to OPEN so it can match more orders
+
                 order.status = TransferOrderStatus.OPEN
                 update_fields = ["status", "tx_hash", "updated_at"]
 
             order.save(update_fields=update_fields)
 
     def mark_failed(self, error_message: str):
-        """Revert the optimistically applied filled_quantity and return both orders to a matchable status."""
         self.status = SwapOrderStatus.FAILED
         self.error_message = error_message
         self.save(update_fields=["status", "error_message", "updated_at"])

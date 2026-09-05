@@ -39,9 +39,7 @@ class Blockchain(str, Enum):
 class Wallet(BaseModel):
     user_account = models.ForeignKey(UserAccount, on_delete=models.CASCADE, related_name="wallets")
     name = models.CharField(max_length=100, blank=True, null=True)
-    address = models.CharField(
-        max_length=255, db_index=True
-    )  # Not unique - same wallet can be tracked by multiple users
+    address = models.CharField(max_length=255, db_index=True)
     chain = models.CharField(
         max_length=20,
         choices=Blockchain.choices(),

@@ -39,7 +39,6 @@ class CapitalIncreaseViewSet(AuthenticatedModelViewSet):
         return queryset.visible_to_user(self.request.user)
 
     def filter_queryset(self, queryset):
-        """Query params narrow the list only; a detail action is a uuid lookup and keeps its own params."""
         if self.action == "list":
             return super().filter_queryset(queryset)
         return queryset

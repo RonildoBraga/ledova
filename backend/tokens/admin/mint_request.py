@@ -148,7 +148,6 @@ class MintRequestAdmin(admin.ModelAdmin):
         return render(request, f"admin/tokens/mintrequest/{action.lower()}_form.html", context)
 
     def execute_view(self, request, uuid):
-        """Executes a pending request and retries a failed one; the form asks for confirmation either way."""
         mint_request = get_object_or_404(MintRequest, uuid=uuid)
         if not mint_request.can_be_executed:
             return self._refuse(request, mint_request, "execute")

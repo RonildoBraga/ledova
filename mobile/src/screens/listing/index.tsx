@@ -45,8 +45,6 @@ const OPTIONAL_DOCUMENTS: { type: DocumentType; label: string }[] = [
   { type: 'bank_statement', label: 'Bank Statement' },
 ];
 
-// The backend accepts withdraw from draft, submitted and info_required; once review has started the
-// application stays with the reviewer, so the screen offers Withdraw only for the pending states it can act on.
 const WITHDRAWABLE_STATUSES: Company['status'][] = ['submitted', 'info_required'];
 
 const ACTION_ERROR_FALLBACK = 'The request was refused. Please try again.';
@@ -220,7 +218,6 @@ export function ListingScreen() {
     </CustomModal>
   );
 
-  // Read-only states: the application is with the operator or has reached an outcome
   if (!canEdit) {
     return (
       <GradientBackground>
@@ -244,7 +241,6 @@ export function ListingScreen() {
   return (
     <GradientBackground>
       <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-        {/* Info Required Warning */}
         {isInfoRequired && (
           <View style={styles.warningBanner}>
             <WarningIcon size={20} color={theme.colors.status.warning.icon} weight="fill" />
@@ -263,7 +259,6 @@ export function ListingScreen() {
           </View>
         )}
 
-        {/* Required Documents */}
         <Panel title="Required Documents">
           {REQUIRED_DOCUMENTS.map((doc, index) => {
             const uploaded = documents.find((d) => d.documentType === doc.type);
@@ -284,7 +279,6 @@ export function ListingScreen() {
           })}
         </Panel>
 
-        {/* Optional Documents */}
         <Panel title="Optional Documents">
           {OPTIONAL_DOCUMENTS.map((doc, index) => {
             const uploaded = documents.find((d) => d.documentType === doc.type);
@@ -305,7 +299,6 @@ export function ListingScreen() {
           })}
         </Panel>
 
-        {/* Response to the information request */}
         {isInfoRequired && (
           <Panel title="Your Response">
             <View style={styles.responseContainer}>
@@ -324,7 +317,6 @@ export function ListingScreen() {
           </Panel>
         )}
 
-        {/* What Happens Next */}
         <Panel title="What Happens Next" icon={<InfoIcon />}>
           <View style={styles.stepsContainer}>
             {[
@@ -342,7 +334,6 @@ export function ListingScreen() {
           </View>
         </Panel>
 
-        {/* Submit / Resubmit / Withdraw */}
         <View style={styles.submitSection}>
           {isInfoRequired ? (
             <PrimaryButton onPress={handleResubmit} loading={isResubmitting} disabled={isActing} fullWidth>
@@ -360,7 +351,6 @@ export function ListingScreen() {
           )}
         </View>
 
-        {/* Delete Confirmation Modal */}
         <CustomModal
           visible={!!deleteTarget}
           onClose={() => setDeleteTarget(null)}
@@ -381,7 +371,6 @@ export function ListingScreen() {
   );
 }
 
-/** Read-only view for every state the owner cannot edit. */
 function ApplicationStatusView({
   company,
   operatorName,
@@ -461,8 +450,6 @@ function ApplicationStatusView({
   );
 }
 
-// --- Sub-components ---
-
 interface DocumentRowProps {
   label: string;
   uploaded?: { uuid: string; name?: string; fileUrl?: string } | undefined;
@@ -537,8 +524,6 @@ function DocumentRow({
   );
 }
 
-// --- Styles ---
-
 function useStyles() {
   return useThemedStyles((theme) => ({
     container: {
@@ -561,7 +546,7 @@ function useStyles() {
       color: theme.colors.text.muted,
       textAlign: 'center',
     },
-    // Warning banner
+
     warningBanner: {
       flexDirection: 'row',
       alignItems: 'flex-start',
@@ -585,7 +570,7 @@ function useStyles() {
       color: theme.colors.text.muted,
       marginTop: theme.spacing.xs,
     },
-    // Submitted state
+
     submittedContainer: {
       alignItems: 'center',
       padding: theme.spacing.xl,
@@ -606,7 +591,7 @@ function useStyles() {
       fontWeight: theme.fontWeight.medium,
       color: theme.colors.text.primary,
     },
-    // Document rows
+
     docRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -647,7 +632,7 @@ function useStyles() {
       borderBottomWidth: 1,
       borderBottomColor: theme.colors.border.default,
     },
-    // Steps
+
     stepsContainer: {
       padding: theme.spacing.md,
       gap: theme.spacing.xs,
@@ -666,7 +651,7 @@ function useStyles() {
       color: theme.colors.text.secondary,
       flex: 1,
     },
-    // Submit section
+
     submitSection: {
       alignItems: 'center',
       gap: theme.spacing.sm,
@@ -682,7 +667,7 @@ function useStyles() {
       color: theme.colors.text.muted,
       paddingVertical: theme.spacing.xs,
     },
-    // Information request response
+
     previousResponse: {
       marginTop: theme.spacing.sm,
       padding: theme.spacing.sm,
@@ -725,7 +710,7 @@ function useStyles() {
       color: theme.colors.text.primary,
       fontSize: theme.fontSize.sm,
     },
-    // Modal
+
     modalContent: {
       gap: theme.spacing.sm,
     },

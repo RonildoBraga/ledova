@@ -33,7 +33,6 @@ def create_member(verified=True):
 
 
 class CookieTransportCsrfTest(APITestCase):
-    """Browser-style requests: the cookie is sent automatically, so unsafe methods need the CSRF token."""
 
     def setUp(self):
         super().setUp()
@@ -139,8 +138,6 @@ class CookieTransportCsrfTest(APITestCase):
 
 
 class BearerBesideCookieTest(APITestCase):
-    """React Native's cookie jar replays the access cookie set at sign-in next to the mobile app's
-    Bearer token, so the header must win: no CSRF check, and a stale cookie must not shadow it."""
 
     def setUp(self):
         super().setUp()
@@ -178,7 +175,6 @@ class BearerBesideCookieTest(APITestCase):
 
 
 class CsrfCookieBootstrapTest(APITestCase):
-    """The dashboard needs a readable csrftoken cookie on load (verify) and with every issued session."""
 
     def setUp(self):
         super().setUp()
@@ -246,8 +242,6 @@ class CsrfCookieBootstrapTest(APITestCase):
 
 
 class RefreshTransportCsrfTest(APITestCase):
-    """The refresh cookie is also sent by the browser on its own, so rotating or
-    revoking with it needs the CSRF token unless a Bearer header is present."""
 
     def setUp(self):
         super().setUp()

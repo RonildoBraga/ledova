@@ -15,7 +15,6 @@ HEARTBEAT_INTERVAL = 30
 
 
 def _authenticate_sync(request):
-    """Cookie (dashboard) or Authorization header (mobile) only; never the query string."""
     result = HybridJWTAuthentication().authenticate(request)
     if result is not None:
         return result[0]
@@ -39,7 +38,6 @@ def _format_sse(event_type: str, data: dict) -> str:
 
 
 def _format_public_trading_event(event, token_uuid: str):
-    """Return an identifier-free event for the requested public market."""
     if not isinstance(event, dict) or event.get("token") != token_uuid:
         return None
 
@@ -51,7 +49,6 @@ def _format_public_trading_event(event, token_uuid: str):
 
 
 async def _resolve_deployed_token_uuid(raw_token_uuid):
-    """Resolve only UUIDs exposed by the deployed-token trading market."""
     try:
         token_uuid = str(UUID(raw_token_uuid))
     except (AttributeError, TypeError, ValueError):
@@ -64,7 +61,6 @@ async def _resolve_deployed_token_uuid(raw_token_uuid):
 
 
 async def _event_stream(token_uuid: str):
-    """Async generator that subscribes to Redis and yields SSE-formatted events."""
     client = aioredis.from_url(settings.REDIS_URL)
     pubsub = client.pubsub()
     subscribed = False

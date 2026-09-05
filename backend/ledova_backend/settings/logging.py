@@ -19,7 +19,6 @@ LOGGING = {
             "formatter": "verbose",
         },
     },
-    # Every module logs under its own __name__ and propagates to the root console handler.
     "root": {"handlers": ["console"], "level": "INFO"},
     "loggers": {
         "django": {

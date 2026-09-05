@@ -44,14 +44,12 @@ export function WalletVerificationModal({ isOpen, wallet, onClose }: WalletVerif
     enabled: verificationStep === 'scan-signature',
   });
 
-  // Handle modal close
   const handleClose = useCallback(() => {
     stopScanner();
     reset();
     onClose();
   }, [onClose, reset, stopScanner]);
 
-  // Auto-close on success
   useEffect(() => {
     if (verificationSuccess) {
       const timer = setTimeout(() => {

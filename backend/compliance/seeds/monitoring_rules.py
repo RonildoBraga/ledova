@@ -1,8 +1,4 @@
-"""Rows for `sync_monitoring_rules`: upserted by rule_code; any other rule in the database is deleted.
-Keys are MonitoringRule fields."""
-
 MONITORING_RULES = [
-    # Core Transaction Monitoring Rules (MON-001 to MON-006)
     {
         "rule_code": "MON-001",
         "name": "Large Transaction",
@@ -63,8 +59,6 @@ MONITORING_RULES = [
         "alert_severity": "high",
         "is_active": True,
     },
-    # Advanced Monitoring Rules (MON-007 to MON-010)
-    # Policy References: Document 3 §3.1, Document 5 §3.2
     {
         "rule_code": "MON-007",
         "name": "High Aggregate Volume",
@@ -101,8 +95,6 @@ MONITORING_RULES = [
         "alert_severity": "low",
         "is_active": True,
     },
-    # Risk-Based Monitoring Rules (MON-011)
-    # Policy References: Document 2 §4.2
     {
         "rule_code": "MON-011",
         "name": "Extreme Risk Customer",

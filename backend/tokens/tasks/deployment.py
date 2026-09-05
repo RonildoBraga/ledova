@@ -15,11 +15,6 @@ PENDING_DEPLOYMENT_AGE = timedelta(minutes=10)
 
 @app.task(retry=RetryStrategy(max_attempts=4, wait=30))
 def deploy_share_token_task(token_uuid: str):
-    """Create the share token on chain; the service owns the DRAFT / DEPLOYING / DEPLOYED transitions.
-
-    A retry after a sent transaction adopts the address the factory already holds for the token's identifier, or
-    waits on the recorded transaction; it never sends a second create and never returns the token to DRAFT.
-    """
     token = ShareToken.objects.select_related("company").filter(uuid=token_uuid).first()
     if token is None:
         logger.error(f"Token not found: {token_uuid}")
@@ -36,7 +31,6 @@ def deploy_share_token_task(token_uuid: str):
 @app.periodic(cron="*/5 * * * *")
 @app.task
 def check_pending_token_deployments(timestamp: int = 0):
-    """Resolve tokens left DEPLOYING by a lost receipt or a crashed task through the factory's identifier lookup."""
     pending = ShareToken.objects.filter(
         status=ShareTokenStatus.DEPLOYING,
         updated_at__lt=timezone.now() - PENDING_DEPLOYMENT_AGE,

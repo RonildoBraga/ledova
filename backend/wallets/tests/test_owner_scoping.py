@@ -1,10 +1,3 @@
-"""The wallet owner FK must be scoped to the caller's own accounts.
-
-Regression for the confirmed HIGH mass-assignment: the serializer previously
-widened user_account to UserAccount.objects.all(), letting a tenant assign a
-wallet into another tenant's account.
-"""
-
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework.test import APIRequestFactory

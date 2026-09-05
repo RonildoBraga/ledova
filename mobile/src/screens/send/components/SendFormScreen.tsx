@@ -121,8 +121,6 @@ export function SendFormScreen({ onDone }: SendFormScreenProps) {
   const chainShortName = wallet ? getChainShortCode(wallet.chain) : 'ETH';
   const isEthereum = isEthereumChain(chainShortName) || wallet?.chain === BLOCKCHAIN.BASE;
 
-  // Bitcoin transactions are built and signed outside the app; the Wallets stack's TransferDetails screen
-  // carries that manual flow (paste the signed hex), so a Bitcoin wallet leaves the EVM flow here.
   const handleSelectWallet = useCallback(
     (selected: Wallet) => {
       if (isBitcoinChain(getChainShortCode(selected.chain))) {

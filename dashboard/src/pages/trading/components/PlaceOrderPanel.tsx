@@ -66,7 +66,6 @@ export function PlaceOrderPanel({
 
   return (
     <>
-      {/* Action buttons */}
       <div className="flex gap-4">
         <button
           onClick={() => handleOpen('sell')}
@@ -84,7 +83,6 @@ export function PlaceOrderPanel({
         </button>
       </div>
 
-      {/* Order form modal */}
       <Modal
         isOpen={isOpen}
         onClose={handleClose}

@@ -56,8 +56,6 @@ class WhitelistService:
         account = self.chain_client.account_from_key(self.signer_key)
         return account.address
 
-    # On-chain reads
-
     def is_whitelisted(self, address: str) -> bool:
         checksum_address = self.chain_client.to_checksum_address(address)
         return self.contract.functions.isWhitelisted(checksum_address).call()
@@ -74,11 +72,8 @@ class WhitelistService:
         checksum_address = self.chain_client.to_checksum_address(address)
         return self.contract.functions.canReceive(checksum_address).call()
 
-    # Registry transactions
-
     @staticmethod
     def _resolve_wallet(checksum_address: str, wallet_uuid=None) -> Wallet:
-        """The wallet behind an address; a uuid picks between duplicates, otherwise the match must be unique."""
         wallets = Wallet.objects.filter_by_address(checksum_address).order_by("uuid")
         if wallet_uuid is not None:
             wallet = wallets.filter(uuid=wallet_uuid).first()
@@ -91,7 +86,6 @@ class WhitelistService:
 
     @classmethod
     def _resolve_entry(cls, checksum_address: str, wallet_uuid=None) -> WhitelistEntry:
-        """The entry behind an address: the operator's treasury entry when one exists, else the wallet's."""
         if wallet_uuid is None:
             treasury = WhitelistEntry.objects.filter(wallet__isnull=True, address__iexact=checksum_address).first()
             if treasury is not None:
@@ -101,7 +95,6 @@ class WhitelistService:
         return entry
 
     def _send_tx(self, tx_type, function_name, checksum_address, entry, wait_for_receipt):
-        """Record, send and settle one registry call; a chain error marks the record and the entry failed."""
         tx_record = BlockchainTransaction.objects.create(
             tx_type=tx_type,
             status=TransactionStatus.PENDING,
@@ -170,8 +163,6 @@ class WhitelistService:
         if receipt and entry:
             entry.mark_removed(tx_hash)
         return tx_hash, entry
-
-    # Database sync
 
     def sync_entry(self, address: str, wallet_uuid=None) -> WhitelistEntry:
         checksum_address = self.chain_client.to_checksum_address(address)

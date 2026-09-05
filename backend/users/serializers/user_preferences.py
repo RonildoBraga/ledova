@@ -51,7 +51,6 @@ class UserPreferencesSerializer(serializers.ModelSerializer):
         return fields
 
     def validate(self, data):
-        """get_fields already limits both querysets to the user's own rows, so only the cross-field rule is left."""
         selected_account = data.get("selected_account")
         selected_portfolio = data.get("selected_portfolio")
 

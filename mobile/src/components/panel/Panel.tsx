@@ -6,23 +6,13 @@ import { useAppTheme, useThemedStyles } from '../../contexts';
 interface PanelProps {
   title?: string | React.ReactNode;
   icon?: React.ReactNode;
-  /**
-   * Optional actions to display on the right side of the header
-   */
+
   actions?: React.ReactNode;
-  /**
-   * Optional style to apply to the panel container
-   */
+
   style?: StyleProp<ViewStyle>;
-  /**
-   * When true, applies full height to ensure the panel fills available space
-   */
+
   fullHeight?: boolean;
-  /**
-   * Content to display in the panel.
-   * NOTE: Do NOT add padding to children - Panel handles all padding automatically
-   * to ensure consistent alignment across all sections.
-   */
+
   children: React.ReactNode;
 }
 
@@ -67,11 +57,11 @@ export function Panel({ title, icon, actions, style, fullHeight = false, childre
     contentWithoutTitle: {
       flex: 1,
       paddingHorizontal: theme.spacing.sm,
-      paddingTop: theme.spacing.md, // Add header height (paddingVertical from header)
+      paddingTop: theme.spacing.md,
       paddingBottom: theme.spacing.md,
     },
   }));
-  // Clone the icon with default props if it's a React element
+
   const styledIcon =
     icon && React.isValidElement(icon)
       ? React.cloneElement(icon as React.ReactElement<any>, {
@@ -81,7 +71,6 @@ export function Panel({ title, icon, actions, style, fullHeight = false, childre
         })
       : icon;
 
-  // When there's no title, add the header height to content padding to maintain consistent panel size
   const contentStyle = title ? styles.content : styles.contentWithoutTitle;
 
   return (

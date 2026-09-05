@@ -1,5 +1,3 @@
-"""The share-token transitions and response keys the dashboard drives for the owner's own token."""
-
 from unittest.mock import patch
 
 from django.test import override_settings
@@ -159,7 +157,6 @@ class ShareTokenActionTest(APITestCase):
 
     @patch("tokens.views.share_token.ShareTokenService")
     def test_issue_rejects_a_bad_amount_with_a_field_error(self, service_class):
-        """Mobile can post a null amount (NaN parseInt); it must be a 400, never a 500."""
         token = self.tenant.deployed_token
 
         for amount in (None, "seven", 0):
@@ -183,7 +180,6 @@ class ShareTokenActionTest(APITestCase):
 
     @patch("tokens.views.share_token.ShareTokenService")
     def test_detail_actions_keep_filter_params_off_the_token_lookup(self, service_class):
-        """?status= narrows the issuances of the named token; ShareTokenFilter only applies to the list."""
         token = self.tenant.deployed_token
         completed = ShareIssuance.objects.create(
             token=token, recipient_address=RECIPIENT, amount="5", status=IssuanceStatus.COMPLETED

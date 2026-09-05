@@ -66,7 +66,6 @@ function buildTransferableAssets(wallet: Wallet, holdings: WalletHolding[]): Tra
     });
   }
 
-  // ERC-20 holdings exist on both EVM chains the backend serves (Ethereum and Base).
   if (isEthereumChain(chainShortCode) || chain === BLOCKCHAIN.BASE) {
     for (const holding of holdings) {
       const balance = parseFloat(holding.quantity) || 0;

@@ -9,8 +9,7 @@ const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
   headers: { 'Content-Type': 'application/json' },
   withCredentials: true,
-  // Cookie-authenticated POST/PUT/PATCH/DELETE must echo the readable `csrftoken` cookie as
-  // X-CSRFToken. withXSRFToken is required because the API origin differs from the dashboard's.
+
   xsrfCookieName: 'csrftoken',
   xsrfHeaderName: 'X-CSRFToken',
   withXSRFToken: true,
@@ -24,9 +23,6 @@ const isCsrfFailure = (error: AxiosError) => {
 apiClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
-    // A missing or stale csrftoken cookie: GET auth/verify reissues it, then replay once.
-    // config.data is already the serialized body from the first pass; axios passes JSON strings
-    // and FormData through transformRequest untouched, so the config replays as-is.
     const config = error.config as RetriableRequestConfig | undefined;
     if (config && !config.csrfRetried && isCsrfFailure(error)) {
       config.csrfRetried = true;

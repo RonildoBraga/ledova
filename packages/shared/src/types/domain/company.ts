@@ -80,7 +80,7 @@ export interface Company extends BaseEntity {
   activatedAt: string | null;
   infoRequestedAt: string | null;
   infoRequestReason: string;
-  /** The owner's answer to the last information request; cleared with the reason on approval. */
+
   additionalInfoResponse: string;
   rejectionAt: string | null;
   rejectionReason: string;

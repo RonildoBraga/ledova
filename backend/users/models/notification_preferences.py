@@ -39,7 +39,7 @@ class NotificationPreferences(BaseModel):
             "transaction": self.transaction_alerts,
             "price": self.price_alerts,
             "marketing": self.marketing,
-            "general": True,  # General notifications always allowed
+            "general": True,
         }
 
         return type_mapping.get(notification_type, True)

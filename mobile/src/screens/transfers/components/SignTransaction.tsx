@@ -80,7 +80,6 @@ export function SignTransaction({ urEncodedTransaction }: SignTransactionProps) 
       contentContainerStyle={styles.scrollContentContainer}
       showsVerticalScrollIndicator={false}
     >
-      {/* QR Code */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Scan with your Wallet</Text>
         <View style={styles.qrContainer}>
@@ -95,14 +94,12 @@ export function SignTransaction({ urEncodedTransaction }: SignTransactionProps) 
         </View>
       </View>
 
-      {/* Divider */}
       <View style={styles.dividerContainer}>
         <View style={styles.dividerLine} />
         <Text style={styles.dividerText}>then scan signature</Text>
         <View style={styles.dividerLine} />
       </View>
 
-      {/* Instructions */}
       <View style={styles.instructionsContainer}>
         <Text style={styles.instructionsText}>
           After signing the transaction on your hardware wallet, scan the signature QR code using the button below.

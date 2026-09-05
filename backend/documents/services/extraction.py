@@ -4,7 +4,7 @@ import io
 import logging
 from typing import Type
 
-import fitz  # PyMuPDF
+import fitz
 from django.utils import timezone
 from PIL import Image
 from pydantic import BaseModel
@@ -25,14 +25,13 @@ class ExtractionService:
 
     @staticmethod
     def render_first_page(document: Document) -> bytes:
-        """One PNG of the first page: the vision model takes images, not PDF bytes."""
         with document.file.open("rb") as fh:
             raw = fh.read()
 
         if document.mime_type == "application/pdf" or document.original_filename.lower().endswith(".pdf"):
             doc = fitz.open(stream=raw, filetype="pdf")
             try:
-                pix = doc[0].get_pixmap(matrix=fitz.Matrix(2, 2))  # 2x zoom is roughly 144 dpi
+                pix = doc[0].get_pixmap(matrix=fitz.Matrix(2, 2))
                 return pix.tobytes("png")
             finally:
                 doc.close()
@@ -51,7 +50,6 @@ class ExtractionService:
 
     @classmethod
     def run(cls, document: Document) -> DocumentExtraction:
-        """Always returns a saved row, FAILED with `error` set when anything goes wrong, so the API can show it."""
         extraction = DocumentExtraction.objects.create(
             document=document,
             status=ExtractionStatus.RUNNING,

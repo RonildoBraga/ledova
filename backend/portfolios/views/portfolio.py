@@ -30,8 +30,7 @@ class PortfolioViewSet(AuthenticatedModelViewSet):
     def perform_create(self, serializer):
         user_account = serializer.validated_data.get("user_account")
         if user_account is None:
-            # Default to the caller's selected account, then to their only
-            # account; never guess between several with .first().
+
             accounts = UserAccount.objects.visible_to_user(self.request.user)
             preferences = getattr(self.request.user.userprofile, "preferences", None)
             selected_id = getattr(preferences, "selected_account_id", None)

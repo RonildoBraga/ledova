@@ -7,14 +7,11 @@ import snsWebSdk from '@sumsub/websdk';
 export function useIdentityVerification() {
   const queryClient = useQueryClient();
 
-  // Local state
   const [sdkError, setSdkError] = useState<string | null>(null);
   const [justSubmitted, setJustSubmitted] = useState(false);
   const [isLaunching, setIsLaunching] = useState(false);
   const [formUrl, setFormUrl] = useState<string | null>(null);
   const [sdkActive, setSdkActive] = useState(false);
-
-  // --- Queries & mutations ---
 
   const statusQuery = useQuery({
     queryKey: ['identity-verification', 'status'],
@@ -27,7 +24,7 @@ export function useIdentityVerification() {
     retry: 1,
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
-    // Poll every 5s after submission until verified or rejected
+
     refetchInterval: (query) => {
       if (!justSubmitted) return false;
       const data = query.state.data;
@@ -48,8 +45,6 @@ export function useIdentityVerification() {
     },
   });
 
-  // --- Derived status flags ---
-
   const status = statusQuery.data;
   const isVerified = status?.isVerified ?? false;
   const needsRetry = status?.needsRetry ?? false;
@@ -59,7 +54,6 @@ export function useIdentityVerification() {
   const isRejected = !!status && status.reviewAnswer === 'RED' && !status.isVerified && !status.needsRetry;
   const hasSubmitted = !!status && ['pending', 'queued', 'onHold'].includes(status.status ?? '') && !status.isVerified;
 
-  // When polling resolves the status, stop polling and refresh profile
   useEffect(() => {
     if (justSubmitted && (isVerified || isRejected)) {
       setJustSubmitted(false);
@@ -67,7 +61,6 @@ export function useIdentityVerification() {
     }
   }, [justSubmitted, isVerified, isRejected, queryClient]);
 
-  // Listen for KYCAID iframe postMessage completion events
   useEffect(() => {
     if (!formUrl) return;
     const handler = (event: MessageEvent) => {
@@ -76,15 +69,11 @@ export function useIdentityVerification() {
         if (data?.event === 'FORM_COMPLETED') {
           handleFormComplete();
         }
-      } catch {
-        // Ignore non-JSON messages
-      }
+      } catch {}
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
   }, [formUrl]);
-
-  // --- Display flags ---
 
   const showPendingBanner = (justSubmitted || hasSubmitted) && !isVerified && !isRejected;
   const showOnHoldBanner = isOnHold && !justSubmitted;
@@ -93,8 +82,6 @@ export function useIdentityVerification() {
   const showForm = !isVerified && !showPendingBanner && !showRetryBanner;
   const showContinue = isVerified || hasSubmitted || justSubmitted;
   const showSkip = !isVerified && !hasSubmitted && !justSubmitted;
-
-  // --- SDK launch ---
 
   const launchVerification = useCallback(
     async (containerId: string) => {
@@ -105,7 +92,6 @@ export function useIdentityVerification() {
         const tokenData = await tokenMutation.mutateAsync();
 
         if (tokenData?.formUrl) {
-          // KYCAID: open hosted form in iframe
           setFormUrl(tokenData.formUrl);
           setIsLaunching(false);
           return;
@@ -115,7 +101,6 @@ export function useIdentityVerification() {
           throw new Error('Failed to generate verification token');
         }
 
-        // Sumsub: launch WebSDK widget
         const snsWebSdkInstance = snsWebSdk
           .init(tokenData.accessToken, () => {
             return tokenMutation.mutateAsync().then((newTokenData) => {
@@ -149,14 +134,10 @@ export function useIdentityVerification() {
     [tokenMutation],
   );
 
-  // --- KYCAID form completion ---
-
   const handleFormComplete = useCallback(() => {
     setFormUrl(null);
     setJustSubmitted(true);
   }, []);
-
-  // --- Reset (for modal open/close) ---
 
   const resetState = useCallback(() => {
     setSdkError(null);
@@ -166,12 +147,10 @@ export function useIdentityVerification() {
   }, []);
 
   return {
-    // Status
     status,
     isLoadingStatus: statusQuery.isLoading,
     refetchStatus: statusQuery.refetch,
 
-    // Display flags
     showPendingBanner,
     showOnHoldBanner,
     showRejectedBanner,
@@ -180,24 +159,19 @@ export function useIdentityVerification() {
     showContinue,
     showSkip,
 
-    // Flags
     isVerified,
     hasApplicant,
     sdkActive,
 
-    // Actions
     launchVerification,
 
-    // KYCAID form
     formUrl,
 
-    // State
     justSubmitted,
     sdkError,
     isLaunching,
     tokenError: tokenMutation.error,
 
-    // Reset
     resetState,
   };
 }

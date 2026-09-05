@@ -1,13 +1,3 @@
-"""Drop leftover django-celery-beat and django-celery-results tables.
-
-Celery was replaced by procrastinate. Removing the apps from INSTALLED_APPS
-does not drop their tables, so pre-migration databases (including the AWS→GCP
-Postgres import) still carry dead rows. This migration finishes the cleanup.
-
-Idempotent: uses IF EXISTS so it's safe to run on any database, including
-fresh ones where these tables were never created.
-"""
-
 from django.db import migrations
 
 CELERY_TABLES = [

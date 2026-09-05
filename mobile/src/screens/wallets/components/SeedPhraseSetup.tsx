@@ -65,7 +65,6 @@ export function SeedPhraseSetup({ visible, onClose, onComplete, onCancel }: Seed
 
   const [storeError, setStoreError] = useState<string | null>(null);
 
-  // Clear sensitive state when modal is hidden
   useEffect(() => {
     if (!visible) {
       setMnemonic('');

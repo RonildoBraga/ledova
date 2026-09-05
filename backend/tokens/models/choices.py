@@ -30,7 +30,6 @@ class IssuanceType(models.TextChoices):
 
 
 class RequestStatus(models.TextChoices):
-    """Review workflow shared by CapitalIncreaseRequest and ShareIssuanceRequest."""
 
     DRAFT = "draft", "Draft"
     SUBMITTED = "submitted", "Submitted"

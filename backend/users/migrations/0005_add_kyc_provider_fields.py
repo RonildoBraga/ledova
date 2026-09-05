@@ -1,5 +1,3 @@
-"""Add provider-agnostic KYC fields and KYCAID fields to UserProfile."""
-
 from django.db import migrations, models
 
 
@@ -10,7 +8,6 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        # Provider-agnostic fields
         migrations.AddField(
             model_name="userprofile",
             name="kyc_provider",
@@ -61,7 +58,6 @@ class Migration(migrations.Migration):
             name="verified_at",
             field=models.DateTimeField(blank=True, null=True),
         ),
-        # KYCAID-specific fields
         migrations.AddField(
             model_name="userprofile",
             name="kycaid_applicant_id",

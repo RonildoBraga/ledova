@@ -1,14 +1,3 @@
-/**
- * Reusable upload + extraction-status panel.
- *
- * Drop on /user-profile (current home) or on a future /documents page
- * unchanged — it owns its own data fetching and queueing.
- *
- * Designed for payslips. Extending to bank statements / tax returns
- * is mostly adding more types to DOCUMENT_TYPE_LABELS and giving the
- * result card a per-type field renderer.
- */
-
 import { useRef, useState } from 'react';
 import {
   CloudArrowUpIcon,
@@ -37,10 +26,6 @@ const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
 
 const MAX_FILE_MB = 10;
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -58,10 +43,6 @@ function formatDate(iso: string | null): string {
   if (!iso) return '—';
   return new Date(iso).toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
 }
-
-// ---------------------------------------------------------------------------
-// Status pill
-// ---------------------------------------------------------------------------
 
 function StatusPill({ status }: { status: ExtractionStatus | undefined }) {
   if (!status || status === 'pending') {
@@ -91,10 +72,6 @@ function StatusPill({ status }: { status: ExtractionStatus | undefined }) {
     </span>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Payslip result fields
-// ---------------------------------------------------------------------------
 
 function PayslipResult({ data, durationMs }: { data: PayslipExtraction; durationMs: number | null }) {
   const fields: { label: string; value: string }[] = [
@@ -136,12 +113,7 @@ function PayslipResult({ data, durationMs }: { data: PayslipExtraction; duration
   );
 }
 
-// ---------------------------------------------------------------------------
-// Single document card (live-polled if still running)
-// ---------------------------------------------------------------------------
-
 function DocumentCard({ initialDoc }: { initialDoc: Document }) {
-  // Polls every 3s while pending/running, stops once succeeded/failed.
   const liveQuery = useDocument(initialDoc.uuid);
   const doc = liveQuery.data ?? initialDoc;
   const extraction = doc.latestExtraction;
@@ -185,10 +157,6 @@ function DocumentCard({ initialDoc }: { initialDoc: Document }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Upload card (drag-and-drop + click)
-// ---------------------------------------------------------------------------
-
 function UploadCard() {
   const [file, setFile] = useState<File | null>(null);
   const [documentType, setDocumentType] = useState<DocumentType>('payslip');
@@ -203,7 +171,7 @@ function UploadCard() {
       return;
     }
     await upload.mutateAsync({ file, documentType, note });
-    // Reset for the next upload.
+
     setFile(null);
     setNote('');
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -286,10 +254,6 @@ function UploadCard() {
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Main panel
-// ---------------------------------------------------------------------------
 
 export function DocumentsPanel() {
   const docs = useDocuments();

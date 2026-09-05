@@ -27,5 +27,5 @@ class DocumentExtractionAdmin(admin.ModelAdmin):
     ordering = ("-created_at",)
 
     def has_add_permission(self, request) -> bool:
-        # Extractions are produced by the worker, not by humans.
+
         return False

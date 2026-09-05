@@ -1,5 +1,3 @@
-"""Shared by StablecoinAdmin and YieldTokenAdmin: the mint page and button, backed by mint_service."""
-
 import logging
 
 from django.contrib import admin, messages
@@ -16,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class MintableTokenAdmin(admin.ModelAdmin):
-    mint_request_field = ""  # the MintRequest foreign key pointing at this token model
+    mint_request_field = ""
     search_fields = ["name", "symbol", "contract_address"]
     ordering = ["symbol"]
     contract_address_short = hex_column("contract_address", "Contract", tail=8)

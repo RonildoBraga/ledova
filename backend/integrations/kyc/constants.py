@@ -14,7 +14,7 @@ STATUS_QUEUED = "queued"
 STATUS_COMPLETED = "completed"
 STATUS_ON_HOLD = "onHold"
 STATUS_PRECHECKED = "prechecked"
-STATUS_UNUSED = "unused"  # KYCAID: applicant data without a triggered verification
+STATUS_UNUSED = "unused"
 
 VERIFICATION_STATUS_CHOICES = [
     (STATUS_INIT, "Initialized"),

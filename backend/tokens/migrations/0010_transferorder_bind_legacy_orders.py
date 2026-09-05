@@ -5,11 +5,6 @@ EVM_CHAINS = ("ethereum", "base")
 
 
 def bind_or_delete_unbound_orders(apps, schema_editor):
-    """Legacy pre-0009 orders: bind to the single verified EVM wallet at their address, else delete.
-
-    Kept separate from the schema change in 0011: the cascaded deletes leave deferred
-    FK triggers pending, and PostgreSQL refuses ALTER TABLE in the same transaction.
-    """
     TransferOrder = apps.get_model("tokens", "TransferOrder")
     Wallet = apps.get_model("wallets", "Wallet")
 

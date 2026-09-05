@@ -13,7 +13,6 @@ export function MobileHeader() {
   const { title: pageTitle } = usePageTitle();
   const location = useLocation();
 
-  // Close drawer on route change
   useEffect(() => {
     setIsOpen(false);
   }, [location.pathname]);
@@ -22,7 +21,6 @@ export function MobileHeader() {
 
   return (
     <>
-      {/* Top bar */}
       <div className="bg-surface-base/95 backdrop-blur-md">
         <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="relative">
@@ -46,7 +44,6 @@ export function MobileHeader() {
         </div>
       </div>
 
-      {/* Backdrop */}
       <div
         className={`fixed inset-0 z-50 bg-black/40 backdrop-blur-sm transition-opacity duration-300 ${
           isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
@@ -55,13 +52,11 @@ export function MobileHeader() {
         aria-hidden="true"
       />
 
-      {/* Slide-out drawer */}
       <div
         className={`fixed inset-y-0 left-0 z-50 w-60 transform transition-transform duration-300 ease-out ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        {/* Close button overlaid on top-right of drawer */}
         <button
           onClick={handleClose}
           className="absolute top-4 right-3 z-10 inline-flex items-center justify-center w-8 h-8 rounded-full text-text-muted hover:text-text-primary hover:bg-surface-raised/50 transition-all duration-200"

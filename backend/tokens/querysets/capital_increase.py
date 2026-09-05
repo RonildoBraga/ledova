@@ -25,7 +25,6 @@ class CapitalIncreaseRequestQuerySet(QuerySet):
         return self.filter(token__company__in=user_companies)
 
     def pending(self):
-        """Requests still needing staff action: submitted, under review, or approved but not yet executed."""
         return self.filter(status__in=[RequestStatus.SUBMITTED, RequestStatus.UNDER_REVIEW, RequestStatus.APPROVED])
 
     def with_relations(self):

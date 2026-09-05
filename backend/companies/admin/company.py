@@ -25,8 +25,7 @@ STATUS_COLORS = {
     CompanyStatus.WITHDRAWN: "#adb5bd",
 }
 
-# URL slug -> the Company transition it drives. Entries with a `label` ask for a reason on a form page first;
-# `actor` names the kwarg that receives the acting staff user; `level` is the message level on success.
+
 TRANSITIONS = {
     "start-review": dict(method="start_review", done="Review started for '{name}'."),
     "approve": dict(method="approve", actor="approved_by", done="Company '{name}' has been approved."),

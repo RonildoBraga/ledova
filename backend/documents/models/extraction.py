@@ -11,7 +11,6 @@ class ExtractionStatus(models.TextChoices):
 
 
 class DocumentExtraction(BaseModel):
-    """One LLM run over a Document; a document keeps every run and clients read the newest."""
 
     document = models.ForeignKey(
         "documents.Document",

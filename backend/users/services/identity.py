@@ -159,7 +159,6 @@ class IdentityVerificationService:
             user_profile.is_id_verified = False
             user_profile.verified_at = None
 
-        # One block: a job that cannot be deferred rolls the saved result back with it.
         with transaction.atomic():
             user_profile.save()
 
@@ -168,7 +167,7 @@ class IdentityVerificationService:
 
             message = REVIEW_OUTCOME_MESSAGES.get(normalized.review_result)
             if message and normalized.review_result != previous_result:
-                # Imported here: the task module imports this package.
+
                 from users.tasks.notifications import send_push_notification
 
                 title, body = message
@@ -215,8 +214,7 @@ class IdentityVerificationService:
         from compliance.services.risk_assessment import RiskAssessmentService
 
         try:
-            # Savepoint inside the caller's block: a failed assessment rolls back only itself,
-            # the verified result and the outcome notification still commit.
+
             with transaction.atomic():
                 RiskAssessmentService.calculate_and_create(user_account=user_account, pep_data=pep_data)
             logger.info(f"Triggered risk assessment for account {user_account.uuid}")

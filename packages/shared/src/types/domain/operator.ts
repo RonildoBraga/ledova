@@ -9,7 +9,6 @@ export interface OperatorSettlementAsset {
   chainDeployments: AssetChainDeployment[];
 }
 
-/** Only the payment rails the operator has filled in are present. */
 export interface OperatorPaymentInstructions {
   bankAccountName?: string;
   bankBsb?: string;
@@ -19,7 +18,6 @@ export interface OperatorPaymentInstructions {
   receivingWalletChain?: string;
 }
 
-/** GET /api/operator/: the public profile of whoever hosts this deployment. */
 export interface Operator {
   name: string;
   legalName: string;

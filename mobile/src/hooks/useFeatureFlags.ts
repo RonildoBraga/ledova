@@ -19,7 +19,7 @@ function isVersionAtLeast(current: string, minimum: string): boolean {
 }
 
 function filterFlagForPlatform(flag: FeatureFlag): boolean {
-  const platform = Platform.OS; // 'ios' | 'android'
+  const platform = Platform.OS;
 
   switch (flag.platform) {
     case 'all':

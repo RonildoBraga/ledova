@@ -1,32 +1,12 @@
-/**
- * Types for the backend `documents` app (POST/GET /api/v1/documents/).
- *
- * Mirror of:
- *   backend/documents/serializers/document.py
- *   backend/documents/schemas/payslip.py
- *
- * Kept local to the dashboard for the PoC. Lift into
- * @ledova/shared when mobile needs it too.
- */
-
 export type DocumentType = 'payslip' | 'bank_statement' | 'tax_return' | 'other';
 
 export type ExtractionStatus = 'pending' | 'running' | 'succeeded' | 'failed';
 
-/**
- * The shape Qwen2.5-VL-7B returns for a payslip, validated by the
- * backend pydantic schema. Decimals come over the wire as strings —
- * we keep them as strings until they reach a formatter.
- *
- * Keys are camelCase because DRF's camelcase renderer converts even
- * JSONField values on output. The backend stores them snake_case but
- * the wire format is what we type to.
- */
 export interface PayslipExtraction {
   employeeName: string | null;
   employerName: string | null;
   abn: string | null;
-  periodStart: string | null; // YYYY-MM-DD
+  periodStart: string | null;
   periodEnd: string | null;
   payDate: string | null;
   grossPay: string | null;

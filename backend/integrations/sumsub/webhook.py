@@ -1,10 +1,3 @@
-"""
-SumSub Webhook Handler
-
-Receives verification status updates from SumSub.
-Documentation: https://docs.sumsub.com/reference/webhooks
-"""
-
 import logging
 
 from django.core.exceptions import ValidationError
@@ -35,8 +28,7 @@ logger = logging.getLogger(__name__)
 class SumSubWebhookView(APIView):
     authentication_classes = []
     permission_classes = []
-    # SumSub sends camelCase keys (applicantId, externalUserId, reviewResult, reviewStatus); the
-    # project-wide CamelCase parser would underscore them, so this view reads the payload verbatim.
+
     parser_classes = [JSONParser]
 
     def post(self, request):

@@ -5,7 +5,6 @@ import { useAppTheme, useThemedStyles } from '../../contexts';
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 type ButtonSize = 'small' | 'medium' | 'large';
 
-// Button-specific tokens (component-level, not design tokens)
 const BUTTON_SIZES = {
   small: { height: 40, paddingHorizontal: 16, fontSize: 14, iconSize: 16, gap: 6 },
   medium: { height: 48, paddingHorizontal: 24, fontSize: 16, iconSize: 20, gap: 8 },
@@ -46,27 +45,26 @@ function getButtonVariants(theme: ReturnType<typeof useAppTheme>) {
 }
 
 interface ButtonProps {
-  /** Visual style variant of the button */
   variant?: ButtonVariant;
-  /** Size of the button (affects height, padding, font size) */
+
   size?: ButtonSize;
-  /** Whether the button is disabled */
+
   disabled?: boolean;
-  /** Whether the button is in a loading state (shows spinner) */
+
   loading?: boolean;
-  /** Optional icon to display in the button */
+
   icon?: React.ReactNode;
-  /** Position of the icon relative to text */
+
   iconPosition?: 'left' | 'right';
-  /** Button press handler */
+
   onPress: () => void;
-  /** Button text content */
+
   children: React.ReactNode;
-  /** Whether the button should take full width of container */
+
   fullWidth?: boolean;
-  /** Optional custom style override */
+
   style?: ViewStyle;
-  /** Optional custom text style override */
+
   textStyle?: TextStyle;
 }
 

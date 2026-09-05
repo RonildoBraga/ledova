@@ -136,7 +136,6 @@ export function SettingsPage() {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
 
-  // Currency preference
   const preferencesQuery = useQuery({
     queryKey: ['userPreferences'],
     queryFn: () => getCurrentUserPreferences(apiClient),

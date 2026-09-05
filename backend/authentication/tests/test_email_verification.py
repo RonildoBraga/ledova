@@ -40,7 +40,6 @@ class EmailVerificationTest(APITestCase):
 
     @staticmethod
     def issue_code(user, code="654321", sent_at=None):
-        """Store a code the way EmailCodeService.send does, without sending mail."""
         user.email_verification_token = _digest(user, code)
         user.email_verification_sent_at = sent_at or timezone.now()
         user.email_verification_attempts = 0

@@ -1,5 +1,3 @@
-"""Application-level portfolio isolation through live account membership."""
-
 from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
 

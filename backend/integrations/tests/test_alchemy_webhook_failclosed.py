@@ -1,5 +1,3 @@
-"""The Alchemy webhook must reject every call when its signing key is unset."""
-
 import hashlib
 import hmac
 

@@ -1,5 +1,3 @@
-"""Every company application event reaches the owner once: one Notification row, one deferred push job."""
-
 from types import SimpleNamespace
 from unittest import skipUnless
 from unittest.mock import patch
@@ -29,7 +27,7 @@ TEST_STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
 }
-# (transition, status it runs from, kwargs, expected title, expected body)
+
 MATRIX = [
     ("submit", CompanyStatus.DRAFT, {}, "Application submitted", "Acme Pty Ltd was submitted for review."),
     ("start_review", CompanyStatus.SUBMITTED, {}, "Review started", "The review of Acme Pty Ltd has started."),
@@ -91,7 +89,7 @@ class ApplicationNotificationProducerTest(TestCase):
         self.bystander = User.objects.create_user(email="bystander@example.test", password="pw-12345678")
         self.company = Company.objects.create(owner=self.owner, name="Acme Pty Ltd", acn="123456789")
         self.task = patch(TASK).start()
-        self.task.defer.side_effect = run_task  # run the deferred job inline so the row it writes is visible
+        self.task.defer.side_effect = run_task
         self.addCleanup(patch.stopall)
 
     def _set_status(self, status):
@@ -157,7 +155,6 @@ class ApplicationNotificationProducerTest(TestCase):
 
 @override_settings(STORAGES=TEST_STORAGES)
 class ApplicationNotificationEntryPointsTest(APITestCase):
-    """The admin button, the bulk action and the staff status route each announce a transition exactly once."""
 
     def setUp(self):
         self.owner = User.objects.create_user(email="owner@example.test", password="pw-12345678")
@@ -226,7 +223,6 @@ class ApplicationNotificationEntryPointsTest(APITestCase):
 
 @skipUnless(connection.vendor == "postgresql", "procrastinate job rows live in PostgreSQL only")
 class ApplicationNotificationJobRowTest(TestCase):
-    """The real defer: one procrastinate_jobs row per event, none when the block fails after the defer."""
 
     def setUp(self):
         self.owner = User.objects.create_user(email="owner@example.test", password="pw-12345678")
@@ -245,7 +241,6 @@ class ApplicationNotificationJobRowTest(TestCase):
         self.assertEqual((row.args["user_id"], row.args["title"]), (str(self.owner.pk), "Application approved"))
 
     def test_a_failure_after_the_defer_rolls_the_job_row_back_with_the_status(self):
-        """The defer writes through the request connection, so an enclosing block that fails takes the row with it."""
         with self.assertRaises(RuntimeError):
             with transaction.atomic():
                 transition_company(self.company, "approve", approved_by=self.owner)

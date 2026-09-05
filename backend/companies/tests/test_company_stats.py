@@ -46,10 +46,10 @@ class CompanyStatsTest(APITestCase):
     def test_stats_keys_and_counts_read_by_the_clients(self):
         holder_a, holder_b = "0x" + "1" * 40, "0x" + "2" * 40
         self._issuance(self.deployed, holder_a)
-        self._issuance(self.deployed, holder_a)  # same holder twice counts once
+        self._issuance(self.deployed, holder_a)
         self._issuance(self.deployed, holder_b)
-        self._issuance(self.deployed, "0x" + "3" * 40, status=IssuanceStatus.PENDING)  # not completed
-        self._issuance(self.draft, "0x" + "4" * 40)  # token not deployed
+        self._issuance(self.deployed, "0x" + "3" * 40, status=IssuanceStatus.PENDING)
+        self._issuance(self.draft, "0x" + "4" * 40)
         for status in RequestStatus:
             self._capital_increase(status)
         self.client.force_authenticate(self.owner)

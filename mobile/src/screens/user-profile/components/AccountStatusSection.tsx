@@ -28,9 +28,7 @@ export function AccountStatusSection({ userProfile, isLoading, isError, onRefres
       borderBottomWidth: 1,
       borderBottomColor: theme.colors.border.subtle,
     },
-    clickableRow: {
-      // Same styling as infoRow - no special border or background
-    },
+    clickableRow: {},
     label: {
       fontSize: theme.fontSize.sm,
       color: theme.colors.text.muted,
