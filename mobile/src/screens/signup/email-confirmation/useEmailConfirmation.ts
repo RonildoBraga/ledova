@@ -82,7 +82,7 @@ export const useEmailConfirmation = () => {
     setGeneralError('');
 
     try {
-      await resendVerificationCode(apiClient);
+      await resendVerificationCode(apiClient, { email });
       setSuccessMessage('Verification code sent! Please check your email.');
       setVerificationCode('');
     } catch {

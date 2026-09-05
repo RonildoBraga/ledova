@@ -137,6 +137,7 @@ export function HomeScreen() {
           <WalletsCard
             btcWalletsCount={wallets.btcWalletsCount}
             ethWalletsCount={wallets.ethWalletsCount}
+            baseWalletsCount={wallets.baseWalletsCount}
             totals={wallets.totals}
             isLoading={wallets.isLoading}
           />

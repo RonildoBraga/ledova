@@ -99,7 +99,7 @@ export function useBroadcastTransaction() {
   return useMutation({
     mutationFn: async (signedTx: string) => {
       const response = await apiClient.post<BroadcastResponse>(TRADING_ENDPOINTS.TRANSFERS.BROADCAST, {
-        signed_tx: signedTx,
+        signedTransaction: signedTx,
       });
       return response.data;
     },

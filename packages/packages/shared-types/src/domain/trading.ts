@@ -266,18 +266,10 @@ export interface OrderModificationChange {
   new: string;
 }
 
-export interface OrderModificationMatchDetails {
-  matchedOrderUuid: string;
-  matchedQuantity: number;
-  matchedPrice: string;
-}
-
 export interface OrderModificationResponse {
   order: TransferOrder;
   modificationCount: number;
   changes: OrderModificationChange[];
-  matchFound: boolean;
-  matchDetails?: OrderModificationMatchDetails | null;
 }
 
 // ============================================================================

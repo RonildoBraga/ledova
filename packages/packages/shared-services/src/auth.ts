@@ -4,6 +4,7 @@ import type {
   SigninRequest,
   SignupRequest,
   EmailVerificationRequest,
+  ResendVerificationRequest,
   TokenRefreshResult,
   TokenRefreshRequest,
   AuthVerificationResponse,
@@ -27,8 +28,8 @@ export const verifyEmail = (apiClient: AxiosInstance, data: EmailVerificationReq
   return apiClient.post(AUTH_ENDPOINTS.EMAIL_VERIFICATION, data);
 };
 
-export const resendVerificationCode = (apiClient: AxiosInstance) => {
-  return apiClient.post(AUTH_ENDPOINTS.RESEND_VERIFICATION);
+export const resendVerificationCode = (apiClient: AxiosInstance, data: ResendVerificationRequest) => {
+  return apiClient.post(AUTH_ENDPOINTS.RESEND_VERIFICATION, data);
 };
 
 export const refreshToken = (apiClient: AxiosInstance, data: TokenRefreshRequest) => {

@@ -12,11 +12,18 @@ const PIE_SIZE = 180;
 interface WalletAllocationCardProps {
   btcWalletsCount: number;
   ethWalletsCount: number;
+  baseWalletsCount: number;
   totals: WalletTotals;
   isLoading: boolean;
 }
 
-export function WalletsCard({ btcWalletsCount, ethWalletsCount, totals, isLoading }: WalletAllocationCardProps) {
+export function WalletsCard({
+  btcWalletsCount,
+  ethWalletsCount,
+  baseWalletsCount,
+  totals,
+  isLoading,
+}: WalletAllocationCardProps) {
   const theme = useAppTheme();
   const { formatDisplayCurrency } = useCurrency();
   const styles = useThemedStyles((theme) => ({
@@ -118,15 +125,19 @@ export function WalletsCard({ btcWalletsCount, ethWalletsCount, totals, isLoadin
     },
   }));
 
-  const totalWallets = btcWalletsCount + ethWalletsCount;
-  const totalMarketValue = totals.ethTotalMarketValue + totals.btcTotalMarketValue;
+  const totalWallets = btcWalletsCount + ethWalletsCount + baseWalletsCount;
+  const totalMarketValue = totals.ethTotalMarketValue + totals.btcTotalMarketValue + totals.baseTotalMarketValue;
   const hasEth = totals.ethTotalMarketValue > 0;
   const hasBtc = totals.btcTotalMarketValue > 0;
-  const ethPercentage = totalMarketValue > 0 ? (totals.ethTotalMarketValue / totalMarketValue) * 100 : 0;
-  const btcPercentage = totalMarketValue > 0 ? (totals.btcTotalMarketValue / totalMarketValue) * 100 : 0;
+  const hasBase = totals.baseTotalMarketValue > 0;
+  const percentageOf = (value: number) => (totalMarketValue > 0 ? (value / totalMarketValue) * 100 : 0);
+  const ethPercentage = percentageOf(totals.ethTotalMarketValue);
+  const btcPercentage = percentageOf(totals.btcTotalMarketValue);
+  const basePercentage = percentageOf(totals.baseTotalMarketValue);
 
   const ETH_COLOR = theme.colors.chain.ethereum;
   const BTC_COLOR = theme.colors.chain.bitcoin;
+  const BASE_COLOR = theme.colors.chain.base;
 
   if (isLoading) {
     return (
@@ -154,6 +165,7 @@ export function WalletsCard({ btcWalletsCount, ethWalletsCount, totals, isLoadin
   const chartData = [
     ...(hasEth ? [{ value: ethPercentage, color: ETH_COLOR }] : []),
     ...(hasBtc ? [{ value: btcPercentage, color: BTC_COLOR }] : []),
+    ...(hasBase ? [{ value: basePercentage, color: BASE_COLOR }] : []),
   ];
 
   return (
@@ -197,6 +209,17 @@ export function WalletsCard({ btcWalletsCount, ethWalletsCount, totals, isLoadin
                 <Text style={styles.cryptoBalance}>{formatCryptoBalance(totals.btc, '').trimEnd()}</Text>
                 <Text style={styles.marketValue}>{formatDisplayCurrency(totals.btcTotalMarketValue)}</Text>
                 <Text style={styles.percentageText}>{formatPercentage(btcPercentage, 1)}</Text>
+              </View>
+            </View>
+          )}
+          {hasBase && (
+            <View style={styles.legendRow}>
+              <View style={[styles.colorDot, { backgroundColor: BASE_COLOR }]} />
+              <Text style={styles.chainName}>Base</Text>
+              <View style={styles.rightGroup}>
+                <Text style={styles.cryptoBalance}>{formatCryptoBalance(totals.base, '').trimEnd()}</Text>
+                <Text style={styles.marketValue}>{formatDisplayCurrency(totals.baseTotalMarketValue)}</Text>
+                <Text style={styles.percentageText}>{formatPercentage(basePercentage, 1)}</Text>
               </View>
             </View>
           )}

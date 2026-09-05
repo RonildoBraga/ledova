@@ -55,6 +55,7 @@ export const useHome = () => {
 
   const btcWallets = useMemo(() => filterWalletsByChain(walletsList, BLOCKCHAIN.BITCOIN), [walletsList]);
   const ethWallets = useMemo(() => filterWalletsByChain(walletsList, BLOCKCHAIN.ETHEREUM), [walletsList]);
+  const baseWallets = useMemo(() => filterWalletsByChain(walletsList, BLOCKCHAIN.BASE), [walletsList]);
   const walletTotals = useMemo(() => calculateWalletTotals(walletsList), [walletsList]);
 
   const TRANSACTIONS_PAGE_SIZE = 5;
@@ -166,6 +167,7 @@ export const useHome = () => {
       list: walletsList,
       btcWalletsCount: btcWallets.length,
       ethWalletsCount: ethWallets.length,
+      baseWalletsCount: baseWallets.length,
       totals: walletTotals,
       isLoading: walletsQuery.isLoading,
     },

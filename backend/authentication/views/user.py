@@ -32,9 +32,8 @@ TRANSPORT_HEADER = "X-Auth-Transport"
 
 
 def bearer_transport(request):
-    """`X-Auth-Transport: bearer` (the mobile app) asks for the tokens in the body and no cookies.
-    Without the header the cookies are set and, until that client build ships the header, the body
-    still carries the same pair."""
+    """`X-Auth-Transport: bearer` (the mobile app) asks for the tokens in the body and no cookies;
+    without the header (the dashboard) the cookies carry the session and no body ever does."""
     return request.headers.get(TRANSPORT_HEADER, "").strip().lower() == "bearer"
 
 
@@ -65,12 +64,14 @@ class TokenCookieMixin:
         return response
 
     def session_response(self, request, data, access_token, refresh_token):
-        """The body carries raw tokens (the mobile app reads `tokens[0]`), so it must never be cached.
-        On the cookie transport `get_token` makes CsrfViewMiddleware send a fresh `csrftoken` cookie
-        with the auth cookies."""
-        data["tokens"] = [{"access_token": access_token, "refresh_token": refresh_token}]
+        """A bearer body carries raw tokens (the mobile app reads `tokens[0]`), so it must never be
+        cached. On the cookie transport `get_token` makes CsrfViewMiddleware send a fresh `csrftoken`
+        cookie with the auth cookies."""
+        bearer = bearer_transport(request)
+        if bearer:
+            data["tokens"] = [{"access_token": access_token, "refresh_token": refresh_token}]
         response = Response(data, status=status.HTTP_200_OK, headers={"Cache-Control": "no-store"})
-        if bearer_transport(request):
+        if bearer:
             return response
         get_token(request)
         return self.set_token_cookies(response, access_token, refresh_token)
@@ -163,12 +164,16 @@ class AuthViewSet(TokenCookieMixin, ViewSet):
             resp = Response({"error": "Invalid refresh token."}, status=status.HTTP_401_UNAUTHORIZED)
             return resp if bearer else self.clear_token_cookies(resp)
 
+        if bearer:
+            return Response(
+                {"access": access_token, "refresh": refresh_token},
+                status=status.HTTP_200_OK,
+                headers={"Cache-Control": "no-store"},
+            )
         response = Response(
-            {"access": access_token, "refresh": refresh_token},
-            status=status.HTTP_200_OK,
-            headers={"Cache-Control": "no-store"},
+            {"message": "Session refreshed."}, status=status.HTTP_200_OK, headers={"Cache-Control": "no-store"}
         )
-        return response if bearer else self.set_token_cookies(response, access_token, refresh_token)
+        return self.set_token_cookies(response, access_token, refresh_token)
 
     @action(detail=False, methods=["post"], url_path="email-verification")
     def email_verification(self, request):

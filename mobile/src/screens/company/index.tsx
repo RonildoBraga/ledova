@@ -46,7 +46,7 @@ function getStatusColors(theme: ReturnType<typeof useAppTheme>): Record<CompanyS
 export function CompanyScreen() {
   const theme = useAppTheme();
   const styles = useStyles();
-  const { company, stats, isLoading, error, refetch, updateCompany, isUpdating } = useCompanyProfile();
+  const { company, companyUuid, stats, isLoading, error, refetch, updateCompany, isUpdating } = useCompanyProfile();
   const tokensHook = useCompanyTokensList();
   const shareholdersHook = useCompanyShareholders();
 
@@ -202,6 +202,7 @@ export function CompanyScreen() {
         <View style={styles.contentCard}>
           {activeTab === 'tokens' && (
             <TokensSection
+              companyUuid={companyUuid}
               tokens={tokensHook.tokens}
               totalCount={tokensHook.totalCount}
               page={tokensHook.page}

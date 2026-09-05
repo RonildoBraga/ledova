@@ -1,4 +1,4 @@
-import type { UserProfile } from '@ledova/shared-types';
+import type { ReviewAnswer, UserProfile, VerificationStatus as KycStatus } from '@ledova/shared-types';
 
 export type VerificationStatusType = 'verified' | 'pending' | 'rejected' | 'not_started' | 'not_verified' | 'unknown';
 
@@ -16,20 +16,32 @@ const STATUS_LABELS: Record<VerificationStatusType, string> = {
   unknown: 'Unknown',
 };
 
-export function getUserVerificationStatus(profile?: UserProfile | string | null): VerificationStatus {
-  // If the profile object has isIdVerified set, that's the definitive answer
-  if (typeof profile === 'object' && profile?.isIdVerified) {
-    return { type: 'verified', label: STATUS_LABELS.verified };
-  }
+const PENDING_STATUSES: ReadonlySet<string> = new Set(['pending', 'queued', 'prechecked', 'onHold']);
 
-  const status = typeof profile === 'string' ? profile : profile?.sumsubVerificationStatus;
-  if (!status) return { type: 'not_started', label: STATUS_LABELS.not_started };
-  const normalized = status.toLowerCase();
-  if (normalized === 'verified' || normalized === 'approved')
-    return { type: 'verified', label: STATUS_LABELS.verified };
-  if (normalized === 'pending' || normalized === 'in_progress')
-    return { type: 'pending', label: STATUS_LABELS.pending };
-  if (normalized === 'rejected' || normalized === 'failed') return { type: 'rejected', label: STATUS_LABELS.rejected };
-  if (normalized === 'not_verified') return { type: 'not_verified', label: STATUS_LABELS.not_verified };
-  return { type: 'unknown', label: STATUS_LABELS.unknown };
+const REVIEW_RESULT_TYPES: Record<NonNullable<ReviewAnswer>, VerificationStatusType> = {
+  GREEN: 'verified',
+  YELLOW: 'pending',
+  RED: 'rejected',
+};
+
+function statusOf(type: VerificationStatusType): VerificationStatus {
+  return { type, label: STATUS_LABELS[type] };
+}
+
+/**
+ * Maps the provider-agnostic `verificationStatus` / `reviewResult` pair the backend writes
+ * (`integrations/kyc/constants.py`) to the account-status badge. A bare string is read as the
+ * `verificationStatus` alone.
+ */
+export function getUserVerificationStatus(profile?: UserProfile | string | null): VerificationStatus {
+  if (typeof profile === 'object' && profile?.isIdVerified) return statusOf('verified');
+
+  const status: KycStatus | undefined =
+    typeof profile === 'string' ? (profile as KycStatus) : profile?.verificationStatus;
+  const reviewResult: ReviewAnswer = typeof profile === 'object' ? (profile?.reviewResult ?? null) : null;
+
+  if (!status || status === 'init') return statusOf('not_started');
+  if (PENDING_STATUSES.has(status)) return statusOf('pending');
+  if (status === 'completed') return statusOf(reviewResult ? REVIEW_RESULT_TYPES[reviewResult] : 'unknown');
+  return statusOf('unknown');
 }

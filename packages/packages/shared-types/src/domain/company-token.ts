@@ -25,6 +25,8 @@ export interface CompanyShareToken {
 }
 
 export interface TokenCreate {
+  /** Issuing company uuid; the backend defaults it when the caller manages exactly one company. */
+  company?: string;
   name: string;
   symbol: string;
   tokenType: TokenType;

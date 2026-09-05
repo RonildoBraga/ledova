@@ -25,7 +25,7 @@ from authentication.services.tokens import TokenService
 
 User = get_user_model()
 
-SESSION_KEYS = {"uuid", "email", "isEmailVerified", "tokens"}
+SESSION_KEYS = {"uuid", "email", "isEmailVerified"}
 
 
 @override_settings(DEBUG=False)
@@ -139,8 +139,7 @@ class EmailVerificationTest(APITestCase):
         payload = response.json()
         self.assertEqual(set(payload), SESSION_KEYS)
         self.assertTrue(payload["isEmailVerified"])
-        self.assertEqual(payload["tokens"][0]["accessToken"], response.cookies["access"].value)
-        self.assertEqual(payload["tokens"][0]["refreshToken"], response.cookies["refresh"].value)
+        self.assertNotIn(response.cookies["refresh"].value, response.content.decode())
         self.assertEqual(response["Cache-Control"], "no-store")
         user.refresh_from_db()
         self.assertTrue(user.is_email_verified)

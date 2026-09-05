@@ -6,7 +6,6 @@ export * from './identity-verification';
 export * from './investment';
 export * from './notifications';
 export * from './portfolio';
-export * from './reference-data';
 export * from './user';
 export * from './user-preferences';
 export * from './wallet';

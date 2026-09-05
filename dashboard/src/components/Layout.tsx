@@ -16,10 +16,7 @@ export default function Layout({ children }: LayoutProps) {
   const pageTitleCtx = usePageTitleProvider();
 
   const isPublicPage =
-    location.pathname === '/' ||
-    location.pathname === '/signin' ||
-    location.pathname.startsWith('/signup') ||
-    location.pathname === '/transparency';
+    location.pathname === '/' || location.pathname === '/signin' || location.pathname.startsWith('/signup');
 
   if (isPublicPage) {
     return (

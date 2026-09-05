@@ -1,5 +1,13 @@
 import type { AxiosInstance } from 'axios';
-import { changePassword, signin, signout, signup, verifyAuth, verifyEmail } from '../src/auth';
+import {
+  changePassword,
+  resendVerificationCode,
+  signin,
+  signout,
+  signup,
+  verifyAuth,
+  verifyEmail,
+} from '../src/auth';
 
 describe('auth services', () => {
   const post = jest.fn();
@@ -36,6 +44,12 @@ describe('auth services', () => {
     verifyEmail(apiClient, data);
 
     expect(post).toHaveBeenCalledWith('/api/email-verification/', data);
+  });
+
+  it('posts the signup address to resend-verification because signup issues no session', () => {
+    resendVerificationCode(apiClient, { email: 'founder@example.test' });
+
+    expect(post).toHaveBeenCalledWith('/api/resend-verification/', { email: 'founder@example.test' });
   });
 
   it('gets the current authentication state from the verification endpoint', () => {

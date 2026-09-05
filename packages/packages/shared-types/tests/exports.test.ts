@@ -2,9 +2,10 @@ import type {
   AccountExportData,
   AssetFilters,
   AuthVerificationResponse,
-  CreatePortfolio,
   HoldingsQueryParams,
   Portfolio,
+  PortfolioSnapshotQueryParams,
+  PortfolioSnapshotReason,
   UpdateUserProfile,
   UserProfile,
 } from '../src';
@@ -47,9 +48,9 @@ describe('shared-types exports', () => {
     const minValue: Has<HoldingsQueryParams, 'min_value'> = false;
     const reason: Has<AuthVerificationResponse, 'reason'> = false;
     const portfolioTotal: Has<Portfolio, 'totalValue' | 'template'> = false;
-    const create: CreatePortfolio = { name: 'Main' };
-    const createWithAccount: CreatePortfolio = { name: 'Main', userAccount: 'account-uuid' };
-    expect([minValue, reason, portfolioTotal]).toEqual([false, false, false]);
-    expect([create, createWithAccount].map((p) => p.name)).toEqual(['Main', 'Main']);
+    const snapshotReasonParam: Has<PortfolioSnapshotQueryParams, 'snapshot_reason'> = false;
+    const onlyDaily: PortfolioSnapshotReason = 'DAILY';
+    expect([minValue, reason, portfolioTotal, snapshotReasonParam]).toEqual([false, false, false, false]);
+    expect(onlyDaily).toBe('DAILY');
   });
 });

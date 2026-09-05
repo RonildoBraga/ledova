@@ -5,7 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { CustomModal } from '../../../components/modal';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
-import type { CompanyShareToken, TokenStatus, TokenType } from '@ledova/shared-types';
+import type { CompanyShareToken, TokenCreate, TokenStatus, TokenType } from '@ledova/shared-types';
 import type { CompanyStackParamList } from '../../../navigation/CompanyStackNavigator';
 
 const STATUS_LABELS: Record<TokenStatus, string> = {
@@ -37,18 +37,20 @@ function getStatusColors(theme: ReturnType<typeof useAppTheme>): Record<TokenSta
 }
 
 interface TokensSectionProps {
+  companyUuid?: string;
   tokens: CompanyShareToken[];
   totalCount: number;
   page: number;
   totalPages: number;
   isLoading: boolean;
   setPage: (page: number) => void;
-  createToken: (data: { name: string; symbol: string; tokenType: TokenType; totalSupply: string }) => Promise<unknown>;
+  createToken: (data: TokenCreate) => Promise<unknown>;
   isCreating: boolean;
   createError: Error | null;
 }
 
 export function TokensSection({
+  companyUuid,
   tokens,
   totalCount,
   page,
@@ -70,6 +72,7 @@ export function TokensSection({
   const handleCreate = async () => {
     try {
       await createToken({
+        company: companyUuid,
         name: newName,
         symbol: newSymbol.toUpperCase(),
         tokenType: newType,

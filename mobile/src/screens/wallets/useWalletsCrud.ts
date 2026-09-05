@@ -68,18 +68,21 @@ export function useWalletsCrud() {
 
   const btcWallets = filterWalletsByChain(wallets, BLOCKCHAIN.BITCOIN);
   const ethWallets = filterWalletsByChain(wallets, BLOCKCHAIN.ETHEREUM);
+  const baseWallets = filterWalletsByChain(wallets, BLOCKCHAIN.BASE);
   const totals = calculateWalletTotals(wallets);
 
   if (USE_MOCK_DATA) {
     const mockWallets = generateMockWalletsData();
     const mockBtcWallets = filterWalletsByChain(mockWallets, BLOCKCHAIN.BITCOIN);
     const mockEthWallets = filterWalletsByChain(mockWallets, BLOCKCHAIN.ETHEREUM);
+    const mockBaseWallets = filterWalletsByChain(mockWallets, BLOCKCHAIN.BASE);
     const mockTotals = calculateWalletTotals(mockWallets);
 
     return {
       wallets: mockWallets,
       btcWallets: mockBtcWallets,
       ethWallets: mockEthWallets,
+      baseWallets: mockBaseWallets,
       totals: mockTotals,
       userAccountUuid: 'user-account-1',
       isLoading: false,
@@ -106,6 +109,7 @@ export function useWalletsCrud() {
     wallets,
     btcWallets,
     ethWallets,
+    baseWallets,
     totals,
     userAccountUuid: selectedAccount?.uuid,
 

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { CurrencyBtcIcon, CurrencyEthIcon, FunnelIcon } from '@phosphor-icons/react';
+import { useCallback, useEffect, useState, type ReactElement } from 'react';
+import { CircleIcon, CurrencyBtcIcon, CurrencyEthIcon, FunnelIcon } from '@phosphor-icons/react';
 import { BLOCKCHAIN, WALLET_VERIFICATION_STATUS, DESIGN_TOKENS } from '@ledova/shared-constants';
 
 const ICON_MD = DESIGN_TOKENS.icon.sizes.md;
@@ -72,24 +72,18 @@ export function WalletsPage() {
 
   const ethWallets = sortedWallets.filter((w) => w.chain === BLOCKCHAIN.ETHEREUM);
   const btcWallets = sortedWallets.filter((w) => w.chain === BLOCKCHAIN.BITCOIN);
+  const baseWallets = sortedWallets.filter((w) => w.chain === BLOCKCHAIN.BASE);
 
   const selectedWallet = wallets.find((w) => w.uuid === selectedWalletUuid) ?? null;
 
-  const ethTotals = ethWallets.reduce(
-    (acc, wallet) => ({
-      balance: acc.balance + (parseFloat(wallet.nativeBalance) || 0),
-      marketValue: acc.marketValue + (parseFloat(wallet.marketValue) || 0),
-    }),
-    { balance: 0, marketValue: 0 },
-  );
-
-  const btcTotals = btcWallets.reduce(
-    (acc, wallet) => ({
-      balance: acc.balance + (parseFloat(wallet.nativeBalance) || 0),
-      marketValue: acc.marketValue + (parseFloat(wallet.marketValue) || 0),
-    }),
-    { balance: 0, marketValue: 0 },
-  );
+  const sumTotals = (chainWallets: WalletType[]) =>
+    chainWallets.reduce(
+      (acc, wallet) => ({
+        balance: acc.balance + (parseFloat(wallet.nativeBalance) || 0),
+        marketValue: acc.marketValue + (parseFloat(wallet.marketValue) || 0),
+      }),
+      { balance: 0, marketValue: 0 },
+    );
 
   const handleSelectWallet = useCallback((wallet: WalletType) => {
     setSelectedWalletUuid((prev) => (prev === wallet.uuid ? null : wallet.uuid));
@@ -138,6 +132,40 @@ export function WalletsPage() {
     };
   };
 
+  const renderChainPanel = (chain: string, title: string, icon: ReactElement, chainWallets: WalletType[]) => {
+    const totals = sumTotals(chainWallets);
+    return (
+      <Panel
+        title={title}
+        icon={icon}
+        actions={
+          chainWallets.length > 0 ? (
+            <div className="flex items-baseline gap-2">
+              <span className="text-xs text-text-muted">{formatCryptoBalance(totals.balance, '').trimEnd()}</span>
+              <span className="text-sm font-semibold text-text-primary">
+                {formatDisplayCurrency(totals.marketValue)}
+              </span>
+            </div>
+          ) : undefined
+        }
+      >
+        {chainWallets.length === 0 ? (
+          <ChainEmptyState message={`No ${title} wallets`} onAction={() => setShowAddModal(true)} />
+        ) : (
+          <>
+            <WalletList
+              wallets={chainWallets}
+              selectedWalletUuid={selectedWalletUuid}
+              onSelectWallet={handleSelectWallet}
+              onEditWallet={(wallet) => setEditingWallet(wallet)}
+            />
+            <WalletActionBar {...buildActionBarProps(chain)} />
+          </>
+        )}
+      </Panel>
+    );
+  };
+
   if (isLoading) {
     return (
       <main className="text-text-primary">
@@ -156,67 +184,9 @@ export function WalletsPage() {
       <div className="w-full max-w-6xl mx-auto px-4 pt-6 pb-16 sm:px-6 lg:px-8">
         <div className="flex flex-col gap-4 sm:gap-5 md:gap-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-5 md:gap-6 items-start">
-            <Panel
-              title="Ethereum"
-              icon={<CurrencyEthIcon size={ICON_MD} />}
-              actions={
-                ethWallets.length > 0 ? (
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-xs text-text-muted">
-                      {formatCryptoBalance(ethTotals.balance, '').trimEnd()}
-                    </span>
-                    <span className="text-sm font-semibold text-text-primary">
-                      {formatDisplayCurrency(ethTotals.marketValue)}
-                    </span>
-                  </div>
-                ) : undefined
-              }
-            >
-              {ethWallets.length === 0 ? (
-                <ChainEmptyState message="No Ethereum wallets" onAction={() => setShowAddModal(true)} />
-              ) : (
-                <>
-                  <WalletList
-                    wallets={ethWallets}
-                    selectedWalletUuid={selectedWalletUuid}
-                    onSelectWallet={handleSelectWallet}
-                    onEditWallet={(wallet) => setEditingWallet(wallet)}
-                  />
-                  <WalletActionBar {...buildActionBarProps(BLOCKCHAIN.ETHEREUM)} />
-                </>
-              )}
-            </Panel>
-
-            <Panel
-              title="Bitcoin"
-              icon={<CurrencyBtcIcon size={ICON_MD} />}
-              actions={
-                btcWallets.length > 0 ? (
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-xs text-text-muted">
-                      {formatCryptoBalance(btcTotals.balance, '').trimEnd()}
-                    </span>
-                    <span className="text-sm font-semibold text-text-primary">
-                      {formatDisplayCurrency(btcTotals.marketValue)}
-                    </span>
-                  </div>
-                ) : undefined
-              }
-            >
-              {btcWallets.length === 0 ? (
-                <ChainEmptyState message="No Bitcoin wallets" onAction={() => setShowAddModal(true)} />
-              ) : (
-                <>
-                  <WalletList
-                    wallets={btcWallets}
-                    selectedWalletUuid={selectedWalletUuid}
-                    onSelectWallet={handleSelectWallet}
-                    onEditWallet={(wallet) => setEditingWallet(wallet)}
-                  />
-                  <WalletActionBar {...buildActionBarProps(BLOCKCHAIN.BITCOIN)} />
-                </>
-              )}
-            </Panel>
+            {renderChainPanel(BLOCKCHAIN.ETHEREUM, 'Ethereum', <CurrencyEthIcon size={ICON_MD} />, ethWallets)}
+            {renderChainPanel(BLOCKCHAIN.BITCOIN, 'Bitcoin', <CurrencyBtcIcon size={ICON_MD} />, btcWallets)}
+            {renderChainPanel(BLOCKCHAIN.BASE, 'Base', <CircleIcon size={ICON_MD} weight="fill" />, baseWallets)}
           </div>
         </div>
       </div>

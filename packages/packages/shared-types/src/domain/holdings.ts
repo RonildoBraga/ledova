@@ -59,8 +59,11 @@ export interface AssetAllocationItem {
 export interface WalletTotals {
   btc: number;
   eth: number;
+  base: number;
   btcMarketValue: number;
   ethMarketValue: number;
+  baseMarketValue: number;
   btcTotalMarketValue: number;
   ethTotalMarketValue: number;
+  baseTotalMarketValue: number;
 }
