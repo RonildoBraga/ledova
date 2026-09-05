@@ -264,65 +264,29 @@ class CompanyEndpointIsolationTest(APITestCase):
         body = response.json()
         return body.get("results", body) if isinstance(body, dict) else body
 
-    def test_authenticated_reads_see_own_full_record_and_public_shape_of_others(self):
+    def test_authenticated_reads_are_owner_only(self):
         self.client.force_authenticate(self.alice)
 
         own_detail = self.client.get(f"/api/v1/companies/{self.alice_company.uuid}/")
         self.assertEqual(own_detail.status_code, 200)
         self.assertIn("email", own_detail.json())
         self.assertIn("documents", own_detail.json())
-        self._assert_public_representation(self.bob_company)
-
-        draft_company = Company.objects.create(
-            owner=self.bob, name="Bob Draft", company_type="pty", acn="888888888", status="draft"
-        )
-        self.assertEqual(self.client.get(f"/api/v1/companies/{draft_company.uuid}/").status_code, 404)
-        self.assertEqual(self.client.get(f"/api/v1/companies/acn/{draft_company.acn}/").status_code, 404)
-
-    def _assert_public_representation(self, company):
-        for url in (
-            f"/api/v1/companies/{company.uuid}/",
-            f"/api/v1/companies/acn/{company.acn}/",
-        ):
-            with self.subTest(url=url):
-                response = self.client.get(url)
-                self.assertEqual(response.status_code, 200)
-                body = response.json()
-                self.assertEqual(body["uuid"], str(company.uuid))
-                for private_field in (
-                    "documents",
-                    "email",
-                    "phone",
-                    "addressLine1",
-                    "infoRequestReason",
-                    "primaryContact",
-                ):
-                    self.assertNotIn(private_field, body)
-                self.assertNotIn(self.bob_document.external_url, str(body))
-
-    def test_anonymous_company_detail_and_acn_lookup_are_public_safe(self):
-        inactive_company = Company.objects.create(
-            owner=self.bob,
-            name="Bob Inactive Company",
-            company_type="pty",
-            acn="999999999",
-            status="draft",
-        )
 
         list_response = self.client.get("/api/v1/companies/")
         self.assertEqual(list_response.status_code, 200)
-        returned = {row["uuid"] for row in self._rows(list_response)}
-        self.assertIn(str(self.bob_company.uuid), returned)
-        self.assertNotIn(str(inactive_company.uuid), returned)
+        self.assertEqual({row["uuid"] for row in self._rows(list_response)}, {str(self.alice_company.uuid)})
 
-        self._assert_public_representation(self.bob_company)
+        foreign_detail = self.client.get(f"/api/v1/companies/{self.bob_company.uuid}/")
+        self.assertEqual(foreign_detail.status_code, 404)
+        self.assertNotIn(self.bob_document.external_url, foreign_detail.content.decode())
+        self.assertNotIn("Bob private address", foreign_detail.content.decode())
 
-        for url in (
-            f"/api/v1/companies/{inactive_company.uuid}/",
-            f"/api/v1/companies/acn/{inactive_company.acn}/",
-        ):
+    def test_anonymous_reads_are_rejected(self):
+        for url in ("/api/v1/companies/", f"/api/v1/companies/{self.bob_company.uuid}/"):
             with self.subTest(url=url):
-                self.assertEqual(self.client.get(url).status_code, 404)
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 401)
+                self.assertNotIn(str(self.bob_company.uuid), response.content.decode())
 
     def test_explicit_admin_actions_keep_global_scope(self):
         staff = User.objects.create_user(

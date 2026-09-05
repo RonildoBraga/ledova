@@ -3,25 +3,10 @@ from django.db.models.functions import Lower
 
 
 class TransactionQuerySet(QuerySet):
-    def filter_by_wallet(self, wallet):
-        if wallet:
-            if hasattr(wallet, "uuid"):
-                return self.filter(wallet__uuid=wallet.uuid)
-            return self.filter(wallet__uuid=wallet)
-        return self
-
     def filter_by_address(self, address):
         if address:
             return self.filter(Q(from_address__iexact=address) | Q(to_address__iexact=address))
         return self
-
-    def filter_by_date_range(self, start_date=None, end_date=None):
-        queryset = self
-        if start_date:
-            queryset = queryset.filter(block_timestamp__gte=start_date)
-        if end_date:
-            queryset = queryset.filter(block_timestamp__lte=end_date)
-        return queryset
 
     def filter_by_direction(self, direction, wallet_uuid=None):
         if direction not in ("incoming", "outgoing"):

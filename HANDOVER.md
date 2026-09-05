@@ -78,11 +78,11 @@ deleted; the three `/company/*` redirect routes stay for old bookmarks.
 Decisions deferred during the simplification pass (each is a delete-or-keep
 call for the owner; the code is kept and working until decided):
 
-- Client-less API surfaces: `/api/v1/tokens/orders/`, `yield-tokens/`,
-  `tokens/{uuid}/can-receive/`, wallets `batch-check-balances`,
-  `sync-holdings`, `{uuid}/transactions`, `{uuid}/balances` (PostgreSQL-only
-  `DISTINCT ON`), `/api/holding-snapshots/`, `assets/bulk-update-prices`,
-  `/api/countries/`, `/api/waitlist/`, anonymous company listing and `acn/`.
+- Client-less API surfaces: removed in the dead-routes bundle. Wallets
+  `batch-check-balances` is a LIVE client contract (dashboard AddWalletModal,
+  mobile `useFetchBalances`, both through shared-services `fetchBatchBalances`)
+  and stays. `/api/waitlist/` and `/api/asset-allocations/` are handled in the
+  dead-models bundle together with their models.
 - Models nothing writes or reads: `SignatureRequest`, `AssetAllocation`,
   `FiatTransaction` persistence, the unread `Wallet`/`Holding` columns,
   `NotificationPreferences` (foldable into `UserPreferences`).

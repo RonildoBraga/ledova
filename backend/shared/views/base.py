@@ -18,8 +18,3 @@ class AuthenticatedModelViewSet(viewsets.ModelViewSet):
 class AuthenticatedReadOnlyViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
     lookup_field = "uuid"
-
-
-class AuthenticatedReferenceDataViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
-    permission_classes = [IsAuthenticated]
-    lookup_field = "uuid"

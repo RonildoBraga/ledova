@@ -1,6 +1,6 @@
 import django_filters
 
-from wallets.models import HoldingSnapshot, Transaction, Wallet
+from wallets.models import Transaction, Wallet
 
 
 class WalletFilter(django_filters.FilterSet):
@@ -33,16 +33,3 @@ class TransactionFilter(django_filters.FilterSet):
     def filter_direction(self, queryset, name, value):
         wallet_uuid = self.data.get("wallet")
         return queryset.filter_by_direction(value, wallet_uuid)
-
-
-class HoldingSnapshotFilter(django_filters.FilterSet):
-    holding = django_filters.UUIDFilter(field_name="holding__uuid")
-    wallet = django_filters.UUIDFilter(field_name="holding__wallet__uuid")
-    asset = django_filters.UUIDFilter(field_name="holding__asset__uuid")
-    reason = django_filters.CharFilter(field_name="snapshot_reason")
-    start_date = django_filters.DateTimeFilter(field_name="snapshot_date", lookup_expr="gte")
-    end_date = django_filters.DateTimeFilter(field_name="snapshot_date", lookup_expr="lte")
-
-    class Meta:
-        model = HoldingSnapshot
-        fields = []

@@ -5,16 +5,6 @@ from tokens.models.choices import TransferOrderStatus, TransferOrderType
 
 
 class TransferOrderQuerySet(QuerySet):
-    def filter_by_token(self, token_uuid):
-        if token_uuid:
-            return self.filter(token__uuid=token_uuid)
-        return self
-
-    def filter_by_order_type(self, order_type):
-        if order_type:
-            return self.filter(order_type=order_type)
-        return self
-
     def ownership_bound(self):
         """Return orders whose immutable tenant and address snapshots match."""
         return self.filter(

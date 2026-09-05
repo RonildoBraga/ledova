@@ -18,13 +18,8 @@ from wallets.exceptions import (
     VerificationChallengeNotFoundException,
 )
 from wallets.filters import WalletFilter
-from wallets.models import HoldingSnapshot, Transaction, Wallet
-from wallets.serializers import (
-    HoldingSerializer,
-    HoldingSnapshotSerializer,
-    TransactionSerializer,
-    WalletSerializer,
-)
+from wallets.models import Wallet
+from wallets.serializers import HoldingSerializer, WalletSerializer
 from wallets.services import (
     BalanceService,
     TransferService,
@@ -142,56 +137,11 @@ class WalletViewSet(AuthenticatedModelViewSet):
             status=status.HTTP_200_OK,
         )
 
-    @action(detail=True, methods=["post"], url_path="sync-holdings", url_name="sync-holdings")
-    def sync_holdings(self, request, uuid=None):
-        wallet = self.get_object()
-        job_id = sync_wallet.defer(wallet_uuid=str(wallet.uuid))
-        serializer = self.get_serializer(wallet)
-
-        return Response(
-            {"success": True, "taskId": job_id, "wallet": serializer.data},
-            status=status.HTTP_202_ACCEPTED,
-        )
-
     @action(detail=True, methods=["get"], url_path="holdings", url_name="holdings")
     def holdings(self, request, uuid=None):
         wallet = self.get_object()
         holdings = wallet.holdings.filter(asset__is_active=True, asset__is_verified=True).select_related("asset")
         return Response(HoldingSerializer(holdings, many=True).data, status=status.HTTP_200_OK)
-
-    @action(detail=True, methods=["get"], url_path="balances", url_name="balances")
-    def balances(self, request, uuid=None):
-        wallet = self.get_object()
-        snapshots = (
-            HoldingSnapshot.objects.filter(
-                holding__wallet=wallet, holding__asset__is_active=True, holding__asset__is_verified=True
-            )
-            .select_related("holding", "holding__asset")
-            .order_by("holding__asset_id", "-snapshot_date")
-            .distinct("holding__asset_id")
-        )
-
-        page = self.paginate_queryset(snapshots)
-        serializer = HoldingSnapshotSerializer(page, many=True)
-        return self.get_paginated_response(serializer.data)
-
-    @action(detail=True, methods=["get"], url_path="transactions", url_name="transactions")
-    def transactions(self, request, uuid=None):
-        wallet = self.get_object()
-        start_date = request.query_params.get("start_date")
-        end_date = request.query_params.get("end_date")
-
-        transactions = (
-            Transaction.objects.filter_by_wallet(wallet)
-            .filter(asset__is_verified=True)
-            .filter_by_date_range(start_date, end_date)
-            .with_optimized_data()
-            .order_by("-block_timestamp")
-        )
-
-        page = self.paginate_queryset(transactions)
-        serializer = TransactionSerializer(page, many=True)
-        return self.get_paginated_response(serializer.data)
 
     @action(detail=True, methods=["post"], url_path="prepare-transfer", url_name="prepare-transfer")
     def prepare_transfer(self, request, uuid=None):

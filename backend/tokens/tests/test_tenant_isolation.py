@@ -96,21 +96,6 @@ class TenantOrderIsolationTest(APITestCase):
         self.assertIn(self.bob_order.uuid, uuids)
         self.assertNotIn(self.alice_order.uuid, uuids)
 
-    def test_legacy_tokens_order_endpoint_is_owner_scoped_and_read_only(self):
-        self.client.force_authenticate(self.bob)
-
-        own_response = self.client.get(f"/api/v1/tokens/orders/{self.bob_order.uuid}/")
-        other_response = self.client.get(f"/api/v1/tokens/orders/{self.alice_order.uuid}/")
-        create_response = self.client.post("/api/v1/tokens/orders/", {}, format="json")
-        cancel_response = self.client.post(f"/api/v1/tokens/orders/{self.bob_order.uuid}/cancel/")
-        delete_response = self.client.delete(f"/api/v1/tokens/orders/{self.bob_order.uuid}/")
-
-        self.assertEqual(own_response.status_code, 200)
-        self.assertEqual(other_response.status_code, 404)
-        self.assertEqual(create_response.status_code, 405)
-        self.assertEqual(cancel_response.status_code, 404)
-        self.assertEqual(delete_response.status_code, 405)
-
     def test_registering_another_tenants_address_does_not_grant_order_access(self):
         Wallet.objects.create(
             user_account=self.bob_account,

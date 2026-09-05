@@ -73,22 +73,6 @@ class WhitelistService:
         checksum_address = self.chain_client.to_checksum_address(address)
         return self.contract.functions.canReceive(checksum_address).call()
 
-    def get_receive_eligibility(self, address: str) -> dict:
-        checksum_address = self.chain_client.to_checksum_address(address)
-        db_whitelisted = WhitelistEntry.objects.filter_by_address(checksum_address).active().exists()
-
-        on_chain_whitelisted = None
-        try:
-            on_chain_whitelisted = self.is_whitelisted(checksum_address)
-        except Exception as e:
-            logger.warning(f"Failed to check on-chain status for {address}: {e}")
-
-        return {
-            "can_receive": db_whitelisted or (on_chain_whitelisted is True),
-            "db_whitelisted": db_whitelisted,
-            "on_chain_whitelisted": on_chain_whitelisted,
-        }
-
     # Registry transactions
 
     @staticmethod

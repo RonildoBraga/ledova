@@ -3,7 +3,7 @@
 from collections import namedtuple
 from unittest.mock import patch
 
-from django.db import connection, transaction
+from django.db import transaction
 from rest_framework.test import APITestCase
 
 from companies.models import (
@@ -25,13 +25,6 @@ ALLOWANCE = {
     "required_amount": 1500,
     "current_allowance": 0,
     "has_sufficient_allowance": False,
-}
-ELIGIBILITY = {
-    "can_receive": True,
-    "db_whitelisted": True,
-    "on_chain_whitelisted": False,
-    "investor_type": "retail",
-    "investor_type_display": "Retail",
 }
 
 
@@ -73,7 +66,7 @@ def _create_issuance_request(token, recipient, amount, user, reason="", issuance
 # `{name}` placeholders resolve to the target tenant's identifiers (own, foreign or phantom);
 # `{own_name}` always resolves to the acting tenant's. foreign is the status expected when the
 # target belongs to another tenant; prepare puts the actor's own row into the state the action needs.
-Route = namedtuple("Route", "method path payload foreign prepare postgres_only", defaults=(None, 404, None, False))
+Route = namedtuple("Route", "method path payload foreign prepare", defaults=(None, 404, None))
 
 CAPITAL_INCREASE = {
     "additionalShares": 100,
@@ -114,10 +107,7 @@ ROUTES = (
     Route("post", "/api/wallets/{wallet}/request-verification/", {}),
     Route("post", "/api/wallets/{wallet}/verify-signature/", {"signature": "0x01"}),
     Route("post", "/api/wallets/{wallet}/sync/", {}),
-    Route("post", "/api/wallets/{wallet}/sync-holdings/", {}),
     Route("get", "/api/wallets/{wallet}/holdings/"),
-    Route("get", "/api/wallets/{wallet}/balances/", postgres_only=True),
-    Route("get", "/api/wallets/{wallet}/transactions/"),
     Route("post", "/api/wallets/{wallet}/prepare-transfer/", {"toAddress": "0x" + "c" * 40, "amountEth": "0.1"}),
     Route("post", "/api/wallets/{wallet}/broadcast-transfer/", {"signedTransaction": "0x02"}),
     Route(
@@ -133,7 +123,6 @@ ROUTES = (
         foreign=400,
     ),
     Route("get", "/api/transactions/{transaction}/"),
-    Route("get", "/api/holding-snapshots/{holding_snapshot}/"),
     Route("get", "/api/fiat-purchases/{fiat_purchase}/"),
     Route("post", "/api/fiat-purchases/transak-widget-url/", {"walletUuid": "{wallet}"}),
     Route("get", "/api/portfolios/{portfolio}/"),
@@ -198,7 +187,6 @@ ROUTES = (
         "/api/v1/tokens/{deployed_token}/issue/",
         {"recipient": RECIPIENT, "amount": 7, "reason": "Owner", "issuanceType": "additional"},
     ),
-    Route("get", "/api/v1/tokens/{deployed_token}/can-receive/" + RECIPIENT + "/"),
     Route("get", "/api/v1/tokens/{deployed_token}/issuances/"),
     Route("get", "/api/v1/tokens/{deployed_token}/holders/"),
     Route(
@@ -213,7 +201,6 @@ ROUTES = (
     Route("delete", "/api/v1/tokens/capital-increases/{capital_increase}/"),
     Route("post", "/api/v1/tokens/capital-increases/{capital_increase}/submit/", {}),
     Route("post", "/api/v1/tokens/capital-increases/", {"token": "{deployed_token}", **CAPITAL_INCREASE}),
-    Route("get", "/api/v1/tokens/orders/{order}/"),
     Route("get", "/api/v1/trading/orders/{order}/"),
     Route("post", "/api/v1/trading/orders/{order}/cancel/", {"message": "cancel", "signature": SIGNATURE}),
     Route("get", "/api/v1/trading/orders/{order}/cancel/message/"),
@@ -257,7 +244,6 @@ LIST_ROUTES = (
     ("/api/wallets/", ("wallet", "spare_wallet")),
     ("/api/wallets/{wallet}/holdings/", ("holding",)),
     ("/api/transactions/", ("transaction",)),
-    ("/api/holding-snapshots/", ("holding_snapshot",)),
     ("/api/fiat-purchases/", ("fiat_purchase",)),
     ("/api/portfolios/", ("portfolio",)),
     ("/api/portfolios/{portfolio}/allocations/", ("allocation",)),
@@ -267,8 +253,6 @@ LIST_ROUTES = (
     ("/api/v1/companies/{company}/documents/", ("company_document",)),
     ("/api/v1/tokens/", ("token", "deployed_token")),
     ("/api/v1/tokens/capital-increases/", ("capital_increase",)),
-    ("/api/v1/tokens/orders/", ("order", "counter_order")),
-    ("/api/v1/tokens/orders/open/", ("order", "counter_order")),
     ("/api/v1/trading/orders/", ("order", "counter_order")),
     ("/api/v1/documents/", ("document",)),
 )
@@ -303,8 +287,6 @@ class CrossTenantRouteMatrixTest(APITestCase):
         share_tokens = self._service("tokens.views.share_token.ShareTokenService").return_value
         share_tokens.create_issuance_request.side_effect = _create_issuance_request
         share_tokens.get_token_holders.return_value = []
-        whitelist = self._service("tokens.views.share_token.WhitelistService").return_value
-        whitelist.get_receive_eligibility.return_value = ELIGIBILITY
         trading_orders = self._service("tokens.views.trading_order.TradingOrderService")
         trading_orders.cancel_order.side_effect = lambda order: order
         trading_orders.get_order_cancel_message.return_value = {}
@@ -377,8 +359,6 @@ class CrossTenantRouteMatrixTest(APITestCase):
             self.client.force_authenticate(actor.user)
             own = route_context(actor)
             for route in ROUTES:
-                if route.postgres_only and not connection.features.can_distinct_on_fields:
-                    continue
                 with self.subTest(actor=actor.label, route=f"{route.method} {route.path}"):
                     # Each row runs against the pristine graph: the savepoint discards its side effects.
                     with transaction.atomic():
