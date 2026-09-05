@@ -246,6 +246,53 @@ call for the owner; the code is kept and working until decided):
   Operational thresholds and evasion-sensitive rules live outside the
   repository (decided, not deferred).
 
+**Phase 0 checkpoint (branch `claude/p0-issuance-onchain`, on `main` `ef69bf8`):
+issuance works on chain.** Shares are minted on allotment: deployment only
+calls `createShareToken`, the on-chain `authorizedShares` is the cap the
+company entered as `total_supply`, and `totalSupply` grows only through
+executed issuance requests, which are refused before any transaction when the
+recipient is not on the `WhitelistRegistry`, the amount exceeds the cap or the
+token is paused (`ShareTokenService`). The factory identifier is
+`<acn>:<symbol>` (the ACN is required and unique, so the key survives a later
+ABN), so a company can hold several share classes; a deployment re-run adopts
+the address the factory already holds (no `CompanyAlreadyExists`), a token
+whose create transaction was sent stays `DEPLOYING` until
+`check_pending_token_deployments` (now periodic, every 5 minutes) resolves it or
+the admin "Retry Deployment" button re-queues the task, and only failures
+before any transaction return it to `DRAFT`. Issuance mints once: a request is
+claimed with a compare-and-set on its status, the mint hash is written to the
+request's `ShareIssuance` before the receipt is awaited, a retry resumes on it
+(completes when mined, mints afresh only when reverted) and
+`check_executing_issuance_requests` (every 5 minutes) finishes an issuance or
+capital increase a killed worker left executing after the call was sent.
+Capital increases call
+`setAuthorizedShares(new_authorized_total)` and mint nothing, are refused
+unless that total is above the cap the chain holds now, and are serialised per
+token with a `select_for_update` row lock on the `ShareToken` around the cap
+read, the call and the DB write, so two increases approved against one cap
+cannot lower it even when two workers execute them in the same block window
+(the second reads the cap only after the first has mined and committed; SQLite
+ignores the lock); the `setAuthorizedShares` hash is recorded on a
+`BlockchainTransaction` for the request before the receipt is awaited, so a
+retry after a lost receipt resumes on it instead of refusing the request with
+the DB cap behind the chain; pause and unpause read `paused()`
+first, reconcile the DB status when the chain is already there (a receipt lost
+after the call mined no longer strands the token) and otherwise call the
+contract before the status moves; the admin pause/unpause buttons rely on the
+service guard, so a deployed token the chain reports paused unpauses in one
+click; "Retry Deployment" confirms on a page and re-queues on POST like
+"Deploy". Hashes are stored 0x-prefixed.
+`Company.operator_wallet` now has writers (admin fieldset offering the owner's
+verified EVM wallets, company PATCH with a verified EVM wallet uuid) and the
+fallback wallet must be verified. The
+whitelist status route is out of the trading gate. `make chain-test` (also a
+CI step) starts a Hardhat node, deploys the core contracts and runs
+`backend/tokens/tests/test_chain_integration.py` end to end (CI runs it on
+SQLite and again on PostgreSQL for the row-lock case); the local-chain
+variables and `EVM_ASSET_TRANSFER_HISTORY_ENABLED` are documented in
+`backend/.env.example` and the README "Local chain" subsection.
+`is_transferable` / `is_divisible` remain display-only (no on-chain effect).
+
 The remaining canonical backlog is [ISSUES.md](ISSUES.md).
 
 ## Working rules

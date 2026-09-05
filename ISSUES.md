@@ -43,11 +43,56 @@ item names where it lives in the code today.
    state-machine invariants at the database level, no replay protection and no
    idempotency keys around order and swap creation, cancellation, matching and
    settlement.
-6. **On-chain and background-job idempotency.** Deployment
-   (`tokens/services/share_token_service.py`, `tokens/tasks/`), minting
-   (`tokens/services/mint_service.py`), issuance, capital increase, whitelist
-   (`whitelist/services/whitelist.py`) and the retryable Procrastinate tasks
-   are not safe after crashes, duplicate delivery or uncertain RPC responses.
+6. **On-chain and background-job idempotency.** Share-token deployment and
+   issuance are covered since 2026-09-05: a deployment re-run adopts the
+   factory's address for the token identifier (`<acn>:<symbol>`), a sent
+   create transaction never returns the token to draft (the admin "Retry
+   Deployment" button re-queues a stuck one), issuance is refused before any
+   transaction when the recipient is not whitelisted, the cap is exceeded or
+   the token is paused, a capital increase is refused unless its total is above
+   the cap the chain holds now and increases are serialised per token with a
+   row lock on the `ShareToken` (a second executor reads the cap only after the
+   first has mined and committed; the request status is re-read under that
+   lock so a stale copy of a finished request is refused), a request is
+   claimed with a compare-and-set on its status so two Execute submits cannot
+   both mint, the mint hash is
+   written to the request's `ShareIssuance` (`idempotency_key`
+   `issuance-request:<uuid>`) and the `setAuthorizedShares` hash to a
+   `BlockchainTransaction` for the `CapitalIncreaseRequest` before the receipt
+   is awaited, so a retry after a lost receipt completes from that hash instead
+   of sending again (a reverted call is forgotten and re-sent),
+   `check_executing_issuance_requests` (every
+   5 minutes) finishes an issuance or capital increase a killed worker left
+   `EXECUTING` after the call was sent, pause and unpause read `paused()` and
+   reconcile the DB
+   status when the chain already holds the target state, and `make chain-test`
+   proves the flow against a real Hardhat node
+   (`tokens/tests/test_chain_integration.py`, on SQLite and on PostgreSQL in
+   CI). Still open: minting
+   (`tokens/services/mint_service.py`), the whitelist service
+   (`whitelist/services/whitelist.py`), a request left `EXECUTING` before its
+   mint was sent (nothing recorded to resume on; the sweep only logs it), a
+   capital-increase worker hard-killed during the receipt wait (the claim and
+   the recorded hash live in the row lock's transaction and roll back with it,
+   so the retry finds the chain cap already raised, refuses `CAP_NOT_RAISED`
+   and the DB cap has to be set by hand), the `pending` nonce the client takes
+   (`integrations/base_chain/client.py`) which the row lock only serialises
+   per `ShareToken`, so two workers sending for different tokens, or a mint and
+   a whitelist add, in the same instant can sign the same nonce and one send
+   fails with `nonce too low` (the request is marked failed and retried; safe
+   now that every hash is recorded first), the row lock held across the 120 s
+   receipt wait (a second executor for the same token blocks that long on a
+   DB connection, and a production `idle_in_transaction_session_timeout` or
+   `lock_timeout` would abort it with an `OperationalError` the task retries),
+   a "Retry Deployment" while the first job is still queued or running (both
+   send a create; the second reverts `CompanyAlreadyExists` and the token
+   stays on the first hash, correct but noisy), an
+   `eth_sendRawTransaction` whose HTTP response is lost after the node accepted
+   it (the create sits in the mempool while the token returns to draft; a
+   redeploy with the same symbol adopts it by identifier, but editing the
+   draft's symbol first orphans the on-chain token), and the retryable
+   Procrastinate tasks after crashes, duplicate delivery or uncertain RPC
+   responses.
 7. **Pending confirmations.** `wallets/tasks/confirmation.py` and
    `blockchain/tasks.py` mark stale transactions failed after 24 hours; there is
    no reconciliation of submitted transactions for replacement, reorgs,

@@ -41,9 +41,11 @@ class WalletQuerySet(QuerySet):
         return self.filter(address__iexact=address)
 
     def for_chain_with_l2_fallback(self, chain):
+        """Newest verified wallet on the chain, falling back to an Ethereum wallet for the Base L2."""
         from wallets.models.wallet import Blockchain
 
-        wallet = self.filter(chain=chain).order_by("-created_at").first()
+        verified = self.filter(verification_status=WALLET_VERIFICATION_STATUS_VERIFIED)
+        wallet = verified.filter(chain=chain).order_by("-created_at").first()
         if not wallet and chain == Blockchain.BASE.value:
-            wallet = self.filter(chain=Blockchain.ETHEREUM.value).order_by("-created_at").first()
+            wallet = verified.filter(chain=Blockchain.ETHEREUM.value).order_by("-created_at").first()
         return wallet

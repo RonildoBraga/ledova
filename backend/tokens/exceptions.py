@@ -26,6 +26,18 @@ class InvalidTokenStateException(APIException):
     default_code = "invalid_token_state"
 
 
+class TokenPauseFailedException(APIException):
+    status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+    default_detail = "Token pause or unpause failed on chain."
+    default_code = "token_pause_failed"
+
+
+class IssuanceRefusedException(APIException):
+    status_code = status.HTTP_400_BAD_REQUEST
+    default_detail = "Issuance refused before any transaction was sent."
+    default_code = "issuance_refused"
+
+
 class CompanyNotReadyException(APIException):
     status_code = status.HTTP_400_BAD_REQUEST
     default_detail = "Company is not ready for this operation."

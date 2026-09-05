@@ -1,0 +1,53 @@
+{% extends "admin/base_custom.html" %}
+{% load i18n admin_urls static %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Home</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_label|capfirst }}</a>
+    &rsaquo; <a href="{% url 'admin:tokens_sharetoken_changelist' %}">Share tokens</a>
+    &rsaquo; <a href="{% url 'admin:tokens_sharetoken_change' token.pk %}">{{ token.name }}</a>
+    &rsaquo; Retry deployment
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="admin-custom-form admin-custom-form--wide">
+    <div class="alert alert-warning">
+        <strong>Retry Deployment</strong>
+        <p class="mt-1 mb-0">
+            <strong>{{ token.name }} ({{ token.symbol }})</strong> is still deploying. Re-queuing the deployment task
+            adopts the token the factory already holds for it, resumes on the recorded create transaction, or sends
+            the create only when nothing was ever sent; it never creates a second token for this identifier.
+        </p>
+    </div>
+
+    <div class="admin-card">
+        <div class="admin-card-header">Recorded Deployment</div>
+        <div class="admin-card-body">
+            <table class="admin-table">
+                <tr>
+                    <td class="label-col">Create transaction</td>
+                    <td class="monospace">{{ token.deployment_tx_hash|default:"none sent yet" }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Authorized Shares (cap)</td>
+                    <td>{{ token.total_supply }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Company</td>
+                    <td>{{ token.company.name }} (ACN {{ token.company.acn }})</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+        <div class="action-row mt-0">
+            <button type="submit" class="btn btn-primary">Retry Deployment</button>
+            <a href="{% url 'admin:tokens_sharetoken_change' token.pk %}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

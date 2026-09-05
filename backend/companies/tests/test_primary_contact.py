@@ -4,6 +4,10 @@ from django.test import TestCase
 from companies.models import Company, CompanyStatus, CompanyType
 from companies.serializers import CompanyDetailSerializer
 from users.models import UserAccount, UserProfile
+from wallets.constants import (
+    WALLET_VERIFICATION_STATUS_PENDING,
+    WALLET_VERIFICATION_STATUS_VERIFIED,
+)
 from wallets.models import Wallet
 
 User = get_user_model()
@@ -34,10 +38,18 @@ class CompanyPrimaryWalletTest(TestCase):
             owner=self.owner, name="Wallets Pty Ltd", company_type=CompanyType.PROPRIETARY, acn="000000778"
         )
 
-    def _wallet(self, chain, suffix, account=None):
-        return Wallet.objects.create(user_account=account or self.account, address="0x" + suffix * 40, chain=chain)
+    def _wallet(self, chain, suffix, account=None, verified=True):
+        return Wallet.objects.create(
+            user_account=account or self.account,
+            address="0x" + suffix * 40,
+            chain=chain,
+            verification_status=WALLET_VERIFICATION_STATUS_VERIFIED if verified else WALLET_VERIFICATION_STATUS_PENDING,
+        )
 
-    def test_operator_wallet_wins_and_owner_wallets_fall_back_to_ethereum(self):
+    def test_operator_wallet_wins_and_verified_owner_wallets_fall_back_to_ethereum(self):
+        self.assertIsNone(self.company.get_primary_wallet())
+
+        self._wallet("base", "0", verified=False)
         self.assertIsNone(self.company.get_primary_wallet())
 
         ethereum = self._wallet("ethereum", "1")
@@ -52,7 +64,7 @@ class CompanyPrimaryWalletTest(TestCase):
         self.company.operator_wallet = operator
         self.company.save(update_fields=["operator_wallet"])
         self.assertEqual(self.company.get_primary_wallet(), operator)
-        self.assertEqual(self.company.get_primary_wallet("ethereum"), ethereum)
+        self.assertEqual(self.company.get_primary_wallet("ethereum"), operator)
 
     def test_wallets_of_other_users_are_never_primary(self):
         stranger = User.objects.create_user(email="stranger@example.test", password="pw-12345678")

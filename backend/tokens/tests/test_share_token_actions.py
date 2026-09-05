@@ -2,10 +2,13 @@
 
 from unittest.mock import patch
 
+from django.test import override_settings
 from rest_framework.test import APITestCase
 
 from companies.models import Company, CompanyStatus
+from integrations.base_chain.exceptions import BaseChainConnectionError
 from shared.tests.tenants import make_tenant
+from tokens.exceptions import TokenPauseFailedException
 from tokens.models import (
     IssuanceStatus,
     ShareIssuance,
@@ -26,10 +29,16 @@ class ShareTokenActionTest(APITestCase):
     def _activate(self):
         Company.objects.filter(pk=self.tenant.company.pk).update(status=CompanyStatus.ACTIVE)
 
+    @override_settings(BLOCKCHAIN_OPERATOR_KEY="0xkey")
+    @patch("tokens.services.share_token_service.get_base_chain_client")
     @patch("tokens.tasks.deploy_share_token_task")
-    def test_deploy_pause_and_unpause_move_status(self, deploy_task):
+    def test_deploy_pause_and_unpause_move_status(self, deploy_task, chain_client):
         self._activate()
         draft, deployed = self.tenant.token, self.tenant.deployed_token
+        chain = chain_client.return_value
+        contract = chain.load_contract.return_value
+        contract.functions.paused.return_value.call.side_effect = [False, True]
+        chain.send_transaction.return_value = ("0xtx", {"blockNumber": 1, "gasUsed": 1})
 
         response = self.client.post(f"/api/v1/tokens/{draft.uuid}/deploy/")
         self.assertEqual(response.status_code, 200)
@@ -39,13 +48,35 @@ class ShareTokenActionTest(APITestCase):
         self.assertEqual(draft.status, ShareTokenStatus.DEPLOYING)
         deploy_task.defer.assert_called_once_with(token_uuid=str(draft.uuid))
 
-        self.assertEqual(self.client.post(f"/api/v1/tokens/{deployed.uuid}/pause/").status_code, 200)
+        paused = self.client.post(f"/api/v1/tokens/{deployed.uuid}/pause/")
+        self.assertEqual(paused.status_code, 200)
+        self.assertEqual(paused.json()["token"]["status"], ShareTokenStatus.PAUSED)
         deployed.refresh_from_db()
         self.assertEqual(deployed.status, ShareTokenStatus.PAUSED)
+        self.assertEqual(chain.send_transaction.call_args.args[0], contract.functions.pause.return_value)
 
         self.assertEqual(self.client.post(f"/api/v1/tokens/{deployed.uuid}/unpause/").status_code, 200)
         deployed.refresh_from_db()
         self.assertEqual(deployed.status, ShareTokenStatus.DEPLOYED)
+        self.assertEqual(chain.send_transaction.call_args.args[0], contract.functions.unpause.return_value)
+        self.assertEqual(chain.send_transaction.call_count, 2)
+
+    @patch("tokens.services.share_token_service.get_base_chain_client")
+    def test_pause_failure_on_chain_keeps_the_status_and_answers_with_detail(self, chain_client):
+        deployed = self.tenant.deployed_token
+        failure = TokenPauseFailedException("Token pause failed: execution reverted")
+        with patch("tokens.services.share_token_service.ShareTokenService._set_paused", side_effect=failure):
+            response = self.client.post(f"/api/v1/tokens/{deployed.uuid}/pause/")
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.json()["detail"], "Token pause failed: execution reverted")
+        deployed.refresh_from_db()
+        self.assertEqual(deployed.status, ShareTokenStatus.DEPLOYED)
+
+    @patch("tokens.services.share_token_service.get_base_chain_client", side_effect=BaseChainConnectionError("down"))
+    def test_unreachable_chain_answers_with_detail_instead_of_crashing(self, chain_client):
+        response = self.client.post(f"/api/v1/tokens/{self.tenant.deployed_token.uuid}/pause/")
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.json()["detail"], "Chain unreachable: down")
 
     @patch("tokens.tasks.deploy_share_token_task")
     def test_deploy_guards_leave_the_token_in_draft(self, deploy_task):
@@ -76,11 +107,14 @@ class ShareTokenActionTest(APITestCase):
         self.assertEqual(draft.status, ShareTokenStatus.DRAFT)
         deploy_task.defer.assert_not_called()
 
-    def test_pause_and_unpause_reject_the_wrong_state(self):
+    @patch("tokens.services.share_token_service.get_base_chain_client")
+    def test_pause_and_unpause_reject_the_wrong_state(self, chain_client):
         draft, deployed = self.tenant.token, self.tenant.deployed_token
+        chain_client.return_value.load_contract.return_value.functions.paused.return_value.call.return_value = False
 
         self.assertEqual(self.client.post(f"/api/v1/tokens/{draft.uuid}/pause/").status_code, 400)
         self.assertEqual(self.client.post(f"/api/v1/tokens/{deployed.uuid}/unpause/").status_code, 400)
+        chain_client.return_value.send_transaction.assert_not_called()
 
     def test_duplicate_symbol_is_rejected_by_the_unique_validator(self):
         response = self.client.post(

@@ -91,6 +91,32 @@ npm ci
 npx hardhat test
 ```
 
+### Local chain
+
+Share tokens are created through the `ShareTokenFactory`, shares are minted
+on allotment (never at deployment) up to the authorized cap, and only wallets
+on the `WhitelistRegistry` can receive them. To exercise that against a real
+node:
+
+```bash
+cd contracts && npx hardhat node          # terminal 1, chain id 31337
+npm --prefix contracts run deploy:local:core   # terminal 2, writes .deployed-contracts.env
+```
+
+Copy the four addresses from `.deployed-contracts.env` into `backend/.env`
+together with `BLOCKCHAIN_RPC_URL`, `BLOCKCHAIN_CHAIN_ID=31337` and the
+Hardhat account #0 key as `BLOCKCHAIN_OPERATOR_KEY` (see
+`backend/.env.example`). `make chain-test` does all of that unattended: it
+starts a node, deploys the core contracts, runs
+`backend/tokens/tests/test_chain_integration.py` (deploy, whitelist, issue,
+capital increase, pause, idempotent redeploy, recovery after a crash between
+sending the create transaction and its receipt, a mint, capital increase or
+pause whose receipt is lost after it mined) and stops the node. The same module
+is skipped by the ordinary test suite and runs in CI. `CHAIN_TEST_PORT` moves
+the node; `CHAIN_TEST_SETTINGS=ledova_backend.settings.test_postgres` (with the
+`POSTGRES_*` variables set) runs it on PostgreSQL, which adds the two-worker
+capital-increase case that needs real row locks; CI runs both.
+
 ## Safety defaults
 
 - Local development and supported public testnets only; bundled mainnet

@@ -1,13 +1,27 @@
+import logging
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as ReadTimeout
+
 from django.contrib import admin, messages
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.urls import path, reverse
 
-from tokens.exceptions import CompanyNotReadyException, InvalidTokenStateException
+from integrations.base_chain.exceptions import BaseChainConnectionError
+from tokens.exceptions import (
+    CompanyNotReadyException,
+    InvalidTokenStateException,
+    TokenPauseFailedException,
+)
 from tokens.models import IssuanceStatus, ShareIssuance, ShareToken, ShareTokenStatus
 from tokens.services import ShareTokenService
 
 from ._helpers import action_buttons, hex_column, status_badge
+
+logger = logging.getLogger(__name__)
+
+# Seconds the change page waits for paused(); a slower node gets both buttons instead of holding the page.
+PAUSED_READ_TIMEOUT = 5
 
 ISSUANCE_COLORS = {
     IssuanceStatus.PENDING: "#6c757d",
@@ -144,6 +158,11 @@ class ShareTokenAdmin(admin.ModelAdmin):
                 self.admin_site.admin_view(self.unpause_view),
                 name="tokens_sharetoken_unpause",
             ),
+            path(
+                "<uuid:uuid>/retry-deploy/",
+                self.admin_site.admin_view(self.retry_deploy_view),
+                name="tokens_sharetoken_retry_deploy",
+            ),
         ]
         return custom_urls + urls
 
@@ -171,17 +190,49 @@ class ShareTokenAdmin(admin.ModelAdmin):
             return action_buttons([("🚀 Deploy Token", deploy_url, "#007bff")])
 
         if obj.status == ShareTokenStatus.DEPLOYING:
-            return action_buttons([("⏳ Deployment in Progress", None, "#17a2b8")])
+            retry_url = reverse("admin:tokens_sharetoken_retry_deploy", args=[obj.uuid])
+            return action_buttons(
+                [("⏳ Deployment in Progress", None, "#17a2b8"), ("↻ Retry Deployment", retry_url, "#007bff")]
+            )
 
+        unpause_url = reverse("admin:tokens_sharetoken_unpause", args=[obj.uuid])
         if obj.status == ShareTokenStatus.DEPLOYED:
+            # A pause whose receipt was lost leaves the DB deployed while the chain is paused: the chain decides
+            # which button is shown (one eth_call per change page); both are offered when it cannot be read.
             pause_url = reverse("admin:tokens_sharetoken_pause", args=[obj.uuid])
-            return action_buttons([("⏸ Pause Token", pause_url, "#ffc107", "black")])
+            paused_on_chain = self._paused_on_chain(obj)
+            if paused_on_chain is True:
+                return action_buttons([("▶ Unpause Token", unpause_url, "#28a745")])
+            buttons = [("⏸ Pause Token", pause_url, "#ffc107", "black")]
+            if paused_on_chain is None:
+                buttons.append(("▶ Unpause Token", unpause_url, "#6c757d"))
+            return action_buttons(buttons)
 
         if obj.status == ShareTokenStatus.PAUSED:
-            unpause_url = reverse("admin:tokens_sharetoken_unpause", args=[obj.uuid])
             return action_buttons([("▶ Unpause Token", unpause_url, "#28a745")])
 
         return "-"
+
+    @staticmethod
+    def _paused_on_chain(obj):
+        """paused() as the chain reports it, or None when it cannot be read in PAUSED_READ_TIMEOUT seconds.
+
+        Any error (a slow or unreachable node, a misconfigured factory or ABI path, a settings error) is logged and
+        answered with None: the change page offers both buttons rather than failing on the chain.
+        """
+        executor = ThreadPoolExecutor(max_workers=1)
+        try:
+            return executor.submit(lambda: ShareTokenService().read_paused(obj)).result(timeout=PAUSED_READ_TIMEOUT)
+        except ReadTimeout:
+            logger.warning(
+                f"paused() of {obj.symbol} not answered within {PAUSED_READ_TIMEOUT}s; offering both buttons"
+            )
+            return None
+        except Exception as exc:
+            logger.warning(f"paused() of {obj.symbol} could not be read: {exc}")
+            return None
+        finally:
+            executor.shutdown(wait=False)
 
     def deploy_view(self, request, uuid):
         token = get_object_or_404(ShareToken, uuid=uuid)
@@ -199,8 +250,8 @@ class ShareTokenAdmin(admin.ModelAdmin):
         if request.method == "POST":
             messages.success(
                 request,
-                f"Deployment started for '{token.name}'. "
-                f"All {token.total_supply} shares will be minted to the company wallet.",
+                f"Deployment started for '{token.name}'. No shares are minted at deployment; "
+                f"up to {token.total_supply} shares can be issued through issuance requests.",
             )
             return HttpResponseRedirect(change_url)
 
@@ -214,27 +265,54 @@ class ShareTokenAdmin(admin.ModelAdmin):
         }
         return render(request, "admin/tokens/sharetoken/deploy_confirm.html", context)
 
-    def pause_view(self, request, uuid):
+    def retry_deploy_view(self, request, uuid):
+        """Confirm on GET and re-queue on POST: the change-page button is a link, so the state change needs a submit."""
         token = get_object_or_404(ShareToken, uuid=uuid)
+        change_url = reverse("admin:tokens_sharetoken_change", args=[token.pk])
+        try:
+            if request.method == "POST":
+                ShareTokenService.retry_deployment(token)
+            else:
+                ShareTokenService.require_retryable(token)
+        except InvalidTokenStateException as exc:
+            messages.error(request, f"Cannot retry deployment: {exc.detail}")
+            return HttpResponseRedirect(change_url)
 
-        if token.status != ShareTokenStatus.DEPLOYED:
-            messages.error(request, f"Cannot pause: token status is '{token.get_status_display()}'")
-            return HttpResponseRedirect(reverse("admin:tokens_sharetoken_change", args=[token.pk]))
+        if request.method == "POST":
+            messages.info(
+                request, f"Deployment retried for '{token.name}'; the task adopts or resumes what is on chain."
+            )
+            return HttpResponseRedirect(change_url)
 
-        token.mark_paused()
-        messages.warning(request, f"Token '{token.name}' has been paused. Transfers are now disabled.")
-        return HttpResponseRedirect(reverse("admin:tokens_sharetoken_change", args=[token.pk]))
+        context = {
+            **self.admin_site.each_context(request),
+            "title": f"Retry Deployment: {token.name}",
+            "subtitle": None,
+            "token": token,
+            "opts": self.model._meta,
+        }
+        return render(request, "admin/tokens/sharetoken/retry_deploy_confirm.html", context)
+
+    def pause_view(self, request, uuid):
+        return self._pause_view(request, uuid, "pause")
 
     def unpause_view(self, request, uuid):
+        return self._pause_view(request, uuid, "unpause")
+
+    def _pause_view(self, request, uuid, verb):
+        """The service holds the state guard, so a deployed token the chain reports paused unpauses in one click."""
         token = get_object_or_404(ShareToken, uuid=uuid)
-
-        if token.status != ShareTokenStatus.PAUSED:
-            messages.error(request, f"Cannot unpause: token status is '{token.get_status_display()}'")
-            return HttpResponseRedirect(reverse("admin:tokens_sharetoken_change", args=[token.pk]))
-
-        token.mark_unpaused()
-        messages.success(request, f"Token '{token.name}' has been unpaused. Transfers are now enabled.")
-        return HttpResponseRedirect(reverse("admin:tokens_sharetoken_change", args=[token.pk]))
+        change_url = reverse("admin:tokens_sharetoken_change", args=[token.pk])
+        try:
+            getattr(ShareTokenService(), verb)(token)
+        except (InvalidTokenStateException, TokenPauseFailedException, BaseChainConnectionError) as exc:
+            messages.error(request, f"Cannot {verb}: {getattr(exc, 'detail', exc)}")
+            return HttpResponseRedirect(change_url)
+        if verb == "pause":
+            messages.warning(request, f"Token '{token.name}' has been paused on chain. Transfers are now disabled.")
+        else:
+            messages.success(request, f"Token '{token.name}' has been unpaused on chain. Transfers are now enabled.")
+        return HttpResponseRedirect(change_url)
 
 
 @admin.register(ShareIssuance)
