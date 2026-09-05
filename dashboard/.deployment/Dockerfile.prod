@@ -14,9 +14,6 @@ COPY dashboard ./dashboard
 # Install dependencies (workspace mode - no NPM_TOKEN needed)
 RUN npm ci
 
-# Build shared packages first
-RUN npm run build:packages
-
 # Vite embeds public endpoints at build time. Keep mode-specific .env files out
 # of the Docker context and pass explicit, non-secret values instead.
 ARG VITE_API_URL=http://localhost:8000

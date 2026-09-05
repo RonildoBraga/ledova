@@ -24,10 +24,7 @@
     "check:react-singleton": "node scripts/check-react-singleton.mjs"
   },
   "dependencies": {
-    "@ledova/shared-constants": "^8.15.543",
-    "@ledova/shared-services": "^10.1.518",
-    "@ledova/shared-types": "^8.22.518",
-    "@ledova/shared-utils": "^8.23.518",
+    "@ledova/shared": "*",
     "@headlessui/react": "^2.2.10",
     "@heroicons/react": "^2.2.0",
     "@keystonehq/animated-qr": "^0.10.0",

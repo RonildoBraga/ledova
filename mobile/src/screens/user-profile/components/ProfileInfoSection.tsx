@@ -1,10 +1,10 @@
 import React from 'react';
 import { View, Text } from 'react-native';
 import { UserIcon } from 'phosphor-react-native';
-import { formatDate } from '@ledova/shared-utils';
+import { formatDate } from '@ledova/shared';
 import { Panel } from '../../../components/panel';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
-import type { UserProfile } from '@ledova/shared-types';
+import type { UserProfile } from '@ledova/shared';
 
 interface ProfileInfoSectionProps {
   userProfile: UserProfile | null | undefined;

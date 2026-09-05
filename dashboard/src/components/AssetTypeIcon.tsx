@@ -5,7 +5,7 @@ import {
   CurrencyEthIcon,
   CertificateIcon,
 } from '@phosphor-icons/react';
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
+import { DESIGN_TOKENS } from '@ledova/shared';
 import type { IconWeight } from '@phosphor-icons/react';
 
 interface AssetTypeIconProps {

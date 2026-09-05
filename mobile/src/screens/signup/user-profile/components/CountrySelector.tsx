@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Modal, ScrollView } from 'react-native';
 import { CaretDownIcon } from 'phosphor-react-native';
-import type { CountryData } from '@ledova/shared-constants';
+import type { CountryData } from '@ledova/shared';
 import { overlayColors } from '../../../../contexts';
 import { useAppTheme, useThemedStyles } from '../../../../contexts';
 

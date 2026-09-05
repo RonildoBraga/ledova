@@ -1,10 +1,9 @@
 import { WalletIcon } from '@phosphor-icons/react';
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
+import { DESIGN_TOKENS, formatPercentage, formatCryptoBalance } from '@ledova/shared';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
-import { formatPercentage, formatCryptoBalance } from '@ledova/shared-utils';
 import { useCurrency } from '@hooks/useCurrency';
-import type { WalletTotals } from '@ledova/shared-types';
+import type { WalletTotals } from '@ledova/shared';
 import { Panel } from '@components/Panel';
 import { useColors } from '@hooks/useColors';
 

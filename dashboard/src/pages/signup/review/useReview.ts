@@ -1,13 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 
-import { getUserProfiles, updateUserProfileCompletion, getCompanies } from '@ledova/shared-services';
-import { CACHE_TIMING } from '@ledova/shared-constants';
+import { getUserProfiles, updateUserProfileCompletion, getCompanies, CACHE_TIMING } from '@ledova/shared';
 import { useFinancialProfile } from '@hooks/useFinancialProfile';
 import { useAccountRole } from '@hooks/useAccountRole';
 import apiClient from '@services/apiClient';
 
-import type { ReviewData, Company } from '@ledova/shared-types';
+import type { ReviewData, Company } from '@ledova/shared';
 
 export interface ReviewHookReturn {
   data: ReviewData;

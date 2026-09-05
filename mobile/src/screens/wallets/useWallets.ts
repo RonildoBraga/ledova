@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
-import type { CreateWallet, DerivedAddress, HardwareWalletImport } from '@ledova/shared-types';
-import { getChainByShortName } from '@ledova/shared-constants';
+import type { CreateWallet, DerivedAddress, HardwareWalletImport } from '@ledova/shared';
+import { getChainByShortName } from '@ledova/shared';
 import { useWalletsCrud } from './useWalletsCrud';
 import type { SoftwareWalletImport } from '../../utils/softwareWallet';
 

@@ -1,7 +1,6 @@
 import React from 'react';
-import { FormErrors } from '@ledova/shared-types';
+import { FormErrors, SOURCE_OF_FUNDS_OPTIONS, INTENDED_USE_OPTIONS, DESIGN_TOKENS } from '@ledova/shared';
 import { FinancialProfileFormState } from '../useSignupFinancialProfile';
-import { SOURCE_OF_FUNDS_OPTIONS, INTENDED_USE_OPTIONS, DESIGN_TOKENS } from '@ledova/shared-constants';
 import { Field, Label, Input, Description } from '@headlessui/react';
 import { WarningIcon } from '@phosphor-icons/react';
 import RadioGroupField from './RadioGroupField';

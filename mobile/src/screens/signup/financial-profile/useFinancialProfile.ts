@@ -1,12 +1,7 @@
 import { useState, useEffect } from 'react';
-import {
-  getFinancialProfiles,
-  createFinancialProfile,
-  updateFinancialProfile,
-  getUserProfiles,
-} from '@ledova/shared-services';
+import { getFinancialProfiles, createFinancialProfile, updateFinancialProfile, getUserProfiles } from '@ledova/shared';
 import { apiClient } from '../../../services/apiClient';
-import type { CreateFinancialProfile, FinancialProfileFormState, FormErrors } from '@ledova/shared-types';
+import type { CreateFinancialProfile, FinancialProfileFormState, FormErrors } from '@ledova/shared';
 
 /**
  * Hook for managing financial profile

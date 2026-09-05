@@ -6,7 +6,7 @@ import { ripemd160 } from '@noble/hashes/ripemd160';
 import { secp256k1 } from 'ethereum-cryptography/secp256k1';
 import { keccak256 } from 'ethereum-cryptography/keccak';
 import { bech32 } from 'bech32';
-import type { HardwareWalletNetworkType } from '@ledova/shared-types';
+import type { HardwareWalletNetworkType } from '@ledova/shared';
 
 /**
  * Detects network type from BIP44 derivation path

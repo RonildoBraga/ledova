@@ -57,7 +57,7 @@ Common patterns are defined once in composable interfaces and reused across doma
 
 ## Composable Interfaces
 
-These are the building blocks defined in `@ledova/shared-types/api`:
+These are the building blocks defined in `packages/shared/src/types/api.ts`:
 
 ### PaginationParams
 

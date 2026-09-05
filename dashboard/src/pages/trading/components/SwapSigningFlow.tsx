@@ -7,7 +7,7 @@
 import { useEffect, useCallback } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { XIcon, ArrowsDownUpIcon, CheckCircleIcon, WarningCircleIcon, SpinnerGapIcon } from '@phosphor-icons/react';
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
+import { DESIGN_TOKENS } from '@ledova/shared';
 import { AnimatedQRCode } from '@keystonehq/animated-qr';
 
 const ICON_MD = DESIGN_TOKENS.icon.sizes.md;
@@ -15,7 +15,7 @@ const ICON_XL = DESIGN_TOKENS.icon.sizes.xl;
 const ICON_HERO = DESIGN_TOKENS.icon.sizes.hero;
 const ICON_DISPLAY = DESIGN_TOKENS.icon.sizes.display;
 import { useQRScanner, QRScannerView } from '@components/qr';
-import type { SwapOrder, Wallet } from '@ledova/shared-types';
+import type { SwapOrder, Wallet } from '@ledova/shared';
 import { useAtomicSwapSigning } from '../hooks/useAtomicSwapSigning';
 import { decodeKeystoneMessageSignature, decodeKeystoneSignedTransaction } from '@utils/keystone/urDecoder';
 

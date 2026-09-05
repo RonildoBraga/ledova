@@ -1,9 +1,8 @@
 import { useState, useCallback } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { prepareTransfer, prepareBitcoinTransfer, broadcastTransfer } from '@ledova/shared-services';
-import { BLOCKCHAIN } from '@ledova/shared-constants';
+import { prepareTransfer, prepareBitcoinTransfer, broadcastTransfer, BLOCKCHAIN } from '@ledova/shared';
 import apiClient from '@services/apiClient';
-import type { Wallet, PreparedWalletTransfer } from '@ledova/shared-types';
+import type { Wallet, PreparedWalletTransfer } from '@ledova/shared';
 
 interface UseCryptoTransferSigningParams {
   wallet: Wallet | null;

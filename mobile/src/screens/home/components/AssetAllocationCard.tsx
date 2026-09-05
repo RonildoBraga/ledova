@@ -4,9 +4,9 @@ import { Panel } from '../../../components/panel';
 import { AllocationPieChart } from './AllocationPieChart';
 import { ErrorBoundary } from '../../../components/ErrorBoundary';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
-import { formatPercentage } from '@ledova/shared-utils';
+import { formatPercentage } from '@ledova/shared';
 import { useCurrency } from '../../../hooks/useCurrency';
-import type { AssetAllocationItem, HoldingsSummary } from '@ledova/shared-types';
+import type { AssetAllocationItem, HoldingsSummary } from '@ledova/shared';
 
 interface AssetAllocationCardProps {
   assetAllocation: AssetAllocationItem[];

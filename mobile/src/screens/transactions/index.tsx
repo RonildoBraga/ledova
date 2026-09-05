@@ -18,7 +18,7 @@ import { TransactionListItem, TransactionDetailModal } from '../../components/bl
 import { TransactionFiltersModal } from './components/filters/TransactionFiltersModal';
 import { TransactionSortModal } from './components/TransactionSortModal';
 import type { TransactionSortOption } from './components/TransactionSortModal';
-import type { Transaction } from '@ledova/shared-types';
+import type { Transaction } from '@ledova/shared';
 
 function isIncomingTransaction(tx: Transaction): boolean {
   const walletAddr = tx.walletAddress?.toLowerCase() || '';

@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, TextInput, ScrollView } from 'react-native';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
-import { formatWalletAddressShort } from '@ledova/shared-utils';
-import type { TransactionData } from '@ledova/shared-types';
+import { formatWalletAddressShort } from '@ledova/shared';
+import type { TransactionData } from '@ledova/shared';
 
 interface BitcoinSignTransactionProps {
   transactionData: TransactionData;

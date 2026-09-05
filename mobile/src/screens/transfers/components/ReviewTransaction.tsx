@@ -1,9 +1,8 @@
 import React from 'react';
 import { View, Text, ScrollView } from 'react-native';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
-import { formatWalletAddressMedium } from '@ledova/shared-utils';
-import { isEthereumChain } from '@ledova/shared-constants';
-import type { TransactionData } from '@ledova/shared-types';
+import { formatWalletAddressMedium, isEthereumChain } from '@ledova/shared';
+import type { TransactionData } from '@ledova/shared';
 
 interface ReviewTransactionProps {
   transactionData: TransactionData;

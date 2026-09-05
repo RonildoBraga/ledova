@@ -1,7 +1,6 @@
 import { SpinnerGapIcon } from '@phosphor-icons/react';
-import type { ShareToken } from '@ledova/shared-types';
-import { formatCurrency } from '@ledova/shared-utils';
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
+import type { ShareToken } from '@ledova/shared';
+import { formatCurrency, DESIGN_TOKENS } from '@ledova/shared';
 import { Panel } from '@components/Panel';
 
 const ICON_SM = DESIGN_TOKENS.icon.sizes.sm;

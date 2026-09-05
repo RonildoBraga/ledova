@@ -7,18 +7,20 @@ import {
   CurrencyEthIcon,
   CurrencyBtcIcon,
 } from '@phosphor-icons/react';
-import { formatCryptoBalance, formatWalletAddressMedium, formatDate } from '@ledova/shared-utils';
-import { useCurrency } from '@hooks/useCurrency';
 import {
+  formatCryptoBalance,
+  formatWalletAddressMedium,
+  formatDate,
   getChainShortCode,
   isBitcoinChain,
   WALLET_VERIFICATION_STATUS,
   WALLET_TYPE,
   DESIGN_TOKENS,
-} from '@ledova/shared-constants';
+} from '@ledova/shared';
+import { useCurrency } from '@hooks/useCurrency';
 
 const ICON_SM = DESIGN_TOKENS.icon.sizes.sm;
-import type { Wallet as WalletType } from '@ledova/shared-types';
+import type { Wallet as WalletType } from '@ledova/shared';
 import { Modal } from '@components/Modal';
 
 interface EditWalletModalProps {

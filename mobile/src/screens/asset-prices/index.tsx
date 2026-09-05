@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { FunnelIcon, ChartBarIcon, SortAscendingIcon } from 'phosphor-react-native';
-import type { Asset } from '@ledova/shared-types';
+import type { Asset } from '@ledova/shared';
 import { GradientBackground } from '../../components/GradientBackground';
 import { Panel } from '../../components/panel';
 import { useAppTheme, useThemedStyles } from '../../contexts';

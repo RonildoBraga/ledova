@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import type { SwapTypedData, Wallet } from '@ledova/shared-types';
+import type { SwapTypedData, Wallet } from '@ledova/shared';
 import { encodeEthereumTypedData, encodeEthereumTransaction } from '../../utils/keystone/urEncoder';
 import { getSeedPhrase } from '../../services/secureKeyStorage';
 import { signEthereumTransaction, signEthereumTypedData } from '../../utils/softwareWallet/localSigner';

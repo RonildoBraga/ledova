@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { PlusIcon, FunnelIcon } from 'phosphor-react-native';
-import type { Wallet } from '@ledova/shared-types';
+import type { Wallet } from '@ledova/shared';
 import type { WalletsStackParamList } from '../../navigation/WalletsStackNavigator';
 import { GradientBackground } from '../../components/GradientBackground';
 import { WalletList, WalletSortModal, useWalletSort } from '../../components/wallet-list';
@@ -12,7 +12,7 @@ import { DeleteWalletModal } from './components/DeleteWalletModal';
 import { useWallets } from './useWallets';
 import { useWalletsCrud } from './useWalletsCrud';
 import { useAppTheme, useThemedStyles } from '../../contexts';
-import { formatWalletAddressShort } from '@ledova/shared-utils';
+import { formatWalletAddressShort } from '@ledova/shared';
 
 export function WalletsScreen() {
   const theme = useAppTheme();

@@ -1,8 +1,8 @@
 import React, { useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { XIcon } from 'phosphor-react-native';
-import { formatDateTime } from '@ledova/shared-utils';
-import type { Notification } from '@ledova/shared-types';
+import { formatDateTime } from '@ledova/shared';
+import type { Notification } from '@ledova/shared';
 import { useAppTheme, useThemedStyles } from '../../contexts';
 import { CustomModal } from '../modal';
 import { useNotifications } from '../../hooks/useNotifications';

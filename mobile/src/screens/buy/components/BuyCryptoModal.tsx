@@ -13,17 +13,21 @@ import {
   ArrowRightIcon,
 } from 'phosphor-react-native';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { BUYABLE_ASSETS, WALLET_TYPE, WALLET_VERIFICATION_STATUS, CACHE_TIMING } from '@ledova/shared-constants';
-import type { BuyableAssetConfig } from '@ledova/shared-constants';
-import { getWallets, getOnRampWidgetUrl, getUserProfiles } from '@ledova/shared-services';
 import {
+  BUYABLE_ASSETS,
+  WALLET_TYPE,
+  WALLET_VERIFICATION_STATUS,
+  CACHE_TIMING,
+  getWallets,
+  getOnRampWidgetUrl,
+  getUserProfiles,
   formatWalletAddressShort,
   formatCryptoBalance,
   formatSyncAge,
   getUserVerificationStatus,
-} from '@ledova/shared-utils';
+} from '@ledova/shared';
+import type { BuyableAssetConfig, Wallet } from '@ledova/shared';
 import { useCurrency } from '../../../hooks/useCurrency';
-import type { Wallet } from '@ledova/shared-types';
 import { CustomModal } from '../../../components/modal';
 import { apiClient } from '../../../services/apiClient';
 import { useAppTheme, useThemedStyles } from '../../../contexts';

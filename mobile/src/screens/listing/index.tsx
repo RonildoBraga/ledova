@@ -11,7 +11,7 @@ import {
   EyeIcon,
 } from 'phosphor-react-native';
 import * as DocumentPicker from 'expo-document-picker';
-import type { DocumentType } from '@ledova/shared-types';
+import type { DocumentType } from '@ledova/shared';
 import { useAppTheme, useThemedStyles } from '../../contexts';
 import { GradientBackground } from '../../components/GradientBackground';
 import { Panel } from '../../components/panel';

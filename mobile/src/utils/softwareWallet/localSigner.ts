@@ -4,7 +4,7 @@ import { HDKey } from 'ethereum-cryptography/hdkey';
 import { mnemonicToSeedSync } from 'ethereum-cryptography/bip39';
 import { secp256k1 } from 'ethereum-cryptography/secp256k1';
 import { sha256 } from '@noble/hashes/sha256';
-import { isBitcoinTestnetSigningPath } from '@ledova/shared-utils';
+import { isBitcoinTestnetSigningPath } from '@ledova/shared';
 
 /**
  * Zero out Uint8Arrays to remove sensitive key material from memory.

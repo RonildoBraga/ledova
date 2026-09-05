@@ -18,11 +18,7 @@ config.resolver.extraNodeModules = {
 const path = require('path');
 const workspacePackages = path.resolve(__dirname, '../packages');
 
-// Follow the file:../packages/packages/* links so a clean clone can bundle.
+// Follow the file:../packages/shared link so Metro bundles the shared sources.
 config.watchFolders = [workspacePackages];
-config.resolver.nodeModulesPaths = [
-  path.resolve(__dirname, 'node_modules'),
-  path.resolve(workspacePackages, 'node_modules'),
-];
 
 module.exports = config;

@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import type { Asset } from '@ledova/shared-types';
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
+import type { Asset } from '@ledova/shared';
+import { DESIGN_TOKENS } from '@ledova/shared';
 import { ChartBarIcon, FunnelIcon, ArrowsClockwiseIcon } from '@phosphor-icons/react';
 import { Panel } from '@components/Panel';
 import { useHeaderActions } from '@hooks/useHeaderActions';

@@ -1,9 +1,17 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getWallets, createWallet, updateWallet, deleteWallet, syncWallet } from '@ledova/shared-services';
-import { CACHE_TIMING, BLOCKCHAIN } from '@ledova/shared-constants';
-import type { CreateWallet } from '@ledova/shared-types';
-import { calculateWalletTotals, filterWalletsByChain } from '@ledova/shared-utils';
+import {
+  getWallets,
+  createWallet,
+  updateWallet,
+  deleteWallet,
+  syncWallet,
+  CACHE_TIMING,
+  BLOCKCHAIN,
+  calculateWalletTotals,
+  filterWalletsByChain,
+} from '@ledova/shared';
+import type { CreateWallet } from '@ledova/shared';
 import { apiClient } from '../../services/apiClient';
 import { invalidateHomeDashboard } from '../../utils/queryInvalidation';
 import { useUserPreferences } from '../../hooks/useUserPreferences';

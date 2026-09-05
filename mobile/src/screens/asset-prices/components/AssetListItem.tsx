@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { StarIcon } from 'phosphor-react-native';
-import type { Asset } from '@ledova/shared-types';
+import type { Asset } from '@ledova/shared';
 import { useCurrency } from '../../../hooks/useCurrency';
 import { AssetTypeIcon } from '../../../components/AssetTypeIcon';
 import { useAppTheme, useThemedStyles } from '../../../contexts';

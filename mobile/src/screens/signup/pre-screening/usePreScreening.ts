@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getUserProfiles, updateUserProfile } from '@ledova/shared-services';
-import type { UpdateUserProfile } from '@ledova/shared-types';
+import { getUserProfiles, updateUserProfile } from '@ledova/shared';
+import type { UpdateUserProfile } from '@ledova/shared';
 import { apiClient } from '../../../services/apiClient';
 
 export const usePreScreening = () => {

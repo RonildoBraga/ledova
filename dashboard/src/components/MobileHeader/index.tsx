@@ -4,7 +4,7 @@ import { ListIcon, XIcon } from '@phosphor-icons/react';
 import { usePageTitle } from '@hooks/usePageTitle';
 import { NotificationBell } from '@components/NotificationBell';
 import { Sidebar } from '@components/Sidebar';
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
+import { DESIGN_TOKENS } from '@ledova/shared';
 
 const ICON_MD = DESIGN_TOKENS.icon.sizes.md;
 

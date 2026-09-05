@@ -37,7 +37,7 @@ The `README.md` quick-start covers the full local stack. In short:
 
 - **Contracts:** `cd contracts && npm ci && npx hardhat compile && npx hardhat test`
 - **Backend + web stack (Docker):** `make init-local && make dev-up`
-- **Shared packages + dashboard:** `npm ci && npm run build:packages && npm run dev:dashboard`
+- **Shared package + dashboard:** `npm ci && npm run dev:dashboard` (the dashboard compiles `packages/shared` from source; no build step)
 
 Copy each `.env.example` to a local `.env` and fill in your own values before
 running that component. Local compilation and contract tests do not need any

@@ -3,11 +3,13 @@
 /**
  * Generates Tailwind CSS v4 @theme tokens from DESIGN_TOKENS.
  *
- * Single source of truth: packages/shared-constants/src/ui/design-tokens.ts
+ * Single source of truth: packages/shared/src/constants/ui/design-tokens.ts
  * Outputs:  dashboard/src/styles/tokens.css
  *           marketing/src/tokens.css
  *
- * Usage: node packages/scripts/generate-css-tokens.mjs
+ * Usage: make generate-tokens
+ *        (npx tsx packages/scripts/generate-css-tokens.mjs; tsx loads the .ts source directly)
+ * CI regenerates both files and fails when they differ from the committed copies.
  */
 
 import { writeFileSync } from 'fs';
@@ -17,8 +19,8 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '../..');
 
-// Import from built shared-constants
-const { DESIGN_TOKENS, LIGHT_COLORS } = await import('../packages/shared-constants/dist/ui/design-tokens.js');
+// Imported straight from the TypeScript source (run through tsx)
+const { DESIGN_TOKENS, LIGHT_COLORS } = await import('../shared/src/constants/ui/design-tokens.ts');
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -155,9 +157,8 @@ const sharedVars = generateSharedVars();
 const css = `/**
  * AUTO-GENERATED — DO NOT EDIT
  *
- * Source of truth: packages/shared-constants/src/ui/design-tokens.ts
- * Regenerate:      node packages/scripts/generate-css-tokens.mjs
- *                  (or: make generate-tokens from repo root)
+ * Source of truth: packages/shared/src/constants/ui/design-tokens.ts
+ * Regenerate:      make generate-tokens (from the repo root)
  */
 
 @theme {${[...darkColorVars, ...sharedVars].join('\n')}

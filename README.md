@@ -3,7 +3,7 @@
 Ledova is an experimental, open-source reference implementation for modelling
 allowlist-gated share tokens and settlement flows. The repository contains
 Solidity contracts, a Django API, web applications, a React Native client, and
-shared TypeScript packages.
+a shared TypeScript package.
 
 Ledova is the sanitized public continuation of the earlier private Blueberry
 codebase. The transition preserves its existing architecture and behaviour

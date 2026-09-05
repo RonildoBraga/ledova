@@ -19,15 +19,16 @@ import {
 } from 'phosphor-react-native';
 
 import type { WalletsStackParamList } from '../../../navigation/WalletsStackNavigator';
-import type { Wallet, DerivedAddress } from '@ledova/shared-types';
+import type { Wallet, DerivedAddress } from '@ledova/shared';
 import {
   WALLET_VERIFICATION_STATUS,
   WALLET_TYPE,
   getChainByShortName,
   getChainShortCode,
   isBitcoinChain,
-} from '@ledova/shared-constants';
-import { formatDate, formatCryptoBalance } from '@ledova/shared-utils';
+  formatDate,
+  formatCryptoBalance,
+} from '@ledova/shared';
 import { useCurrency } from '../../../hooks/useCurrency';
 import { GradientBackground } from '../../../components/GradientBackground';
 import { Panel } from '../../../components/panel';

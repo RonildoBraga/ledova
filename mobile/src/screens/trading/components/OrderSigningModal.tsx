@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { View, Text, ActivityIndicator } from 'react-native';
 import { CheckCircleIcon, WarningCircleIcon } from 'phosphor-react-native';
-import type { CreateOrderRequest, TransferOrder, Wallet } from '@ledova/shared-types';
+import type { CreateOrderRequest, TransferOrder, Wallet } from '@ledova/shared';
 import { CustomModal } from '../../../components/modal';
 import { QRDisplay, QRScanner } from '../../../components/qr';
 import { decodeKeystoneMessageSignature } from '../../../utils/keystone/urDecoder';

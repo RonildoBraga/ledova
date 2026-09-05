@@ -1,4 +1,4 @@
-import type { TransferableAsset, TransactionData, Wallet } from '@ledova/shared-types';
+import type { TransferableAsset, TransactionData, Wallet } from '@ledova/shared';
 
 export const generateMockTransferableAssets = (wallet: Wallet): TransferableAsset[] => {
   const assets: TransferableAsset[] = [];

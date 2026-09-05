@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { CaretDownIcon } from '@phosphor-icons/react';
-import type { CountryData } from '@ledova/shared-types';
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
+import type { CountryData } from '@ledova/shared';
+import { DESIGN_TOKENS } from '@ledova/shared';
 
 const ICON_SM = DESIGN_TOKENS.icon.sizes.sm;
 

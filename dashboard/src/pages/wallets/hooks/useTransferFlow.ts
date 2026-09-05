@@ -1,10 +1,16 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getWhitelistStatus, getWalletHoldings } from '@ledova/shared-services';
-import { CACHE_TIMING, BLOCKCHAIN, getChainShortCode, getBlockchainDisplayName } from '@ledova/shared-constants';
-import { formatCryptoBalance } from '@ledova/shared-utils';
+import {
+  getWhitelistStatus,
+  getWalletHoldings,
+  CACHE_TIMING,
+  BLOCKCHAIN,
+  getChainShortCode,
+  getBlockchainDisplayName,
+  formatCryptoBalance,
+} from '@ledova/shared';
 import apiClient from '@services/apiClient';
-import type { Wallet } from '@ledova/shared-types';
+import type { Wallet } from '@ledova/shared';
 import { useCryptoTransferSigning } from './useCryptoTransferSigning';
 
 export type AssetType = 'crypto' | 'stablecoin' | 'share_token';

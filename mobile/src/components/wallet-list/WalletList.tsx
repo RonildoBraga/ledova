@@ -1,9 +1,14 @@
 import React, { useMemo } from 'react';
 import { ActivityIndicator, Text, View, ScrollView, RefreshControl } from 'react-native';
 import { CircleIcon, CurrencyBtcIcon, CurrencyEthIcon, WalletIcon } from 'phosphor-react-native';
-import type { Wallet } from '@ledova/shared-types';
-import { BLOCKCHAIN, getBlockchainDisplayName } from '@ledova/shared-constants';
-import { formatCryptoBalance, calculateWalletTotals, filterWalletsByChain } from '@ledova/shared-utils';
+import type { Wallet } from '@ledova/shared';
+import {
+  BLOCKCHAIN,
+  getBlockchainDisplayName,
+  formatCryptoBalance,
+  calculateWalletTotals,
+  filterWalletsByChain,
+} from '@ledova/shared';
 import { useCurrency } from '../../hooks/useCurrency';
 import { Panel } from '../panel';
 import { Accordion } from '../accordion';

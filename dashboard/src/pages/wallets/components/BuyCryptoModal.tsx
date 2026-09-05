@@ -10,12 +10,18 @@ import {
   SpinnerGapIcon,
 } from '@phosphor-icons/react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { BUYABLE_ASSETS, WALLET_TYPE, DESIGN_TOKENS } from '@ledova/shared-constants';
-import type { BuyableAssetConfig } from '@ledova/shared-constants';
-import { getWallets, getOnRampWidgetUrl } from '@ledova/shared-services';
-import { formatWalletAddressShort, formatCryptoBalance, formatSyncAge } from '@ledova/shared-utils';
+import {
+  BUYABLE_ASSETS,
+  WALLET_TYPE,
+  DESIGN_TOKENS,
+  getWallets,
+  getOnRampWidgetUrl,
+  formatWalletAddressShort,
+  formatCryptoBalance,
+  formatSyncAge,
+} from '@ledova/shared';
+import type { BuyableAssetConfig, Wallet } from '@ledova/shared';
 import { useCurrency } from '@hooks/useCurrency';
-import type { Wallet } from '@ledova/shared-types';
 import { Modal } from '@components/Modal';
 import { WalletBadge } from '@components/Wallet';
 import apiClient from '@services/apiClient';

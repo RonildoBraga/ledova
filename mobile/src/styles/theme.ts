@@ -1,4 +1,4 @@
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
+import { DESIGN_TOKENS } from '@ledova/shared';
 
 /**
  * Static layout constants. These don't change between themes.

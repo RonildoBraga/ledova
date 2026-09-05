@@ -4,8 +4,8 @@ import { useCurrency } from '@hooks/useCurrency';
 import { Panel } from '@components/Panel';
 import { PortfolioValueChart } from './performance/PortfolioValueChart';
 import { HoldingsChart } from './performance/HoldingsChart';
-import type { TimeRange } from '@ledova/shared-constants';
-import { TIME_RANGES } from '@ledova/shared-constants';
+import type { TimeRange } from '@ledova/shared';
+import { TIME_RANGES } from '@ledova/shared';
 
 type ViewMode = 'total' | 'by-asset';
 

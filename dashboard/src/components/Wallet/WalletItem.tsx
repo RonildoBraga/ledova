@@ -1,8 +1,13 @@
 import { HardDriveIcon, CloudIcon, ClockIcon } from '@phosphor-icons/react';
-import { formatCryptoBalance, formatWalletAddressShort, formatSyncAge } from '@ledova/shared-utils';
+import {
+  formatCryptoBalance,
+  formatWalletAddressShort,
+  formatSyncAge,
+  WALLET_TYPE,
+  DESIGN_TOKENS,
+} from '@ledova/shared';
 import { useCurrency } from '@hooks/useCurrency';
-import { WALLET_TYPE, DESIGN_TOKENS } from '@ledova/shared-constants';
-import type { Wallet } from '@ledova/shared-types';
+import type { Wallet } from '@ledova/shared';
 import { WalletBadge } from './WalletBadge';
 
 const ICON_XS = DESIGN_TOKENS.icon.sizes.xs;

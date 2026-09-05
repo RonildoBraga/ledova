@@ -18,7 +18,7 @@ import {
   BuildingsIcon,
   FileTextIcon,
 } from 'phosphor-react-native';
-import { signout } from '@ledova/shared-services';
+import { signout } from '@ledova/shared';
 import { apiClient } from '../services/apiClient';
 import { notificationsService } from '../services/notificationsService';
 import { clearTokens } from '../services/tokenStorage';

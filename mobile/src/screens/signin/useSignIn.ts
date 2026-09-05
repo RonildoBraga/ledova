@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { signin } from '@ledova/shared-services';
-import { FormErrors, SigninRequest } from '@ledova/shared-types';
+import { signin, FormErrors, SigninRequest } from '@ledova/shared';
 import { apiClient, rotateRefreshToken, UserFriendlyError } from '../../services/apiClient';
 import { storeTokens } from '../../services/tokenStorage';
 import { notificationsService } from '../../services/notificationsService';

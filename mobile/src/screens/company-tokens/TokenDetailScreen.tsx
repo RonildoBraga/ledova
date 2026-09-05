@@ -28,7 +28,7 @@ import type {
   IssuanceStatus,
   CapitalIncreaseRequest,
   CapitalIncreaseStatus,
-} from '@ledova/shared-types';
+} from '@ledova/shared';
 import { GradientBackground } from '../../components/GradientBackground';
 import { PrimaryButton } from '../../components/buttons';
 import { CustomModal } from '../../components/modal';

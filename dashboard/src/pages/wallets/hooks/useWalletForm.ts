@@ -1,9 +1,14 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { URDecoder, UREncoder } from '@ngraveio/bc-ur';
 import { Html5Qrcode } from 'html5-qrcode';
-import { detectChainFromAddress, validateWalletAddress } from '@ledova/shared-utils';
-import { getActiveChains, getChainByShortName, getChainConfig } from '@ledova/shared-constants';
-import type { CreateWallet, DerivedAddress, HardwareWalletImport } from '@ledova/shared-types';
+import {
+  detectChainFromAddress,
+  validateWalletAddress,
+  getActiveChains,
+  getChainByShortName,
+  getChainConfig,
+} from '@ledova/shared';
+import type { CreateWallet, DerivedAddress, HardwareWalletImport } from '@ledova/shared';
 
 type FormStep = 'input' | 'selectAddresses';
 

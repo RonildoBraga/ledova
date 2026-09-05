@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { verifyAuth } from '@ledova/shared-services';
-import { CACHE_TIMING } from '@ledova/shared-constants';
+import { verifyAuth, CACHE_TIMING } from '@ledova/shared';
 import { apiClient } from '../services/apiClient';
 
 export const useAuth = () => {

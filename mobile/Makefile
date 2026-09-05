@@ -1,9 +1,8 @@
-.PHONY: help install sync-packages start ios android typecheck lint doctor
+.PHONY: help install start ios android typecheck lint doctor
 
 help:
 	@echo "Ledova mobile app (local development only)"
 	@echo "  make install        Install dependencies"
-	@echo "  make sync-packages  Build local shared packages"
 	@echo "  make start          Start Expo"
 	@echo "  make ios            Run the iOS development build"
 	@echo "  make android        Run the Android development build"
@@ -13,16 +12,13 @@ help:
 install:
 	npm ci
 
-sync-packages:
-	cd .. && npm run build:packages
-
-start: sync-packages
+start:
 	npm start
 
-ios: sync-packages
+ios:
 	npm run ios
 
-android: sync-packages
+android:
 	npm run android
 
 typecheck:

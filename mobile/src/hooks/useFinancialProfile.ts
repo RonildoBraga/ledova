@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { getFinancialProfiles } from '@ledova/shared-services';
-import { CACHE_TIMING } from '@ledova/shared-constants';
+import { getFinancialProfiles, CACHE_TIMING } from '@ledova/shared';
 import { apiClient } from '../services/apiClient';
 
 export function useFinancialProfile() {

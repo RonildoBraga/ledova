@@ -7,7 +7,7 @@ import {
   ClockCountdownIcon,
   ArrowCounterClockwiseIcon,
 } from '@phosphor-icons/react';
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
+import { DESIGN_TOKENS } from '@ledova/shared';
 import { useIdentityVerification } from '@hooks/useIdentityVerification';
 import { Modal } from '@components/Modal';
 

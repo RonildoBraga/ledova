@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getUserProfiles, updateUserProfile } from '@ledova/shared-services';
-import { CACHE_TIMING } from '@ledova/shared-constants';
-import type { UpdateUserProfile } from '@ledova/shared-types';
+import { getUserProfiles, updateUserProfile, CACHE_TIMING } from '@ledova/shared';
+import type { UpdateUserProfile } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 
 export function useUserProfile() {

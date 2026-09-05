@@ -1,10 +1,10 @@
 import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { ArrowUpIcon, ArrowDownIcon } from 'phosphor-react-native';
-import { formatShortDate, formatTime, getBlockchainShortName, formatCryptoBalance } from '@ledova/shared-utils';
+import { formatShortDate, formatTime, getBlockchainShortName, formatCryptoBalance } from '@ledova/shared';
 import { useCurrency } from '../../../hooks/useCurrency';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
-import type { Transaction } from '@ledova/shared-types';
+import type { Transaction } from '@ledova/shared';
 
 interface TransactionListItemProps {
   transaction: Transaction;

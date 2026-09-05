@@ -3,8 +3,8 @@ import { AppState } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import * as SecureStore from 'expo-secure-store';
 import EventSource from 'react-native-sse';
-import { TRADING_ENDPOINTS, TRADING_CONFIG, TRADING_EVENT_INVALIDATION_MAP } from '@ledova/shared-constants';
-import type { TradingEventType } from '@ledova/shared-constants';
+import { TRADING_ENDPOINTS, TRADING_CONFIG, TRADING_EVENT_INVALIDATION_MAP } from '@ledova/shared';
+import type { TradingEventType } from '@ledova/shared';
 
 type SSEEventTypes = TradingEventType | 'connected';
 

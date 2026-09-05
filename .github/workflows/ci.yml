@@ -23,8 +23,12 @@ jobs:
             mobile/package-lock.json
       - name: Install dependencies
         run: make install
-      - name: Build packages, dashboard, marketing, contracts
+      - name: Build dashboard, marketing, contracts
         run: make build
+      - name: Design tokens match packages/shared
+        run: |
+          make generate-tokens
+          git diff --exit-code dashboard/src/styles/tokens.css marketing/src/tokens.css
       - name: Type-check workspaces
         run: |
           npm run typecheck

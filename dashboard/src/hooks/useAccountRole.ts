@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { CACHE_TIMING } from '@ledova/shared-constants';
+import { CACHE_TIMING } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 
 export type AccountRole = 'investor' | 'company' | 'both';

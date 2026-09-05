@@ -10,9 +10,8 @@ import {
   QrCodeIcon,
   SpinnerGapIcon,
 } from '@phosphor-icons/react';
-import type { TransferOrder, SwapOrder, OrderBook as OrderBookType, OrderBookEntry } from '@ledova/shared-types';
-import { formatCurrency } from '@ledova/shared-utils';
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
+import type { TransferOrder, SwapOrder, OrderBook as OrderBookType, OrderBookEntry } from '@ledova/shared';
+import { formatCurrency, DESIGN_TOKENS } from '@ledova/shared';
 
 const ICON_XS = DESIGN_TOKENS.icon.sizes.xs;
 const ICON_SM = DESIGN_TOKENS.icon.sizes.sm;

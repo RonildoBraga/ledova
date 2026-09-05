@@ -3,9 +3,9 @@ import { WalletIcon } from 'phosphor-react-native';
 import { PieChart } from 'react-native-gifted-charts';
 import { Panel } from '../../../components/panel';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
-import { formatCryptoBalance, formatPercentage } from '@ledova/shared-utils';
+import { formatCryptoBalance, formatPercentage } from '@ledova/shared';
 import { useCurrency } from '../../../hooks/useCurrency';
-import type { WalletTotals } from '@ledova/shared-types';
+import type { WalletTotals } from '@ledova/shared';
 
 const PIE_SIZE = 180;
 

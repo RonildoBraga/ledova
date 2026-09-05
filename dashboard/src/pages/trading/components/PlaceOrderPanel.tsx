@@ -1,8 +1,7 @@
 import { useRef, useState, useCallback } from 'react';
-import type { ShareToken, CreateOrderRequest, TransferOrder, Wallet } from '@ledova/shared-types';
-import type { OrderType } from '@ledova/shared-constants';
+import type { ShareToken, CreateOrderRequest, TransferOrder, Wallet, OrderType } from '@ledova/shared';
 import { ShieldWarningIcon } from '@phosphor-icons/react';
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
+import { DESIGN_TOKENS } from '@ledova/shared';
 import { Modal } from '@components/Modal';
 import { OrderForm } from './OrderForm';
 import type { OrderFormRef } from './OrderForm';

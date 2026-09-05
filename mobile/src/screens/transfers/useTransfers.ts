@@ -1,14 +1,13 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Alert } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type { AxiosResponse } from 'axios';
 import {
   getWallets,
   prepareTransfer,
   prepareBitcoinTransfer,
   broadcastTransfer,
   getWalletHoldings,
-} from '@ledova/shared-services';
-import {
   CACHE_TIMING,
   getBlockchainDisplayName,
   getChainShortCode,
@@ -16,8 +15,8 @@ import {
   isBitcoinChain,
   isEthereumChain,
   WALLET_VERIFICATION_STATUS,
-} from '@ledova/shared-constants';
-import { getErrorMessage } from '@ledova/shared-utils';
+  getErrorMessage,
+} from '@ledova/shared';
 import { apiClient } from '../../services/apiClient';
 import { useUserPreferences } from '../../hooks/useUserPreferences';
 import { useMockData } from '../../_mock/useMockData';
@@ -26,13 +25,15 @@ import { generateMockWalletsData } from '../wallets/_mock/mock';
 import type {
   Wallet,
   PrepareTransferRequest,
+  PrepareTransferResponse,
   PrepareBitcoinTransferRequest,
+  PrepareBitcoinTransferResponse,
   BroadcastTransferRequest,
   TransferState,
   TransactionData,
   TransferableAsset,
   WalletHolding,
-} from '@ledova/shared-types';
+} from '@ledova/shared';
 
 const INITIAL_STATE: TransferState = {
   step: 'select-wallet',
@@ -141,7 +142,13 @@ export function useTransfers() {
   }, [state.wallet, holdingsQuery.data, USE_MOCK_DATA]);
 
   const prepareTransferMutation = useMutation({
-    mutationFn: ({ uuid, data }: { uuid: string; data: PrepareTransferRequest | PrepareBitcoinTransferRequest }) =>
+    mutationFn: ({
+      uuid,
+      data,
+    }: {
+      uuid: string;
+      data: PrepareTransferRequest | PrepareBitcoinTransferRequest;
+    }): Promise<AxiosResponse<PrepareTransferResponse | PrepareBitcoinTransferResponse>> =>
       'amountBtc' in data ? prepareBitcoinTransfer(apiClient, uuid, data) : prepareTransfer(apiClient, uuid, data),
     onSuccess: (response) => {
       setState((prev) => ({

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { getBlockchainDisplayName } from '@ledova/shared-constants';
-import type { Wallet, DerivedAddress } from '@ledova/shared-types';
+import { getBlockchainDisplayName } from '@ledova/shared';
+import type { Wallet, DerivedAddress } from '@ledova/shared';
 import { Modal } from '@components/Modal';
 import { deriveAddressFromParentKey } from '@utils/keystone/bcurDecoder';
 

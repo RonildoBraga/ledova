@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { getFeatureFlags } from '@ledova/shared-services';
-import { CACHE_TIMING } from '@ledova/shared-constants';
+import { getFeatureFlags, CACHE_TIMING } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 
 export interface FeatureFlags {

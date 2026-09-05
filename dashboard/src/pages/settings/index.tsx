@@ -12,18 +12,18 @@ import {
   CurrencyCircleDollarIcon,
 } from '@phosphor-icons/react';
 import { useNavigate } from 'react-router-dom';
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
+  DESIGN_TOKENS,
   deleteAccount,
   changePassword,
   exportAccountData,
   getCurrentUserPreferences,
   upsertCurrentUserPreferences,
-} from '@ledova/shared-services';
-import { CACHE_TIMING } from '@ledova/shared-constants';
+  CACHE_TIMING,
+} from '@ledova/shared';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useQuery } from '@tanstack/react-query';
-import type { DisplayCurrency } from '@ledova/shared-types';
+import type { DisplayCurrency } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 import { Panel } from '@components/Panel';
 import { Modal } from '@components/Modal';

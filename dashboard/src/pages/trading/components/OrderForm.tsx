@@ -1,9 +1,7 @@
 import { useState, useEffect, useMemo, useImperativeHandle, forwardRef } from 'react';
 import { WalletIcon } from '@phosphor-icons/react';
-import { formatWalletAddressShort, formatCurrency } from '@ledova/shared-utils';
-import type { ShareToken, CreateOrderRequest, Wallet as WalletType } from '@ledova/shared-types';
-import type { OrderType } from '@ledova/shared-constants';
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
+import { formatWalletAddressShort, formatCurrency, DESIGN_TOKENS } from '@ledova/shared';
+import type { ShareToken, CreateOrderRequest, Wallet as WalletType, OrderType } from '@ledova/shared';
 
 const ICON_SM = DESIGN_TOKENS.icon.sizes.sm;
 

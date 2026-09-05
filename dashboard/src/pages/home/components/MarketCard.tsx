@@ -1,8 +1,8 @@
 import { ChartBarIcon, StarIcon } from '@phosphor-icons/react';
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
+import { DESIGN_TOKENS } from '@ledova/shared';
 import { useColors } from '@hooks/useColors';
 import { useCurrency } from '@hooks/useCurrency';
-import type { Asset } from '@ledova/shared-types';
+import type { Asset } from '@ledova/shared';
 import { Accordion } from '@components/Accordion';
 import { AssetTypeIcon } from '@components/AssetTypeIcon';
 

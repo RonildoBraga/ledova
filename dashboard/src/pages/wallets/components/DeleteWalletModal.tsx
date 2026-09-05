@@ -1,5 +1,5 @@
-import { formatWalletAddressShort } from '@ledova/shared-utils';
-import type { Wallet } from '@ledova/shared-types';
+import { formatWalletAddressShort } from '@ledova/shared';
+import type { Wallet } from '@ledova/shared';
 import { Modal } from '@components/Modal';
 
 interface DeleteWalletModalProps {

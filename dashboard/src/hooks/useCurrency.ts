@@ -1,8 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { getCurrentUserPreferences, getExchangeRate } from '@ledova/shared-services';
-import { CACHE_TIMING } from '@ledova/shared-constants';
-import { formatCurrency } from '@ledova/shared-utils';
-import type { DisplayCurrency } from '@ledova/shared-types';
+import { getCurrentUserPreferences, getExchangeRate, CACHE_TIMING, formatCurrency } from '@ledova/shared';
+import type { DisplayCurrency } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 import { useAuth } from './useAuth';
 

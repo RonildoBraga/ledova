@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { getCurrentUserPreferences } from '@ledova/shared-services';
-import { CACHE_TIMING } from '@ledova/shared-constants';
+import { getCurrentUserPreferences, CACHE_TIMING } from '@ledova/shared';
 import apiClient from '../services/apiClient';
 import { useAuth } from './useAuth';
 

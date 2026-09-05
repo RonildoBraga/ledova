@@ -1,10 +1,19 @@
 import { useState } from 'react';
 import { useQuery, useQueries } from '@tanstack/react-query';
-import { getWalletHoldings, getWallets, getPortfolioSnapshotsTimeSeries } from '@ledova/shared-services';
+import {
+  getWalletHoldings,
+  getWallets,
+  getPortfolioSnapshotsTimeSeries,
+  CACHE_TIMING,
+  TimeRange,
+  TIME_RANGES,
+  MAX_CHART_POINTS,
+  getDateRange,
+  calculateHoldingsSummary,
+  calculateAssetAllocation,
+} from '@ledova/shared';
 import { apiClient } from '../../services/apiClient';
-import { CACHE_TIMING, TimeRange, TIME_RANGES, MAX_CHART_POINTS } from '@ledova/shared-constants';
-import type { HoldingWithWallet, PortfolioSnapshot, Wallet, WalletHolding } from '@ledova/shared-types';
-import { getDateRange, calculateHoldingsSummary, calculateAssetAllocation } from '@ledova/shared-utils';
+import type { HoldingWithWallet, PortfolioSnapshot, Wallet, WalletHolding } from '@ledova/shared';
 import { generateMockHoldingsData, generateMockPortfolioChartData } from './_mock/mock';
 import { useUserPreferences } from '../../hooks/useUserPreferences';
 import { useMockData } from '../../_mock/useMockData';

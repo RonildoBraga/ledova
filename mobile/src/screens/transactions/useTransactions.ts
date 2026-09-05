@@ -1,8 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
-import { CACHE_TIMING, BLOCKCHAIN } from '@ledova/shared-constants';
-import { getTransactions, getTransactionsNextPage, getWallets } from '@ledova/shared-services';
-import type { TransactionQueryParams, Transaction, PaginatedResponse, Wallet } from '@ledova/shared-types';
+import { CACHE_TIMING, BLOCKCHAIN, getTransactions, getTransactionsNextPage, getWallets } from '@ledova/shared';
+import type { TransactionQueryParams, Transaction, PaginatedResponse, Wallet } from '@ledova/shared';
 import { apiClient } from '../../services/apiClient';
 import { generateMockTransactionsData } from './_mock/mock';
 import { useMockData } from '../../_mock/useMockData';

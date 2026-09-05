@@ -1,9 +1,8 @@
 import { BellIcon, XIcon } from '@phosphor-icons/react';
 import { Popover, PopoverButton, PopoverPanel } from '@headlessui/react';
-import { formatDateTime } from '@ledova/shared-utils';
+import { formatDateTime, DESIGN_TOKENS } from '@ledova/shared';
 import { useNotifications } from '@hooks/useNotifications';
-import type { Notification } from '@ledova/shared-types';
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
+import type { Notification } from '@ledova/shared';
 
 const ICON_SM = DESIGN_TOKENS.icon.sizes.sm;
 

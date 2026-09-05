@@ -13,9 +13,9 @@ COPY package.json package-lock.json ./
 COPY packages ./packages
 COPY dashboard ./dashboard
 
-# Install the locked workspace and compile the local shared packages consumed
-# by the dashboard. npm selects platform-specific optional binaries itself.
-RUN npm ci && npm run build:packages
+# Install the locked workspace; the shared package is consumed from source
+# through the workspace link. npm selects platform-specific optional binaries itself.
+RUN npm ci
 
 WORKDIR /usr/src/app/dashboard
 EXPOSE 5174

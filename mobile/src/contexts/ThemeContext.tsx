@@ -1,10 +1,9 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { DESIGN_TOKENS, LIGHT_COLORS } from '@ledova/shared-constants';
+import { DESIGN_TOKENS, LIGHT_COLORS, upsertCurrentUserPreferences } from '@ledova/shared';
 import { useQueryClient, useMutation } from '@tanstack/react-query';
-import { upsertCurrentUserPreferences } from '@ledova/shared-services';
-import type { Theme } from '@ledova/shared-types';
+import type { Theme } from '@ledova/shared';
 import { apiClient } from '../services/apiClient';
 import { useAuth } from '../hooks/useAuth';
 import { useUserPreferences } from '../hooks/useUserPreferences';

@@ -1,7 +1,7 @@
 import { Field, Label, Input, Description } from '@headlessui/react';
 import { KeyIcon, WarningIcon, CheckCircleIcon } from '@phosphor-icons/react';
-import type { FormErrors } from '@ledova/shared-types';
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
+import type { FormErrors } from '@ledova/shared';
+import { DESIGN_TOKENS } from '@ledova/shared';
 
 const ICON_MD = DESIGN_TOKENS.icon.sizes.md;
 

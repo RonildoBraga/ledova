@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, Linking } from 'react-native';
 import { CheckCircleIcon, ArrowSquareOutIcon } from 'phosphor-react-native';
 import { CustomModal } from '../../../components/modal';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
-import { getBlockchainDisplayName, getBlockExplorerTxUrl } from '@ledova/shared-constants';
+import { getBlockchainDisplayName, getBlockExplorerTxUrl } from '@ledova/shared';
 
 interface SuccessModalProps {
   visible: boolean;

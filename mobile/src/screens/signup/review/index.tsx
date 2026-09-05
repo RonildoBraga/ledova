@@ -14,7 +14,7 @@ import {
   parseAddress,
   formatSourceOfFunds,
   formatIntendedUse,
-} from '@ledova/shared-utils';
+} from '@ledova/shared';
 import { PUBLIC_LINKS } from '../../../config/publicLinks';
 
 export function ReviewScreen() {

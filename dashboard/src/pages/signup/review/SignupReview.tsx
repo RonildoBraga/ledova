@@ -8,10 +8,10 @@ import {
   parseAddress,
   formatSourceOfFunds,
   formatIntendedUse,
-} from '@ledova/shared-utils';
+  DESIGN_TOKENS,
+} from '@ledova/shared';
 import { useReview } from './useReview';
 import { AuthLayout } from '@components/AuthLayout';
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
 
 const ICON_LG = DESIGN_TOKENS.icon.sizes.lg;
 

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
-import { WALLET_TYPE } from '@ledova/shared-constants';
-import type { Wallet } from '@ledova/shared-types';
+import { WALLET_TYPE } from '@ledova/shared';
+import type { Wallet } from '@ledova/shared';
 
 export type WalletSortOption = 'default' | 'verified' | 'name' | 'namedFirst' | 'highestValue' | 'highestBalance';
 

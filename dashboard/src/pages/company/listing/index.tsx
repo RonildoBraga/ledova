@@ -21,9 +21,9 @@ import {
   uploadCompanyDocument,
   deleteCompanyDocument,
   submitApplication,
-} from '@ledova/shared-services';
-import { CACHE_TIMING } from '@ledova/shared-constants';
-import type { CompanyDocument, DocumentType } from '@ledova/shared-types';
+  CACHE_TIMING,
+} from '@ledova/shared';
+import type { CompanyDocument, DocumentType } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 
 const REQUIRED_DOCUMENTS: { type: DocumentType; label: string }[] = [

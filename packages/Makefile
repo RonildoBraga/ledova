@@ -1,47 +1,23 @@
 NPM ?= npm
 ROOT := ..
 
-.PHONY: help install build lint test typecheck validate clean \
-	build-constants build-types build-utils build-services
+.PHONY: help install lint test typecheck
 
 help:
-	@echo "Ledova shared packages"
+	@echo "Ledova shared package (@ledova/shared, consumed from source)"
 	@echo "  make install    Install the root workspace"
-	@echo "  make build      Build packages in dependency order"
-	@echo "  make lint       Lint all shared packages"
-	@echo "  make test       Run shared-package tests"
-	@echo "  make typecheck  Type-check all shared packages"
-	@echo "  make validate   Validate package metadata and entry points"
+	@echo "  make lint       Lint the shared package"
+	@echo "  make test       Run the shared package tests"
+	@echo "  make typecheck  Type-check the shared package"
 
 install:
 	$(NPM) --prefix $(ROOT) ci
 
-build:
-	$(NPM) --prefix $(ROOT) run build:packages
-
 lint:
-	$(NPM) --prefix $(ROOT) run lint --workspaces --if-present
+	$(NPM) --prefix $(ROOT) run lint -w @ledova/shared
 
 test:
-	$(NPM) --prefix $(ROOT) run test --workspaces --if-present
+	$(NPM) --prefix $(ROOT) run test -w @ledova/shared
 
 typecheck:
-	$(NPM) --prefix $(ROOT) run typecheck --workspaces --if-present
-
-validate:
-	$(NPM) --prefix $(ROOT)/packages run validate:packages
-
-clean:
-	$(NPM) --prefix $(ROOT) run clean --workspaces --if-present
-
-build-constants:
-	$(NPM) --prefix $(ROOT) run build -w @ledova/shared-constants
-
-build-types: build-constants
-	$(NPM) --prefix $(ROOT) run build -w @ledova/shared-types
-
-build-utils: build-types
-	$(NPM) --prefix $(ROOT) run build -w @ledova/shared-utils
-
-build-services: build-utils
-	$(NPM) --prefix $(ROOT) run build -w @ledova/shared-services
+	$(NPM) --prefix $(ROOT) run typecheck -w @ledova/shared

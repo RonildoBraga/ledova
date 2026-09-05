@@ -1,15 +1,18 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { getUserProfiles, updateUserProfile } from '@ledova/shared-services';
-import { FormErrors, UserProfileFormValidation, UserProfileFormData } from '@ledova/shared-types';
 import {
+  getUserProfiles,
+  updateUserProfile,
+  FormErrors,
+  UserProfileFormValidation,
+  UserProfileFormData,
   validateUserProfileField,
   isValidFullName,
   isValidPhoneFormat,
   formatPhoneForDisplay,
   cleanPhoneNumber,
-} from '@ledova/shared-utils';
-import { COUNTRIES } from '@ledova/shared-constants';
-import type { CountryData } from '@ledova/shared-constants';
+  COUNTRIES,
+} from '@ledova/shared';
+import type { CountryData } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 
 const validateUserProfile = (form: UserProfileFormData): UserProfileFormValidation => {

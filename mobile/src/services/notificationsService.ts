@@ -8,8 +8,8 @@ import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
-import { registerDeviceToken, unregisterDeviceToken } from '@ledova/shared-services';
-import type { DeviceType } from '@ledova/shared-types';
+import { registerDeviceToken, unregisterDeviceToken } from '@ledova/shared';
+import type { DeviceType } from '@ledova/shared';
 import { apiClient } from './apiClient';
 
 const PUSH_TOKEN_KEY = 'notifications.pushToken';

@@ -1,13 +1,17 @@
 import { useState, useCallback, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { requestVerificationChallenge, verifyWalletSignature } from '@ledova/shared-services';
-import { getErrorMessage } from '@ledova/shared-utils';
-import type { Wallet, VerifyWalletRequest } from '@ledova/shared-types';
+import {
+  requestVerificationChallenge,
+  verifyWalletSignature,
+  getErrorMessage,
+  isBitcoinChain,
+  getChainShortCode,
+} from '@ledova/shared';
+import type { Wallet, VerifyWalletRequest } from '@ledova/shared';
 import { apiClient } from '../../services/apiClient';
 import { useUserPreferences } from '../../hooks/useUserPreferences';
 import { getSeedPhrase } from '../../services/secureKeyStorage';
 import { signEthereumMessage, signBitcoinMessage } from '../../utils/softwareWallet';
-import { isBitcoinChain, getChainShortCode } from '@ledova/shared-constants';
 
 type VerificationStep = 'instructions' | 'show-challenge-qr' | 'scan-signature';
 

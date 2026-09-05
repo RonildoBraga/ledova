@@ -1,9 +1,15 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getAssetByUuid, getAssets, getFavouriteAssets } from '@ledova/shared-services';
-import type { Asset } from '@ledova/shared-types';
-import { BLOCKCHAIN, CACHE_TIMING } from '@ledova/shared-constants';
-import { calculateWalletTotals, filterWalletsByChain } from '@ledova/shared-utils';
+import {
+  getAssetByUuid,
+  getAssets,
+  getFavouriteAssets,
+  BLOCKCHAIN,
+  CACHE_TIMING,
+  calculateWalletTotals,
+  filterWalletsByChain,
+} from '@ledova/shared';
+import type { Asset } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 import { useSelectedPortfolio } from '@hooks/useSelectedPortfolio';
 import { useWalletsSummary } from './hooks/useWalletsSummary';

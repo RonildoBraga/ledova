@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { getWallets } from '@ledova/shared-services';
-import { CACHE_TIMING } from '@ledova/shared-constants';
+import { getWallets, CACHE_TIMING } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 
 export function useWalletsSummary(accountUuid: string | undefined) {

@@ -1,9 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getUserProfiles, updateUserProfile } from '@ledova/shared-services';
-import { FormErrors, UserProfileFormData } from '@ledova/shared-types';
-import { formatPhoneForDisplay, cleanPhoneNumber } from '@ledova/shared-utils';
-import { COUNTRIES } from '@ledova/shared-constants';
-import type { CountryData } from '@ledova/shared-constants';
+import {
+  getUserProfiles,
+  updateUserProfile,
+  FormErrors,
+  UserProfileFormData,
+  formatPhoneForDisplay,
+  cleanPhoneNumber,
+  COUNTRIES,
+} from '@ledova/shared';
+import type { CountryData } from '@ledova/shared';
 import { apiClient } from '../../../services/apiClient';
 
 export const useUserProfile = () => {

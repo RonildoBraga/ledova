@@ -1,9 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
-import { getFeatureFlags } from '@ledova/shared-services';
-import { CACHE_TIMING } from '@ledova/shared-constants';
-import type { FeatureFlag } from '@ledova/shared-types';
+import { getFeatureFlags, CACHE_TIMING } from '@ledova/shared';
+import type { FeatureFlag } from '@ledova/shared';
 import { apiClient } from '../services/apiClient';
 
 function isVersionAtLeast(current: string, minimum: string): boolean {

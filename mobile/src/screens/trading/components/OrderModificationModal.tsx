@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { View, Text, TextInput, ActivityIndicator, ScrollView } from 'react-native';
 import { CheckCircleIcon, WarningCircleIcon } from 'phosphor-react-native';
-import { formatCurrency } from '@ledova/shared-utils';
-import type { TransferOrder, Wallet } from '@ledova/shared-types';
+import { formatCurrency, getWalletVerificationEvmChainId } from '@ledova/shared';
+import type { TransferOrder, Wallet } from '@ledova/shared';
 import { CustomModal } from '../../../components/modal';
 import { QRDisplay, QRScanner } from '../../../components/qr';
 import { encodeEthereumMessage } from '../../../utils/keystone/urEncoder';
-import { getWalletVerificationEvmChainId } from '@ledova/shared-constants';
 import { decodeKeystoneMessageSignature } from '../../../utils/keystone/urDecoder';
 import { getSeedPhrase } from '../../../services/secureKeyStorage';
 import { signEthereumMessage } from '../../../utils/softwareWallet/localSigner';

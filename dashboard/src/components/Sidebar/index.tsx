@@ -17,13 +17,12 @@ import {
   BuildingsIcon,
   FileTextIcon,
 } from '@phosphor-icons/react';
-import { signout } from '@ledova/shared-services';
+import { signout, DESIGN_TOKENS } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 import { useFeatureFlags, useRole } from '@hooks';
 import { useBuyCrypto } from '@hooks/useBuyCrypto';
 import { useSendTransfer } from '@hooks/useSendTransfer';
 import { useUserProfile } from '@pages/user-profile/useUserProfile';
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
 
 const MARKETING_URL = import.meta.env.VITE_MARKETING_URL || 'http://localhost:5173';
 const ICON_MD = DESIGN_TOKENS.icon.sizes.md;

@@ -1,5 +1,5 @@
 import { Field, Label, Description, Radio, RadioGroup } from '@headlessui/react';
-import type { RadioGroupFieldProps } from '@ledova/shared-types';
+import type { RadioGroupFieldProps } from '@ledova/shared';
 
 const RadioGroupField = ({ label, value, options, error, onChange }: RadioGroupFieldProps) => (
   <Field className="space-y-3">

@@ -2,10 +2,10 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, ActivityIndicator, ScrollView } from 'react-native';
 import { FingerprintSimpleIcon, CheckCircleIcon, WarningCircleIcon } from 'phosphor-react-native';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
-import type { Wallet, TransactionData } from '@ledova/shared-types';
+import type { Wallet, TransactionData } from '@ledova/shared';
 import { getSeedPhrase } from '../../../services/secureKeyStorage';
 import { signEthereumTransaction } from '../../../utils/softwareWallet';
-import { formatWalletAddressShort } from '@ledova/shared-utils';
+import { formatWalletAddressShort } from '@ledova/shared';
 
 interface SoftwareSignTransactionProps {
   wallet: Wallet;

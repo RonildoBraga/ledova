@@ -6,7 +6,7 @@
  *   backend/documents/schemas/payslip.py
  *
  * Kept local to the dashboard for the PoC. Lift into
- * @ledova/shared-types when mobile needs it too.
+ * @ledova/shared when mobile needs it too.
  */
 
 export type DocumentType = 'payslip' | 'bank_statement' | 'tax_return' | 'other';

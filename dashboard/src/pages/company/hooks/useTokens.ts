@@ -12,8 +12,8 @@ import {
   createCompanyToken,
   createCapitalIncrease,
   submitCapitalIncrease,
-} from '@ledova/shared-services';
-import type { TokenCreate, CapitalIncreaseCreate, TokenTabType } from '@ledova/shared-types';
+} from '@ledova/shared';
+import type { TokenCreate, CapitalIncreaseCreate, TokenTabType } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 
 export function useTokensList() {

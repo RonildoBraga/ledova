@@ -1,4 +1,4 @@
-import type { Asset } from '@ledova/shared-types';
+import type { Asset } from '@ledova/shared';
 import { AssetTypeIcon } from '@components/AssetTypeIcon';
 import { useCurrency } from '@hooks/useCurrency';
 

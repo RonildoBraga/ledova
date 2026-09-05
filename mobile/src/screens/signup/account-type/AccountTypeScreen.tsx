@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { UserIcon, BuildingsIcon } from 'phosphor-react-native';
-import { CACHE_TIMING } from '@ledova/shared-constants';
+import { CACHE_TIMING } from '@ledova/shared';
 import { GradientBackground } from '../../../components/GradientBackground';
 import { apiClient } from '../../../services/apiClient';
 import type { RootStackParamList } from '../../../navigation/AppNavigator';

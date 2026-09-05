@@ -1,14 +1,9 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { CheckCircleIcon, ClockIcon, ShieldCheckIcon, WarningCircleIcon, XCircleIcon } from 'phosphor-react-native';
-import {
-  formatDate,
-  formatDateTime,
-  getUserVerificationStatus,
-  type VerificationStatusType,
-} from '@ledova/shared-utils';
+import { formatDate, formatDateTime, getUserVerificationStatus, type VerificationStatusType } from '@ledova/shared';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
-import type { UserProfile } from '@ledova/shared-types';
+import type { UserProfile } from '@ledova/shared';
 import { Panel } from '../../../components/panel';
 import { VerificationModal } from './VerificationModal';
 

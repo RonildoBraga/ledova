@@ -1,7 +1,6 @@
 import { useCallback } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { getTransactions, getTransactionsNextPage } from '@ledova/shared-services';
-import { CACHE_TIMING } from '@ledova/shared-constants';
+import { getTransactions, getTransactionsNextPage, CACHE_TIMING } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 
 const PAGE_SIZE = 5;

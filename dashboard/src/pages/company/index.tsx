@@ -16,10 +16,9 @@ import {
 } from '@phosphor-icons/react';
 import { Panel } from '@components/Panel';
 import { Modal } from '@components/Modal';
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
+import { DESIGN_TOKENS, updateCompany, issueCompanyShares } from '@ledova/shared';
 import { useCompany } from './hooks/useCompany';
 import { useTokensList, useTokenDetail } from './hooks/useTokens';
-import { updateCompany, issueCompanyShares } from '@ledova/shared-services';
 import type {
   Company,
   CompanyUpdate,
@@ -31,7 +30,7 @@ import type {
   TokenTabType,
   TokenHolder,
   TokenIssuance,
-} from '@ledova/shared-types';
+} from '@ledova/shared';
 import apiClient from '@services/apiClient';
 
 const ICON_SM = DESIGN_TOKENS.icon.sizes.sm;

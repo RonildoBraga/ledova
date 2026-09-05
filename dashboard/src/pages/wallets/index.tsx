@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useState, type ReactElement } from 'react';
 import { CircleIcon, CurrencyBtcIcon, CurrencyEthIcon, FunnelIcon } from '@phosphor-icons/react';
-import { BLOCKCHAIN, WALLET_VERIFICATION_STATUS, DESIGN_TOKENS } from '@ledova/shared-constants';
+import { BLOCKCHAIN, WALLET_VERIFICATION_STATUS, DESIGN_TOKENS, formatCryptoBalance } from '@ledova/shared';
 
 const ICON_MD = DESIGN_TOKENS.icon.sizes.md;
 const ICON_SM = DESIGN_TOKENS.icon.sizes.sm;
 import { useHeaderActions } from '@hooks/useHeaderActions';
-import type { Wallet as WalletType, DerivedAddress, HardwareWalletImport } from '@ledova/shared-types';
-import { formatCryptoBalance } from '@ledova/shared-utils';
+import type { Wallet as WalletType, DerivedAddress, HardwareWalletImport } from '@ledova/shared';
 import { useCurrency } from '@hooks/useCurrency';
 import { Panel } from '@components/Panel';
 import { WalletList, ChainEmptyState } from '@components/Wallet';
