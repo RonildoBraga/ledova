@@ -117,6 +117,32 @@ the node; `CHAIN_TEST_SETTINGS=ledova_backend.settings.test_postgres` (with the
 `POSTGRES_*` variables set) runs it on PostgreSQL, which adds the two-worker
 capital-increase case that needs real row locks; CI runs both.
 
+### Operator setup
+
+The operator is whoever hosts a deployment: a single company running its own
+instance for its own tokenized shares, or a registry provider hosting many
+companies. Its configuration is one row (`backend/operators`, model
+`Operator`) edited in the Django admin at `/admin/operators/operator/` (the
+list redirects to the single change page, `/admin/operators/operator/1/change/`;
+no add once the row exists, no delete). The row is created lazily the first
+time the admin page or `GET /api/operator/` asks for it, with the name from
+`OPERATOR_NAME` in `backend/.env` (default `Ledova operator`); nothing runs in
+the compose `migrate` chain for it. Fields, by admin section:
+
+- Identity: `name`, `legal_name`, `abn` (11 digits), `contact_email`, `website`.
+- Deployment: `deployment_mode`, `single_issuer` or `registry` (default).
+- Payments: `bank_account_name`, `bank_bsb` (6 digits), `bank_account_number`,
+  `payment_reference_prefix` (letters and digits; subscription references will
+  start with it), `receiving_wallet_address` (checksummed EVM address) and
+  `receiving_wallet_chain` (`ethereum` or `base`), `issued_stablecoin` and
+  `supported_settlement_assets` (stablecoin assets only).
+- Eligibility: `investor_kyc_required` (default on), `issuer_kyc_required`
+  (default off); configuration only, no gate reads them yet.
+
+`GET /api/operator/` (authenticated) returns the identity, deployment mode,
+settlement assets, the two eligibility flags and `paymentInstructions`, which
+carries only the payment fields that are set.
+
 ## Safety defaults
 
 - Local development and supported public testnets only; bundled mainnet

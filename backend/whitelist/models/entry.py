@@ -7,13 +7,19 @@ from whitelist.querysets.entry import WhitelistEntryQuerySet
 
 
 class WhitelistEntry(BaseModel):
+    """A registry entry for a user's wallet, or (wallet None) for a treasury/custodian address the operator holds."""
+
     objects = WhitelistEntryQuerySet.as_manager()
 
     wallet = models.OneToOneField(
         "wallets.Wallet",
         on_delete=models.CASCADE,
         related_name="whitelist_entry",
+        null=True,
+        blank=True,
     )
+    address = models.CharField(max_length=42, blank=True, help_text="Set only when the entry has no wallet.")
+    label = models.CharField(max_length=100, blank=True, help_text="Treasury or custodian name for a non-user address.")
 
     status = models.CharField(
         max_length=20,
@@ -37,9 +43,19 @@ class WhitelistEntry(BaseModel):
             models.Index(fields=["status"]),
             models.Index(fields=["is_whitelisted"]),
         ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(wallet__isnull=False) | ~models.Q(address=""),
+                name="whitelist_entry_wallet_or_address",
+            ),
+        ]
 
     def __str__(self) -> str:
-        return f"{self.wallet.address[:10]}..."
+        return f"{self.wallet_address[:10]}..."
+
+    @property
+    def wallet_address(self) -> str:
+        return self.wallet.address if self.wallet_id else self.address
 
     def mark_active(self, tx_hash: str) -> None:
         self.status = WhitelistStatus.ACTIVE

@@ -631,10 +631,25 @@ class ShareTokenService:
                     failure = exc
             if failure is None and result is None:
                 authorized, _ = self.share_supply(token.contract_address)
-                refused = request.new_authorized_total <= authorized
+                token.refresh_from_db(fields=["total_supply"])
+                if authorized == request.new_authorized_total and int(token.total_supply) < authorized:
+                    # The call mined but nothing recorded it (a worker killed between the send and the hash write):
+                    # the chain holds exactly this request's cap, so adopt it instead of refusing forever.
+                    logger.warning(
+                        f"{token.symbol} authorized shares are already {authorized} on chain with the DB cap at "
+                        f"{token.total_supply}; adopting the chain cap for request {request.uuid} without sending"
+                    )
+                    result = {
+                        "tx_hash": None,
+                        "block_number": None,
+                        "gas_used": None,
+                        "new_authorized_total": request.new_authorized_total,
+                        "adopted": True,
+                    }
+                refused = result is None and request.new_authorized_total <= authorized
                 if refused:
                     request.mark_refused(CAP_NOT_RAISED)
-                else:
+                elif result is None:
                     self._start_execution(request)
                     logger.info(
                         f"Raising {token.symbol} authorized shares from {authorized} to {request.new_authorized_total}"
@@ -657,13 +672,16 @@ class ShareTokenService:
 
     @staticmethod
     def _recorded_increase(request: CapitalIncreaseRequest) -> Optional[BlockchainTransaction]:
-        """The latest setAuthorizedShares sent for the request and not resolved yet (a reverted one is forgotten)."""
+        """The latest setAuthorizedShares sent for the request and not reverted.
+
+        A CONFIRMED record whose completion writes were lost counts too: the retry resumes on it without sending.
+        """
         return (
             BlockchainTransaction.objects.filter(
                 related_model=CapitalIncreaseRequest._meta.label,
                 related_uuid=request.uuid,
                 function_name="setAuthorizedShares",
-                status__in=(TransactionStatus.SUBMITTED, TransactionStatus.FAILED),
+                status__in=(TransactionStatus.SUBMITTED, TransactionStatus.FAILED, TransactionStatus.CONFIRMED),
             )
             .exclude(tx_hash__isnull=True)
             .exclude(tx_hash="")
@@ -713,7 +731,7 @@ class ShareTokenService:
         token.total_supply = str(max(int(token.total_supply), request.new_authorized_total))
         token.save(update_fields=["total_supply", "updated_at"])
         request.mark_executed()
-        logger.info(f"Capital increase executed for {token.symbol}: {result['tx_hash']}")
+        logger.info(f"Capital increase executed for {token.symbol}: {result['tx_hash'] or 'adopted from chain'}")
 
     def resolve_executing_capital_increase(self, request: CapitalIncreaseRequest) -> Optional[str]:
         """Finish a capital increase left EXECUTING after its setAuthorizedShares was sent; nothing is sent here.
@@ -743,6 +761,10 @@ class ShareTokenService:
         result = {**self._tx_result(tx_hash, receipt), "new_authorized_total": request.new_authorized_total}
         with transaction.atomic():
             ShareToken.objects.select_for_update().get(pk=request.token.pk)
+            request.refresh_from_db(fields=["status"])
+            if request.status == RequestStatus.EXECUTED:
+                logger.info(f"Request {request.uuid} was completed by another worker while the sweep read the chain")
+                return None
             self._confirm_record(tx_record, receipt)
             self._complete_capital_increase(request, result)
         return "executed"
@@ -792,16 +814,22 @@ class ShareTokenService:
 
     # Pause
 
-    def pause(self, token: ShareToken) -> None:
-        if token.status != ShareTokenStatus.DEPLOYED:
+    @staticmethod
+    def require_pausable(token: ShareToken, paused: bool) -> None:
+        """The database half of the pause/unpause guard; the admin confirm pages check it before offering the form."""
+        if paused and token.status != ShareTokenStatus.DEPLOYED:
             raise InvalidTokenStateException("Only deployed tokens can be paused.")
+        if not paused and token.status not in (ShareTokenStatus.PAUSED, ShareTokenStatus.DEPLOYED):
+            raise InvalidTokenStateException("Only paused tokens can be unpaused.")
+
+    def pause(self, token: ShareToken) -> None:
+        self.require_pausable(token, True)
         self._set_paused(token, True)
 
     def unpause(self, token: ShareToken) -> None:
         """Unpause a PAUSED token, or a DEPLOYED one the chain reports paused (a pause whose receipt was lost)."""
-        if token.status == ShareTokenStatus.PAUSED or (
-            token.status == ShareTokenStatus.DEPLOYED and self.read_paused(token)
-        ):
+        self.require_pausable(token, False)
+        if token.status == ShareTokenStatus.PAUSED or self.read_paused(token):
             self._set_paused(token, False)
             return
         raise InvalidTokenStateException("Only paused tokens can be unpaused.")

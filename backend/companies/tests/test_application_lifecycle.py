@@ -1,6 +1,7 @@
 """End-to-end coverage of the company application lifecycle over the REST API and the admin actions."""
 
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from django.contrib.admin.sites import AdminSite
 from django.contrib.auth import get_user_model
@@ -17,10 +18,13 @@ from companies.models import (
 from users.models import UserProfile
 
 User = get_user_model()
+TASK = "companies.services.company.send_push_notification"
 
 
 class ApplicationLifecycleTest(APITestCase):
     def setUp(self):
+        patch(TASK).start()  # every transition defers the owner's notification; the producer has its own tests
+        self.addCleanup(patch.stopall)
         self.owner = User.objects.create_user(email="owner@example.test", password="pw-12345678")
         self.other = User.objects.create_user(email="other@example.test", password="pw-12345678")
         self.staff = User.objects.create_user(email="staff@example.test", password="pw-12345678", is_staff=True)
@@ -131,12 +135,16 @@ class ApplicationLifecycleTest(APITestCase):
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual(response.data["company"]["status"], "submitted")
         self.company.refresh_from_db()
-        self.assertEqual(self.company.info_request_reason, "")
+        # The question stays next to the answer until approval, so the reviewer sees both.
+        self.assertEqual(self.company.info_request_reason, "Need the latest share register")
+        self.assertEqual(self.company.additional_info_response, "Uploaded it")
+        self.assertEqual(self.client.get(self.url).data["additional_info_response"], "Uploaded it")
 
         self.set_status("review")
         response = self.set_status("approved")
         self.assertEqual(response.data["message"], "Company status updated to Approved")
         self.assertEqual(self.company.approved_by, self.staff)
+        self.assertEqual((self.company.info_request_reason, self.company.additional_info_response), ("", ""))
 
         self.set_status("active")
         self.assertEqual(self.company.status, CompanyStatus.ACTIVE)

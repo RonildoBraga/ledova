@@ -5,12 +5,14 @@ from django.shortcuts import get_object_or_404, render
 from django.urls import path, reverse
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
+from web3 import Web3
 
 from wallets.models import Wallet
 from whitelist.models import WhitelistEntry, WhitelistStatus
 
 
 class WhitelistEntryAddForm(forms.ModelForm):
+    """A user's wallet by address, or, with a label, a treasury/custodian address no user holds."""
 
     wallet_address = forms.CharField(
         max_length=100,
@@ -19,31 +21,37 @@ class WhitelistEntryAddForm(forms.ModelForm):
 
     class Meta:
         model = WhitelistEntry
-        fields = ["wallet_address", "notes"]
+        fields = ["wallet_address", "label", "notes"]
 
     def clean_wallet_address(self):
         address = self.cleaned_data.get("wallet_address", "").strip()
 
         if not address:
             raise forms.ValidationError("Wallet address is required.")
+        if not Web3.is_address(address):
+            raise forms.ValidationError("Enter a valid EVM address.")
+        address = Web3.to_checksum_address(address)
 
         if WhitelistEntry.objects.filter_by_address(address).exists():
             raise forms.ValidationError(f"Address '{address}' already has a whitelist entry.")
 
-        wallet = Wallet.objects.filter_by_address(address).first()
-
-        if not wallet:
-            raise forms.ValidationError(f"Wallet '{address}' not found.")
-
-        if not wallet.user_account:
-            raise forms.ValidationError(f"Wallet '{address}' is not assigned to any user.")
-
-        self._wallet = wallet
+        self._wallet = Wallet.objects.filter_by_address(address).first()
         return address
+
+    def clean(self):
+        cleaned = super().clean()
+        if "wallet_address" in cleaned and self._wallet is None and not cleaned.get("label"):
+            self.add_error(
+                "wallet_address",
+                f"Wallet '{cleaned['wallet_address']}' not found. Give the entry a label to whitelist it as a "
+                "treasury or custodian address.",
+            )
+        return cleaned
 
     def save(self, commit=True):
         instance = super().save(commit=False)
         instance.wallet = self._wallet
+        instance.address = "" if self._wallet else self.cleaned_data["wallet_address"]
         if commit:
             instance.save()
         return instance
@@ -54,6 +62,7 @@ class WhitelistEntryAdmin(admin.ModelAdmin):
     list_display = [
         "short_address",
         "wallet_owner",
+        "label",
         "status",
         "is_whitelisted",
         "created_at",
@@ -64,6 +73,8 @@ class WhitelistEntryAdmin(admin.ModelAdmin):
     ]
     search_fields = [
         "wallet__address",
+        "address",
+        "label",
         "wallet__user_account__uuid",
     ]
     list_select_related = ["wallet", "wallet__user_account"]
@@ -90,7 +101,7 @@ class WhitelistEntryAdmin(admin.ModelAdmin):
     def get_fieldsets(self, request, obj=None):
         if obj is None:
             return [
-                ("Add Wallet to Whitelist", {"fields": ["wallet_address"]}),
+                ("Add Wallet to Whitelist", {"fields": ["wallet_address", "label"]}),
                 ("Notes", {"fields": ["notes"], "classes": ["collapse"]}),
             ]
         return self._change_fieldsets
@@ -98,11 +109,11 @@ class WhitelistEntryAdmin(admin.ModelAdmin):
     def get_readonly_fields(self, request, obj=None):
         readonly = list(super().get_readonly_fields(request, obj))
         if obj:
-            readonly.append("wallet")
+            readonly.extend(["wallet", "address"])
         return readonly
 
     _change_fieldsets = [
-        ("Wallet Information", {"fields": ["uuid", "wallet"]}),
+        ("Wallet Information", {"fields": ["uuid", "wallet", "address", "label"]}),
         ("Status & Actions", {"fields": ["status", "is_whitelisted", "status_actions"]}),
         (
             "Blockchain",
@@ -116,7 +127,7 @@ class WhitelistEntryAdmin(admin.ModelAdmin):
     ]
 
     def short_address(self, obj):
-        address = obj.wallet.address
+        address = obj.wallet_address
         return format_html(
             '<span title="{}">{}</span>',
             address,
@@ -130,6 +141,8 @@ class WhitelistEntryAdmin(admin.ModelAdmin):
             profiles = obj.wallet.user_account.user_profiles.all()
             if profiles:
                 return profiles[0].user.email
+        if obj.wallet_id is None:
+            return "Operator (treasury/custodian)"
         return mark_safe('<span style="color: #dc3545;">Unassigned</span>')
 
     wallet_owner.short_description = "Owner"
@@ -191,7 +204,7 @@ class WhitelistEntryAdmin(admin.ModelAdmin):
         entry = get_object_or_404(WhitelistEntry, uuid=uuid)
 
         if entry.is_whitelisted:
-            messages.warning(request, f"Address {entry.wallet.address} is already whitelisted on blockchain.")
+            messages.warning(request, f"Address {entry.wallet_address} is already whitelisted on blockchain.")
             return HttpResponseRedirect(reverse("admin:whitelist_whitelistentry_change", args=[entry.pk]))
 
         if request.method == "POST":
@@ -201,7 +214,7 @@ class WhitelistEntryAdmin(admin.ModelAdmin):
             result = service.ensure_whitelisted([entry])
 
             if result["added"] or result["synced"]:
-                messages.success(request, f"Successfully whitelisted {entry.wallet.address}.")
+                messages.success(request, f"Successfully whitelisted {entry.wallet_address}.")
             for error in result["errors"]:
                 messages.error(request, error)
 
@@ -209,7 +222,7 @@ class WhitelistEntryAdmin(admin.ModelAdmin):
 
         context = {
             **self.admin_site.each_context(request),
-            "title": f"Add to Blockchain: {entry.wallet.address[:10]}...{entry.wallet.address[-6:]}",
+            "title": f"Add to Blockchain: {entry.wallet_address[:10]}...{entry.wallet_address[-6:]}",
             "entry": entry,
             "opts": self.model._meta,
         }
@@ -219,7 +232,7 @@ class WhitelistEntryAdmin(admin.ModelAdmin):
         entry = get_object_or_404(WhitelistEntry, uuid=uuid)
 
         if not entry.is_whitelisted:
-            messages.warning(request, f"Address {entry.wallet.address} is not on the blockchain whitelist.")
+            messages.warning(request, f"Address {entry.wallet_address} is not on the blockchain whitelist.")
             return HttpResponseRedirect(reverse("admin:whitelist_whitelistentry_change", args=[entry.pk]))
 
         if request.method == "POST":
@@ -229,7 +242,7 @@ class WhitelistEntryAdmin(admin.ModelAdmin):
             result = service.ensure_removed([entry])
 
             if result["removed"]:
-                messages.success(request, f"Successfully removed {entry.wallet.address} from blockchain whitelist.")
+                messages.success(request, f"Successfully removed {entry.wallet_address} from blockchain whitelist.")
             for error in result["errors"]:
                 messages.error(request, error)
 
@@ -237,7 +250,7 @@ class WhitelistEntryAdmin(admin.ModelAdmin):
 
         context = {
             **self.admin_site.each_context(request),
-            "title": f"Remove from Blockchain: {entry.wallet.address[:10]}...{entry.wallet.address[-6:]}",
+            "title": f"Remove from Blockchain: {entry.wallet_address[:10]}...{entry.wallet_address[-6:]}",
             "entry": entry,
             "opts": self.model._meta,
         }

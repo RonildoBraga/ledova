@@ -1,11 +1,11 @@
-from django.db.models import QuerySet
+from django.db.models import Q, QuerySet
 
 
 class WhitelistEntryQuerySet(QuerySet):
 
     def filter_by_address(self, address):
         if address:
-            return self.filter(wallet__address__iexact=address)
+            return self.filter(Q(wallet__address__iexact=address) | Q(address__iexact=address))
         return self
 
     def visible_to_user(self, user):

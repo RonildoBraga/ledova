@@ -220,7 +220,7 @@ class ExecuteRequestServiceTest(TestCase):
         request = self._approved(self.tenant.capital_increase)
         CapitalIncreaseRequest.objects.filter(pk=request.pk).update(new_authorized_total=1200)
         request.refresh_from_db()
-        for authorized in (1500, 1200):
+        for authorized in (1500, 1201):
             with self.subTest(authorized=authorized):
                 with patch(SUPPLY, return_value=(authorized, 10)):
                     with self.assertRaisesMessage(IssuanceRefusedException, CAP_NOT_RAISED):
@@ -252,6 +252,51 @@ class ExecuteRequestServiceTest(TestCase):
         self.assertEqual((record.from_address, record.to_address), (SIGNER, self.token.contract_address))
         self.assertEqual(record.function_args, {"newAuthorizedShares": "1200"})
         self.assertEqual(record.block_hash, "0x" + "cd" * 32)
+
+    def test_a_chain_cap_equal_to_the_request_with_the_db_cap_behind_is_adopted_instead_of_refused(self):
+        """A worker killed between the send and the hash write: nothing recorded, the chain already at the cap."""
+        request = self._approved(self.tenant.capital_increase)
+        self._set_authorized_contract()
+        with patch(SUPPLY, return_value=(1100, 0)):
+            with self.assertLogs("tokens.services.share_token_service", "WARNING") as logs:
+                result = self.service.execute_request(request)
+
+        self.assertEqual(result["adopted"], True)
+        self.assertEqual((result["tx_hash"], result["new_authorized_total"]), (None, 1100))
+        self.assertIn("adopting the chain cap", logs.output[0])
+        self.chain.send_transaction.assert_not_called()
+        request.refresh_from_db()
+        self.token.refresh_from_db()
+        self.assertEqual((request.status, request.executed_issuance), (RequestStatus.EXECUTED, None))
+        self.assertIsNotNone(request.executed_at)
+        self.assertEqual(self.token.total_supply, "1100")
+        self.assertFalse(self._increase_records(request).exists())
+
+        # The DB cap already there means a genuinely stale request: still refused.
+        stale = self._approved(self.tenant.capital_increase)
+        CapitalIncreaseRequest.objects.filter(pk=stale.pk).update(status=RequestStatus.APPROVED)
+        stale.refresh_from_db()
+        with patch(SUPPLY, return_value=(1100, 0)):
+            with self.assertRaisesMessage(IssuanceRefusedException, CAP_NOT_RAISED):
+                self.service.execute_request(stale)
+
+    def test_retry_resumes_on_a_confirmed_record_whose_completion_writes_were_lost(self):
+        request = self._approved(self.tenant.capital_increase)
+        request.mark_failed("worker died after the receipt")
+        confirmed = self._recorded_increase(request, tx_hash="0xdone", status=TransactionStatus.CONFIRMED)
+        self._set_authorized_contract()
+        self.chain.get_transaction_receipt.return_value = {"status": 1, **RECEIPT}
+
+        result = self.service.execute_request(request)
+
+        self.assertEqual(result["tx_hash"], "0xdone")
+        self.chain.send_transaction.assert_not_called()
+        request.refresh_from_db()
+        self.token.refresh_from_db()
+        confirmed.refresh_from_db()
+        self.assertEqual((request.status, self.token.total_supply), (RequestStatus.EXECUTED, "1100"))
+        self.assertEqual(confirmed.status, TransactionStatus.CONFIRMED)
+        self.assertEqual(self._increase_records(request).count(), 1)
 
     def test_capital_increase_holds_a_row_lock_on_the_token_from_the_cap_read_to_the_cap_write(self):
         """Two workers in one block window: the second reads the cap only after the first has committed."""
@@ -786,6 +831,23 @@ class ExecutingIssuanceSweepTest(TestCase):
         self.assertTrue(request.can_be_executed)
         self.assertEqual(record.status, TransactionStatus.REVERTED)
         self.assertEqual(self.token.total_supply, "1000")
+
+    def test_an_increase_another_worker_completed_meanwhile_is_left_alone(self):
+        """The sweep read EXECUTING, the executor finished before the lock: no second cap write, no confirm."""
+        request, record = self._stuck_increase()
+        self.chain.get_transaction_receipt.return_value = {"status": 1, **RECEIPT}
+        CapitalIncreaseRequest.objects.filter(pk=request.pk).update(status=RequestStatus.EXECUTED)
+        ShareToken.objects.filter(pk=self.token.pk).update(total_supply="1500")
+
+        service = ShareTokenService()
+        with self.assertLogs("tokens.services.share_token_service", "INFO") as logs:
+            self.assertIsNone(service.resolve_executing_capital_increase(request))
+
+        self.assertIn("completed by another worker", logs.output[-1])
+        record.refresh_from_db()
+        self.token.refresh_from_db()
+        self.assertEqual((record.status, self.token.total_supply), (TransactionStatus.SUBMITTED, "1500"))
+        self.chain.send_transaction.assert_not_called()
 
     def test_an_increase_with_nothing_recorded_is_only_logged(self):
         request, _ = self._stuck_increase(tx_hash=None)

@@ -300,19 +300,40 @@ class ShareTokenAdmin(admin.ModelAdmin):
         return self._pause_view(request, uuid, "unpause")
 
     def _pause_view(self, request, uuid, verb):
-        """The service holds the state guard, so a deployed token the chain reports paused unpauses in one click."""
+        """Confirm on GET and call the contract on POST, like retry_deploy_view; the service holds the guards.
+
+        GET checks only the database status; the chain read (a deployed token the chain reports paused unpauses)
+        happens on the POST, so the confirm page never waits on the node.
+        """
         token = get_object_or_404(ShareToken, uuid=uuid)
         change_url = reverse("admin:tokens_sharetoken_change", args=[token.pk])
         try:
-            getattr(ShareTokenService(), verb)(token)
+            if request.method == "POST":
+                getattr(ShareTokenService(), verb)(token)
+            else:
+                ShareTokenService.require_pausable(token, verb == "pause")
         except (InvalidTokenStateException, TokenPauseFailedException, BaseChainConnectionError) as exc:
             messages.error(request, f"Cannot {verb}: {getattr(exc, 'detail', exc)}")
             return HttpResponseRedirect(change_url)
-        if verb == "pause":
-            messages.warning(request, f"Token '{token.name}' has been paused on chain. Transfers are now disabled.")
-        else:
-            messages.success(request, f"Token '{token.name}' has been unpaused on chain. Transfers are now enabled.")
-        return HttpResponseRedirect(change_url)
+
+        if request.method == "POST":
+            if verb == "pause":
+                messages.warning(request, f"Token '{token.name}' has been paused on chain. Transfers are now disabled.")
+            else:
+                messages.success(
+                    request, f"Token '{token.name}' has been unpaused on chain. Transfers are now enabled."
+                )
+            return HttpResponseRedirect(change_url)
+
+        context = {
+            **self.admin_site.each_context(request),
+            "title": f"{verb.capitalize()} Token: {token.name}",
+            "subtitle": None,
+            "token": token,
+            "verb": verb,
+            "opts": self.model._meta,
+        }
+        return render(request, "admin/tokens/sharetoken/pause_confirm.html", context)
 
 
 @admin.register(ShareIssuance)

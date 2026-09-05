@@ -101,13 +101,20 @@ class ShareTokenAdminPauseTest(TestCase):
     def _chain_paused(self, value):
         self._contract().functions.paused.return_value.call.return_value = value
 
-    def test_deployed_token_the_chain_reports_paused_is_unpaused_in_one_click(self):
+    def test_deployed_token_the_chain_reports_paused_confirms_then_unpauses_on_post(self):
         self._chain_paused(True)
         change_page = self.client.get(self.change_url)
         self.assertContains(change_page, self.unpause_url)
         self.assertNotContains(change_page, self.pause_url)
 
-        response = self.client.get(self.unpause_url)
+        confirm = self.client.get(self.unpause_url)
+        self.assertEqual(confirm.status_code, 200)
+        self.assertTemplateUsed(confirm, "admin/tokens/sharetoken/pause_confirm.html")
+        self.assertContains(confirm, 'method="post"')
+        self.assertContains(confirm, "Unpause Token")
+        self.chain.send_transaction.assert_not_called()
+
+        response = self.client.post(self.unpause_url)
         self.assertRedirects(response, self.change_url, fetch_redirect_response=False)
         self.assertContains(self.client.get(self.change_url), "has been unpaused on chain")
         self.chain.send_transaction.assert_called_once_with(
@@ -150,12 +157,36 @@ class ShareTokenAdminPauseTest(TestCase):
         self.assertContains(change_page, self.unpause_url)
         self.assertIn("not answered within", logs.output[0])
 
+    def test_pause_confirms_on_get_and_calls_the_contract_on_post(self):
+        self._chain_paused(False)
+
+        confirm = self.client.get(self.pause_url)
+        self.assertEqual(confirm.status_code, 200)
+        self.assertContains(confirm, "Pause Token")
+        self.assertContains(confirm, self.token.contract_address)
+        self.chain.send_transaction.assert_not_called()
+
+        response = self.client.post(self.pause_url)
+        self.assertRedirects(response, self.change_url, fetch_redirect_response=False)
+        self.assertContains(self.client.get(self.change_url), "has been paused on chain")
+        self.chain.send_transaction.assert_called_once_with(
+            self._contract().functions.pause.return_value, "0xkey", wait_for_receipt=True
+        )
+        self.token.refresh_from_db()
+        self.assertEqual(self.token.status, ShareTokenStatus.PAUSED)
+
     def test_state_guards_come_from_the_service(self):
         self._chain_paused(False)
-        self.client.get(self.unpause_url)
+        self.client.post(self.unpause_url)
         self.assertContains(self.client.get(self.change_url), "Cannot unpause: Only paused tokens can be unpaused.")
 
-        self.client.get(reverse("admin:tokens_sharetoken_pause", args=[self.tenant.token.uuid]))
-        change_page = self.client.get(reverse("admin:tokens_sharetoken_change", args=[self.tenant.token.pk]))
-        self.assertContains(change_page, "Cannot pause: Only deployed tokens can be paused.")
+        draft_pause_url = reverse("admin:tokens_sharetoken_pause", args=[self.tenant.token.uuid])
+        draft_change_url = reverse("admin:tokens_sharetoken_change", args=[self.tenant.token.pk])
+        for method in (self.client.get, self.client.post):
+            refused = method(draft_pause_url)
+            self.assertRedirects(refused, draft_change_url, fetch_redirect_response=False)
+            self.assertContains(self.client.get(draft_change_url), "Cannot pause: Only deployed tokens can be paused.")
+        draft_unpause_url = reverse("admin:tokens_sharetoken_unpause", args=[self.tenant.token.uuid])
+        self.client.get(draft_unpause_url)
+        self.assertContains(self.client.get(draft_change_url), "Cannot unpause: Only paused tokens can be unpaused.")
         self.chain.send_transaction.assert_not_called()

@@ -90,6 +90,7 @@ class Company(BaseModel):
 
     info_requested_at = models.DateTimeField(null=True, blank=True)
     info_request_reason = models.TextField(blank=True)
+    additional_info_response = models.TextField(blank=True)
 
     rejection_reason = models.TextField(blank=True)
     rejection_at = models.DateTimeField(null=True, blank=True)
@@ -176,19 +177,31 @@ class Company(BaseModel):
         self.info_request_reason = reason
         self.save(update_fields=["status", "info_requested_at", "info_request_reason", "updated_at"])
 
-    def resubmit(self):
+    def resubmit(self, response: str = ""):
+        """The request reason stays next to the answer until approval, so the reviewer sees both."""
         self._require_status([CompanyStatus.INFO_REQUIRED], CompanyStatus.SUBMITTED)
         self.status = CompanyStatus.SUBMITTED
         self.submitted_at = timezone.now()
-        self.info_request_reason = ""
-        self.save(update_fields=["status", "submitted_at", "info_request_reason", "updated_at"])
+        self.additional_info_response = response
+        self.save(update_fields=["status", "submitted_at", "additional_info_response", "updated_at"])
 
     def approve(self, approved_by=None):
         self._require_status([CompanyStatus.REVIEW], CompanyStatus.APPROVED)
         self.status = CompanyStatus.APPROVED
         self.review_completed_at = self.approved_at = timezone.now()
         self.approved_by = approved_by
-        self.save(update_fields=["status", "review_completed_at", "approved_at", "approved_by", "updated_at"])
+        self.info_request_reason = self.additional_info_response = ""
+        self.save(
+            update_fields=[
+                "status",
+                "review_completed_at",
+                "approved_at",
+                "approved_by",
+                "info_request_reason",
+                "additional_info_response",
+                "updated_at",
+            ]
+        )
 
     def activate(self):
         self._require_status([CompanyStatus.APPROVED], CompanyStatus.ACTIVE)

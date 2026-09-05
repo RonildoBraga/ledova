@@ -43,9 +43,7 @@ class WhitelistEntryViewSet(
     def by_address(self, request, address=None):
         address = address.lower()
 
-        entries = list(
-            self.get_queryset().filter(wallet__address__iexact=address).select_related("wallet").order_by("uuid")[:2]
-        )
+        entries = list(self.get_queryset().filter_by_address(address).select_related("wallet").order_by("uuid")[:2])
         if len(entries) != 1:
             raise Http404(f"No whitelist entry found for {address}")
 
@@ -144,7 +142,7 @@ class WhitelistEntryViewSet(
         for entry in queryset:
             writer.writerow(
                 [
-                    entry.wallet.address,
+                    entry.wallet_address,
                     entry.get_status_display(),
                     "Yes" if entry.is_whitelisted else "No",
                     entry.created_at.isoformat() if entry.created_at else "",

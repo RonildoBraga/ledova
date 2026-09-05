@@ -239,6 +239,8 @@ SINGLETON_ROUTES = (
     ("/api/user-preferences/", "preferences"),
     ("/api/notification-preferences/", "notification_preferences"),
 )
+# Deployment-wide singletons: the same body for every authenticated actor, 401 for nobody.
+GLOBAL_ROUTES = ("/api/operator/",)
 
 
 def _fill(value, context):
@@ -262,6 +264,7 @@ class CrossTenantRouteMatrixTest(APITestCase):
         self._service("wallets.views.wallet.verify_wallet_signature", return_value=True)
         self._service("wallets.views.wallet.sync_wallet").defer.return_value = "job"
         self._service("wallets.views.fiat_purchase.generate_transak_widget_url", return_value="https://widget.test")
+        self._service("companies.services.company.send_push_notification")
         self._service("tokens.tasks.deploy_share_token_task")
         share_tokens = self._service("tokens.views.share_token.ShareTokenService").return_value
         share_tokens.create_issuance_request.side_effect = _create_issuance_request
@@ -381,3 +384,16 @@ class CrossTenantRouteMatrixTest(APITestCase):
                 with self.subTest(actor=actor.label, path=path):
                     self.assertEqual(response.status_code, 200, response.content)
                     self.assertEqual(response.json()["uuid"], own[key])
+
+    def test_global_singleton_routes_answer_every_actor_and_refuse_anonymous(self):
+        for path in GLOBAL_ROUTES:
+            bodies = []
+            for actor in self.actors:
+                self.client.force_authenticate(actor.user)
+                response = self.client.get(path)
+                with self.subTest(actor=actor.label, path=path):
+                    self.assertEqual(response.status_code, 200, response.content)
+                bodies.append(response.json())
+            self.assertEqual(len({str(body) for body in bodies}), 1)
+            self.client.force_authenticate(None)
+            self.assertEqual(self.client.get(path).status_code, 401)

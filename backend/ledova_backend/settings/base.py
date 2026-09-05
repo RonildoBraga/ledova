@@ -24,6 +24,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "django_filters",
     "storages",
+    "operators",  # the hosting operator: one admin-editable configuration row
     "authentication",
     "users",  # depends on authentication (includes UserAccount model)
     "portfolios",  # depends on users
@@ -85,3 +86,6 @@ USE_X_FORWARDED_PORT = True
 # Redis is used only for the trading-events pub/sub channel
 # (backend/tokens/events.py). Background tasks run on procrastinate (Postgres).
 REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
+
+# Name of the lazily created Operator row (backend/operators); everything else is set in the admin.
+OPERATOR_NAME = os.environ.get("OPERATOR_NAME") or "Ledova operator"

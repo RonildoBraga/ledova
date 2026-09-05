@@ -1,5 +1,7 @@
 """Every Quick Actions button on the company admin page goes through the one table-driven transition view."""
 
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -32,6 +34,8 @@ CASES = [
 @override_settings(STORAGES=TEST_STORAGES)
 class CompanyAdminTransitionTest(TestCase):
     def setUp(self):
+        patch("companies.services.company.send_push_notification").start()
+        self.addCleanup(patch.stopall)
         self.admin = User.objects.create_superuser(email="admin-companies@example.test", password="pw-12345678")
         self.client.force_login(self.admin)
         owner = User.objects.create_user(email="owner-companies@example.test", password="pw-12345678")
@@ -127,6 +131,18 @@ class CompanyAdminTransitionTest(TestCase):
                     self.assertContains(response, label)
                     if slug:
                         self.assertContains(response, self._url(slug))
+
+    def test_change_page_shows_the_applicants_answer_under_application_tracking(self):
+        self._set_status(CompanyStatus.REVIEW)
+        self.client.post(self._url("request-info"), {"reason": "Send the share register"})
+        self.company.refresh_from_db()
+        self.company.resubmit(response="Share register attached as a document")
+
+        response = self.client.get(self.change_url)
+
+        self.assertContains(response, "Send the share register")
+        self.assertContains(response, "Share register attached as a document")
+        self.assertNotContains(response, "The company will be notified")
 
     def test_unknown_action_is_not_a_transition_route(self):
         self._set_status(CompanyStatus.REVIEW)
