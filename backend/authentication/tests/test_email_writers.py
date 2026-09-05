@@ -129,14 +129,22 @@ class EmailAdminChangeTests(TestCase):
     def setUp(self):
         super().setUp()
         self.superuser = User.objects.create_superuser(email="admin@example.test", password=self.password)
-        self.target = User.objects.create_user(email="member@example.test", password=self.password)
+        self.target = User.objects.create_user(
+            email="member@example.test", password=self.password, is_email_verified=True
+        )
         self.other = User.objects.create_user(email="legacy.owner@example.test", password=self.password)
         self.change_url = reverse("admin:authentication_customuser_change", args=[self.target.pk])
         self.client.force_login(self.superuser)
 
     @staticmethod
     def change_data(email):
-        return {"email": email, "date_joined_0": "2026-01-01", "date_joined_1": "00:00:00", "is_active": "on"}
+        return {
+            "email": email,
+            "date_joined_0": "2026-01-01",
+            "date_joined_1": "00:00:00",
+            "is_active": "on",
+            "is_email_verified": "on",
+        }
 
     def issue_sessions(self):
         return [TokenService.issue(self.target)[1] for _ in range(2)]
@@ -155,7 +163,7 @@ class EmailAdminChangeTests(TestCase):
         self.assertNotIn("email", model_admin.get_readonly_fields(request, self.target))
         self.assertIn("email", model_admin.get_form(request, self.target).base_fields)
 
-    def test_change_normalises_the_address_and_revokes_every_session(self):
+    def test_change_normalises_the_address_revokes_every_session_and_unverifies_it(self):
         sessions = self.issue_sessions()
 
         response = self.client.post(self.change_url, self.change_data(" Member.Renamed@EXAMPLE.TEST "))
@@ -163,6 +171,7 @@ class EmailAdminChangeTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.target.refresh_from_db()
         self.assertEqual(self.target.email, "member.renamed@example.test")
+        self.assertFalse(self.target.is_email_verified)
         self.assert_sessions_live(sessions, False)
 
     def test_same_address_in_another_spelling_changes_nothing_and_keeps_sessions(self):
@@ -173,6 +182,7 @@ class EmailAdminChangeTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.target.refresh_from_db()
         self.assertEqual(self.target.email, "member@example.test")
+        self.assertTrue(self.target.is_email_verified)
         self.assert_sessions_live(sessions, True)
 
     def test_colliding_and_invalid_addresses_are_form_errors_not_constraint_failures(self):

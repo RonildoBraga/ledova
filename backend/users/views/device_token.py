@@ -1,4 +1,3 @@
-from django.db import IntegrityError
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -29,17 +28,11 @@ class DeviceTokenViewSet(AuthenticatedModelViewSet):
         push_token = serializer.validated_data["push_token"]
         device_type = serializer.validated_data["device_type"]
 
-        try:
-            device_token, created = DeviceToken.objects.update_or_create(
-                user=request.user,
-                push_token=push_token,
-                defaults={"device_type": device_type, "is_active": True},
-            )
-        except IntegrityError:
-            return Response(
-                {"detail": "Device token registration conflict."},
-                status=status.HTTP_409_CONFLICT,
-            )
+        # A push token identifies an app install; whoever signed in on it last is its owner.
+        device_token, created = DeviceToken.objects.update_or_create(
+            push_token=push_token,
+            defaults={"user": request.user, "device_type": device_type, "is_active": True},
+        )
 
         if created:
             response_status = status.HTTP_201_CREATED

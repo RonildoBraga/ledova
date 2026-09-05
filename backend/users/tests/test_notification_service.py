@@ -3,7 +3,7 @@ from unittest.mock import Mock, patch
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from users.models import DeviceToken, UserProfile
+from users.models import DeviceToken, Notification, NotificationPreferences, UserProfile
 from users.services.notifications import NotificationService
 
 User = get_user_model()
@@ -50,3 +50,30 @@ class NotificationServiceDeviceTokenTest(TestCase):
 
         token.refresh_from_db()
         self.assertFalse(token.is_active)
+
+
+class NotificationServicePreferencesTest(TestCase):
+    def setUp(self):
+        with patch("users.services.notifications.ExpoPushClient"):
+            self.service = NotificationService()
+
+    def test_user_without_profile_or_preferences_gets_exactly_one_row(self):
+        user = User.objects.create_user(email="noprofile@example.test", password="pw-12345678")
+
+        result = self.service.notify_user(user, "title", "body", notification_type="transaction")
+
+        self.assertEqual(result["status"], "no_devices")
+        self.assertEqual(Notification.objects.filter(user=user).count(), 1)
+
+    def test_disabled_type_keeps_the_inbox_row_and_skips_the_push(self):
+        user = User.objects.create_user(email="muted@example.test", password="pw-12345678")
+        NotificationPreferences.objects.create(
+            user_profile=UserProfile.objects.create(user=user), transaction_alerts=False
+        )
+        DeviceToken.objects.create(user=user, push_token="ExponentPushToken[muted]", device_type="ios")
+
+        result = self.service.notify_user(user, "title", "body", notification_type="transaction")
+
+        self.assertEqual(result["status"], "skipped")
+        self.assertEqual(Notification.objects.filter(user=user, notification_type="transaction").count(), 1)
+        self.service.expo_client.send_batch.assert_not_called()

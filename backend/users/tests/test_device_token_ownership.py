@@ -52,26 +52,28 @@ class DeviceTokenOwnershipTest(APITestCase):
         )
         return actor, active_token, inactive_token
 
-    def test_foreign_registration_collision_is_generic_and_preserves_owner_for_every_role(self):
+    def test_foreign_token_follows_the_latest_sign_in_for_every_role(self):
+        push_token = self.foreign_token.push_token
+        previous_owner = self.foreign_user
         for actor, _, _ in self.actor_cases:
             self.client.force_authenticate(actor)
 
             response = self.client.post(
                 "/api/device-tokens/register/",
-                {
-                    "pushToken": self.foreign_token.push_token,
-                    "deviceType": DeviceToken.DeviceType.ANDROID,
-                },
+                {"pushToken": push_token, "deviceType": DeviceToken.DeviceType.ANDROID},
                 format="json",
             )
 
             with self.subTest(actor=actor.email):
-                self.assertEqual(response.status_code, 409)
-                self.assertEqual(response.json(), {"detail": "Device token registration conflict."})
-                self.foreign_token.refresh_from_db()
-                self.assertEqual(self.foreign_token.user, self.foreign_user)
-                self.assertFalse(self.foreign_token.is_active)
-                self.assertEqual(self.foreign_token.device_type, DeviceToken.DeviceType.IOS)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json()["uuid"], str(self.foreign_token.uuid))
+                token = DeviceToken.objects.get(push_token=push_token)
+                self.assertEqual(token.user, actor)
+                self.assertTrue(token.is_active)
+                self.assertEqual(token.device_type, DeviceToken.DeviceType.ANDROID)
+                self.assertFalse(DeviceToken.objects.filter(user=previous_owner, push_token=push_token).exists())
+                self.assertEqual(DeviceToken.objects.filter(push_token=push_token).count(), 1)
+            previous_owner = actor
 
     def test_own_token_reactivation_and_type_update_succeeds_for_every_role(self):
         for actor, _, inactive_token in self.actor_cases:

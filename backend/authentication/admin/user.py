@@ -72,9 +72,13 @@ class CustomUserAdmin(UserAdmin):
     )
 
     def save_model(self, request, obj, form, change):
-        """A changed address ends every session: the old one may no longer belong to this person."""
+        """A changed address ends every session and must be proven again at the next sign-in:
+        the old one may no longer belong to this person and the new one is unverified."""
+        email_changed = change and form.initial.get("email") != obj.email
+        if email_changed:
+            obj.is_email_verified = False
         super().save_model(request, obj, form, change)
-        if change and form.initial.get("email") != obj.email:
+        if email_changed:
             TokenService.revoke_all(obj)
 
 
