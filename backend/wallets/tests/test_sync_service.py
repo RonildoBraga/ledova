@@ -72,7 +72,7 @@ class WalletSyncServiceTest(TestCase):
         client = MagicMock()
         client.get_transaction_history.return_value = []
         with patch("wallets.services.sync.get_blockchain_client", return_value=client), patch(
-            "wallets.services.sync.fetch_chain_balance", return_value=Decimal(balance)
+            "wallets.services.holdings.fetch_chain_balance", return_value=Decimal(balance)
         ):
             return WalletSyncService.sync_wallet(self.wallet)
 

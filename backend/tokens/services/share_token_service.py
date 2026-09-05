@@ -9,11 +9,14 @@ from rest_framework.exceptions import ValidationError
 from web3 import Web3
 from web3.logs import DISCARD
 
+from assets.models import Asset, AssetType
+from assets.services.identity import free_symbol, verified_contract_asset
 from blockchain.models import BlockchainTransaction, TransactionStatus, TransactionType
 from companies.models import CompanyStatus
 from integrations.base_chain import get_base_chain_client
 from integrations.base_chain.exceptions import BaseChainContractError
 from operators.settlement import settlement_deployments
+from shared.constants import BLOCKCHAIN_BASE
 from tokens.exceptions import (
     CompanyNotReadyException,
     ContractLoadException,
@@ -44,6 +47,8 @@ ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 NOT_WHITELISTED = "Recipient wallet is not whitelisted. Whitelist it before executing."
 EXCEEDS_AUTHORIZED = "Amount exceeds authorized shares. Submit a capital increase first."
 TOKEN_PAUSED = "Token is paused. Unpause it before executing."
+SHARE_ASSET_CHAIN = BLOCKCHAIN_BASE
+NOT_ATTESTED = "{symbol} at {address} is not the address the factory holds for {identifier}; left unverified"
 CAP_NOT_RAISED = (
     "Authorized shares are already at or above the requested total. "
     "Resubmit the capital increase against the current cap."
@@ -189,8 +194,7 @@ class ShareTokenService:
             if contract_address is None:
                 contract_address = self._create_share_token(token, identifier)
 
-        token.mark_deployed(contract_address)
-        self._approve_for_swap(token)
+        self._finish_deployment(token, contract_address)
         return {"contract_address": contract_address, "identifier": identifier, "adopted": adopted}
 
     def resolve_pending_deployment(self, token: ShareToken) -> Optional[str]:
@@ -198,8 +202,7 @@ class ShareTokenService:
         if contract_address:
             self._warn_on_cap_mismatch(token, contract_address)
             self._confirm_deployment_transaction(token)
-            token.mark_deployed(contract_address)
-            self._approve_for_swap(token)
+            self._finish_deployment(token, contract_address)
         return contract_address
 
     def _confirm_deployment_transaction(self, token: ShareToken) -> None:
@@ -330,6 +333,42 @@ class ShareTokenService:
             token.mark_deploying(tx_hash=tx_hash, transaction=tx_record)
         logger.info(f"ShareToken {token.symbol} created at {contract_address}")
         return contract_address
+
+    def _finish_deployment(self, token: ShareToken, contract_address: str) -> None:
+        token.mark_deployed(contract_address)
+        self.bridge_share_asset(token, contract_address)
+        self._approve_for_swap(token)
+
+    def bridge_share_asset(self, token: ShareToken, contract_address: str) -> None:
+        identifier = self.token_identifier(token)
+        try:
+            attested = self.get_token_by_identifier(identifier)
+        except Exception as exc:
+            logger.warning(f"getTokenByIdentifier({identifier}) failed; {token.symbol} has no verified asset: {exc}")
+            return
+        if not attested or attested.lower() != contract_address.lower():
+            logger.warning(NOT_ATTESTED.format(symbol=token.symbol, address=contract_address, identifier=identifier))
+            return
+        try:
+            asset = verified_contract_asset(
+                chain=SHARE_ASSET_CHAIN,
+                contract_address=contract_address,
+                symbol=self._share_asset_symbol(token, contract_address),
+                name=f"{token.company.name} {token.name}",
+                decimals=token.decimals,
+                asset_type=AssetType.TOKENIZED_SECURITY.value,
+            )
+        except Exception as exc:
+            logger.error(f"Could not bridge {token.symbol} at {contract_address} into an asset: {exc}")
+            return
+        logger.info(f"{token.symbol} at {contract_address} is asset {asset.symbol} on {SHARE_ASSET_CHAIN}")
+
+    @staticmethod
+    def _share_asset_symbol(token: ShareToken, contract_address: str) -> str:
+        bare = token.symbol
+        if free_symbol(bare, contract_address) == bare:
+            return bare
+        return f"{bare}.{token.company.acn}" if token.company.acn else bare
 
     @staticmethod
     def _approve_for_swap(token: ShareToken) -> None:
@@ -498,7 +537,26 @@ class ShareTokenService:
             tx_hash=result["tx_hash"], block_number=result["block_number"], gas_used=result["gas_used"]
         )
         request.mark_executed(issuance)
+        ShareTokenService._seed_recipient_holding(request.token, issuance.recipient_address)
         logger.info(f"Issuance executed for {request.token.symbol}: {result['tx_hash']}")
+
+    @staticmethod
+    def _seed_recipient_holding(token: ShareToken, recipient_address: str) -> None:
+        from wallets.services.holdings import sync_holding
+        from whitelist.models import WhitelistEntry
+
+        try:
+            entry = WhitelistEntry.objects.filter_by_address(recipient_address).select_related("wallet").first()
+            if entry is None or entry.wallet is None:
+                logger.info(f"{recipient_address} is not an investor wallet; no {token.symbol} holding written")
+                return
+            asset = Asset.get_by_chain_and_contract(SHARE_ASSET_CHAIN, token.contract_address)
+            if asset is None:
+                logger.warning(f"{token.symbol} has no asset on {SHARE_ASSET_CHAIN}; no holding written")
+                return
+            sync_holding(entry.wallet, asset)
+        except Exception as exc:
+            logger.error(f"Could not record the {token.symbol} holding of {recipient_address}: {exc}")
 
     def resolve_executing_issuance(self, request: ShareIssuanceRequest) -> Optional[str]:
         issuance = (

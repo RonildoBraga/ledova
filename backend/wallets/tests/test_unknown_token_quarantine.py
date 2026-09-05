@@ -55,7 +55,7 @@ class UnknownTokenQuarantineTest(APITestCase):
         client = MagicMock()
         client.get_transaction_history.return_value = list(transfers)
         with patch("wallets.services.sync.get_blockchain_client", return_value=client):
-            with patch("wallets.services.sync.fetch_chain_balance", return_value=None):
+            with patch("wallets.services.holdings.fetch_chain_balance", return_value=None):
                 return WalletSyncService.sync_wallet(wallet or self.wallet)
 
     def base_wallet(self):

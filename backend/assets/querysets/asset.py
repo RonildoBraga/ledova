@@ -18,6 +18,9 @@ class AssetQuerySet(QuerySet):
     def verified(self):
         return self.filter(is_verified=True)
 
+    def excluding_securities(self):
+        return self.exclude(asset_type="tokenized_security")
+
     def native_for_chain(self, chain):
         return self.filter(
             asset_type="native_crypto",

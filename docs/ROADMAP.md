@@ -65,6 +65,13 @@ today; the only directory that does exist is the market one, `GET
   `paymentInstructions` appears only as a type
   (`packages/shared/src/types/domain/operator.ts`), with no reader in
   `dashboard/src` or `mobile/src`.
+- Allotted shares now reach the portfolio. Deploying a share token writes a
+  verified `assets.Asset` (`tokenized_security`, `decimals` 0) and an
+  `AssetChainDeployment` at the address the factory attests, and completing an
+  issuance writes the recipient's `Holding` from `balanceOf`. Share tokens
+  deployed before this existed are bridged by
+  `manage.py bridge_share_assets`, which is idempotent and never runs on its
+  own.
 
 ## Phase 2 — Eligibility and the register
 
@@ -116,6 +123,22 @@ deployment configuration is deliberately absent.
   Phase 1 investor directory and the Phase 2 eligibility gate are built to:
   Phase 1 records the classification, Phase 2 enforces it. Nothing in the code
   enforces it today.
+- **Share classes stay out of the general asset list.** `GET /api/assets/`
+  excludes `tokenized_security`, so one company's share class is not visible to
+  every authenticated user through the market card, the asset-prices screen or
+  the favourites picker. Discovery belongs to the eligibility-gated investor
+  directory. A holder still sees their own shares through
+  `GET /api/wallets/{uuid}/holdings/`.
+- **A share Asset carries no price.** `current_price` stays null for a
+  tokenized security: a nominal issue price on an unlisted illiquid security
+  would flow into total market value and the performance percentage, which is a
+  valuation claim the platform cannot make. The consequence is cosmetic and
+  pinned by tests — a shares-only portfolio draws a flat zero holdings chart
+  instead of the empty state, and its allocation doughnut is empty while the
+  quantity column shows the real share count.
+- **Shares move by allotment, not by wallet transfer.** `prepare-transfer` and
+  `broadcast-transfer` refuse a `tokenized_security`, which is what keeps the
+  Phase 1 register — a read-model over `ShareIssuance` — correct.
 - **Two deployment modes, one row.** `deployment_mode` is recorded
   configuration on the operator row
   ([docs/OPERATIONS.md](OPERATIONS.md#operator-configuration)); it does not
