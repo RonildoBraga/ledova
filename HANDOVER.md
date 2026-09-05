@@ -79,6 +79,10 @@ deleted; the three `/company/*` redirect routes stay for old bookmarks.
    `matchDetails` entries; the trading cleanup removed the endpoint and fields.
 3. Product call: should modifying an order re-run matching automatically?
    Creation matches; modification no longer reports a candidate match.
+4. Deploy note: `companies/0003_delete_review_and_signature_models` (with
+   `tokens/0013_remove_transferorder_signature_request` before it) drops the
+   three unused tables `ApplicationReview`, `ReviewNote` and
+   `SignatureRequest`; both migrations are reversible with `migrate`.
 
 Decisions deferred during the simplification pass (each is a delete-or-keep
 call for the owner; the code is kept and working until decided):
@@ -88,13 +92,11 @@ call for the owner; the code is kept and working until decided):
   mobile `useFetchBalances`, both through shared-services `fetchBatchBalances`)
   and stays. `/api/waitlist/` and `/api/asset-allocations/` are handled in the
   dead-models bundle together with their models.
-- Models nothing writes or reads: `SignatureRequest`, `AssetAllocation`,
+- Models nothing writes or reads: `AssetAllocation`,
   `FiatTransaction` persistence, the unread `Wallet`/`Holding` columns,
   `NotificationPreferences` (foldable into `UserPreferences`).
 - The materialised `PortfolioSnapshot` table versus an on-read value series.
 - Bitcoin support end to end (`integrations/blockchain/bitcoin.py`).
-- The two-reviewer company approval workflow (`ApplicationReview`,
-  `ReviewNote`): finish wiring or delete.
 - Push notifications: nothing creates `Notification` rows or defers the send
   tasks; wire one producer or keep the model as an admin-populated inbox.
 - Mobile app status and the collapse of the four shared TypeScript packages
