@@ -45,7 +45,6 @@ class TenantOrderIsolationTest(APITestCase):
             user_account=account,
             address=address,
             chain="ethereum",
-            custody_model="non_custodial",
             wallet_type="software",
             verification_status="VERIFIED",
         )

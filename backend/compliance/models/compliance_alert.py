@@ -28,14 +28,6 @@ class ComplianceAlert(BaseModel):
         related_name="compliance_alerts",
         help_text="Crypto transaction that triggered the alert",
     )
-    fiat_transaction = models.ForeignKey(
-        "wallets.FiatTransaction",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="compliance_alerts",
-        help_text="Fiat transaction that triggered the alert",
-    )
     monitoring_rule = models.ForeignKey(
         "compliance.MonitoringRule",
         on_delete=models.SET_NULL,

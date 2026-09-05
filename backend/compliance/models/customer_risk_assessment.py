@@ -48,7 +48,6 @@ class CustomerRiskAssessment(BaseModel):
         default=PEP_TYPE_NONE,
     )
     pep_details = models.JSONField(null=True, blank=True)
-    high_risk_country = models.BooleanField(default=False)
     high_risk_occupation = models.BooleanField(default=False)
     assessment_reason = models.TextField(blank=True)
     assessed_by = models.ForeignKey(

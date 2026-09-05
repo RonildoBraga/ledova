@@ -14,7 +14,6 @@ from users.models import (
     UserAccount,
     UserPreferences,
     UserProfile,
-    Waitlist,
 )
 
 User = get_user_model()
@@ -49,7 +48,6 @@ class UsersAdminPagesTest(TestCase):
             FavouriteAsset.objects.create(user_account=account, asset=asset),
             DeviceToken.objects.create(user=user, push_token="ExponentPushToken[admin]", device_type="ios"),
             Notification.objects.create(user=user, title="Hello", body="Body"),
-            Waitlist.objects.create(email="wait@example.test"),
         ]
 
     def test_every_users_model_is_registered_and_renders(self):
@@ -64,15 +62,3 @@ class UsersAdminPagesTest(TestCase):
                 self.assertEqual(
                     self.client.get(reverse("admin:%s_%s_change" % info, args=[instance.pk])).status_code, 200
                 )
-
-    def test_waitlist_actions_still_toggle_entries(self):
-        entry = Waitlist.objects.get(email="wait@example.test")
-        url = reverse("admin:users_waitlist_changelist")
-
-        self.client.post(url, {"action": "mark_inactive", "_selected_action": [entry.pk]})
-        entry.refresh_from_db()
-        self.assertFalse(entry.is_active)
-
-        self.client.post(url, {"action": "mark_active", "_selected_action": [entry.pk]})
-        entry.refresh_from_db()
-        self.assertTrue(entry.is_active)

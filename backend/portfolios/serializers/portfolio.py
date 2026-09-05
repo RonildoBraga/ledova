@@ -1,11 +1,6 @@
 from rest_framework import serializers
 
-from assets.models import Asset
-from portfolios.models.portfolio import (
-    AssetAllocation,
-    Portfolio,
-    PortfolioSnapshot,
-)
+from portfolios.models.portfolio import Portfolio, PortfolioSnapshot
 from users.models import UserAccount
 
 
@@ -47,73 +42,6 @@ class PortfolioSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
-
-
-class AssetAllocationSerializer(serializers.ModelSerializer):
-    portfolio = serializers.PrimaryKeyRelatedField(queryset=Portfolio.objects.none())
-    asset = serializers.PrimaryKeyRelatedField(queryset=Asset.objects.none())
-    asset_name = serializers.CharField(source="asset.name", read_only=True)
-    asset_symbol = serializers.CharField(source="asset.symbol", read_only=True)
-    asset_display_name = serializers.CharField(source="asset.display_name", read_only=True)
-    asset_sector = serializers.SerializerMethodField()
-    asset_industry = serializers.SerializerMethodField()
-    asset_exchange = serializers.SerializerMethodField()
-    asset_currency = serializers.CharField(source="asset.currency", read_only=True)
-
-    def get_asset_sector(self, obj):
-        return obj.asset.sector.name if hasattr(obj.asset, "sector") and obj.asset.sector else None
-
-    def get_asset_industry(self, obj):
-        return obj.asset.industry.name if hasattr(obj.asset, "industry") and obj.asset.industry else None
-
-    def get_asset_exchange(self, obj):
-        return obj.asset.exchange.name if hasattr(obj.asset, "exchange") and obj.asset.exchange else None
-
-    quantity = serializers.IntegerField(read_only=True, required=False)
-    allocation_percentage = serializers.DecimalField(max_digits=5, decimal_places=2, read_only=True, required=False)
-    market_value = serializers.DecimalField(max_digits=19, decimal_places=4, read_only=True, required=False)
-
-    class Meta:
-        model = AssetAllocation
-        fields = (
-            "uuid",
-            "portfolio",
-            "asset",
-            "asset_name",
-            "asset_symbol",
-            "asset_display_name",
-            "asset_sector",
-            "asset_industry",
-            "asset_exchange",
-            "asset_currency",
-            "percentage",
-            "quantity",
-            "allocation_percentage",
-            "market_value",
-        )
-        read_only_fields = (
-            "uuid",
-            "asset_name",
-            "asset_symbol",
-            "asset_display_name",
-            "asset_sector",
-            "asset_industry",
-            "asset_exchange",
-            "asset_currency",
-            "quantity",
-            "allocation_percentage",
-            "market_value",
-        )
-
-    def get_fields(self):
-        fields = super().get_fields()
-        request = self.context.get("request")
-        if request is None or not request.user.is_authenticated:
-            fields["portfolio"].queryset = Portfolio.objects.none()
-        else:
-            fields["portfolio"].queryset = Portfolio.objects.visible_to_user(request.user).active()
-        fields["asset"].queryset = Asset.objects.all()
-        return fields
 
 
 class PortfolioSnapshotSerializer(serializers.ModelSerializer):

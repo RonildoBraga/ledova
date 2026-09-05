@@ -32,9 +32,8 @@ router.register(
 router.register(r"notifications", user_views.NotificationViewSet, basename="notifications")
 router.register(r"transactions", wallet_views.TransactionViewSet, basename="transactions")
 router.register(r"wallets", wallet_views.WalletViewSet, basename="wallets")
-router.register(r"fiat-purchases", wallet_views.FiatTransactionViewSet, basename="fiat-purchases")
+router.register(r"fiat-purchases", wallet_views.FiatPurchaseViewSet, basename="fiat-purchases")
 router.register(r"portfolios", portfolio_views.PortfolioViewSet, basename="portfolios")
-router.register(r"asset-allocations", portfolio_views.AssetAllocationViewSet, basename="asset-allocations")
 router.register(r"favourite-assets", user_views.FavouriteAssetViewSet, basename="favourite-assets")
 router.register(r"assets", asset_views.AssetViewSet, basename="assets")
 router.register(r"feature-flags", feature_flag_views.FeatureFlagViewSet, basename="feature-flags")
@@ -43,7 +42,6 @@ identity_verification_router = DefaultRouter()
 identity_verification_router.register(r"", user_views.IdentityVerificationViewSet, basename="identity-verification")
 
 urlpatterns = [
-    path("api/waitlist/", user_views.waitlist_signup, name="waitlist-signup"),
     path("api/users/identity-verification/", include(identity_verification_router.urls)),
     path("webhooks/sumsub/", SumSubWebhookView.as_view(), name="sumsub-webhook"),
     path("webhooks/kycaid/", KYCAIDWebhookView.as_view(), name="kycaid-webhook"),

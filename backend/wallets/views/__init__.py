@@ -1,9 +1,9 @@
-from wallets.views.fiat_purchase import FiatTransactionViewSet
+from wallets.views.fiat_purchase import FiatPurchaseViewSet
 from wallets.views.transaction import TransactionViewSet
 from wallets.views.wallet import WalletViewSet
 
 __all__ = [
     "TransactionViewSet",
-    "FiatTransactionViewSet",
+    "FiatPurchaseViewSet",
     "WalletViewSet",
 ]

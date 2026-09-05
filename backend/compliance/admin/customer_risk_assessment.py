@@ -26,7 +26,6 @@ class CustomerRiskAssessmentAdmin(admin.ModelAdmin):
         "assessment_status",
         "overall_risk_rating",
         "pep_type",
-        "high_risk_country",
         "high_risk_occupation",
         "is_automated",
     ]

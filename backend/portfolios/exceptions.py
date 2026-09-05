@@ -2,19 +2,6 @@ from rest_framework import status
 from rest_framework.exceptions import APIException
 
 
-class PortfolioNotFoundException(APIException):
-    status_code = status.HTTP_404_NOT_FOUND
-    default_detail = "Portfolio not found."
-    default_code = "portfolio_not_found"
-
-    def __init__(self, portfolio_uuid=None):
-        if portfolio_uuid:
-            detail = f"Portfolio {portfolio_uuid} not found."
-        else:
-            detail = self.default_detail
-        super().__init__(detail)
-
-
 class InactivePortfolioException(APIException):
     status_code = status.HTTP_409_CONFLICT
     default_detail = "Cannot perform operations on an inactive portfolio."

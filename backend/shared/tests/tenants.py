@@ -13,7 +13,7 @@ from django.utils import timezone
 from assets.models import Asset
 from companies.models import Company, CompanyDocument, CompanyType, DocumentType
 from documents.models import Document
-from portfolios.models import AssetAllocation, Portfolio, PortfolioSnapshot
+from portfolios.models import Portfolio, PortfolioSnapshot
 from shared.models import Country
 from tokens.models import (
     CapitalIncreaseRequest,
@@ -35,13 +35,7 @@ from users.models import (
     UserProfile,
 )
 from wallets.constants import WALLET_VERIFICATION_STATUS_VERIFIED
-from wallets.models import (
-    FiatTransaction,
-    Holding,
-    HoldingSnapshot,
-    Transaction,
-    Wallet,
-)
+from wallets.models import Holding, HoldingSnapshot, Transaction, Wallet
 
 User = get_user_model()
 PASSWORD = "pw-12345678"
@@ -123,18 +117,9 @@ def make_tenant(label, *, staff=False, superuser=False):
         snapshot_reason="DAILY",
         caused_by_transaction=transaction,
     )
-    fiat_purchase = FiatTransaction.objects.create(
-        external_id=f"fiat-{label}",
-        user=user,
-        wallet=wallet,
-        fiat_amount=Decimal("100.00"),
-        fiat_currency="AUD",
-        crypto_currency="ETH",
-    )
 
     portfolio = Portfolio.objects.create(user_account=account, name=f"{label} portfolio")
     portfolio.wallets.add(wallet)
-    allocation = AssetAllocation.objects.create(portfolio=portfolio, asset=refs.asset, percentage="50.00")
     portfolio_snapshot = PortfolioSnapshot.objects.create(
         portfolio=portfolio, snapshot_date=date(2026, 9, 1), snapshot_reason="DAILY"
     )
@@ -219,9 +204,7 @@ def make_tenant(label, *, staff=False, superuser=False):
         holding=holding,
         transaction=transaction,
         holding_snapshot=holding_snapshot,
-        fiat_purchase=fiat_purchase,
         portfolio=portfolio,
-        allocation=allocation,
         portfolio_snapshot=portfolio_snapshot,
         preferences=preferences,
         favourite=favourite,

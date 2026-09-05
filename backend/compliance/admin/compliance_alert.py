@@ -93,16 +93,15 @@ class ComplianceAlertAdmin(admin.ModelAdmin):
         "updated_at",
         "monitoring_rule",
         "transaction_link",
-        "fiat_transaction_link",
     ]
     ordering = ["-created_at"]
     date_hierarchy = "created_at"
     inlines = [AlertChecklistItemInline]
     actions = ["assign_to_me", "mark_as_reviewing", "close_alerts"]
-    # The raw transaction FKs are replaced by links: the selects would list every transaction.
+    # The raw transaction FK is replaced by a link: the select would list every transaction.
     fieldsets = (
         (None, {"fields": ("user_account", "triggered_rule", "alert_type", "severity", "description", "alert_data")}),
-        ("Related Transactions", {"fields": ("transaction_link", "fiat_transaction_link", "monitoring_rule")}),
+        ("Related Transactions", {"fields": ("transaction_link", "monitoring_rule")}),
         ("Status & Assignment", {"fields": ("status", "assigned_to", "assigned_at")}),
         ("Resolution", {"fields": ("investigation_outcome", "resolution_notes", "resolved_at", "resolved_by")}),
         (
@@ -133,10 +132,6 @@ class ComplianceAlertAdmin(admin.ModelAdmin):
     @admin.display(description="Crypto Transaction")
     def transaction_link(self, obj):
         return admin_link(obj.transaction)
-
-    @admin.display(description="Fiat Transaction")
-    def fiat_transaction_link(self, obj):
-        return admin_link(obj.fiat_transaction)
 
     @admin.action(description="Assign selected alerts to me")
     def assign_to_me(self, request, queryset):

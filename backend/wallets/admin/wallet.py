@@ -14,9 +14,7 @@ class WalletAdmin(admin.ModelAdmin):
         "user_account",
         "chain",
         "holdings_count",
-        "custody_model",
         "verification_status",
-        "is_whitelisted_for_securities",
         "last_synced_at",
     )
     search_fields = (
@@ -28,8 +26,6 @@ class WalletAdmin(admin.ModelAdmin):
     )
     list_filter = (
         "verification_status",
-        "custody_model",
-        "is_whitelisted_for_securities",
         "chain",
         "created_at",
         "verified_at",
@@ -37,15 +33,9 @@ class WalletAdmin(admin.ModelAdmin):
     )
     readonly_fields = (
         "uuid",
-        "custody_model",
         "holdings_count",
         "last_synced_at",
-        "last_synced_block",
         "verified_at",
-        "whitelisted_at",
-        "reconstruction_status",
-        "reconstruction_complete",
-        "reconstruction_completed_at",
         "created_at",
         "updated_at",
         # HD wallet fields (set programmatically from hardware wallet import)

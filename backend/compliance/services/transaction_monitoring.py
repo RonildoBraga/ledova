@@ -52,7 +52,7 @@ from compliance.constants import (
 )
 from compliance.models import ComplianceAlert, CustomerRiskAssessment, MonitoringRule
 from compliance.services.crypto_screening import CryptoScreeningService
-from wallets.models import FiatTransaction, Transaction
+from wallets.models import Transaction
 
 logger = logging.getLogger(__name__)
 
@@ -215,19 +215,13 @@ def _check_aggregate_volume(rule, transaction, user_account) -> RuleResult:
     threshold = Decimal(str(rule.parameters.get("amount", AGGREGATE_VOLUME_THRESHOLD_AUD)))
     period_days = rule.parameters.get("period_days", AGGREGATE_VOLUME_PERIOD_DAYS)
     period_start = timezone.now() - timedelta(days=period_days)
-    crypto_volume = Transaction.objects.filter(
+    total_volume = Transaction.objects.filter(
         wallet__user_account=user_account, created_at__gte=period_start, market_value__isnull=False
     ).aggregate(total=Sum("market_value"))["total"] or Decimal("0")
-    fiat_volume = FiatTransaction.objects.filter(
-        user__userprofile__user_accounts=user_account, created_at__gte=period_start, fiat_amount__isnull=False
-    ).aggregate(total=Sum("fiat_amount"))["total"] or Decimal("0")
-    total_volume = crypto_volume + fiat_volume
     if total_volume < threshold:
         return False, {}
     return True, {
         "total_volume": float(total_volume),
-        "crypto_volume": float(crypto_volume),
-        "fiat_volume": float(fiat_volume),
         "threshold": float(threshold),
         "period_days": period_days,
         "reason": f"High aggregate volume: ${float(total_volume):,.2f} in {period_days} days",

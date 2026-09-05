@@ -125,7 +125,6 @@ class RiskAssessmentService:
             "product_risk_score": PRODUCT_RISK_SCORE,
             "pep_type": (pep_data or {}).get("pep_type", PEP_TYPE_NONE),
             "pep_details": pep_data,
-            "high_risk_country": "high_risk_country" in geographic_factors,
             "high_risk_occupation": "high_risk_occupation" in customer_factors,
             "assessment_reason": assessment_reason(
                 customer_score, customer_factors, geographic_score, geographic_factors, total, rating

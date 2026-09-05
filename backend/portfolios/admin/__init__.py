@@ -1,9 +1,5 @@
-from portfolios.admin.portfolio import (
-    AssetAllocationAdmin,
-    PortfolioAdmin,
-)
+from portfolios.admin.portfolio import PortfolioAdmin
 
 __all__ = [
-    "AssetAllocationAdmin",
     "PortfolioAdmin",
 ]

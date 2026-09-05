@@ -1,28 +1,20 @@
 from django.conf import settings
 from django.shortcuts import get_object_or_404
+from rest_framework import viewsets
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from shared.constants import get_native_asset_symbol
-from shared.views import AuthenticatedReadOnlyViewSet
 from wallets.exceptions import WalletUuidRequiredException
-from wallets.models import FiatTransaction, Wallet
-from wallets.serializers import FiatTransactionSerializer
+from wallets.models import Wallet
 from wallets.services.fiat_onramp import generate_transak_widget_url
 
 
-class FiatTransactionViewSet(AuthenticatedReadOnlyViewSet):
-    serializer_class = FiatTransactionSerializer
-    ordering = ["-created_at"]
-    ordering_fields = ["created_at", "updated_at"]
+class FiatPurchaseViewSet(viewsets.ViewSet):
+    """Only the Transak widget-URL action; purchases are not persisted (no provider webhook exists)."""
 
-    def get_queryset(self):
-        user = self.request.user
-        if not user.is_authenticated:
-            return FiatTransaction.objects.none()
-
-        visible_wallets = Wallet.objects.visible_to_user(user)
-        return FiatTransaction.objects.filter(user=user, wallet__in=visible_wallets).select_related("wallet")
+    permission_classes = [IsAuthenticated]
 
     @action(detail=False, methods=["post"], url_path="transak-widget-url")
     def transak_widget_url(self, request):

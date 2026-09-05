@@ -9,7 +9,7 @@ from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from assets.models import Asset
-from portfolios.models import AssetAllocation, Portfolio, PortfolioSnapshot
+from portfolios.models import Portfolio, PortfolioSnapshot
 from portfolios.services import PortfolioSyncService
 from users.models import UserAccount, UserPreferences, UserProfile
 from wallets.models import Wallet
@@ -47,11 +47,6 @@ class PortfolioLiveAuthorizationTest(PortfolioFixtureMixin, APITestCase):
             asset_type="tokenized_security",
             is_active=True,
         )
-        self.alice_allocation = AssetAllocation.objects.create(
-            portfolio=self.alice_portfolio,
-            asset=self.asset,
-            percentage="50.00",
-        )
         self.alice_snapshot = PortfolioSnapshot.objects.create(
             portfolio=self.alice_portfolio,
             snapshot_date=date(2026, 9, 1),
@@ -68,16 +63,11 @@ class PortfolioLiveAuthorizationTest(PortfolioFixtureMixin, APITestCase):
         self.alice_account.user_profiles.remove(self.alice_profile)
 
         self.assertNotIn(self.alice_portfolio, Portfolio.objects.visible_to_user(self.alice))
-        self.assertNotIn(self.alice_allocation, AssetAllocation.objects.visible_to_user(self.alice))
         self.assertNotIn(self.alice_snapshot, PortfolioSnapshot.objects.visible_to_user(self.alice))
 
         self.client.force_authenticate(self.alice)
         self.assertEqual(
             self.client.get(f"/api/portfolios/{self.alice_portfolio.uuid}/").status_code,
-            404,
-        )
-        self.assertEqual(
-            self.client.get(f"/api/asset-allocations/{self.alice_allocation.uuid}/").status_code,
             404,
         )
         preferences_response = self.client.get("/api/user-preferences/")
@@ -94,18 +84,12 @@ class PortfolioLiveAuthorizationTest(PortfolioFixtureMixin, APITestCase):
     def test_reverse_membership_addition_reveals_preexisting_tree(self):
         self.alice_profile.user_accounts.add(self.bob_account)
 
-        bob_allocation = AssetAllocation.objects.create(
-            portfolio=self.bob_portfolio,
-            asset=self.asset,
-            percentage="25.00",
-        )
         bob_snapshot = PortfolioSnapshot.objects.create(
             portfolio=self.bob_portfolio,
             snapshot_date=date(2026, 9, 1),
             snapshot_reason="DAILY",
         )
         self.assertIn(self.bob_portfolio, Portfolio.objects.visible_to_user(self.alice))
-        self.assertIn(bob_allocation, AssetAllocation.objects.visible_to_user(self.alice))
         self.assertIn(bob_snapshot, PortfolioSnapshot.objects.visible_to_user(self.alice))
 
 
@@ -120,16 +104,6 @@ class PortfolioEndpointIsolationTest(PortfolioFixtureMixin, APITestCase):
             name="Scoped asset",
             asset_type="tokenized_security",
             is_active=True,
-        )
-        self.alice_allocation = AssetAllocation.objects.create(
-            portfolio=self.alice_portfolio,
-            asset=self.asset,
-            percentage="60.00",
-        )
-        self.bob_allocation = AssetAllocation.objects.create(
-            portfolio=self.bob_portfolio,
-            asset=self.asset,
-            percentage="40.00",
         )
         self.alice_snapshot = PortfolioSnapshot.objects.create(
             portfolio=self.alice_portfolio,
