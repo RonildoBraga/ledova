@@ -1,8 +1,11 @@
 """The two transaction status writers notify the wallet account's members and nobody else."""
 
+from unittest import skipUnless
 from unittest.mock import patch
 
+from django.db import connection
 from django.test import TestCase
+from procrastinate.contrib.django.models import ProcrastinateJob
 
 from shared.tests.tenants import make_tenant
 from users.models import Notification
@@ -62,3 +65,43 @@ class TransactionNotificationProducerTest(TestCase):
 
         self.tx.refresh_from_db()
         self.assertNotEqual(self.tx.status, TRANSACTION_STATUS_CONFIRMED)
+
+
+@skipUnless(connection.vendor == "postgresql", "procrastinate job rows live in PostgreSQL only")
+class TransactionNotificationJobRowTest(TestCase):
+    """The real defer: one procrastinate_jobs row per member, none when the block fails after the defer."""
+
+    def setUp(self):
+        self.tenant = make_tenant("jobrow")
+        second = make_tenant("jobrow-second")
+        self.tenant.account.user_profiles.add(second.profile)
+        self.tx = self.tenant.transaction
+
+    def job_rows(self):
+        return ProcrastinateJob.objects.filter(task_name=run_task.name)
+
+    def test_confirmation_writes_one_todo_job_per_account_member(self):
+        self.assertEqual(TransactionConfirmationService.confirm_transaction(self.tx.tx_hash)["status"], "confirmed")
+
+        rows = list(self.job_rows())
+        members = self.tenant.account.user_profiles.values_list("user_id", flat=True)
+        self.assertEqual(sorted(row.args["user_id"] for row in rows), sorted(str(pk) for pk in members))
+        self.assertEqual({row.status for row in rows}, {"todo"})
+        self.assertEqual({row.args["transaction_id"] for row in rows}, {str(self.tx.uuid)})
+        self.assertEqual({row.args["event_type"] for row in rows}, {"confirmed"})
+
+    def test_a_failure_after_the_defer_rolls_the_job_rows_back_with_the_status(self):
+        notify = TransactionConfirmationService._notify_wallet_users
+
+        def notify_then_fail(tx, event):
+            notify(tx, event)
+            raise RuntimeError("after the defer")
+
+        with patch.object(TransactionConfirmationService, "_notify_wallet_users", side_effect=notify_then_fail):
+            with self.assertRaises(RuntimeError):
+                TransactionConfirmationService.confirm_transaction(self.tx.tx_hash, block_number=9)
+
+        self.assertEqual(self.job_rows().count(), 0)
+        self.tx.refresh_from_db()
+        self.assertNotEqual(self.tx.status, TRANSACTION_STATUS_CONFIRMED)
+        self.assertIsNone(self.tx.block_number)

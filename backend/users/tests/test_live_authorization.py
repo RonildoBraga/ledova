@@ -63,6 +63,7 @@ class UserLiveAuthorizationTest(APITestCase):
             name="User scope asset",
             asset_type="tokenized_security",
             is_active=True,
+            is_verified=True,
         )
         self.alice_favourite = FavouriteAsset.objects.create(
             user_account=self.alice_account,

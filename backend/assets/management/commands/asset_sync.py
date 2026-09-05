@@ -18,10 +18,20 @@ class Command(BaseCommand):
             default=365,
             help="Number of days to backfill (default: 365, ignored with --today-only)",
         )
+        parser.add_argument(
+            "--seed-only",
+            action="store_true",
+            help="Only upsert the supported assets and their chain deployments; no price fetch, no network",
+        )
 
     def handle(self, *args, **options):
         today_only = options["today_only"]
         days = options["days"]
+
+        if options["seed_only"]:
+            AssetSyncService.ensure_supported_assets()
+            self.stdout.write(self.style.SUCCESS("✓ Supported assets seeded"))
+            return
 
         if today_only:
             self.stdout.write("\nStarting asset sync (today only)...\n")

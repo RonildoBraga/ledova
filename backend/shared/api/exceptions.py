@@ -1,6 +1,6 @@
 import logging
 
-from django.core.exceptions import ObjectDoesNotExist
+from django.core.exceptions import ImproperlyConfigured, ObjectDoesNotExist
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import DatabaseError
 from rest_framework import exceptions, status
@@ -20,6 +20,13 @@ def custom_exception_handler(exc, context):
         elif isinstance(exc, DjangoValidationError):
             messages = exc.message_dict if hasattr(exc, "message_dict") else exc.messages
             response = exception_handler(ValidationError(messages), context)
+        elif isinstance(exc, ImproperlyConfigured):
+            # The message names the setting; keep that server-side.
+            logger.error(f"Service not configured: {exc}")
+            response = Response(
+                {"error": "Service not configured", "detail": "This feature is not configured on this server."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
         elif isinstance(exc, DatabaseError):
             logger.error(f"Database error: {exc}", exc_info=True)
             response = Response(

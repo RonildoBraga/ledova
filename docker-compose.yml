@@ -38,7 +38,7 @@ services:
       POSTGRES_HOST: postgres
       REDIS_URL: redis://redis:6379/0
       STORAGE_BACKEND: local
-    command: python manage.py migrate --noinput
+    command: sh -c "python manage.py migrate --noinput && python manage.py sync_monitoring_rules && python manage.py sync_procedure_templates && python manage.py asset_sync --seed-only"
     depends_on:
       postgres:
         condition: service_healthy

@@ -12,7 +12,11 @@ class FavouriteAssetViewSet(AuthenticatedModelViewSet):
     ordering_fields = ["created_at"]
 
     def get_queryset(self):
-        return FavouriteAsset.objects.visible_to_user(self.request.user).with_optimized_data()
+        return (
+            FavouriteAsset.objects.visible_to_user(self.request.user)
+            .filter(asset__is_verified=True)
+            .with_optimized_data()
+        )
 
     def perform_create(self, serializer):
         serializer.save()

@@ -2,7 +2,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from assets.models import Asset
@@ -18,9 +18,15 @@ from compliance.constants import (
     RISK_RATING_HIGH,
     RISK_RATING_LOW,
     RISK_RATING_MEDIUM,
+    RULE_TYPE_ADDRESS,
     RULE_TYPE_THRESHOLD,
 )
-from compliance.models import ComplianceAlert, CustomerRiskAssessment, MonitoringRule
+from compliance.models import (
+    ComplianceAlert,
+    CustomerRiskAssessment,
+    MonitoringRule,
+    TransactionScreening,
+)
 from compliance.services.risk_assessment import RiskAssessmentService, overall_rating
 from compliance.services.transaction_monitoring import (
     TransactionMonitoringService,
@@ -83,6 +89,28 @@ class RuleDispatchTest(TestCase):
         self.assertEqual([a.monitoring_rule for a in alerts], [rule])
         self.assertEqual(alerts[0].alert_type, "large_transaction")
         self.assertEqual(alerts[0].description, "Large: d")
+
+    @override_settings(KYC_PROVIDER="", KYCAID_CRYPTO_MONITORING_ENABLED=False)
+    def test_disabled_address_screening_needs_no_kyc_provider_and_lets_the_other_rules_run(self):
+        address_rule = MonitoringRule.objects.create(
+            rule_code="MON-004",
+            name="High-Risk Wallet",
+            description="d",
+            rule_type=RULE_TYPE_ADDRESS,
+            parameters={"check_type": "high_risk_wallet"},
+        )
+        threshold_rule = MonitoringRule.objects.create(
+            rule_code="MON-001", name="Large", description="d", rule_type=RULE_TYPE_THRESHOLD, parameters={}
+        )
+
+        triggered, details = check_rule(address_rule, self.tx, self.account)
+        self.assertTrue(triggered)
+        self.assertEqual(details["error"], "Crypto monitoring is disabled")
+        self.assertEqual(details["screening_trigger"], "large_transaction")
+        self.assertEqual(TransactionScreening.objects.get(transaction=self.tx).provider, "disabled")
+
+        alerts = TransactionMonitoringService.check_transaction(self.tx, self.account)
+        self.assertEqual([alert.monitoring_rule for alert in alerts], [threshold_rule, address_rule])
 
     def test_is_new_customer_uses_the_activation_date(self):
         self.assertTrue(is_new_customer(self.account))

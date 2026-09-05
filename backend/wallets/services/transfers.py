@@ -88,17 +88,17 @@ class TransferService:
         amount_token: Optional[str],
         token_contract: str,
     ) -> Dict[str, Any]:
-        from assets.models import Asset
         from wallets.models import Holding
+        from wallets.services.transaction_confirmation import (
+            TransactionConfirmationService,
+        )
 
         if not to_address or not amount_token:
             raise InvalidTransactionException("Both 'toAddress' and 'amountToken' are required for token transfers.")
 
         amount = TransferService._parse_amount(amount_token)
 
-        token_asset = Asset.get_by_chain_and_contract(wallet.chain, token_contract)
-        if not token_asset:
-            raise InvalidTransactionException(f"Token contract {token_contract} not found on {wallet.chain}.")
+        token_asset = TransactionConfirmationService.resolve_transfer_asset(wallet, token_contract)
 
         token_holding = Holding.objects.filter(wallet=wallet, asset=token_asset).first()
         token_balance = token_holding.quantity if token_holding else Decimal("0")
@@ -134,6 +134,13 @@ class TransferService:
         if not signed_transaction:
             raise InvalidTransactionException("'signedTransaction' is required.")
 
+        from wallets.services.transaction_confirmation import (
+            TransactionConfirmationService,
+        )
+
+        if token_contract:  # refuse an unknown or quarantined contract while the funds are still here
+            TransactionConfirmationService.resolve_transfer_asset(wallet, token_contract)
+
         if chain in EVM_BLOCKCHAINS:
             tx_hash = broadcast_ethereum_transaction(chain, signed_transaction)
         elif chain == BLOCKCHAIN_BITCOIN:
@@ -143,10 +150,6 @@ class TransferService:
 
         pending_result = None
         if to_address and amount:
-            from wallets.services.transaction_confirmation import (
-                TransactionConfirmationService,
-            )
-
             amount_decimal = Decimal(amount)
             fee_decimal = Decimal(transaction_fee) if transaction_fee else None
 

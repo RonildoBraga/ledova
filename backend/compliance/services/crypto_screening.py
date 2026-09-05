@@ -24,9 +24,11 @@ SANCTIONS_KEYWORDS = ("sanctions", "sanctioned", "ofac", "sdn")
 
 class CryptoScreeningService:
     def __init__(self):
-        self.provider = get_kyc_provider()
-        self.provider_name = self.provider.get_provider_name()
         self.enabled = settings.KYCAID_CRYPTO_MONITORING_ENABLED
+        # While screening is off a blank KYC_PROVIDER must not abort the other monitoring rules.
+        self.provider = get_kyc_provider() if self.enabled else None
+        # A blank KYC_PROVIDER must not write provider="" on the screening rows kept while it is off.
+        self.provider_name = self.provider.get_provider_name() if self.provider else settings.KYC_PROVIDER or "disabled"
         self.threshold_medium = settings.CRYPTO_RISK_THRESHOLD_MEDIUM
         self.threshold_high = settings.CRYPTO_RISK_THRESHOLD_HIGH
 

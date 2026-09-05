@@ -15,6 +15,10 @@ class AssetQuerySet(QuerySet):
     def active(self):
         return self.filter(is_active=True)
 
+    def verified(self):
+        """Allowlisted rows; unverified (quarantined) assets never reach a customer."""
+        return self.filter(is_verified=True)
+
     def native_for_chain(self, chain):
         """The chain's native coin: a native_crypto asset with an active contract-less deployment on `chain`."""
         return self.filter(

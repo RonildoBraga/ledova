@@ -123,6 +123,26 @@ clients show it read-only by design.
    delivery on the phone additionally needs `extra.eas.projectId` in
    `mobile/app.json` and a dev or production build (Expo Go cannot receive
    remote push on SDK 54); the inbox works without it.
+7. Deploy/run note: the compose `migrate` service now runs
+   `migrate --noinput && sync_monitoring_rules && sync_procedure_templates
+   && asset_sync --seed-only`, so a fresh database gets the compliance
+   monitoring rules, the alert procedure templates and the verified
+   supported assets (all three commands are idempotent and reconcile the
+   tables to the seed modules; `--seed-only` touches no network). `make run`
+   users must run the three commands once after `migrate`; without the
+   first two no monitoring rule exists and no compliance alert is ever
+   raised, and without the seed a token declaring a supported symbol is
+   quarantined under a suffixed symbol until an operator verifies it.
+   Unknown ERC-20 contracts are quarantined as unverified assets keyed on
+   their contract address (ISSUES.md item 9); allowlist one with the asset
+   admin's `Mark selected assets as verified` action, and switch a contract
+   off by deactivating its chain deployment (transfers for it are then
+   skipped and logged, never booked). The same contract address seen on
+   another chain joins an existing row only while that row is unverified and
+   its deployment active; a verified row never gains a deployment without an
+   operator adding it in the admin. An
+   unconfigured integration (`KYC_PROVIDER` blank) now answers 503
+   `Service not configured` instead of 500.
 
 Decisions deferred during the simplification pass (each is a delete-or-keep
 call for the owner; the code is kept and working until decided):

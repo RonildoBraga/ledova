@@ -7,8 +7,9 @@ from django.db import transaction
 from django.utils import timezone
 
 from assets.models import Asset
+from assets.services.identity import native_asset_for_chain
 from compliance.services.transaction_monitoring import TransactionMonitoringService
-from shared.constants import get_native_asset_symbol, normalize_chain
+from shared.constants import normalize_chain
 from users.tasks.notifications import send_transaction_notification
 from wallets.constants import (
     SNAPSHOT_REASON_TRANSACTION,
@@ -16,6 +17,7 @@ from wallets.constants import (
     TRANSACTION_STATUS_FAILED,
     TRANSACTION_STATUS_PENDING,
 )
+from wallets.exceptions import InvalidTransactionException
 from wallets.models import Holding, HoldingSnapshot, Transaction, Wallet
 from wallets.services.chain import fetch_chain_balance
 
@@ -23,6 +25,21 @@ logger = logging.getLogger(__name__)
 
 
 class TransactionConfirmationService:
+
+    @staticmethod
+    def resolve_transfer_asset(wallet: Wallet, token_contract: Optional[str] = None) -> Asset:
+        """The Asset an outgoing transfer books against: the verified token behind token_contract on
+        the wallet's chain, else the chain's native coin. Callers run this before broadcasting so an
+        unknown or quarantined contract is refused while the funds are still in the wallet."""
+        if not token_contract:
+            return native_asset_for_chain(wallet.chain)
+
+        asset = Asset.get_by_chain_and_contract(wallet.chain, token_contract)
+        if asset is None or not asset.is_verified:
+            raise InvalidTransactionException(
+                f"Token contract {token_contract} is not a verified asset on {normalize_chain(wallet.chain)}."
+            )
+        return asset
 
     @staticmethod
     def create_pending_transaction(
@@ -34,19 +51,7 @@ class TransactionConfirmationService:
         token_contract: Optional[str] = None,
     ) -> Dict[str, Any]:
         chain = normalize_chain(wallet.chain)
-
-        asset = Asset.get_by_chain_and_contract(wallet.chain, token_contract) if token_contract else None
-        if token_contract and asset is None:
-            logger.warning(
-                f"Token contract not found: {token_contract} on {wallet.chain}, falling back to native asset"
-            )
-        if asset is None:
-            asset = Asset.objects.native_for_chain(wallet.chain)
-        if asset is None:
-            asset_symbol = get_native_asset_symbol(chain)
-            asset, _ = Asset.objects.get_or_create(
-                symbol=asset_symbol, defaults={"name": asset_symbol, "asset_type": "native_crypto"}
-            )
+        asset = TransactionConfirmationService.resolve_transfer_asset(wallet, token_contract)
 
         with transaction.atomic():
             tx = Transaction.objects.create(

@@ -56,9 +56,32 @@ item names where it lives in the code today.
    `tokens/models/capital_increase.py` do not verify director
    authority, immutable ownership, ACN/ABN validity, authorized-capital limits,
    issuance totals or concurrent capital changes.
-9. **Scam detection.** `wallets/utils/scam_detection.py` trusts symbols and
-   metadata; replace it with chain-and-contract identity, explicit
-   verification (`Asset.is_verified`) and quarantine for unknown assets.
+9. **Scam detection — completed 2026-09-05.** The symbol-lookalike heuristic
+   (`wallets/utils/scam_detection.py`) is gone. Asset identity for chain data
+   is `(chain, contract_address)` through `AssetChainDeployment`
+   (`assets/services/identity.py`): the contract is looked up first, on any
+   chain, and only the row carrying it is ever returned; the same contract
+   seen on another chain joins its row only while that row is unverified and
+   the deployment is active (a verified row never gains a deployment without
+   an operator, and a switched-off deployment is not undone by the address
+   turning up elsewhere); a contract the
+   allowlist does not know is recorded as an unverified `Asset` with its
+   deployment under a symbol no other row owns (declared symbol, or symbol
+   plus a hex prefix of the contract that grows until free), so neither a
+   fake `USDC` nor a fake `USDC-a0b866` can attach to someone else's row
+   whichever contract the chain shows first; a deployment an operator
+   deactivated refuses the transfer (skipped and logged); the transaction
+   for a quarantined token is kept for audit but no `Holding` is opened.
+   The compose `migrate` chain seeds the supported assets
+   (`asset_sync --seed-only`) so no supported symbol is free on a fresh
+   stack. Unverified rows are invisible to
+   customers: `/api/assets/` (list, detail, snapshots), favourites, wallet
+   holdings, transactions, market values and the portfolio holding sync all
+   filter `is_verified`, and a pending transfer naming an unknown or
+   unverified token contract is rejected with 400 instead of debiting the
+   native holding. An operator allowlists a token with the `Mark selected
+   assets as verified` admin action
+   (`wallets/tests/test_unknown_token_quarantine.py`).
 10. **Multi-chain balance aggregation.** `wallets/services/sync.py` and the
     holdings queries scope by wallet, not by the wallet's configured chain;
     same-address balances or symbols can be merged across networks.

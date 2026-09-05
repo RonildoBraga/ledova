@@ -2,6 +2,7 @@ from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
+from django.core.management import call_command
 from django.test import TestCase
 from django.utils import timezone
 
@@ -218,3 +219,15 @@ class SyncTaskTests(TestCase):
             AssetSyncService.ensure_supported_assets()
             sync_all_assets(timestamp=0)
             self.assertEqual(service.ensure_supported_assets.call_count, 1)
+
+
+class AssetSyncCommandTests(TestCase):
+    def test_seed_only_upserts_the_supported_assets_without_touching_the_network(self):
+        with patch.object(AssetSyncService, "sync_assets") as sync_assets:
+            call_command("asset_sync", "--seed-only")
+            call_command("asset_sync", "--seed-only")
+
+        sync_assets.assert_not_called()
+        self.assertEqual(
+            Asset.objects.filter(symbol__in=SUPPORTED_ASSETS, is_verified=True).count(), len(SUPPORTED_ASSETS)
+        )

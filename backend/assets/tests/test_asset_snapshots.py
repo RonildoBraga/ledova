@@ -14,7 +14,9 @@ class AssetSnapshotsEndpointTest(APITestCase):
     def setUp(self):
         user = User.objects.create_user(email="snapshots@example.test", password="pw-12345678")
         UserProfile.objects.create(user=user)
-        self.asset = Asset.objects.create(symbol="SNAP", name="Snapshot asset", asset_type="tokenized_security")
+        self.asset = Asset.objects.create(
+            symbol="SNAP", name="Snapshot asset", asset_type="tokenized_security", is_verified=True
+        )
         AssetChainDeployment.objects.create(asset=self.asset, chain="ethereum")
         base = timezone.make_aware(datetime(2026, 9, 1, 12, 0, 0))
         self.timestamps = [base + timedelta(days=offset) for offset in range(3)]

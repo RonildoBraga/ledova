@@ -22,7 +22,7 @@ class AssetViewSet(AuthenticatedReadOnlyViewSet):
 
     def get_queryset(self):
         chain = self.request.query_params.get("chain")
-        queryset = Asset.objects.visible_to_user(self.request.user)
+        queryset = Asset.objects.visible_to_user(self.request.user).verified()
         if chain:
             queryset = queryset.filter_by_chain(chain)
         else:
