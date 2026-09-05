@@ -79,6 +79,10 @@ export const FEATURE_FLAG_ENDPOINTS = {
   BASE: '/api/feature-flags/',
 } as const;
 
+export const OPERATOR_ENDPOINTS = {
+  BASE: '/api/operator/',
+} as const;
+
 export const COMPANY_ENDPOINTS = {
   BASE: '/api/v1/companies/',
   DETAIL: (uuid: string) => `/api/v1/companies/${uuid}/` as const,

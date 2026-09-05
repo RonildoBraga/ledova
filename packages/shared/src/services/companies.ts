@@ -9,6 +9,8 @@ import type {
   CompanyDocument,
   DocumentUpload,
   ApplicationResponse,
+  ApplicationResubmit,
+  ApplicationWithdraw,
   PaginatedResponse,
 } from '../types';
 
@@ -46,3 +48,9 @@ export const deleteCompanyDocument = (apiClient: AxiosInstance, companyUuid: str
 
 export const submitApplication = (apiClient: AxiosInstance, companyUuid: string) =>
   apiClient.post<ApplicationResponse>(COMPANY_ENDPOINTS.SUBMIT(companyUuid), { confirm: true });
+
+export const resubmitApplication = (apiClient: AxiosInstance, companyUuid: string, data: ApplicationResubmit) =>
+  apiClient.post<ApplicationResponse>(COMPANY_ENDPOINTS.RESUBMIT(companyUuid), data);
+
+export const withdrawApplication = (apiClient: AxiosInstance, companyUuid: string, data: ApplicationWithdraw = {}) =>
+  apiClient.post<ApplicationResponse>(COMPANY_ENDPOINTS.WITHDRAW(companyUuid), data);

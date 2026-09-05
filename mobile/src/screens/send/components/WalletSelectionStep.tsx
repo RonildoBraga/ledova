@@ -151,6 +151,7 @@ export function WalletSelectionStep({ wallets, isLoading, onSelectWallet }: Wall
   }
 
   const ethWallets = wallets.filter((w) => w.chain === BLOCKCHAIN.ETHEREUM);
+  const baseWallets = wallets.filter((w) => w.chain === BLOCKCHAIN.BASE);
   const btcWallets = wallets.filter((w) => w.chain === BLOCKCHAIN.BITCOIN);
 
   const renderWallet = (wallet: Wallet) => {
@@ -222,27 +223,24 @@ export function WalletSelectionStep({ wallets, isLoading, onSelectWallet }: Wall
         <Text style={styles.heroSubtitle}>Select your wallet</Text>
       </View>
 
-      {ethWallets.length > 0 && (
-        <View style={styles.chainGroup}>
-          <View style={styles.chainHeaderRow}>
-            <CurrencyEthIcon size={theme.icon.sizes.md} color={theme.colors.text.muted} weight="bold" />
-            <Text style={styles.chainHeader}>Ethereum</Text>
-          </View>
-          {ethWallets.map(renderWallet)}
-        </View>
-      )}
-
-      {ethWallets.length > 0 && btcWallets.length > 0 && <View style={styles.divider} />}
-
-      {btcWallets.length > 0 && (
-        <View style={styles.chainGroup}>
-          <View style={styles.chainHeaderRow}>
-            <CurrencyBtcIcon size={theme.icon.sizes.md} color={theme.colors.text.muted} weight="bold" />
-            <Text style={styles.chainHeader}>Bitcoin</Text>
-          </View>
-          {btcWallets.map(renderWallet)}
-        </View>
-      )}
+      {[
+        { key: 'ethereum', label: 'Ethereum', icon: CurrencyEthIcon, wallets: ethWallets },
+        { key: 'base', label: 'Base', icon: CurrencyEthIcon, wallets: baseWallets },
+        { key: 'bitcoin', label: 'Bitcoin', icon: CurrencyBtcIcon, wallets: btcWallets },
+      ]
+        .filter((group) => group.wallets.length > 0)
+        .map((group, index) => (
+          <React.Fragment key={group.key}>
+            {index > 0 && <View style={styles.divider} />}
+            <View style={styles.chainGroup}>
+              <View style={styles.chainHeaderRow}>
+                <group.icon size={theme.icon.sizes.md} color={theme.colors.text.muted} weight="bold" />
+                <Text style={styles.chainHeader}>{group.label}</Text>
+              </View>
+              {group.wallets.map(renderWallet)}
+            </View>
+          </React.Fragment>
+        ))}
     </View>
   );
 }

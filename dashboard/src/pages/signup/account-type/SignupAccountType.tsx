@@ -21,7 +21,7 @@ const ACCOUNT_TYPES: AccountTypeOption[] = [
   {
     role: 'investor',
     title: 'Individual Investor',
-    description: 'Manage your personal portfolio, buy and sell crypto, and trade tokenized securities.',
+    description: 'Invest in tokenized company shares and manage your digital assets from one portfolio.',
     icon: UserIcon,
   },
   {

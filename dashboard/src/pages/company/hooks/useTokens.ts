@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   getCompanyTokens,
@@ -13,7 +13,7 @@ import {
   createCapitalIncrease,
   submitCapitalIncrease,
 } from '@ledova/shared';
-import type { TokenCreate, CapitalIncreaseCreate, TokenTabType } from '@ledova/shared';
+import type { TokenCreate, CapitalIncreaseCreate } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 
 export function useTokensList() {
@@ -66,8 +66,8 @@ export function useTokensList() {
   };
 }
 
+/** One token with its cap table, issuances and capital increases; the issuer controls invalidate the token and the list. */
 export function useTokenDetail(uuid: string) {
-  const [activeTab, setActiveTab] = useState<TokenTabType>('overview');
   const [showCapitalIncreaseForm, setShowCapitalIncreaseForm] = useState(false);
   const queryClient = useQueryClient();
 
@@ -86,34 +86,39 @@ export function useTokenDetail(uuid: string) {
   const { data: holdersResponse, isLoading: isLoadingHolders } = useQuery({
     queryKey: ['token', uuid, 'holders'],
     queryFn: () => getCompanyTokenHolders(apiClient, uuid),
-    enabled: !!uuid && activeTab === 'shareholders',
+    enabled: !!uuid,
   });
 
   const { data: issuancesResponse, isLoading: isLoadingIssuances } = useQuery({
     queryKey: ['token', uuid, 'issuances'],
     queryFn: () => getCompanyTokenIssuances(apiClient, uuid),
-    enabled: !!uuid && activeTab === 'issuances',
+    enabled: !!uuid,
   });
 
   const { data: capitalIncreasesResponse, isLoading: isLoadingCapitalIncreases } = useQuery({
     queryKey: ['token', uuid, 'capital-increases'],
     queryFn: () => getCapitalIncreases(apiClient, { token: uuid }),
-    enabled: !!uuid && (activeTab === 'capital-increases' || activeTab === 'shares'),
+    enabled: !!uuid,
   });
+
+  const invalidateToken = () => {
+    queryClient.invalidateQueries({ queryKey: ['token', uuid] });
+    queryClient.invalidateQueries({ queryKey: ['tokens'] });
+  };
 
   const deployMutation = useMutation({
     mutationFn: () => deployCompanyToken(apiClient, uuid),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['token', uuid] }),
+    onSuccess: invalidateToken,
   });
 
   const pauseMutation = useMutation({
     mutationFn: () => pauseCompanyToken(apiClient, uuid),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['token', uuid] }),
+    onSuccess: invalidateToken,
   });
 
   const unpauseMutation = useMutation({
     mutationFn: () => unpauseCompanyToken(apiClient, uuid),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['token', uuid] }),
+    onSuccess: invalidateToken,
   });
 
   const createCapitalIncreaseMutation = useMutation({
@@ -129,13 +134,6 @@ export function useTokenDetail(uuid: string) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['token', uuid, 'capital-increases'] }),
   });
 
-  const refetchTab = useCallback(() => {
-    if (activeTab === 'shareholders') queryClient.invalidateQueries({ queryKey: ['token', uuid, 'holders'] });
-    if (activeTab === 'issuances') queryClient.invalidateQueries({ queryKey: ['token', uuid, 'issuances'] });
-    if (activeTab === 'capital-increases')
-      queryClient.invalidateQueries({ queryKey: ['token', uuid, 'capital-increases'] });
-  }, [activeTab, uuid, queryClient]);
-
   const holders = holdersResponse?.data;
   const issuances = issuancesResponse?.data;
   const capitalIncreases = capitalIncreasesResponse?.data;
@@ -144,8 +142,6 @@ export function useTokenDetail(uuid: string) {
     token,
     isLoading,
     error,
-    activeTab,
-    setActiveTab,
     holders: holders?.holders || [],
     totalHolders: holders?.totalHolders || 0,
     isLoadingHolders,
@@ -160,9 +156,12 @@ export function useTokenDetail(uuid: string) {
     deploy: deployMutation.mutateAsync,
     isDeploying: deployMutation.isPending,
     pause: pauseMutation.mutateAsync,
+    isPausing: pauseMutation.isPending,
     unpause: unpauseMutation.mutateAsync,
+    isUnpausing: unpauseMutation.isPending,
     createCapitalIncrease: createCapitalIncreaseMutation.mutateAsync,
+    isCreatingCapitalIncrease: createCapitalIncreaseMutation.isPending,
     submitCapitalIncrease: submitCapitalIncreaseMutation.mutateAsync,
-    refetchTab,
+    isSubmittingCapitalIncrease: submitCapitalIncreaseMutation.isPending,
   };
 }

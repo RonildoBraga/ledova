@@ -1,10 +1,13 @@
 import React from 'react';
 import { View, Text, ScrollView, Linking } from 'react-native';
 import { EnvelopeSimpleIcon, InfoIcon, QuestionIcon, FileTextIcon } from 'phosphor-react-native';
+import { useQuery } from '@tanstack/react-query';
+import { getOperator, CACHE_TIMING } from '@ledova/shared';
 import { GradientBackground } from '../../components/GradientBackground';
 import { ContactCard } from './components/ContactCard';
 import { PUBLIC_LINKS, SUPPORT_EMAIL } from '../../config/publicLinks';
 import { useAppTheme, useThemedStyles } from '../../contexts';
+import { apiClient } from '../../services/apiClient';
 import appJson from '../../../app.json';
 
 const APP_VERSION = appJson.expo.version;
@@ -41,6 +44,12 @@ export function HelpScreen() {
       fontWeight: theme.fontWeight.medium,
     },
   }));
+  const { data: operator } = useQuery({
+    queryKey: ['operator'],
+    queryFn: () => getOperator(apiClient).then((res) => res.data),
+    staleTime: CACHE_TIMING.EXTRA_LONG_GC_TIME,
+  });
+
   const handleEmailPress = () => {
     Linking.openURL(`mailto:${SUPPORT_EMAIL}`);
   };
@@ -99,6 +108,7 @@ export function HelpScreen() {
           {/* About */}
           <ContactCard icon={<InfoIcon />} title="About" description="">
             <View style={styles.aboutContainer}>
+              {operator?.name ? <Text style={styles.aboutText}>Operated by {operator.name}</Text> : null}
               <Text style={styles.aboutText}>Version {APP_VERSION}</Text>
               <Text style={styles.aboutText}>© {CURRENT_YEAR} Ledova contributors</Text>
               <Text style={styles.aboutText}>Licensed under Apache-2.0.</Text>

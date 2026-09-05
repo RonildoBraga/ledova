@@ -43,6 +43,18 @@ class TreasuryEntryModelTest(TestCase):
             with transaction.atomic():
                 WhitelistEntry.objects.create(label="Nothing behind it")
 
+    def test_a_treasury_address_cannot_be_duplicated_while_wallet_entries_share_the_blank_address(self):
+        treasury_entry()
+        account = UserAccount.objects.create()
+        for suffix in ("d", "e"):
+            wallet = Wallet.objects.create(user_account=account, address="0x" + suffix * 40, chain="base")
+            WhitelistEntry.objects.create(wallet=wallet)
+
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                treasury_entry("Duplicate")
+        self.assertEqual(WhitelistEntry.objects.count(), 3)
+
 
 class TreasuryEntryServiceTest(TestCase):
     def _service(self, on_chain=False):

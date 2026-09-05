@@ -70,6 +70,8 @@ export {
   uploadCompanyDocument,
   deleteCompanyDocument,
   submitApplication,
+  resubmitApplication,
+  withdrawApplication,
 } from './companies';
 export {
   getCompanyTokens,
@@ -86,4 +88,5 @@ export {
   submitCapitalIncrease,
 } from './company-tokens';
 export { getFeatureFlags } from './featureFlags';
+export { getOperator } from './operator';
 export { getExchangeRate } from './exchangeRates';

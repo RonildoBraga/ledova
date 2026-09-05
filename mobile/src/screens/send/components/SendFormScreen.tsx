@@ -1,11 +1,18 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { View, Text, ActivityIndicator } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { CompositeNavigationProp } from '@react-navigation/native';
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { Wallet } from '@ledova/shared';
+import type { BottomTabParamList } from '../../../navigation/BottomTabNavigator';
+import type { SendStackParamList } from '../../../navigation/SendStackNavigator';
 import { GradientBackground } from '../../../components/GradientBackground';
 import { Panel } from '../../../components/panel';
 import { ButtonGroup, SecondaryButton } from '../../../components/buttons';
 import { QRScanner } from '../../../components/qr';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
-import { getChainShortCode, isEthereumChain, WALLET_TYPE } from '@ledova/shared';
+import { BLOCKCHAIN, getChainShortCode, isBitcoinChain, isEthereumChain, WALLET_TYPE } from '@ledova/shared';
 import { SendForm } from '../../transfers/components/SendForm';
 import { ReviewTransaction } from '../../transfers/components/ReviewTransaction';
 import { SignTransaction } from '../../transfers/components/SignTransaction';
@@ -20,8 +27,14 @@ interface SendFormScreenProps {
   onDone: () => void;
 }
 
+type SendNavigation = CompositeNavigationProp<
+  NativeStackNavigationProp<SendStackParamList>,
+  BottomTabNavigationProp<BottomTabParamList>
+>;
+
 export function SendFormScreen({ onDone }: SendFormScreenProps) {
   const theme = useAppTheme();
+  const navigation = useNavigation<SendNavigation>();
   const styles = useThemedStyles((theme) => ({
     container: {
       flex: 1,
@@ -106,7 +119,24 @@ export function SendFormScreen({ onDone }: SendFormScreenProps) {
 
   const isSoftwareWallet = wallet?.walletType === WALLET_TYPE.SOFTWARE;
   const chainShortName = wallet ? getChainShortCode(wallet.chain) : 'ETH';
-  const isEthereum = isEthereumChain(chainShortName);
+  const isEthereum = isEthereumChain(chainShortName) || wallet?.chain === BLOCKCHAIN.BASE;
+
+  // Bitcoin transactions are built and signed outside the app; the Wallets stack's TransferDetails screen
+  // carries that manual flow (paste the signed hex), so a Bitcoin wallet leaves the EVM flow here.
+  const handleSelectWallet = useCallback(
+    (selected: Wallet) => {
+      if (isBitcoinChain(getChainShortCode(selected.chain))) {
+        navigation.navigate('Wallets', {
+          screen: 'TransferDetails',
+          initial: false,
+          params: { wallet: selected },
+        });
+        return;
+      }
+      selectWallet(selected);
+    },
+    [navigation, selectWallet],
+  );
   const canSubmit = !!toAddress && !!amount && !!selectedAsset && !isPreparing;
 
   const urEncodedTransaction = useMemo(() => {
@@ -183,7 +213,7 @@ export function SendFormScreen({ onDone }: SendFormScreenProps) {
 
   const renderContent = () => {
     if (step === 'select-wallet') {
-      return <WalletSelectionStep wallets={wallets} isLoading={isLoading} onSelectWallet={selectWallet} />;
+      return <WalletSelectionStep wallets={wallets} isLoading={isLoading} onSelectWallet={handleSelectWallet} />;
     }
 
     if (!wallet) {

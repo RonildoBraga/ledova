@@ -19,3 +19,4 @@ export * from './trading';
 export * from './company';
 export * from './company-token';
 export * from './feature-flag';
+export * from './operator';

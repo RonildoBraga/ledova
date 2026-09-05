@@ -1,5 +1,5 @@
 import { PageWrapper } from './components/PageWrapper';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Field, Label, Input } from '@headlessui/react';
 import {
@@ -13,10 +13,20 @@ import {
   InfoIcon,
   UsersThreeIcon,
   ListBulletsIcon,
+  ArrowSquareOutIcon,
+  TrendUpIcon,
 } from '@phosphor-icons/react';
 import { Panel } from '@components/Panel';
 import { Modal } from '@components/Modal';
-import { DESIGN_TOKENS, updateCompany, issueCompanyShares } from '@ledova/shared';
+import {
+  DESIGN_TOKENS,
+  BLOCKCHAIN,
+  updateCompany,
+  issueCompanyShares,
+  getBlockExplorerAddressUrl,
+  getBlockExplorerTxUrl,
+  getErrorMessage,
+} from '@ledova/shared';
 import { useCompany } from './hooks/useCompany';
 import { useTokensList, useTokenDetail } from './hooks/useTokens';
 import type {
@@ -27,9 +37,10 @@ import type {
   TokenStatus,
   TokenType,
   TokenCreate,
-  TokenTabType,
   TokenHolder,
   TokenIssuance,
+  CapitalIncreaseRequest,
+  CapitalIncreaseStatus,
 } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 
@@ -85,6 +96,23 @@ const TOKEN_TYPE_LABELS: Record<TokenType, string> = {
   preference: 'Preference',
   redeemable: 'Redeemable',
 };
+
+const CAPITAL_INCREASE_STATUS_COLORS: Record<CapitalIncreaseStatus, string> = {
+  draft: 'bg-surface-tertiary text-text-muted',
+  submitted: 'bg-info-light/20 text-info-light',
+  under_review: 'bg-info-light/20 text-info-light',
+  approved: 'bg-success-light/20 text-success-light',
+  rejected: 'bg-error-light/20 text-error-light',
+  executing: 'bg-info-light/20 text-info-light',
+  executed: 'bg-success-light/20 text-success-light',
+  failed: 'bg-error-light/20 text-error-light',
+};
+
+// Share tokens deploy through the factory on the Base testnet (the backend's default issuer chain).
+const TOKEN_CHAIN = BLOCKCHAIN.BASE;
+
+const INPUT_CLASS =
+  'w-full rounded-lg border border-border bg-surface-raised px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-mid focus:outline-none focus:ring-1 focus:ring-brand-mid';
 
 function formatAddress(company: Company): string {
   const parts = [
@@ -412,39 +440,69 @@ export default function CompanyPage() {
       </Modal>
 
       {/* Token Detail Modal */}
-      {selectedTokenUuid && <TokenDetailModal uuid={selectedTokenUuid} onClose={() => setSelectedTokenUuid(null)} />}
+      {selectedTokenUuid && (
+        <TokenDetailModal
+          uuid={selectedTokenUuid}
+          companyStatus={company.status}
+          onClose={() => setSelectedTokenUuid(null)}
+        />
+      )}
     </PageWrapper>
   );
 }
 
 // --- Token Detail Modal ---
 
-function TokenDetailModal({ uuid, onClose }: { uuid: string; onClose: () => void }) {
+const ACTION_ERROR_FALLBACK = 'The request was refused. Please try again.';
+
+function TokenDetailModal({
+  uuid,
+  companyStatus,
+  onClose,
+}: {
+  uuid: string;
+  companyStatus: CompanyStatus;
+  onClose: () => void;
+}) {
   const queryClient = useQueryClient();
   const {
     token,
     isLoading,
-    setActiveTab,
     holders,
     totalHolders,
     isLoadingHolders,
     issuances,
     issuanceCount,
     isLoadingIssuances,
+    capitalIncreases,
+    capitalIncreaseCount,
+    isLoadingCapitalIncreases,
+    showCapitalIncreaseForm,
+    setShowCapitalIncreaseForm,
+    deploy,
+    isDeploying,
+    pause,
+    isPausing,
+    unpause,
+    isUnpausing,
+    createCapitalIncrease,
+    isCreatingCapitalIncrease,
+    submitCapitalIncrease,
+    isSubmittingCapitalIncrease,
   } = useTokenDetail(uuid);
 
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [isIssueOpen, setIsIssueOpen] = useState(false);
   const [issueForm, setIssueForm] = useState({ recipient: '', amount: '', reason: '' });
-
-  // Load holders + issuances data
-  useEffect(() => {
-    setActiveTab('shareholders' as TokenTabType);
-    // Small delay then also trigger issuances
-    const t = setTimeout(() => setActiveTab('issuances' as TokenTabType), 100);
-    return () => clearTimeout(t);
-  }, [setActiveTab]);
+  const [capitalForm, setCapitalForm] = useState({
+    additionalShares: '',
+    purpose: '',
+    boardResolutionReference: '',
+    shareholderApprovalReference: '',
+  });
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
 
   const issueMutation = useMutation({
     mutationFn: () =>
@@ -466,6 +524,18 @@ function TokenDetailModal({ uuid, onClose }: { uuid: string; onClose: () => void
     setTimeout(() => setCopiedField(null), 2000);
   };
 
+  // Every issuer control reports the backend's refusal (400 detail) instead of swallowing it.
+  const runAction = async (action: () => Promise<unknown>, successMessage: string) => {
+    setActionError(null);
+    setActionMessage(null);
+    try {
+      await action();
+      setActionMessage(successMessage);
+    } catch (err) {
+      setActionError(getErrorMessage(err, ACTION_ERROR_FALLBACK));
+    }
+  };
+
   const isIssueValid =
     issueForm.recipient.trim() !== '' && issueForm.amount.trim() !== '' && parseInt(issueForm.amount) > 0;
 
@@ -479,8 +549,41 @@ function TokenDetailModal({ uuid, onClose }: { uuid: string; onClose: () => void
     );
   }
 
-  const formattedSupply = parseInt(token.totalSupply).toLocaleString();
+  const currentSupply = parseInt(token.totalSupply) || 0;
+  const formattedSupply = currentSupply.toLocaleString();
   const isDeployed = token.status === 'deployed';
+  const isPaused = token.status === 'paused';
+  const isDraft = token.status === 'draft';
+  const companyIsActive = companyStatus === 'active';
+  const contractUrl = token.contractAddress ? getBlockExplorerAddressUrl(TOKEN_CHAIN, token.contractAddress) : '';
+  const deploymentTxUrl = token.deploymentTxHash ? getBlockExplorerTxUrl(TOKEN_CHAIN, token.deploymentTxHash) : '';
+
+  const additionalShares = parseInt(capitalForm.additionalShares) || 0;
+  const newAuthorizedTotal = currentSupply + additionalShares;
+  const isCapitalValid =
+    additionalShares > 0 && capitalForm.purpose.trim() !== '' && capitalForm.boardResolutionReference.trim() !== '';
+
+  const resetCapitalForm = () =>
+    setCapitalForm({
+      additionalShares: '',
+      purpose: '',
+      boardResolutionReference: '',
+      shareholderApprovalReference: '',
+    });
+
+  const handleCreateCapitalIncrease = () =>
+    runAction(
+      () =>
+        createCapitalIncrease({
+          token: uuid,
+          additionalShares,
+          newAuthorizedTotal,
+          purpose: capitalForm.purpose.trim(),
+          boardResolutionReference: capitalForm.boardResolutionReference.trim(),
+          shareholderApprovalReference: capitalForm.shareholderApprovalReference.trim() || undefined,
+        }).then(resetCapitalForm),
+      'Capital increase request created. Submit it for review when the paperwork is ready.',
+    );
 
   // Info sub-modal
   if (isInfoOpen) {
@@ -490,6 +593,7 @@ function TokenDetailModal({ uuid, onClose }: { uuid: string; onClose: () => void
           <DetailRow label="Name" value={token.name} />
           <DetailRow label="Symbol" value={token.symbol} />
           <DetailRow label="Type" value={TOKEN_TYPE_LABELS[token.tokenType] || token.tokenType} />
+          <DetailRow label="Status" value={TOKEN_STATUS_LABELS[token.status] || token.status} />
           <DetailRow label="Authorized Shares" value={formattedSupply} />
           <DetailRow label="Decimals" value={String(token.decimals)} />
           <DetailRow label="Transferable" value={token.isTransferable ? 'Yes' : 'No'} />
@@ -511,7 +615,38 @@ function TokenDetailModal({ uuid, onClose }: { uuid: string; onClose: () => void
                     <CopyIcon size={ICON_SM} />
                   )}
                 </button>
+                {contractUrl && (
+                  <a
+                    href={contractUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="View on block explorer"
+                    className="text-text-muted hover:text-text-primary transition-colors"
+                  >
+                    <ArrowSquareOutIcon size={ICON_SM} />
+                  </a>
+                )}
               </div>
+            </div>
+          )}
+          {token.deploymentTxHash && (
+            <div className="flex items-center justify-between px-4 py-2.5">
+              <span className="text-sm text-text-muted">Deployment</span>
+              {deploymentTxUrl ? (
+                <a
+                  href={deploymentTxUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-xs font-mono text-brand-light hover:text-brand-subtle"
+                >
+                  {token.deploymentTxHash.slice(0, 10)}...{token.deploymentTxHash.slice(-8)}
+                  <ArrowSquareOutIcon size={ICON_SM} />
+                </a>
+              ) : (
+                <code className="text-xs font-mono text-text-primary">
+                  {token.deploymentTxHash.slice(0, 10)}...{token.deploymentTxHash.slice(-8)}
+                </code>
+              )}
             </div>
           )}
           {token.deployedAt && <DetailRow label="Deployed" value={new Date(token.deployedAt).toLocaleString()} />}
@@ -538,6 +673,11 @@ function TokenDetailModal({ uuid, onClose }: { uuid: string; onClose: () => void
         confirmLoading={issueMutation.isPending}
       >
         <div className="space-y-4">
+          {issueMutation.error && (
+            <div className="p-3 rounded-lg bg-error/10 border border-error/30">
+              <p className="text-sm text-error-light">{getErrorMessage(issueMutation.error, ACTION_ERROR_FALLBACK)}</p>
+            </div>
+          )}
           <Field>
             <Label className="block text-sm font-medium text-text-primary mb-1">Recipient Address</Label>
             <Input
@@ -547,7 +687,7 @@ function TokenDetailModal({ uuid, onClose }: { uuid: string; onClose: () => void
               onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                 setIssueForm({ ...issueForm, recipient: e.target.value })
               }
-              className="w-full rounded-lg border border-border bg-surface-raised px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-mid focus:outline-none focus:ring-1 focus:ring-brand-mid font-mono"
+              className={`${INPUT_CLASS} font-mono`}
             />
           </Field>
           <Field>
@@ -560,7 +700,7 @@ function TokenDetailModal({ uuid, onClose }: { uuid: string; onClose: () => void
               onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                 setIssueForm({ ...issueForm, amount: e.target.value })
               }
-              className="w-full rounded-lg border border-border bg-surface-raised px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-mid focus:outline-none focus:ring-1 focus:ring-brand-mid"
+              className={INPUT_CLASS}
             />
           </Field>
           <Field>
@@ -572,13 +712,107 @@ function TokenDetailModal({ uuid, onClose }: { uuid: string; onClose: () => void
               onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                 setIssueForm({ ...issueForm, reason: e.target.value })
               }
-              className="w-full rounded-lg border border-border bg-surface-raised px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-mid focus:outline-none focus:ring-1 focus:ring-brand-mid"
+              className={INPUT_CLASS}
             />
           </Field>
         </div>
       </Modal>
     );
   }
+
+  // Capital increase sub-modal: the request is created as a draft; the list below offers "Submit for review".
+  if (showCapitalIncreaseForm) {
+    return (
+      <Modal
+        isOpen
+        onClose={() => {
+          setShowCapitalIncreaseForm(false);
+          resetCapitalForm();
+          setActionError(null);
+        }}
+        title={`Request ${token.symbol} Capital Increase`}
+        showFooter
+        confirmLabel="Create Request"
+        onConfirm={handleCreateCapitalIncrease}
+        confirmDisabled={!isCapitalValid || isCreatingCapitalIncrease}
+        confirmLoading={isCreatingCapitalIncrease}
+      >
+        <div className="space-y-4">
+          {actionError && (
+            <div className="p-3 rounded-lg bg-error/10 border border-error/30">
+              <p className="text-sm text-error-light">{actionError}</p>
+            </div>
+          )}
+          <p className="text-sm text-text-secondary">
+            Raises the authorized share cap on chain once the operator approves the request. Current cap:{' '}
+            <span className="font-medium text-text-primary">{formattedSupply}</span> shares.
+          </p>
+          <Field>
+            <Label className="block text-sm font-medium text-text-primary mb-1">Additional Shares</Label>
+            <Input
+              type="number"
+              placeholder="Number of new shares to authorize"
+              min="1"
+              value={capitalForm.additionalShares}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setCapitalForm({ ...capitalForm, additionalShares: e.target.value })
+              }
+              className={INPUT_CLASS}
+            />
+            {additionalShares > 0 && (
+              <p className="text-xs text-text-muted mt-1">
+                New authorized total: <span className="text-text-primary">{newAuthorizedTotal.toLocaleString()}</span>
+              </p>
+            )}
+          </Field>
+          <Field>
+            <Label className="block text-sm font-medium text-text-primary mb-1">Purpose</Label>
+            <Input
+              type="text"
+              placeholder="e.g. Series A funding round"
+              value={capitalForm.purpose}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setCapitalForm({ ...capitalForm, purpose: e.target.value })
+              }
+              className={INPUT_CLASS}
+            />
+          </Field>
+          <Field>
+            <Label className="block text-sm font-medium text-text-primary mb-1">Board Resolution Reference</Label>
+            <Input
+              type="text"
+              placeholder="e.g. BR-2026-03"
+              value={capitalForm.boardResolutionReference}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setCapitalForm({ ...capitalForm, boardResolutionReference: e.target.value })
+              }
+              className={INPUT_CLASS}
+            />
+          </Field>
+          <Field>
+            <Label className="block text-sm font-medium text-text-primary mb-1">
+              Shareholder Approval Reference (optional)
+            </Label>
+            <Input
+              type="text"
+              placeholder="e.g. AGM-2026"
+              value={capitalForm.shareholderApprovalReference}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setCapitalForm({ ...capitalForm, shareholderApprovalReference: e.target.value })
+              }
+              className={INPUT_CLASS}
+            />
+          </Field>
+        </div>
+      </Modal>
+    );
+  }
+
+  const deployDisabledReason = !companyIsActive
+    ? 'The company must be active before a token can be deployed.'
+    : isDeploying
+      ? 'Deployment is starting...'
+      : undefined;
 
   // Main token detail modal
   return (
@@ -602,8 +836,53 @@ function TokenDetailModal({ uuid, onClose }: { uuid: string; onClose: () => void
               {token.symbol} · {TOKEN_TYPE_LABELS[token.tokenType] || token.tokenType} ·{' '}
               <span className="font-medium text-text-primary">{formattedSupply}</span> shares
             </p>
+            {token.contractAddress ? (
+              <div className="flex items-center gap-2 mt-1">
+                <code className="text-xs font-mono text-text-muted">
+                  {token.contractAddress.slice(0, 10)}...{token.contractAddress.slice(-8)}
+                </code>
+                <button
+                  onClick={() => copyToClipboard(token.contractAddress!, 'hero-contract')}
+                  className="text-text-muted hover:text-text-primary transition-colors"
+                >
+                  {copiedField === 'hero-contract' ? (
+                    <CheckCircleIcon size={ICON_SM} className="text-success-light" />
+                  ) : (
+                    <CopyIcon size={ICON_SM} />
+                  )}
+                </button>
+                {contractUrl && (
+                  <a
+                    href={contractUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs text-brand-light hover:text-brand-subtle"
+                  >
+                    View on explorer
+                    <ArrowSquareOutIcon size={ICON_SM} />
+                  </a>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-text-muted mt-1">
+                {token.status === 'deploying'
+                  ? 'Deployment in progress; the contract address appears once mined.'
+                  : 'Not deployed yet.'}
+              </p>
+            )}
           </div>
         </div>
+
+        {actionError && (
+          <div className="p-3 rounded-lg bg-error/10 border border-error/30">
+            <p className="text-sm text-error-light">{actionError}</p>
+          </div>
+        )}
+        {actionMessage && (
+          <div className="p-3 rounded-lg bg-success-light/10 border border-success-light/25">
+            <p className="text-sm text-success-light">{actionMessage}</p>
+          </div>
+        )}
 
         {/* Cap Table */}
         <div>
@@ -719,14 +998,124 @@ function TokenDetailModal({ uuid, onClose }: { uuid: string; onClose: () => void
           )}
         </div>
 
+        {/* Capital Increases */}
+        {(isDeployed || isPaused || capitalIncreaseCount > 0) && (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-semibold text-text-primary flex items-center gap-1.5">
+                <TrendUpIcon size={ICON_SM} className="text-text-muted" />
+                Capital Increases
+                <span className="text-text-muted font-normal">({capitalIncreaseCount})</span>
+              </h3>
+              {isDeployed && (
+                <button
+                  onClick={() => {
+                    setActionError(null);
+                    setActionMessage(null);
+                    setShowCapitalIncreaseForm(true);
+                  }}
+                  className="text-xs font-medium text-brand-light hover:text-brand-subtle"
+                >
+                  Request capital increase
+                </button>
+              )}
+            </div>
+            {isLoadingCapitalIncreases ? (
+              <div className="py-4 text-center">
+                <div className="h-5 w-5 border-2 border-brand-subtle border-t-brand rounded-full animate-spin mx-auto" />
+              </div>
+            ) : capitalIncreases.length > 0 ? (
+              <div className="bg-surface-tertiary/50 rounded-lg border border-border divide-y divide-border-subtle">
+                {capitalIncreases.slice(0, 5).map((request: CapitalIncreaseRequest) => (
+                  <div key={request.uuid} className="flex items-center gap-3 px-3 py-2.5">
+                    <span className="text-xs text-text-muted w-20 flex-shrink-0">
+                      {new Date(request.createdAt).toLocaleDateString()}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-text-primary truncate">{request.purpose}</p>
+                      <p className="text-xs text-text-muted">
+                        +{request.additionalShares.toLocaleString()} → {request.newAuthorizedTotal.toLocaleString()}{' '}
+                        authorized
+                        {request.rejectionReason ? ` · ${request.rejectionReason}` : ''}
+                      </p>
+                    </div>
+                    {request.status === 'draft' && (
+                      <button
+                        onClick={() =>
+                          runAction(
+                            () => submitCapitalIncrease(request.uuid),
+                            'Capital increase request submitted for review.',
+                          )
+                        }
+                        disabled={isSubmittingCapitalIncrease}
+                        className="text-xs font-medium text-brand-light hover:text-brand-subtle disabled:opacity-50"
+                      >
+                        Submit for review
+                      </button>
+                    )}
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${CAPITAL_INCREASE_STATUS_COLORS[request.status] || CAPITAL_INCREASE_STATUS_COLORS.draft}`}
+                    >
+                      {request.statusDisplay}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="bg-surface-tertiary/30 rounded-lg border border-border-subtle py-4 text-center">
+                <p className="text-sm text-text-muted">No capital increase requests yet.</p>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Action buttons */}
-        <div className="flex gap-3 pt-1">
+        <div className="flex flex-wrap gap-3 pt-1">
+          {isDraft && (
+            <span className="flex-1" title={deployDisabledReason}>
+              <button
+                onClick={() =>
+                  runAction(
+                    () => deploy(),
+                    'Deployment started. The contract address appears once the transaction is mined.',
+                  )
+                }
+                disabled={!companyIsActive || isDeploying}
+                className="w-full flex items-center justify-center gap-2 rounded-lg bg-brand-mid px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {isDeploying ? 'Deploying...' : 'Deploy Token'}
+              </button>
+            </span>
+          )}
+          {token.status === 'deploying' && (
+            <span className="flex-1 flex items-center justify-center rounded-lg border border-border px-4 py-2.5 text-sm text-text-muted">
+              Deployment in progress
+            </span>
+          )}
           {isDeployed && (
             <button
               onClick={() => setIsIssueOpen(true)}
               className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-brand-mid px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand transition-colors"
             >
               Request Issuance
+            </button>
+          )}
+          {isDeployed && (
+            <button
+              onClick={() => runAction(() => pause(), 'Token paused. Transfers and issuance are suspended.')}
+              disabled={isPausing}
+              className="flex items-center justify-center gap-1.5 rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-text-primary hover:bg-surface-tertiary disabled:opacity-50 transition-colors"
+            >
+              {isPausing ? 'Pausing...' : 'Pause'}
+            </button>
+          )}
+          {isPaused && (
+            <button
+              onClick={() => runAction(() => unpause(), 'Token unpaused.')}
+              disabled={isUnpausing}
+              className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-brand-mid px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand disabled:opacity-50 transition-colors"
+            >
+              {isUnpausing ? 'Unpausing...' : 'Unpause'}
             </button>
           )}
           <button

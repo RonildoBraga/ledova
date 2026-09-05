@@ -8,6 +8,7 @@ import {
   RefreshControl,
   TextInput,
   Alert,
+  Linking,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import {
@@ -18,6 +19,7 @@ import {
   ListBulletsIcon,
   TrendUpIcon,
   InfoIcon,
+  ArrowSquareOutIcon,
 } from 'phosphor-react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type {
@@ -29,6 +31,7 @@ import type {
   CapitalIncreaseRequest,
   CapitalIncreaseStatus,
 } from '@ledova/shared';
+import { BLOCKCHAIN, getBlockExplorerAddressUrl, getErrorMessage } from '@ledova/shared';
 import { GradientBackground } from '../../components/GradientBackground';
 import { PrimaryButton } from '../../components/buttons';
 import { CustomModal } from '../../components/modal';
@@ -79,6 +82,9 @@ const CAPITAL_INCREASE_STATUS_LABELS: Record<CapitalIncreaseStatus, string> = {
   failed: 'Failed',
 };
 
+// Share tokens deploy through the factory on the Base testnet (the backend's default issuer chain).
+const TOKEN_CHAIN = BLOCKCHAIN.BASE;
+
 function formatNumber(value: string | number): string {
   return Number(value).toLocaleString();
 }
@@ -103,6 +109,8 @@ export function TokenDetailScreen({ route }: Props) {
     issueShares,
     isIssuing,
     resetIssueError,
+    deploy,
+    isDeploying,
     refetch,
   } = useTokenDetail(uuid);
 
@@ -136,6 +144,24 @@ export function TokenDetailScreen({ route }: Props) {
     } catch {
       Alert.alert('Error', 'Failed to submit issuance request. Please try again.');
     }
+  };
+
+  // The backend refuses deployment unless the company is active and has an issuer wallet; its 400 detail is shown.
+  const handleDeploy = () => {
+    Alert.alert('Deploy Token', 'Create the share token contract on the blockchain? This cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Deploy',
+        onPress: async () => {
+          try {
+            await deploy();
+            Alert.alert('Deployment Started', 'The contract address appears once the transaction is mined.');
+          } catch (error) {
+            Alert.alert('Deployment Refused', getErrorMessage(error, 'Could not start the deployment.') || '');
+          }
+        },
+      },
+    ]);
   };
 
   const handleCloseIssueModal = () => {
@@ -179,6 +205,8 @@ export function TokenDetailScreen({ route }: Props) {
   const statusColors = getStatusColors(theme);
   const statusColor = statusColors[token.status];
   const isDeployed = token.status === 'deployed';
+  const isDraft = token.status === 'draft';
+  const contractUrl = token.contractAddress ? getBlockExplorerAddressUrl(TOKEN_CHAIN, token.contractAddress) : '';
 
   return (
     <GradientBackground>
@@ -202,6 +230,14 @@ export function TokenDetailScreen({ route }: Props) {
               <Text style={styles.tokenMeta} numberOfLines={1}>
                 {token.symbol} · {TOKEN_TYPE_LABELS[token.tokenType]}
               </Text>
+              {contractUrl ? (
+                <TouchableOpacity onPress={() => Linking.openURL(contractUrl)} hitSlop={8} activeOpacity={0.7}>
+                  <View style={styles.explorerLink}>
+                    <Text style={styles.explorerLinkText}>{truncateAddress(token.contractAddress!)}</Text>
+                    <ArrowSquareOutIcon size={12} color={theme.colors.interactive.active} weight="regular" />
+                  </View>
+                </TouchableOpacity>
+              ) : null}
             </View>
             <View style={[styles.statusBadge, { backgroundColor: statusColor.bg }]}>
               <Text style={[styles.statusText, { color: statusColor.text }]}>{STATUS_LABELS[token.status]}</Text>
@@ -269,7 +305,12 @@ export function TokenDetailScreen({ route }: Props) {
           )}
         </View>
 
-        {/* Request Issuance Button */}
+        {/* Deploy (draft) / Request Issuance (deployed) */}
+        {isDraft && (
+          <PrimaryButton onPress={handleDeploy} loading={isDeploying} fullWidth>
+            Deploy Token
+          </PrimaryButton>
+        )}
         {isDeployed && (
           <PrimaryButton onPress={() => setShowIssueModal(true)} fullWidth>
             Request Issuance
@@ -304,6 +345,15 @@ export function TokenDetailScreen({ route }: Props) {
               />
             </TouchableOpacity>
           )}
+          {contractUrl ? (
+            <TouchableOpacity onPress={() => Linking.openURL(contractUrl)}>
+              <ModalInfoRow
+                label="Explorer"
+                value="View contract"
+                icon={<ArrowSquareOutIcon size={14} color={theme.colors.interactive.active} />}
+              />
+            </TouchableOpacity>
+          ) : null}
           {token.deployedAt && (
             <ModalInfoRow label="Deployed" value={new Date(token.deployedAt).toLocaleDateString()} />
           )}
@@ -756,6 +806,17 @@ function useStyles() {
     tokenMeta: {
       fontSize: theme.fontSize.xs,
       color: theme.colors.text.muted,
+    },
+    explorerLink: {
+      flexDirection: 'row' as const,
+      alignItems: 'center' as const,
+      gap: 4,
+      marginTop: 2,
+    },
+    explorerLinkText: {
+      fontSize: theme.fontSize.xs,
+      color: theme.colors.interactive.active,
+      fontFamily: 'monospace',
     },
     statusBadge: {
       paddingHorizontal: 8,

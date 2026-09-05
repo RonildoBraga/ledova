@@ -124,7 +124,8 @@ export function CompanyScreen() {
           <BuildingsIcon size={48} color={theme.colors.text.muted} weight="regular" />
           <Text style={styles.errorText}>No Company Registered</Text>
           <Text style={styles.noCompanyText}>
-            Your account does not have a company profile yet. Contact support to set up your company.
+            Your account does not have a company profile yet. Register your company from the sign-up flow to get
+            started.
           </Text>
         </View>
       </GradientBackground>

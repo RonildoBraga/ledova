@@ -171,11 +171,21 @@ class Company(BaseModel):
         self.save(update_fields=["status", "review_started_at", "updated_at"])
 
     def request_info(self, reason: str):
+        """A new question clears the previous answer, so the owner never sees an old response next to it."""
         self._require_status([CompanyStatus.REVIEW], CompanyStatus.INFO_REQUIRED)
         self.status = CompanyStatus.INFO_REQUIRED
         self.info_requested_at = timezone.now()
         self.info_request_reason = reason
-        self.save(update_fields=["status", "info_requested_at", "info_request_reason", "updated_at"])
+        self.additional_info_response = ""
+        self.save(
+            update_fields=[
+                "status",
+                "info_requested_at",
+                "info_request_reason",
+                "additional_info_response",
+                "updated_at",
+            ]
+        )
 
     def resubmit(self, response: str = ""):
         """The request reason stays next to the answer until approval, so the reviewer sees both."""

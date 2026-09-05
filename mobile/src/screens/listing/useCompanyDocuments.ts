@@ -4,6 +4,8 @@ import {
   uploadCompanyDocument,
   deleteCompanyDocument,
   submitApplication,
+  resubmitApplication,
+  withdrawApplication,
   CACHE_TIMING,
 } from '@ledova/shared';
 import type { CompanyDocument, DocumentType } from '@ledova/shared';
@@ -48,12 +50,26 @@ export function useCompanyDocuments() {
     },
   });
 
+  const invalidateCompany = () => {
+    queryClient.invalidateQueries({ queryKey: ['company', companyUuid] });
+    queryClient.invalidateQueries({ queryKey: ['companies'] });
+  };
+
+  // The three application transitions the owner drives; each one's backend refusal (400 detail) reaches the
+  // caller through mutateAsync so the screen can show it.
   const submitMutation = useMutation({
     mutationFn: () => submitApplication(apiClient, companyUuid!),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['company', companyUuid] });
-      queryClient.invalidateQueries({ queryKey: ['companies'] });
-    },
+    onSuccess: invalidateCompany,
+  });
+
+  const resubmitMutation = useMutation({
+    mutationFn: (response: string) => resubmitApplication(apiClient, companyUuid!, { response }),
+    onSuccess: invalidateCompany,
+  });
+
+  const withdrawMutation = useMutation({
+    mutationFn: (reason: string) => withdrawApplication(apiClient, companyUuid!, { reason }),
+    onSuccess: invalidateCompany,
   });
 
   const canEdit = company?.status === 'draft' || company?.status === 'info_required';
@@ -70,7 +86,11 @@ export function useCompanyDocuments() {
     uploadError: uploadMutation.error,
     deleteDocument: deleteMutation.mutate,
     isDeleting: deleteMutation.isPending,
-    submitApplication: submitMutation.mutate,
+    submitApplication: submitMutation.mutateAsync,
     isSubmitting: submitMutation.isPending,
+    resubmitApplication: resubmitMutation.mutateAsync,
+    isResubmitting: resubmitMutation.isPending,
+    withdrawApplication: withdrawMutation.mutateAsync,
+    isWithdrawing: withdrawMutation.isPending,
   };
 }
