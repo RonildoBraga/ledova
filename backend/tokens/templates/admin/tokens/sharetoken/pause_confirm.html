@@ -1,0 +1,56 @@
+{% extends "admin/base_custom.html" %}
+{% load i18n admin_urls static %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Home</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_label|capfirst }}</a>
+    &rsaquo; <a href="{% url 'admin:tokens_sharetoken_changelist' %}">Share tokens</a>
+    &rsaquo; <a href="{% url 'admin:tokens_sharetoken_change' token.pk %}">{{ token.name }}</a>
+    &rsaquo; {{ verb|capfirst }} token
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="admin-custom-form admin-custom-form--wide">
+    <div class="alert {% if verb == 'pause' %}alert-warning{% else %}alert-info{% endif %}">
+        <strong>{{ verb|capfirst }} {{ token.name }} ({{ token.symbol }})</strong>
+        <p class="mt-1 mb-0">
+            {% if verb == 'pause' %}
+            This calls <code>pause()</code> on the share token: transfers and issuance stop until it is unpaused.
+            {% else %}
+            This calls <code>unpause()</code> on the share token (or only reconciles the database when the chain
+            already reports it unpaused): transfers and issuance resume.
+            {% endif %}
+        </p>
+    </div>
+
+    <div class="admin-card">
+        <div class="admin-card-header">Token</div>
+        <div class="admin-card-body">
+            <table class="admin-table">
+                <tr>
+                    <td class="label-col">Contract</td>
+                    <td class="monospace">{{ token.contract_address }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Database status</td>
+                    <td>{{ token.get_status_display }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Company</td>
+                    <td>{{ token.company.name }} (ACN {{ token.company.acn }})</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <form method="post">
+        {% csrf_token %}
+        <div class="action-row mt-0">
+            <button type="submit" class="btn {% if verb == 'pause' %}btn-warning{% else %}btn-success{% endif %}">{{ verb|capfirst }} Token</button>
+            <a href="{% url 'admin:tokens_sharetoken_change' token.pk %}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -6,7 +6,7 @@
     <a href="{% url 'admin:index' %}">Home</a>
     &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_label|capfirst }}</a>
     &rsaquo; <a href="{% url 'admin:whitelist_whitelistentry_changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
-    &rsaquo; <a href="{% url 'admin:whitelist_whitelistentry_change' entry.pk %}">{{ entry.wallet.short_address }}</a>
+    &rsaquo; <a href="{% url 'admin:whitelist_whitelistentry_change' entry.pk %}">{{ entry }}</a>
     &rsaquo; Add to Blockchain
 </div>
 {% endblock %}
@@ -27,16 +27,16 @@
             <table class="admin-table">
                 <tr>
                     <td class="label-col">Wallet Address</td>
-                    <td class="monospace">{{ entry.wallet.address }}</td>
+                    <td class="monospace">{{ entry.wallet_address }}</td>
                 </tr>
                 <tr>
                     <td class="label-col">Current Status</td>
                     <td>{{ entry.get_status_display }}</td>
                 </tr>
-                {% if entry.wallet.user %}
+                {% if entry.label %}
                 <tr>
-                    <td class="label-col">Wallet Owner</td>
-                    <td>{{ entry.wallet.user.email }}</td>
+                    <td class="label-col">Label</td>
+                    <td>{{ entry.label }}</td>
                 </tr>
                 {% endif %}
             </table>

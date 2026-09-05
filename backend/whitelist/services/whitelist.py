@@ -89,6 +89,17 @@ class WhitelistService:
             raise WalletNotRegisteredException()
         return wallet
 
+    @classmethod
+    def _resolve_entry(cls, checksum_address: str, wallet_uuid=None) -> WhitelistEntry:
+        """The entry behind an address: the operator's treasury entry when one exists, else the wallet's."""
+        if wallet_uuid is None:
+            treasury = WhitelistEntry.objects.filter(wallet__isnull=True, address__iexact=checksum_address).first()
+            if treasury is not None:
+                return treasury
+        wallet = cls._resolve_wallet(checksum_address, wallet_uuid)
+        entry, _ = WhitelistEntry.objects.get_or_create(wallet=wallet, defaults={"status": WhitelistStatus.PENDING})
+        return entry
+
     def _send_tx(self, tx_type, function_name, checksum_address, entry, wait_for_receipt):
         """Record, send and settle one registry call; a chain error marks the record and the entry failed."""
         tx_record = BlockchainTransaction.objects.create(
@@ -135,8 +146,7 @@ class WhitelistService:
         if self.is_whitelisted(checksum_address):
             raise AddressAlreadyWhitelistedException(f"Address {address} is already whitelisted")
 
-        wallet = self._resolve_wallet(checksum_address, wallet_uuid)
-        entry, _ = WhitelistEntry.objects.get_or_create(wallet=wallet, defaults={"status": WhitelistStatus.PENDING})
+        entry = self._resolve_entry(checksum_address, wallet_uuid)
         tx_hash, receipt = self._send_tx(
             TransactionType.WHITELIST_ADD, "addToWhitelist", checksum_address, entry, wait_for_receipt
         )
@@ -165,21 +175,15 @@ class WhitelistService:
 
     def sync_entry(self, address: str, wallet_uuid=None) -> WhitelistEntry:
         checksum_address = self.chain_client.to_checksum_address(address)
-        wallet = self._resolve_wallet(checksum_address, wallet_uuid)
+        entry = self._resolve_entry(checksum_address, wallet_uuid)
 
         info = self.get_investor_info(checksum_address)
         kyc_ts = info["kyc_timestamp"]
-        on_chain_ts = datetime.fromtimestamp(kyc_ts, tz=dt_timezone.utc) if kyc_ts else None
-
-        entry, _ = WhitelistEntry.objects.update_or_create(
-            wallet=wallet,
-            defaults={
-                "is_whitelisted": info["whitelisted"],
-                "on_chain_timestamp": on_chain_ts,
-                "status": WhitelistStatus.ACTIVE if info["whitelisted"] else WhitelistStatus.REMOVED,
-                "last_synced_at": timezone.now(),
-            },
-        )
+        entry.is_whitelisted = info["whitelisted"]
+        entry.on_chain_timestamp = datetime.fromtimestamp(kyc_ts, tz=dt_timezone.utc) if kyc_ts else None
+        entry.status = WhitelistStatus.ACTIVE if info["whitelisted"] else WhitelistStatus.REMOVED
+        entry.last_synced_at = timezone.now()
+        entry.save(update_fields=["is_whitelisted", "on_chain_timestamp", "status", "last_synced_at", "updated_at"])
 
         logger.debug(f"Synced {checksum_address}: {info}")
         return entry
@@ -190,11 +194,11 @@ class WhitelistService:
 
         for entry in entries:
             try:
-                self.sync_entry(entry.wallet.address, wallet_uuid=entry.wallet_id)
+                self.sync_entry(entry.wallet_address, wallet_uuid=entry.wallet_id)
                 synced += 1
             except Exception as e:
-                errors.append(f"Failed to sync {entry.wallet.address}: {e}")
-                logger.error(f"Failed to sync {entry.wallet.address}: {e}")
+                errors.append(f"Failed to sync {entry.wallet_address}: {e}")
+                logger.error(f"Failed to sync {entry.wallet_address}: {e}")
 
         return {"synced": synced, "errors": errors}
 
@@ -213,14 +217,14 @@ class WhitelistService:
                 continue
             try:
                 try:
-                    self.add_to_whitelist(entry.wallet.address, wallet_uuid=entry.wallet_id)
+                    self.add_to_whitelist(entry.wallet_address, wallet_uuid=entry.wallet_id)
                     result["added"] += 1
                 except AddressAlreadyWhitelistedException:
-                    self.sync_entry(entry.wallet.address, wallet_uuid=entry.wallet_id)
+                    self.sync_entry(entry.wallet_address, wallet_uuid=entry.wallet_id)
                     result["synced"] += 1
             except Exception as e:
-                result["errors"].append(f"Failed to whitelist {entry.wallet.address}: {e}")
-                logger.error(f"Failed to whitelist {entry.wallet.address}: {e}")
+                result["errors"].append(f"Failed to whitelist {entry.wallet_address}: {e}")
+                logger.error(f"Failed to whitelist {entry.wallet_address}: {e}")
 
         return result
 
@@ -233,12 +237,12 @@ class WhitelistService:
                 continue
             try:
                 try:
-                    self.remove_from_whitelist(entry.wallet.address)
+                    self.remove_from_whitelist(entry.wallet_address)
                 except AddressNotWhitelistedException:
-                    self.sync_entry(entry.wallet.address, wallet_uuid=entry.wallet_id)
+                    self.sync_entry(entry.wallet_address, wallet_uuid=entry.wallet_id)
                 result["removed"] += 1
             except Exception as e:
-                result["errors"].append(f"Failed to remove {entry.wallet.address}: {e}")
-                logger.error(f"Failed to remove {entry.wallet.address}: {e}")
+                result["errors"].append(f"Failed to remove {entry.wallet_address}: {e}")
+                logger.error(f"Failed to remove {entry.wallet_address}: {e}")
 
         return result

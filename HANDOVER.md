@@ -293,6 +293,70 @@ variables and `EVM_ASSET_TRANSFER_HISTORY_ENABLED` are documented in
 `backend/.env.example` and the README "Local chain" subsection.
 `is_transferable` / `is_divisible` remain display-only (no on-chain effect).
 
+**Phase 0 checkpoint, bundle P0a-2 (branch `claude/p0-operator`, on
+`claude/p0-issuance-onchain` `b11cab7`): the operator is configuration and
+company events reach the applicant.** The operator (whoever hosts the
+deployment: one company on its own instance, or a registry provider hosting
+many) is a single admin-editable row, `operators.Operator` (the package is
+`operators`, not `operator`, which would shadow the standard-library module
+from `backend/`). It holds identity (`name`, `legal_name`, `abn`,
+`contact_email`, `website`), `deployment_mode` (`single_issuer` | `registry`,
+default registry), the payment rails Phase 1 renders instructions from
+(`bank_account_name`, `bank_bsb`, `bank_account_number`,
+`payment_reference_prefix`, `receiving_wallet_address` +
+`receiving_wallet_chain`, `issued_stablecoin`, `supported_settlement_assets`;
+the last two are limited to `assets.Asset` rows of type `stablecoin`) and the
+two eligibility switches (`investor_kyc_required` default on,
+`issuer_kyc_required` default off; configuration for Phase 2, no gate reads
+them). One row is enforced three ways: fixed pk 1, a `CheckConstraint` on it,
+and a `save()` guard; `Operator.get()` creates it lazily with
+`settings.OPERATOR_NAME` (env `OPERATOR_NAME`, default `Ledova operator`), so
+the compose `migrate` chain is unchanged. The admin changelist redirects to
+the one change page (`/admin/operators/operator/1/change/`, fieldsets
+Identity / Deployment / Payments / Eligibility; add only while no row exists,
+never delete; ABN, BSB, reference prefix and wallet address are normalised and
+validated in `Operator.clean()`). `GET /api/operator/` (authenticated; 401
+anonymous; in the route matrix as a global singleton) returns exactly `name,
+legal_name, abn, contact_email, website, deployment_mode,
+supported_settlement_assets, issued_stablecoin, investor_kyc_required,
+issuer_kyc_required, payment_instructions` (camelCase on the wire); the
+settlement assets carry `uuid, symbol, name, chain_deployments`, and
+`payment_instructions` carries only the rails that are set (the chain only
+with the wallet address). Nothing else reads the row yet.
+
+Company application events now notify the owner: every transition goes
+through `companies.services.transition_company` (the admin buttons and bulk
+actions, the staff `POST /status/` route and the owner's submit / resubmit /
+withdraw), which runs the model transition and, inside the same atomic block,
+defers `users.tasks.notifications.send_push_notification` for the owner (the
+task writes the `Notification` row, as the transaction and KYC producers do).
+Matrix: submit -> "Application submitted", resubmit -> "Application
+resubmitted", start_review -> "Review started", request_info -> "More
+information requested: <reason>", approve -> "Application approved", reject ->
+"Application rejected", activate -> "Company activated", withdraw ->
+"Application withdrawn"; warning, resolve-warning, suspend, reinstate and
+delist notify nobody, and the admin copy says so. The Request-Info round trip
+is stored: `POST /resubmit/` writes the required `response` to
+`Company.additional_info_response` (migration
+`companies/0004_company_additional_info_response`), the request reason now
+stays next to it until approval (both are cleared by `approve()`), the detail
+serializer exposes `additional_info_response` read-only and the admin shows it
+under Application Tracking. Whitelist entries can now name an operator-held
+address: `WhitelistEntry.wallet` is nullable and `address` + `label` are set
+instead (migration `whitelist/0002_whitelistentry_treasury_addresses`, with a
+check constraint that one of wallet or address is present); only the admin add
+form creates such an entry (an unknown address needs a label), the service
+resolves it before falling back to a user's wallet, so `ensure_whitelisted`,
+`add_to_whitelist` and `sync_entry` work on it, and the API reads carry
+`walletAddress` + `label`; the customer status route is unchanged. Carried
+from the P0a-1 review: a capital increase whose chain cap already equals the
+request's total while the DB cap is behind is adopted (cap written, request
+executed, warning logged) instead of refused forever; `_recorded_increase`
+also resumes on a CONFIRMED record and `resolve_executing_capital_increase`
+re-reads the status under the token row lock and returns without writing when
+another worker finished first; the admin pause / unpause buttons confirm on
+GET and call the contract on POST, like "Retry Deployment".
+
 The remaining canonical backlog is [ISSUES.md](ISSUES.md).
 
 ## Working rules

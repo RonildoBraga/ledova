@@ -18,7 +18,7 @@ from companies.serializers import (
     CompanyStatusUpdateSerializer,
     CompanyUpdateSerializer,
 )
-from companies.services import submit_application
+from companies.services import submit_application, transition_company
 from shared.views import AuthenticatedModelViewSet
 from tokens.services.company_stats import company_stats
 
@@ -118,23 +118,24 @@ class CompanyViewSet(AuthenticatedModelViewSet):
         new_status = serializer.validated_data["status"]
         reason = serializer.validated_data.get("reason", "")
 
-        back_to_active = {CompanyStatus.WARNING: company.resolve_warning, CompanyStatus.SUSPENDED: company.reinstate}
+        back_to_active = {CompanyStatus.WARNING: "resolve_warning", CompanyStatus.SUSPENDED: "reinstate"}
         transitions = {
-            CompanyStatus.REVIEW: company.start_review,
-            CompanyStatus.INFO_REQUIRED: lambda: company.request_info(reason),
-            CompanyStatus.APPROVED: lambda: company.approve(approved_by=request.user),
-            CompanyStatus.ACTIVE: back_to_active.get(company.status, company.activate),
-            CompanyStatus.REJECTED: lambda: company.reject(reason, rejected_by=request.user),
-            CompanyStatus.WARNING: lambda: company.issue_warning(reason),
-            CompanyStatus.SUSPENDED: lambda: company.suspend(reason),
-            CompanyStatus.DELISTED: lambda: company.delist(reason),
+            CompanyStatus.REVIEW: ("start_review", {}),
+            CompanyStatus.INFO_REQUIRED: ("request_info", {"reason": reason}),
+            CompanyStatus.APPROVED: ("approve", {"approved_by": request.user}),
+            CompanyStatus.ACTIVE: (back_to_active.get(company.status, "activate"), {}),
+            CompanyStatus.REJECTED: ("reject", {"reason": reason, "rejected_by": request.user}),
+            CompanyStatus.WARNING: ("issue_warning", {"reason": reason}),
+            CompanyStatus.SUSPENDED: ("suspend", {"reason": reason}),
+            CompanyStatus.DELISTED: ("delist", {"reason": reason}),
         }
         if new_status not in transitions:
             raise InvalidStatusTransitionException(
                 from_status=company.get_status_display(),
                 to_status=CompanyStatus(new_status).label,
             )
-        transitions[new_status]()
+        method, kwargs = transitions[new_status]
+        transition_company(company, method, **kwargs)
 
         return Response(
             {
@@ -166,7 +167,7 @@ class CompanyViewSet(AuthenticatedModelViewSet):
         serializer = ApplicationResubmitSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        company.resubmit()
+        transition_company(company, "resubmit", response=serializer.validated_data["response"])
 
         return Response(
             {
@@ -182,7 +183,7 @@ class CompanyViewSet(AuthenticatedModelViewSet):
         serializer = ApplicationWithdrawSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        company.withdraw(reason=serializer.validated_data.get("reason") or "")
+        transition_company(company, "withdraw", reason=serializer.validated_data.get("reason") or "")
 
         return Response(
             {

@@ -7,6 +7,7 @@ from django.utils.html import format_html
 
 from companies.exceptions import InvalidStatusTransitionException
 from companies.models import Company, CompanyDocument, CompanyStatus
+from companies.services import transition_company
 from tokens.admin._helpers import action_buttons, status_badge
 from wallets.models import Wallet
 
@@ -38,8 +39,9 @@ TRANSITIONS = {
         alert="warning",
         heading="Information Request",
         intro=(
-            "You are requesting additional information from {name} (ACN: {acn}). The company will be notified "
-            'and the application status will change to "Additional Information Required".'
+            "You are requesting additional information from {name} (ACN: {acn}). The owner receives an in-app "
+            'notification carrying this request and the application status changes to "Additional Information '
+            'Required"; their answer appears under Application Tracking when they resubmit.'
         ),
         legend="Information Request Details",
         label="Information Requested",
@@ -55,7 +57,7 @@ TRANSITIONS = {
         heading="Warning",
         intro=(
             "You are about to reject the company registration for {name} (ACN: {acn}). "
-            "This action will notify the company that their registration has been rejected."
+            "The owner receives an in-app notification carrying this reason."
         ),
         legend="Rejection Details",
         label="Rejection Reason",
@@ -69,8 +71,8 @@ TRANSITIONS = {
         alert="warning",
         heading="Compliance Warning",
         intro=(
-            "You are issuing a compliance warning to {name} (ACN: {acn}). The company will be notified "
-            'and their status will change to "Compliance Warning".'
+            "You are issuing a compliance warning to {name} (ACN: {acn}). Their status will change to "
+            '"Compliance Warning"; the reason is recorded on the company and no notification is sent.'
         ),
         legend="Warning Details",
         label="Warning Reason",
@@ -181,6 +183,7 @@ class CompanyAdmin(admin.ModelAdmin):
         "activated_at",
         "rejection_at",
         "info_requested_at",
+        "additional_info_response",
         "warning_issued_at",
         "suspended_at",
         "delisted_at",
@@ -223,6 +226,7 @@ class CompanyAdmin(admin.ModelAdmin):
                     "review_started_at",
                     "info_requested_at",
                     "info_request_reason",
+                    "additional_info_response",
                     "review_completed_at",
                     "approved_at",
                     "activated_at",
@@ -383,7 +387,7 @@ class CompanyAdmin(admin.ModelAdmin):
             kwargs["reason"] = form.cleaned_data["reason"]
 
         try:
-            getattr(company, spec["method"])(**kwargs)
+            transition_company(company, spec["method"], **kwargs)
         except InvalidStatusTransitionException as exc:
             messages.error(request, str(exc.detail))
         else:
@@ -394,7 +398,7 @@ class CompanyAdmin(admin.ModelAdmin):
     def start_review_action(self, request, queryset):
         count = 0
         for company in queryset.filter(status=CompanyStatus.SUBMITTED):
-            company.start_review()
+            transition_company(company, "start_review")
             count += 1
         self.message_user(request, f"Review started for {count} applications.")
 
@@ -402,7 +406,7 @@ class CompanyAdmin(admin.ModelAdmin):
     def approve_action(self, request, queryset):
         count = 0
         for company in queryset.filter(status=CompanyStatus.REVIEW):
-            company.approve(approved_by=request.user)
+            transition_company(company, "approve", approved_by=request.user)
             count += 1
         self.message_user(request, f"{count} applications approved.")
 
@@ -410,6 +414,6 @@ class CompanyAdmin(admin.ModelAdmin):
     def activate_action(self, request, queryset):
         count = 0
         for company in queryset.filter(status=CompanyStatus.APPROVED):
-            company.activate()
+            transition_company(company, "activate")
             count += 1
         self.message_user(request, f"{count} companies activated.")

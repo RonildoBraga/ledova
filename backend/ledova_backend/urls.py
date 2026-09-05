@@ -47,6 +47,7 @@ urlpatterns = [
     path("webhooks/kycaid/", KYCAIDWebhookView.as_view(), name="kycaid-webhook"),
     path("webhooks/kycaid/crypto/", KYCAIDCryptoWebhookView.as_view(), name="kycaid-crypto-webhook"),
     path("webhooks/alchemy/", AlchemyWebhookView.as_view(), name="alchemy-webhook"),
+    path("api/operator/", include("operators.urls", namespace="operators")),
     path("api/v1/companies/", include("companies.urls", namespace="companies")),
     path("api/v1/tokens/", include("tokens.urls", namespace="tokens")),
     path("api/v1/whitelist/", include("whitelist.urls", namespace="whitelist")),

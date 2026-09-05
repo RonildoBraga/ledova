@@ -4,7 +4,8 @@ from whitelist.models import WhitelistEntry
 
 
 class WhitelistEntrySerializer(serializers.ModelSerializer):
-    wallet_address = serializers.CharField(source="wallet.address", read_only=True)
+    wallet_address = serializers.CharField(read_only=True)
+    label = serializers.CharField(read_only=True)
     status_display = serializers.CharField(source="get_status_display", read_only=True)
 
     class Meta:
@@ -12,6 +13,7 @@ class WhitelistEntrySerializer(serializers.ModelSerializer):
         fields = [
             "uuid",
             "wallet_address",
+            "label",
             "status",
             "status_display",
             "is_whitelisted",
