@@ -10,6 +10,8 @@ const apiClient = axios.create({
   timeout: API_CONFIG.DEFAULT_TIMEOUT,
   headers: {
     'Content-Type': 'application/json',
+    // Asks sign-in, email verification and token refresh for the pair in the body and no cookies.
+    'X-Auth-Transport': 'bearer',
   },
   // Auth is the Bearer header from SecureStore. React Native's XMLHttpRequest defaults
   // withCredentials to true, which stores the sign-in cookies and replays them beside the header.

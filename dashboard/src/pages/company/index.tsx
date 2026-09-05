@@ -150,7 +150,7 @@ export default function CompanyPage() {
 
   const handleCreateToken = async () => {
     try {
-      await tokensList.createToken(newToken);
+      await tokensList.createToken({ ...newToken, company: companyUuid });
       setNewToken({ name: '', symbol: '', tokenType: 'ordinary', totalSupply: '' });
     } catch {
       // Error handled by mutation state

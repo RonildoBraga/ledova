@@ -75,8 +75,8 @@ Branch `claude/b5-auth-backend` is the auth backend bundle, backward compatible
 with the client builds as they are: the token transport is negotiated with the
 `X-Auth-Transport: bearer` request header (sign-in, email verification and
 `token/refresh` answer in the body only, set no cookie and never read the
-refresh cookie; without the header the cookies are set and the body still
-carries the pair), `resend-verification` is `AllowAny` and takes `{ email }`
+refresh cookie; without the header the cookies are set and no body carries a
+token), `resend-verification` is `AllowAny` and takes `{ email }`
 in the body (an authenticated caller without one is still served by its own
 address; the reply is a generic 200), `change-password` revokes every other
 session (`TokenService.revoke_all(user, keep_jti=...)`), and the admin change
@@ -85,27 +85,33 @@ form lets staff change a user's email with the API's canonical validation
 every session of that user on a change. No self-service email change: both
 clients show it read-only by design.
 
+Branch `claude/b9-client-fixes` is the client bundle the backend bundles
+prepared for. Mobile sends `X-Auth-Transport: bearer` from `axios.create`, so
+the cookie transport now carries no token in any body: sign-in and email
+verification answer with the identity keys only and `token/refresh` with
+`{ "message": "Session refreshed." }`. Both signup email-confirmation screens
+post `{ email }` to `resend-verification`; the swap-approval broadcast sends
+`signedTransaction` (pinned by `tokens/tests/test_trading_transfer_broadcast.py`);
+the trading page lists verified Ethereum and Base wallets only, the backend
+rule; token creation sends the issuing `company`; Base wallets render on the
+dashboard wallets page and send picker and in the mobile wallet list, home
+card and counts; `getUserVerificationStatus` reads `verificationStatus` /
+`reviewResult`. Gone: the dashboard transparency placeholder, the shared
+`Country` type, `TRADING_ENDPOINTS.TRANSACTIONS`, the order-modification
+match fields, the `SWAP`/`MANUAL` snapshot reasons and `CreatePortfolio`.
+
 ## Next work
 
-1. Client bundle for the header-negotiated transport: mobile
-   `src/services/apiClient.ts` sends `X-Auth-Transport: bearer` from
-   `axios.create`, and both signup email-confirmation screens (shared-services
-   `resendVerificationCode`) post `{ email }` to `resend-verification`. Once
-   the mobile build with the header is out, drop the body `tokens` from the
-   cookie transport so dashboard JavaScript never sees a refresh token.
-2. Client bundle: drop the shared-constants `TRADING_ENDPOINTS.TRANSACTIONS`
-   key and the shared-types `OrderModificationMatchDetails`, `matchFound` and
-   `matchDetails` entries; the trading cleanup removed the endpoint and fields.
-3. Product call: should modifying an order re-run matching automatically?
+1. Product call: should modifying an order re-run matching automatically?
    Creation matches; modification no longer reports a candidate match.
-4. Deploy note: `ACCESS_TOKEN_LIFETIME` defaults to 7 days again (604800, the
+2. Deploy note: `ACCESS_TOKEN_LIFETIME` defaults to 7 days again (604800, the
    same as the refresh token). This is safe because the access token carries
    its refresh jti (`rjti`) and `HybridJWTAuthentication` checks that session
    is live on every request, so signout, signout-all, a password change,
    an admin email change and account deletion revoke it immediately; the
    24-hour value only signed dashboard users out daily. Remove any
    `ACCESS_TOKEN_LIFETIME=86400` override to pick the default up.
-5. Deploy note: `companies/0003_delete_review_and_signature_models` (with
+3. Deploy note: `companies/0003_delete_review_and_signature_models` (with
    `tokens/0013_remove_transferorder_signature_request` before it) drops the
    three unused tables `ApplicationReview`, `ReviewNote` and
    `SignatureRequest`; both migrations are reversible with `migrate`. The
@@ -117,13 +123,13 @@ clients show it read-only by design.
    ten columns (nine on `wallets`, `holdings.last_synced_block`); all four are
    reversible with `migrate`. Export any `accounts_waitlist` rows you want to
    keep before applying.
-6. Deploy note: notifications are live. Transaction confirmed/failed and the
+4. Deploy note: notifications are live. Transaction confirmed/failed and the
    KYC review outcome create `Notification` rows and defer the push tasks, so
    the in-app inbox (dashboard bell, mobile inbox) fills from day one. Push
    delivery on the phone additionally needs `extra.eas.projectId` in
    `mobile/app.json` and a dev or production build (Expo Go cannot receive
    remote push on SDK 54); the inbox works without it.
-7. Deploy/run note: the compose `migrate` service now runs
+5. Deploy/run note: the compose `migrate` service now runs
    `migrate --noinput && sync_monitoring_rules && sync_procedure_templates
    && asset_sync --seed-only`, so a fresh database gets the compliance
    monitoring rules, the alert procedure templates and the verified
@@ -144,7 +150,7 @@ clients show it read-only by design.
    (`usdc` cannot sit next to `USDC`) and a quarantined row is never priced.
    An unconfigured integration (`KYC_PROVIDER` blank) now answers 503
    `Service not configured` instead of 500.
-8. Deploy note: the portfolio value series is computed on read
+6. Deploy note: the portfolio value series is computed on read
    (`portfolios/services/value_series.py`, from `HoldingSnapshot` x
    `AssetSnapshot`); `GET /api/portfolios/{uuid}/snapshots/` keeps its path,
    parameters and row shape. `portfolios/0005_delete_portfoliosnapshot` drops
@@ -154,9 +160,6 @@ clients show it read-only by design.
    wallet sync now upserts one `DAILY` `HoldingSnapshot` per holding per day,
    so a wallet with no transactions still gets a daily point; nothing is
    fabricated before a wallet's first holding snapshot.
-9. Client bundle: shared-types `PortfolioSnapshotReason` may narrow to
-   `'DAILY'` and drop the unused `snapshot_reason` query param; the backend
-   only ever emits `DAILY`.
 
 Decisions deferred during the simplification pass (each is a delete-or-keep
 call for the owner; the code is kept and working until decided):

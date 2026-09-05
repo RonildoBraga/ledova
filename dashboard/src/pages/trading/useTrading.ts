@@ -14,7 +14,7 @@ import {
   modifyOrder,
   getOrderBook,
 } from '@ledova/shared-services';
-import { CACHE_TIMING, TRADING_CONFIG } from '@ledova/shared-constants';
+import { BLOCKCHAIN, CACHE_TIMING, TRADING_CONFIG, WALLET_VERIFICATION_STATUS } from '@ledova/shared-constants';
 import type {
   TransferOrder,
   CreateOrderRequest,
@@ -61,10 +61,12 @@ export function useUserTradingWallets() {
     enabled: !!portfolio?.userAccount,
     staleTime: CACHE_TIMING.DEFAULT_STALE_TIME,
     gcTime: CACHE_TIMING.EXTRA_LONG_GC_TIME,
-    select: (data) => {
-      const ethWallets = data.data.results.filter((w: Wallet) => w.chain === 'ethereum');
-      return ethWallets;
-    },
+    select: (data) =>
+      data.data.results.filter(
+        (w: Wallet) =>
+          w.verificationStatus === WALLET_VERIFICATION_STATUS.VERIFIED &&
+          (w.chain === BLOCKCHAIN.ETHEREUM || w.chain === BLOCKCHAIN.BASE),
+      ),
   });
 
   return {

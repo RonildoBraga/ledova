@@ -6,6 +6,7 @@ import type { WalletChainFilter, WalletSortOption } from './WalletSortModal';
 const CHAIN_MAP: Record<Exclude<WalletChainFilter, 'all'>, string> = {
   btc: BLOCKCHAIN.BITCOIN,
   eth: BLOCKCHAIN.ETHEREUM,
+  base: BLOCKCHAIN.BASE,
 };
 
 function sortWallets(wallets: Wallet[], option: WalletSortOption): Wallet[] {

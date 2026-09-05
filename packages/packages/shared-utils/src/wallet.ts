@@ -17,11 +17,25 @@ export function calculateWalletTotals(wallets: Wallet[]): WalletTotals {
         acc.eth += balance;
         acc.ethMarketValue += nativeMarketValue;
         acc.ethTotalMarketValue += totalMarketValue;
+      } else if (chain === BLOCKCHAIN.BASE) {
+        acc.base += balance;
+        acc.baseMarketValue += nativeMarketValue;
+        acc.baseTotalMarketValue += totalMarketValue;
       }
 
       return acc;
     },
-    { btc: 0, eth: 0, btcMarketValue: 0, ethMarketValue: 0, btcTotalMarketValue: 0, ethTotalMarketValue: 0 },
+    {
+      btc: 0,
+      eth: 0,
+      base: 0,
+      btcMarketValue: 0,
+      ethMarketValue: 0,
+      baseMarketValue: 0,
+      btcTotalMarketValue: 0,
+      ethTotalMarketValue: 0,
+      baseTotalMarketValue: 0,
+    },
   );
 }
 

@@ -38,6 +38,7 @@ export function WalletSelectionModal({ isOpen, onClose, onSelectWallet, userAcco
   const wallets = walletsQuery.data?.data.results || [];
   const ethWallets = wallets.filter((w) => w.chain === BLOCKCHAIN.ETHEREUM);
   const btcWallets = wallets.filter((w) => w.chain === BLOCKCHAIN.BITCOIN);
+  const baseWallets = wallets.filter((w) => w.chain === BLOCKCHAIN.BASE);
 
   const renderWallet = (wallet: Wallet) => {
     const walletLabel = wallet.name || formatWalletAddressShort(wallet.address);
@@ -105,6 +106,12 @@ export function WalletSelectionModal({ isOpen, onClose, onSelectWallet, userAcco
           <div className="space-y-1">
             <span className="text-xs font-medium text-text-muted uppercase tracking-wider">Bitcoin</span>
             {btcWallets.map(renderWallet)}
+          </div>
+        )}
+        {baseWallets.length > 0 && (
+          <div className="space-y-1">
+            <span className="text-xs font-medium text-text-muted uppercase tracking-wider">Base</span>
+            {baseWallets.map(renderWallet)}
           </div>
         )}
       </div>

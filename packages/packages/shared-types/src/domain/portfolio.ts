@@ -9,10 +9,8 @@ export interface Portfolio extends BaseEntity {
   walletCount: number;
 }
 
-/** `userAccount` is optional: the backend files the portfolio under the caller's selected account when absent. */
-export type CreatePortfolio = Pick<Portfolio, 'name'> & Partial<Pick<Portfolio, 'userAccount' | 'isActive'>>;
-
-export type PortfolioSnapshotReason = 'DAILY' | 'SWAP' | 'MANUAL';
+/** The value series is computed on read; every emitted row is a DAILY point. */
+export type PortfolioSnapshotReason = 'DAILY';
 
 export interface PortfolioSnapshot extends BaseEntity {
   portfolio: string;
@@ -43,7 +41,6 @@ export interface PortfolioSnapshotQueryParams extends TimeSeriesQueryParams {
   portfolio?: string;
   user_account?: string;
   user_profile?: string;
-  snapshot_reason?: PortfolioSnapshotReason;
 }
 
 /**

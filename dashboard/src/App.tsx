@@ -24,7 +24,6 @@ import CompanyPage from '@pages/company';
 import ListingPage from '@pages/company/listing';
 import { SignupAccountType } from '@pages/signup/account-type';
 import { SignupCompanyRegistration } from '@pages/signup/company-registration';
-import TransparencyPage from '@pages/transparency';
 import Layout from '@components/Layout';
 
 function LoadingSpinner() {
@@ -192,7 +191,6 @@ function App() {
           }
         />
 
-        <Route path="/transparency" element={<TransparencyPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </Layout>

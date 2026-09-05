@@ -91,14 +91,13 @@ class LegacyAuthProtocolTestCase(APITestCase):
         self.assertEqual(cookie["max-age"], max_age)
 
     def assert_session_body(self, response, user):
-        """The mobile app reads `tokens[0].accessToken/refreshToken`; the pair must be the one in the cookies."""
+        """The cookie transport carries the pair only in the HttpOnly cookies; page JavaScript never sees it."""
         payload = response.json()
-        self.assertEqual(set(payload), IDENTITY_KEYS | {"tokens"})
+        self.assertEqual(set(payload), IDENTITY_KEYS)
         self.assertEqual(payload["email"], user.email)
-        self.assertEqual(len(payload["tokens"]), 1)
-        self.assertEqual(set(payload["tokens"][0]), {"accessToken", "refreshToken"})
-        self.assertEqual(payload["tokens"][0]["accessToken"], response.cookies["access"].value)
-        self.assertEqual(payload["tokens"][0]["refreshToken"], response.cookies["refresh"].value)
+        for name in ("access", "refresh"):
+            self.assertIn(name, response.cookies)
+            self.assertNotIn(response.cookies[name].value, response.content.decode())
         self.assertEqual(response["Cache-Control"], "no-store")
         return payload
 
@@ -172,7 +171,7 @@ class LegacyTransportTest(LegacyAuthProtocolTestCase):
         self.assert_issued_cookie(response, "refresh", 604800)
         self.assertEqual(OutstandingToken.objects.filter(user=user).count(), 1)
         self.assertFalse(BlacklistedToken.objects.exists())
-        self.assertTrue(self.verify_with_cookie(payload["tokens"][0]["accessToken"])["valid"])
+        self.assertTrue(self.verify_with_cookie(response.cookies["access"].value)["valid"])
 
     def test_legacy_signin_issues_its_own_session_and_discloses_no_other(self):
         user = self.create_completed_user()
@@ -390,14 +389,11 @@ class LegacyRefreshLogoutTest(LegacyAuthProtocolTestCase):
         response = self.client.post("/api/token/refresh/", {}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(set(response.json()), {"access", "refresh"})
+        self.assertEqual(response.json(), {"message": "Session refreshed."})
         self.assertEqual(response["Cache-Control"], "no-store")
         self.assert_issued_cookie(response, "access", 900)
         self.assert_issued_cookie(response, "refresh", 604800)
-        new_access, new_refresh = response.json()["access"], response.json()["refresh"]
-        self.assertEqual(
-            (response.cookies["access"].value, response.cookies["refresh"].value), (new_access, new_refresh)
-        )
+        new_access, new_refresh = response.cookies["access"].value, response.cookies["refresh"].value
         self.assertNotEqual(jti_of(old_refresh), jti_of(new_refresh))
         self.assertTrue(is_blacklisted(old_refresh))
         self.assertFalse(is_blacklisted(new_refresh))
@@ -412,21 +408,18 @@ class LegacyRefreshLogoutTest(LegacyAuthProtocolTestCase):
         self.assertEqual(replay.cookies["access"]["max-age"], 0)
         self.assertEqual(replay.cookies["refresh"]["max-age"], 0)
 
-    def test_legacy_body_refresh_rotates_for_cookieless_clients(self):
+    def test_legacy_body_refresh_without_the_header_answers_in_the_cookies_only(self):
         user = self.create_completed_user()
         _, old_refresh = TokenService.issue(user)
 
         response = self.client.post("/api/token/refresh/", {"refresh": old_refresh}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(set(response.json()), {"access", "refresh"})
+        self.assertEqual(response.json(), {"message": "Session refreshed."})
+        self.assert_issued_cookie(response, "refresh", 604800)
         self.assertTrue(is_blacklisted(old_refresh))
-        self.assertTrue(self.verify_with_bearer(response.json()["access"])["valid"])
-
-        second = self.client.post("/api/token/refresh/", {"refresh": response.json()["refresh"]}, format="json")
-
-        self.assertEqual(second.status_code, status.HTTP_200_OK)
-        self.assertNotEqual(jti_of(second.json()["refresh"]), jti_of(response.json()["refresh"]))
+        self.assertNotIn(response.cookies["refresh"].value, response.content.decode())
+        self.assertTrue(self.verify_with_cookie(response.cookies["access"].value)["valid"])
 
     def test_legacy_invalid_refresh_clears_both_cookie_names(self):
         self.client.cookies["refresh"] = "invalid-refresh-token"
@@ -811,8 +804,8 @@ class ResendVerificationTest(LegacyAuthProtocolTestCase):
 
 
 class BearerTransportTest(LegacyAuthProtocolTestCase):
-    """`X-Auth-Transport: bearer` (the mobile app once it ships the header): tokens in the body, no
-    cookies set, and the refresh cookie never read. Without the header every shape above is kept."""
+    """`X-Auth-Transport: bearer` (the mobile app): tokens in the body, no cookies set, and the refresh
+    cookie never read. Without the header the cookies carry the session and no body does."""
 
     def setUp(self):
         super().setUp()

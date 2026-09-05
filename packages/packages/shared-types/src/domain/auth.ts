@@ -14,6 +14,10 @@ export interface EmailVerificationRequest {
   email?: string;
 }
 
+export interface ResendVerificationRequest {
+  email: string;
+}
+
 export interface TokenRefreshRequest {
   refresh: string;
 }

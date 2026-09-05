@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { ActivityIndicator, Text, View, ScrollView, RefreshControl } from 'react-native';
-import { CurrencyBtcIcon, CurrencyEthIcon, WalletIcon } from 'phosphor-react-native';
+import { CircleIcon, CurrencyBtcIcon, CurrencyEthIcon, WalletIcon } from 'phosphor-react-native';
 import type { Wallet } from '@ledova/shared-types';
 import { BLOCKCHAIN, getBlockchainDisplayName } from '@ledova/shared-constants';
 import { formatCryptoBalance, calculateWalletTotals, filterWalletsByChain } from '@ledova/shared-utils';
@@ -10,6 +10,9 @@ import { Accordion } from '../accordion';
 import { PrimaryButton } from '../buttons';
 import { WalletItem } from '../../screens/wallets/components/WalletItem';
 import { useAppTheme, useThemedStyles } from '../../contexts';
+import type { WalletChainFilter } from './WalletSortModal';
+
+const CHAIN_ICONS = { BTC: CurrencyBtcIcon, ETH: CurrencyEthIcon, BASE: CircleIcon } as const;
 
 interface WalletListProps {
   wallets: Wallet[];
@@ -23,7 +26,7 @@ interface WalletListProps {
   bottomButtonDisabled?: boolean;
   bottomButtonLoading?: boolean;
   isLoading?: boolean;
-  chainFilter?: 'all' | 'btc' | 'eth';
+  chainFilter?: WalletChainFilter;
   onRefresh?: () => void;
   refreshing?: boolean;
 }
@@ -121,16 +124,17 @@ export function WalletList({
   }));
   const ethWallets = useMemo(() => filterWalletsByChain(wallets, BLOCKCHAIN.ETHEREUM), [wallets]);
   const btcWallets = useMemo(() => filterWalletsByChain(wallets, BLOCKCHAIN.BITCOIN), [wallets]);
+  const baseWallets = useMemo(() => filterWalletsByChain(wallets, BLOCKCHAIN.BASE), [wallets]);
   const totals = useMemo(() => calculateWalletTotals(wallets), [wallets]);
 
   const renderChainPanel = (
     networkWallets: Wallet[],
     networkName: string,
-    networkSymbol: 'BTC' | 'ETH',
+    networkSymbol: keyof typeof CHAIN_ICONS,
     total: number,
     marketValue: number,
   ) => {
-    const Icon = networkSymbol === 'BTC' ? CurrencyBtcIcon : CurrencyEthIcon;
+    const Icon = CHAIN_ICONS[networkSymbol];
     const headerActions =
       networkWallets.length > 0 ? (
         <View style={styles.headerValues}>
@@ -185,9 +189,17 @@ export function WalletList({
           ) : undefined
         }
       >
-        {chainFilter !== 'btc' &&
+        {(chainFilter === 'all' || chainFilter === 'eth') &&
           renderChainPanel(ethWallets, getBlockchainDisplayName('ETH'), 'ETH', totals.eth, totals.ethTotalMarketValue)}
-        {chainFilter !== 'eth' &&
+        {(chainFilter === 'all' || chainFilter === 'base') &&
+          renderChainPanel(
+            baseWallets,
+            getBlockchainDisplayName('BASE'),
+            'BASE',
+            totals.base,
+            totals.baseTotalMarketValue,
+          )}
+        {(chainFilter === 'all' || chainFilter === 'btc') &&
           renderChainPanel(btcWallets, getBlockchainDisplayName('BTC'), 'BTC', totals.btc, totals.btcTotalMarketValue)}
       </ScrollView>
       {showBottomButton && onBottomButtonPress && (

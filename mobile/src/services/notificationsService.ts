@@ -93,14 +93,17 @@ export const notificationsService = {
    * Unregister the device token from the backend.
    */
   async unregisterToken(): Promise<void> {
+    const token = await SecureStore.getItemAsync(PUSH_TOKEN_KEY).catch(() => null);
+    if (!token) {
+      return;
+    }
     try {
-      const token = await SecureStore.getItemAsync(PUSH_TOKEN_KEY);
-      if (token) {
-        await unregisterDeviceToken(apiClient, { push_token: token });
-        await SecureStore.deleteItemAsync(PUSH_TOKEN_KEY);
-      }
+      await unregisterDeviceToken(apiClient, { push_token: token });
     } catch {
-      // Silently fail - token cleanup is best effort
+      // Best effort: the backend drops the token on the next sign-in anyway.
+    } finally {
+      // The stored key belongs to this session; a failed unregister must not keep it around.
+      await SecureStore.deleteItemAsync(PUSH_TOKEN_KEY).catch(() => undefined);
     }
   },
 };

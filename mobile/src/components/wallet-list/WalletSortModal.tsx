@@ -4,6 +4,7 @@ import {
   FunnelIcon,
   CurrencyBtcIcon,
   CurrencyEthIcon,
+  CircleIcon,
   ListBulletsIcon,
   ShieldCheckIcon,
   SortAscendingIcon,
@@ -15,7 +16,7 @@ import {
 import { CustomModal } from '../modal';
 import { useAppTheme, useThemedStyles } from '../../contexts';
 
-export type WalletChainFilter = 'all' | 'btc' | 'eth';
+export type WalletChainFilter = 'all' | 'btc' | 'eth' | 'base';
 export type WalletSortOption = 'default' | 'verified' | 'name' | 'namedFirst' | 'highestValue' | 'highestBalance';
 
 interface WalletSortModalProps {
@@ -145,6 +146,11 @@ export function WalletSortModal({ visible, selectedChain, selectedSort, onClose,
       id: 'eth',
       label: 'ETH',
       icon: <CurrencyEthIcon size={theme.icon.sizes.sm} color={theme.colors.text.primary} weight="regular" />,
+    },
+    {
+      id: 'base',
+      label: 'BASE',
+      icon: <CircleIcon size={theme.icon.sizes.sm} color={theme.colors.text.primary} weight="fill" />,
     },
   ];
 

@@ -278,14 +278,16 @@ class RefreshTransportCsrfTest(APITestCase):
         response = self.client.post("/api/token/refresh/", HTTP_X_CSRFTOKEN=token)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertNotEqual(response.json()["refresh"], self.refresh)
+        self.assertEqual(response.json(), {"message": "Session refreshed."})
         self.assertTrue({"access", "refresh"} <= set(response.cookies))
+        self.assertNotEqual(response.cookies["refresh"].value, self.refresh)
 
     def test_body_refresh_needs_no_csrf_token(self):
         response = self.client.post("/api/token/refresh/", {"refresh": self.refresh}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertNotEqual(response.json()["refresh"], self.refresh)
+        self.assertEqual(response.json(), {"message": "Session refreshed."})
+        self.assertNotEqual(response.cookies["refresh"].value, self.refresh)
 
     def test_transport_header_does_not_let_the_refresh_cookie_rotate_without_csrf(self):
         self.client.cookies["refresh"] = self.refresh
