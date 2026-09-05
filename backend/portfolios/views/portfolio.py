@@ -1,17 +1,17 @@
+from datetime import datetime
+
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
 from portfolios.filters import PortfolioFilter
-from portfolios.models.portfolio import Portfolio, PortfolioSnapshot
+from portfolios.models.portfolio import Portfolio
 from portfolios.serializers.portfolio import (
     PortfolioSerializer,
-    PortfolioSnapshotSerializer,
+    PortfolioValuePointSerializer,
 )
-from portfolios.services import (
-    PortfolioWalletService,
-)
+from portfolios.services import PortfolioWalletService, portfolio_value_series
 from shared.utils.querysets import sample_evenly
 from shared.views.base import AuthenticatedModelViewSet
 from users.models import UserAccount
@@ -79,24 +79,17 @@ class PortfolioViewSet(AuthenticatedModelViewSet):
     @action(detail=True, methods=["get"], url_path="snapshots")
     def snapshots(self, request, *args, **kwargs):
         portfolio = self.get_object()
-
         params = request.query_params
-        snapshots = (
-            PortfolioSnapshot.objects.visible_to_user(request.user)
-            .filter_by_portfolio(portfolio)
-            .with_optimized_data()
-            .filter_by_date_range(
-                start_date=params.get("start_date"),
-                end_date=params.get("end_date"),
-            )
-        )
-        if params.get("snapshot_reason"):
-            snapshots = snapshots.filter(snapshot_reason=params["snapshot_reason"])
-        order_by = params.get("order_by", "-snapshot_date")
-        allowed_orderings = {"snapshot_date", "-snapshot_date"}
-        if order_by not in allowed_orderings:
-            order_by = "-snapshot_date"
-        snapshots = sample_evenly(snapshots.order_by(order_by), params.get("max_points"))
 
-        serializer = PortfolioSnapshotSerializer(snapshots, many=True, context={"request": request})
-        return Response(serializer.data)
+        bounds = {}
+        for key in ("start_date", "end_date"):
+            try:
+                bounds[key] = datetime.strptime(params[key], "%Y-%m-%d").date() if params.get(key) else None
+            except ValueError:
+                raise ValidationError({"detail": "start_date and end_date must be YYYY-MM-DD."})
+        points = portfolio_value_series(portfolio, **bounds)
+        if params.get("order_by") != "snapshot_date":
+            points.reverse()
+        points = sample_evenly(points, params.get("max_points"))
+
+        return Response(PortfolioValuePointSerializer(points, many=True).data)

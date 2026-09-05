@@ -7,6 +7,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from assets.models import Asset, AssetChainDeployment, AssetSnapshot
+from assets.services.identity import quarantine_unknown_token
 from assets.services.sync import SUPPORTED_ASSETS, AssetSyncService
 from assets.tasks import sync_all_assets
 from tokens.models import YieldToken
@@ -135,6 +136,18 @@ class SyncCurrentPricesTests(TestCase):
         )
         self.assertEqual(Asset.objects.get(symbol="ETH").current_price, Decimal("3000.5"))
         self.assertIsNone(Asset.objects.get(symbol="AAPL.t").current_price)
+
+    def test_a_quarantined_row_under_a_coingecko_symbol_is_never_priced(self):
+        doge = quarantine_unknown_token("ethereum", "0x" + "d0" * 20, "DOGE", 18)
+        self.client_mock.fetch_prices_by_symbols.return_value["DOGE"] = {"price": "0.5"}
+
+        with patch("assets.services.sync.CoinGeckoClient", return_value=self.client_mock):
+            AssetSyncService.sync_assets(today_only=True)
+
+        self.assertNotIn("DOGE", self.client_mock.fetch_prices_by_symbols.call_args.args[0])
+        self.assertNotIn("DOGE", self.price_rows())
+        doge.refresh_from_db()
+        self.assertEqual((doge.symbol, doge.is_verified, doge.current_price), ("DOGE", False, None))
 
     def test_fixed_and_nav_prices_survive_a_coingecko_outage_and_inactive_assets_are_skipped(self):
         Asset.objects.filter(symbol="AUDY").update(is_active=False)

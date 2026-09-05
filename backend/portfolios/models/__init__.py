@@ -1,6 +1,5 @@
-from portfolios.models.portfolio import Portfolio, PortfolioSnapshot
+from portfolios.models.portfolio import Portfolio
 
 __all__ = [
     "Portfolio",
-    "PortfolioSnapshot",
 ]

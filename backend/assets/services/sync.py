@@ -137,7 +137,8 @@ class AssetSyncService:
     @staticmethod
     def _current_prices() -> Dict[str, Tuple[Decimal, str]]:
         """(price, data_source) per symbol: fixed pegs, yield-token NAVs, then one CoinGecko call
-        for every active priced asset the symbol map knows."""
+        for every active, verified priced asset the symbol map knows (a quarantined row that took
+        a CoinGecko-known symbol is never priced)."""
         from tokens.models import YieldToken
 
         prices: Dict[str, Tuple[Decimal, str]] = {}
@@ -149,7 +150,7 @@ class AssetSyncService:
                 if nav and nav[0]:
                     prices[symbol] = (nav[0], "nav_update")
 
-        symbols = Asset.objects.filter(is_active=True, asset_type__in=PRICED_ASSET_TYPES).values_list(
+        symbols = Asset.objects.filter(is_active=True, is_verified=True, asset_type__in=PRICED_ASSET_TYPES).values_list(
             "symbol", flat=True
         )
         symbol_map = {symbol: SYMBOL_TO_COINGECKO_ID[symbol] for symbol in symbols if symbol in SYMBOL_TO_COINGECKO_ID}
@@ -165,7 +166,7 @@ class AssetSyncService:
     def _sync_current_prices() -> int:
         prices = AssetSyncService._current_prices()
         updated = 0
-        for asset in Asset.objects.filter(symbol__in=prices, is_active=True):
+        for asset in Asset.objects.filter(symbol__in=prices, is_active=True, is_verified=True):
             price, source = prices[asset.symbol]
             try:
                 AssetSyncService.update_price(asset, price, source=source)

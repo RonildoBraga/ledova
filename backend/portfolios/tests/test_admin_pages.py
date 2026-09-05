@@ -17,7 +17,7 @@ class PortfoliosAdminPagesTest(TestCase):
     def setUp(self):
         self.tenant = make_tenant("portfolioadmin", superuser=True)
         self.client.force_login(self.tenant.user)
-        self.instances = [self.tenant.portfolio, self.tenant.portfolio_snapshot]
+        self.instances = [self.tenant.portfolio]
 
     def test_every_portfolios_model_is_registered_and_renders(self):
         registered = {model for model in admin.site._registry if model._meta.app_label == "portfolios"}

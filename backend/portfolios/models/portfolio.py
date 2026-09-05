@@ -1,10 +1,6 @@
-from decimal import Decimal
-from uuid import UUID
-
 from django.db import models
 
 from portfolios.querysets.portfolio import PortfolioQuerySet
-from portfolios.querysets.portfolio_snapshot import PortfolioSnapshotQuerySet
 from shared.models import BaseModel
 from users.models import UserAccount
 
@@ -29,64 +25,3 @@ class Portfolio(BaseModel):
     def account_wallets(self):
         """Return only wallet links that agree with the portfolio's tenant."""
         return self.wallets.filter(user_account_id=self.user_account_id)
-
-
-class PortfolioSnapshot(BaseModel):
-    portfolio = models.ForeignKey(Portfolio, on_delete=models.CASCADE, related_name="snapshots")
-    snapshot_date = models.DateField()
-    snapshot_reason = models.CharField(
-        max_length=50,
-        choices=[
-            ("DAILY", "Daily Snapshot"),
-            ("MANUAL", "Manual Snapshot"),
-        ],
-    )
-    holdings_data = models.JSONField(default=dict, blank=True)
-    total_market_value = models.DecimalField(max_digits=40, decimal_places=18, null=True, blank=True)
-
-    objects = PortfolioSnapshotQuerySet.as_manager()
-
-    class Meta:
-        db_table = "portfolio_snapshots"
-        verbose_name = "Portfolio Snapshot"
-        verbose_name_plural = "Portfolio Snapshots"
-        indexes = [
-            models.Index(fields=["portfolio", "-snapshot_date"]),
-        ]
-
-    def __str__(self):
-        return f"Portfolio {self.portfolio.name} snapshot on {self.snapshot_date}"
-
-    @property
-    def has_value_data(self) -> bool:
-        return self.total_market_value is not None
-
-    def has_account_scoped_holdings(self, allowed_wallet_ids=None) -> bool:
-        """Return whether embedded wallet provenance stays within the portfolio account."""
-        if not isinstance(self.holdings_data, dict):
-            return False
-
-        if not self.holdings_data:
-            return self.total_market_value is None or self.total_market_value == Decimal("0")
-
-        if allowed_wallet_ids is None:
-            allowed_wallet_ids = self.portfolio.user_account.wallets.values_list("uuid", flat=True)
-        allowed_wallet_ids = {str(wallet_id) for wallet_id in allowed_wallet_ids}
-
-        for holding_data in self.holdings_data.values():
-            if not isinstance(holding_data, dict):
-                return False
-
-            wallet_ids = holding_data.get("wallets")
-            if not isinstance(wallet_ids, list) or not wallet_ids:
-                return False
-
-            try:
-                normalized_wallet_ids = {str(UUID(str(wallet_id))) for wallet_id in wallet_ids}
-            except (AttributeError, TypeError, ValueError):
-                return False
-
-            if not normalized_wallet_ids.issubset(allowed_wallet_ids):
-                return False
-
-        return True

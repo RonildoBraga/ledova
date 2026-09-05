@@ -2,7 +2,6 @@ from django.db import models
 
 from shared.models import BaseModel
 from wallets.constants import SNAPSHOT_REASON_CHOICES
-from wallets.querysets.holding_snapshot import HoldingSnapshotQuerySet
 
 
 class HoldingSnapshot(BaseModel):
@@ -24,8 +23,6 @@ class HoldingSnapshot(BaseModel):
         blank=True,
         related_name="holding_snapshots",
     )
-
-    objects = HoldingSnapshotQuerySet.as_manager()
 
     class Meta:
         db_table = "holding_snapshots"

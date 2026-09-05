@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from portfolios.models.portfolio import Portfolio, PortfolioSnapshot
+from portfolios.models.portfolio import Portfolio
 from users.models import UserAccount
 
 
@@ -44,55 +44,17 @@ class PortfolioSerializer(serializers.ModelSerializer):
         )
 
 
-class PortfolioSnapshotSerializer(serializers.ModelSerializer):
-    portfolio_name = serializers.CharField(source="portfolio.name", read_only=True)
-    account_id = serializers.CharField(source="portfolio.user_account.uuid", read_only=True)
-    has_value_data = serializers.BooleanField(read_only=True)
+class PortfolioValuePointSerializer(serializers.Serializer):
+    """One computed day of the value series, under the keys the stored snapshot rows carried."""
 
-    def _has_account_scoped_holdings(self, obj):
-        portfolio_id = obj.portfolio_id
-        if not hasattr(self, "_allowed_wallet_ids_by_portfolio"):
-            self._allowed_wallet_ids_by_portfolio = {}
-
-        if portfolio_id not in self._allowed_wallet_ids_by_portfolio:
-            self._allowed_wallet_ids_by_portfolio[portfolio_id] = set(
-                obj.portfolio.user_account.wallets.values_list("uuid", flat=True)
-            )
-
-        return obj.has_account_scoped_holdings(self._allowed_wallet_ids_by_portfolio[portfolio_id])
-
-    def to_representation(self, instance):
-        representation = super().to_representation(instance)
-        if not self._has_account_scoped_holdings(instance):
-            # Legacy snapshots may predate account-scoped collection. Keep their
-            # metadata visible, but quarantine all embedded holdings and values.
-            representation["holdings_data"] = {}
-            representation["total_market_value"] = None
-            representation["has_value_data"] = False
-        return representation
-
-    class Meta:
-        model = PortfolioSnapshot
-        fields = (
-            "uuid",
-            "portfolio",
-            "portfolio_name",
-            "account_id",
-            "holdings_data",
-            "total_market_value",
-            "has_value_data",
-            "snapshot_date",
-            "snapshot_reason",
-            "created_at",
-            "updated_at",
-        )
-        read_only_fields = (
-            "uuid",
-            "portfolio_name",
-            "account_id",
-            "holdings_data",
-            "total_market_value",
-            "has_value_data",
-            "created_at",
-            "updated_at",
-        )
+    uuid = serializers.CharField()
+    portfolio = serializers.UUIDField()
+    portfolio_name = serializers.CharField()
+    account_id = serializers.CharField()
+    holdings_data = serializers.DictField()
+    total_market_value = serializers.DecimalField(max_digits=40, decimal_places=18, allow_null=True)
+    has_value_data = serializers.BooleanField()
+    snapshot_date = serializers.DateField()
+    snapshot_reason = serializers.CharField()
+    created_at = serializers.DateTimeField()
+    updated_at = serializers.DateTimeField()

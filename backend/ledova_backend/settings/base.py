@@ -1,5 +1,4 @@
 import os
-from datetime import time
 from pathlib import Path
 
 from ledova_backend.environment import read_bool
@@ -82,9 +81,6 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 USE_X_FORWARDED_HOST = True
 USE_X_FORWARDED_PORT = True
-
-# Used by portfolios.services.sync to timestamp daily portfolio snapshots.
-PORTFOLIO_SNAPSHOT_TIME_UTC = time(21, 0, 0)
 
 # Redis is used only for the trading-events pub/sub channel
 # (backend/tokens/events.py). Background tasks run on procrastinate (Postgres).

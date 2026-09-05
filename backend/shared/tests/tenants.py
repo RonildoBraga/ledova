@@ -13,7 +13,7 @@ from django.utils import timezone
 from assets.models import Asset
 from companies.models import Company, CompanyDocument, CompanyType, DocumentType
 from documents.models import Document
-from portfolios.models import Portfolio, PortfolioSnapshot
+from portfolios.models import Portfolio
 from shared.models import Country
 from tokens.models import (
     CapitalIncreaseRequest,
@@ -120,9 +120,6 @@ def make_tenant(label, *, staff=False, superuser=False):
 
     portfolio = Portfolio.objects.create(user_account=account, name=f"{label} portfolio")
     portfolio.wallets.add(wallet)
-    portfolio_snapshot = PortfolioSnapshot.objects.create(
-        portfolio=portfolio, snapshot_date=date(2026, 9, 1), snapshot_reason="DAILY"
-    )
     preferences = UserPreferences.objects.create(
         user_profile=profile, selected_account=account, selected_portfolio=portfolio
     )
@@ -205,7 +202,6 @@ def make_tenant(label, *, staff=False, superuser=False):
         transaction=transaction,
         holding_snapshot=holding_snapshot,
         portfolio=portfolio,
-        portfolio_snapshot=portfolio_snapshot,
         preferences=preferences,
         favourite=favourite,
         device_token=device_token,
@@ -231,6 +227,8 @@ def route_context(tenant):
     """Placeholder values for route templates: every uuid in the graph plus the non-uuid lookups."""
     context = {name: str(row.uuid) for name, row in _rows(tenant).items() if hasattr(row, "uuid")}
     context.update(
+        # The value series is computed on read; its one point on the holding snapshot's day.
+        series_point=f"{tenant.portfolio.uuid}:{tenant.holding_snapshot.snapshot_date.isoformat()}",
         wallet_address=tenant.wallet.address,
         push_token=tenant.device_token.push_token,
         acn=tenant.company.acn,

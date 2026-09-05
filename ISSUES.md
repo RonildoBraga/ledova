@@ -59,16 +59,16 @@ item names where it lives in the code today.
 9. **Scam detection — completed 2026-09-05.** The symbol-lookalike heuristic
    (`wallets/utils/scam_detection.py`) is gone. Asset identity for chain data
    is `(chain, contract_address)` through `AssetChainDeployment`
-   (`assets/services/identity.py`): the contract is looked up first, on any
-   chain, and only the row carrying it is ever returned; the same contract
-   seen on another chain joins its row only while that row is unverified and
-   the deployment is active (a verified row never gains a deployment without
-   an operator, and a switched-off deployment is not undone by the address
-   turning up elsewhere); a contract the
+   (`assets/services/identity.py`): the deployment on this chain is looked
+   up first and only the row carrying it is ever returned; the same address
+   seen on another chain is another contract and gets its own unverified row
+   (an operator adds a second chain's deployment to a verified row by hand);
+   a contract the
    allowlist does not know is recorded as an unverified `Asset` with its
-   deployment under a symbol no other row owns (declared symbol, or symbol
-   plus a hex prefix of the contract that grows until free), so neither a
-   fake `USDC` nor a fake `USDC-a0b866` can attach to someone else's row
+   deployment under a symbol no other row owns, compared case-insensitively
+   (declared symbol, or symbol plus a hex prefix of the contract that grows
+   until free), so neither a fake `USDC`, `usdc` nor `USDC-a0b866` can attach
+   to someone else's row
    whichever contract the chain shows first; a deployment an operator
    deactivated refuses the transfer (skipped and logged); the transaction
    for a quarantined token is kept for audit but no `Holding` is opened.
@@ -76,8 +76,9 @@ item names where it lives in the code today.
    (`asset_sync --seed-only`) so no supported symbol is free on a fresh
    stack. Unverified rows are invisible to
    customers: `/api/assets/` (list, detail, snapshots), favourites, wallet
-   holdings, transactions, market values and the portfolio holding sync all
-   filter `is_verified`, and a pending transfer naming an unknown or
+   holdings, transactions, market values, the price sync and the portfolio
+   value series all filter `is_verified`, and a pending transfer naming an
+   unknown or
    unverified token contract is rejected with 400 instead of debiting the
    native holding. An operator allowlists a token with the `Mark selected
    assets as verified` admin action
