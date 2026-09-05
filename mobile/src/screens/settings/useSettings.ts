@@ -1,17 +1,13 @@
 import { useState, useCallback } from 'react';
 import { Alert, Linking, Share } from 'react-native';
 import * as StoreReview from 'expo-store-review';
-import * as SecureStore from 'expo-secure-store';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { deleteAccount, exportAccountData, changePassword } from '@ledova/shared-services';
 import { apiClient } from '../../services/apiClient';
-import { useAppLock } from '../../contexts';
+import { clearTokens } from '../../services/tokenStorage';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import { APP_STORE_URL, MARKETING_URL } from '../../config/publicLinks';
-
-// Storage keys must match AppLockContext
-const SAVED_PASSWORD_KEY = 'credentials.password';
 
 /**
  * Custom hook for Settings screen actions.
@@ -21,7 +17,6 @@ const SAVED_PASSWORD_KEY = 'credentials.password';
 export function useSettings() {
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const queryClient = useQueryClient();
-  const { hasSavedCredentials } = useAppLock();
 
   // Loading states
   const [isExporting, setIsExporting] = useState(false);
@@ -30,7 +25,7 @@ export function useSettings() {
 
   /**
    * Change the user's password.
-   * Also updates stored biometric credentials if they exist.
+   * The backend keeps the current session, so the biometric-gated refresh token stays valid.
    */
   const changeUserPassword = useCallback(
     async (currentPassword: string, newPassword: string, newPasswordConfirm: string): Promise<boolean> => {
@@ -41,15 +36,6 @@ export function useSettings() {
           newPassword,
           newPasswordConfirm,
         });
-
-        // Update stored biometric credentials with new password if they exist
-        if (hasSavedCredentials) {
-          try {
-            await SecureStore.setItemAsync(SAVED_PASSWORD_KEY, newPassword);
-          } catch {
-            // Silent fail - biometric login will just require re-setup
-          }
-        }
 
         Alert.alert('Password Changed', 'Your password has been changed successfully.');
         return true;
@@ -71,7 +57,7 @@ export function useSettings() {
         setIsChangingPassword(false);
       }
     },
-    [hasSavedCredentials],
+    [],
   );
 
   /**
@@ -106,9 +92,8 @@ export function useSettings() {
     try {
       await deleteAccount(apiClient);
 
-      // Clear local data
-      await SecureStore.deleteItemAsync('accessToken');
-      await SecureStore.deleteItemAsync('refreshToken');
+      // Clear local data, the biometric-gated refresh token included
+      await clearTokens();
       queryClient.clear();
 
       // Navigate to sign in

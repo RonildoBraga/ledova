@@ -115,6 +115,21 @@ validator decodes legacy and typed transactions through
 existed in eth-account 0.14; `tokens/tests/test_signed_transactions.py` signs
 real transactions offline).
 
+Branch `claude/b11-mobile-biometric` removes the password at rest from the
+mobile app. Biometric sign-in now unlocks a copy of the rotating refresh token
+kept behind a biometric-gated SecureStore entry (`requireAuthentication`,
+`WHEN_PASSCODE_SET_THIS_DEVICE_ONLY`, the seed-phrase pattern) and exchanges
+it at `token/refresh` for a new session; the password is never stored, and a
+sign-out revokes the token so the next sign-in is typed once. Every token
+write goes through `mobile/src/services/tokenStorage.ts`, which keeps the
+gated copy in step with each rotation (silently on iOS; Android's Keystore
+asks for biometrics on every gated write and drops the copy when the prompt is
+cancelled or the app is in the background, so the next password sign-in stores
+it again). The mobile axios client refreshes once on a 401 (single-flight,
+replaying the request) and clears every token when the backend rejects the
+refresh. The trading broadcast validator also rejects a transaction signed for
+another chain id.
+
 ## Next work
 
 1. Product call: should modifying an order re-run matching automatically?

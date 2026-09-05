@@ -274,9 +274,11 @@ export function TransferFormScreen({ route, navigation }: Props) {
       case 'broadcast':
         return (
           <View style={styles.placeholderContainer}>
-            <ActivityIndicator size="small" color={theme.colors.interactive.active} />
+            {!broadcastError && <ActivityIndicator size="small" color={theme.colors.interactive.active} />}
             <Text style={styles.placeholderTitle}>Broadcasting Transaction</Text>
-            <Text style={styles.placeholderText}>Submitting your transaction to the network...</Text>
+            {!broadcastError && (
+              <Text style={styles.placeholderText}>Submitting your transaction to the network...</Text>
+            )}
             {broadcastError && <Text style={styles.errorText}>{broadcastError}</Text>}
           </View>
         );

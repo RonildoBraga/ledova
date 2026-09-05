@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { signin } from '@ledova/shared-services';
 import { FormErrors, SigninRequest } from '@ledova/shared-types';
-import * as SecureStore from 'expo-secure-store';
-import { apiClient, UserFriendlyError } from '../../services/apiClient';
+import { apiClient, rotateRefreshToken, UserFriendlyError } from '../../services/apiClient';
+import { storeTokens } from '../../services/tokenStorage';
 import { notificationsService } from '../../services/notificationsService';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -46,31 +46,25 @@ export const useSignIn = () => {
     return Object.keys(newErrors).length === 0;
   };
 
+  const completeSignIn = async (onSuccess?: () => void) => {
+    await refetchAuth();
+
+    notificationsService.registerToken().catch(() => {});
+
+    if (onSuccess) {
+      onSuccess();
+    }
+  };
+
   const performLogin = async (email: string, password: string, onSuccess?: () => void): Promise<boolean> => {
     try {
       const response = await signin(apiClient, { email, password });
 
-      if (response.data?.tokens && Array.isArray(response.data.tokens) && response.data.tokens.length > 0) {
-        const token = response.data.tokens[0];
-
-        const accessToken = token?.accessToken;
-        const refreshToken = token?.refreshToken;
-
-        if (accessToken) {
-          await SecureStore.setItemAsync('accessToken', accessToken);
-        }
-
-        if (refreshToken) {
-          await SecureStore.setItemAsync('refreshToken', refreshToken);
-        }
+      const token = response.data?.tokens?.[0];
+      if (token?.accessToken && token?.refreshToken) {
+        await storeTokens({ accessToken: token.accessToken, refreshToken: token.refreshToken });
       }
-      await refetchAuth();
-
-      notificationsService.registerToken().catch(() => {});
-
-      if (onSuccess) {
-        onSuccess();
-      }
+      await completeSignIn(onSuccess);
       return true;
     } catch (err: unknown) {
       setErrors({});
@@ -147,12 +141,25 @@ export const useSignIn = () => {
     }
   };
 
-  const loginWithCredentials = async (email: string, password: string, onSuccess?: () => void) => {
+  /**
+   * Biometric sign in: exchanges the refresh token unlocked by the OS prompt for a new session.
+   * The backend rejects it after a sign-out (revoked) or once it expired; the password form takes over.
+   */
+  const loginWithRefreshToken = async (refreshToken: string, onSuccess?: () => void): Promise<boolean> => {
     setGeneralError(null);
     setIsLoading(true);
 
     try {
-      await performLogin(email, password, onSuccess);
+      await rotateRefreshToken(refreshToken);
+      await completeSignIn(onSuccess);
+      return true;
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'isUserFriendly' in err) {
+        setGeneralError((err as UserFriendlyError).message);
+      } else {
+        setGeneralError('Your saved sign in has expired. Please sign in with your password.');
+      }
+      return false;
     } finally {
       setIsLoading(false);
     }
@@ -167,6 +174,7 @@ export const useSignIn = () => {
     setFieldValue,
     togglePassword,
     handleSubmit,
-    loginWithCredentials,
+    loginWithRefreshToken,
+    setGeneralError,
   };
 };

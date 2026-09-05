@@ -1,3 +1,4 @@
+from django.conf import settings
 from rest_framework import serializers
 from web3 import Web3
 
@@ -203,6 +204,10 @@ class BroadcastTransferSerializer(serializers.Serializer):
             decoded = decode_signed_transaction(bytes.fromhex(value[2:]))
         except ValueError:
             raise serializers.ValidationError("Unable to decode signed transaction")
+
+        # A pre-EIP-155 legacy transaction carries no chain id and is accepted as before.
+        if decoded.chain_id is not None and decoded.chain_id != settings.BLOCKCHAIN_CHAIN_ID:
+            raise serializers.ValidationError("Transaction is signed for a different network")
 
         if decoded.to is None:
             raise serializers.ValidationError("Contract creation transactions are not allowed")
