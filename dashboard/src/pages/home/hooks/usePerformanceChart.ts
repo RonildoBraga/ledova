@@ -1,9 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getPortfolioSnapshotsTimeSeries } from '@ledova/shared-services';
-import { CACHE_TIMING, TimeRange, TIME_RANGES } from '@ledova/shared-constants';
-import type { PortfolioSnapshot } from '@ledova/shared-types';
-import { getDateRange } from '@ledova/shared-utils';
+import { getPortfolioSnapshotsTimeSeries, CACHE_TIMING, TimeRange, TIME_RANGES, getDateRange } from '@ledova/shared';
+import type { PortfolioSnapshot } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 
 interface SnapshotPoint {

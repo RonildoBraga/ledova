@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { CheckCircleIcon } from '@phosphor-icons/react';
-import type { TransferOrder, CreateOrderRequest, Wallet, SwapOrder } from '@ledova/shared-types';
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
+import type { TransferOrder, CreateOrderRequest, Wallet, SwapOrder } from '@ledova/shared';
+import { DESIGN_TOKENS } from '@ledova/shared';
 import { Modal } from '@components/Modal';
 import {
   useShareTokens,

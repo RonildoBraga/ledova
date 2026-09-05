@@ -9,8 +9,8 @@ import {
   PencilSimpleIcon,
   TrashIcon,
 } from 'phosphor-react-native';
-import type { TransferOrder, SwapOrder, OrderBook as OrderBookType, OrderBookEntry } from '@ledova/shared-types';
-import { formatCurrency } from '@ledova/shared-utils';
+import type { TransferOrder, SwapOrder, OrderBook as OrderBookType, OrderBookEntry } from '@ledova/shared';
+import { formatCurrency } from '@ledova/shared';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
 
 interface OrdersCardProps {

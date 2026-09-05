@@ -5,9 +5,9 @@ import type {
   CancelOrderMessageResponse,
   TransferOrder,
   Wallet,
-} from '@ledova/shared-types';
+} from '@ledova/shared';
 import { encodeEthereumMessage } from '../../utils/keystone/urEncoder';
-import { getWalletVerificationEvmChainId } from '@ledova/shared-constants';
+import { getWalletVerificationEvmChainId } from '@ledova/shared';
 import { getSeedPhrase } from '../../services/secureKeyStorage';
 import { signEthereumMessage } from '../../utils/softwareWallet/localSigner';
 import { useOrderCreateMessage, useOrderCancelMessage, useCreateOrder, useCancelOrder } from './useTrading';

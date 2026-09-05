@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { CaretDownIcon } from '@phosphor-icons/react';
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
+import { DESIGN_TOKENS } from '@ledova/shared';
 
 const ICON_MD = DESIGN_TOKENS.icon.sizes.md;
 

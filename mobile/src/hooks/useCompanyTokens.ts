@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getCompanyTokens, getCompanyTokenHolders, createCompanyToken } from '@ledova/shared-services';
-import type { TokenCreate, CompanyShareToken, TokenHoldersResponse } from '@ledova/shared-types';
+import { getCompanyTokens, getCompanyTokenHolders, createCompanyToken } from '@ledova/shared';
+import type { TokenCreate, CompanyShareToken, TokenHoldersResponse } from '@ledova/shared';
 import { apiClient } from '../services/apiClient';
 
 type ShareholderSummary = {

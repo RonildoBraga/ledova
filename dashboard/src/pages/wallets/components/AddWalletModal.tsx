@@ -1,12 +1,17 @@
 import { useEffect, useState } from 'react';
 import { QrCodeIcon, CheckIcon, WalletIcon, HardDrivesIcon } from '@phosphor-icons/react';
-import { getBlockchainDisplayName, isEthereumChain, isBitcoinChain, DESIGN_TOKENS } from '@ledova/shared-constants';
+import {
+  getBlockchainDisplayName,
+  isEthereumChain,
+  isBitcoinChain,
+  DESIGN_TOKENS,
+  fetchBatchBalances,
+} from '@ledova/shared';
 
 const ICON_XS = DESIGN_TOKENS.icon.sizes.xs;
 const ICON_SM = DESIGN_TOKENS.icon.sizes.sm;
 const ICON_XXL = DESIGN_TOKENS.icon.sizes.xxl;
-import { fetchBatchBalances } from '@ledova/shared-services';
-import type { CreateWallet, DerivedAddress, HardwareWalletImport } from '@ledova/shared-types';
+import type { CreateWallet, DerivedAddress, HardwareWalletImport } from '@ledova/shared';
 import { Modal } from '@components/Modal';
 import apiClient from '@services/apiClient';
 import { useWalletForm } from '../hooks/useWalletForm';

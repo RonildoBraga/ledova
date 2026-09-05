@@ -1,6 +1,6 @@
 import { Field, Label, Input, Description } from '@headlessui/react';
 import { BuildingsIcon, WarningIcon, CaretDownIcon } from '@phosphor-icons/react';
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
+import { DESIGN_TOKENS } from '@ledova/shared';
 import { COMPANY_TYPES } from '../constants';
 
 const ICON_MD = DESIGN_TOKENS.icon.sizes.md;

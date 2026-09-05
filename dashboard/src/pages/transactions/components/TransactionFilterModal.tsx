@@ -1,6 +1,6 @@
 import { CurrencyEthIcon, CurrencyBtcIcon, FunnelIcon } from '@phosphor-icons/react';
-import { BLOCKCHAIN, DESIGN_TOKENS } from '@ledova/shared-constants';
-import type { Wallet } from '@ledova/shared-types';
+import { BLOCKCHAIN, DESIGN_TOKENS } from '@ledova/shared';
+import type { Wallet } from '@ledova/shared';
 import { Modal } from '@components/Modal';
 import type { TransactionFilters } from '../useTransactions';
 

@@ -1,9 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView } from 'react-native';
 import { ShoppingCartIcon, TagIcon, WalletIcon, ShieldWarningIcon } from 'phosphor-react-native';
-import { formatWalletAddressShort, formatCurrency } from '@ledova/shared-utils';
-import type { ShareToken, CreateOrderRequest, Wallet } from '@ledova/shared-types';
-import type { OrderType } from '@ledova/shared-constants';
+import { formatWalletAddressShort, formatCurrency } from '@ledova/shared';
+import type { ShareToken, CreateOrderRequest, Wallet, OrderType } from '@ledova/shared';
 import { CustomModal } from '../../../components/modal';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
 

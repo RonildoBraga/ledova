@@ -1,8 +1,8 @@
 import React, { useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity } from 'react-native';
 import { WalletIcon, QrCodeIcon } from 'phosphor-react-native';
-import { getChainConfig, getAddressPlaceholder } from '@ledova/shared-constants';
-import type { CreateWallet, DerivedAddress, HardwareWalletImport, WalletType } from '@ledova/shared-types';
+import { getChainConfig, getAddressPlaceholder } from '@ledova/shared';
+import type { CreateWallet, DerivedAddress, HardwareWalletImport, WalletType } from '@ledova/shared';
 import type { SoftwareWalletImport } from '../../../utils/softwareWallet';
 import { AnimatedQRScanner } from '../../../components/qr';
 import { CustomModal } from '../../../components/modal';

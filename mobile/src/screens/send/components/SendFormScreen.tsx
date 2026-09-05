@@ -5,7 +5,7 @@ import { Panel } from '../../../components/panel';
 import { ButtonGroup, SecondaryButton } from '../../../components/buttons';
 import { QRScanner } from '../../../components/qr';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
-import { getChainShortCode, isEthereumChain } from '@ledova/shared-constants';
+import { getChainShortCode, isEthereumChain, WALLET_TYPE } from '@ledova/shared';
 import { SendForm } from '../../transfers/components/SendForm';
 import { ReviewTransaction } from '../../transfers/components/ReviewTransaction';
 import { SignTransaction } from '../../transfers/components/SignTransaction';
@@ -14,7 +14,6 @@ import { SuccessModal } from '../../transfers/components/SuccessModal';
 import { WalletSelectionStep } from './WalletSelectionStep';
 import { encodeEthereumTransaction } from '../../../utils/keystone/urEncoder';
 import { decodeKeystoneSignature } from '../../../utils/keystone/urDecoder';
-import { WALLET_TYPE } from '@ledova/shared-constants';
 import { useTransfers } from '../../transfers/useTransfers';
 
 interface SendFormScreenProps {

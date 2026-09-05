@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getUserProfiles, getPortfolios, getCurrentUserPreferences } from '@ledova/shared-services';
-import { CACHE_TIMING } from '@ledova/shared-constants';
+import { getUserProfiles, getPortfolios, getCurrentUserPreferences, CACHE_TIMING } from '@ledova/shared';
 import { apiClient } from '../../services/apiClient';
 import { useAuth } from '../../hooks/useAuth';
 

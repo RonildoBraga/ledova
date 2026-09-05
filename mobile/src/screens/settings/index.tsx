@@ -13,8 +13,8 @@ import {
   CurrencyCircleDollarIcon,
 } from 'phosphor-react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { upsertCurrentUserPreferences } from '@ledova/shared-services';
-import type { DisplayCurrency } from '@ledova/shared-types';
+import { upsertCurrentUserPreferences } from '@ledova/shared';
+import type { DisplayCurrency } from '@ledova/shared';
 import { GradientBackground } from '../../components/GradientBackground';
 import { Panel } from '../../components/panel';
 import { CustomModal } from '../../components/modal';

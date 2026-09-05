@@ -9,7 +9,7 @@ import {
   CoinsIcon,
   CheckIcon,
 } from '@phosphor-icons/react';
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
+import { DESIGN_TOKENS } from '@ledova/shared';
 import { Modal } from '@components/Modal';
 import type { WalletSortOption } from '../hooks/useWalletSort';
 

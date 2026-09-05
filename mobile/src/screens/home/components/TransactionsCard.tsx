@@ -2,9 +2,9 @@ import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity } from 'rea
 import { LinkIcon, ArrowUpIcon, ArrowDownIcon } from 'phosphor-react-native';
 import { Accordion } from '../../../components/accordion';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
-import { formatShortDate, formatTime, getBlockchainShortName, formatCryptoBalance } from '@ledova/shared-utils';
+import { formatShortDate, formatTime, getBlockchainShortName, formatCryptoBalance } from '@ledova/shared';
 import { useCurrency } from '../../../hooks/useCurrency';
-import type { Transaction } from '@ledova/shared-types';
+import type { Transaction } from '@ledova/shared';
 
 interface TransactionsCardProps {
   transactions: Transaction[];

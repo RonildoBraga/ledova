@@ -9,7 +9,7 @@ import {
 import LoadingState from '@components/signup/LoadingState';
 import { useIdentityVerification } from '@hooks/useIdentityVerification';
 import { AuthLayout } from '@components/AuthLayout';
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
+import { DESIGN_TOKENS } from '@ledova/shared';
 
 const ICON_MD = DESIGN_TOKENS.icon.sizes.md;
 const ICON_LG = DESIGN_TOKENS.icon.sizes.lg;

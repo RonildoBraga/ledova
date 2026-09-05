@@ -1,9 +1,7 @@
 import { useMemo } from 'react';
 import { useQueries } from '@tanstack/react-query';
-import { getWalletHoldings } from '@ledova/shared-services';
-import { CACHE_TIMING } from '@ledova/shared-constants';
-import type { Wallet, HoldingWithWallet } from '@ledova/shared-types';
-import { calculateHoldingsSummary, calculateAssetAllocation } from '@ledova/shared-utils';
+import { getWalletHoldings, CACHE_TIMING, calculateHoldingsSummary, calculateAssetAllocation } from '@ledova/shared';
+import type { Wallet, HoldingWithWallet } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 
 export function useHoldings(walletsList: Wallet[]) {

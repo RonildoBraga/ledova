@@ -14,7 +14,7 @@ import {
   PencilSimpleIcon,
   InfoIcon,
 } from '@phosphor-icons/react';
-import { DESIGN_TOKENS, getWalletVerificationEvmChainId } from '@ledova/shared-constants';
+import { DESIGN_TOKENS, getWalletVerificationEvmChainId, formatCurrency } from '@ledova/shared';
 import { AnimatedQRCode } from '@keystonehq/animated-qr';
 
 const ICON_SM = DESIGN_TOKENS.icon.sizes.sm;
@@ -23,8 +23,7 @@ const ICON_XL = DESIGN_TOKENS.icon.sizes.xl;
 const ICON_HERO = DESIGN_TOKENS.icon.sizes.hero;
 const ICON_DISPLAY = DESIGN_TOKENS.icon.sizes.display;
 import { useQRScanner, QRScannerView } from '@components/qr';
-import type { Wallet, TransferOrder } from '@ledova/shared-types';
-import { formatCurrency } from '@ledova/shared-utils';
+import type { Wallet, TransferOrder } from '@ledova/shared';
 import { encodeEthereumMessage } from '@utils/keystone/urEncoder';
 import { decodeKeystoneMessageSignature } from '@utils/keystone/urDecoder';
 import {

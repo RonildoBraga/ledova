@@ -1,6 +1,6 @@
 # Interface Naming Conventions
 
-This document outlines the naming conventions for TypeScript interfaces in the `@ledova/shared-types` package.
+This document outlines the naming conventions for TypeScript interfaces in the `@ledova/shared` package (`packages/shared/src/types`).
 
 ## Status: Implemented
 

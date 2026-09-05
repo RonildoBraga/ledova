@@ -19,8 +19,8 @@ import {
   formatDateTime,
   getUserVerificationStatus,
   type VerificationStatusType,
-} from '@ledova/shared-utils';
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
+  DESIGN_TOKENS,
+} from '@ledova/shared';
 import { useUserProfile } from './useUserProfile';
 
 const ICON_SM = DESIGN_TOKENS.icon.sizes.sm;

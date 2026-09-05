@@ -20,10 +20,7 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@ledova/shared-constants": "file:../packages/packages/shared-constants",
-    "@ledova/shared-services": "file:../packages/packages/shared-services",
-    "@ledova/shared-types": "file:../packages/packages/shared-types",
-    "@ledova/shared-utils": "file:../packages/packages/shared-utils",
+    "@ledova/shared": "file:../packages/shared",
     "@expo/metro-runtime": "~6.1.2",
     "@expo/vector-icons": "^15.0.3",
     "@keystonehq/bc-ur-registry": "^0.7.1",

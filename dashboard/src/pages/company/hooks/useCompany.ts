@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { getCompanies, getCompany, getCompanyStats } from '@ledova/shared-services';
-import type { Company, CompanyStats } from '@ledova/shared-types';
+import { getCompanies, getCompany, getCompanyStats } from '@ledova/shared';
+import type { Company, CompanyStats } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 
 export function useCompany() {

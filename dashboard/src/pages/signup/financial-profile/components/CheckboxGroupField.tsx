@@ -1,5 +1,5 @@
 import { Field, Label, Description } from '@headlessui/react';
-import type { CheckboxGroupFieldProps } from '@ledova/shared-types';
+import type { CheckboxGroupFieldProps } from '@ledova/shared';
 
 const CheckboxGroupField = ({ label, value, options, error, onChange }: CheckboxGroupFieldProps) => {
   const handleCheckboxChange = (optionValue: string, checked: boolean) => {

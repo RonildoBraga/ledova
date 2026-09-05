@@ -6,8 +6,8 @@ import {
   ArrowsClockwiseIcon,
   TrashIcon,
 } from '@phosphor-icons/react';
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
-import type { Wallet } from '@ledova/shared-types';
+import { DESIGN_TOKENS } from '@ledova/shared';
+import type { Wallet } from '@ledova/shared';
 
 const ICON_MD = DESIGN_TOKENS.icon.sizes.md;
 

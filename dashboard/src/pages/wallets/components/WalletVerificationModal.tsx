@@ -1,8 +1,8 @@
 import { useEffect, useCallback } from 'react';
 import { ShieldCheckIcon, QrCodeIcon, CameraIcon, CheckCircleIcon, ArrowLeftIcon } from '@phosphor-icons/react';
 import { QRCodeSVG } from 'qrcode.react';
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
-import type { Wallet } from '@ledova/shared-types';
+import { DESIGN_TOKENS } from '@ledova/shared';
+import type { Wallet } from '@ledova/shared';
 
 const ICON_SM = DESIGN_TOKENS.icon.sizes.sm;
 const ICON_XXL = DESIGN_TOKENS.icon.sizes.xxl;

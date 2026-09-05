@@ -3,9 +3,9 @@ import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator } from 'rea
 import { HardDrivesIcon, CheckIcon } from 'phosphor-react-native';
 import { PrimaryButton, SecondaryButton } from '../../../components/buttons';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
-import type { DerivedAddress, HardwareWalletImport } from '@ledova/shared-types';
+import type { DerivedAddress, HardwareWalletImport } from '@ledova/shared';
 import { extractFromKeystoneQR } from '../../../utils/keystone/bcurDecoder';
-import { getBlockchainDisplayName } from '@ledova/shared-constants';
+import { getBlockchainDisplayName } from '@ledova/shared';
 import { useFetchBalances } from '../../../hooks';
 
 interface HardwareAccountSelectorProps {

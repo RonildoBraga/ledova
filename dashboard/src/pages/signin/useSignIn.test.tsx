@@ -3,13 +3,14 @@
 import type { PropsWithChildren } from 'react';
 import { act, renderHook } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { signin } from '@ledova/shared-services';
+import { signin } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 import { AUTH_QUERY_KEY } from '@hooks/useAuth';
 import { useSignIn } from './useSignIn';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@ledova/shared-services', () => ({
+vi.mock('@ledova/shared', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@ledova/shared')>()),
   signin: vi.fn(),
   verifyAuth: vi.fn(),
 }));

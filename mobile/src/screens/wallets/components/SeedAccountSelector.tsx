@@ -3,8 +3,8 @@ import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { WalletIcon, CheckIcon } from 'phosphor-react-native';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
 import { PrimaryButton, SecondaryButton } from '../../../components/buttons';
-import type { DerivedAddress } from '@ledova/shared-types';
-import { getBlockchainDisplayName } from '@ledova/shared-constants';
+import type { DerivedAddress } from '@ledova/shared';
+import { getBlockchainDisplayName } from '@ledova/shared';
 
 interface SeedAccountSelectorProps {
   addresses: DerivedAddress[];

@@ -3,7 +3,7 @@ import { useSignIn } from './useSignIn';
 import { Field, Label, Input, Description } from '@headlessui/react';
 import { EyeIcon, EyeSlashIcon, EnvelopeIcon, LockIcon, WarningIcon } from '@phosphor-icons/react';
 import { AuthLayout } from '@components/AuthLayout';
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
+import { DESIGN_TOKENS } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 
 const ICON_MD = DESIGN_TOKENS.icon.sizes.md;

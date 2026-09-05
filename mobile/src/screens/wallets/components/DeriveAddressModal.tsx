@@ -3,8 +3,8 @@ import { View, Text, ActivityIndicator } from 'react-native';
 import { KeyIcon, CheckCircleIcon } from 'phosphor-react-native';
 import { CustomModal } from '../../../components/modal';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
-import { getBlockchainDisplayName } from '@ledova/shared-constants';
-import type { Wallet, DerivedAddress } from '@ledova/shared-types';
+import { getBlockchainDisplayName } from '@ledova/shared';
+import type { Wallet, DerivedAddress } from '@ledova/shared';
 import { deriveAddressFromParentKey } from '../../../utils/keystone/bcurDecoder';
 
 interface DeriveAddressModalProps {

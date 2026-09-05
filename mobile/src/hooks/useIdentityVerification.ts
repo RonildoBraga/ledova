@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getIdentityVerificationToken, getIdentityVerificationStatus } from '@ledova/shared-services';
-import { CACHE_TIMING } from '@ledova/shared-constants';
+import { getIdentityVerificationToken, getIdentityVerificationStatus, CACHE_TIMING } from '@ledova/shared';
 import { apiClient } from '../services/apiClient';
 
 export function useIdentityVerification() {

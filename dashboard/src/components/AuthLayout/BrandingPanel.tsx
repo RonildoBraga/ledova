@@ -1,5 +1,5 @@
 import { ShieldCheckIcon, CubeIcon, ChartBarIcon } from '@phosphor-icons/react';
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
+import { DESIGN_TOKENS } from '@ledova/shared';
 import { useColors } from '@hooks/useColors';
 
 const ICON_SM = DESIGN_TOKENS.icon.sizes.sm;

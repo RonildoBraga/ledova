@@ -1,8 +1,7 @@
 import { useState, useCallback } from 'react';
 import { apiClient } from '../services/apiClient';
-import { fetchBatchBalances } from '@ledova/shared-services';
-import { isEthereumChain, isBitcoinChain } from '@ledova/shared-constants';
-import type { DerivedAddress } from '@ledova/shared-types';
+import { fetchBatchBalances, isEthereumChain, isBitcoinChain } from '@ledova/shared';
+import type { DerivedAddress } from '@ledova/shared';
 
 export function useFetchBalances() {
   const [balances, setBalances] = useState<Map<string, string>>(new Map());

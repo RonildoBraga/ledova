@@ -2,7 +2,7 @@ import { View, Text } from 'react-native';
 import { PieChart } from 'react-native-gifted-charts';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
 import { useCurrency } from '../../../hooks/useCurrency';
-import type { AssetAllocationItem } from '@ledova/shared-types';
+import type { AssetAllocationItem } from '@ledova/shared';
 
 interface AllocationPieChartProps {
   data: AssetAllocationItem[];

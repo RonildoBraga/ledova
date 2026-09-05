@@ -38,6 +38,11 @@ What the branch did, in order:
   hashed, expiring (10 minutes) and attempt-capped (5); sign-in, sign-up and
   verification are throttled per address; the DEBUG `000000` bypass is gone;
   cookie flags come from `settings.AUTH_COOKIE`; both tokens live 7 days.
+  The v2 session protocol (challenge and delivery models, admission kernel,
+  kid-rotated tokens: about 4.7k production and 9.3k test lines with zero
+  runtime callers) was withdrawn at `0727cc2`/`33995c6`; this bullet is the
+  decision record (`backend/docs/adr/` is gone). ADRs 0003 and 0004 are
+  readable at `963c686`, ADR 0002 at `0ced196^`.
 - Per-app simplification with every feature kept: compliance (shared admin
   helpers, seed modules, flat services), users (lifecycle service, one
   preferences guard), tokens (deployment and mint services, one review
@@ -109,7 +114,7 @@ tooling (`normalizeBitcoinRawTransactionHex` strips whitespace and an optional
 `0x`) and broadcasts it; the success state links to the testnet explorer.
 The Keystone QR (dashboard) and software/hardware (mobile) EVM paths are
 unchanged, `useTransferFlow` treats Base as EVM (whitelist query, 18
-decimals, display name from shared-constants) and the trading broadcast
+decimals, display name from the shared constants) and the trading broadcast
 validator decodes legacy and typed transactions through
 `tokens/services/signed_transactions.py` (`Account.decode_transaction` never
 existed in eth-account 0.14; `tokens/tests/test_signed_transactions.py` signs
@@ -129,6 +134,32 @@ it again). The mobile axios client refreshes once on a 401 (single-flight,
 replaying the request) and clears every token when the backend rejects the
 refresh. The trading broadcast validator also rejects a transaction signed for
 another chain id.
+
+Branch `claude/b12-shared-package` collapses the four dist-built
+`@ledova/shared-*` packages into one source-only `@ledova/shared` under
+`packages/shared`: `src/{constants,types,services,utils}` are the old `src`
+trees, the old tests sit under `tests/<name>/`, cross-package imports are
+relative, and `src/index.ts` re-exports the four sub-barrels (`utils` and
+`services` keep their explicit export lists, so nothing leaks that the old
+packages did not export). There is no build step: `package.json` `main` and
+`types` point at `src/index.ts` and the clients compile the TypeScript
+themselves. The dashboard reaches it through the root npm workspace link
+(`node_modules/@ledova/shared -> packages/shared`): Vite and `tsc -b` follow
+the symlink to its real path outside `node_modules`, so Vite transforms the
+sources like app code instead of pre-bundling them and `tsc` checks them
+under the dashboard's options. Mobile links it with
+`"@ledova/shared": "file:../packages/shared"`; Metro follows the symlink into
+`../packages`, which stays in `watchFolders`, and `tsc --noEmit` resolves it
+with `preserveSymlinks`. Every client import is now `from '@ledova/shared'`
+(504 import lines in 236 files rewritten by script and merged per file); the
+per-package tsconfig/jest/eslint sets, the composite `tsc --build` chain,
+`build:packages`, the boundary lint rules and `check-dependency-versions.js`
+are gone, and a fresh clone no longer needs a package build before `expo
+start`. `make generate-tokens` runs `packages/scripts/generate-css-tokens.mjs`
+with `tsx` straight from `packages/shared/src/constants/ui/design-tokens.ts`;
+CI regenerates `dashboard/src/styles/tokens.css` and `marketing/src/tokens.css`
+after `make build` and fails on any drift (both files are prettier-ignored raw
+generator output; `generate-design-docs.mjs` had no readers and is deleted).
 
 ## Next work
 
@@ -196,7 +227,7 @@ call for the owner; the code is kept and working until decided):
 
 - Client-less API surfaces: removed in the dead-routes bundle. Wallets
   `batch-check-balances` is a LIVE client contract (dashboard AddWalletModal,
-  mobile `useFetchBalances`, both through shared-services `fetchBatchBalances`)
+  mobile `useFetchBalances`, both through the shared `fetchBatchBalances` service)
   and stays. `/api/waitlist/`, `/api/asset-allocations/` and the fiat-purchase
   rows were removed in the dead-models bundle together with their models; only
   `POST /api/fiat-purchases/transak-widget-url/` remains.
@@ -206,8 +237,14 @@ call for the owner; the code is kept and working until decided):
   on testnet/regtest: the app never builds or signs a Bitcoin transaction; the
   user signs with their own tooling and pastes the raw hex, which the backend
   broadcasts (decided, not deferred).
-- Mobile app status and the collapse of the four shared TypeScript packages
-  into one; both are client-side work and were out of scope here.
+- Mobile app status: client-side work, out of scope here (the shared-package
+  collapse it was paired with is done, see `claude/b12-shared-package`).
+- The published compliance monitoring seed
+  (`backend/compliance/seeds/monitoring_rules.py`, `ALERT_THRESHOLD_AUD`) is
+  accepted as public: its figures are the generic AUSTRAC-public ones (AUD
+  10,000 is the statutory threshold-transaction figure), not operational rules.
+  Operational thresholds and evasion-sensitive rules live outside the
+  repository (decided, not deferred).
 
 The remaining canonical backlog is [ISSUES.md](ISSUES.md).
 

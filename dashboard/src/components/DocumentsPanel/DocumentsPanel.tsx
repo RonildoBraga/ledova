@@ -20,7 +20,7 @@ import {
   TrashIcon,
 } from '@phosphor-icons/react';
 
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
+import { DESIGN_TOKENS } from '@ledova/shared';
 
 import { useDeleteDocument, useDocument, useDocuments, useUploadDocument } from '@hooks/useDocuments';
 import type { Document, DocumentType, ExtractionStatus, PayslipExtraction } from '../../types/document';

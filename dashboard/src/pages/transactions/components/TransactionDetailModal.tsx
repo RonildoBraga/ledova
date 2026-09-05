@@ -1,9 +1,8 @@
 import { ArrowUpIcon, ArrowDownIcon } from '@phosphor-icons/react';
-import { formatCryptoBalance, formatShortDate, formatTime } from '@ledova/shared-utils';
-import { getChainShortCode, DESIGN_TOKENS } from '@ledova/shared-constants';
+import { formatCryptoBalance, formatShortDate, formatTime, getChainShortCode, DESIGN_TOKENS } from '@ledova/shared';
 
 const ICON_XXL = DESIGN_TOKENS.icon.sizes.xxl;
-import type { Transaction } from '@ledova/shared-types';
+import type { Transaction } from '@ledova/shared';
 import { Modal } from '@components/Modal';
 
 interface TransactionDetailModalProps {

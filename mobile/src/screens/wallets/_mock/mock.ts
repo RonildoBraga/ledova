@@ -1,4 +1,4 @@
-import type { Wallet } from '@ledova/shared-types';
+import type { Wallet } from '@ledova/shared';
 
 const MOCK_WALLETS_PER_CHAIN = 30;
 

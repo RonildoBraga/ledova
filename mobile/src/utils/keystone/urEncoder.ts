@@ -2,8 +2,11 @@ import { EthSignRequest, DataType as EthDataType } from '@keystonehq/bc-ur-regis
 import { BtcSignRequest, DataType as BtcDataType } from '@keystonehq/bc-ur-registry-btc';
 import { v4 as uuid } from 'uuid';
 import { Transaction } from 'ethers';
-import { isSupportedEvmTestChainId } from '@ledova/shared-constants';
-import { isBitcoinTestnetSigningPath, isValidBitcoinNativeSegwitTestAddress } from '@ledova/shared-utils';
+import {
+  isSupportedEvmTestChainId,
+  isBitcoinTestnetSigningPath,
+  isValidBitcoinNativeSegwitTestAddress,
+} from '@ledova/shared';
 
 export function encodeEthereumTransaction(
   address: string,

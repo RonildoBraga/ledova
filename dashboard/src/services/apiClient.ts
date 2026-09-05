@@ -1,8 +1,7 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
-import { AUTH_ENDPOINTS } from '@ledova/shared-constants';
-import { createUserFriendlyError } from '@ledova/shared-utils';
+import { AUTH_ENDPOINTS, createUserFriendlyError } from '@ledova/shared';
 
-export type { UserFriendlyError } from '@ledova/shared-types';
+export type { UserFriendlyError } from '@ledova/shared';
 
 type RetriableRequestConfig = InternalAxiosRequestConfig & { csrfRetried?: boolean };
 

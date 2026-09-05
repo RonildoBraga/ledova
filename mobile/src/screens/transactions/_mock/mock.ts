@@ -1,4 +1,4 @@
-import type { Transaction } from '@ledova/shared-types';
+import type { Transaction } from '@ledova/shared';
 
 interface MockTransactionPage {
   results: Transaction[];

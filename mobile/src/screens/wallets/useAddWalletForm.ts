@@ -1,7 +1,12 @@
 import { useState, useCallback } from 'react';
-import { getActiveChains, getChainByShortName, getChainConfig } from '@ledova/shared-constants';
-import { validateWalletAddress, detectChainFromAddress } from '@ledova/shared-utils';
-import type { DerivedAddress, HardwareWalletImport, CreateWallet, WalletType } from '@ledova/shared-types';
+import {
+  getActiveChains,
+  getChainByShortName,
+  getChainConfig,
+  validateWalletAddress,
+  detectChainFromAddress,
+} from '@ledova/shared';
+import type { DerivedAddress, HardwareWalletImport, CreateWallet, WalletType } from '@ledova/shared';
 
 export const FORM_STEPS = {
   SELECT_TYPE: 'selectType',

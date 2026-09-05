@@ -1,14 +1,19 @@
 import { WalletIcon, ArrowsClockwiseIcon, PaperPlaneTiltIcon } from '@phosphor-icons/react';
 import { useQuery } from '@tanstack/react-query';
-import { BLOCKCHAIN, DESIGN_TOKENS } from '@ledova/shared-constants';
-import { getWallets } from '@ledova/shared-services';
-import { formatCryptoBalance, formatWalletAddressShort, formatSyncAge } from '@ledova/shared-utils';
+import {
+  BLOCKCHAIN,
+  DESIGN_TOKENS,
+  getWallets,
+  formatCryptoBalance,
+  formatWalletAddressShort,
+  formatSyncAge,
+  WALLET_TYPE,
+} from '@ledova/shared';
 import { useCurrency } from '@hooks/useCurrency';
-import type { Wallet } from '@ledova/shared-types';
+import type { Wallet } from '@ledova/shared';
 import { Modal } from '@components/Modal';
 import { WalletBadge } from '@components/Wallet';
 import apiClient from '@services/apiClient';
-import { WALLET_TYPE } from '@ledova/shared-constants';
 import { HardDriveIcon, CloudIcon, ClockIcon } from '@phosphor-icons/react';
 
 const ICON_XS = DESIGN_TOKENS.icon.sizes.xs;

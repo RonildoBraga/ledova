@@ -1,8 +1,12 @@
 import { useState, useEffect } from 'react';
-import { verifyEmail, resendVerificationCode } from '@ledova/shared-services';
-import { FormErrors } from '@ledova/shared-types';
-import { validateEmailConfirmation, formatVerificationToken } from '@ledova/shared-utils';
-import { EMAIL_CONFIRMATION_VALIDATION } from '@ledova/shared-constants';
+import {
+  verifyEmail,
+  resendVerificationCode,
+  FormErrors,
+  validateEmailConfirmation,
+  formatVerificationToken,
+  EMAIL_CONFIRMATION_VALIDATION,
+} from '@ledova/shared';
 import apiClient from '@services/apiClient';
 
 export const useSignupEmailConfirmation = () => {

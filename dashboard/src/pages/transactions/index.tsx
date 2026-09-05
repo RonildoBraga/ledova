@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { FunnelIcon, PackageIcon } from '@phosphor-icons/react';
-import { getBlockExplorerTxUrl, DESIGN_TOKENS } from '@ledova/shared-constants';
+import { getBlockExplorerTxUrl, DESIGN_TOKENS } from '@ledova/shared';
 
 const ICON_MD = DESIGN_TOKENS.icon.sizes.md;
 const ICON_SM = DESIGN_TOKENS.icon.sizes.sm;
 const ICON_XXL = DESIGN_TOKENS.icon.sizes.xxl;
 import { useHeaderActions } from '@hooks/useHeaderActions';
-import type { Transaction } from '@ledova/shared-types';
+import type { Transaction } from '@ledova/shared';
 import { Panel } from '@components/Panel';
 import { useTransactions } from './useTransactions';
 import { TransactionFilterModal } from './components/TransactionFilterModal';

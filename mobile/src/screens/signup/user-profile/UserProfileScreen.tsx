@@ -11,7 +11,7 @@ import { UserIcon, WarningCircleIcon, HouseIcon, PhoneIcon } from 'phosphor-reac
 import { CountrySelector } from './components/CountrySelector';
 import { layout } from '../../../styles';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
-import { parseDateString, formatDateToString } from '@ledova/shared-utils';
+import { parseDateString, formatDateToString } from '@ledova/shared';
 import { useRole } from '../../../hooks/useRole';
 
 export function UserProfileScreen() {

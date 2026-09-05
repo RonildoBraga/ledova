@@ -1,8 +1,12 @@
 import { useState, useMemo } from 'react';
-import { signup } from '@ledova/shared-services';
-import { FormErrors, SignupRequest } from '@ledova/shared-types';
-import { PASSWORD_VALIDATION } from '@ledova/shared-constants';
-import { isNumericOnly, validatePassword } from '@ledova/shared-utils';
+import {
+  signup,
+  FormErrors,
+  SignupRequest,
+  PASSWORD_VALIDATION,
+  isNumericOnly,
+  validatePassword,
+} from '@ledova/shared';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiClient } from '../../../services/apiClient';
 

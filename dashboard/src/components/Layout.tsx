@@ -3,7 +3,7 @@ import { DesktopHeader } from './DesktopHeader';
 import { MobileHeader } from './MobileHeader';
 import Footer from './Footer';
 import { useLocation } from 'react-router-dom';
-import type { LayoutProps } from '@ledova/shared-types';
+import type { LayoutProps } from '@ledova/shared';
 import { gradients } from '../styles/theme';
 import { HeaderActionsProvider } from '@hooks/useHeaderActions';
 import { BuyCryptoProvider } from '@hooks/useBuyCrypto';

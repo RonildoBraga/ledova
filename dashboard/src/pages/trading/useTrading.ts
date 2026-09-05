@@ -13,8 +13,11 @@ import {
   getOrderModificationMessage,
   modifyOrder,
   getOrderBook,
-} from '@ledova/shared-services';
-import { BLOCKCHAIN, CACHE_TIMING, TRADING_CONFIG, WALLET_VERIFICATION_STATUS } from '@ledova/shared-constants';
+  BLOCKCHAIN,
+  CACHE_TIMING,
+  TRADING_CONFIG,
+  WALLET_VERIFICATION_STATUS,
+} from '@ledova/shared';
 import type {
   TransferOrder,
   CreateOrderRequest,
@@ -28,7 +31,7 @@ import type {
   OrderModificationRequest,
   OrderModificationMessageResponse,
   SignedOrderModificationRequest,
-} from '@ledova/shared-types';
+} from '@ledova/shared';
 import apiClient from '@services/apiClient';
 import { useSelectedPortfolio } from '@hooks/useSelectedPortfolio';
 

@@ -5,8 +5,7 @@ import { AssetLineChart } from './AssetLineChart';
 import { ErrorBoundary } from '../../../components/ErrorBoundary';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
 import { useCurrency } from '../../../hooks/useCurrency';
-import type { TimeRange } from '@ledova/shared-constants';
-import type { PortfolioSnapshotDataPoint } from '@ledova/shared-types';
+import type { TimeRange, PortfolioSnapshotDataPoint } from '@ledova/shared';
 
 interface PerformanceCardProps {
   chartData: PortfolioSnapshotDataPoint[] | null;

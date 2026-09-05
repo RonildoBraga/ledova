@@ -1,8 +1,11 @@
 import { BtcDataType, EthDataType, createBtcSignRequest, createEthSignRequest } from './registry';
 import { v4 as uuid } from 'uuid';
 import { Transaction } from 'ethers';
-import { isSupportedEvmTestChainId } from '@ledova/shared-constants';
-import { isBitcoinTestnetSigningPath, isValidBitcoinNativeSegwitTestAddress } from '@ledova/shared-utils';
+import {
+  isSupportedEvmTestChainId,
+  isBitcoinTestnetSigningPath,
+  isValidBitcoinNativeSegwitTestAddress,
+} from '@ledova/shared';
 
 /**
  * Encode EIP-712 typed data for signing via Keystone hardware wallet.

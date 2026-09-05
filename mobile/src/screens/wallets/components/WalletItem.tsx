@@ -4,9 +4,13 @@ import { Swipeable } from 'react-native-gesture-handler';
 import { WalletIcon, CheckCircleIcon, ClockIcon, ArrowsClockwiseIcon, TrashIcon } from 'phosphor-react-native';
 
 import { useAppTheme, useThemedStyles } from '../../../contexts';
-import type { Wallet } from '@ledova/shared-types';
-import { WALLET_VERIFICATION_STATUS } from '@ledova/shared-constants';
-import { formatWalletAddressShort, formatCryptoBalance, formatSyncAge } from '@ledova/shared-utils';
+import type { Wallet } from '@ledova/shared';
+import {
+  WALLET_VERIFICATION_STATUS,
+  formatWalletAddressShort,
+  formatCryptoBalance,
+  formatSyncAge,
+} from '@ledova/shared';
 import { useCurrency } from '../../../hooks/useCurrency';
 
 interface WalletItemProps {

@@ -3,7 +3,7 @@ import { HDKey } from 'ethereum-cryptography/hdkey';
 import { mnemonicToSeedSync } from 'ethereum-cryptography/bip39';
 import { sha256 } from '@noble/hashes/sha256';
 import { bytesToHex } from 'ethereum-cryptography/utils';
-import type { DerivedAddress, ParentKeyData } from '@ledova/shared-types';
+import type { DerivedAddress, ParentKeyData } from '@ledova/shared';
 import { deriveNonHardenedChild, deriveEthereumAddress, deriveBitcoinAddress } from '../crypto/bip32';
 
 export interface SoftwareWalletImport {

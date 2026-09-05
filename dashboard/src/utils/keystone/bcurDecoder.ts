@@ -6,12 +6,7 @@ import { secp256k1 } from 'ethereum-cryptography/secp256k1';
 import { bech32 } from 'bech32';
 import { URDecoder } from '@ngraveio/bc-ur';
 import { CryptoMultiAccounts } from '@keystonehq/bc-ur-registry';
-import type {
-  DerivedAddress,
-  HardwareWalletNetworkType,
-  ParentKeyData,
-  HardwareWalletImport,
-} from '@ledova/shared-types';
+import type { DerivedAddress, HardwareWalletNetworkType, ParentKeyData, HardwareWalletImport } from '@ledova/shared';
 
 /**
  * Normalizes derivation path to always start with "m/"

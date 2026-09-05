@@ -1,4 +1,4 @@
-import type { LoadingStateProps } from '@ledova/shared-types';
+import type { LoadingStateProps } from '@ledova/shared';
 
 export default function LoadingState({
   message = 'Loading data...',

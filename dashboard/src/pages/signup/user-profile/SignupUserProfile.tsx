@@ -6,7 +6,7 @@ import { UserProfileForm } from './components/UserProfileForm';
 import { useSignupUserProfile } from './useSignupUserProfile';
 import { useAccountRole } from '@hooks/useAccountRole';
 import { AuthLayout } from '@components/AuthLayout';
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
+import { DESIGN_TOKENS } from '@ledova/shared';
 
 const ICON_MD = DESIGN_TOKENS.icon.sizes.md;
 

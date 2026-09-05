@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { UserIcon, BuildingsIcon } from '@phosphor-icons/react';
-import { CACHE_TIMING, DESIGN_TOKENS } from '@ledova/shared-constants';
+import { CACHE_TIMING, DESIGN_TOKENS } from '@ledova/shared';
 import { AuthLayout } from '@components/AuthLayout';
 import apiClient from '@services/apiClient';
 

@@ -1,8 +1,12 @@
 import { useState, useCallback } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { requestVerificationChallenge, verifyWalletSignature } from '@ledova/shared-services';
-import { BLOCKCHAIN, getWalletVerificationEvmChainId } from '@ledova/shared-constants';
-import type { Wallet } from '@ledova/shared-types';
+import {
+  requestVerificationChallenge,
+  verifyWalletSignature,
+  BLOCKCHAIN,
+  getWalletVerificationEvmChainId,
+} from '@ledova/shared';
+import type { Wallet } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 import { encodeEthereumMessage, encodeBitcoinMessage } from '@utils/keystone/urEncoder';
 

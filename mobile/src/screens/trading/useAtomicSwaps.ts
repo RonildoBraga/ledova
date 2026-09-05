@@ -1,13 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { CACHE_TIMING, TRADING_ENDPOINTS } from '@ledova/shared-constants';
 import {
+  CACHE_TIMING,
+  TRADING_ENDPOINTS,
   getSwapOrders,
   getOrderSwapData,
   submitOrderSwapSignature,
   getOrderSwapApprovalStatus,
   getOrderSwapApprovalData,
-} from '@ledova/shared-services';
-import type { SubmitSignatureRequest, SwapOrder } from '@ledova/shared-types';
+} from '@ledova/shared';
+import type { SubmitSignatureRequest, SwapOrder } from '@ledova/shared';
 import { apiClient } from '../../services/apiClient';
 
 export interface BroadcastResponse {

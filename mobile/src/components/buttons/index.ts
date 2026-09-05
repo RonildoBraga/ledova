@@ -1,7 +1,7 @@
 /**
  * Button Components
  *
- * Standardized button system based on design tokens from @ledova/shared-constants
+ * Standardized button system based on design tokens from @ledova/shared
  *
  * Usage:
  * ```tsx

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
-import { getChainName, BLOCKCHAIN, WALLET_TYPE } from '@ledova/shared-constants';
-import type { Wallet } from '@ledova/shared-types';
+import { getChainName, BLOCKCHAIN, WALLET_TYPE } from '@ledova/shared';
+import type { Wallet } from '@ledova/shared';
 import type { WalletChainFilter, WalletSortOption } from './WalletSortModal';
 
 const CHAIN_MAP: Record<Exclude<WalletChainFilter, 'all'>, string> = {

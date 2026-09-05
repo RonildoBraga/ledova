@@ -13,7 +13,7 @@ import {
   isBitcoinChain,
   getWalletVerificationEvmChainId,
   WALLET_TYPE,
-} from '@ledova/shared-constants';
+} from '@ledova/shared';
 import type { WalletsStackParamList } from '../../../navigation/WalletsStackNavigator';
 import { ButtonGroup } from '../../../components/buttons';
 import { useWalletVerification } from '../useWalletVerification';

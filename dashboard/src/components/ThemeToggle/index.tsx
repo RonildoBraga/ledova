@@ -1,5 +1,5 @@
 import { SunIcon, MoonIcon } from '@phosphor-icons/react';
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
+import { DESIGN_TOKENS } from '@ledova/shared';
 import { useTheme } from '@hooks/useTheme';
 
 const ICON_SIZE = DESIGN_TOKENS.icon.sizes.md;

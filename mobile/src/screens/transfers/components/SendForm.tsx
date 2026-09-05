@@ -2,10 +2,9 @@ import React from 'react';
 import { View, Text, ActivityIndicator, TouchableOpacity, TextInput, ScrollView } from 'react-native';
 import { CurrencyBtcIcon, CurrencyEthIcon, CurrencyCircleDollarIcon, QrCodeIcon } from 'phosphor-react-native';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
-import { formatCryptoBalance, formatWalletAddressMedium } from '@ledova/shared-utils';
+import { formatCryptoBalance, formatWalletAddressMedium, getAddressPlaceholder, isBitcoinChain } from '@ledova/shared';
 import { useCurrency } from '../../../hooks/useCurrency';
-import { getAddressPlaceholder, isBitcoinChain } from '@ledova/shared-constants';
-import type { TransferableAsset } from '@ledova/shared-types';
+import type { TransferableAsset } from '@ledova/shared';
 
 interface SendFormProps {
   chainShortName: string;

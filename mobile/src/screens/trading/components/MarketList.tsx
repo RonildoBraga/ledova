@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
-import type { ShareToken } from '@ledova/shared-types';
-import { formatCurrency } from '@ledova/shared-utils';
+import type { ShareToken } from '@ledova/shared';
+import { formatCurrency } from '@ledova/shared';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
 
 interface MarketListProps {

@@ -5,8 +5,8 @@ import {
   getCompanyTokenIssuances,
   getCapitalIncreases,
   issueCompanyShares,
-} from '@ledova/shared-services';
-import type { CompanyShareToken, TokenHolder, TokenIssuance, CapitalIncreaseRequest } from '@ledova/shared-types';
+} from '@ledova/shared';
+import type { CompanyShareToken, TokenHolder, TokenIssuance, CapitalIncreaseRequest } from '@ledova/shared';
 import { apiClient } from '../../services/apiClient';
 
 export function useTokenDetail(uuid: string) {

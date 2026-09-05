@@ -1,4 +1,4 @@
-import type { ErrorStateProps } from '@ledova/shared-types';
+import type { ErrorStateProps } from '@ledova/shared';
 
 export default function ErrorState({
   title = 'Error Loading Data',

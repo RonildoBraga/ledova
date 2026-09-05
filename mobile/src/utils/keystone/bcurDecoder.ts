@@ -1,12 +1,7 @@
 import { URDecoder } from '@ngraveio/bc-ur';
 import { CryptoMultiAccounts } from '@keystonehq/bc-ur-registry';
 import { Buffer } from 'buffer';
-import type {
-  DerivedAddress,
-  ParentKeyData,
-  HardwareWalletImport,
-  HardwareWalletNetworkType,
-} from '@ledova/shared-types';
+import type { DerivedAddress, ParentKeyData, HardwareWalletImport, HardwareWalletNetworkType } from '@ledova/shared';
 import {
   detectNetworkFromPath,
   normalizeDerivationPath,

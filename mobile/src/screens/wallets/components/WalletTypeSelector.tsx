@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { WalletIcon, KeyIcon, QrCodeIcon } from 'phosphor-react-native';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
-import type { WalletType } from '@ledova/shared-types';
+import type { WalletType } from '@ledova/shared';
 
 interface WalletTypeSelectorProps {
   onSelect: (type: WalletType) => void;

@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getUserProfiles, registerCompany, getCompanies, updateCompany } from '@ledova/shared-services';
-import type { CompanyRegistration, CompanyType } from '@ledova/shared-types';
+import { getUserProfiles, registerCompany, getCompanies, updateCompany } from '@ledova/shared';
+import type { CompanyRegistration, CompanyType } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 
 interface CompanyFormData {

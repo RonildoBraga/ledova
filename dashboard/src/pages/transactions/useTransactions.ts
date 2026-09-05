@@ -1,8 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
-import { CACHE_TIMING } from '@ledova/shared-constants';
-import { getTransactions, getTransactionsNextPage, getWallets } from '@ledova/shared-services';
-import type { TransactionQueryParams } from '@ledova/shared-types';
+import { CACHE_TIMING, getTransactions, getTransactionsNextPage, getWallets } from '@ledova/shared';
+import type { TransactionQueryParams } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 
 export interface TransactionFilters {

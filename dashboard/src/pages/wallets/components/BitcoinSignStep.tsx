@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { formatWalletAddressMedium, normalizeBitcoinRawTransactionHex } from '@ledova/shared-utils';
-import type { PrepareBitcoinTransferResponse } from '@ledova/shared-types';
+import { formatWalletAddressMedium, normalizeBitcoinRawTransactionHex } from '@ledova/shared';
+import type { PrepareBitcoinTransferResponse } from '@ledova/shared';
 
 interface BitcoinSignStepProps {
   prepared: PrepareBitcoinTransferResponse;

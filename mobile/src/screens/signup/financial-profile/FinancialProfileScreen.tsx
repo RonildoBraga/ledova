@@ -18,7 +18,7 @@ import { WarningCircleIcon, ChartBarIcon } from 'phosphor-react-native';
 import { CheckIcon } from 'phosphor-react-native';
 import { layout } from '../../../styles';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
-import { SOURCE_OF_FUNDS_OPTIONS, INTENDED_USE_OPTIONS } from '@ledova/shared-constants';
+import { SOURCE_OF_FUNDS_OPTIONS, INTENDED_USE_OPTIONS } from '@ledova/shared';
 
 /**
  * Financial Profile Screen - AML/CTF Compliance

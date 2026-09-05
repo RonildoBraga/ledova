@@ -1,8 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getFavouriteAssets, addFavouriteAsset, removeFavouriteAsset } from '@ledova/shared-services';
-import type { FavouriteAsset } from '@ledova/shared-types';
-import { CACHE_TIMING } from '@ledova/shared-constants';
+import { getFavouriteAssets, addFavouriteAsset, removeFavouriteAsset, CACHE_TIMING } from '@ledova/shared';
+import type { FavouriteAsset } from '@ledova/shared';
 import { apiClient } from '../../services/apiClient';
 import { useAuth } from '../../hooks/useAuth';
 import { useUserPreferences } from '../../hooks/useUserPreferences';

@@ -4,7 +4,7 @@ import LoadingState from '@components/signup/LoadingState';
 import ErrorState from '@components/signup/ErrorState';
 import { useSignupPreScreening } from './useSignupPreScreening';
 import { AuthLayout } from '@components/AuthLayout';
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
+import { DESIGN_TOKENS } from '@ledova/shared';
 
 const ICON_MD = DESIGN_TOKENS.icon.sizes.md;
 

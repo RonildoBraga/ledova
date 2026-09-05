@@ -1,9 +1,14 @@
 import { ArrowUpIcon, ArrowDownIcon } from '@phosphor-icons/react';
-import { formatCryptoBalance, formatShortDate, formatTime, getBlockchainShortName } from '@ledova/shared-utils';
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
+import {
+  formatCryptoBalance,
+  formatShortDate,
+  formatTime,
+  getBlockchainShortName,
+  DESIGN_TOKENS,
+} from '@ledova/shared';
 
 const ICON_SM = DESIGN_TOKENS.icon.sizes.sm;
-import type { Transaction } from '@ledova/shared-types';
+import type { Transaction } from '@ledova/shared';
 
 interface TransactionListItemProps {
   transaction: Transaction;

@@ -1,9 +1,8 @@
 import { useCallback } from 'react';
 import { Alert } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getNotificationPreferences, updateNotificationPreferences } from '@ledova/shared-services';
-import { CACHE_TIMING } from '@ledova/shared-constants';
-import type { UpdateNotificationPreferencesRequest, NotificationPreferences } from '@ledova/shared-types';
+import { getNotificationPreferences, updateNotificationPreferences, CACHE_TIMING } from '@ledova/shared';
+import type { UpdateNotificationPreferencesRequest, NotificationPreferences } from '@ledova/shared';
 import { apiClient } from '../../services/apiClient';
 import { useAuth } from '../../hooks/useAuth';
 export function useNotificationPreferences() {

@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { ArrowUpIcon, ArrowDownIcon, PencilSimpleIcon, XCircleIcon } from 'phosphor-react-native';
-import { formatWalletAddressShort, formatCurrency } from '@ledova/shared-utils';
-import type { TransferOrder } from '@ledova/shared-types';
+import { formatWalletAddressShort, formatCurrency } from '@ledova/shared';
+import type { TransferOrder } from '@ledova/shared';
 import { CustomModal } from '../../../components/modal';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
 

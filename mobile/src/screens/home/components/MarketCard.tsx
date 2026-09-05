@@ -4,7 +4,7 @@ import { Accordion } from '../../../components/accordion';
 import { AssetTypeIcon } from '../../../components/AssetTypeIcon';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
 import { useCurrency } from '../../../hooks/useCurrency';
-import type { Asset } from '@ledova/shared-types';
+import type { Asset } from '@ledova/shared';
 
 interface MarketCardProps {
   assets: Asset[];

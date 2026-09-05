@@ -1,4 +1,4 @@
-import type { Wallet } from '@ledova/shared-types';
+import type { Wallet } from '@ledova/shared';
 import { WalletItem } from './WalletItem';
 
 interface WalletListProps {

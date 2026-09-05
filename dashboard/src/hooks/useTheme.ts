@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getCurrentUserPreferences, upsertCurrentUserPreferences } from '@ledova/shared-services';
-import { CACHE_TIMING } from '@ledova/shared-constants';
-import type { Theme } from '@ledova/shared-types';
+import { getCurrentUserPreferences, upsertCurrentUserPreferences, CACHE_TIMING } from '@ledova/shared';
+import type { Theme } from '@ledova/shared';
 import { useAuth } from './useAuth';
 import apiClient from '@services/apiClient';
 

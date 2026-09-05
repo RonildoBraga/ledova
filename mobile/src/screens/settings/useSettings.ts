@@ -3,7 +3,7 @@ import { Alert, Linking, Share } from 'react-native';
 import * as StoreReview from 'expo-store-review';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
-import { deleteAccount, exportAccountData, changePassword } from '@ledova/shared-services';
+import { deleteAccount, exportAccountData, changePassword } from '@ledova/shared';
 import { apiClient } from '../../services/apiClient';
 import { clearTokens } from '../../services/tokenStorage';
 import type { RootStackParamList } from '../../navigation/AppNavigator';

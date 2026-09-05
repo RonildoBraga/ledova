@@ -3,12 +3,12 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import { Dropdown } from 'react-native-element-dropdown';
 import { CurrencyBtcIcon, CurrencyEthIcon, CaretDownIcon, WalletIcon } from 'phosphor-react-native';
 import { useAppTheme, useThemedStyles } from '../../../../contexts';
-import { formatWalletAddressShort } from '@ledova/shared-utils';
+import { formatWalletAddressShort } from '@ledova/shared';
 import { CustomModal } from '../../../../components/modal';
 import { DatePickerField } from '../../../../components/date-picker';
 import { NumberField } from '../../../../components/number-field';
 import type { TransactionQueryParams } from '../../useTransactions';
-import type { Wallet } from '@ledova/shared-types';
+import type { Wallet } from '@ledova/shared';
 
 interface TransactionFiltersModalProps {
   isOpen: boolean;

@@ -5,8 +5,8 @@ import {
   markNotificationRead,
   archiveNotification,
   markAllNotificationsRead,
-} from '@ledova/shared-services';
-import { CACHE_TIMING } from '@ledova/shared-constants';
+  CACHE_TIMING,
+} from '@ledova/shared';
 import { apiClient } from '../services/apiClient';
 
 export function useNotifications() {

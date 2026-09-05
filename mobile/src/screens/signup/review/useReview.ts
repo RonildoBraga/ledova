@@ -2,13 +2,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../../../navigation/AppNavigator';
 
-import { getUserProfiles, updateUserProfileCompletion, getCompanies } from '@ledova/shared-services';
-import { CACHE_TIMING } from '@ledova/shared-constants';
+import { getUserProfiles, updateUserProfileCompletion, getCompanies, CACHE_TIMING } from '@ledova/shared';
 import { useFinancialProfile } from '../../../hooks/useFinancialProfile';
 import { useRole } from '../../../hooks/useRole';
 import { apiClient } from '../../../services/apiClient';
 
-import type { ReviewData } from '@ledova/shared-types';
+import type { ReviewData } from '@ledova/shared';
 
 export const useReview = () => {
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();

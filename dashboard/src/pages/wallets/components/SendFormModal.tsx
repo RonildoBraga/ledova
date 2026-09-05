@@ -16,10 +16,11 @@ import {
   DESIGN_TOKENS,
   getAddressPlaceholder,
   getBlockchainDisplayName,
-} from '@ledova/shared-constants';
-import { formatWalletAddressShort, validateWalletAddress } from '@ledova/shared-utils';
+  formatWalletAddressShort,
+  validateWalletAddress,
+} from '@ledova/shared';
 import { useCurrency } from '@hooks/useCurrency';
-import type { Wallet, WhitelistStatus } from '@ledova/shared-types';
+import type { Wallet, WhitelistStatus } from '@ledova/shared';
 import { Modal } from '@components/Modal';
 import { useQRScanner, QRScannerView } from '@components/qr';
 import type { UnifiedAsset } from '../hooks/useTransferFlow';

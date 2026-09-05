@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getCompanies, getCompany, getCompanyStats, updateCompany } from '@ledova/shared-services';
-import type { Company, CompanyStats, CompanyUpdate } from '@ledova/shared-types';
+import { getCompanies, getCompany, getCompanyStats, updateCompany } from '@ledova/shared';
+import type { Company, CompanyStats, CompanyUpdate } from '@ledova/shared';
 import { apiClient } from '../services/apiClient';
 
 export function useCompanyProfile() {

@@ -1,5 +1,5 @@
 import { WalletIcon } from '@phosphor-icons/react';
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
+import { DESIGN_TOKENS } from '@ledova/shared';
 
 const ICON_XL = DESIGN_TOKENS.icon.sizes.xl;
 

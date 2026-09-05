@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { PrepareBitcoinTransferResponse } from '@ledova/shared-types';
+import type { PrepareBitcoinTransferResponse } from '@ledova/shared';
 import { BitcoinSignStep, INVALID_SIGNED_HEX_MESSAGE } from './BitcoinSignStep';
 
 const prepared: PrepareBitcoinTransferResponse = {

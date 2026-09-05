@@ -9,7 +9,7 @@ import {
   storeSeedPhrase,
 } from '../../../services/secureKeyStorage';
 import { deriveAccountsFromMnemonic } from '../../../utils/softwareWallet';
-import type { DerivedAddress } from '@ledova/shared-types';
+import type { DerivedAddress } from '@ledova/shared';
 import type { SoftwareWalletImport } from '../../../utils/softwareWallet';
 import { useFetchBalances } from '../../../hooks';
 import * as LocalAuthentication from 'expo-local-authentication';

@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { View, useWindowDimensions } from 'react-native';
 import { LineChart } from 'react-native-gifted-charts';
-import type { PortfolioSnapshotDataPoint } from '@ledova/shared-types';
+import type { PortfolioSnapshotDataPoint } from '@ledova/shared';
 import { useAppTheme } from '../../../contexts';
 import type { lineDataItem } from 'gifted-charts-core';
 import { useChartPointer } from '../../../hooks/useChartPointer';

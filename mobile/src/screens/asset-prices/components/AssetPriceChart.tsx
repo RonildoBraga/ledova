@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
 import { LineChart } from 'react-native-gifted-charts';
-import { TIME_RANGES, type TimeRange } from '@ledova/shared-constants';
+import { TIME_RANGES, type TimeRange } from '@ledova/shared';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
 import { useChartPointer } from '../../../hooks/useChartPointer';
 import type { ChartDataPoint } from '../useAssetPrices';

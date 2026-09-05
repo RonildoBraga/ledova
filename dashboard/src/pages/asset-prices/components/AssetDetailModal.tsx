@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from 'react';
-import type { Asset } from '@ledova/shared-types';
-import { TIME_RANGES } from '@ledova/shared-constants';
+import type { Asset } from '@ledova/shared';
+import { TIME_RANGES } from '@ledova/shared';
 import { useCurrency } from '@hooks/useCurrency';
 import { StarIcon } from '@phosphor-icons/react';
 import { AssetTypeIcon } from '@components/AssetTypeIcon';

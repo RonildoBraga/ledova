@@ -9,7 +9,7 @@ import { useCompanyTokensList, useCompanyShareholders } from '../../hooks/useCom
 import { useAppTheme, useThemedStyles } from '../../contexts';
 import { TokensSection } from './components/TokensSection';
 import { ShareholdersSection } from './components/ShareholdersSection';
-import type { CompanyStatus, CompanyUpdate } from '@ledova/shared-types';
+import type { CompanyStatus, CompanyUpdate } from '@ledova/shared';
 
 type ActiveTab = 'tokens' | 'shareholders' | 'pending';
 

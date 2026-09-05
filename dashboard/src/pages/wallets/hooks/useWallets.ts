@@ -1,10 +1,17 @@
 import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getWallets, createWallet, updateWallet, deleteWallet, syncWallet } from '@ledova/shared-services';
-import { CACHE_TIMING, getChainByShortName } from '@ledova/shared-constants';
+import {
+  getWallets,
+  createWallet,
+  updateWallet,
+  deleteWallet,
+  syncWallet,
+  CACHE_TIMING,
+  getChainByShortName,
+} from '@ledova/shared';
 import apiClient from '@services/apiClient';
 import { useSelectedPortfolio } from '@hooks/useSelectedPortfolio';
-import type { Wallet, CreateWallet, DerivedAddress, HardwareWalletImport } from '@ledova/shared-types';
+import type { Wallet, CreateWallet, DerivedAddress, HardwareWalletImport } from '@ledova/shared';
 
 export function useWallets() {
   const queryClient = useQueryClient();

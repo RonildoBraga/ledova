@@ -2,9 +2,14 @@ import React from 'react';
 import { View, Text, Linking } from 'react-native';
 import { ArrowUpIcon, ArrowDownIcon } from 'phosphor-react-native';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
-import { formatShortDate, formatTime, formatCryptoBalance } from '@ledova/shared-utils';
-import { getChainShortCode, getBlockExplorerTxUrl } from '@ledova/shared-constants';
-import type { Transaction } from '@ledova/shared-types';
+import {
+  formatShortDate,
+  formatTime,
+  formatCryptoBalance,
+  getChainShortCode,
+  getBlockExplorerTxUrl,
+} from '@ledova/shared';
+import type { Transaction } from '@ledova/shared';
 import { CustomModal } from '../../modal';
 
 interface TransactionDetailModalProps {

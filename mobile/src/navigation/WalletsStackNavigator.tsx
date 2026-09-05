@@ -9,7 +9,7 @@ import { OnRampWebViewScreen } from '../screens/wallets/components/OnRampWebView
 import type { OnRampWebViewParams } from '../screens/wallets/components/OnRampWebViewScreen';
 import { useAppTheme } from '../contexts';
 import { MainHeader } from './headers';
-import type { Wallet } from '@ledova/shared-types';
+import type { Wallet } from '@ledova/shared';
 import { getMainHeaderStyle } from './headers/MainHeader';
 
 export type WalletsStackParamList = {

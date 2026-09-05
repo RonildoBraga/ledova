@@ -14,7 +14,7 @@ import {
   ShoppingCartIcon,
   TagIcon,
 } from '@phosphor-icons/react';
-import { DESIGN_TOKENS, getWalletVerificationEvmChainId } from '@ledova/shared-constants';
+import { DESIGN_TOKENS, getWalletVerificationEvmChainId } from '@ledova/shared';
 import { AnimatedQRCode } from '@keystonehq/animated-qr';
 
 const ICON_MD = DESIGN_TOKENS.icon.sizes.md;
@@ -28,7 +28,7 @@ import type {
   CancelOrderMessageResponse,
   TransferOrder,
   Wallet,
-} from '@ledova/shared-types';
+} from '@ledova/shared';
 import { encodeEthereumMessage } from '@utils/keystone/urEncoder';
 import { decodeKeystoneMessageSignature } from '@utils/keystone/urDecoder';
 import { signEthereumMessage, deriveAddress } from '@utils/softwareWallet/localSigner';

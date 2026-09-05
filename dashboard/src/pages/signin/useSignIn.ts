@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { signin } from '@ledova/shared-services';
-import { FormErrors, SigninRequest } from '@ledova/shared-types';
+import { signin, FormErrors, SigninRequest } from '@ledova/shared';
 import apiClient, { UserFriendlyError } from '@services/apiClient';
 import { AUTH_QUERY_KEY } from '@hooks/useAuth';
 

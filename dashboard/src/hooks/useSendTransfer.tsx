@@ -5,7 +5,7 @@ import { useTransferFlow } from '@pages/wallets/hooks/useTransferFlow';
 import { WalletSelectionModal } from '@pages/wallets/components/WalletSelectionModal';
 import { SendFormModal } from '@pages/wallets/components/SendFormModal';
 import { TransferSigningFlow } from '@pages/wallets/components/TransferSigningFlow';
-import type { Wallet } from '@ledova/shared-types';
+import type { Wallet } from '@ledova/shared';
 
 interface SendTransferContextValue {
   openSendTransfer: () => void;

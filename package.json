@@ -3,11 +3,10 @@
   "private": true,
   "license": "Apache-2.0",
   "workspaces": [
-    "packages/packages/*",
+    "packages/shared",
     "dashboard"
   ],
   "scripts": {
-    "build:packages": "npm run build -w @ledova/shared-constants && npm run build -w @ledova/shared-types && npm run build -w @ledova/shared-utils && npm run build -w @ledova/shared-services",
     "dev:dashboard": "npm run dev -w dashboard",
     "lint": "npm run lint --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",

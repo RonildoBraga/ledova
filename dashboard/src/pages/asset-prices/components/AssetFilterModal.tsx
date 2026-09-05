@@ -1,5 +1,5 @@
 import { FunnelIcon } from '@phosphor-icons/react';
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
+import { DESIGN_TOKENS } from '@ledova/shared';
 import { Modal } from '@components/Modal';
 
 const ICON_LG = DESIGN_TOKENS.icon.sizes.lg;

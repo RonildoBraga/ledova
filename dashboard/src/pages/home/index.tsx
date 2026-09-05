@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Asset } from '@ledova/shared-types';
+import type { Asset } from '@ledova/shared';
 import { PerformanceSection } from './components/PerformanceSection';
 import { AssetAllocationCard } from './components/AssetAllocationCard';
 import { WalletAllocationCard } from './components/WalletAllocationCard';

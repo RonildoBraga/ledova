@@ -8,9 +8,14 @@ import {
   CurrencyEthIcon,
   CurrencyBtcIcon,
 } from 'phosphor-react-native';
-import { BLOCKCHAIN, WALLET_VERIFICATION_STATUS } from '@ledova/shared-constants';
-import { formatWalletAddressShort, formatCryptoBalance, formatSyncAge } from '@ledova/shared-utils';
-import type { Wallet } from '@ledova/shared-types';
+import {
+  BLOCKCHAIN,
+  WALLET_VERIFICATION_STATUS,
+  formatWalletAddressShort,
+  formatCryptoBalance,
+  formatSyncAge,
+} from '@ledova/shared';
+import type { Wallet } from '@ledova/shared';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
 import { useCurrency } from '../../../hooks/useCurrency';
 

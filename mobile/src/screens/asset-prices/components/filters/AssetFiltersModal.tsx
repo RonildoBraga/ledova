@@ -9,7 +9,7 @@ import {
   CubeIcon,
   MagnifyingGlassIcon,
 } from 'phosphor-react-native';
-import { HOLDING_ASSET_TYPE, getHoldingAssetTypeLabel } from '@ledova/shared-constants';
+import { HOLDING_ASSET_TYPE, getHoldingAssetTypeLabel } from '@ledova/shared';
 import { useAppTheme, useThemedStyles } from '../../../../contexts';
 import { CustomModal } from '../../../../components/modal';
 import { CheckboxItem } from '../../../../components/checkbox';

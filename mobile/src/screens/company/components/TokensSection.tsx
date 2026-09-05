@@ -5,7 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { CustomModal } from '../../../components/modal';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
-import type { CompanyShareToken, TokenCreate, TokenStatus, TokenType } from '@ledova/shared-types';
+import type { CompanyShareToken, TokenCreate, TokenStatus, TokenType } from '@ledova/shared';
 import type { CompanyStackParamList } from '../../../navigation/CompanyStackNavigator';
 
 const STATUS_LABELS: Record<TokenStatus, string> = {

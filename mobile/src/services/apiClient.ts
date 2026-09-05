@@ -1,10 +1,13 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
-import { API_CONFIG, AUTH_ENDPOINTS } from '@ledova/shared-constants';
-import { refreshToken as requestTokenRefresh } from '@ledova/shared-services';
-import { createUserFriendlyError } from '@ledova/shared-utils';
+import {
+  API_CONFIG,
+  AUTH_ENDPOINTS,
+  refreshToken as requestTokenRefresh,
+  createUserFriendlyError,
+} from '@ledova/shared';
 import { clearTokens, getAccessToken, getRefreshToken, storeTokens } from './tokenStorage';
 
-export type { UserFriendlyError } from '@ledova/shared-types';
+export type { UserFriendlyError } from '@ledova/shared';
 
 const apiClient = axios.create({
   baseURL: process.env.EXPO_PUBLIC_API_URL,

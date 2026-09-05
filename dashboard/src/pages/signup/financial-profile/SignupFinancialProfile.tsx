@@ -5,7 +5,7 @@ import ErrorState from '@components/signup/ErrorState';
 import { useNavigate } from 'react-router-dom';
 import { ChartBarIcon } from '@phosphor-icons/react';
 import { AuthLayout } from '@components/AuthLayout';
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
+import { DESIGN_TOKENS } from '@ledova/shared';
 
 const ICON_MD = DESIGN_TOKENS.icon.sizes.md;
 

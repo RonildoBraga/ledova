@@ -9,8 +9,13 @@ import {
   ArrowSquareOutIcon,
 } from '@phosphor-icons/react';
 import { AnimatedQRCode } from '@keystonehq/animated-qr';
-import { formatWalletAddressMedium } from '@ledova/shared-utils';
-import { BLOCKCHAIN, DESIGN_TOKENS, getBlockExplorerTxUrl, getChainShortCode } from '@ledova/shared-constants';
+import {
+  formatWalletAddressMedium,
+  BLOCKCHAIN,
+  DESIGN_TOKENS,
+  getBlockExplorerTxUrl,
+  getChainShortCode,
+} from '@ledova/shared';
 import { useQRScanner, QRScannerView } from '@components/qr';
 
 const ICON_XS = DESIGN_TOKENS.icon.sizes.xs;
@@ -23,7 +28,7 @@ import type {
   WalletTokenBalance,
   ShareTokenTransferPrepareResponse,
   PreparedWalletTransfer,
-} from '@ledova/shared-types';
+} from '@ledova/shared';
 import { encodeEthereumTransaction } from '@utils/keystone/urEncoder';
 import { decodeKeystoneSignedTransaction } from '@utils/keystone/urDecoder';
 import { BitcoinSignStep } from './BitcoinSignStep';

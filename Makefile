@@ -4,7 +4,7 @@
 NPM ?= npm
 PYTHON ?= python3
 
-.PHONY: help install install-backend init-local check-local-env build check test \
+.PHONY: help install install-backend init-local check-local-env build generate-tokens check test \
 	dev-up dev-down dev-logs contracts-compile contracts-test contracts-deploy-local \
 	contracts-deploy-testnet
 
@@ -13,7 +13,8 @@ help:
 	@echo "  make install                  Install JavaScript dependencies"
 	@echo "  make install-backend          Install backend development dependencies"
 	@echo "  make init-local               Create owner-only local .env files"
-	@echo "  make build                    Build packages, dashboard, marketing, and contracts"
+	@echo "  make build                    Build dashboard, marketing, and contracts"
+	@echo "  make generate-tokens          Regenerate the CSS design tokens from packages/shared"
 	@echo "  make check                    Run static checks, including mobile and Django"
 	@echo "  make test                     Run workspace and contract tests"
 	@echo "  make dev-up                   Start the local Docker Compose stack"
@@ -38,10 +39,12 @@ check-local-env:
 	$(PYTHON) scripts/init-local-env.py --check
 
 build:
-	$(NPM) run build:packages
 	$(NPM) run build -w dashboard
 	$(NPM) --prefix marketing run build
 	$(NPM) --prefix contracts run compile
+
+generate-tokens:
+	$(NPM) exec -- tsx packages/scripts/generate-css-tokens.mjs
 
 check: install-backend
 	$(NPM) run typecheck

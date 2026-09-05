@@ -1,5 +1,5 @@
-import { HOLDING_ASSET_TYPE, getChartColor, getHoldingAssetTypeLabel, type TimeRange } from '@ledova/shared-constants';
-import type { HoldingWithWallet, HoldingsSummary, AssetAllocationItem } from '@ledova/shared-types';
+import { HOLDING_ASSET_TYPE, getChartColor, getHoldingAssetTypeLabel, type TimeRange } from '@ledova/shared';
+import type { HoldingWithWallet, HoldingsSummary, AssetAllocationItem } from '@ledova/shared';
 import { MOCK_ASSETS, MOCK_ASSET_VALUES, MOCK_WALLETS } from '../../../_mock/mockConfig';
 
 /**
