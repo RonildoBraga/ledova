@@ -13,7 +13,7 @@ from assets.models import Asset, AssetChainDeployment, AssetType
 from assets.services import AssetSyncService
 from operators.models import Operator
 from operators.settlement import deployment_for, live_deployments
-from tokens.admin._helpers import MintForm, action_buttons, format_units
+from shared.utils.admin_display import action_buttons, format_units
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +85,7 @@ class AssetAdmin(admin.ModelAdmin):
         return action_buttons([("+ Mint", reverse("admin:assets_asset_mint", args=[obj.uuid]), "#28a745")])
 
     def mint_view(self, request, uuid):
+        from tokens.admin._helpers import MintForm
         from tokens.models import MintRequest
         from tokens.services import mint_service
 

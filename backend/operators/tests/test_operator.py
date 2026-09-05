@@ -116,25 +116,6 @@ class OperatorModelTest(TestCase):
             operator.clean()
         self.assertEqual(ctx.exception.message_dict["payment_reference_prefix"], ["Use 2 to 10 letters or digits."])
 
-    def test_the_issued_stablecoin_must_be_deployed_on_the_receiving_chain(self):
-        audy = stablecoin(chain="ethereum")
-        operator = Operator.get()
-        operator.issued_stablecoin = audy
-
-        with self.assertRaises(ValidationError) as ctx:
-            operator.clean()
-        self.assertEqual(
-            ctx.exception.message_dict["issued_stablecoin"],
-            ["AUDY has no active deployment with a contract address on base."],
-        )
-
-        operator.receiving_wallet_chain = ReceivingChain.ETHEREUM
-        operator.clean()
-
-        audy.chain_deployments.update(is_active=False)
-        with self.assertRaises(ValidationError):
-            operator.clean()
-
 
 @override_settings(STORAGES=TEST_STORAGES)
 class OperatorAdminTest(TestCase):
@@ -221,6 +202,35 @@ class OperatorAdminTest(TestCase):
 
         self.assertRedirects(accepted, self.changelist_url, fetch_redirect_response=False)
         self.assertEqual(list(Operator.get().supported_settlement_assets.all()), [audy])
+
+    def test_the_issued_stablecoin_must_be_deployed_on_the_receiving_chain(self):
+        audy = stablecoin(chain="ethereum")
+        change_url = reverse("admin:operators_operator_change", args=[Operator.get().pk])
+        payload = {
+            "name": "Acme",
+            "deployment_mode": DeploymentMode.REGISTRY,
+            "receiving_wallet_chain": ReceivingChain.BASE,
+            "issued_stablecoin": str(audy.pk),
+            "investor_kyc_required": "on",
+        }
+
+        refused = self.client.post(change_url, payload)
+
+        self.assertEqual(refused.status_code, 200)
+        self.assertContains(refused, "AUDY has no active deployment with a contract address on base.")
+        self.assertIsNone(Operator.get().issued_stablecoin)
+
+        payload["receiving_wallet_chain"] = ReceivingChain.ETHEREUM
+        accepted = self.client.post(change_url, payload)
+
+        self.assertRedirects(accepted, self.changelist_url, fetch_redirect_response=False)
+        self.assertEqual(Operator.get().issued_stablecoin, audy)
+
+        audy.chain_deployments.update(is_active=False)
+        refused_again = self.client.post(change_url, payload)
+
+        self.assertEqual(refused_again.status_code, 200)
+        self.assertContains(refused_again, "AUDY has no active deployment with a contract address on ethereum.")
 
     def test_a_prefix_longer_than_ten_characters_is_refused_by_the_change_form(self):
         operator = Operator.get()

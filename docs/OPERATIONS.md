@@ -453,11 +453,20 @@ without it.
   fold `tokens.Stablecoin` into `assets.Asset`. Apply them in that order.
   `0014` also makes `SwapOrder.payment_token` nullable, which is what lets
   `0016` be unapplied on a database that holds swap orders; `0015` reverses by
-  rebuilding a `Stablecoin` row per settlement asset from its deployment on
-  `receiving_wallet_chain` and re-pointing all three foreign keys, so
+  rebuilding a `Stablecoin` row for every asset it folded and every asset an
+  order still points at, from that asset's deployment on
+  `receiving_wallet_chain`, and re-pointing all three foreign keys, so
   `migrate tokens 0013_remove_transferorder_signature_request` returns the
   previous release's schema with the order history intact. `reserve_amount`,
   `reserve_updated_at` and the original `Stablecoin` uuids are not restored.
+- The assets side of the fold is not undone at all. After a full rollback the
+  database still holds every `assets.Asset` row `0015` created for a stablecoin
+  that had no asset, every `assets.AssetChainDeployment` row it created on the
+  settlement chain, and the contract address it wrote onto a deployment that
+  already existed. `assets/0012` is separate and reverses on its own; nothing
+  else on the assets side does. Drop those rows by hand if the rollback is
+  meant to leave no trace, and remember they are what a re-applied `0015`
+  matches against.
 - `tokens/0015` refuses to run when a `Stablecoin` address disagrees with the
   address the matching asset already carries on the settlement chain. The
   migration is atomic, so the refusal writes nothing and names every
@@ -471,7 +480,12 @@ without it.
   what that many-to-many lists, so without the seeding
   `POST /api/v1/trading/transfer/prepare` would start refusing settlement
   assets and the wallet balance endpoint would stop listing them. Confirm the
-  list in the operator admin after deploying.
+  list in the operator admin after deploying. `0015` records the ids it
+  actually added in a `tokens_stablecoin_fold_grant` table and its reverse
+  removes only those, then drops the table, so an asset an operator had already
+  configured by hand keeps its place through a rollback. A rollback run against
+  a database folded by a build that predates that table logs a warning and
+  leaves the many-to-many untouched.
 - `assets/0012` moves the `AUDY` deployment from `ethereum` to `base` and gives
   it `STABLECOIN_CONTRACT_ADDRESS`. Any `AUDY` `Holding` keyed to the ethereum
   deployment stops resolving until the wallet sync runs again: count them

@@ -14,17 +14,6 @@ MAX_PAYMENT_REFERENCE_PREFIX = 10
 NOT_A_STABLECOIN = "{symbol} is not a stablecoin asset."
 
 
-def settlement_errors(assets, field: str, chain: str) -> dict:
-    from operators.settlement import NOT_DEPLOYED, deployment_on_chain
-
-    for asset in assets:
-        if asset.asset_type != AssetType.STABLECOIN.value:
-            return {field: NOT_A_STABLECOIN.format(symbol=asset.symbol)}
-        if deployment_on_chain(asset, chain) is None:
-            return {field: NOT_DEPLOYED.format(symbol=asset.symbol, chain=chain)}
-    return {}
-
-
 class DeploymentMode(models.TextChoices):
     SINGLE_ISSUER = "single_issuer", "Single issuer (one company on its own instance)"
     REGISTRY = "registry", "Registry (many companies on one instance)"
@@ -119,7 +108,7 @@ class Operator(models.Model):
                 self.receiving_wallet_address = Web3.to_checksum_address(self.receiving_wallet_address)
             else:
                 errors["receiving_wallet_address"] = "Enter a valid EVM address."
-        if self.issued_stablecoin_id:
-            errors.update(settlement_errors([self.issued_stablecoin], "issued_stablecoin", self.receiving_wallet_chain))
+        if self.issued_stablecoin_id and self.issued_stablecoin.asset_type != AssetType.STABLECOIN.value:
+            errors["issued_stablecoin"] = NOT_A_STABLECOIN.format(symbol=self.issued_stablecoin.symbol)
         if errors:
             raise ValidationError(errors)

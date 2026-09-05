@@ -5,10 +5,11 @@ from django.shortcuts import get_object_or_404, render
 from django.urls import path, reverse
 from django.utils.html import format_html
 
+from shared.utils.admin_display import action_buttons
 from tokens.models import MintRequest, MintRequestStatus
 from tokens.services import mint_service
 
-from ._helpers import action_buttons, status_badge
+from ._helpers import status_badge
 
 REJECT = ("Reject", "reject", "#dc3545")
 STATUS_ACTIONS = {

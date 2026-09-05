@@ -1,8 +1,8 @@
 from typing import Optional
 
-from assets.models import Asset, AssetChainDeployment
+from assets.models import Asset, AssetChainDeployment, AssetType
 from operators.exceptions import SettlementAssetNotDeployedException
-from operators.models import Operator
+from operators.models import NOT_A_STABLECOIN, Operator
 
 NOT_DEPLOYED = "{symbol} has no active deployment with a contract address on {chain}."
 
@@ -46,3 +46,12 @@ def settlement_deployments():
 
 def settlement_assets():
     return Asset.objects.filter(pk__in=settlement_deployments().values("asset_id"))
+
+
+def settlement_errors(assets, field: str, chain: str) -> dict:
+    for asset in assets:
+        if asset.asset_type != AssetType.STABLECOIN.value:
+            return {field: NOT_A_STABLECOIN.format(symbol=asset.symbol)}
+        if deployment_on_chain(asset, chain) is None:
+            return {field: NOT_DEPLOYED.format(symbol=asset.symbol, chain=chain)}
+    return {}

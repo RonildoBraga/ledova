@@ -4,7 +4,8 @@ from django.core.exceptions import ValidationError
 from django.http import HttpResponseRedirect
 from django.urls import reverse
 
-from operators.models import Operator, settlement_errors
+from operators.models import Operator
+from operators.settlement import settlement_errors
 
 
 class OperatorForm(forms.ModelForm):
@@ -14,12 +15,18 @@ class OperatorForm(forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
-        assets = cleaned.get("supported_settlement_assets")
         chain = cleaned.get("receiving_wallet_chain")
-        if assets is not None and chain:
-            errors = settlement_errors(assets, "supported_settlement_assets", chain)
-            if errors:
-                raise ValidationError(errors)
+        if not chain:
+            return cleaned
+        errors = {}
+        issued = cleaned.get("issued_stablecoin")
+        if issued is not None:
+            errors.update(settlement_errors([issued], "issued_stablecoin", chain))
+        assets = cleaned.get("supported_settlement_assets")
+        if assets is not None:
+            errors.update(settlement_errors(assets, "supported_settlement_assets", chain))
+        if errors:
+            raise ValidationError(errors)
         return cleaned
 
 

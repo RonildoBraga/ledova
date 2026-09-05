@@ -1,4 +1,5 @@
 import logging
+from uuid import UUID
 
 from django.db import migrations
 
@@ -8,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 STABLECOIN = "stablecoin"
 SYMBOL_MAX_LENGTH = 10
+GRANT_TABLE = "tokens_stablecoin_fold_grant"
 ADDRESS_CONFLICT = (
     "stablecoin {symbol} carries {coin_address} but {asset_symbol} on {chain} already carries " "{deployment_address}"
 )
@@ -15,7 +17,11 @@ ADDRESS_CONFLICTS = (
     "The fold would point a settlement path at a contract the stablecoin row does not name: {conflicts}. "
     "Reconcile the addresses before applying this migration; nothing has been written."
 )
+ORPHANED_SWAP_ORDERS = "{count} swap orders have no settlement asset after the fold."
 NOT_RESTORABLE = "{symbol} cannot be represented as a stablecoin row; its foreign keys were left null."
+GRANTS_NOT_RECORDED = (
+    "No record of what the fold added to Operator.supported_settlement_assets; the list is left as it stands."
+)
 FK_COLUMNS = (
     ("MintRequest", "settlement_asset", "stablecoin"),
     ("SwapOrder", "payment_asset", "payment_token"),
@@ -97,31 +103,46 @@ def _upsert_deployment(apps, asset, coin, chain):
     return None
 
 
-def _support(apps, asset_ids):
+def _record_grants(schema_editor, asset_ids):
+    with schema_editor.connection.cursor() as cursor:
+        cursor.execute(f"DROP TABLE IF EXISTS {GRANT_TABLE}")
+        cursor.execute(f"CREATE TABLE {GRANT_TABLE} (asset_id varchar(36) PRIMARY KEY)")
+        for asset_id in sorted(str(asset_id) for asset_id in asset_ids):
+            cursor.execute(f"INSERT INTO {GRANT_TABLE} (asset_id) VALUES (%s)", [asset_id])
+
+
+def _granted_ids(schema_editor):
+    with schema_editor.connection.cursor() as cursor:
+        if GRANT_TABLE not in schema_editor.connection.introspection.table_names(cursor):
+            logger.warning(GRANTS_NOT_RECORDED)
+            return set()
+        cursor.execute(f"SELECT asset_id FROM {GRANT_TABLE}")
+        return {UUID(row[0]) for row in cursor.fetchall()}
+
+
+def _drop_grants(schema_editor):
+    with schema_editor.connection.cursor() as cursor:
+        cursor.execute(f"DROP TABLE IF EXISTS {GRANT_TABLE}")
+
+
+def _support(apps, schema_editor, asset_ids):
     operator = _operator(apps)
-    if operator is None:
-        return
-    if operator.issued_stablecoin_id:
-        asset_ids = set(asset_ids) | {operator.issued_stablecoin_id}
-    if asset_ids:
-        operator.supported_settlement_assets.add(*asset_ids)
+    granted = set()
+    if operator is not None:
+        candidates = set(asset_ids)
+        if operator.issued_stablecoin_id:
+            candidates.add(operator.issued_stablecoin_id)
+        granted = candidates - set(operator.supported_settlement_assets.values_list("pk", flat=True))
+        if granted:
+            operator.supported_settlement_assets.add(*granted)
+    _record_grants(schema_editor, granted)
 
 
 def _withdraw_support(apps, asset_ids):
     operator = _operator(apps)
-    if operator is None:
+    if operator is None or not asset_ids:
         return
-    if operator.issued_stablecoin_id:
-        asset_ids = set(asset_ids) | {operator.issued_stablecoin_id}
-    if asset_ids:
-        operator.supported_settlement_assets.remove(*asset_ids)
-
-
-def _supported_asset_ids(apps):
-    operator = _operator(apps)
-    if operator is None:
-        return set()
-    return set(operator.supported_settlement_assets.values_list("pk", flat=True))
+    operator.supported_settlement_assets.remove(*asset_ids)
 
 
 def _referenced_asset_ids(apps):
@@ -192,18 +213,18 @@ def fold_stablecoins(apps, schema_editor):
 
     orphans = SwapOrder.objects.filter(payment_asset__isnull=True).count()
     if orphans:
-        raise RuntimeError(f"{orphans} swap orders have no settlement asset after the fold.")
+        raise RuntimeError(ORPHANED_SWAP_ORDERS.format(count=orphans))
 
-    _support(apps, folded)
+    _support(apps, schema_editor, folded)
 
 
 def unfold_stablecoins(apps, schema_editor):
     Asset = apps.get_model("assets", "Asset")
 
     chain = _settlement_chain(apps)
-    asset_ids = _supported_asset_ids(apps) | _referenced_asset_ids(apps)
+    granted = _granted_ids(schema_editor)
     coins = {}
-    for asset in Asset.objects.filter(pk__in=asset_ids):
+    for asset in Asset.objects.filter(pk__in=granted | _referenced_asset_ids(apps)):
         coin = _restored_coin(apps, asset, chain)
         if coin is not None:
             coins[asset.pk] = coin
@@ -214,7 +235,8 @@ def unfold_stablecoins(apps, schema_editor):
             model.objects.filter(**{source: asset_id}).update(**{target: coin, source: None})
         model.objects.exclude(**{f"{source}__isnull": True}).update(**{source: None})
 
-    _withdraw_support(apps, asset_ids)
+    _withdraw_support(apps, granted)
+    _drop_grants(schema_editor)
 
 
 class Migration(migrations.Migration):
