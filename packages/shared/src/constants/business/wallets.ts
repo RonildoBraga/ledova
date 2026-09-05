@@ -191,7 +191,7 @@ export const BUYABLE_ASSETS: BuyableAssetConfig[] = [
   { symbol: 'USDT', name: 'Tether', chain: BLOCKCHAIN.ETHEREUM },
 ];
 
-const TRANSFER_FEE_ESTIMATES = { BTC: 0.00005, ETH: 0.0005 } as const;
+const TRANSFER_FEE_ESTIMATES = { BTC: 0.00005, ETH: 0.0005, BASE: 0.00002 } as const;
 
 export function getEstimatedFee(chainShortName: string): number {
   return TRANSFER_FEE_ESTIMATES[chainShortName as keyof typeof TRANSFER_FEE_ESTIMATES] || TRANSFER_FEE_ESTIMATES.ETH;

@@ -13,9 +13,12 @@ The operator is whoever hosts the deployment: a single company running its own
 instance, or a registry provider hosting many companies. Its configuration is
 one row, `operators.Operator`, edited in the Django admin.
 
-- The admin changelist redirects to the single change page,
-  `/admin/operators/operator/1/change/`. Add is offered only while no row
-  exists; delete never is. One row is enforced three ways: a fixed primary key
+- The admin changelist, `/admin/operators/operator/`, seeds the row if it is
+  missing and redirects to the single change page,
+  `/admin/operators/operator/1/change/`. Always enter through the changelist:
+  the change URL alone redirects to `/admin/` on a fresh install, because
+  `changelist_view` is the only thing that creates the row. Add is offered only
+  while no row exists; delete never is. One row is enforced three ways: a fixed primary key
   of 1, a `CheckConstraint` on it, and a guard in `save()`.
 - The row is created lazily the first time the admin page or
   `GET /api/operator/` asks for it, named from `OPERATOR_NAME` (default
@@ -54,8 +57,9 @@ owner-only `.env` files and fills `SECRET_KEY` and `POSTGRES_PASSWORD` with
 generated secrets. It never overwrites an existing file.
 
 `DEBUG`, `COOKIE_SECURE` and `EVM_ASSET_TRANSFER_HISTORY_ENABLED` go through
-`read_bool` and must be exactly `true` or `false`; anything else raises
-`ImproperlyConfigured` at startup. `KYCAID_CRYPTO_MONITORING_ENABLED` is
+`read_bool`, which strips and lowercases the value first, so `true`, `TRUE` and
+` true ` are all accepted, and must resolve to `true` or `false`; anything else
+raises `ImproperlyConfigured` at startup. `KYCAID_CRYPTO_MONITORING_ENABLED` is
 compared against the literal `true` and treats anything else as off.
 
 ### Django core
@@ -102,8 +106,13 @@ default up.
 The connection is configured with `CONN_MAX_AGE` 300 seconds, a 10 second
 connect timeout and TCP keepalives.
 
-Compose overrides `POSTGRES_HOST` to `postgres` for the `migrate`, `backend`
-and `worker` services.
+Compose sets `POSTGRES_HOST` to `postgres`, `REDIS_URL` to
+`redis://redis:6379/0` and `STORAGE_BACKEND` to `local` for the `migrate`,
+`backend` and `worker` services. These are `environment:` entries, so they win
+over `backend/.env`: a `STORAGE_BACKEND=s3` or a custom `REDIS_URL` in that file
+is silently ignored inside the local stack. Because the stack forces local
+storage, `backend/.env` must keep `DEBUG=true` (as `.env.example` does) or the
+ASGI entrypoint refuses to start — see Media storage.
 
 ### Blockchain
 
@@ -115,13 +124,10 @@ and `worker` services.
 | `BITCOIN_NETWORK` | `test` | No; `test` or `regtest` only |
 | `EVM_ASSET_TRANSFER_HISTORY_ENABLED` | `false` | No; without it EVM holdings appear only from app-initiated transfers |
 | `BLOCKCHAIN_OPERATOR_KEY` | empty | Yes to deploy, mint, whitelist, pause |
-| `BLOCKCHAIN_OPERATOR_ADDRESS` | empty | No |
 | `WHITELIST_CONTRACT_ADDRESS` | empty | Yes for issuance |
 | `SHARE_TOKEN_FACTORY_ADDRESS` | empty | Yes for issuance |
 | `ATOMIC_SWAP_ADDRESS` | empty | Only for settlement |
 | `STABLECOIN_CONTRACT_ADDRESS` | empty | Only for stablecoin payment |
-| `YIELD_TOKEN_CONTRACT_ADDRESS` | empty | No |
-| `TOKEN_DEPLOYMENT_CHAIN` | empty | No |
 | `SWAP_ORDER_EXPIRY_HOURS` | `24` | No |
 
 ### Media storage
@@ -136,13 +142,21 @@ and `worker` services.
 S3 and GCS objects are served through signed URLs that expire after 300
 seconds, with `file_overwrite` off.
 
+`local` is a development-only backend. The `/media/` route exists only while
+`DEBUG` is on (`ledova_backend/urls.py` builds it with
+`django.conf.urls.static.static()`, which returns no patterns otherwise) and
+WhiteNoise is configured for `STATIC_ROOT` only, so with `DEBUG=false` every
+uploaded document answers 404. `ledova_backend/wsgi.py` and
+`ledova_backend/asgi.py` therefore raise `ImproperlyConfigured` at startup when
+`DEBUG` is false and the resolved backend is `local`: choose `s3` or `gcs` for
+any deployment.
+
 ### Market data and chain providers
 
 | Variable | Default | Required |
 | --- | --- | --- |
 | `ALCHEMY_ETH_URL`, `ALCHEMY_BTC_URL`, `ALCHEMY_BASE_URL` | empty | Only for provider-backed sync |
 | `ALCHEMY_WEBHOOK_SIGNING_KEY` | empty | Yes to accept `/webhooks/alchemy/` |
-| `ALCHEMY_WEBHOOK_NETWORK` | empty | No |
 | `COINGECKO_API_KEY` | empty | No |
 | `COINGECKO_BASE_URL` | `https://api.coingecko.com/api/v3` | No |
 | `COINGECKO_TIMEOUT` | `10` seconds | No |
@@ -240,8 +254,12 @@ Consequences of skipping them:
 
 - Without `sync_monitoring_rules` and `sync_procedure_templates` no monitoring
   rule exists, so no compliance alert is ever raised.
-- Without `asset_sync --seed-only` a token declaring a supported symbol is
-  quarantined under a suffixed symbol until an operator verifies it.
+- Without `asset_sync --seed-only` there are no verified rows for the supported
+  native assets and no `AssetChainDeployment` for them, so chain sync has
+  nothing to attach balances to. The seed does not change the suffixed-symbol
+  quarantine either way: `RESERVED_SYMBOLS` in `assets/services/identity.py` is
+  a module constant built from `SUPPORTED_ASSETS`, so a token declaring a
+  supported symbol is quarantined whether or not the seed ran.
 
 The published monitoring seed
 (`backend/compliance/seeds/monitoring_rules.py`, with `ALERT_THRESHOLD_AUD` in
@@ -285,12 +303,20 @@ growing hex prefix of the contract address), compared case-insensitively.
 - For local work use Hardhat account #0
   (`0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80`). It is
   a public development key and must never hold anything of value.
-- `DEPLOYER_PRIVATE_KEY` is a second signing key, separate from
-  `BLOCKCHAIN_OPERATOR_KEY` and used only by Hardhat, which reads it from
-  `process.env` into the `localhost` and `baseSepolia` account lists. Export it
-  in the deploying shell for the length of the deployment; nothing loads it from
-  a file. Leave it unset against `localhost`, where Hardhat falls back to the
-  node's own accounts.
+- `DEPLOYER_PRIVATE_KEY` is the key Hardhat signs the deployment with; it reads
+  it from `process.env` into the `localhost` and `baseSepolia` account lists.
+  Export it in the deploying shell for the length of the deployment; nothing
+  loads it from a file. Leave it unset against `localhost`, where Hardhat falls
+  back to the node's own accounts.
+- **It is not a second, independent key.**
+  `contracts/scripts/deploy-all.ts` passes `deployer.address` as the owner of
+  WhitelistRegistry, ShareTokenFactory, AUDY and AtomicSwap, and it is also the
+  address added as the AUDY minter. The backend signs every `onlyOwner` call
+  with `BLOCKCHAIN_OPERATOR_KEY`. The two keys must therefore resolve to the
+  **same address**, or ownership of all four contracts must be transferred to
+  the `BLOCKCHAIN_OPERATOR_KEY` address after deployment. Deploy with one key
+  and operate with another, without transferring ownership, and every mint, cap
+  change, whitelist write and pause reverts.
 - Client `.env` files hold no secrets by construction: `VITE_` and
   `EXPO_PUBLIC_` values are embedded in the shipped bundle.
 
@@ -323,7 +349,12 @@ wrong explorer.
 
 Base Sepolia (chain id 84532) is the supported public testnet:
 `npm --prefix contracts run deploy:testnet`, with `DEPLOYER_PRIVATE_KEY` and
-`BASE_SEPOLIA_RPC_URL` exported in that shell.
+`BASE_SEPOLIA_RPC_URL` exported in that shell. The `DEPLOYER_PRIVATE_KEY`
+address becomes the owner of all four contracts, so it must be the same signer
+as the `BLOCKCHAIN_OPERATOR_KEY` you put in `backend/.env`, or you must transfer
+ownership of WhitelistRegistry, ShareTokenFactory, AUDY and AtomicSwap to the
+operator address immediately after deploying. Otherwise the backend's
+`onlyOwner` calls revert against the freshly deployed contracts.
 
 `make chain-test` does the local sequence unattended: it compiles, starts a
 node, waits for `eth_chainId`, deploys the core contracts, sources
@@ -357,14 +388,20 @@ one.
 ## Notifications and push
 
 Transaction confirmed and failed events, the KYC review outcome and every
-company application transition create a `Notification` row and defer
-`users.tasks.notifications.send_push_notification`, so the in-app inbox (the
-dashboard bell, the mobile inbox) fills from day one.
+company application transition defer
+`users.tasks.notifications.send_push_notification`, which is what writes the
+`Notification` row (`users/tasks/notifications.py`). A company transition
+records nothing at transition time: `companies/services/company.py` only defers
+the job. The in-app inbox (the dashboard bell, the mobile inbox) therefore needs
+a running Procrastinate worker — with no worker the transition succeeds and the
+inbox stays empty until one drains the queue.
 
 Company transitions notify the owner as: submit, resubmit, start_review,
 request_info (carrying the reason), approve, reject (carrying the reason),
 activate and withdraw. Warning, resolve-warning, suspend, reinstate and delist
-notify nobody, and the admin copy says so.
+notify nobody. Only the Issue Warning action says so in its admin copy
+(`companies/admin/company.py`); resolve-warning and reinstate have no intro copy
+at all.
 
 Delivery to a phone additionally needs `extra.eas.projectId` in
 `mobile/app.json` plus a development or production build. It is not set in this
@@ -376,7 +413,12 @@ without it.
 - Every migration named below is reversible with `migrate`.
 - `companies/0003_delete_review_and_signature_models` (with
   `tokens/0013_remove_transferorder_signature_request` before it) drops
-  `ApplicationReview`, `ReviewNote` and `SignatureRequest`.
+  `ApplicationReview`, `ReviewNote` and `SignatureRequest`. **This is the one
+  irreversible step in the release.** All three operations are `DeleteModel`,
+  and reversing a `DeleteModel` recreates the table empty: rolling the migration
+  back restores the schema and none of the rows. Export anything in
+  `companies_applicationreview`, `companies_reviewnote` and
+  `companies_signaturerequest` worth keeping before applying it.
 - `portfolios/0004_delete_assetallocation`,
   `compliance/0005_remove_fiat_transaction_and_high_risk_country`,
   `wallets/0006_delete_fiattransaction_drop_unread_columns` (depends on
@@ -412,8 +454,10 @@ without it.
    operator key, and the four contract addresses.
 6. `python manage.py migrate --noinput`, then `sync_monitoring_rules`,
    `sync_procedure_templates` and `asset_sync --seed-only`.
-7. Open `/admin/operators/operator/1/change/` and complete identity, deployment
-   mode and payment rails before inviting anyone.
+7. Open `/admin/operators/operator/` and complete identity, deployment mode and
+   payment rails before inviting anyone. Enter the changelist, not
+   `/admin/operators/operator/1/change/`: only `OperatorAdmin.changelist_view`
+   seeds the row, so on a fresh install the change URL redirects to `/admin/`.
 8. Confirm a worker is running; check the deployment, issuance and confirmation
    sweeps appear in its log.
 9. Confirm `GET /health/` answers 200 and `GET /api/operator/` returns 401

@@ -32,8 +32,14 @@ them.
      resume on, and the sweep only logs it.
    - A capital-increase worker hard-killed during the receipt wait. The claim
      and the recorded hash live in the row lock's transaction and roll back with
-     it, so the retry finds the chain cap already raised, refuses with
-     `CAP_NOT_RAISED`, and the database cap has to be set by hand.
+     it. The retry no longer needs a hand-set cap — when the chain cap already
+     equals `new_authorized_total` and the database cap is behind,
+     `tokens/services/share_token_service.py` adopts the chain cap and completes
+     the request without sending (pinned by
+     `tokens/tests/test_review_requests.py`). What is still open is
+     attribution: because nothing durable ties the raise to the request that
+     sent it, two approved requests that share a `new_authorized_total` can have
+     the same on-chain increase adopted by whichever one retries first.
    - The `pending` nonce the client takes
      (`integrations/base_chain/client.py`). The row lock serialises per
      `ShareToken` only, so two workers sending for different tokens, or a mint
@@ -68,10 +74,16 @@ them.
    holdings queries scope by wallet, not by the wallet's configured chain, so
    same-address balances or symbols can be merged across networks.
 
-7. **Uploads and media.** `documents/` serves uploads through `MEDIA_URL`
-   (`ledova_backend/urls.py`, the `static(...)` call) with no authenticated
-   download path, no content or rendered-size limits, no malware handling, no
-   lifecycle cleanup and no denial-of-service protection.
+7. **Uploads and media.** With `DEBUG=true`, `documents/` serves uploads through
+   `MEDIA_URL` (`ledova_backend/urls.py`, the `static(...)` call). With `DEBUG`
+   off that route does not exist at all — `django.conf.urls.static.static()`
+   returns no patterns — so local-storage links 404; the WSGI/ASGI entrypoints
+   now refuse to start in that configuration. There is still no authenticated
+   download path, no malware handling, no lifecycle cleanup and no
+   denial-of-service protection. Size and content limits exist only on company
+   documents (`companies/serializers/document.py` enforces 10 MB and
+   PDF/PNG/JPEG); the `documents/` app takes a bare `FileField`
+   (`documents/serializers/document.py`) with neither.
 
 8. **Provider logs and webhooks.** `integrations/sumsub/webhook.py`,
    `integrations/kycaid/webhook.py`, `integrations/kycaid/crypto_webhook.py` and

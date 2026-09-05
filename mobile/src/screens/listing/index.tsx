@@ -249,12 +249,6 @@ export function ListingScreen() {
               {company.infoRequestReason ? (
                 <Text style={styles.warningMessage}>{company.infoRequestReason}</Text>
               ) : null}
-              {company.additionalInfoResponse ? (
-                <View style={styles.previousResponse}>
-                  <Text style={styles.previousResponseLabel}>Your previous response</Text>
-                  <Text style={styles.previousResponseText}>{company.additionalInfoResponse}</Text>
-                </View>
-              ) : null}
             </View>
           </View>
         )}

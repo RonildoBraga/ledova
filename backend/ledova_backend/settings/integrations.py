@@ -43,7 +43,6 @@ ALCHEMY_ETH_URL = os.environ.get("ALCHEMY_ETH_URL", "")
 ALCHEMY_BTC_URL = os.environ.get("ALCHEMY_BTC_URL", "")
 ALCHEMY_BASE_URL = os.environ.get("ALCHEMY_BASE_URL", "")
 ALCHEMY_WEBHOOK_SIGNING_KEY = os.environ.get("ALCHEMY_WEBHOOK_SIGNING_KEY", "")
-ALCHEMY_WEBHOOK_NETWORK = os.environ.get("ALCHEMY_WEBHOOK_NETWORK", "").strip().upper()
 
 BLOCKSTREAM_API_URL = os.environ.get("BLOCKSTREAM_API_URL", "https://blockstream.info/testnet/api")
 BLOCKSTREAM_TIMEOUT = int(os.environ.get("BLOCKSTREAM_TIMEOUT", "30"))

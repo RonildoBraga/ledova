@@ -87,7 +87,7 @@ export interface Company extends BaseEntity {
   withdrawnAt: string | null;
   withdrawalReason: string;
 
-  operatorAddress: string;
+  operatorWallet: string | null;
   description: string;
   industry: string;
   foundedYear: number | null;
@@ -140,18 +140,23 @@ export interface CompanyRegistrationResponse {
 
 export interface ApplicationStatus {
   uuid: string;
+  name: string;
   status: CompanyStatus;
   statusDisplay: string;
   submittedAt: string | null;
   reviewStartedAt: string | null;
   reviewCompletedAt: string | null;
   approvedAt: string | null;
+  activatedAt: string | null;
   infoRequestedAt: string | null;
   infoRequestReason: string;
   rejectionAt: string | null;
   rejectionReason: string;
   withdrawnAt: string | null;
   withdrawalReason: string;
+  isPendingReview: boolean;
+  isApproved: boolean;
+  isActive: boolean;
 }
 
 export interface ApplicationResponse {

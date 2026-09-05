@@ -228,12 +228,6 @@ export default function ListingPage() {
                 {company.infoRequestReason}
               </p>
             )}
-            {company.additionalInfoResponse && (
-              <div className="mt-3 rounded-lg bg-surface-raised/60 border border-border-subtle p-3">
-                <p className="text-xs font-medium text-text-muted mb-1">Your previous response</p>
-                <p className="text-sm text-text-secondary whitespace-pre-wrap">{company.additionalInfoResponse}</p>
-              </div>
-            )}
           </div>
         </div>
       )}

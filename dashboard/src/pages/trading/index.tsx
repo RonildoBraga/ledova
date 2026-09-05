@@ -93,7 +93,11 @@ export function TradingPage() {
   useTradingEvents(selectedTokenUuid);
 
   const { wallets, walletAddresses } = useUserTradingWallets();
-  const { isWhitelisted, isLoading: isLoadingWhitelistStatus } = useWalletsWhitelistStatus(walletAddresses);
+  const {
+    isWhitelisted,
+    getStatus: getWhitelistStatusFor,
+    isLoading: isLoadingWhitelistStatus,
+  } = useWalletsWhitelistStatus(walletAddresses);
   const { data: swaps, isLoading: isLoadingSwaps } = useSwapOrdersMulti(walletAddresses);
 
   useMemo(() => {
@@ -214,6 +218,9 @@ export function TradingPage() {
                 walletsWithHoldings={getWalletsWithHoldings(selectedToken.uuid)}
                 onSubmit={handleCreateOrder}
                 isWalletWhitelisted={walletAddresses.length > 0 && isWhitelisted(walletAddresses[0])}
+                isWhitelistStatusUnknown={
+                  walletAddresses.length > 0 && getWhitelistStatusFor(walletAddresses[0])?.status === 'unknown'
+                }
                 isLoadingWhitelistStatus={isLoadingWhitelistStatus}
               />
             </>

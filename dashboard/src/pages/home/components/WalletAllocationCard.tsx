@@ -15,6 +15,7 @@ interface WalletAllocationCardProps {
   totals: WalletTotals;
   ethWalletsCount: number;
   btcWalletsCount: number;
+  baseWalletsCount: number;
   isLoading: boolean;
 }
 
@@ -22,16 +23,18 @@ export function WalletAllocationCard({
   totals,
   ethWalletsCount,
   btcWalletsCount,
+  baseWalletsCount,
   isLoading,
 }: WalletAllocationCardProps) {
   const { formatDisplayCurrency } = useCurrency();
   const colors = useColors();
   const ETH_COLOR = colors.chain.ethereum;
   const BTC_COLOR = colors.chain.bitcoin;
+  const BASE_COLOR = colors.chain.base;
   const TOOLTIP = colors.chartUI.tooltip;
 
-  const totalWallets = ethWalletsCount + btcWalletsCount;
-  const totalMarketValue = totals.ethTotalMarketValue + totals.btcTotalMarketValue;
+  const totalWallets = ethWalletsCount + btcWalletsCount + baseWalletsCount;
+  const totalMarketValue = totals.ethTotalMarketValue + totals.btcTotalMarketValue + totals.baseTotalMarketValue;
 
   if (isLoading) {
     return (
@@ -58,12 +61,16 @@ export function WalletAllocationCard({
 
   const hasEth = totals.ethTotalMarketValue > 0;
   const hasBtc = totals.btcTotalMarketValue > 0;
-  const ethPercentage = totalMarketValue > 0 ? (totals.ethTotalMarketValue / totalMarketValue) * 100 : 0;
-  const btcPercentage = totalMarketValue > 0 ? (totals.btcTotalMarketValue / totalMarketValue) * 100 : 0;
+  const hasBase = totals.baseTotalMarketValue > 0;
+  const percentageOf = (value: number) => (totalMarketValue > 0 ? (value / totalMarketValue) * 100 : 0);
+  const ethPercentage = percentageOf(totals.ethTotalMarketValue);
+  const btcPercentage = percentageOf(totals.btcTotalMarketValue);
+  const basePercentage = percentageOf(totals.baseTotalMarketValue);
 
   const chartEntries = [
     ...(hasEth ? [{ label: 'Ethereum', value: totals.ethTotalMarketValue, color: ETH_COLOR }] : []),
     ...(hasBtc ? [{ label: 'Bitcoin', value: totals.btcTotalMarketValue, color: BTC_COLOR }] : []),
+    ...(hasBase ? [{ label: 'Base', value: totals.baseTotalMarketValue, color: BASE_COLOR }] : []),
   ];
 
   const data = {
@@ -140,6 +147,19 @@ export function WalletAllocationCard({
                 <span className="text-xs text-text-muted">{formatDisplayCurrency(totals.btcTotalMarketValue)}</span>
                 <span className="text-sm font-semibold text-text-primary min-w-[36px] text-right">
                   {formatPercentage(btcPercentage, 1)}
+                </span>
+              </div>
+            </div>
+          )}
+          {hasBase && (
+            <div className="flex items-center gap-2 py-1.5">
+              <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: BASE_COLOR }} />
+              <span className="text-sm font-semibold text-text-primary">Base</span>
+              <div className="flex-1 flex items-baseline justify-end gap-2">
+                <span className="text-xs text-text-muted">{formatCryptoBalance(totals.base, '').trimEnd()}</span>
+                <span className="text-xs text-text-muted">{formatDisplayCurrency(totals.baseTotalMarketValue)}</span>
+                <span className="text-sm font-semibold text-text-primary min-w-[36px] text-right">
+                  {formatPercentage(basePercentage, 1)}
                 </span>
               </div>
             </div>

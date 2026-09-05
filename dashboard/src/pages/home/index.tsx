@@ -70,6 +70,7 @@ export function HomePage() {
               totals={wallets.totals}
               ethWalletsCount={wallets.ethWalletsCount}
               btcWalletsCount={wallets.btcWalletsCount}
+              baseWalletsCount={wallets.baseWalletsCount}
               isLoading={wallets.isLoading}
             />
           </div>

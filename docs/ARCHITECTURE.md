@@ -63,7 +63,8 @@ package of per-concern modules re-exported by `settings/__init__.py`.
 
 Most apps are laid out as `models/ querysets/ serializers/ services/ views/
 tasks/ admin/`, taking only the layers they need: `operators/` is flat modules,
-`integrations/` has only `admin.py`, and `blockchain/`, `compliance/`,
+`integrations/` takes only `admin.py` of those layers (the rest of it is one
+subpackage per provider), and `blockchain/`, `compliance/`,
 `feature_flags/` and `shared/` are partial. Prefer fewer layers and fewer
 lines. Delete before abstracting; add a layer only when a second caller needs
 the same logic.
@@ -199,7 +200,12 @@ the ORM, not in PostgreSQL: row-level security is not planned.
 
 - Every customer-facing queryset has `visible_to_user(user)` (and
   `manageable_by_user` for writes) that returns `none()` for an anonymous or
-  `None` user, and every viewset calls it from `get_queryset`.
+  `None` user, and every viewset calls it from `get_queryset`, with two explicit
+  exceptions: `TradingTokenViewSet` and `TradingStablecoinViewSet`
+  (`tokens/views/trading_token.py`) return every deployed share token and every
+  active stablecoin to any authenticated user. They are the market directory and
+  are deliberately not owner-scoped. Whether that posture is right is an open
+  Phase 1 decision, not a settled one.
 - Owner foreign keys are `NOT NULL`, and writable FKs are scoped in
   `get_fields()`.
 - Global operator routes require `IsAdminUser`.
@@ -254,11 +260,16 @@ These are enforced by review, by CI lint, or by both.
 - Dependencies: nothing in `requirements.txt` or a `package.json` without an
   importer.
 - Endpoints: nothing routed without a caller in `dashboard/`, `mobile/`,
-  `packages/` or a documented external consumer. Check `packages/shared` before
-  concluding a route is dead: `POST /api/wallets/batch-check-balances/` looks
-  unreferenced from either app but is called through
-  `packages/shared/src/services/wallet-balances.ts`, which the dashboard's
-  add-wallet modal and the mobile balance hook both use.
+  `packages/`, a documented external consumer, or the operator API. Check
+  `packages/shared` before concluding a route is dead: `POST
+  /api/wallets/batch-check-balances/` looks unreferenced from either app but is
+  called through `packages/shared/src/services/wallet-balances.ts`, which the
+  dashboard's add-wallet modal and the mobile balance hook both use.
+- The operator API is the named exception: `IsAdminUser`-gated routes an
+  operator drives from a script or a client the repository does not ship. The
+  whole `/api/v1/whitelist/` tree (`whitelist/urls.py`) and
+  `/api/portfolios/{uuid}/add-wallet/` and `/remove-wallet/` are in it. They
+  have no caller in either app and are kept, tested and documented deliberately.
 - The dashboard, the mobile app and `packages/shared` are first-class clients:
   every response key, status code and URL they read is a contract the backend
   keeps.

@@ -21,6 +21,7 @@ _STATICFILES_STORAGE = {
 }
 
 _storage_backend = resolve_storage_backend(debug=DEBUG)
+STORAGE_BACKEND = _storage_backend
 
 if _storage_backend == "local":
     MEDIA_URL = "/media/"

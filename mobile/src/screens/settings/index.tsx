@@ -10,7 +10,6 @@ import {
   AppWindowIcon,
   SunIcon,
   MoonIcon,
-  CurrencyCircleDollarIcon,
 } from 'phosphor-react-native';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { upsertCurrentUserPreferences } from '@ledova/shared';

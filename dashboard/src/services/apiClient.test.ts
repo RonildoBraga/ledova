@@ -95,3 +95,60 @@ describe('apiClient CSRF retry', () => {
     expect(adapter).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('apiClient 5xx handling', () => {
+  const originalAdapter = apiClient.defaults.adapter;
+
+  beforeEach(() => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    apiClient.defaults.adapter = originalAdapter;
+    vi.restoreAllMocks();
+  });
+
+  const failWith = (status: number, data: unknown) =>
+    vi.fn(async (config: InternalAxiosRequestConfig) => {
+      const response: AxiosResponse = { status, statusText: 'Error', data, headers: {}, config };
+      throw new AxiosError('Request failed', AxiosError.ERR_BAD_RESPONSE, config, undefined, response);
+    });
+
+  it('passes a service detail through on 503 so the chain reason reaches the caller', async () => {
+    apiClient.defaults.adapter = failWith(503, { detail: 'Chain unreachable: connection refused' });
+
+    await expect(apiClient.post('/api/v1/tokens/abc/pause/')).rejects.toMatchObject({
+      response: { status: 503, data: { detail: 'Chain unreachable: connection refused' } },
+    });
+  });
+
+  it('still replaces a detail-less 500 with the generic copy', async () => {
+    apiClient.defaults.adapter = failWith(500, '<html>Server Error</html>');
+
+    await expect(apiClient.post('/api/v1/tokens/abc/pause/')).rejects.toMatchObject({
+      isUserFriendly: true,
+      message: 'Our servers are temporarily unavailable. Please try again in a few moments.',
+    });
+  });
+
+  it('does not treat a blank detail as a service message', async () => {
+    apiClient.defaults.adapter = failWith(503, { detail: '   ' });
+
+    await expect(apiClient.post('/api/v1/tokens/abc/pause/')).rejects.toMatchObject({
+      isUserFriendly: true,
+      message: 'Our servers are temporarily unavailable. Please try again in a few moments.',
+    });
+  });
+
+  it('keeps the generic copy for a 500 whose detail is the catch-all handler text', async () => {
+    apiClient.defaults.adapter = failWith(500, {
+      error: 'Internal server error',
+      detail: 'An unexpected error occurred',
+    });
+
+    await expect(apiClient.post('/api/v1/tokens/abc/pause/')).rejects.toMatchObject({
+      isUserFriendly: true,
+      message: 'Our servers are temporarily unavailable. Please try again in a few moments.',
+    });
+  });
+});

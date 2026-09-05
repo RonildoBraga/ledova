@@ -9,10 +9,7 @@ export interface FavouriteAsset {
   updatedAt: string;
 }
 
-export interface CreateFavouriteAsset {
-  asset: string;
-  userAccount: string;
-}
+export type CreateFavouriteAsset = Pick<FavouriteAsset, 'userAccount'> & { asset: string };
 
 export interface FavouriteAssetQueryParams extends BaseQueryParams {
   user_account?: string;

@@ -4,6 +4,7 @@ import {
   AUTH_ENDPOINTS,
   refreshToken as requestTokenRefresh,
   createUserFriendlyError,
+  hasServiceErrorDetail,
 } from '@ledova/shared';
 import { clearTokens, getAccessToken, getRefreshToken, storeTokens } from './tokenStorage';
 
@@ -102,10 +103,8 @@ apiClient.interceptors.response.use(
     }
 
     if (error.response?.status && error.response.status >= 500) {
-      if (typeof error.response.data === 'string' && error.response.data.includes('<html>')) {
-        return Promise.reject(
-          createUserFriendlyError('Our servers are temporarily unavailable. Please try again in a few moments.', error),
-        );
+      if (error.response.status === 503 && hasServiceErrorDetail(error)) {
+        return Promise.reject(error);
       }
 
       return Promise.reject(

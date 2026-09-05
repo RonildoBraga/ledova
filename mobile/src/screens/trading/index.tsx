@@ -229,6 +229,7 @@ export function TradingScreen() {
           walletsWithHoldings={walletsWithHoldings}
           onSubmit={handleCreateOrderSubmit}
           isWalletWhitelisted={whitelistStatus.isWhitelisted}
+          getWhitelistStatus={whitelistStatus.getStatus}
           isLoadingWhitelistStatus={whitelistStatus.isLoading}
         />
       )}

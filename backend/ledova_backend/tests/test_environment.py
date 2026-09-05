@@ -9,6 +9,7 @@ from django.test import SimpleTestCase
 
 from ledova_backend.chain_safety import parse_bitcoin_network, parse_evm_chain_id
 from ledova_backend.environment import (
+    assert_media_storage_is_servable,
     read_bool,
     read_choice,
     resolve_storage_backend,
@@ -30,9 +31,18 @@ class EnvironmentParsingTests(SimpleTestCase):
             with self.assertRaises(ImproperlyConfigured):
                 read_choice("STORAGE_BACKEND", choices=("local", "s3"), default="local")
 
-    def test_local_storage_works_without_debug(self):
+    def test_local_storage_resolves_without_debug(self):
         with patch.dict("os.environ", {"STORAGE_BACKEND": "local"}):
             self.assertEqual(resolve_storage_backend(debug=False), "local")
+
+    def test_local_storage_without_debug_is_refused_at_server_startup(self):
+        with self.assertRaises(ImproperlyConfigured):
+            assert_media_storage_is_servable(debug=False, storage_backend="local")
+
+    def test_servable_media_configurations_are_accepted(self):
+        assert_media_storage_is_servable(debug=True, storage_backend="local")
+        assert_media_storage_is_servable(debug=False, storage_backend="s3")
+        assert_media_storage_is_servable(debug=False, storage_backend="gcs")
 
     def test_evm_mainnets_are_rejected(self):
         for chain_id in ("1", "8453"):

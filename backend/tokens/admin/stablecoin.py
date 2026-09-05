@@ -1,15 +1,11 @@
-import logging
-
 from django.contrib import admin
 from django.utils import timezone
 
 from tokens.models import Stablecoin
 from tokens.services import mint_service
 
-from ._helpers import action_buttons, format_units
+from ._helpers import action_buttons, bounded_chain_read, format_units
 from .mintable_token import MintableTokenAdmin
-
-logger = logging.getLogger(__name__)
 
 
 @admin.register(Stablecoin)
@@ -44,11 +40,13 @@ class StablecoinAdmin(MintableTokenAdmin):
     def total_supply_display(self, obj):
         if not obj.contract_address:
             return "-"
-        try:
-            return f"${format_units(mint_service.token_service(obj).get_total_supply(), obj.decimals)}"
-        except Exception as exc:
-            logger.warning(f"Failed to get total supply for {obj.symbol}: {exc}")
-            return "Error"
+        raw_supply = bounded_chain_read(
+            lambda: mint_service.token_service(obj).get_total_supply(),
+            f"totalSupply() of {obj.symbol}",
+        )
+        if raw_supply is None:
+            return "Unavailable"
+        return f"${format_units(raw_supply, obj.decimals)}"
 
     @admin.display(description="Actions")
     def mint_action(self, obj):

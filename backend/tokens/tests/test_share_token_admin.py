@@ -133,7 +133,7 @@ class ShareTokenAdminPauseTest(TestCase):
         self.assertContains(change_page, self.unpause_url)
 
         with patch("tokens.admin.share_token.ShareTokenService", side_effect=KeyError("SHARE_TOKEN_FACTORY_ADDRESS")):
-            with self.assertLogs("tokens.admin.share_token", "WARNING") as logs:
+            with self.assertLogs("tokens.admin._helpers", "WARNING") as logs:
                 change_page = self.client.get(self.change_url)
         self.assertEqual(change_page.status_code, 200)
         self.assertContains(change_page, self.pause_url)
@@ -146,8 +146,8 @@ class ShareTokenAdminPauseTest(TestCase):
             return False
 
         self._contract().functions.paused.return_value.call.side_effect = slow
-        with patch("tokens.admin.share_token.PAUSED_READ_TIMEOUT", 0.05):
-            with self.assertLogs("tokens.admin.share_token", "WARNING") as logs:
+        with patch("tokens.admin._helpers.CHAIN_READ_TIMEOUT", 0.05):
+            with self.assertLogs("tokens.admin._helpers", "WARNING") as logs:
                 started = time.monotonic()
                 change_page = self.client.get(self.change_url)
         self.assertLess(time.monotonic() - started, 0.5)

@@ -25,9 +25,7 @@ export interface UserPreferences extends BaseEntity {
   displayCurrency: DisplayCurrency;
 }
 
-export interface UpdateUserPreferences {
+export type UpdateUserPreferences = Partial<Pick<UserPreferences, 'theme' | 'displayCurrency'>> & {
   selectedAccount?: string | null;
   selectedPortfolio?: string | null;
-  theme?: Theme;
-  displayCurrency?: DisplayCurrency;
-}
+};

@@ -169,7 +169,7 @@ class TransactionConfirmationService:
 
     @staticmethod
     def _notify_wallet_users(tx: Transaction, event: str) -> None:
-        recipients = get_user_model().objects.filter(userprofile__user_accounts__wallets=tx.wallet)
+        recipients = get_user_model().objects.filter(userprofile__user_accounts__wallets=tx.wallet).distinct()
         for user in recipients:
             send_transaction_notification.defer(user_id=str(user.pk), transaction_id=str(tx.uuid), event_type=event)
 

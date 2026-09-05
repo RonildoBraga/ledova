@@ -14,6 +14,7 @@ interface PlaceOrderPanelProps {
   walletsWithHoldings: { walletAddress: string; balance: string }[];
   onSubmit: (data: CreateOrderRequest) => Promise<TransferOrder>;
   isWalletWhitelisted: boolean;
+  isWhitelistStatusUnknown: boolean;
   isLoadingWhitelistStatus: boolean;
 }
 
@@ -23,6 +24,7 @@ export function PlaceOrderPanel({
   walletsWithHoldings,
   onSubmit,
   isWalletWhitelisted,
+  isWhitelistStatusUnknown,
   isLoadingWhitelistStatus,
 }: PlaceOrderPanelProps) {
   const [orderType, setOrderType] = useState<OrderType | null>(null);
@@ -100,8 +102,14 @@ export function PlaceOrderPanel({
               <div className="flex items-start gap-3">
                 <ShieldWarningIcon size={ICON_LG} className="text-warning-light flex-shrink-0 mt-0.5" />
                 <div>
-                  <h4 className="text-sm font-semibold text-warning-light">Wallet Not Verified</h4>
-                  <p className="text-sm text-text-muted mt-1">Complete KYC verification before placing orders.</p>
+                  <h4 className="text-sm font-semibold text-warning-light">
+                    {isWhitelistStatusUnknown ? 'Allowlist Status Unavailable' : 'Wallet Not Allowlisted'}
+                  </h4>
+                  <p className="text-sm text-text-muted mt-1">
+                    {isWhitelistStatusUnknown
+                      ? 'We could not reach the network to check your allowlist status. Orders are held until the check succeeds - please try again shortly.'
+                      : 'The operator must add your wallet to the allowlist before you can place orders.'}
+                  </p>
                 </div>
               </div>
             </div>

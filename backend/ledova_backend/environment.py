@@ -34,3 +34,13 @@ def resolve_storage_backend(*, debug: bool) -> str:
         default="local",
     )
     return "local" if debug else configured_backend
+
+
+def assert_media_storage_is_servable(*, debug: bool, storage_backend: str) -> None:
+    if debug or storage_backend != "local":
+        return
+    raise ImproperlyConfigured(
+        "STORAGE_BACKEND=local is only servable while DEBUG is true: the /media/ route is registered by "
+        "django.conf.urls.static, which returns no patterns when DEBUG is false, so every uploaded document "
+        "answers 404. Set STORAGE_BACKEND to s3 or gcs for any deployment that runs with DEBUG=false."
+    )

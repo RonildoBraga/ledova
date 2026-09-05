@@ -74,6 +74,7 @@ export function useHome() {
     wallets: {
       btcWalletsCount: filterWalletsByChain(walletsSummary.walletsList, BLOCKCHAIN.BITCOIN).length,
       ethWalletsCount: filterWalletsByChain(walletsSummary.walletsList, BLOCKCHAIN.ETHEREUM).length,
+      baseWalletsCount: filterWalletsByChain(walletsSummary.walletsList, BLOCKCHAIN.BASE).length,
       totals: calculateWalletTotals(walletsSummary.walletsList),
       isLoading: walletsSummary.isLoading,
     },

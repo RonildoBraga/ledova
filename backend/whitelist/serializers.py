@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from whitelist.constants import WHITELIST_STATUS_CHOICES
 from whitelist.models import WhitelistEntry
 
 
@@ -41,6 +42,7 @@ class WhitelistStatusSerializer(serializers.Serializer):
     address = serializers.CharField()
     is_whitelisted = serializers.BooleanField()
     can_receive = serializers.BooleanField()
+    status = serializers.ChoiceField(choices=WHITELIST_STATUS_CHOICES)
 
 
 class WhitelistAddSerializer(serializers.Serializer):

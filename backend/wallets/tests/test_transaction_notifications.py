@@ -16,6 +16,8 @@ TASK = "wallets.services.transaction_confirmation.send_transaction_notification"
 
 class TransactionNotificationProducerTest(TestCase):
     def setUp(self):
+        patch("users.services.notifications.ExpoPushClient").start()
+        self.addCleanup(patch.stopall)
         self.tenant = make_tenant("notified")
         self.bystander = make_tenant("bystander")
         self.tx = self.tenant.transaction

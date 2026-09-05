@@ -1,7 +1,8 @@
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
+from datetime import timezone as datetime_timezone
 from decimal import Decimal
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, NamedTuple, Optional
 
 from django.utils import timezone
 from procrastinate import RetryStrategy
@@ -53,6 +54,66 @@ def _extract_actual_fee(receipt: Dict[str, Any], chain: str) -> Optional[Decimal
         return None
 
 
+class _ReceiptReader(NamedTuple):
+
+    block_number: Callable[[Dict[str, Any]], Optional[int]]
+    succeeded: Callable[[Dict[str, Any]], bool]
+    block_timestamp: Callable[[Any, Dict[str, Any], Optional[int]], Optional[datetime]]
+
+
+def _evm_block_number(receipt: Dict[str, Any]) -> Optional[int]:
+    return receipt.get("blockNumber") or receipt.get("block_number")
+
+
+def _evm_succeeded(receipt: Dict[str, Any]) -> bool:
+    status = receipt.get("status", 1)
+    return status == 1 or status is True
+
+
+def _evm_block_timestamp(client: Any, receipt: Dict[str, Any], block_number: Optional[int]) -> Optional[datetime]:
+    if not block_number or not hasattr(client, "w3"):
+        return None
+    try:
+        block = client.w3.eth.get_block(block_number)
+    except Exception:
+        return timezone.now()
+    if not block:
+        return None
+    return datetime.fromtimestamp(block["timestamp"], tz=datetime_timezone.utc)
+
+
+def _bitcoin_block_number(receipt: Dict[str, Any]) -> Optional[int]:
+    return receipt.get("block_height")
+
+
+def _bitcoin_succeeded(receipt: Dict[str, Any]) -> bool:
+    return bool(receipt.get("confirmed")) and int(receipt.get("confirmations") or 0) > 0
+
+
+def _bitcoin_block_timestamp(client: Any, receipt: Dict[str, Any], block_number: Optional[int]) -> Optional[datetime]:
+    block_hash = receipt.get("block_hash")
+    if not block_hash or not hasattr(client, "get_block_timestamp"):
+        return None
+    try:
+        seconds = client.get_block_timestamp(block_hash)
+    except Exception:
+        return None
+    if seconds is None:
+        return None
+    return datetime.fromtimestamp(seconds, tz=datetime_timezone.utc)
+
+
+_EVM_RECEIPT_READER = _ReceiptReader(_evm_block_number, _evm_succeeded, _evm_block_timestamp)
+
+_RECEIPT_READERS = {
+    BLOCKCHAIN_BITCOIN: _ReceiptReader(_bitcoin_block_number, _bitcoin_succeeded, _bitcoin_block_timestamp),
+}
+
+
+def get_receipt_reader(chain: str) -> _ReceiptReader:
+    return _RECEIPT_READERS.get(chain.lower(), _EVM_RECEIPT_READER)
+
+
 @app.task(retry=RetryStrategy(max_attempts=6, wait=30))
 def confirm_pending_transaction(tx_hash: str, wallet_uuid: str) -> Dict[str, Any]:
     try:
@@ -76,20 +137,12 @@ def confirm_pending_transaction(tx_hash: str, wallet_uuid: str) -> Dict[str, Any
         logger.info(f"Transaction not yet confirmed: {tx_hash}")
         raise RuntimeError(f"receipt not yet available for {tx_hash}")
 
-    block_number = receipt.get("blockNumber") or receipt.get("block_number")
-    block_timestamp = None
+    reader = get_receipt_reader(wallet.chain)
+    block_number = reader.block_number(receipt)
+    block_timestamp = reader.block_timestamp(client, receipt, block_number)
     actual_fee = _extract_actual_fee(receipt, wallet.chain)
 
-    if block_number:
-        try:
-            block = client.w3.eth.get_block(block_number) if hasattr(client, "w3") else None
-            if block:
-                block_timestamp = timezone.datetime.fromtimestamp(block["timestamp"], tz=timezone.utc)
-        except Exception:
-            block_timestamp = timezone.now()
-
-    tx_status = receipt.get("status", 1)
-    if tx_status == 1 or tx_status is True:
+    if reader.succeeded(receipt):
         result = TransactionConfirmationService.confirm_transaction(
             tx_hash=tx_hash,
             block_number=block_number,
