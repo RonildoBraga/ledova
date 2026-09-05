@@ -4,6 +4,7 @@ import django.db.models.deletion
 from django.conf import settings
 from django.db import migrations, models
 
+import shared.storage
 import users.models.investor_classification
 
 
@@ -65,6 +66,7 @@ class Migration(migrations.Migration):
                         blank=True,
                         max_length=255,
                         null=True,
+                        storage=shared.storage.private_storage,
                         upload_to=users.models.investor_classification.investor_evidence_path,
                     ),
                 ),

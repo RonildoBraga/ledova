@@ -7,17 +7,15 @@ from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 from web3 import Web3
 
-from users.services.eligibility import investor_eligibility
+from users.services.eligibility import account_eligibility
 from wallets.models import Wallet
 from whitelist.models import WhitelistEntry, WhitelistStatus
 
 
 def entry_eligibility(wallet):
-    account = wallet.user_account if wallet is not None else None
-    profile = account.user_profiles.first() if account is not None else None
-    if profile is None:
+    if wallet is None:
         return None
-    return investor_eligibility(profile.user)
+    return account_eligibility(wallet.user_account)
 
 
 def eligibility_warning(wallet):

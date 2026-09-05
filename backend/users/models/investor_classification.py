@@ -8,6 +8,7 @@ from django.db import models
 from django.utils import timezone
 
 from shared.models import BaseModel
+from shared.storage import private_storage
 from users.exceptions import InvalidClassificationTransitionException
 from users.querysets.investor_classification import InvestorClassificationQuerySet
 
@@ -107,7 +108,13 @@ class InvestorClassification(BaseModel):
     declaration_text = models.TextField(blank=True)
     declared_basis = models.TextField(blank=True)
 
-    evidence_file = models.FileField(upload_to=investor_evidence_path, max_length=255, null=True, blank=True)
+    evidence_file = models.FileField(
+        upload_to=investor_evidence_path,
+        storage=private_storage,
+        max_length=255,
+        null=True,
+        blank=True,
+    )
     evidence_file_size = models.PositiveIntegerField(null=True, blank=True)
     evidence_mime_type = models.CharField(max_length=100, blank=True)
 

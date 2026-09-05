@@ -33,7 +33,7 @@ RUN SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
 
 RUN groupadd --gid 1000 appuser \
     && useradd --uid 1000 --gid appuser --create-home --shell /usr/sbin/nologin appuser \
-    && mkdir -p /usr/src/app/media \
+    && mkdir -p /usr/src/app/media /usr/src/app/private-media \
     && chown -R appuser:appuser /usr/src/app
 
 USER appuser

@@ -1,9 +1,13 @@
+import importlib
+import os
+import re
 from datetime import date, timedelta
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase, override_settings
-from django.urls import reverse
+from django.test import Client, TestCase, override_settings
+from django.urls import clear_url_caches, reverse
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
@@ -358,3 +362,50 @@ class AdminTransitionViewTest(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertIn("/admin/login/", response["Location"])
+
+
+@override_settings(STORAGES=ADMIN_STORAGES)
+class EvidenceIsNotServedFromMediaTest(TestCase):
+
+    def setUp(self):
+        self.staff = User.objects.create_superuser(email="media-staff@example.test", password="pw-12345678")
+        _, account = make_investor("media-leak")
+        self.classification = attach_evidence(make_classification(account), EVIDENCE_BYTES)
+
+    @staticmethod
+    def _reloaded_urlconf():
+        import ledova_backend.urls
+
+        importlib.reload(ledova_backend.urls)
+        clear_url_caches()
+
+    def test_the_admin_change_page_prints_no_media_href(self):
+        self.client.force_login(self.staff)
+
+        response = self.client.get(reverse("admin:users_investorclassification_change", args=[self.classification.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(re.findall(r'href="(/media/[^"]*)"', response.content.decode()), [])
+
+    def test_the_evidence_file_has_no_public_url_at_all(self):
+        with self.assertRaises(ValueError):
+            self.classification.evidence_file.url
+
+    def test_an_anonymous_caller_cannot_fetch_the_evidence_from_media_under_debug(self):
+        media_path = f"{settings.MEDIA_URL}{self.classification.evidence_file.name}"
+
+        with override_settings(DEBUG=True, ALLOWED_HOSTS=["*"]):
+            self._reloaded_urlconf()
+            try:
+                response = Client().get(media_path)
+            finally:
+                self._reloaded_urlconf()
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_the_evidence_bytes_live_outside_the_served_media_root(self):
+        path = self.classification.evidence_file.path
+
+        self.assertTrue(os.path.isfile(path))
+        self.assertTrue(path.startswith(os.path.abspath(settings.PRIVATE_MEDIA_ROOT)))
+        self.assertFalse(path.startswith(os.path.abspath(settings.MEDIA_ROOT)))

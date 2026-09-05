@@ -152,7 +152,7 @@ class InvestorClassificationAdmin(admin.ModelAdmin):
         ),
         (
             "Evidence",
-            {"fields": ["evidence_file", "evidence_link", "evidence_file_size", "evidence_mime_type"]},
+            {"fields": ["evidence_link", "evidence_file_size", "evidence_mime_type"]},
         ),
         (
             "Accountant's Certificate",

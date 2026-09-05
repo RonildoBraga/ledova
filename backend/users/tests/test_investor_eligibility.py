@@ -17,7 +17,12 @@ from users.constants import (
     ACCOUNT_STATUS_TERMINATED,
 )
 from users.exceptions import InvestorNotEligibleException
-from users.models import InvestorCategory, InvestorClassification, UserProfile
+from users.models import (
+    InvestorCategory,
+    InvestorClassification,
+    UserAccount,
+    UserProfile,
+)
 from users.models.user_account import AccountRole
 from users.services.eligibility import (
     ACCOUNT_NOT_IN_GOOD_STANDING,
@@ -25,6 +30,8 @@ from users.services.eligibility import (
     IDENTITY_NOT_VERIFIED,
     NO_INVESTOR_ACCOUNT,
     NO_LIVE_CLASSIFICATION,
+    NOT_AN_INVESTOR_ACCOUNT,
+    account_eligibility,
     investor_eligibility,
     require_investor_eligibility,
     require_subscription_eligibility,
@@ -245,45 +252,160 @@ class SubscriptionEligibilityTest(TestCase):
         )
         _set_kyc_required(True)
 
-    def _user_for(self, label, category):
-        user, account = make_investor(label)
+    def _account_for(self, label, category):
+        _, account = make_investor(label)
         company = self.company if category == InvestorCategory.ASSOCIATED_PERSON else None
         verified_classification(account, self.reviewer, category=category, company=company)
-        return user
+        return account
 
     def test_product_value_is_refused_below_the_threshold(self):
-        user = self._user_for("pv-below", InvestorCategory.PRODUCT_VALUE)
+        account = self._account_for("pv-below", InvestorCategory.PRODUCT_VALUE)
 
         with self.assertRaises(InvestorNotEligibleException) as caught:
-            require_subscription_eligibility(user, self.company, Decimal("499999.99"))
+            require_subscription_eligibility(account, self.company, Decimal("499999.99"))
 
         self.assertEqual(caught.exception.reasons, (AMOUNT_BELOW_PRODUCT_VALUE_THRESHOLD,))
 
     def test_product_value_passes_exactly_at_the_threshold(self):
-        user = self._user_for("pv-at", InvestorCategory.PRODUCT_VALUE)
+        account = self._account_for("pv-at", InvestorCategory.PRODUCT_VALUE)
 
-        outcome = require_subscription_eligibility(user, self.company, Decimal("500000.00"))
+        outcome = require_subscription_eligibility(account, self.company, Decimal("500000.00"))
 
         self.assertTrue(outcome.is_eligible)
 
     def test_product_value_passes_above_the_threshold(self):
-        user = self._user_for("pv-above", InvestorCategory.PRODUCT_VALUE)
+        account = self._account_for("pv-above", InvestorCategory.PRODUCT_VALUE)
 
-        self.assertTrue(require_subscription_eligibility(user, self.company, Decimal("500000.01")).is_eligible)
+        self.assertTrue(require_subscription_eligibility(account, self.company, Decimal("500000.01")).is_eligible)
 
     def test_the_threshold_does_not_apply_to_other_categories(self):
         for category in FOUR_CATEGORIES:
             if category == InvestorCategory.PRODUCT_VALUE:
                 continue
             with self.subTest(category=category):
-                user = self._user_for(f"other-{category}", category)
-                outcome = require_subscription_eligibility(user, self.company, Decimal("1.00"))
+                account = self._account_for(f"other-{category}", category)
+                outcome = require_subscription_eligibility(account, self.company, Decimal("1.00"))
                 self.assertTrue(outcome.is_eligible)
 
     def test_an_ineligible_account_is_refused_before_the_amount_is_looked_at(self):
-        user, _ = make_investor("no-claim")
+        _, account = make_investor("no-claim")
 
         with self.assertRaises(InvestorNotEligibleException) as caught:
-            require_subscription_eligibility(user, self.company, Decimal("900000.00"))
+            require_subscription_eligibility(account, self.company, Decimal("900000.00"))
 
         self.assertEqual(caught.exception.reasons, (NO_LIVE_CLASSIFICATION,))
+
+    def test_the_outcome_names_the_account_that_was_asked_about(self):
+        account = self._account_for("named-account", InvestorCategory.PROFESSIONAL_INVESTOR)
+
+        outcome = require_subscription_eligibility(account, self.company, Decimal("1.00"))
+
+        self.assertEqual(outcome.account, account)
+
+
+class AccountScopedEligibilityTest(TestCase):
+
+    def setUp(self):
+        self.reviewer = User.objects.create_user(email="account-scope@example.test", password="pw-12345678")
+        self.owner = User.objects.create_user(email="scope-issuer@example.test", password="pw-12345678")
+        self.company = Company.objects.create(
+            owner=self.owner, name="Scope Pty Ltd", company_type=CompanyType.PROPRIETARY, acn="444555666"
+        )
+        _set_kyc_required(True)
+        self.user, self.qualified = make_investor("two-accounts")
+        self.profile = self.qualified.user_profiles.first()
+        self.unqualified = UserAccount.objects.create(
+            account_number="ACC-SECOND",
+            account_status=ACCOUNT_STATUS_ACTIVE,
+            role=AccountRole.INVESTOR,
+            director=self.profile,
+        )
+        self.unqualified.user_profiles.add(self.profile)
+        verified_classification(self.qualified, self.reviewer)
+
+    def test_the_user_scoped_answer_is_true_because_one_account_qualifies(self):
+        self.assertTrue(investor_eligibility(self.user).is_eligible)
+        self.assertEqual(investor_eligibility(self.user).account, self.qualified)
+
+    def test_the_unqualified_account_of_an_eligible_user_cannot_subscribe(self):
+        with self.assertRaises(InvestorNotEligibleException) as caught:
+            require_subscription_eligibility(self.unqualified, self.company, Decimal("900000.00"))
+
+        self.assertEqual(caught.exception.reasons, (NO_LIVE_CLASSIFICATION,))
+
+    def test_the_unqualified_account_of_an_eligible_user_is_refused_without_an_amount(self):
+        outcome = account_eligibility(self.unqualified, self.company)
+
+        self.assertFalse(outcome.is_eligible)
+        self.assertEqual(outcome.reasons, (NO_LIVE_CLASSIFICATION,))
+
+    def test_the_qualified_account_passes(self):
+        self.assertTrue(account_eligibility(self.qualified, self.company).is_eligible)
+
+    def test_a_non_investing_account_is_refused(self):
+        _, company_account = make_investor("scope-company-role", role=AccountRole.COMPANY)
+
+        outcome = account_eligibility(company_account)
+
+        self.assertEqual(outcome.reasons, (NOT_AN_INVESTOR_ACCOUNT,))
+
+    def test_no_account_is_refused(self):
+        self.assertEqual(account_eligibility(None).reasons, (NOT_AN_INVESTOR_ACCOUNT,))
+
+
+class MultipleLiveClaimsTest(TestCase):
+
+    def setUp(self):
+        self.reviewer = User.objects.create_user(email="multi-claim@example.test", password="pw-12345678")
+        self.owner = User.objects.create_user(email="multi-issuer@example.test", password="pw-12345678")
+        self.company = Company.objects.create(
+            owner=self.owner, name="Multi Pty Ltd", company_type=CompanyType.PROPRIETARY, acn="777888999"
+        )
+        _set_kyc_required(True)
+        self.user, self.account = make_investor("multi")
+
+    def _claim_created_at(self, category, created_at):
+        claim = verified_classification(self.account, self.reviewer, category=category)
+        InvestorClassification.objects.filter(pk=claim.pk).update(created_at=created_at)
+        claim.refresh_from_db()
+        return claim
+
+    def test_a_small_amount_passes_on_the_professional_claim_whichever_was_submitted_last(self):
+        now = timezone.now()
+        for label, product_value_at, professional_at in (
+            ("product value newest", now, now - timedelta(days=1)),
+            ("professional newest", now - timedelta(days=1), now),
+        ):
+            with self.subTest(label):
+                InvestorClassification.objects.all().delete()
+                self._claim_created_at(InvestorCategory.PRODUCT_VALUE, product_value_at)
+                professional = self._claim_created_at(InvestorCategory.PROFESSIONAL_INVESTOR, professional_at)
+
+                outcome = require_subscription_eligibility(self.account, self.company, Decimal("1000.00"))
+
+                self.assertEqual(outcome.classification, professional)
+
+    def test_an_amount_at_the_threshold_may_be_answered_by_either_claim(self):
+        now = timezone.now()
+        self._claim_created_at(InvestorCategory.PRODUCT_VALUE, now)
+        self._claim_created_at(InvestorCategory.PROFESSIONAL_INVESTOR, now - timedelta(days=1))
+
+        outcome = require_subscription_eligibility(self.account, self.company, Decimal("500000.00"))
+
+        self.assertTrue(outcome.is_eligible)
+        self.assertEqual(outcome.classification.category, InvestorCategory.PRODUCT_VALUE)
+
+    def test_with_no_amount_the_newest_live_claim_is_the_one_reported(self):
+        now = timezone.now()
+        self._claim_created_at(InvestorCategory.PRODUCT_VALUE, now - timedelta(days=1))
+        newest = self._claim_created_at(InvestorCategory.ACCOUNTANT_CERTIFICATE, now)
+
+        self.assertEqual(investor_eligibility(self.user).classification, newest)
+
+    def test_a_product_value_only_account_is_still_refused_below_the_threshold(self):
+        self._claim_created_at(InvestorCategory.PRODUCT_VALUE, timezone.now())
+
+        with self.assertRaises(InvestorNotEligibleException) as caught:
+            require_subscription_eligibility(self.account, self.company, Decimal("499999.99"))
+
+        self.assertEqual(caught.exception.reasons, (AMOUNT_BELOW_PRODUCT_VALUE_THRESHOLD,))

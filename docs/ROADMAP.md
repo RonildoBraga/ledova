@@ -64,17 +64,43 @@ the only directory that does exist is the market one, `GET
   the operator holding an AFSL, and there is no evidence this deployment does.
   Adding it later is one `TextChoices` row, one migration and one form branch.
   Expiry is derived from `expires_at`, so there is no stored expired status and
-  no nightly sweep. `users.services.eligibility.investor_eligibility` is the one
-  predicate; the directory and the subscription flow call it, they do not
-  re-derive it.
-- Classification evidence is not served from `MEDIA_URL`. It streams through an
-  authenticated view scoped by `visible_to_user`, so the submitting account
-  reads it over the API and staff read it in the admin; both go through the
-  storage backend's `open()`, so local disk and S3 behave identically and no
-  presign infrastructure is needed. `CompanyDocument.get_file_url` still returns
-  a plain `MEDIA_URL` path — a pre-existing exposure on ASIC extracts and
-  constitutions, left standing because repointing it breaks the mobile client,
-  which authenticates with a bearer token an `<img>` cannot send.
+  no nightly sweep. `users.services.eligibility` is the one predicate, with two
+  subjects. `investor_eligibility(user)` answers a question about a person and
+  is what the directory asks: may this user see offerings at all. Everything
+  that binds a specific account — a subscription, a whitelist entry — asks
+  `account_eligibility(account)` / `require_subscription_eligibility(account,
+  company, amount)` instead, because a user with two investor accounts earns a
+  `True` on one of them and must not spend it on the other. The predicate never
+  infers the account from the user for those callers; the caller names it.
+- An account may hold more than one live claim, so eligibility asks whether
+  *any* live claim supports the offer, not what the newest one says. A live
+  `professional_investor` claim qualifies a AUD 1,000 subscription even when a
+  `product_value` claim was recorded more recently, and the AUD 500,000 floor
+  still refuses an account whose only live claim is `product_value`. Where no
+  amount is in play the newest live claim is the one reported.
+- Classification evidence is not served from `MEDIA_URL`, and the bytes do not
+  live under `MEDIA_ROOT` at all. On the local backend they are written to
+  `PRIVATE_MEDIA_ROOT` (`backend/private-media`) through
+  `shared.storage.PrivateMediaStorage`, which has no `base_url`, so
+  `evidence_file.url` raises rather than handing anyone a path; on S3 and GCS
+  the same private, signed bucket configuration as every other upload. Hiding
+  the link was not enough: `django.conf.urls.static` serves the whole of
+  `MEDIA_ROOT` to anonymous callers whenever `DEBUG` is true, which is the
+  configuration `docker-compose.yml` and `backend/.env.example` ship, so a
+  net-asset statement under `MEDIA_ROOT` is one copied URL away from the public.
+  Reading it goes through the storage backend's `open()` in both places — the
+  submitting account over the API scoped by `visible_to_user`, staff through the
+  admin — so local disk and S3 behave identically and no presign is needed. The
+  admin change form shows only that streaming link; the raw `FileField` is not
+  in `fieldsets`, and putting it in `readonly_fields` would not do, because
+  Django renders a readonly `FileField` as an `<a href>` on `value.url`.
+- `CompanyDocument.get_file_url` still returns a plain `MEDIA_URL` path, so on a
+  deployment running `DEBUG=true` every uploaded ASIC extract and constitution
+  is readable with no session. Lower sensitivity than net-asset evidence and
+  left standing because repointing it breaks the mobile client, which
+  authenticates with a bearer token an `<img>` cannot send — but it is an
+  exposure, not merely a rough edge, and closing it means giving the clients a
+  streaming endpoint the way classification evidence has one.
 - There is no retention or auto-deletion rule for rejected and expired
   classifications. Evidence is kept until someone decides the rule. Account
   deletion behaviour is unchanged. Flagged for the owner and counsel.
@@ -98,6 +124,12 @@ switch.
   `IdentityVerificationService._process_verified_customer` is the only writer of
   `active` and it runs only on a green KYC result. `issuer_kyc_required` is
   still read by nothing.
+- The eligibility predicate has one production reader so far, the whitelist
+  admin's read-only column and add-form warning. The directory and the
+  subscription flow are the enforcing callers and neither exists yet. When the
+  directory lands, a refusal must narrow the queryset to
+  `ShareToken.objects.none()` and answer 404 — never 403, which would tell an
+  ineligible caller that the offering exists.
 - A share register that is the authoritative record, reconciled against the
   chain rather than derived from it ad hoc.
 - Director authority, ownership immutability, ACN and ABN validation and

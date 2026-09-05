@@ -18,6 +18,7 @@ from users.models.investor_classification import (
 from users.models.user_account import UserAccount
 
 NO_INVESTOR_ACCOUNT = "no_investor_account"
+NOT_AN_INVESTOR_ACCOUNT = "not_an_investor_account"
 ACCOUNT_NOT_IN_GOOD_STANDING = "account_not_in_good_standing"
 IDENTITY_NOT_VERIFIED = "identity_not_verified"
 NO_LIVE_CLASSIFICATION = "no_live_classification"
@@ -45,16 +46,23 @@ def _every_holder_verified(account):
     return profiles.exists() and not profiles.filter(is_id_verified=False).exists()
 
 
-def _evaluate(account, investor_kyc_required, company):
+def _permits_amount(classification, amount_aud):
+    if amount_aud is None or classification.category != InvestorCategory.PRODUCT_VALUE:
+        return True
+    return Decimal(amount_aud) >= PRODUCT_VALUE_THRESHOLD_AUD
+
+
+def _evaluate(account, investor_kyc_required, company, amount_aud=None):
     reasons = []
     if _standing_refused(account, investor_kyc_required):
         reasons.append(ACCOUNT_NOT_IN_GOOD_STANDING)
     if investor_kyc_required and not _every_holder_verified(account):
         reasons.append(IDENTITY_NOT_VERIFIED)
 
-    classification = InvestorClassification.objects.filter(user_account=account).live().for_company(company).first()
+    live = list(InvestorClassification.objects.filter(user_account=account).live().for_company(company))
+    classification = next((claim for claim in live if _permits_amount(claim, amount_aud)), None)
     if classification is None:
-        reasons.append(NO_LIVE_CLASSIFICATION)
+        reasons.append(AMOUNT_BELOW_PRODUCT_VALUE_THRESHOLD if live else NO_LIVE_CLASSIFICATION)
 
     return InvestorEligibility(
         is_eligible=not reasons,
@@ -62,6 +70,14 @@ def _evaluate(account, investor_kyc_required, company):
         classification=classification,
         reasons=tuple(reasons),
     )
+
+
+def account_eligibility(account, company=None, amount_aud=None) -> InvestorEligibility:
+    if account is None or not UserAccount.objects.investing().filter(pk=account.pk).exists():
+        return InvestorEligibility(
+            is_eligible=False, account=account, classification=None, reasons=(NOT_AN_INVESTOR_ACCOUNT,)
+        )
+    return _evaluate(account, Operator.get().investor_kyc_required, company, amount_aud)
 
 
 def investor_eligibility(user, company=None) -> InvestorEligibility:
@@ -77,16 +93,15 @@ def investor_eligibility(user, company=None) -> InvestorEligibility:
     return outcomes[0]
 
 
-def require_investor_eligibility(user, company=None) -> InvestorEligibility:
-    outcome = investor_eligibility(user, company)
+def _require(outcome) -> InvestorEligibility:
     if not outcome.is_eligible:
         raise InvestorNotEligibleException(outcome.reasons)
     return outcome
 
 
-def require_subscription_eligibility(user, company, amount_aud: Decimal) -> InvestorEligibility:
-    outcome = require_investor_eligibility(user, company)
-    if outcome.classification.category == InvestorCategory.PRODUCT_VALUE:
-        if Decimal(amount_aud) < PRODUCT_VALUE_THRESHOLD_AUD:
-            raise InvestorNotEligibleException((AMOUNT_BELOW_PRODUCT_VALUE_THRESHOLD,))
-    return outcome
+def require_investor_eligibility(user, company=None) -> InvestorEligibility:
+    return _require(investor_eligibility(user, company))
+
+
+def require_subscription_eligibility(account, company, amount_aud: Decimal) -> InvestorEligibility:
+    return _require(account_eligibility(account, company, amount_aud))

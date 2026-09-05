@@ -26,9 +26,13 @@ STORAGE_BACKEND = _storage_backend
 if _storage_backend == "local":
     MEDIA_URL = "/media/"
     MEDIA_ROOT = os.path.join(BASE_DIR, "media")
+    PRIVATE_MEDIA_ROOT = os.path.join(BASE_DIR, "private-media")
     STORAGES = {
         "default": {
             "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "private": {
+            "BACKEND": "shared.storage.PrivateMediaStorage",
         },
         "staticfiles": _STATICFILES_STORAGE,
     }
@@ -65,3 +69,5 @@ else:
             },
             "staticfiles": _STATICFILES_STORAGE,
         }
+
+    STORAGES["private"] = STORAGES["default"]
