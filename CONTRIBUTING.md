@@ -1,80 +1,100 @@
 # Contributing to Ledova
 
-Thanks for your interest. Ledova is an early-stage, **experimental, unaudited,
-testnet-only** reference implementation, so there is a lot of surface to
-improve — and contributions that make it more correct, more secure, better
-tested, and better documented are especially welcome.
+How to set up, what the gates are, and what a pull request has to look like.
 
-Please read this whole page before opening your first pull request.
+Ledova is an early-stage, experimental, unaudited, testnet-only reference
+implementation, so contributions that make it more correct, more secure, better
+tested and better documented are especially welcome. Please read this whole page
+before opening your first pull request.
 
 ## Ground rules
 
 - **Testnet and synthetic data only.** Never contribute code, configuration,
-  tests, or docs that assume real funds, real securities, real personal data,
-  or a mainnet deployment target. Chain guards that fail closed on mainnet IDs
-  are intentional — do not weaken them.
-- **No secrets, ever.** Do not commit `.env` files, private keys, seed phrases,
-  API tokens, real personal data, or internal infrastructure identifiers. Only
-  `.env.example` templates with blank values belong in the repo.
-- **Trading and mutation flows are disabled by default** while the issues in
-  the tracker (see below) are open. That default is containment, not a bug to
+  tests or docs that assume real funds, real securities, real personal data or a
+  mainnet deployment target. The chain guards that fail closed on unsupported
+  chain ids are intentional; do not weaken them.
+- **No secrets, ever.** No `.env` files, private keys, seed phrases, API tokens,
+  real personal data or internal infrastructure identifiers. Only `.env.example`
+  templates with blank values belong in the repository.
+- **Trading routes are disabled by default** while the items in
+  [ISSUES.md](ISSUES.md) are open. That default is containment, not a bug to
   "fix" by enabling them.
 - Be respectful and constructive. Assume good faith.
+  See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
 ## Where to start
 
-- Browse the **[open issues](https://github.com/RonildoBraga/ledova/issues)**.
-  The items labeled **`deferred-hardening`** are the known high-risk work
-  intentionally deferred from this release — they describe the redesigns
-  required before any multi-user or real-value use. `ISSUES.md` is the
-  human-readable index of the same list.
-- For anything substantial, **open an issue to discuss it first** so we can
-  agree on the approach before you invest time.
+- Browse the
+  [open issues](https://github.com/RonildoBraga/ledova/issues). The ones
+  labeled `deferred-hardening` are the known high-risk work described in
+  [ISSUES.md](ISSUES.md); they need redesigns, not patches.
+- For anything substantial, open an issue to discuss the approach first.
 
 ## Development setup
 
-The `README.md` quick-start covers the full local stack. In short:
+The [README quick start](README.md#quick-start) covers the full local stack.
+In short:
 
-- **Contracts:** `cd contracts && npm ci && npx hardhat compile && npx hardhat test`
-- **Backend + web stack (Docker):** `make init-local && make dev-up`
-- **Shared package + dashboard:** `npm ci && npm run dev:dashboard` (the dashboard compiles `packages/shared` from source; no build step)
+| Target | Commands |
+| --- | --- |
+| Whole stack in Docker | `make init-local && make dev-up` |
+| Dashboard and shared package | `npm ci && npm run dev:dashboard` (the dashboard compiles `packages/shared` from source; there is no build step) |
+| Backend outside Docker | `cd backend && make install && make run`, with a `.env` present |
+| Contracts | `cd contracts && npm ci && npx hardhat compile && npx hardhat test` |
+| Mobile | `cd mobile && make install && make start` |
 
-Copy each `.env.example` to a local `.env` and fill in your own values before
-running that component. Local compilation and contract tests do not need any
-credentials.
+Local compilation and the contract tests need no credentials.
+[docs/OPERATIONS.md](docs/OPERATIONS.md) documents every environment variable.
 
 ## Making changes
 
-1. **Fork** the repo and create a branch from `main`
-   (e.g. `fix/whitelist-check`, `docs/quickstart`).
-2. Keep pull requests **small and focused** — one logical change per PR.
-3. **Add or update tests** for any behavior change. Security- and
-   correctness-related changes should come with a regression test.
-4. **Run the checks locally** before pushing:
-   - Backend (from `backend/`): `make lint && make check && make test`; CI
-     also runs the suite on PostgreSQL. Follow
-     [backend/docs/CONVENTIONS.md](./backend/docs/CONVENTIONS.md) for
-     layering and style.
-   - JS/TS workspaces: the package's `lint`, `type`/build, and `test` scripts.
-   - Contracts: `npm run lint && npm run format:check && npx hardhat test`.
-5. Write a clear PR description: what changed, why, and how you verified it.
-   Reference the issue it addresses (e.g. `Closes #12`).
+1. Fork, and branch from `main` (`fix/whitelist-check`, `docs/quickstart`).
+2. Keep pull requests small and focused: one logical change each.
+3. Add or update tests for any behaviour change. Security and correctness fixes
+   come with a regression test. A new detail route or custom action also needs a
+   cross-tenant row in `backend/shared/tests/test_cross_tenant_routes.py`.
+4. Follow the coding rules in
+   [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#coding-rules). The one that
+   surprises people most: **source carries no comments and no docstrings**. Only
+   functional directives the tooling reads (`# noqa`, `eslint-disable`,
+   `// SPDX-License-Identifier` and the rest of the list) are allowed.
+   Configuration and documentation files keep their comments.
+5. Write a clear pull request description: what changed, why, and how you
+   verified it. Reference the issue it addresses (`Closes #12`).
+
+## Gates
+
+Run these locally before opening a pull request. Most are also CI gates; the
+exceptions are noted below the table.
+
+| Area | Command |
+| --- | --- |
+| Everything JavaScript | `make build`, `make check`, `make test` from the root |
+| Design tokens | `make generate-tokens`, then confirm `dashboard/src/styles/tokens.css` and `marketing/src/tokens.css` are unchanged |
+| Backend | from `backend/`: `make lint` (black, isort, flake8), `make check`, `make test` |
+| Backend migrations | from `backend/`: `python manage.py makemigrations --check --dry-run` |
+| Contracts | from `contracts/`: `npm run format:check && npm run lint && npx hardhat test` |
+| Real chain | `make chain-test` from the root |
+
+Local-only: `.github/workflows/ci.yml` has no contracts lint or format step, so
+`npm run format:check` and `npm run lint` from `contracts/` are yours to run.
+CI's `make test` runs `npm test` and `npm --prefix contracts test` only; root
+`npm run lint` is not a gate either.
+
+CI additionally runs the whole Django suite on PostgreSQL, the SQLite migration
+tests, and `make chain-test` twice, the second time on PostgreSQL.
 
 ## Reporting security issues
 
-**Do not open a public issue for a security vulnerability.** Use GitHub's
-**private vulnerability reporting** on this repository
-(Security → *Report a vulnerability*). Include reproduction steps and affected
-paths. Because this is an unaudited experimental project, please still avoid
-using it with anything of real value.
+Do not open a public issue for a vulnerability. Use GitHub's private
+vulnerability reporting on this repository (Security, then *Report a
+vulnerability*). See [SECURITY.md](SECURITY.md).
 
 ## Licensing of contributions
 
-By submitting a contribution, you agree that it is licensed under the project's
-**[Apache License 2.0](./LICENSE)**, and that you have the right to submit it
-under that license.
-
----
+By submitting a contribution you agree that it is licensed under the project's
+[Apache License 2.0](LICENSE) and that you have the right to submit it under
+that license.
 
 Ledova is an independent open-source project and makes no claim of regulatory
 compliance or legal recognition. Contributions are volunteered on that basis.

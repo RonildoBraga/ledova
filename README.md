@@ -1,66 +1,73 @@
 # Ledova
 
-Ledova is an experimental, open-source reference implementation for modelling
-allowlist-gated share tokens and settlement flows. The repository contains
-Solidity contracts, a Django API, web applications, a React Native client, and
-a shared TypeScript package.
+Ledova is an open-source reference implementation of infrastructure for
+tokenized company equity: companies deploy a share token, issue shares to
+whitelisted investor wallets, and an operator runs the whole thing from the
+Django admin.
 
-Ledova is the sanitized public continuation of the earlier private Blueberry
-codebase. The transition preserves its existing architecture and behaviour
-where practical rather than rebuilding the platform from scratch. Secrets,
-production configuration, private operations, and private data do not belong
-here; publication blockers are addressed now, while broader production
-hardening remains tracked in [ISSUES.md](./ISSUES.md).
+> **Experimental and unaudited.** Use Ledova only with synthetic data on a local
+> development chain or a supported public testnet. It is not production ready
+> and must not be used with real funds, securities, companies, identities,
+> wallets or personal information. It does not represent a real asset, issuer,
+> reserve, custodian, company register, licensed service or regulated offering,
+> and nothing here is legal, financial or investment advice.
 
-> **Experimental and unaudited.** Use Ledova only with synthetic data on a
-> local development chain or supported public testnet. It is not production
-> ready and must not be used with real funds, securities, companies, identities,
-> wallets, or personal information.
+## Who it is for
 
-**▶ [Watch a one-minute walkthrough](https://ledova.io/#demo)** of the local
-stack — sign-up, onboarding, watch-only wallets, and market data — or run it
-yourself with the quick start below.
+| Role | What they do |
+| --- | --- |
+| Operator | Hosts the deployment, runs the Django admin, holds the deployer key, receives investor payments in AUD or in a supported stablecoin |
+| Company | Registers, is approved, deploys a share token, issues shares up to its authorized cap |
+| Investor | Verifies identity, is whitelisted, holds shares in a verified EVM wallet |
 
-Ledova does not represent a real asset, issuer, reserve, custodian, company
-register, licensed service, or regulated offering. Nothing in this repository
-is legal, financial, or investment advice, and no claim of regulatory
-compliance or legal recognition is made.
+Shares are minted on allotment. The authorized share count is the cap; total
+supply is what has actually been issued. Only whitelisted addresses can receive
+a share token, enforced by the contract on every transfer.
+
+## Two deployment modes
+
+The operator row records which shape a deployment is
+(`/admin/operators/operator/1/change/`):
+
+- **Single issuer** — one company runs its own instance for its own shares.
+- **Registry** — a provider hosts many companies on one instance. This is the
+  default.
+
+Both run the same code and the same isolation rules; the mode is configuration,
+not a fork.
 
 ## Repository layout
 
 | Path | Contents |
 | --- | --- |
-| `contracts/` | Solidity contracts and local/testnet deployment examples |
-| `backend/` | Django REST API and PostgreSQL-backed background jobs |
-| `dashboard/` | React and Vite application demo |
+| `contracts/` | Solidity contracts, Hardhat tests, local and testnet deployment scripts |
+| `backend/` | Django REST API, Django admin, PostgreSQL-backed background jobs |
+| `dashboard/` | React and Vite web client |
+| `mobile/` | Expo application |
 | `marketing/` | Static project site |
-| `mobile/` | Experimental Expo application |
-| `packages/` | Shared TypeScript constants, types, services, and utilities |
-
-The current verified checkpoint and next task are recorded in
-[HANDOVER.md](./HANDOVER.md). Backend layering and style rules live in
-[backend/docs/CONVENTIONS.md](./backend/docs/CONVENTIONS.md).
+| `packages/` | `@ledova/shared`, the TypeScript constants, types, services and utilities both clients use, and `packages/scripts/` which generates the CSS design tokens |
+| `docs/` | Architecture, operations and roadmap |
+| `scripts/` | Local environment bootstrapper |
 
 ## Quick start
 
-Prerequisites: Docker with Compose and Python 3.13. From the repository root:
+Prerequisites: Docker with Compose, and Python 3.13. From the repository root:
 
 ```bash
 python3 scripts/init-local-env.py
 docker compose up --build
 ```
 
-With Docker images already cached, the local demo should start in under five
-minutes. A first run may take longer while Docker downloads and builds images.
-The `migrate` service also seeds the compliance monitoring rules, the alert
-procedure templates and the supported assets on every start; if you run the
-backend outside Docker (`make run` in `backend/`), run `python manage.py migrate`,
-`python manage.py sync_monitoring_rules`, `python manage.py sync_procedure_templates`
-and `python manage.py asset_sync --seed-only` once first.
+The initializer creates owner-only, gitignored `.env` files from the
+`.env.example` templates and generates the development secrets without printing
+them. It never overwrites an existing environment file. `make init-local` and
+`make dev-up` do the same two steps through the Makefile.
 
-The initializer creates ignored, owner-only local environment files and
-generates the required development secrets without printing them. It never
-overwrites an existing environment file.
+The `migrate` service runs the migrations and then seeds the compliance
+monitoring rules, the alert procedure templates and the supported assets on
+every start. Running the backend outside Docker (`make run` in `backend/`)
+means running those four commands by hand once; see
+[docs/OPERATIONS.md](docs/OPERATIONS.md).
 
 Once the containers are ready:
 
@@ -68,102 +75,101 @@ Once the containers are ready:
 - Marketing site: <http://localhost:5173>
 - API: <http://localhost:8000>
 
-Stop the stack with `docker compose down`.
+Stop the stack with `docker compose down` or `make dev-down`.
 
-The dashboard authenticates with cookies, so its origin must be listed in the
-backend's `DJANGO_CSRF_TRUSTED_ORIGINS` (the template already lists
-`http://localhost:5174`); cookie-authenticated writes from any other origin are
-rejected with `403 CSRF Failed`.
+Two things catch people out on a first run:
 
-Sign-up requires an email verification code. The local stack has no email
-provider configured: with `SENDGRID_API_KEY` empty the backend hands mail to
-Django's email backend, which under `DEBUG=true` (the local default) prints the
-message, six-digit code included, to the backend log
-(`docker compose logs -f backend`). A code is valid for ten minutes and five
-attempts; request a new one with "Resend" if it lapses. Outside `DEBUG` a real
-SendGrid configuration is required.
+- The dashboard authenticates with cookies, so its origin must be listed in
+  `DJANGO_CSRF_TRUSTED_ORIGINS` (the template already lists
+  `http://localhost:5174`). Cookie-authenticated writes from any other origin
+  are rejected with `403 CSRF Failed`.
+- Sign-up requires an emailed six-digit code, and the local stack has no email
+  provider. With `SENDGRID_API_KEY` empty and `DEBUG=true` the backend prints
+  the message, code included, to its log (`docker compose logs -f backend`). A
+  code lasts ten minutes and five attempts; use "Resend" if it lapses.
 
-To run the contract suite independently:
+Common Makefile targets, from the repository root:
+
+| Command | Does |
+| --- | --- |
+| `make install` | `npm ci` for the root workspace, `contracts`, `marketing` and `mobile` |
+| `make install-backend` | Install the backend development dependencies |
+| `make build` | Build the dashboard, the marketing site and the contracts |
+| `make check` | Type-check every workspace and run Django's `manage.py check` |
+| `make test` | Workspace and contract tests |
+| `make chain-test` | The real-chain backend test against a Hardhat node |
+| `make generate-tokens` | Regenerate the CSS design tokens from `packages/shared` |
+
+`make help` lists the common ones; the Makefile also has `check-local-env`,
+`contracts-compile` and `contracts-test`.
+
+## Local chain
+
+Share tokens are created through the `ShareTokenFactory`, minted on allotment up
+to the authorized cap, and only wallets on the `WhitelistRegistry` can receive
+them. To exercise that against a real node, in two terminals:
 
 ```bash
-cd contracts
-npm ci
-npx hardhat test
+cd contracts && npx hardhat node               # chain id 31337
+npm --prefix contracts run deploy:local:core   # writes .deployed-contracts.env
 ```
 
-### Local chain
+Then point `backend/.env` at the node and the deployed addresses;
+[docs/OPERATIONS.md](docs/OPERATIONS.md#chain-configuration) has the variable
+list and the Base Sepolia equivalent.
 
-Share tokens are created through the `ShareTokenFactory`, shares are minted
-on allotment (never at deployment) up to the authorized cap, and only wallets
-on the `WhitelistRegistry` can receive them. To exercise that against a real
-node:
-
-```bash
-cd contracts && npx hardhat node          # terminal 1, chain id 31337
-npm --prefix contracts run deploy:local:core   # terminal 2, writes .deployed-contracts.env
-```
-
-Copy the four addresses from `.deployed-contracts.env` into `backend/.env`
-together with `BLOCKCHAIN_RPC_URL`, `BLOCKCHAIN_CHAIN_ID=31337` and the
-Hardhat account #0 key as `BLOCKCHAIN_OPERATOR_KEY` (see
-`backend/.env.example`). `make chain-test` does all of that unattended: it
-starts a node, deploys the core contracts, runs
+`make chain-test` does all of that unattended, running
 `backend/tokens/tests/test_chain_integration.py` (deploy, whitelist, issue,
-capital increase, pause, idempotent redeploy, recovery after a crash between
-sending the create transaction and its receipt, a mint, capital increase or
-pause whose receipt is lost after it mined) and stops the node. The same module
-is skipped by the ordinary test suite and runs in CI. `CHAIN_TEST_PORT` moves
-the node; `CHAIN_TEST_SETTINGS=ledova_backend.settings.test_postgres` (with the
-`POSTGRES_*` variables set) runs it on PostgreSQL, which adds the two-worker
-capital-increase case that needs real row locks; CI runs both.
+capital increase, pause, idempotent redeploy and recovery from lost receipts)
+against a node it starts and stops. That module is skipped by the ordinary
+suite; CI runs it on SQLite and again on PostgreSQL.
 
-### Operator setup
+To run the contract suite on its own:
 
-The operator is whoever hosts a deployment: a single company running its own
-instance for its own tokenized shares, or a registry provider hosting many
-companies. Its configuration is one row (`backend/operators`, model
-`Operator`) edited in the Django admin at `/admin/operators/operator/` (the
-list redirects to the single change page, `/admin/operators/operator/1/change/`;
-no add once the row exists, no delete). The row is created lazily the first
-time the admin page or `GET /api/operator/` asks for it, with the name from
-`OPERATOR_NAME` in `backend/.env` (default `Ledova operator`); nothing runs in
-the compose `migrate` chain for it. Fields, by admin section:
+```bash
+cd contracts && npm ci && npx hardhat test
+```
 
-- Identity: `name`, `legal_name`, `abn` (11 digits), `contact_email`, `website`.
-- Deployment: `deployment_mode`, `single_issuer` or `registry` (default).
-- Payments: `bank_account_name`, `bank_bsb` (6 digits), `bank_account_number`,
-  `payment_reference_prefix` (letters and digits; subscription references will
-  start with it), `receiving_wallet_address` (checksummed EVM address) and
-  `receiving_wallet_chain` (`ethereum` or `base`), `issued_stablecoin` and
-  `supported_settlement_assets` (stablecoin assets only).
-- Eligibility: `investor_kyc_required` (default on), `issuer_kyc_required`
-  (default off); configuration only, no gate reads them yet.
+## Where to go next
 
-`GET /api/operator/` (authenticated) returns the identity, deployment mode,
-settlement assets, the two eligibility flags and `paymentInstructions`, which
-carries only the payment fields that are set.
+| Document | For |
+| --- | --- |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Contracts, backend apps and layers, clients, the shared package, the issuance data flow, auth, tenancy, coding rules |
+| [docs/OPERATIONS.md](docs/OPERATIONS.md) | Operator setup, the environment variable reference, seeds, keys, chain configuration, background jobs, migration notes, deploy checklist |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | The phases and the product decisions taken |
+| [ISSUES.md](ISSUES.md) | Open high-risk work, deferred deliberately |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Workflow, gates and pull request rules |
+| [SECURITY.md](SECURITY.md) | Reporting a vulnerability |
 
 ## Safety defaults
 
-- Local development and supported public testnets only; bundled mainnet
-  deployment configuration is intentionally absent.
-- Trading mutations are disabled by default. Enabling the feature flag does
-  not make the trading implementation safe for production.
-- Provider credentials, signer keys, deployment addresses, and private data
-  are not included. Keep filled environment files outside version control.
-- Client-prefixed variables such as `VITE_` and `EXPO_PUBLIC_` are public build
-  configuration and must never contain secrets.
+- Local development and supported public testnets only. Startup refuses any EVM
+  chain id outside 1337, 31337, 84532 and 11155111, and any Bitcoin network
+  other than `test` and `regtest`. Mainnet deployment configuration is
+  deliberately absent.
+- While the `trading_enabled` feature flag is off,
+  `backend/feature_flags/middleware.py` refuses with 403 any request, of any
+  method, whose path starts with one of five prefixes:
+  `/api/v1/trading/{orders,wallets,transfers,swaps,events}/`. The read-only
+  market routes (`tokens/`, `stablecoins/`) and the whitelist status route sit
+  outside the gate by design. Turning the flag on does not make the trading
+  implementation safe.
+- Provider credentials, signer keys, deployment addresses and private data are
+  not included. Keep filled environment files out of version control.
+- `VITE_` and `EXPO_PUBLIC_` variables are public build configuration and must
+  never hold a secret.
 
-Important security and correctness work is intentionally deferred to
-[ISSUES.md](./ISSUES.md). Do not expose this software as a public multi-user
+Important security and correctness work is deliberately deferred to
+[ISSUES.md](ISSUES.md). Do not expose this software as a public multi-user
 service until those items have been addressed and independently reviewed.
 
 ## Contributing
 
-Issues and pull requests are welcome. Please keep examples synthetic and avoid
-including credentials, private endpoints, production identifiers, or personal
-data in code, fixtures, screenshots, logs, or Git history.
+Issues and pull requests are welcome. Keep examples synthetic, and keep
+credentials, private endpoints, production identifiers and personal data out of
+code, fixtures, screenshots, logs and Git history. Read
+[CONTRIBUTING.md](CONTRIBUTING.md) first.
 
 ## License
 
-Licensed under the [Apache License 2.0](./LICENSE).
+Licensed under the [Apache License 2.0](LICENSE).
