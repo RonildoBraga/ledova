@@ -227,7 +227,7 @@ LIST_ROUTES = (
     ("/api/wallets/{wallet}/holdings/", ("holding",)),
     ("/api/transactions/", ("transaction",)),
     ("/api/portfolios/", ("portfolio",)),
-    ("/api/portfolios/{portfolio}/snapshots/", ("portfolio_snapshot",)),
+    ("/api/portfolios/{portfolio}/snapshots/?start_date=2026-09-01&end_date=2026-09-01", ("series_point",)),
     ("/api/v1/companies/", ("company",)),
     ("/api/v1/companies/{company}/documents/", ("company_document",)),
     ("/api/v1/tokens/", ("token", "deployed_token")),

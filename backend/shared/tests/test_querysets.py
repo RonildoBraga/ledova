@@ -30,3 +30,11 @@ class SampleEvenlyTest(TestCase):
         for max_points in (None, "", "abc", 0, -2, 10, 50):
             with self.subTest(max_points=max_points):
                 self.assertEqual(len(self.prices(sample_evenly(self.ascending, max_points))), 10)
+
+    def test_plain_sequences_are_sampled_the_same_way(self):
+        rows = list(range(10))
+        self.assertEqual(sample_evenly(rows, 4), [0, 3, 6, 9])
+        self.assertEqual(sample_evenly(rows, 1), [0])
+        for max_points in (None, "abc", 0, 10, 50):
+            with self.subTest(max_points=max_points):
+                self.assertEqual(sample_evenly(rows, max_points), rows)

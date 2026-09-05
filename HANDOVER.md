@@ -137,12 +137,26 @@ clients show it read-only by design.
    their contract address (ISSUES.md item 9); allowlist one with the asset
    admin's `Mark selected assets as verified` action, and switch a contract
    off by deactivating its chain deployment (transfers for it are then
-   skipped and logged, never booked). The same contract address seen on
-   another chain joins an existing row only while that row is unverified and
-   its deployment active; a verified row never gains a deployment without an
-   operator adding it in the admin. An
-   unconfigured integration (`KYC_PROVIDER` blank) now answers 503
+   skipped and logged, never booked). Identity is `(chain, contract_address)`:
+   the same address seen on another chain is another contract and gets its
+   own unverified row; an operator adds a second chain's deployment to a
+   verified row by hand in the admin. Symbol ownership is case-insensitive
+   (`usdc` cannot sit next to `USDC`) and a quarantined row is never priced.
+   An unconfigured integration (`KYC_PROVIDER` blank) now answers 503
    `Service not configured` instead of 500.
+8. Deploy note: the portfolio value series is computed on read
+   (`portfolios/services/value_series.py`, from `HoldingSnapshot` x
+   `AssetSnapshot`); `GET /api/portfolios/{uuid}/snapshots/` keeps its path,
+   parameters and row shape. `portfolios/0005_delete_portfoliosnapshot` drops
+   the `portfolio_snapshots` table (fully regenerable, reversible with
+   `migrate`) and the nightly `sync_all_portfolios` periodic job no longer
+   exists: delete any queued procrastinate jobs under that name. The hourly
+   wallet sync now upserts one `DAILY` `HoldingSnapshot` per holding per day,
+   so a wallet with no transactions still gets a daily point; nothing is
+   fabricated before a wallet's first holding snapshot.
+9. Client bundle: shared-types `PortfolioSnapshotReason` may narrow to
+   `'DAILY'` and drop the unused `snapshot_reason` query param; the backend
+   only ever emits `DAILY`.
 
 Decisions deferred during the simplification pass (each is a delete-or-keep
 call for the owner; the code is kept and working until decided):
@@ -155,7 +169,6 @@ call for the owner; the code is kept and working until decided):
   `POST /api/fiat-purchases/transak-widget-url/` remains.
 - `NotificationPreferences`: fold into `UserPreferences` with the next
   settings-screen change.
-- The materialised `PortfolioSnapshot` table versus an on-read value series.
 - Bitcoin support end to end (`integrations/blockchain/bitcoin.py`).
 - Mobile app status and the collapse of the four shared TypeScript packages
   into one; both are client-side work and were out of scope here.

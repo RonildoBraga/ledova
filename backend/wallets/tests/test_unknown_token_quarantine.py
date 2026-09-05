@@ -184,14 +184,19 @@ class UnknownTokenQuarantineTest(APITestCase):
         self.assertEqual(Asset.objects.count(), assets_before)
         self.assertEqual(self.deployments(self.usdc), [("ethereum", REAL_USDC)])
 
-    def test_the_same_contract_on_another_chain_joins_an_unverified_row_only(self):
+    def test_the_same_contract_on_another_chain_gets_its_own_row(self):
         mystery = self.quarantined()
-        self.assertFalse(mystery.is_verified)
+        for ethereum_deployment_active in (True, False):
+            with self.subTest(ethereum_deployment_active=ethereum_deployment_active):
+                mystery.chain_deployments.update(is_active=ethereum_deployment_active)
+                Asset.objects.filter(symbol="OTHER").delete()
 
-        self.assertEqual(quarantine_unknown_token("base", UNKNOWN.upper(), "OTHER", 6), mystery)
+                other = quarantine_unknown_token("base", UNKNOWN.upper(), "OTHER", 6)
 
-        self.assertEqual(self.deployments(mystery), [("base", UNKNOWN.upper()), ("ethereum", UNKNOWN)])
-        self.assertFalse(Asset.objects.filter(symbol="OTHER").exists())
+                self.assertNotEqual(other, mystery)
+                self.assertEqual((other.symbol, other.is_verified), ("OTHER", False))
+                self.assertEqual(self.deployments(other), [("base", UNKNOWN.upper())])
+                self.assertEqual(self.deployments(mystery), [("ethereum", UNKNOWN)])
 
     def test_a_same_address_contract_on_another_chain_never_joins_the_verified_row(self):
         # Same-address contracts on other EVM chains are attacker-reachable (deterministic deployers,
@@ -217,16 +222,11 @@ class UnknownTokenQuarantineTest(APITestCase):
                 self.assertFalse(Holding.objects.filter(wallet=base).exists())
                 self.assertEqual(self.customer_sees(base), ([], []))
 
-    def test_a_switched_off_deployment_elsewhere_does_not_reattach_on_another_chain(self):
-        mystery = self.quarantined()
-        mystery.chain_deployments.update(is_active=False)
-
-        other = quarantine_unknown_token("base", UNKNOWN, "OTHER", 6)
-
-        self.assertNotEqual(other, mystery)
-        self.assertEqual((other.symbol, other.is_verified), ("OTHER", False))
-        self.assertEqual(self.deployments(other), [("base", UNKNOWN)])
-        self.assertEqual(self.deployments(mystery), [("ethereum", UNKNOWN)])
+    def test_symbol_ownership_is_case_insensitive(self):
+        self.assertEqual(quarantine_unknown_token("ethereum", FAKE_USDC, "usdc", 6).symbol, "usdc-bad000")
+        self.assertEqual(quarantine_unknown_token("ethereum", UNKNOWN, "eth", 18).symbol, "eth-c0ffee")
+        Asset.objects.create(symbol="Mystery", name="Mystery", asset_type="erc20_token")
+        self.assertEqual(quarantine_unknown_token("ethereum", VANITY_USDC, "MYSTERY", 6).symbol, "MYSTERY-a0b866")
 
     def test_native_symbols_are_reserved_for_the_chain_native_coin(self):
         fake = quarantine_unknown_token("ethereum", FAKE_USDC, "POL", 18)

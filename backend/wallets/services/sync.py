@@ -12,7 +12,7 @@ from assets.services.identity import native_asset_for_chain, quarantine_unknown_
 from compliance.services.transaction_monitoring import TransactionMonitoringService
 from integrations.blockchain import get_blockchain_client
 from shared.constants import normalize_chain
-from wallets.constants import SNAPSHOT_REASON_TRANSACTION
+from wallets.constants import SNAPSHOT_REASON_DAILY, SNAPSHOT_REASON_TRANSACTION
 from wallets.models import Holding, HoldingSnapshot, Transaction, Wallet
 from wallets.services.chain import fetch_chain_balance
 
@@ -156,8 +156,13 @@ class WalletSyncService:
                 holding.save(update_fields=["quantity", "last_synced_at"])
                 updated += 1
 
-                today = timezone.now().date()
-                HoldingSnapshot.objects.filter(holding=holding, snapshot_date=today).update(quantity=blockchain_balance)
+                # One row per holding per day, so a wallet with no transactions still has a daily series.
+                HoldingSnapshot.objects.update_or_create(
+                    holding=holding,
+                    snapshot_date=timezone.now().date(),
+                    defaults={"quantity": blockchain_balance},
+                    create_defaults={"quantity": blockchain_balance, "snapshot_reason": SNAPSHOT_REASON_DAILY},
+                )
 
         return updated
 

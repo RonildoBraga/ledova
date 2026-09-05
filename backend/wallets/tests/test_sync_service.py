@@ -1,17 +1,19 @@
 """WalletSyncService.sync_wallet talks to the chain client directly; the chain key it stamps is load-bearing."""
 
+from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
 from django.utils import timezone
 
+from assets.models import Asset
 from users.models import UserAccount
 from wallets.constants import (
     SNAPSHOT_REASON_CHOICES,
     SNAPSHOT_REASON_DAILY,
     SNAPSHOT_REASON_TRANSACTION,
 )
-from wallets.models import HoldingSnapshot, Transaction, Wallet
+from wallets.models import Holding, HoldingSnapshot, Transaction, Wallet
 from wallets.services import WalletSyncService
 
 
@@ -67,3 +69,42 @@ class WalletSyncServiceTest(TestCase):
             [value for value, _ in SNAPSHOT_REASON_CHOICES], [SNAPSHOT_REASON_TRANSACTION, SNAPSHOT_REASON_DAILY]
         )
         self.assertEqual(HoldingSnapshot._meta.get_field("snapshot_reason").choices, SNAPSHOT_REASON_CHOICES)
+
+    def sync_with_balance(self, balance):
+        client = MagicMock()
+        client.get_transaction_history.return_value = []
+        with patch("wallets.services.sync.get_blockchain_client", return_value=client), patch(
+            "wallets.services.sync.fetch_chain_balance", return_value=Decimal(balance)
+        ):
+            return WalletSyncService.sync_wallet(self.wallet)
+
+    def test_hourly_refresh_writes_one_daily_snapshot_per_holding_per_day(self):
+        asset = Asset.objects.create(symbol="ETH", name="Ether", asset_type="native_crypto", is_verified=True)
+        holding = Holding.objects.create(wallet=self.wallet, asset=asset, quantity=Decimal("1"))
+
+        first = self.sync_with_balance("2")
+        second = self.sync_with_balance("3")
+
+        self.assertEqual((first["holdings"], second["holdings"]), (1, 1))
+        row = HoldingSnapshot.objects.get(holding=holding)
+        self.assertEqual(
+            (row.snapshot_date, row.snapshot_reason, row.quantity),
+            (timezone.now().date(), SNAPSHOT_REASON_DAILY, Decimal("3")),
+        )
+        holding.refresh_from_db()
+        self.assertEqual(holding.quantity, Decimal("3"))
+
+    def test_hourly_refresh_keeps_a_transaction_snapshot_written_earlier_today(self):
+        asset = Asset.objects.create(symbol="ETH", name="Ether", asset_type="native_crypto", is_verified=True)
+        holding = Holding.objects.create(wallet=self.wallet, asset=asset, quantity=Decimal("1"))
+        HoldingSnapshot.objects.create(
+            holding=holding,
+            quantity=Decimal("1"),
+            snapshot_date=timezone.now().date(),
+            snapshot_reason=SNAPSHOT_REASON_TRANSACTION,
+        )
+
+        self.sync_with_balance("4")
+
+        row = HoldingSnapshot.objects.get(holding=holding)
+        self.assertEqual((row.snapshot_reason, row.quantity), (SNAPSHOT_REASON_TRANSACTION, Decimal("4")))
