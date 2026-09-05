@@ -12,7 +12,6 @@ from integrations.kycaid.crypto_webhook import KYCAIDCryptoWebhookView
 from integrations.kycaid.webhook import KYCAIDWebhookView
 from integrations.sumsub import SumSubWebhookView
 from portfolios import views as portfolio_views
-from shared.views import reference_data as shared_views
 from users import views as user_views
 from wallets import views as wallet_views
 
@@ -34,12 +33,10 @@ router.register(r"notifications", user_views.NotificationViewSet, basename="noti
 router.register(r"transactions", wallet_views.TransactionViewSet, basename="transactions")
 router.register(r"wallets", wallet_views.WalletViewSet, basename="wallets")
 router.register(r"fiat-purchases", wallet_views.FiatTransactionViewSet, basename="fiat-purchases")
-router.register(r"holding-snapshots", wallet_views.HoldingSnapshotViewSet, basename="holding-snapshots")
 router.register(r"portfolios", portfolio_views.PortfolioViewSet, basename="portfolios")
 router.register(r"asset-allocations", portfolio_views.AssetAllocationViewSet, basename="asset-allocations")
 router.register(r"favourite-assets", user_views.FavouriteAssetViewSet, basename="favourite-assets")
 router.register(r"assets", asset_views.AssetViewSet, basename="assets")
-router.register(r"countries", shared_views.CountryViewSet, basename="countries")
 router.register(r"feature-flags", feature_flag_views.FeatureFlagViewSet, basename="feature-flags")
 
 identity_verification_router = DefaultRouter()

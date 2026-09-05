@@ -16,13 +16,6 @@ from wallets.models import Wallet
 
 RECIPIENT = "0x" + "9" * 40
 HOLDERS = [{"address": RECIPIENT, "name": None, "balance": "5", "source": "issuances", "percentage": 100.0}]
-ELIGIBILITY = {
-    "can_receive": True,
-    "db_whitelisted": True,
-    "on_chain_whitelisted": False,
-    "investor_type": "retail",
-    "investor_type_display": "Retail",
-}
 
 
 class ShareTokenActionTest(APITestCase):
@@ -98,9 +91,8 @@ class ShareTokenActionTest(APITestCase):
         self.assertEqual(response.status_code, 400, response.content)
         self.assertEqual(response.json(), {"nonFieldErrors": ["The fields company, symbol must make a unique set."]})
 
-    @patch("tokens.views.share_token.WhitelistService")
     @patch("tokens.views.share_token.ShareTokenService")
-    def test_issue_holders_and_can_receive_shapes(self, service_class, whitelist_class):
+    def test_issue_and_holders_shapes(self, service_class):
         token = self.tenant.deployed_token
         issuance_request = ShareIssuanceRequest.objects.create(
             token=token, recipient_address=RECIPIENT, amount=7, reason="Owner request", submitted_by=self.tenant.user
@@ -108,8 +100,6 @@ class ShareTokenActionTest(APITestCase):
         service = service_class.return_value
         service.create_issuance_request.return_value = issuance_request
         service.get_token_holders.return_value = HOLDERS
-        whitelist = whitelist_class.return_value
-        whitelist.get_receive_eligibility.return_value = ELIGIBILITY
 
         issue = self.client.post(
             f"/api/v1/tokens/{token.uuid}/issue/",
@@ -132,11 +122,6 @@ class ShareTokenActionTest(APITestCase):
         self.assertEqual(holders.json()["holders"], HOLDERS)
         self.assertEqual(holders.json()["totalHolders"], 1)
         service.get_token_holders.assert_called_once_with(token)
-
-        can_receive = self.client.get(f"/api/v1/tokens/{token.uuid}/can-receive/{RECIPIENT}/")
-        self.assertEqual(can_receive.status_code, 200)
-        self.assertTrue(can_receive.json()["canReceive"])
-        whitelist.get_receive_eligibility.assert_called_once_with(RECIPIENT)
 
     @patch("tokens.views.share_token.ShareTokenService")
     def test_detail_actions_keep_filter_params_off_the_token_lookup(self, service_class):

@@ -13,7 +13,6 @@ TRADING_WRITE_PREFIXES = (
     "/api/v1/trading/transactions/",
     "/api/v1/trading/whitelist/",
     "/api/v1/trading/events/",
-    "/api/v1/tokens/orders/",
 )
 
 

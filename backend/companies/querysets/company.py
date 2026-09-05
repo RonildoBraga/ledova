@@ -13,10 +13,6 @@ class CompanyQuerySet(QuerySet):
             return self.none()
         return self.filter(owner=user)
 
-    def readable_by_user(self, user):
-        """The caller's own companies plus every active company (public representation)."""
-        return self.visible_to_user(user) | self.active()
-
     def active(self):
         from companies.models import CompanyStatus
 

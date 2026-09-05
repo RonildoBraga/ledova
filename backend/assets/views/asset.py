@@ -1,9 +1,6 @@
-from decimal import Decimal
-
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
-from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 
 from assets.filters import AssetFilter
@@ -12,7 +9,7 @@ from assets.serializers import (
     AssetSerializer,
     AssetSnapshotSerializer,
 )
-from assets.services import AssetSyncService, ExchangeRateService
+from assets.services import ExchangeRateService
 from shared.utils.querysets import sample_evenly
 from shared.views.base import AuthenticatedReadOnlyViewSet
 
@@ -67,67 +64,4 @@ class AssetViewSet(AuthenticatedReadOnlyViewSet):
                 "targetCurrency": target.upper(),
                 "rate": str(rate),
             }
-        )
-
-    @action(detail=False, methods=["post"], url_path="bulk-update-prices", permission_classes=[IsAdminUser])
-    def bulk_update_prices(self, request):
-        price_updates = request.data.get("priceUpdates", [])
-        source = request.data.get("source", "manual")
-        create_snapshots = request.data.get("createSnapshots", True)
-
-        if not price_updates:
-            return Response({"success": False, "error": "priceUpdates is required"}, status=status.HTTP_400_BAD_REQUEST)
-
-        if not isinstance(price_updates, list):
-            return Response(
-                {"success": False, "error": "priceUpdates must be an array"}, status=status.HTTP_400_BAD_REQUEST
-            )
-
-        success_count = 0
-        error_count = 0
-        results = []
-
-        for update_data in price_updates:
-            symbol = update_data.get("symbol")
-            price_value = update_data.get("price")
-            currency = update_data.get("currency", "USD")
-
-            if not symbol or not price_value:
-                error_count += 1
-                results.append(
-                    {"symbol": symbol or "<unknown>", "success": False, "message": "Missing symbol or price"}
-                )
-                continue
-
-            try:
-                asset = Asset.objects.get(symbol=symbol)
-                price = Decimal(str(price_value))
-
-                AssetSyncService.update_price(
-                    asset=asset,
-                    price=price,
-                    source=source,
-                    currency=currency,
-                    create_snapshot=create_snapshots,
-                )
-
-                success_count += 1
-                results.append({"symbol": symbol, "success": True, "newPrice": str(price)})
-
-            except Asset.DoesNotExist:
-                error_count += 1
-                results.append({"symbol": symbol, "success": False, "message": f"Asset '{symbol}' not found"})
-            except Exception as e:
-                error_count += 1
-                results.append({"symbol": symbol, "success": False, "message": str(e)})
-
-        return Response(
-            {
-                "success": error_count == 0,
-                "successCount": success_count,
-                "errorCount": error_count,
-                "total": len(price_updates),
-                "results": results,
-            },
-            status=status.HTTP_200_OK if error_count == 0 else status.HTTP_207_MULTI_STATUS,
         )

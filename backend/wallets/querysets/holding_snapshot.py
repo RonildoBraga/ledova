@@ -22,10 +22,5 @@ class HoldingSnapshotQuerySet(QuerySet):
             queryset = queryset.filter(snapshot_date__lte=end_date)
         return queryset
 
-    def visible_to_user(self, user):
-        if user is None or not user.is_authenticated:
-            return self.none()
-        return self.filter(holding__wallet__user_account__user_profiles__user=user)
-
     def with_optimized_data(self):
         return self.select_related("holding", "holding__wallet", "holding__asset", "caused_by_transaction")

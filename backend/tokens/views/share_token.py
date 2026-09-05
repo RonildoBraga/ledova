@@ -16,7 +16,6 @@ from tokens.serializers import (
     ShareTokenListSerializer,
 )
 from tokens.services import ShareTokenService
-from whitelist.services import WhitelistService
 
 MANAGE_ACTIONS = ("create", "update", "partial_update", "destroy", "deploy", "pause", "unpause", "issue")
 
@@ -97,28 +96,6 @@ class ShareTokenViewSet(AuthenticatedModelViewSet):
                 "issuance_request": ShareIssuanceRequestSerializer(issuance_request).data,
             },
             status=status.HTTP_201_CREATED,
-        )
-
-    @action(detail=True, methods=["get"], url_path="can-receive/(?P<address>[^/.]+)")
-    def can_receive(self, request, uuid=None, address=None):
-        token = self.get_object()
-        eligibility = WhitelistService().get_receive_eligibility(address)
-        return Response(
-            {
-                "address": address.lower(),
-                "token": {
-                    "uuid": str(token.uuid),
-                    "name": token.name,
-                    "symbol": token.symbol,
-                },
-                "canReceive": eligibility["can_receive"],
-                "whitelistStatus": {
-                    "database": eligibility["db_whitelisted"],
-                    "onChain": eligibility["on_chain_whitelisted"],
-                },
-                "investorType": eligibility["investor_type"],
-                "investorTypeDisplay": eligibility["investor_type_display"],
-            }
         )
 
     @action(detail=True, methods=["get"])

@@ -1,7 +1,6 @@
 from rest_framework import status
 from rest_framework.decorators import action
-from rest_framework.generics import get_object_or_404
-from rest_framework.permissions import AllowAny, IsAdminUser
+from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 
 from companies.exceptions import InvalidStatusTransitionException
@@ -34,7 +33,6 @@ class CompanyViewSet(AuthenticatedModelViewSet):
         "update",
         "withdraw",
     }
-    public_actions = {"list", "retrieve", "by_acn"}
     filterset_class = CompanyFilter
     ordering = ["-created_at"]
     ordering_fields = ["created_at", "name", "status"]
@@ -59,8 +57,6 @@ class CompanyViewSet(AuthenticatedModelViewSet):
         return CompanyDetailSerializer
 
     def get_permissions(self):
-        if self.action in self.public_actions:
-            return [AllowAny()]
         if self.action in self.administrative_actions:
             return [IsAdminUser()]
         return super().get_permissions()
@@ -72,22 +68,7 @@ class CompanyViewSet(AuthenticatedModelViewSet):
             return Company.objects.all()
         if self.action in self.manageable_actions:
             return Company.objects.manageable_by_user(user)
-        if self.action == "list":
-            return Company.objects.visible_to_user(user) if user.is_authenticated else Company.objects.active()
-        if self.action in self.public_actions:
-            return Company.objects.readable_by_user(user)
         return Company.objects.visible_to_user(user)
-
-    def retrieve(self, request, *args, **kwargs):
-        return self._company_response(self.get_object())
-
-    def _company_response(self, company):
-        """Owners get the full record; every other caller the public listing shape."""
-        if company.owner_id == self.request.user.pk:
-            serializer_class = CompanyDetailSerializer
-        else:
-            serializer_class = CompanyListSerializer
-        return Response(serializer_class(company, context=self.get_serializer_context()).data)
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -105,10 +86,6 @@ class CompanyViewSet(AuthenticatedModelViewSet):
 
     def perform_update(self, serializer):
         serializer.save()
-
-    @action(detail=False, methods=["get"], url_path="acn/(?P<acn>[^/.]+)")
-    def by_acn(self, request, acn=None):
-        return self._company_response(get_object_or_404(self.get_queryset(), acn=acn))
 
     @action(detail=True, methods=["get"])
     def stats(self, request, uuid=None):
