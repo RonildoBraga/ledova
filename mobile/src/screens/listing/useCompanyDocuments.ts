@@ -55,8 +55,6 @@ export function useCompanyDocuments() {
     queryClient.invalidateQueries({ queryKey: ['companies'] });
   };
 
-  // The three application transitions the owner drives; each one's backend refusal (400 detail) reaches the
-  // caller through mutateAsync so the screen can show it.
   const submitMutation = useMutation({
     mutationFn: () => submitApplication(apiClient, companyUuid!),
     onSuccess: invalidateCompany,

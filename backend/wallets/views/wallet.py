@@ -41,7 +41,7 @@ class WalletViewSet(AuthenticatedModelViewSet):
     def get_queryset(self):
         queryset = Wallet.objects.visible_to_user(self.request.user)
         if self.action in ("update", "partial_update"):
-            # Lock the row before validation runs; FOR UPDATE cannot be combined with the market-value aggregate.
+
             return queryset.select_for_update(of=("self",))
         return queryset.with_market_value()
 
@@ -55,10 +55,9 @@ class WalletViewSet(AuthenticatedModelViewSet):
 
     def perform_create(self, serializer):
         wallet = serializer.save(verification_status=WALLET_VERIFICATION_STATUS_PENDING)
-        # The saved instance carries no balance annotations; respond with the annotated row.
+
         serializer.instance = Wallet.objects.with_market_value().get(pk=wallet.pk)
-        # A new wallet lands in the requester's selected portfolio; the UI has no
-        # other way to put wallets into portfolios.
+
         preferences = getattr(getattr(self.request.user, "userprofile", None), "preferences", None)
         portfolio = preferences.selected_portfolio if preferences else None
         if portfolio and portfolio.user_account_id == wallet.user_account_id:

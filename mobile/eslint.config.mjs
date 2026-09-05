@@ -41,12 +41,10 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       'prettier/prettier': 'error',
-      // Disable exhaustive-deps warnings for logical expressions (e.g., data?.data || [])
-      // This aligns with our code quality guideline: "TanStack Query already handles memoization"
+      'no-empty': ['error', { allowEmptyCatch: true }],
+
       'react-hooks/exhaustive-deps': 'off',
-      // Disable set-state-in-effect warnings for valid patterns like modal state sync and pagination
-      // These patterns are necessary for: 1) Syncing modal local state when opening,
-      // 2) Accumulating paginated query results, 3) Managing chart interaction state
+
       'react-hooks/set-state-in-effect': 'off',
     },
   },

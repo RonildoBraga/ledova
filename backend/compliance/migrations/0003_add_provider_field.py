@@ -1,10 +1,7 @@
-"""Add provider and provider_transaction_id fields to TransactionScreening."""
-
 from django.db import migrations, models
 
 
 def populate_provider_fields(apps, schema_editor):
-    """Set provider='sumsub' and copy sumsub_transaction_id to provider_transaction_id."""
     TransactionScreening = apps.get_model("compliance", "TransactionScreening")
     for screening in TransactionScreening.objects.all().iterator():
         screening.provider = "sumsub"

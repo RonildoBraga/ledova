@@ -1,5 +1,3 @@
-"""The staff review workflow (start review, approve, reject, execute) shared by the two request admins."""
-
 from django import forms
 from django.contrib import admin, messages
 from django.http import HttpResponseRedirect
@@ -44,7 +42,6 @@ class RejectForm(forms.Form):
 
 
 class ReviewWorkflowAdmin(admin.ModelAdmin):
-    """Subclasses set `label`, `deletable_status`, `detail_fieldset` and the three describe/detail hooks."""
 
     label = "Request"
     deletable_status = RequestStatus.DRAFT

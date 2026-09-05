@@ -45,10 +45,8 @@ export function TradingScreen() {
   const userOrders = useAllUserOrders(walletAddresses);
   const swapOrders = useSwapOrdersMulti(walletAddresses);
 
-  // Auto-select first token
   const effectiveTokenUuid = selectedTokenUuid ?? (tokens && tokens.length > 0 ? tokens[0].uuid : null);
 
-  // SSE: real-time trading updates
   useTradingEvents(effectiveTokenUuid);
 
   const selectedToken = useMemo(() => {
@@ -58,7 +56,6 @@ export function TradingScreen() {
 
   const { data: orderBookData, isLoading: isLoadingOrderBook } = useOrderBook(effectiveTokenUuid || undefined);
 
-  // Modal state
   const [createOrderType, setCreateOrderType] = useState<'buy' | 'sell'>('buy');
   const [showCreateOrder, setShowCreateOrder] = useState(false);
 
@@ -89,7 +86,6 @@ export function TradingScreen() {
     [wallets],
   );
 
-  // Handlers
   const handleBuy = useCallback(() => {
     setCreateOrderType('buy');
     setShowCreateOrder(true);
@@ -187,7 +183,6 @@ export function TradingScreen() {
           }
         >
           <View style={styles.scrollContent}>
-            {/* Section 1: Market Overview */}
             <MarketList
               tokens={tokens || []}
               selectedTokenUuid={effectiveTokenUuid}
@@ -197,7 +192,6 @@ export function TradingScreen() {
 
             {selectedToken && (
               <>
-                {/* Section 2: Orders (market + yours) */}
                 <OrdersCard
                   tokenSymbol={selectedToken.symbol}
                   orderBook={orderBookData || null}
@@ -213,7 +207,6 @@ export function TradingScreen() {
                   onSignSwap={handleSignSwap}
                 />
 
-                {/* Section 3: Buy / Sell buttons */}
                 <BuySellButtons
                   tokenSymbol={selectedToken.symbol}
                   onBuy={handleBuy}
@@ -226,7 +219,6 @@ export function TradingScreen() {
         </ScrollView>
       </View>
 
-      {/* Modals */}
       {selectedToken && (
         <CreateOrderModal
           visible={showCreateOrder}

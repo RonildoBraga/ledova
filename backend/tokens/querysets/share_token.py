@@ -34,7 +34,6 @@ class ShareTokenQuerySet(QuerySet):
         return self.select_related("company")
 
     def with_market_summary(self):
-        """Best open bid/ask and the last completed trade per row, so list views run no per-token queries."""
         from tokens.models import SwapOrder, TransferOrder
 
         open_orders = TransferOrder.objects.ownership_bound().open().filter(token=OuterRef("pk"))

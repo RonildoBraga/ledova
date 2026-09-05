@@ -12,7 +12,6 @@ class DocumentType(models.TextChoices):
 
 
 def upload_to(instance: "Document", filename: str) -> str:
-    """Per-user, per-document path so a client filename never decides the storage location on its own."""
     return f"documents/{instance.uploaded_by_id}/{instance.uuid}/{filename}"
 
 

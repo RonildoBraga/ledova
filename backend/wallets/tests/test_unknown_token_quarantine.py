@@ -1,5 +1,3 @@
-"""Unknown contracts are quarantined: keyed on (chain, contract), unverified, and invisible to customers."""
-
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
@@ -20,7 +18,7 @@ User = get_user_model()
 REAL_USDC = "0x" + "a0b8" + "6" * 36
 FAKE_USDC = "0x" + "bad" + "0" * 37
 UNKNOWN = "0x" + "c0ffee" + "1" * 34
-VANITY_USDC = "0x" + "a0b866" + "f" * 34  # shares the real contract's first six hex characters
+VANITY_USDC = "0x" + "a0b866" + "f" * 34
 
 
 def transfer(tx_hash, contract_address, symbol, **overrides):
@@ -71,7 +69,6 @@ class UnknownTokenQuarantineTest(APITestCase):
         return asset
 
     def customer_sees(self, wallet=None):
-        """(tx hashes on /api/transactions/, asset symbols on the wallet holdings endpoint) as the customer."""
         wallet = wallet or self.wallet
         self.client.force_authenticate(self.user)
         transactions = self.client.get("/api/transactions/").json()["results"]
@@ -127,13 +124,12 @@ class UnknownTokenQuarantineTest(APITestCase):
         self.assertEqual(list(seeded.chain_deployments.values_list("chain", "contract_address")), [("ethereum", None)])
 
     def test_a_vanity_prefix_contract_never_lands_on_the_verified_suffixed_row(self):
-        # Seed state: the verified USDC row carries no contract, so the real contract is quarantined
-        # under USDC-a0b866 and an operator allowlists that row.
+
         self.usdc.chain_deployments.update(contract_address=None)
         self.sync(transfer("0xreal", REAL_USDC, "USDC"))
         real = Transaction.objects.get(tx_hash="0xreal").asset
         self.assertEqual((real.symbol, real.is_verified), ("USDC-a0b866", False))
-        Asset.objects.filter(pk=real.pk).update(is_verified=True)  # what the admin action does
+        Asset.objects.filter(pk=real.pk).update(is_verified=True)
 
         self.sync(transfer("0xvanity", VANITY_USDC, "USDC"), transfer("0xreal2", REAL_USDC, "USDC"))
 
@@ -161,7 +157,6 @@ class UnknownTokenQuarantineTest(APITestCase):
         self.assertEqual(self.deployments(self.usdc), [("ethereum", None)])
         self.assertFalse(Holding.objects.filter(wallet=self.wallet).exists())
 
-        # The operator allowlists the row that carries the real contract; the squatter stays hidden.
         Asset.objects.filter(pk=real.pk).update(is_verified=True)
         self.sync(transfer("0xsquat2", FAKE_USDC, "USDC-a0b866"), transfer("0xreal2", REAL_USDC, "USDC"))
 
@@ -199,8 +194,7 @@ class UnknownTokenQuarantineTest(APITestCase):
                 self.assertEqual(self.deployments(mystery), [("ethereum", UNKNOWN)])
 
     def test_a_same_address_contract_on_another_chain_never_joins_the_verified_row(self):
-        # Same-address contracts on other EVM chains are attacker-reachable (deterministic deployers,
-        # pre-EIP-155 replay), so a verified row must never gain a deployment without an operator.
+
         base = self.base_wallet()
         for ethereum_deployment_active in (True, False):
             with self.subTest(ethereum_deployment_active=ethereum_deployment_active):

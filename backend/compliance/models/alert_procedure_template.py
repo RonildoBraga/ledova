@@ -13,8 +13,6 @@ from shared.models.base import BaseModel
 
 
 class AlertProcedureTemplate(BaseModel):
-    """One investigation procedure per alert type. Policy references such as "Doc 3 §7" point at the
-    operator's AML/CTF programme documents, which this source release does not include."""
 
     alert_type = models.CharField(
         max_length=50,

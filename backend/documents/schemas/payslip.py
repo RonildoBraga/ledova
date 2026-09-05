@@ -9,7 +9,6 @@ Confidence = Annotated[float, Field(ge=0.0, le=1.0, description="Model's self-as
 
 
 class PayslipExtraction(BaseModel):
-    """The field set the prompt asks the model for; keep it small, accuracy drops as the schema grows."""
 
     employee_name: str | None = Field(None, description="Full name of the employee")
     employer_name: str | None = Field(None, description="Trading name of the employer")

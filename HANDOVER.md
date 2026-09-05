@@ -411,6 +411,28 @@ returned inside an enclosing atomic block, proving the deferred
 `procrastinate_jobs` row is written on the request connection and rolls back
 with the status.
 
+Source now carries no comments and no docstrings. The pass covered every `.py`
+file under `backend/`, `dashboard/src`, `mobile/src` and the `mobile/` root
+`.ts`/`.js` config files, `packages/shared`, `packages/scripts`,
+`marketing/src`, `contracts/contracts`, `contracts/scripts` and
+`contracts/test`, plus the CSS token generator and the two generated
+`tokens.css` files it writes; configuration and documentation files
+(`.env.example`, YAML, Makefiles, Dockerfiles, Markdown) are documentation and
+kept their comments. Only functional directives survive: `# noqa`, `# type:`,
+`# pragma`, `# fmt:`, `# isort` and shebang/coding lines in Python;
+`eslint-disable`/`eslint-enable`, `@ts-` pragmas, `prettier-ignore`,
+`/// <reference`, `@vitest-environment`/`@jest-environment`, coverage pragmas,
+`/* global */` and `biome-ignore` in TypeScript and JavaScript; and
+`// SPDX-License-Identifier` in Solidity. Nothing else changed: the token
+streams of every touched Python and TypeScript file are identical to before
+apart from the removals, the four exceptions being `no-empty` gaining
+`allowEmptyCatch` in the dashboard, mobile and `packages/shared` ESLint configs
+(the catch blocks that held only a comment are now empty), the comment inside
+the injected WebView script string in `VerificationFormModal.tsx`, the CSS
+token generator no longer emitting a header or section comments, and the
+NatSpec dropped from the contracts. The rule is written down in
+`backend/docs/CONVENTIONS.md`.
+
 The remaining canonical backlog is [ISSUES.md](ISSUES.md).
 
 ## Working rules

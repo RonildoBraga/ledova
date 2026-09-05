@@ -32,15 +32,13 @@ export const CountrySelector = ({
       const rect = buttonRef.current.getBoundingClientRect();
       const spaceBelow = window.innerHeight - rect.bottom;
       const spaceAbove = rect.top;
-      const dropdownHeight = 192; // max-h-48 = 12rem = 192px
+      const dropdownHeight = 192;
 
-      // If there's not enough space below but enough above, drop up
       setDropUp(spaceBelow < dropdownHeight && spaceAbove > dropdownHeight);
     }
     setIsOpen(!isOpen);
   };
 
-  // Handle escape key to close dropdown
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && isOpen) {
@@ -73,10 +71,8 @@ export const CountrySelector = ({
 
       {isOpen && (
         <>
-          {/* Backdrop */}
           <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
 
-          {/* Dropdown */}
           <div
             className={`absolute left-0 z-50 bg-surface-raised border border-border rounded-lg shadow-xl max-h-48 overflow-y-auto min-w-72 ${
               dropUp ? 'bottom-full mb-1' : 'top-full mt-1'

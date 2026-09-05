@@ -1,7 +1,5 @@
 from django.db import migrations
 
-# Deployment addresses are intentionally environment-specific. This migration
-# preserves any pre-existing local deployment without embedding a live address.
 MULTI_CHAIN_TOKENS = {}
 
 

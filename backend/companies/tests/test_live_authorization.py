@@ -1,5 +1,3 @@
-"""Application-level company isolation through the live owner relationship."""
-
 from types import SimpleNamespace
 
 from django.contrib.auth import get_user_model

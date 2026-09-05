@@ -83,9 +83,7 @@ export function TokensSection({
       setNewSymbol('');
       setNewType('ordinary');
       setNewSupply('');
-    } catch {
-      // Error handled by mutation state (createError)
-    }
+    } catch {}
   };
 
   const isCreateValid =

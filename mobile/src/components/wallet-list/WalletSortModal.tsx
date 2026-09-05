@@ -196,7 +196,6 @@ export function WalletSortModal({ visible, selectedChain, selectedSort, onClose,
   const [localChain, setLocalChain] = React.useState<WalletChainFilter>(selectedChain);
   const [localSort, setLocalSort] = React.useState<WalletSortOption>(selectedSort);
 
-  // Sync local state when modal opens
   React.useEffect(() => {
     if (visible) {
       setLocalChain(selectedChain);
@@ -220,7 +219,6 @@ export function WalletSortModal({ visible, selectedChain, selectedSort, onClose,
       onCancel={onClose}
       onConfirm={handleApply}
     >
-      {/* Header */}
       <View style={styles.header}>
         <FunnelIcon
           size={theme.icon.sizes.lg}
@@ -231,7 +229,6 @@ export function WalletSortModal({ visible, selectedChain, selectedSort, onClose,
         <Text style={styles.title}>Sort Wallets</Text>
       </View>
 
-      {/* Chain Filter */}
       <Text style={styles.sectionLabel}>Chain</Text>
       <View style={styles.chainContainer}>
         {chainOptions.map((option) => {
@@ -250,7 +247,6 @@ export function WalletSortModal({ visible, selectedChain, selectedSort, onClose,
         })}
       </View>
 
-      {/* Sort Options */}
       <Text style={styles.sectionLabel}>Sort By</Text>
       <View style={styles.optionsContainer}>
         {sortOptions.map((option) => {

@@ -225,7 +225,6 @@ export function TransactionFiltersModal({
     return wallet.name || formatWalletAddressShort(wallet.address);
   };
 
-  // Build wallet dropdown options
   const walletDropdownOptions = [
     { label: 'All Wallets', value: '', chain: '' },
     ...allWallets.map((wallet) => ({
@@ -273,7 +272,6 @@ export function TransactionFiltersModal({
         )}
       </View>
 
-      {/* Direction Filter - Horizontal Buttons */}
       <View style={styles.filterSection}>
         <Text style={styles.sectionTitle}>Direction</Text>
         <View style={styles.buttonGroup}>
@@ -293,7 +291,6 @@ export function TransactionFiltersModal({
         </View>
       </View>
 
-      {/* Chain Filter - Horizontal Buttons */}
       <View style={styles.filterSection}>
         <Text style={styles.sectionTitle}>Chain</Text>
         <View style={styles.buttonGroup}>
@@ -320,7 +317,6 @@ export function TransactionFiltersModal({
         </View>
       </View>
 
-      {/* Wallet Filter - Dropdown */}
       {allWallets.length > 0 && (
         <View style={styles.filterSection}>
           <Text style={styles.sectionTitle}>Wallet</Text>
@@ -366,7 +362,6 @@ export function TransactionFiltersModal({
         </View>
       )}
 
-      {/* Amount Range */}
       <View style={styles.filterSection}>
         <Text style={styles.sectionTitle}>Amount Range</Text>
         <View style={styles.rowFields}>
@@ -392,7 +387,6 @@ export function TransactionFiltersModal({
         </View>
       </View>
 
-      {/* Date Range */}
       <View style={styles.filterSection}>
         <Text style={styles.sectionTitle}>Date Range</Text>
         <View style={styles.rowFields}>

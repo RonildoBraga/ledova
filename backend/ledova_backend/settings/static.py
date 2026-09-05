@@ -4,7 +4,6 @@ from ledova_backend.environment import resolve_storage_backend
 
 from .base import BASE_DIR, DEBUG
 
-# Static files (CSS, JavaScript, images) — served by WhiteNoise
 STATIC_URL = "/static/"
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 
@@ -16,11 +15,6 @@ STATICFILES_FINDERS = [
     "django.contrib.staticfiles.finders.AppDirectoriesFinder",
 ]
 
-# Media files (user uploads)
-#
-# STORAGE_BACKEND selects the media backend. Local storage is the safe default;
-# optional S3 and GCS backends require explicit operator configuration.
-# DEBUG always uses local storage. Invalid configured values still fail fast.
 
 _STATICFILES_STORAGE = {
     "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
@@ -39,7 +33,7 @@ if _storage_backend == "local":
     }
 else:
     if _storage_backend == "s3":
-        # S3 via django-storages[boto3]. Use the provider's standard credential chain.
+
         STORAGES = {
             "default": {
                 "BACKEND": "storages.backends.s3.S3Storage",
@@ -56,7 +50,7 @@ else:
             "staticfiles": _STATICFILES_STORAGE,
         }
     elif _storage_backend == "gcs":
-        # Google Cloud Storage via django-storages.
+
         STORAGES = {
             "default": {
                 "BACKEND": "storages.backends.gcloud.GoogleCloudStorage",

@@ -166,7 +166,6 @@ export function SignupIdentityVerification() {
             </div>
           )}
 
-          {/* Info text when form is shown and not yet launched */}
           {showForm && !isLoadingStatus && !isLaunching && !formUrl && !sdkActive && (
             <div className="text-center py-2 mb-4">
               <p className="text-sm text-text-secondary">
@@ -176,10 +175,8 @@ export function SignupIdentityVerification() {
             </div>
           )}
 
-          {/* Sumsub WebSDK container — hidden until SDK launches into it */}
           {showForm && !formUrl && <div id="sumsub-websdk-container"></div>}
 
-          {/* KYCAID hosted form iframe */}
           {formUrl && (
             <div className="mb-4">
               <iframe

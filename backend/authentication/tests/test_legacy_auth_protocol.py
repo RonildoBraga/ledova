@@ -91,7 +91,6 @@ class LegacyAuthProtocolTestCase(APITestCase):
         self.assertEqual(cookie["max-age"], max_age)
 
     def assert_session_body(self, response, user):
-        """The cookie transport carries the pair only in the HttpOnly cookies; page JavaScript never sees it."""
         payload = response.json()
         self.assertEqual(set(payload), IDENTITY_KEYS)
         self.assertEqual(payload["email"], user.email)
@@ -712,8 +711,6 @@ class LegacyCredentialMutationTest(LegacyAuthProtocolTestCase):
 
 
 class ResendVerificationTest(LegacyAuthProtocolTestCase):
-    """Signup issues no session, so the address may come in the body (AllowAny); an authenticated
-    caller with no body keeps today's behaviour. The reply is the same 200 whatever the address."""
 
     generic_reply = {"message": "A verification code has been sent if the address needs verification."}
 
@@ -804,8 +801,6 @@ class ResendVerificationTest(LegacyAuthProtocolTestCase):
 
 
 class BearerTransportTest(LegacyAuthProtocolTestCase):
-    """`X-Auth-Transport: bearer` (the mobile app): tokens in the body, no cookies set, and the refresh
-    cookie never read. Without the header the cookies carry the session and no body does."""
 
     def setUp(self):
         super().setUp()

@@ -7,20 +7,19 @@ from eth_account.typed_transactions import TypedTransaction
 from eth_utils import to_checksum_address
 from hexbytes import HexBytes
 
-TYPED_ENVELOPE_MAX_PREFIX = 0x7F  # EIP-2718 envelope byte 0x00..0x7f; a legacy RLP list starts at 0xc0
+TYPED_ENVELOPE_MAX_PREFIX = 0x7F
 
 
 @dataclass(frozen=True)
 class DecodedSignedTransaction:
     sender: str
-    to: Optional[str]  # checksum address; None for contract creation
-    chain_id: Optional[int]  # None for a pre-EIP-155 legacy transaction
+    to: Optional[str]
+    chain_id: Optional[int]
     value: int
     data: bytes
 
 
 def decode_signed_transaction(raw_transaction: bytes) -> DecodedSignedTransaction:
-    """Decode a signed legacy or typed transaction and recover its sender; ValueError when the bytes are not one."""
     if not raw_transaction:
         raise ValueError("Empty transaction")
 
@@ -32,7 +31,7 @@ def decode_signed_transaction(raw_transaction: bytes) -> DecodedSignedTransactio
             fields = LegacyTransaction.from_bytes(raw_transaction).as_dict()
             chain_id = _legacy_chain_id(int(fields["v"]))
         sender = Account.recover_transaction(raw_transaction)
-    except Exception as exc:  # rlp, eth_account and eth_keys raise their own decoding and validation errors
+    except Exception as exc:
         raise ValueError("Unable to decode signed transaction") from exc
 
     to = bytes(fields.get("to") or b"")

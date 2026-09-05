@@ -205,7 +205,6 @@ class BroadcastTransferSerializer(serializers.Serializer):
         except ValueError:
             raise serializers.ValidationError("Unable to decode signed transaction")
 
-        # A pre-EIP-155 legacy transaction carries no chain id and is accepted as before.
         if decoded.chain_id is not None and decoded.chain_id != settings.BLOCKCHAIN_CHAIN_ID:
             raise serializers.ValidationError("Transaction is signed for a different network")
 
@@ -238,6 +237,6 @@ class OrderModificationExecuteSerializer(serializers.Serializer):
     def validate_signature(self, value):
         if not value.startswith("0x"):
             raise serializers.ValidationError("Signature must start with 0x")
-        if len(value) != 132:  # 0x + 130 hex chars
+        if len(value) != 132:
             raise serializers.ValidationError("Invalid signature length")
         return value

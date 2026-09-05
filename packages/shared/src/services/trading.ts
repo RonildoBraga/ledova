@@ -110,14 +110,6 @@ export const getOrderSwapApprovalData = (apiClient: AxiosInstance, orderUuid: st
     params: { wallet_address: walletAddress },
   });
 
-// ============================================================================
-// Order Modification Functions
-// ============================================================================
-
-/**
- * Get a modification message for signing.
- * This is step 1 of the two-step modification flow.
- */
 export const getOrderModificationMessage = (
   apiClient: AxiosInstance,
   orderUuid: string,
@@ -129,10 +121,6 @@ export const getOrderModificationMessage = (
     new_price_per_share: data.newPricePerShare,
   });
 
-/**
- * Execute an order modification with a signed message.
- * This is step 2 of the two-step modification flow.
- */
 export const modifyOrder = (apiClient: AxiosInstance, orderUuid: string, data: SignedOrderModificationRequest) =>
   apiClient.post<OrderModificationResponse>(TRADING_ENDPOINTS.ORDERS.MODIFY(orderUuid), {
     message: data.message,

@@ -6,14 +6,6 @@ import { secp256k1 } from 'ethereum-cryptography/secp256k1';
 import { sha256 } from '@noble/hashes/sha256';
 import { isBitcoinTestnetSigningPath } from '@ledova/shared';
 
-/**
- * Zero out Uint8Arrays to remove sensitive key material from memory.
- *
- * JavaScript strings are immutable and cannot be wiped, so this module works
- * with Uint8Array throughout to minimize private key exposure. The ethers.js
- * SigningKey constructor still creates an internal hex string we can't control,
- * but we eliminate all other copies.
- */
 function wipe(...arrays: (Uint8Array | null | undefined)[]): void {
   for (const arr of arrays) {
     if (arr) arr.fill(0);
@@ -25,10 +17,6 @@ interface DerivedKey {
   cleanup: () => void;
 }
 
-/**
- * Derive a private key from mnemonic and HD path, wiping all intermediates.
- * Caller MUST call cleanup() when done with the key.
- */
 function deriveKey(mnemonic: string, derivationPath: string): DerivedKey {
   const seed = mnemonicToSeedSync(mnemonic);
   const masterKey = HDKey.fromMasterSeed(seed);
@@ -45,9 +33,6 @@ function deriveKey(mnemonic: string, derivationPath: string): DerivedKey {
   return { privateKey, cleanup: () => wipe(privateKey) };
 }
 
-/**
- * Execute a signing operation with a derived Ethereum wallet, ensuring key cleanup.
- */
 async function withEthereumSigner<T>(
   mnemonic: string,
   derivationPath: string,
@@ -107,7 +92,6 @@ export async function signBitcoinMessage(mnemonic: string, derivationPath: strin
 
     const sig = secp256k1.sign(msgHash, childKey.privateKey);
 
-    // BIP137 header for a compressed native-SegWit P2WPKH address.
     const recoveryFlag = 39 + sig.recovery;
     const rBytes = hexToBytes32(sig.r.toString(16));
     const sBytes = hexToBytes32(sig.s.toString(16));

@@ -28,7 +28,6 @@ def read_choice(name: str, *, choices: Collection[str], default: str) -> str:
 
 
 def resolve_storage_backend(*, debug: bool) -> str:
-    """Resolve the media backend, with DEBUG forcing local storage."""
     configured_backend = read_choice(
         "STORAGE_BACKEND",
         choices=("local", "s3", "gcs"),

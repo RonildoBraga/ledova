@@ -1,5 +1,3 @@
-"""One call builds a tenant's entire customer graph, so cross-tenant tests share a single fixture."""
-
 from datetime import date
 from decimal import Decimal
 from itertools import count
@@ -48,7 +46,6 @@ def _hex40(prefix, number):
 
 
 def reference_data():
-    """Rows every tenant points at; idempotent so tenants can be built in any order."""
     asset, _ = Asset.objects.get_or_create(
         symbol="TENANT",
         defaults={
@@ -224,10 +221,8 @@ def _rows(tenant):
 
 
 def route_context(tenant):
-    """Placeholder values for route templates: every uuid in the graph plus the non-uuid lookups."""
     context = {name: str(row.uuid) for name, row in _rows(tenant).items() if hasattr(row, "uuid")}
     context.update(
-        # The value series is computed on read; its one point on the holding snapshot's day.
         series_point=f"{tenant.portfolio.uuid}:{tenant.holding_snapshot.snapshot_date.isoformat()}",
         wallet_address=tenant.wallet.address,
         push_token=tenant.device_token.push_token,
@@ -240,12 +235,10 @@ def route_context(tenant):
 
 
 def phantom_context(tenant):
-    """The same keys as route_context with identifiers nobody owns; shared reference rows stay real."""
     return {key: value if key in SHARED_KEYS else str(uuid4()) for key, value in route_context(tenant).items()}
 
 
 def snapshot(tenant):
-    """Every column of every row in the graph, the two membership tables and per-model row counts."""
     rows = {}
     for name, row in _rows(tenant).items():
         fresh = type(row).objects.get(pk=row.pk)

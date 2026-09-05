@@ -8,9 +8,6 @@ import { keccak256 } from 'ethereum-cryptography/keccak';
 import { bech32 } from 'bech32';
 import type { HardwareWalletNetworkType } from '@ledova/shared';
 
-/**
- * Detects network type from BIP44 derivation path
- */
 export function detectNetworkFromPath(path: string): HardwareWalletNetworkType | 'UNKNOWN' {
   const match = path.match(/(?:m\/)?(\d+)'\/(\d+)'/);
   if (!match) return 'UNKNOWN';
@@ -24,16 +21,10 @@ export function detectNetworkFromPath(path: string): HardwareWalletNetworkType |
   return 'UNKNOWN';
 }
 
-/**
- * Normalizes derivation path to always start with "m/"
- */
 export function normalizeDerivationPath(path: string): string {
   return path.startsWith('m/') ? path : 'm/' + path;
 }
 
-/**
- * Derives a child key using non-hardened derivation (BIP32)
- */
 export function deriveNonHardenedChild(
   parentPublicKey: Buffer,
   parentChainCode: Buffer,
@@ -66,19 +57,14 @@ export function deriveNonHardenedChild(
   };
 }
 
-/**
- * Derives an Ethereum address from a public key
- */
 export function deriveEthereumAddress(publicKeyBuffer: Buffer): string {
   let publicKeyHex = publicKeyBuffer.toString('hex');
 
-  // Decompress if needed
   if (publicKeyHex.length === 66 && (publicKeyHex.startsWith('02') || publicKeyHex.startsWith('03'))) {
     const point = secp256k1.ProjectivePoint.fromHex(Buffer.from(publicKeyHex, 'hex'));
     publicKeyHex = Buffer.from(point.toRawBytes(false)).toString('hex');
   }
 
-  // Remove '04' prefix for uncompressed keys
   if (publicKeyHex.startsWith('04')) {
     publicKeyHex = publicKeyHex.slice(2);
   }
@@ -87,9 +73,6 @@ export function deriveEthereumAddress(publicKeyBuffer: Buffer): string {
   return '0x' + Buffer.from(hash).slice(-20).toString('hex');
 }
 
-/**
- * Derives a Bitcoin testnet Native SegWit (tb1q) address from a public key
- */
 export function deriveBitcoinAddress(publicKeyBuffer: Buffer): string {
   const compressedKey =
     publicKeyBuffer.length === 33
@@ -99,7 +82,6 @@ export function deriveBitcoinAddress(publicKeyBuffer: Buffer): string {
   const sha256Hash = sha256(compressedKey);
   const hash160 = ripemd160(sha256Hash);
 
-  // BIP84 uses the testnet coin type (1); public-testnet P2WPKH uses the tb HRP.
   const words = bech32.toWords(Buffer.from(hash160));
   return bech32.encode('tb', [0, ...words]);
 }

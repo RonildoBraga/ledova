@@ -171,7 +171,6 @@ class Company(BaseModel):
         self.save(update_fields=["status", "review_started_at", "updated_at"])
 
     def request_info(self, reason: str):
-        """A new question clears the previous answer, so the owner never sees an old response next to it."""
         self._require_status([CompanyStatus.REVIEW], CompanyStatus.INFO_REQUIRED)
         self.status = CompanyStatus.INFO_REQUIRED
         self.info_requested_at = timezone.now()
@@ -188,7 +187,6 @@ class Company(BaseModel):
         )
 
     def resubmit(self, response: str = ""):
-        """The request reason stays next to the answer until approval, so the reviewer sees both."""
         self._require_status([CompanyStatus.INFO_REQUIRED], CompanyStatus.SUBMITTED)
         self.status = CompanyStatus.SUBMITTED
         self.submitted_at = timezone.now()
@@ -309,7 +307,6 @@ class Company(BaseModel):
         return getattr(self.owner, "userprofile", None)
 
     def get_primary_wallet(self, chain: str | None = None):
-        """The issuer wallet recorded on token deployments: operator_wallet, else the owner's newest verified one."""
         chain = chain or Blockchain.BASE.value
         if self.operator_wallet:
             return self.operator_wallet

@@ -84,7 +84,7 @@ class IdentityVerificationApprovalTest(TestCase):
 
     def test_a_changed_review_result_creates_one_general_notification(self):
         profile, _ = self._profile_with_citizenship("IE")
-        self.push_task.defer.side_effect = run_task  # run the deferred job inline so the row it writes is visible
+        self.push_task.defer.side_effect = run_task
         yellow = NormalizedVerificationResult(
             verification_status="completed", review_result="YELLOW", is_verified=False
         )
@@ -113,7 +113,7 @@ class IdentityVerificationApprovalTest(TestCase):
     def test_a_failing_risk_assessment_keeps_the_verified_result_and_its_notification(self):
         profile, account = self._profile_with_citizenship("DE")
 
-        def broken_assessment(**kwargs):  # a database error: aborts the transaction unless it sits in a savepoint
+        def broken_assessment(**kwargs):
             with connection.cursor() as cursor:
                 cursor.execute("INSERT INTO no_such_table (x) VALUES (1)")
 

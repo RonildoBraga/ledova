@@ -28,7 +28,6 @@ class DeviceTokenViewSet(AuthenticatedModelViewSet):
         push_token = serializer.validated_data["push_token"]
         device_type = serializer.validated_data["device_type"]
 
-        # A push token identifies an app install; whoever signed in on it last is its owner.
         device_token, created = DeviceToken.objects.update_or_create(
             push_token=push_token,
             defaults={"user": request.user, "device_type": device_type, "is_active": True},

@@ -1,5 +1,3 @@
-"""The two transaction status writers notify the wallet account's members and nobody else."""
-
 from unittest import skipUnless
 from unittest.mock import patch
 
@@ -27,7 +25,7 @@ class TransactionNotificationProducerTest(TestCase):
 
     def test_confirmation_creates_the_row_and_defers_one_job_per_member(self):
         with patch(TASK) as task:
-            task.defer.side_effect = run_task  # run the deferred job inline so the row it writes is visible
+            task.defer.side_effect = run_task
             result = TransactionConfirmationService.confirm_transaction(self.tx.tx_hash, block_number=7)
 
         self.assertEqual(result["status"], "confirmed")
@@ -69,7 +67,6 @@ class TransactionNotificationProducerTest(TestCase):
 
 @skipUnless(connection.vendor == "postgresql", "procrastinate job rows live in PostgreSQL only")
 class TransactionNotificationJobRowTest(TestCase):
-    """The real defer: one procrastinate_jobs row per member, none when the block fails after the defer."""
 
     def setUp(self):
         self.tenant = make_tenant("jobrow")

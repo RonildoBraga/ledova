@@ -6,15 +6,6 @@ import { apiClient } from '../../services/apiClient';
 import { useAuth } from '../../hooks/useAuth';
 import { useUserPreferences } from '../../hooks/useUserPreferences';
 
-/**
- * Hook for managing favourite assets.
- *
- * Provides:
- * - List of favourite assets
- * - Set of favourite asset UUIDs for O(1) lookup
- * - Add/remove mutations with optimistic updates
- * - Helper to check if an asset is favourited
- */
 export function useFavouriteAssets() {
   const { isAuthenticated } = useAuth();
   const { selectedAccount } = useUserPreferences();
@@ -30,13 +21,11 @@ export function useFavouriteAssets() {
 
   const favourites: FavouriteAsset[] = favouritesQuery.data?.data?.results ?? [];
 
-  // Create a Set of asset UUIDs for O(1) lookup
   const favouriteAssetUuids = useMemo(
     () => new Set<string>(favourites.map((f: FavouriteAsset) => f.asset.uuid)),
     [favourites],
   );
 
-  // Create a map from asset UUID to favourite UUID for deletion
   const assetToFavouriteMap = useMemo(
     () => new Map<string, string>(favourites.map((f: FavouriteAsset) => [f.asset.uuid, f.uuid])),
     [favourites],
@@ -46,24 +35,18 @@ export function useFavouriteAssets() {
     mutationFn: (assetUuid: string) =>
       addFavouriteAsset(apiClient, { asset: assetUuid, userAccount: selectedAccount!.uuid }),
     onMutate: async (assetUuid) => {
-      // Cancel outgoing refetches
       await queryClient.cancelQueries({ queryKey: ['favouriteAssets'] });
 
-      // Snapshot previous value
       const previousFavourites = queryClient.getQueryData(['favouriteAssets']);
 
-      // Optimistically add to the set (UI will show filled star immediately)
-      // We don't have the full FavouriteAsset object yet, but the Set lookup will work
       return { previousFavourites, assetUuid };
     },
     onError: (_err, _assetUuid, context) => {
-      // Rollback on error
       if (context?.previousFavourites) {
         queryClient.setQueryData(['favouriteAssets'], context.previousFavourites);
       }
     },
     onSettled: () => {
-      // Refetch to get the actual data
       queryClient.invalidateQueries({ queryKey: ['favouriteAssets'] });
     },
   });
@@ -75,7 +58,6 @@ export function useFavouriteAssets() {
 
       const previousFavourites = queryClient.getQueryData(['favouriteAssets']);
 
-      // Optimistically remove from cache
       queryClient.setQueryData(['favouriteAssets'], (old: typeof favouritesQuery.data) => {
         if (!old?.data?.results) return old;
         return {

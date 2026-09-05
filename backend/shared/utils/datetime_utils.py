@@ -4,7 +4,6 @@ from django.utils import timezone
 
 
 def parse_date_to_timezone_aware(date_value):
-    """ "YYYY-MM-DD" string, date or datetime -> aware datetime at the start of that day (None passes through)."""
     if date_value is None:
         return None
     if isinstance(date_value, str):
@@ -17,7 +16,6 @@ def parse_date_to_timezone_aware(date_value):
 
 
 def parse_end_date_inclusive(date_value):
-    """Start of the day after `date_value`, so callers can filter with __lt and include the whole end date."""
     if date_value is None:
         return None
     return parse_date_to_timezone_aware(date_value) + timedelta(days=1)

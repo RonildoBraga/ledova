@@ -164,7 +164,7 @@ export function useOrderSigning({ mode, orderData, orderUuid, wallet, onSuccess 
       const mnemonic = await getSeedPhrase(wallet.masterFingerprint);
       if (!mnemonic) {
         setStep('instructions');
-        return; // User cancelled biometric
+        return;
       }
 
       const signature = await signEthereumMessage(mnemonic, wallet.derivationPath, messageData.message);

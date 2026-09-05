@@ -41,12 +41,11 @@ export default tseslint.config(
     },
     rules: {
       'prettier/prettier': 'error',
+      'no-empty': ['error', { allowEmptyCatch: true }],
       ...reactPlugin.configs.recommended.rules,
       ...reactHooks.configs.recommended.rules,
       'react/react-in-jsx-scope': 'off',
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
-      // Disable exhaustive-deps warnings for logical expressions (e.g., data?.data || [])
-      // This aligns with our code quality guideline: "TanStack Query already handles memoization"
       'react-hooks/exhaustive-deps': 'off',
     },
   },

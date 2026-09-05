@@ -224,7 +224,6 @@ export function PreScreeningScreen() {
       <SafeAreaView style={styles.container}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardView}>
           <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-            {/* Header */}
             <View style={styles.header}>
               <View style={styles.iconContainer}>
                 <ShieldCheckIcon
@@ -239,9 +238,7 @@ export function PreScreeningScreen() {
               </Text>
             </View>
 
-            {/* Form Container */}
             <View style={styles.formContainer}>
-              {/* General Error */}
               {generalError && (
                 <View style={styles.errorContainer}>
                   <WarningCircleIcon
@@ -253,7 +250,6 @@ export function PreScreeningScreen() {
                 </View>
               )}
 
-              {/* Age Confirmation */}
               <TouchableOpacity
                 style={styles.checkboxContainer}
                 onPress={() => setFieldValue('confirmedOver18', !form.confirmedOver18)}
@@ -275,7 +271,6 @@ export function PreScreeningScreen() {
                 </View>
               </TouchableOpacity>
 
-              {/* Australian Resident Confirmation */}
               <TouchableOpacity
                 style={styles.checkboxContainer}
                 onPress={() => setFieldValue('confirmedAustralianResident', !form.confirmedAustralianResident)}
@@ -299,7 +294,6 @@ export function PreScreeningScreen() {
                 </View>
               </TouchableOpacity>
 
-              {/* Individual Account Confirmation */}
               <TouchableOpacity
                 style={styles.checkboxContainer}
                 onPress={() => setFieldValue('confirmedIndividualAccount', !form.confirmedIndividualAccount)}
@@ -321,7 +315,6 @@ export function PreScreeningScreen() {
                 </View>
               </TouchableOpacity>
 
-              {/* Continue Button */}
               <PrimaryButton
                 onPress={handleContinue}
                 loading={isSubmitting}
@@ -333,14 +326,12 @@ export function PreScreeningScreen() {
               </PrimaryButton>
             </View>
 
-            {/* Divider */}
             <View style={styles.divider}>
               <View style={styles.dividerLine} />
               <Text style={styles.dividerText}>or</Text>
               <View style={styles.dividerLine} />
             </View>
 
-            {/* Go Back Section */}
             <View style={styles.backSection}>
               <Text style={styles.backText}>
                 <Text style={styles.backLink} onPress={() => !isSubmitting && handleBack()}>

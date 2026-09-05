@@ -1,5 +1,3 @@
-"""Company.operator_wallet writers: the company PATCH route and the admin change form."""
-
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse

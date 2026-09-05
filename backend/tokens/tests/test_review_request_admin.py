@@ -1,5 +1,3 @@
-"""Both request admins walk start-review, approve, reject and execute through the shared workflow views."""
-
 from unittest.mock import patch
 
 from django.contrib.admin.sites import site

@@ -48,7 +48,7 @@ class CompanyDocumentSerializer(serializers.ModelSerializer):
             return url
         return obj.external_url
 
-    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+    MAX_FILE_SIZE = 10 * 1024 * 1024
     ALLOWED_MIME_TYPES = {"application/pdf", "image/png", "image/jpeg"}
     ALLOWED_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg"}
 

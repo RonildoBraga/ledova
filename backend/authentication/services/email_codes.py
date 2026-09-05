@@ -1,10 +1,3 @@
-"""
-Email verification codes (OTP).
-
-The database never holds the code: the user row stores sha256(pk:code), the time it was sent
-and how many verification attempts have been made against it.
-"""
-
 import hashlib
 import hmac
 import logging
@@ -68,8 +61,6 @@ class EmailCodeService:
 
     @staticmethod
     def verify(user, code):
-        """One code is good for CODE_LIFETIME after it was sent and for MAX_ATTEMPTS guesses; the
-        last failed guess clears it so a fresh code must be requested."""
         stored = user.email_verification_token
         sent_at = user.email_verification_sent_at
         if (

@@ -1,5 +1,3 @@
-"""One chain-balance helper feeds holding sync and confirmation; one queryset resolves a chain's native asset."""
-
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 

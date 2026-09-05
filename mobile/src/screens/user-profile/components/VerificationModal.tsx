@@ -129,9 +129,7 @@ export function VerificationModal({ visible, onClose, onRefresh }: VerificationM
   const handleStartVerification = async () => {
     try {
       await launchVerification();
-    } catch {
-      // The hook exposes the launch error in modal state.
-    }
+    } catch {}
   };
 
   const handleClose = () => {

@@ -10,7 +10,7 @@ from integrations.transak.exceptions import TransakApiError, TransakConfiguratio
 
 logger = logging.getLogger(__name__)
 
-# Cache key for the partner access token
+
 TRANSAK_ACCESS_TOKEN_CACHE_KEY = "transak:partner_access_token"
 
 _LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "host.docker.internal"})
@@ -50,7 +50,6 @@ class TransakClient:
         self.referrer_domain = settings.TRANSAK_REFERRER_DOMAIN
 
     def _get_access_token(self) -> str:
-        """Get a cached partner access token, refreshing if needed."""
         access_token = cache.get(TRANSAK_ACCESS_TOKEN_CACHE_KEY)
         if access_token:
             return access_token
@@ -58,13 +57,6 @@ class TransakClient:
         return self._refresh_access_token()
 
     def _refresh_access_token(self) -> str:
-        """Call Transak's Refresh Access Token API to get a new partner access token.
-
-        POST /partners/api/v2/refresh-token
-        Body: {"apiKey": "..."}
-        Header: api-secret: "..."
-        Returns: {"data": {"accessToken": "...", "expiresAt": <unix_timestamp>}}
-        """
         url = f"{self.api_url}/partners/api/v2/refresh-token"
 
         try:
@@ -94,11 +86,10 @@ class TransakClient:
         if not access_token:
             raise TransakApiError("No accessToken in refresh response")
 
-        # Cache with a buffer before expiry (expire 1 hour early)
         if expires_at:
             ttl = max(int(expires_at - time.time() - 3600), 300)
         else:
-            ttl = 6 * 24 * 3600  # 6 days fallback
+            ttl = 6 * 24 * 3600
 
         cache.set(TRANSAK_ACCESS_TOKEN_CACHE_KEY, access_token, ttl)
         logger.info(f"Transak partner access token refreshed, expires in {ttl}s")
@@ -123,15 +114,6 @@ class TransakClient:
         color_mode: str = "DARK",
         partner_customer_id: str = None,
     ) -> str:
-        """Create a secure widget URL via Transak's Create Widget URL API.
-
-        POST /api/v2/auth/session
-        Body: {"widgetParams": {...}}
-        Header: access-token: "..."
-        Returns: {"data": {"widgetUrl": "..."}}
-
-        The returned widgetUrl is valid for 5 minutes and can only be used once.
-        """
         access_token = self._get_access_token()
 
         widget_params = {

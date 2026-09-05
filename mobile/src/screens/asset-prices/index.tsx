@@ -180,25 +180,21 @@ export function AssetPricesScreen() {
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
 
-    // Check if user scrolled to the top (overscroll top)
     if (contentOffset.y < -50 && !isOverscrollLoading && !isLoading) {
       handleOverscrollRefresh();
     }
 
-    // Check if user scrolled to the bottom (overscroll bottom)
     const isAtBottom = contentOffset.y + layoutMeasurement.height >= contentSize.height + 50;
     if (isAtBottom && !isOverscrollLoading && !isLoading) {
       handleOverscrollRefresh();
     }
   };
 
-  // Sort assets based on selected sort option
   const sortedAssets = useCallback(() => {
     const assetsCopy = [...assets];
 
     switch (selectedSort) {
       case 'assetType':
-        // Sort by asset type first, then alphabetically within each type
         return assetsCopy.sort((a, b) => {
           const typeComparison = (a.assetType || '').localeCompare(b.assetType || '');
           if (typeComparison !== 0) return typeComparison;
@@ -206,7 +202,6 @@ export function AssetPricesScreen() {
         });
 
       case 'favourites':
-        // Sort favourites first, then alphabetically within favourites and non-favourites
         return assetsCopy.sort((a, b) => {
           const aIsFav = isFavourite(a.uuid) ? 1 : 0;
           const bIsFav = isFavourite(b.uuid) ? 1 : 0;
@@ -304,7 +299,6 @@ export function AssetPricesScreen() {
                     onScroll={handleScroll}
                     scrollEventThrottle={16}
                   >
-                    {/* Top Overscroll Indicator */}
                     {(isLoading || isOverscrollLoading) && (
                       <View style={styles.overscrollIndicator}>
                         <ActivityIndicator size="small" color={theme.colors.interactive.active} />
@@ -321,7 +315,6 @@ export function AssetPricesScreen() {
                       />
                     ))}
 
-                    {/* Load More Button */}
                     {hasNextPage && (
                       <TouchableOpacity
                         style={styles.loadMoreButton}
@@ -337,7 +330,6 @@ export function AssetPricesScreen() {
                       </TouchableOpacity>
                     )}
 
-                    {/* Bottom Overscroll Indicator */}
                     {(isLoading || isOverscrollLoading) && (
                       <View style={styles.overscrollIndicator}>
                         <ActivityIndicator size="small" color={theme.colors.interactive.active} />
@@ -361,7 +353,6 @@ export function AssetPricesScreen() {
         </View>
       </View>
 
-      {/* Asset Detail Modal */}
       <AssetDetailModal
         visible={modalVisible}
         asset={selectedAsset}
@@ -370,7 +361,6 @@ export function AssetPricesScreen() {
         onToggleFavourite={toggleFavourite}
       />
 
-      {/* Sort Modal */}
       <AssetSortModal
         visible={showSortDialog}
         selectedSort={selectedSort}
@@ -378,7 +368,6 @@ export function AssetPricesScreen() {
         onSelectSort={setSelectedSort}
       />
 
-      {/* Filters Modal */}
       <AssetFiltersModal
         isOpen={showFiltersDialog}
         filters={filters}

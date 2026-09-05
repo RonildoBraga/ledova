@@ -66,21 +66,17 @@ export function EditWalletModal({ wallet, isOpen, onClose, onSave, isUpdating }:
       onConfirm={handleSave}
     >
       <div className="space-y-5">
-        {/* 1. Hero: Chain icon + Market Value */}
         <div className="flex flex-col items-center gap-2 py-2">
           <ChainIcon size={48} className="text-info-light" weight="light" />
           <span className="text-xl font-semibold text-text-primary">{formatDisplayCurrency(marketValue)}</span>
         </div>
 
-        {/* 2-6. Detail rows (unified order) */}
         <div className="space-y-0">
-          {/* 2. Address */}
           <div className="flex items-center justify-between py-2.5 border-b border-border-subtle">
             <span className="text-sm text-text-muted">Address</span>
             <span className="text-sm font-medium text-text-primary">{formatWalletAddressMedium(wallet.address)}</span>
           </div>
 
-          {/* 3. Balance */}
           <div className="flex items-center justify-between py-2.5 border-b border-border-subtle">
             <span className="text-sm text-text-muted">Balance</span>
             <span className="text-sm font-medium text-text-primary">
@@ -88,7 +84,6 @@ export function EditWalletModal({ wallet, isOpen, onClose, onSave, isUpdating }:
             </span>
           </div>
 
-          {/* 4. Type */}
           <div className="flex items-center justify-between py-2.5 border-b border-border-subtle">
             <span className="text-sm text-text-muted">Type</span>
             <div className="flex items-center gap-1.5">
@@ -103,13 +98,11 @@ export function EditWalletModal({ wallet, isOpen, onClose, onSave, isUpdating }:
             </div>
           </div>
 
-          {/* 5. Last Sync */}
           <div className="flex items-center justify-between py-2.5 border-b border-border-subtle">
             <span className="text-sm text-text-muted">Last Sync</span>
             <span className="text-sm font-medium text-text-primary">{formatDate(wallet.lastSyncedAt)}</span>
           </div>
 
-          {/* 6. Verification */}
           <div className="flex items-center justify-between py-2.5">
             <span className="text-sm text-text-muted">Verification</span>
             <div className="flex items-center gap-1.5">
@@ -125,7 +118,6 @@ export function EditWalletModal({ wallet, isOpen, onClose, onSave, isUpdating }:
           </div>
         </div>
 
-        {/* 7. Name (editable, at bottom) */}
         <div className="space-y-2 pt-2">
           <label className="text-sm font-medium text-text-primary">Wallet Name</label>
           <input

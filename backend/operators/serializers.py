@@ -23,7 +23,6 @@ class SettlementAssetSerializer(serializers.ModelSerializer):
 
 
 class OperatorSerializer(serializers.ModelSerializer):
-    """The public operator profile; payment_instructions carries only the rails the operator has filled in."""
 
     supported_settlement_assets = SettlementAssetSerializer(many=True, read_only=True)
     issued_stablecoin = SettlementAssetSerializer(read_only=True, allow_null=True)

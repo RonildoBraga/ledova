@@ -1,5 +1,3 @@
-"""Wallet edits lock the row in the view and keep the response keys the clients read."""
-
 from rest_framework.test import APITestCase
 
 from shared.tests.tenants import make_tenant

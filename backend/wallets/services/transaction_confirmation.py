@@ -28,9 +28,6 @@ class TransactionConfirmationService:
 
     @staticmethod
     def resolve_transfer_asset(wallet: Wallet, token_contract: Optional[str] = None) -> Asset:
-        """The Asset an outgoing transfer books against: the verified token behind token_contract on
-        the wallet's chain, else the chain's native coin. Callers run this before broadcasting so an
-        unknown or quarantined contract is refused while the funds are still in the wallet."""
         if not token_contract:
             return native_asset_for_chain(wallet.chain)
 
@@ -172,10 +169,6 @@ class TransactionConfirmationService:
 
     @staticmethod
     def _notify_wallet_users(tx: Transaction, event: str) -> None:
-        """Deferred inside the caller's atomic block: the job row rolls back with the status change.
-
-        Recipients are the wallet account's members, the same relation as WalletQuerySet.visible_to_user.
-        """
         recipients = get_user_model().objects.filter(userprofile__user_accounts__wallets=tx.wallet)
         for user in recipients:
             send_transaction_notification.defer(user_id=str(user.pk), transaction_id=str(tx.uuid), event_type=event)

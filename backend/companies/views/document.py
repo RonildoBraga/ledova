@@ -21,7 +21,6 @@ class DocumentViewSet(AuthenticatedModelViewSet):
         return self.action in ("create", "destroy")
 
     def _company(self):
-        """The parent company from the URL, scoped like the documents themselves (writes need management rights)."""
         scope = Company.objects.manageable_by_user if self._writing() else Company.objects.visible_to_user
         company = scope(self.request.user).filter(uuid=self.kwargs["company_uuid"]).first()
         if not company:

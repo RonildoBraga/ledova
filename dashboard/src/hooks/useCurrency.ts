@@ -4,12 +4,6 @@ import type { DisplayCurrency } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 import { useAuth } from './useAuth';
 
-/**
- * Hook that provides currency-aware formatting.
- *
- * Reads the user's display currency preference and fetches the
- * exchange rate to convert USD-denominated values for display.
- */
 export function useCurrency() {
   const { isAuthenticated } = useAuth();
 

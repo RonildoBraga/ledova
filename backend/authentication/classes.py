@@ -14,28 +14,8 @@ logger = logging.getLogger(__name__)
 
 
 class HybridJWTAuthentication(JWTAuthentication):
-    """
-    Extends simplejwt JWTAuthentication to support both authentication methods:
-    1. Cookie-based authentication (via 'access' cookie)
-    2. Header-based authentication (via standard Authorization header)
-
-    Auth failures return None (anonymous) instead of raising, letting the
-    permission class decide — AllowAny endpoints proceed, protected endpoints
-    return 401 via DRF's standard permission denial.
-
-    A browser sends the access cookie on its own, so a cookie-sourced unsafe
-    request must also carry the CSRF token (DRF views are csrf_exempt, which
-    makes this the enforcement point); a Bearer header cannot be forged
-    cross-site, so header-sourced requests skip the check.
-
-    The header wins when both are presented: React Native's cookie jar replays
-    the `access` cookie set at sign-in next to the mobile app's Bearer token,
-    and that cookie must neither trigger the CSRF check nor, once stale, shadow
-    a valid Bearer token. The dashboard never sends an Authorization header.
-    """
 
     def _get_token_and_source(self, request):
-        """Returns (raw_token, source) where source is 'header' or 'cookie'."""
         auth_header = self.get_header(request)
         if auth_header:
             parts = auth_header.split()
@@ -58,7 +38,6 @@ class HybridJWTAuthentication(JWTAuthentication):
         try:
             validated_token = self.get_validated_token(raw_token)
 
-            # An access token is only as live as the refresh token it was issued with.
             if not TokenService.is_session_live(validated_token.get("rjti")):
                 raise InvalidToken("Token has been revoked")
 

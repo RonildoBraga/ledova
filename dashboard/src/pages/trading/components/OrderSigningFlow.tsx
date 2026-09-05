@@ -1,9 +1,3 @@
-/**
- * OrderSigningFlow Component
- * Modal flow for signing order creation/cancellation with hardware or software wallet.
- * Follows the same pattern as SwapSigningFlow for consistent UX.
- */
-
 import { useEffect, useCallback, useState } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import {
@@ -43,14 +37,14 @@ interface OrderSigningFlowProps {
   isOpen: boolean;
   onClose: () => void;
   mode: SigningMode;
-  // For order creation
+
   orderData?: CreateOrderRequest;
-  // For order cancellation
+
   orderUuid?: string;
   orderSymbol?: string;
-  // Wallet for signing
+
   wallet: Wallet | null;
-  // Callback on success
+
   onSuccess?: (order: TransferOrder) => void;
 }
 
@@ -72,7 +66,6 @@ export function OrderSigningFlow({
 
   const isSoftwareWallet = wallet?.walletType === 'software' || (!wallet?.derivationPath && !wallet?.masterFingerprint);
 
-  // Mutations
   const createMessageMutation = useOrderCreateMessage();
   const cancelMessageMutation = useOrderCancelMessage();
   const createOrderMutation = useCreateOrder();
@@ -81,7 +74,6 @@ export function OrderSigningFlow({
   const isCreating = mode === 'create';
   const isCancelling = mode === 'cancel';
 
-  // Reset state when modal opens
   useEffect(() => {
     if (isOpen) {
       setSigningStep('loading');
@@ -90,7 +82,6 @@ export function OrderSigningFlow({
       setError(null);
       setSeedPhrase('');
 
-      // Fetch the message to sign
       if (isCreating && orderData) {
         createMessageMutation.mutate(orderData, {
           onSuccess: (data) => {
@@ -117,7 +108,6 @@ export function OrderSigningFlow({
     }
   }, [isOpen, mode, orderData, orderUuid]);
 
-  // Generate QR code when proceeding to show-qr step
   const generateQrCode = useCallback(() => {
     if (!messageData || !wallet) {
       setError('Missing message data or wallet');
@@ -143,7 +133,6 @@ export function OrderSigningFlow({
     setSigningStep('show-qr');
   }, [messageData, wallet]);
 
-  // Handle Continue button - routes to hardware or software signing
   const handleContinue = useCallback(() => {
     if (isSoftwareWallet) {
       setSigningStep('signing-software');
@@ -152,7 +141,6 @@ export function OrderSigningFlow({
     }
   }, [isSoftwareWallet, generateQrCode]);
 
-  // Handle signature submission
   const handleSignatureScanned = useCallback(
     (signature: string) => {
       if (!messageData) return;
@@ -200,7 +188,6 @@ export function OrderSigningFlow({
     [messageData, isCreating, isCancelling, orderData, orderUuid, createOrderMutation, cancelOrderMutation, onSuccess],
   );
 
-  // Handle software wallet signing with seed phrase
   const handleSoftwareSign = useCallback(async () => {
     if (!messageData || !wallet?.derivationPath || !seedPhrase.trim()) return;
 
@@ -233,14 +220,12 @@ export function OrderSigningFlow({
     enabled: signingStep === 'scan-signature',
   });
 
-  // Handle modal close
   const handleClose = useCallback(() => {
     if (signingStep === 'submitting') return;
     stopScanner();
     onClose();
   }, [onClose, signingStep, stopScanner]);
 
-  // Auto-close on success
   useEffect(() => {
     if (signingStep === 'success') {
       const timer = setTimeout(() => {
@@ -262,7 +247,6 @@ export function OrderSigningFlow({
   }, [signingStep]);
 
   const renderStepContent = () => {
-    // Loading state
     if (signingStep === 'loading') {
       return (
         <div className="flex flex-col items-center justify-center py-8 gap-3">
@@ -276,14 +260,12 @@ export function OrderSigningFlow({
       case 'instructions':
         return (
           <div className="space-y-5">
-            {/* Description */}
             <p className="text-sm text-text-muted">
               {isCreating
                 ? `Sign this order with your ${isSoftwareWallet ? 'seed phrase' : 'hardware wallet'} to authorize the trade.`
                 : `Sign this cancellation with your ${isSoftwareWallet ? 'seed phrase' : 'hardware wallet'} to cancel your order.`}
             </p>
 
-            {/* Order Summary */}
             {messageData && (
               <div className="bg-surface-tertiary rounded-lg p-4 space-y-2">
                 <div className="grid grid-cols-2 gap-2 text-sm">
@@ -317,7 +299,6 @@ export function OrderSigningFlow({
               </div>
             )}
 
-            {/* Instructions */}
             {isSoftwareWallet ? (
               <div className="space-y-3">
                 <div className="flex items-start gap-3 p-3 bg-surface-tertiary rounded-lg">
@@ -364,7 +345,6 @@ export function OrderSigningFlow({
               </div>
             )}
 
-            {/* Footer Buttons */}
             <div className="flex gap-3 pt-2">
               <button
                 type="button"
@@ -388,7 +368,6 @@ export function OrderSigningFlow({
       case 'show-qr':
         return (
           <div className="space-y-5">
-            {/* Description */}
             <p className="text-sm text-text-muted">
               Scan this QR code with your hardware wallet to sign the {isCreating ? 'order' : 'cancellation'}.
             </p>
@@ -405,7 +384,6 @@ export function OrderSigningFlow({
               </div>
             )}
 
-            {/* Footer Buttons */}
             <div className="flex gap-3 pt-2">
               <button
                 type="button"
@@ -428,14 +406,12 @@ export function OrderSigningFlow({
       case 'scan-signature':
         return (
           <div className="space-y-5">
-            {/* Description */}
             <p className="text-sm text-text-muted">
               Point your camera at the signature QR code on your hardware wallet.
             </p>
 
             <QRScannerView scannerId="order-qr-scanner" error={scannerError} />
 
-            {/* Footer Button */}
             <div className="flex gap-3 pt-2">
               <button
                 type="button"
@@ -576,7 +552,6 @@ export function OrderSigningFlow({
   return (
     <Transition show={isOpen}>
       <Dialog onClose={handleClose} className="relative z-50">
-        {/* Backdrop */}
         <Transition.Child
           enter="ease-out duration-200"
           enterFrom="opacity-0"
@@ -588,7 +563,6 @@ export function OrderSigningFlow({
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" />
         </Transition.Child>
 
-        {/* Modal */}
         <div className="fixed inset-0 overflow-y-auto">
           <div className="flex min-h-full items-center justify-center p-4">
             <Transition.Child
@@ -600,7 +574,6 @@ export function OrderSigningFlow({
               leaveTo="opacity-0 scale-95"
             >
               <Dialog.Panel className="w-full max-w-md bg-surface-raised rounded-xl border border-border shadow-xl overflow-hidden">
-                {/* Header */}
                 <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
                   <Dialog.Title className="text-lg font-semibold text-text-primary flex items-center gap-2">
                     <TitleIcon size={ICON_MD} className="text-brand-light" />
@@ -615,7 +588,6 @@ export function OrderSigningFlow({
                   </button>
                 </div>
 
-                {/* Content */}
                 <div className="p-4">{renderStepContent()}</div>
               </Dialog.Panel>
             </Transition.Child>

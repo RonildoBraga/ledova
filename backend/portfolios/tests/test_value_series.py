@@ -1,5 +1,3 @@
-"""The on-read value series: carry-forward, pricing, aggregation across wallets and the endpoint shape."""
-
 from datetime import datetime, time, timedelta
 from decimal import Decimal
 
@@ -17,11 +15,6 @@ def at(day, hour=0):
 
 
 class ValueSeriesFixtureMixin(PortfolioFixtureMixin):
-    """Two wallets, AAA priced every day (100 + day number), BBB priced on days 3 and 15 only.
-
-    Day 1 is 21 days ago so day 22 is today. Holding snapshots: W1 AAA 1 (day 1) then 2 (day 5),
-    W1 BBB 10 (day 1), W2 AAA 3 (day 20). Day 10 also has an intraday AAA price that wins.
-    """
 
     def day(self, number):
         return timezone.now().date() - timedelta(days=22 - number)

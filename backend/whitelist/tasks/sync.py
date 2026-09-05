@@ -10,7 +10,6 @@ logger = logging.getLogger(__name__)
 @app.periodic(cron="*/30 * * * *")
 @app.task(retry=RetryStrategy(max_attempts=4, wait=60))
 def sync_all_entries(timestamp: int):
-    """Sync the on-chain whitelist registry. Runs every 30 minutes."""
     from whitelist.services import WhitelistService
 
     service = WhitelistService()

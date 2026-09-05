@@ -1,5 +1,3 @@
-"""Every assets ModelAdmin renders and the price/activation actions still call the sync service."""
-
 from decimal import Decimal
 
 from django.contrib import admin
@@ -33,7 +31,7 @@ class AssetsAdminPagesTest(TestCase):
 
     def test_every_assets_model_is_registered_and_renders(self):
         registered = {model for model in admin.site._registry if model._meta.app_label == "assets"}
-        instances = [self.asset, self.snapshot]  # deployments are an inline of the asset page
+        instances = [self.asset, self.snapshot]
         self.assertEqual(registered, {type(instance) for instance in instances})
 
         for instance in instances:
@@ -57,7 +55,7 @@ class AssetsAdminPagesTest(TestCase):
         self.client.post(url, {"action": "mark_as_active", "_selected_action": [self.asset.pk]})
         self.assertTrue(Asset.objects.get(pk=self.asset.pk).is_active)
 
-        self.assertFalse(self.asset.is_verified)  # a quarantined token until an operator allowlists it
+        self.assertFalse(self.asset.is_verified)
         self.client.post(url, {"action": "mark_as_verified", "_selected_action": [self.asset.pk]})
         self.assertTrue(Asset.objects.get(pk=self.asset.pk).is_verified)
 

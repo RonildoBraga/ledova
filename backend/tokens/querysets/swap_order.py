@@ -5,7 +5,6 @@ from tokens.models.choices import SwapOrderStatus
 
 class SwapOrderQuerySet(QuerySet):
     def for_wallet_ids(self, wallet_ids):
-        """Scope swaps through exact, internally consistent order wallet FKs."""
         if not wallet_ids:
             return self.none()
 
@@ -33,7 +32,6 @@ class SwapOrderQuerySet(QuerySet):
         return self.filter(share_token=token, status="completed").order_by("-completed_at").first()
 
     def pending_for_wallet_ids(self, wallet_ids):
-        """Return pending swaps tied to the caller's exact wallet rows."""
         return (
             self.for_wallet_ids(wallet_ids)
             .filter(

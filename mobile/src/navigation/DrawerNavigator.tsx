@@ -211,7 +211,6 @@ export function DrawerNavigator() {
     } catch (error) {
       console.error('Sign-out API call failed:', error);
     } finally {
-      // The backend revoked the session; drop the pair and the biometric-gated copy with it
       await clearTokens();
 
       queryClient.clear();

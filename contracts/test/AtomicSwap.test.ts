@@ -20,7 +20,7 @@ describe("AtomicSwap", function () {
   let relayer: SignerWithAddress;
 
   const SHARE_AMOUNT = 1000n;
-  const PAYMENT_AMOUNT = 10000n; // 100.00 AUDY (2 decimals)
+  const PAYMENT_AMOUNT = 10000n;
   const NONCE = 1n;
 
   const DOMAIN_NAME = "LedovaAtomicSwap";
@@ -140,7 +140,7 @@ describe("AtomicSwap", function () {
 
     it("Should return correct chain ID", async function () {
       const chainId = await atomicSwap.getChainId();
-      expect(chainId).to.equal(31337n); // Hardhat default chain ID
+      expect(chainId).to.equal(31337n);
     });
   });
 
@@ -567,7 +567,7 @@ describe("AtomicSwap", function () {
 
       const order = {
         seller: seller.address,
-        buyer: seller.address, // Same as seller
+        buyer: seller.address,
         shareToken: await shareToken.getAddress(),
         paymentToken: await stablecoin.getAddress(),
         shareAmount: SHARE_AMOUNT,
@@ -879,7 +879,7 @@ describe("AtomicSwap", function () {
         buyer.address,
         await shareToken.getAddress(),
         await stablecoin.getAddress(),
-        SHARE_AMOUNT + 1n, // Different amount
+        SHARE_AMOUNT + 1n,
         PAYMENT_AMOUNT,
         NONCE,
         deadline,

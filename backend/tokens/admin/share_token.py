@@ -20,7 +20,7 @@ from ._helpers import action_buttons, hex_column, status_badge
 
 logger = logging.getLogger(__name__)
 
-# Seconds the change page waits for paused(); a slower node gets both buttons instead of holding the page.
+
 PAUSED_READ_TIMEOUT = 5
 
 ISSUANCE_COLORS = {
@@ -197,8 +197,7 @@ class ShareTokenAdmin(admin.ModelAdmin):
 
         unpause_url = reverse("admin:tokens_sharetoken_unpause", args=[obj.uuid])
         if obj.status == ShareTokenStatus.DEPLOYED:
-            # A pause whose receipt was lost leaves the DB deployed while the chain is paused: the chain decides
-            # which button is shown (one eth_call per change page); both are offered when it cannot be read.
+
             pause_url = reverse("admin:tokens_sharetoken_pause", args=[obj.uuid])
             paused_on_chain = self._paused_on_chain(obj)
             if paused_on_chain is True:
@@ -215,11 +214,6 @@ class ShareTokenAdmin(admin.ModelAdmin):
 
     @staticmethod
     def _paused_on_chain(obj):
-        """paused() as the chain reports it, or None when it cannot be read in PAUSED_READ_TIMEOUT seconds.
-
-        Any error (a slow or unreachable node, a misconfigured factory or ABI path, a settings error) is logged and
-        answered with None: the change page offers both buttons rather than failing on the chain.
-        """
         executor = ThreadPoolExecutor(max_workers=1)
         try:
             return executor.submit(lambda: ShareTokenService().read_paused(obj)).result(timeout=PAUSED_READ_TIMEOUT)
@@ -266,7 +260,6 @@ class ShareTokenAdmin(admin.ModelAdmin):
         return render(request, "admin/tokens/sharetoken/deploy_confirm.html", context)
 
     def retry_deploy_view(self, request, uuid):
-        """Confirm on GET and re-queue on POST: the change-page button is a link, so the state change needs a submit."""
         token = get_object_or_404(ShareToken, uuid=uuid)
         change_url = reverse("admin:tokens_sharetoken_change", args=[token.pk])
         try:
@@ -300,11 +293,6 @@ class ShareTokenAdmin(admin.ModelAdmin):
         return self._pause_view(request, uuid, "unpause")
 
     def _pause_view(self, request, uuid, verb):
-        """Confirm on GET and call the contract on POST, like retry_deploy_view; the service holds the guards.
-
-        GET checks only the database status; the chain read (a deployed token the chain reports paused unpauses)
-        happens on the POST, so the confirm page never waits on the node.
-        """
         token = get_object_or_404(ShareToken, uuid=uuid)
         change_url = reverse("admin:tokens_sharetoken_change", args=[token.pk])
         try:

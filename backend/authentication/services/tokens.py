@@ -11,8 +11,6 @@ User = get_user_model()
 
 
 class TokenService:
-    """Sessions are simplejwt refresh tokens; the access token carries its refresh jti as `rjti`
-    so revoking the refresh (blacklist) takes effect on the access token immediately."""
 
     @staticmethod
     def issue(user):
@@ -49,7 +47,6 @@ class TokenService:
 
     @staticmethod
     def revoke_all(user, keep_jti=None):
-        """Every live session of `user` except `keep_jti` (the caller's own session on a password change)."""
         outstanding = OutstandingToken.objects.filter(user=user, blacklistedtoken__isnull=True)
         if keep_jti:
             outstanding = outstanding.exclude(jti=keep_jti)

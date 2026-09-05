@@ -23,7 +23,6 @@ class ShareIssuanceQuerySet(QuerySet):
         return self.filter(status=IssuanceStatus.COMPLETED)
 
     def completed_supply(self, token) -> int:
-        """Shares already minted for the token: the sum of its completed issuances."""
         total = (
             self.completed()
             .filter(token=token)
@@ -64,7 +63,6 @@ class ShareIssuanceQuerySet(QuerySet):
         )
 
     def holders_as_list(self):
-        """Return holders with aggregated balances as a list of dicts."""
         holders = []
         for item in self.holders_with_aggregated_balances():
             try:

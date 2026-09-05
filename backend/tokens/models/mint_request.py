@@ -145,7 +145,6 @@ class MintRequest(BaseModel):
 
     @property
     def can_be_executed(self) -> bool:
-        """Pending requests execute; failed ones may be retried."""
         return self.status in (MintRequestStatus.PENDING, MintRequestStatus.APPROVED, MintRequestStatus.FAILED)
 
     @property

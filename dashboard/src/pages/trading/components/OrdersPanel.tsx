@@ -42,8 +42,6 @@ function formatSwapTimeRemaining(expiresAt: string): string {
   return `${minutes}m`;
 }
 
-// --- Order Book Section ---
-
 function OrderBookRow({
   entry,
   maxQuantity,
@@ -104,8 +102,6 @@ function OrderBookSide({
   );
 }
 
-// --- Combined Panel ---
-
 interface OrdersPanelProps {
   tokenSymbol: string;
   orderBook: OrderBookType | null;
@@ -137,7 +133,6 @@ export function OrdersPanel({
 
   const normalizedAddresses = useMemo(() => walletAddresses.map((a) => a.toLowerCase()), [walletAddresses]);
 
-  // Order book data
   const { asks, bids, maxQuantity, spread } = useMemo(() => {
     if (!orderBook)
       return {
@@ -156,7 +151,6 @@ export function OrdersPanel({
     return { asks: asksSorted, bids: bidsSorted, maxQuantity: max, spread: spreadVal };
   }, [orderBook]);
 
-  // User orders
   const openOrders = userOrders.filter(
     (o) => (o.status === 'open' || o.status === 'partially_filled') && o.tokenSymbol === tokenSymbol,
   );
@@ -182,7 +176,6 @@ export function OrdersPanel({
 
   return (
     <div className="bg-surface-raised rounded-xl border border-border-subtle overflow-hidden">
-      {/* Header */}
       <div className="flex items-center justify-between px-4 py-4 border-b border-border-subtle">
         <div>
           <h2 className="text-base font-semibold text-text-primary">{tokenSymbol} Orders</h2>
@@ -196,7 +189,6 @@ export function OrdersPanel({
         )}
       </div>
 
-      {/* Market Order Book */}
       {isLoadingOrderBook ? (
         <div className="flex items-center justify-center py-8">
           <SpinnerGapIcon size={ICON_XL} className="text-brand-mid animate-spin" />
@@ -214,7 +206,6 @@ export function OrdersPanel({
         </div>
       )}
 
-      {/* Your Orders Section */}
       {(isLoadingUserOrders || isLoadingSwaps || hasUserActivity) && (
         <>
           <div className="flex items-center gap-2 px-4 py-2 bg-surface-tertiary/50 border-t border-border-subtle">

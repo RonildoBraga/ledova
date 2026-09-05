@@ -1,12 +1,4 @@
-/**
- * AUTO-GENERATED — DO NOT EDIT
- *
- * Source of truth: packages/shared/src/constants/ui/design-tokens.ts
- * Regenerate:      make generate-tokens (from the repo root)
- */
-
 @theme {
-  /* === SURFACES === */
   --color-surface-base: #0c1426;
   --color-surface-raised: #1a2332;
   --color-surface-tertiary: #2a3441;
@@ -14,27 +6,23 @@
   --color-surface-disabled: #4a5568;
   --color-surface-transparent: transparent;
 
-  /* === TEXT === */
   --color-text-primary: #fafbfc;
   --color-text-secondary: #e4e7ea;
   --color-text-body: #cbd2d8;
   --color-text-muted: #8b95a1;
   --color-text-subtle: #64748b;
 
-  /* === BRAND === */
   --color-brand-subtle: #a5b4fc;
   --color-brand-light: #818cf8;
   --color-brand-mid: #6366f1;
   --color-brand: #4f46e5;
   --color-brand-hover: #4338ca;
 
-  /* === BORDERS === */
   --color-border: #334155;
   --color-border-subtle: #1e293b;
   --color-border-strong: #475569;
   --color-border-focus: #6366f1;
 
-  /* === STATUS === */
   --color-success-light: #4ade80;
   --color-success: #16a34a;
   --color-success-dark: #166534;
@@ -48,12 +36,10 @@
   --color-info-light: #38bdf8;
   --color-info: #0284c7;
 
-  /* === UTILITY === */
   --color-white: #ffffff;
   --color-black: #000000;
   --color-transparent: transparent;
 
-  /* === SPACING === */
   --spacing-1: 4px;
   --spacing-2: 8px;
   --spacing-4: 16px;
@@ -63,7 +49,6 @@
   --spacing-16: 64px;
   --spacing-20: 80px;
 
-  /* === BORDER RADIUS === */
   --border-radius-none: 0;
   --border-radius-sm: 4px;
   --border-radius-md: 8px;
@@ -72,7 +57,6 @@
   --border-radius-xxl: 24px;
   --border-radius-full: 9999px;
 
-  /* === FONT SIZES === */
   --font-size-xs: 12px;
   --font-size-sm: 14px;
   --font-size-base: 16px;
@@ -83,25 +67,21 @@
   --font-size-xxxxl: 36px;
   --font-size-xxxxxl: 48px;
 
-  /* === FONT WEIGHTS === */
   --font-weight-normal: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
 
-  /* === LINE HEIGHTS === */
   --line-height-tight: 1.25;
   --line-height-normal: 1.5;
   --line-height-relaxed: 1.75;
   --line-height-loose: 2;
 
-  /* === SHADOWS === */
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   --shadow-md: 0 2px 4px 0 rgba(0, 0, 0, 0.1);
   --shadow-lg: 0 4px 8px 0 rgba(0, 0, 0, 0.15);
   --shadow-xl: 0 8px 16px 0 rgba(0, 0, 0, 0.2);
 
-  /* === Z-INDEX === */
   --z-base: 0;
   --z-dropdown: 1000;
   --z-sticky: 1020;
@@ -111,21 +91,15 @@
   --z-popover: 1060;
   --z-tooltip: 1070;
 
-  /* === ANIMATION === */
   --duration-instant: 0ms;
   --duration-fast: 150ms;
   --duration-normal: 300ms;
   --duration-slow: 500ms;
 }
 
-/* ── Light theme ───────────────────────────────────────────────────────────
- * Activates via OS preference or .theme-light class on <html>.
- * Only color variables change; spacing, typography, etc. are shared. */
-
 @media (prefers-color-scheme: light) {
   :root:not(.theme-dark) {
   
-  /* === SURFACES === */
     --color-surface-base: #f5f5f7;
     --color-surface-raised: #ffffff;
     --color-surface-tertiary: #ececee;
@@ -133,27 +107,23 @@
     --color-surface-disabled: #cbd5e1;
     --color-surface-transparent: transparent;
   
-  /* === TEXT === */
     --color-text-primary: #1a1a2e;
     --color-text-secondary: #1f2937;
     --color-text-body: #374151;
     --color-text-muted: #6B7280;
     --color-text-subtle: #94a3b8;
   
-  /* === BRAND === */
     --color-brand-subtle: #a5b4fc;
     --color-brand-light: #6366f1;
     --color-brand-mid: #4f46e5;
     --color-brand: #4f46e5;
     --color-brand-hover: #4338ca;
   
-  /* === BORDERS === */
     --color-border: #d4d4d8;
     --color-border-subtle: #e4e4e7;
     --color-border-strong: #94a3b8;
     --color-border-focus: #6366f1;
   
-  /* === STATUS === */
     --color-success-light: #16a34a;
     --color-success: #16a34a;
     --color-success-dark: #166534;
@@ -167,7 +137,6 @@
     --color-info-light: #0284c7;
     --color-info: #0284c7;
   
-  /* === UTILITY === */
     --color-white: #ffffff;
     --color-black: #000000;
     --color-transparent: transparent;
@@ -176,7 +145,6 @@
 
 .theme-light {
   
-  /* === SURFACES === */
     --color-surface-base: #f5f5f7;
     --color-surface-raised: #ffffff;
     --color-surface-tertiary: #ececee;
@@ -184,27 +152,23 @@
     --color-surface-disabled: #cbd5e1;
     --color-surface-transparent: transparent;
   
-  /* === TEXT === */
     --color-text-primary: #1a1a2e;
     --color-text-secondary: #1f2937;
     --color-text-body: #374151;
     --color-text-muted: #6B7280;
     --color-text-subtle: #94a3b8;
   
-  /* === BRAND === */
     --color-brand-subtle: #a5b4fc;
     --color-brand-light: #6366f1;
     --color-brand-mid: #4f46e5;
     --color-brand: #4f46e5;
     --color-brand-hover: #4338ca;
   
-  /* === BORDERS === */
     --color-border: #d4d4d8;
     --color-border-subtle: #e4e4e7;
     --color-border-strong: #94a3b8;
     --color-border-focus: #6366f1;
   
-  /* === STATUS === */
     --color-success-light: #16a34a;
     --color-success: #16a34a;
     --color-success-dark: #166534;
@@ -218,7 +182,6 @@
     --color-info-light: #0284c7;
     --color-info: #0284c7;
   
-  /* === UTILITY === */
     --color-white: #ffffff;
     --color-black: #000000;
     --color-transparent: transparent;

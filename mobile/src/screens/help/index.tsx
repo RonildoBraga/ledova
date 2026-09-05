@@ -69,9 +69,7 @@ export function HelpScreen() {
   return (
     <GradientBackground>
       <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-        {/* Contact Options */}
         <View style={styles.cardsContainer}>
-          {/* Email Support */}
           {SUPPORT_EMAIL ? (
             <ContactCard
               icon={<EnvelopeSimpleIcon />}
@@ -83,7 +81,6 @@ export function HelpScreen() {
             />
           ) : null}
 
-          {/* Help Center */}
           <ContactCard
             icon={<QuestionIcon />}
             title="Help Center"
@@ -93,7 +90,6 @@ export function HelpScreen() {
             onAction={handleVisitHelpCenter}
           />
 
-          {/* Legal */}
           <ContactCard icon={<FileTextIcon />} title="Legal" description="Review our terms and policies.">
             <View style={styles.legalContainer}>
               <Text style={styles.legalLink} onPress={handleTermsOfService}>
@@ -105,7 +101,6 @@ export function HelpScreen() {
             </View>
           </ContactCard>
 
-          {/* About */}
           <ContactCard icon={<InfoIcon />} title="About" description="">
             <View style={styles.aboutContainer}>
               {operator?.name ? <Text style={styles.aboutText}>Operated by {operator.name}</Text> : null}

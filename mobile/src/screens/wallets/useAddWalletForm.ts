@@ -144,7 +144,6 @@ export function useAddWalletForm({
 
   const handleAddressSelection = useCallback(
     (addresses: DerivedAddress[], importData: HardwareWalletImport) => {
-      // Pass the selected addresses and import data to the parent
       onBatchSubmit(addresses, importData);
     },
     [onBatchSubmit],
@@ -178,7 +177,6 @@ export function useAddWalletForm({
   }, []);
 
   return {
-    // State
     step,
     walletType,
     name,
@@ -189,13 +187,11 @@ export function useAddWalletForm({
     scannedURString,
     isSelectingAddresses: step === FORM_STEPS.SELECT_ADDRESSES && !!scannedURString,
 
-    // Setters
     setName,
     setStep,
     setWalletType,
     setShowScannerDirect,
 
-    // Actions
     reset,
     handleAddressChange,
     handleQRScan,

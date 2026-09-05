@@ -15,7 +15,6 @@ class AssetSnapshotQuerySet(QuerySet):
         return self
 
     def filter_by_date_range(self, start_date=None, end_date=None):
-        """Both bounds are YYYY-MM-DD strings or datetimes; the end date is inclusive."""
         queryset = self
         if start_date:
             queryset = queryset.filter(source_timestamp__gte=parse_date_to_timezone_aware(start_date))

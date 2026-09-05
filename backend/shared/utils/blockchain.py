@@ -1,8 +1,6 @@
 import re
 from typing import Optional, Tuple
 
-# keccak256 selectors of the custom errors declared in contracts/contracts/*.sol
-# (OpenZeppelin ERC20 + AtomicSwap, ShareToken, AUSG, WhitelistRegistry).
 ERROR_SELECTORS = {
     "0xe450d38c": ("ERC20InsufficientBalance", "Insufficient token balance"),
     "0xfb8f41b2": ("ERC20InsufficientAllowance", "Insufficient token allowance"),
@@ -58,7 +56,7 @@ def decode_revert_reason(error_data: str) -> Tuple[Optional[str], Optional[str],
 
 
 def decode_exception_to_message(exception: Exception, default_message: str = "Transaction failed") -> str:
-    # web3 surfaces custom-error reverts as the raw selector+args hex in the exception text.
+
     matches = re.findall(r"0x[a-fA-F0-9]{8,}", str(exception))
     error_data = max(matches, key=len) if matches else None
 

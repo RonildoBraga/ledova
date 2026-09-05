@@ -70,8 +70,6 @@ export function TransactionDetailModal({ visible, transaction, onClose }: Transa
   if (!transaction) return null;
 
   const isIncomingTransaction = (): boolean => {
-    // Check direction from the perspective of THIS transaction's wallet
-    // For internal transfers, the same tx appears twice with different wallets
     const walletAddr = transaction.walletAddress?.toLowerCase() || '';
     const toAddress = transaction.toAddress?.toLowerCase() || '';
     return toAddress === walletAddr;
@@ -113,7 +111,6 @@ export function TransactionDetailModal({ visible, transaction, onClose }: Transa
         <Text style={styles.title}>{isIncoming ? 'Received' : 'Sent'}</Text>
       </View>
 
-      {/* Transaction Details */}
       <View style={styles.detailsSection}>
         <View style={styles.infoRow}>
           <Text style={styles.detailLabel}>Asset:</Text>

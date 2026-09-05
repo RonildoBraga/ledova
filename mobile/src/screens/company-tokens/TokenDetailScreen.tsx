@@ -82,7 +82,6 @@ const CAPITAL_INCREASE_STATUS_LABELS: Record<CapitalIncreaseStatus, string> = {
   failed: 'Failed',
 };
 
-// Share tokens deploy through the factory on the Base testnet (the backend's default issuer chain).
 const TOKEN_CHAIN = BLOCKCHAIN.BASE;
 
 function formatNumber(value: string | number): string {
@@ -146,7 +145,6 @@ export function TokenDetailScreen({ route }: Props) {
     }
   };
 
-  // The backend refuses deployment unless the company is active and has an issuer wallet; its 400 detail is shown.
   const handleDeploy = () => {
     Alert.alert('Deploy Token', 'Create the share token contract on the blockchain? This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
@@ -217,7 +215,6 @@ export function TokenDetailScreen({ route }: Props) {
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.colors.text.muted} />
         }
       >
-        {/* Compact Token Header */}
         <View style={styles.headerCard}>
           <View style={styles.headerRow}>
             <View style={styles.headerIcon}>
@@ -248,7 +245,6 @@ export function TokenDetailScreen({ route }: Props) {
           </View>
         </View>
 
-        {/* Stat Tabs */}
         <View style={styles.statsRow}>
           <StatTab
             icon={<CoinIcon />}
@@ -273,7 +269,6 @@ export function TokenDetailScreen({ route }: Props) {
           />
         </View>
 
-        {/* Dynamic Content */}
         <View style={styles.contentCard}>
           {activeTab === 'shares' && (
             <SharesContent
@@ -305,7 +300,6 @@ export function TokenDetailScreen({ route }: Props) {
           )}
         </View>
 
-        {/* Deploy (draft) / Request Issuance (deployed) */}
         {isDraft && (
           <PrimaryButton onPress={handleDeploy} loading={isDeploying} fullWidth>
             Deploy Token
@@ -318,7 +312,6 @@ export function TokenDetailScreen({ route }: Props) {
         )}
       </ScrollView>
 
-      {/* Token Info Modal */}
       <CustomModal visible={showInfoModal} onClose={() => setShowInfoModal(false)}>
         <View style={styles.modalContent}>
           <Text style={styles.modalTitle}>Token Details</Text>
@@ -360,7 +353,6 @@ export function TokenDetailScreen({ route }: Props) {
         </View>
       </CustomModal>
 
-      {/* Request Issuance Modal */}
       <CustomModal
         visible={showIssueModal}
         onClose={handleCloseIssueModal}
@@ -412,8 +404,6 @@ export function TokenDetailScreen({ route }: Props) {
     </GradientBackground>
   );
 }
-
-// --- Tab Content Components ---
 
 function SharesContent({
   token,
@@ -580,8 +570,6 @@ function IssuancesContent({
   );
 }
 
-// --- Sub-components ---
-
 function ModalInfoRow({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
   const styles = useThemedStyles((theme) => ({
     row: {
@@ -717,8 +705,6 @@ function CapitalIncreaseRow({
   );
 }
 
-// --- Helpers ---
-
 function getIssuanceStatusColor(
   status: IssuanceStatus,
   theme: ReturnType<typeof useAppTheme>,
@@ -755,8 +741,6 @@ function getCapitalIncreaseStatusColor(
   }
 }
 
-// --- Styles ---
-
 function useStyles() {
   return useThemedStyles((theme) => ({
     container: { flex: 1 },
@@ -776,7 +760,7 @@ function useStyles() {
       color: theme.colors.text.muted,
       textAlign: 'center' as const,
     },
-    // Header
+
     headerCard: {
       backgroundColor: theme.colors.surface.raised,
       borderRadius: theme.borderRadius.md,
@@ -835,12 +819,12 @@ function useStyles() {
       alignItems: 'center' as const,
       justifyContent: 'center' as const,
     },
-    // Stats
+
     statsRow: {
       flexDirection: 'row' as const,
       gap: theme.spacing.sm,
     },
-    // Content card
+
     contentCard: {
       backgroundColor: theme.colors.surface.raised,
       borderRadius: theme.borderRadius.md,
@@ -849,7 +833,7 @@ function useStyles() {
       padding: theme.spacing.sm,
     },
     tabContent: {},
-    // Content rows
+
     contentRow: {
       flexDirection: 'row' as const,
       justifyContent: 'space-between' as const,
@@ -870,7 +854,7 @@ function useStyles() {
       borderBottomWidth: 1,
       borderBottomColor: theme.colors.border.default,
     },
-    // Section divider (within content)
+
     sectionDivider: {
       flexDirection: 'row' as const,
       alignItems: 'center' as const,
@@ -886,7 +870,7 @@ function useStyles() {
       textTransform: 'uppercase' as const,
       letterSpacing: 0.5,
     },
-    // Empty states
+
     emptyState: {
       alignItems: 'center' as const,
       paddingVertical: theme.spacing.xl,
@@ -901,7 +885,7 @@ function useStyles() {
       fontSize: theme.fontSize.sm,
       color: theme.colors.text.muted,
     },
-    // Holders
+
     holderRow: {
       flexDirection: 'row' as const,
       justifyContent: 'space-between' as const,
@@ -935,7 +919,7 @@ function useStyles() {
       fontSize: theme.fontSize.xs,
       color: theme.colors.text.muted,
     },
-    // Issuances
+
     issuanceRow: {
       paddingHorizontal: theme.spacing.xs,
       paddingVertical: theme.spacing.sm,
@@ -972,7 +956,7 @@ function useStyles() {
       fontSize: 10,
       fontWeight: theme.fontWeight.semibold,
     },
-    // Capital increases
+
     capitalRow: {
       paddingHorizontal: theme.spacing.xs,
       paddingVertical: theme.spacing.sm,
@@ -995,7 +979,7 @@ function useStyles() {
       fontSize: theme.fontSize.xs,
       color: theme.colors.text.muted,
     },
-    // Modal
+
     modalContent: { gap: theme.spacing.md },
     modalTitle: {
       fontSize: theme.fontSize.lg,

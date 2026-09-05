@@ -32,8 +32,6 @@ TRANSPORT_HEADER = "X-Auth-Transport"
 
 
 def bearer_transport(request):
-    """`X-Auth-Transport: bearer` (the mobile app) asks for the tokens in the body and no cookies;
-    without the header (the dashboard) the cookies carry the session and no body ever does."""
     return request.headers.get(TRANSPORT_HEADER, "").strip().lower() == "bearer"
 
 
@@ -64,9 +62,6 @@ class TokenCookieMixin:
         return response
 
     def session_response(self, request, data, access_token, refresh_token):
-        """A bearer body carries raw tokens (the mobile app reads `tokens[0]`), so it must never be
-        cached. On the cookie transport `get_token` makes CsrfViewMiddleware send a fresh `csrftoken`
-        cookie with the auth cookies."""
         bearer = bearer_transport(request)
         if bearer:
             data["tokens"] = [{"access_token": access_token, "refresh_token": refresh_token}]
@@ -77,13 +72,6 @@ class TokenCookieMixin:
         return self.set_token_cookies(response, access_token, refresh_token)
 
     def presented_refresh_token(self, request):
-        """Body first (native transport, no CSRF exposure), then the cookie, which the bearer
-        transport never reads.
-
-        A refresh cookie is sent by the browser on its own, so using it on an
-        unsafe request needs the CSRF token unless a Bearer header authenticated
-        the request (installed mobile builds replay the cookie beside their token).
-        """
         body_token = request.data.get("refresh") if hasattr(request.data, "get") else None
         if body_token or bearer_transport(request):
             return body_token
@@ -199,9 +187,6 @@ class AuthViewSet(TokenCookieMixin, ViewSet):
 
     @action(detail=False, methods=["post"], url_path="resend-verification")
     def resend_verification(self, request):
-        """Signup issues no session, so the address comes in the body; an authenticated caller without
-        one is served by its own address (the current client builds). The reply never says whether the
-        address exists or is verified: signup already reveals registration and nothing more is added."""
         serializer = ResendVerificationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 

@@ -1,5 +1,3 @@
-"""CoinGecko market-data client. Free tier: no key, 10-50 calls/minute, https://api.coingecko.com/api/v3."""
-
 import logging
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -20,7 +18,7 @@ class CoinGeckoClient:
     def _get_headers(self) -> Dict[str, str]:
         headers = {}
         if self.api_key:
-            # Use Pro API header for pro-api subdomain, Demo header otherwise
+
             if "pro-api.coingecko.com" in self.base_url:
                 headers["x-cg-pro-api-key"] = self.api_key
             else:
@@ -28,10 +26,6 @@ class CoinGeckoClient:
         return headers
 
     def fetch_prices(self, coin_ids: List[str]) -> Dict[str, Any]:
-        """Prices keyed by CoinGecko coin id.
-
-        {"bitcoin": {"usd", "usd_market_cap", "usd_24h_vol", "usd_24h_change"}}
-        """
         if not coin_ids:
             return {}
 
@@ -58,7 +52,6 @@ class CoinGeckoClient:
             raise
 
     def fetch_prices_by_symbols(self, symbol_map: Dict[str, str]) -> Dict[str, Dict[str, Any]]:
-        """Prices keyed by symbol: {"BTC": {"price" (str), "market_cap", "24h_volume", "24h_change"}}."""
         if not symbol_map:
             return {}
 
@@ -79,7 +72,6 @@ class CoinGeckoClient:
         return result
 
     def fetch_exchange_rate(self, target_currency: str = "aud") -> Optional[Decimal]:
-        """USD to target-currency rate, using the USDT price in that currency as the proxy."""
         params = {
             "ids": "tether",
             "vs_currencies": target_currency.lower(),
@@ -108,10 +100,8 @@ class CoinGeckoClient:
     def fetch_historical_prices_bulk(
         self, coin_id: str, start_date: datetime, end_date: datetime
     ) -> List[Dict[str, Any]]:
-        """Uses /market_chart?days= (Demo API) and falls back to /market_chart/range (Pro API)."""
         days = (end_date - start_date).days
 
-        # Demo API supports /market_chart with days parameter (max 365 days)
         if days <= 365:
             params = {
                 "vs_currency": "usd",
@@ -152,7 +142,6 @@ class CoinGeckoClient:
             except requests.RequestException as e:
                 logger.warning(f"/market_chart failed, trying /market_chart/range: {str(e)}")
 
-        # Fall back to /market_chart/range (Pro API only, or if days > 365)
         from_timestamp = int(start_date.timestamp())
         to_timestamp = int(end_date.timestamp())
 

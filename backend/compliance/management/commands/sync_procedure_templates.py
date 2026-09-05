@@ -1,5 +1,3 @@
-"""Idempotent loader for compliance/seeds/procedure_templates.py; safe to run repeatedly."""
-
 from django.core.management.base import BaseCommand
 from django.db import transaction
 

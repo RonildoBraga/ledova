@@ -12,7 +12,6 @@ CONTRACT_SETTINGS = (
 
 
 def known_contract_addresses() -> set[str]:
-    """Lower-cased addresses a broadcast transaction may target: configured contracts plus every token contract."""
     addresses = [getattr(settings, name, "") for name in CONTRACT_SETTINGS]
     addresses += ShareToken.objects.filter(contract_address__isnull=False).values_list("contract_address", flat=True)
     addresses += Stablecoin.objects.filter(is_active=True).values_list("contract_address", flat=True)

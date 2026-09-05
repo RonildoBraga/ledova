@@ -1,5 +1,3 @@
-"""Deployment and its crash recovery, the pending-deployment sweep and pause/unpause with the chain client mocked."""
-
 from datetime import timedelta
 from unittest.mock import Mock, patch
 
@@ -61,7 +59,6 @@ class DeployTokenTest(TestCase):
         return service
 
     def _sent(self, tx_hash="0xsent"):
-        """The state a crash after the create transaction leaves behind: DEPLOYING with a failed record."""
         record = BlockchainTransaction.objects.create(
             tx_type=TransactionType.SHARE_TOKEN_DEPLOY,
             status=TransactionStatus.FAILED,
@@ -246,7 +243,6 @@ class DeployTokenTest(TestCase):
         self.assertEqual(self.token.status, ShareTokenStatus.DEPLOYED)
 
     def test_a_send_that_fails_after_another_worker_bound_a_create_does_not_draft_the_token(self):
-        """Two deploy workers: the first binds its hash while the second's send is out; the second's send fails."""
         other = BlockchainTransaction.objects.create(
             tx_type=TransactionType.SHARE_TOKEN_DEPLOY,
             status=TransactionStatus.SUBMITTED,
@@ -275,7 +271,6 @@ class DeployTokenTest(TestCase):
         self.assertEqual(BlockchainTransaction.objects.exclude(pk=other.pk).get().status, TransactionStatus.FAILED)
 
     def test_two_creates_sent_in_one_window_keep_the_hash_of_the_one_that_confirms(self):
-        """A "Retry Deployment" click while the first worker is alive: both find nothing recorded and both send."""
         other = BlockchainTransaction.objects.create(
             tx_type=TransactionType.SHARE_TOKEN_DEPLOY,
             status=TransactionStatus.PENDING,

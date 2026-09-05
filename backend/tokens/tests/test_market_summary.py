@@ -1,5 +1,3 @@
-"""Token lists carry lastPrice/bestBid/bestAsk from one annotated query, whatever the row count."""
-
 from decimal import Decimal
 
 from django.db import connection

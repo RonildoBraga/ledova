@@ -1,5 +1,3 @@
-"""Tenant authorization regressions for the Transak widget setup."""
-
 from unittest.mock import patch
 from uuid import uuid4
 

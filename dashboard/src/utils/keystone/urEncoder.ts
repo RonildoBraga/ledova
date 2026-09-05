@@ -7,13 +7,6 @@ import {
   isValidBitcoinNativeSegwitTestAddress,
 } from '@ledova/shared';
 
-/**
- * Encode EIP-712 typed data for signing via Keystone hardware wallet.
- * Used for atomic swap signing - signs the swap order hash.
- *
- * Returns cborHex for use with AnimatedQRCode component (for large data that
- * requires multiple QR frames).
- */
 export function encodeEthereumTypedData(
   address: string,
   typedData: object,
@@ -23,7 +16,7 @@ export function encodeEthereumTypedData(
 ): { type: string; cbor: Buffer; cborHex: string; urString: string } | null {
   try {
     const requestId = uuid();
-    // Convert typed data to JSON string bytes
+
     const typedDataBytes = Buffer.from(JSON.stringify(typedData), 'utf8');
 
     if (!derivationPath || !masterFingerprint || chainId === undefined || !isSupportedEvmTestChainId(chainId)) {
@@ -52,10 +45,6 @@ export function encodeEthereumTypedData(
   }
 }
 
-/**
- * Encode an Ethereum message for signing via Keystone hardware wallet.
- * Used for wallet verification - signs a challenge message.
- */
 export function encodeEthereumMessage(
   address: string,
   message: string,
@@ -92,15 +81,6 @@ export function encodeEthereumMessage(
   }
 }
 
-/**
- * Encode an Ethereum transaction for signing via Keystone hardware wallet.
- * Used for approval transactions and other on-chain transactions.
- *
- * @param transaction - The transaction object (from backend's approval-data endpoint)
- * @param derivationPath - BIP44 derivation path for the signing key
- * @param masterFingerprint - Master fingerprint of the hardware wallet
- * @returns Encoded QR data or null if encoding fails
- */
 export function encodeEthereumTransaction(
   transaction: {
     to: string;
@@ -124,7 +104,6 @@ export function encodeEthereumTransaction(
       return null;
     }
 
-    // Create an unsigned transaction using ethers and serialize it
     const tx = Transaction.from({
       to: transaction.to,
       value: BigInt(transaction.value),
@@ -133,12 +112,11 @@ export function encodeEthereumTransaction(
       nonce: parseInt(transaction.nonce, 16),
       data: transaction.data,
       chainId: chainId,
-      type: 0, // Legacy transaction
+      type: 0,
     });
 
-    // Get the unsigned serialized transaction (RLP-encoded)
     const unsignedTx = tx.unsignedSerialized;
-    const txData = Buffer.from(unsignedTx.slice(2), 'hex'); // Remove '0x' prefix
+    const txData = Buffer.from(unsignedTx.slice(2), 'hex');
 
     const ethSignRequest = createEthSignRequest(
       txData,
@@ -163,10 +141,6 @@ export function encodeEthereumTransaction(
   }
 }
 
-/**
- * Encode a Bitcoin message for signing via Keystone hardware wallet.
- * Used for wallet verification - signs a challenge message.
- */
 export function encodeBitcoinMessage(
   address: string,
   message: string,

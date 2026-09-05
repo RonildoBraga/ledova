@@ -321,14 +321,12 @@ export function TransactionsScreen() {
         </View>
       </View>
 
-      {/* Detail Modal */}
       <TransactionDetailModal
         visible={showDetailModal}
         transaction={selectedTransaction}
         onClose={handleCloseDetailModal}
       />
 
-      {/* Sort Modal */}
       <TransactionSortModal
         visible={showSortDialog}
         selectedSort={selectedSort}
@@ -336,7 +334,6 @@ export function TransactionsScreen() {
         onSelectSort={setSelectedSort}
       />
 
-      {/* Filters Modal */}
       <TransactionFiltersModal
         isOpen={showFiltersDialog}
         filters={filters}

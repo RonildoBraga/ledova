@@ -27,10 +27,6 @@ def _digits(value: str) -> str:
 
 
 class Operator(models.Model):
-    """The one row describing whoever hosts this deployment: identity, payment rails and eligibility switches.
-
-    Phase 1 renders investor payment instructions from the Payments fields; nothing reads them yet.
-    """
 
     id = models.PositiveSmallIntegerField(primary_key=True, default=SINGLETON_PK, editable=False)
 
@@ -82,7 +78,6 @@ class Operator(models.Model):
 
     @classmethod
     def get(cls) -> "Operator":
-        """The singleton, created with settings.OPERATOR_NAME the first time anything asks for it."""
         operator, _ = cls.objects.get_or_create(pk=SINGLETON_PK, defaults={"name": settings.OPERATOR_NAME})
         return operator
 

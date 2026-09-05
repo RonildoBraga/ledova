@@ -1,9 +1,6 @@
 @import 'tailwindcss';
 @import './tokens.css';
 
-/* === SCROLLBAR STYLES === */
-
-/* Custom scrollbar for the entire app */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -22,13 +19,11 @@
   background: var(--color-border-strong);
 }
 
-/* Firefox scrollbar */
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--color-border) transparent;
 }
 
-/* Hide scrollbar utility class */
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }

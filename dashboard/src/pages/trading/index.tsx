@@ -96,7 +96,6 @@ export function TradingPage() {
   const { isWhitelisted, isLoading: isLoadingWhitelistStatus } = useWalletsWhitelistStatus(walletAddresses);
   const { data: swaps, isLoading: isLoadingSwaps } = useSwapOrdersMulti(walletAddresses);
 
-  // Auto-select first token
   useMemo(() => {
     if (tokens && tokens.length > 0 && !selectedTokenUuid) {
       setSelectedTokenUuid(tokens[0].uuid);
@@ -114,8 +113,6 @@ export function TradingPage() {
   });
 
   const { data: orderBookData, isLoading: isLoadingOrderBook } = useOrderBook(selectedTokenUuid || undefined);
-
-  // --- Handlers ---
 
   const handleCreateOrder = async (data: CreateOrderRequest): Promise<TransferOrder> => {
     const signingWallet = wallets.find((w) => w.uuid === data.walletUuid);
@@ -184,13 +181,10 @@ export function TradingPage() {
     handleCloseOrderSigningFlow();
   };
 
-  // --- Render ---
-
   return (
     <main className="text-text-primary">
       <div className="w-full max-w-6xl mx-auto px-4 pt-6 pb-16 sm:px-6 lg:px-8">
         <div className="flex flex-col gap-4 sm:gap-5 md:gap-6">
-          {/* Section 1: Market Overview */}
           <MarketOverview
             tokens={tokens || []}
             selectedTokenUuid={selectedTokenUuid}
@@ -200,7 +194,6 @@ export function TradingPage() {
 
           {selectedToken && (
             <>
-              {/* Section 2: Orders (market + yours combined) */}
               <OrdersPanel
                 tokenSymbol={selectedToken.symbol}
                 orderBook={orderBookData || null}
@@ -215,7 +208,6 @@ export function TradingPage() {
                 onSignSwap={handleSignSwap}
               />
 
-              {/* Section 3: Place Order */}
               <PlaceOrderPanel
                 token={selectedToken}
                 wallets={wallets}
@@ -229,7 +221,6 @@ export function TradingPage() {
         </div>
       </div>
 
-      {/* Modals */}
       <OrderSuccessModal isOpen={successModalOpen} order={createdOrder} onClose={() => setSuccessModalOpen(false)} />
 
       <SwapSigningFlow

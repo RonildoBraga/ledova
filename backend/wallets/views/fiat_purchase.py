@@ -12,7 +12,6 @@ from wallets.services.fiat_onramp import generate_transak_widget_url
 
 
 class FiatPurchaseViewSet(viewsets.ViewSet):
-    """Only the Transak widget-URL action; purchases are not persisted (no provider webhook exists)."""
 
     permission_classes = [IsAuthenticated]
 
@@ -24,7 +23,6 @@ class FiatPurchaseViewSet(viewsets.ViewSet):
 
         wallet = get_object_or_404(Wallet.objects.visible_to_user(request.user), uuid=wallet_uuid)
 
-        # Crypto & chain — lock to wallet's native asset if not explicitly provided
         crypto_currency_code = request.data.get("crypto_currency_code")
         if not crypto_currency_code:
             crypto_currency_code = get_native_asset_symbol(wallet.chain)
@@ -36,12 +34,9 @@ class FiatPurchaseViewSet(viewsets.ViewSet):
         fiat_amount = request.data.get("fiat_amount")
         default_fiat_amount = request.data.get("default_fiat_amount")
 
-        # Identity and destination binding are server-owned. The caller may
-        # choose purchase amounts/assets, but cannot redirect the session.
         email = request.user.email
         partner_customer_id = str(request.user.pk)
 
-        # Widget UX settings — server-side defaults for consistent branding
         theme_color = request.data.get("theme_color") or getattr(settings, "TRANSAK_THEME_COLOR", "")
         redirect_url = request.data.get("redirect_url")
 

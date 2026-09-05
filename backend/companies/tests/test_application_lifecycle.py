@@ -1,5 +1,3 @@
-"""End-to-end coverage of the company application lifecycle over the REST API and the admin actions."""
-
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -23,7 +21,7 @@ TASK = "companies.services.company.send_push_notification"
 
 class ApplicationLifecycleTest(APITestCase):
     def setUp(self):
-        patch(TASK).start()  # every transition defers the owner's notification; the producer has its own tests
+        patch(TASK).start()
         self.addCleanup(patch.stopall)
         self.owner = User.objects.create_user(email="owner@example.test", password="pw-12345678")
         self.other = User.objects.create_user(email="other@example.test", password="pw-12345678")
@@ -59,7 +57,6 @@ class ApplicationLifecycleTest(APITestCase):
             "name": "New Co Pty Ltd",
             "acn": "987 654 321",
             "companyType": "pty",
-            # Clients send "<country_code> <number>" composed from the profile step.
             "primaryContact": {"firstName": "Ada", "lastName": "Lovelace", "phone": "+61 0400000000"},
         }
         response = self.client.post("/api/v1/companies/", payload, format="json")
@@ -135,7 +132,7 @@ class ApplicationLifecycleTest(APITestCase):
         self.assertEqual(response.status_code, 200, response.data)
         self.assertEqual(response.data["company"]["status"], "submitted")
         self.company.refresh_from_db()
-        # The question stays next to the answer until approval, so the reviewer sees both.
+
         self.assertEqual(self.company.info_request_reason, "Need the latest share register")
         self.assertEqual(self.company.additional_info_response, "Uploaded it")
         self.assertEqual(self.client.get(self.url).data["additional_info_response"], "Uploaded it")

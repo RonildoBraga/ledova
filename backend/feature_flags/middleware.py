@@ -1,9 +1,3 @@
-"""Fail-closed boundary for the experimental trading mutation APIs.
-
-The whitelist status route is deliberately outside the gate: it is a read-only eligibility check the wallet Send
-flow needs while trading is off.
-"""
-
 from django.db import OperationalError, ProgrammingError
 from django.http import JsonResponse
 
@@ -19,7 +13,6 @@ TRADING_WRITE_PREFIXES = (
 
 
 class TradingFeatureFlagMiddleware:
-    """Require an enabled database flag before entering trading write paths."""
 
     def __init__(self, get_response):
         self.get_response = get_response

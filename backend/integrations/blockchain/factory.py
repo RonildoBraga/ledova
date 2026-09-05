@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 class BlockchainClientFactory:
 
-    _clients = {}  # Cache for client instances
+    _clients = {}
 
     @classmethod
     def get_client(cls, chain: str, use_cache: bool = True) -> BlockchainClient:

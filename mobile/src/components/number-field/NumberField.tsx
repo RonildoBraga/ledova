@@ -58,7 +58,6 @@ export function NumberField({
   }));
   const [inputText, setInputText] = React.useState<string>('');
 
-  // Update input text when value changes externally
   React.useEffect(() => {
     if (value !== undefined) {
       setInputText(value.toString());
@@ -73,19 +72,16 @@ export function NumberField({
   };
 
   const handleChangeText = (text: string) => {
-    // Allow empty string
     if (text === '') {
       setInputText('');
       onChange(undefined);
       return;
     }
 
-    // Allow valid number patterns including decimals in progress (e.g., "0.", "10.", ".5")
     const validPattern = /^-?\d*\.?\d*$/;
     if (validPattern.test(text)) {
       setInputText(text);
 
-      // Only update the actual value if it's a complete valid number
       const numValue = parseFloat(text);
       if (!isNaN(numValue)) {
         onChange(numValue);
@@ -94,7 +90,6 @@ export function NumberField({
   };
 
   const handleBlur = () => {
-    // Parse the final text value
     const numValue = parseFloat(inputText);
 
     if (isNaN(numValue) || inputText === '') {
@@ -103,7 +98,6 @@ export function NumberField({
       return;
     }
 
-    // Apply min/max constraints when user finishes editing
     let finalValue = numValue;
     if (minimumValue !== undefined && numValue < minimumValue) {
       finalValue = minimumValue;
@@ -112,7 +106,6 @@ export function NumberField({
       finalValue = maximumValue;
     }
 
-    // Update with the final constrained value
     setInputText(finalValue.toString());
     onChange(finalValue);
   };

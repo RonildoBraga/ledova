@@ -25,7 +25,7 @@ class SumSubWebhookTest(APITestCase):
         self.account.user_profiles.add(self.profile)
 
     def post_event(self, event_type, applicant_id="app-1", **extra):
-        # Mirrors the real SumSub webhook shape: every key is camelCase.
+
         payload = {
             "type": event_type,
             "applicantId": applicant_id,

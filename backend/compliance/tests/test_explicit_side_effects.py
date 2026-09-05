@@ -1,5 +1,3 @@
-"""The former post_save receivers are now explicit calls at the rows' creation sites; these tests pin that wiring."""
-
 from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock, patch

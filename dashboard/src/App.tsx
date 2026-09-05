@@ -178,7 +178,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-        {/* Redirect old standalone routes to company page */}
         <Route path="/company/tokens" element={<Navigate to="/company" replace />} />
         <Route path="/company/shareholders" element={<Navigate to="/company" replace />} />
         <Route path="/company/tokens/:uuid" element={<Navigate to="/company" replace />} />

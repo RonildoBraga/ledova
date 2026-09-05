@@ -1,5 +1,3 @@
-"""The seed commands load the data modules idempotently and reconcile the tables to them."""
-
 from io import StringIO
 
 from django.core.management import call_command
@@ -37,7 +35,7 @@ class SyncMonitoringRulesTest(TestCase):
             list(MonitoringRule.objects.order_by("rule_code").values("rule_code", "name", "parameters", "is_active")),
             rows,
         )
-        # The data module must survive the loader untouched so a second process sees the same rows.
+
         self.assertEqual(MONITORING_RULES[0]["rule_code"], "MON-001")
 
 

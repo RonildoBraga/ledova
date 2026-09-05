@@ -1,5 +1,3 @@
-"""Stablecoin, yield-token and mint-request admin pages all mint through mint_service.execute."""
-
 from datetime import date
 from unittest.mock import MagicMock, patch
 

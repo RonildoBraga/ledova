@@ -5,12 +5,10 @@ from rest_framework import serializers
 from companies.models import Company
 from tokens.models import ShareToken
 
-# price_per_share has two decimal places; SQLite returns Subquery decimals unquantized.
 PRICE_PLACES = Decimal("0.01")
 
 
 class ShareTokenListSerializer(serializers.ModelSerializer):
-    """Rows must come from ShareTokenQuerySet.with_market_summary(); the market fields read its annotations."""
 
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     token_type_display = serializers.CharField(source="get_token_type_display", read_only=True)

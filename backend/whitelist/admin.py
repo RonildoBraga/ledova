@@ -12,7 +12,6 @@ from whitelist.models import WhitelistEntry, WhitelistStatus
 
 
 class WhitelistEntryAddForm(forms.ModelForm):
-    """A user's wallet by address, or, with a label, a treasury/custodian address no user holds."""
 
     wallet_address = forms.CharField(
         max_length=100,

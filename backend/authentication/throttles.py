@@ -4,10 +4,6 @@ from authentication.email import EmailError, normalize_email
 
 
 class EmailRateThrottle(SimpleRateThrottle):
-    """Per-address limit for the sign-in, sign-up, verification and resend actions, so one account
-    cannot be sprayed or its code guessed from many IPs. Keyed on the body email, or the caller's own
-    address for the authenticated resend. The cache is per process (LocMemCache), which is enough
-    for the testnet deployment."""
 
     scope = "auth_email"
 

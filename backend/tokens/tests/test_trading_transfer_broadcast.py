@@ -1,5 +1,3 @@
-"""Pins the broadcast body key both apps send: `signedTransaction` reaches the view as `signed_transaction`."""
-
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model

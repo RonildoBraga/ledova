@@ -18,8 +18,7 @@ describe('formatCurrency', () => {
 
   it('should format with custom currency', () => {
     const result = formatCurrency(1234.56, { currency: 'USD' });
-    // en-AU locale formats USD with the currency code
-    // The space between USD and amount may be a non-breaking space (U+00A0)
+
     expect(result).toMatch(/USD.1,234\.56/);
   });
 

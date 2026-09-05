@@ -25,7 +25,7 @@ from compliance.models import CustomerRiskAssessment
 
 logger = logging.getLogger(__name__)
 
-# Total score (customer + geographic + product, each 1-5) up to and including the bound maps to the rating.
+
 RATING_BY_MAX_SCORE = (
     (RISK_THRESHOLD_LOW, RISK_RATING_LOW),
     (RISK_THRESHOLD_MEDIUM, RISK_RATING_MEDIUM),
@@ -100,7 +100,6 @@ class RiskAssessmentService:
 
     @staticmethod
     def calculate_and_create(user_account, pep_data: Optional[Dict] = None) -> CustomerRiskAssessment:
-        """Complete the account's pending assessment in place, or create a complete one if none is pending."""
         director = user_account.director or user_account.user_profiles.first()
         if not director:
             logger.warning(f"No user profile found for user_account {user_account.uuid}")

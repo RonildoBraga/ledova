@@ -1,9 +1,3 @@
-/**
- * SwapSigningFlow Component
- * Modal flow for signing an atomic swap order with hardware wallet.
- * Follows the same pattern as WalletVerificationModal for consistent UX.
- */
-
 import { useEffect, useCallback } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { XIcon, ArrowsDownUpIcon, CheckCircleIcon, WarningCircleIcon, SpinnerGapIcon } from '@phosphor-icons/react';
@@ -36,23 +30,23 @@ export function SwapSigningFlow({ isOpen, onClose, swap, walletAddress, wallet, 
     swapQrType,
     signingError,
     signingSuccess,
-    // Approval state
+
     needsApproval,
     approvalTokenSymbol,
     approvalQrCborHex,
     approvalQrType,
     unsignedApprovalTx,
-    // Loading states
+
     isLoadingSwapData,
     isLoadingApprovalData,
     isReady,
     isSubmitting,
     isBroadcastingApproval,
-    // Software wallet
+
     isSoftwareWallet,
     seedPhrase,
     setSeedPhrase,
-    // Actions
+
     startSigning,
     proceedToScanApprovalSignature,
     handleApprovalSignatureScanned,
@@ -90,7 +84,6 @@ export function SwapSigningFlow({ isOpen, onClose, swap, walletAddress, wallet, 
     enabled: signingStep === 'scan-signature',
   });
 
-  // Handle modal close
   const handleClose = useCallback(() => {
     if (isSubmitting || isBroadcastingApproval) return;
     stopApprovalScanner();
@@ -99,7 +92,6 @@ export function SwapSigningFlow({ isOpen, onClose, swap, walletAddress, wallet, 
     onClose();
   }, [onClose, reset, isSubmitting, isBroadcastingApproval, stopApprovalScanner, stopSwapScanner]);
 
-  // Auto-close on success
   useEffect(() => {
     if (signingSuccess) {
       const timer = setTimeout(() => {
@@ -109,7 +101,6 @@ export function SwapSigningFlow({ isOpen, onClose, swap, walletAddress, wallet, 
     }
   }, [signingSuccess, handleClose]);
 
-  // Reset when modal opens
   useEffect(() => {
     if (isOpen) {
       reset();
@@ -117,7 +108,6 @@ export function SwapSigningFlow({ isOpen, onClose, swap, walletAddress, wallet, 
   }, [isOpen, reset]);
 
   const renderStepContent = () => {
-    // Loading state
     if (isLoadingSwapData || (swapData && isLoadingApprovalData)) {
       return (
         <div className="flex flex-col items-center justify-center py-8 gap-3">
@@ -133,13 +123,11 @@ export function SwapSigningFlow({ isOpen, onClose, swap, walletAddress, wallet, 
       case 'instructions':
         return (
           <div className="space-y-5">
-            {/* Description */}
             <p className="text-sm text-text-muted">
               Sign this swap transaction with your {isSoftwareWallet ? 'seed phrase' : 'hardware wallet'} to authorize
               the trade.
             </p>
 
-            {/* Swap Summary */}
             {swapData && (
               <div className="bg-surface-tertiary rounded-lg p-4 space-y-2">
                 <div className="grid grid-cols-2 gap-2 text-sm">
@@ -161,7 +149,6 @@ export function SwapSigningFlow({ isOpen, onClose, swap, walletAddress, wallet, 
               </div>
             )}
 
-            {/* Approval Notice */}
             {needsApproval && approvalTokenSymbol && (
               <div className="p-3 bg-warning/10 border border-warning/20 rounded-lg">
                 <p className="text-sm text-warning">
@@ -171,7 +158,6 @@ export function SwapSigningFlow({ isOpen, onClose, swap, walletAddress, wallet, 
               </div>
             )}
 
-            {/* Instructions */}
             <div className="space-y-3">
               {needsApproval && (
                 <>
@@ -233,7 +219,6 @@ export function SwapSigningFlow({ isOpen, onClose, swap, walletAddress, wallet, 
               </div>
             )}
 
-            {/* Footer Buttons */}
             <div className="flex gap-3 pt-2">
               <button
                 type="button"
@@ -257,7 +242,6 @@ export function SwapSigningFlow({ isOpen, onClose, swap, walletAddress, wallet, 
       case 'show-approval-qr':
         return (
           <div className="space-y-5">
-            {/* Description */}
             <p className="text-sm text-text-muted">
               Scan this QR code to approve the swap contract to transfer your {approvalTokenSymbol} tokens.
             </p>
@@ -274,7 +258,6 @@ export function SwapSigningFlow({ isOpen, onClose, swap, walletAddress, wallet, 
               </div>
             )}
 
-            {/* Footer Buttons */}
             <div className="flex gap-3 pt-2">
               <button
                 type="button"
@@ -297,7 +280,6 @@ export function SwapSigningFlow({ isOpen, onClose, swap, walletAddress, wallet, 
       case 'scan-approval-signature':
         return (
           <div className="space-y-5">
-            {/* Description */}
             <p className="text-sm text-text-muted">
               Point your camera at the signed approval QR code on your hardware wallet.
             </p>
@@ -310,7 +292,6 @@ export function SwapSigningFlow({ isOpen, onClose, swap, walletAddress, wallet, 
               </div>
             )}
 
-            {/* Footer Button */}
             <div className="flex gap-3 pt-2">
               <button
                 type="button"
@@ -335,7 +316,6 @@ export function SwapSigningFlow({ isOpen, onClose, swap, walletAddress, wallet, 
       case 'show-swap-qr':
         return (
           <div className="space-y-5">
-            {/* Description */}
             <p className="text-sm text-text-muted">Scan this QR code with your hardware wallet to sign the swap.</p>
 
             {swapQrCborHex && swapQrType && (
@@ -350,7 +330,6 @@ export function SwapSigningFlow({ isOpen, onClose, swap, walletAddress, wallet, 
               </div>
             )}
 
-            {/* Footer Buttons */}
             <div className="flex gap-3 pt-2">
               <button
                 type="button"
@@ -373,7 +352,6 @@ export function SwapSigningFlow({ isOpen, onClose, swap, walletAddress, wallet, 
       case 'scan-signature':
         return (
           <div className="space-y-5">
-            {/* Description */}
             <p className="text-sm text-text-muted">
               Point your camera at the signature QR code on your hardware wallet.
             </p>
@@ -386,7 +364,6 @@ export function SwapSigningFlow({ isOpen, onClose, swap, walletAddress, wallet, 
               </div>
             )}
 
-            {/* Footer Button */}
             <div className="flex gap-3 pt-2">
               <button
                 type="button"
@@ -519,7 +496,6 @@ export function SwapSigningFlow({ isOpen, onClose, swap, walletAddress, wallet, 
   return (
     <Transition show={isOpen}>
       <Dialog onClose={handleClose} className="relative z-50">
-        {/* Backdrop */}
         <Transition.Child
           enter="ease-out duration-200"
           enterFrom="opacity-0"
@@ -531,7 +507,6 @@ export function SwapSigningFlow({ isOpen, onClose, swap, walletAddress, wallet, 
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" />
         </Transition.Child>
 
-        {/* Modal */}
         <div className="fixed inset-0 overflow-y-auto">
           <div className="flex min-h-full items-center justify-center p-4">
             <Transition.Child
@@ -543,7 +518,6 @@ export function SwapSigningFlow({ isOpen, onClose, swap, walletAddress, wallet, 
               leaveTo="opacity-0 scale-95"
             >
               <Dialog.Panel className="w-full max-w-md bg-surface-raised rounded-xl border border-border shadow-xl overflow-hidden">
-                {/* Header */}
                 <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
                   <Dialog.Title className="text-lg font-semibold text-text-primary flex items-center gap-2">
                     <ArrowsDownUpIcon size={ICON_MD} className="text-brand-light" />
@@ -558,7 +532,6 @@ export function SwapSigningFlow({ isOpen, onClose, swap, walletAddress, wallet, 
                   </button>
                 </div>
 
-                {/* Content */}
                 <div className="p-4">{renderStepContent()}</div>
               </Dialog.Panel>
             </Transition.Child>

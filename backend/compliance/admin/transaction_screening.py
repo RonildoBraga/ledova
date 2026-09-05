@@ -58,7 +58,7 @@ class TransactionScreeningAdmin(admin.ModelAdmin):
     ordering = ["-created_at"]
     date_hierarchy = "created_at"
     actions = ["retry_failed_screenings"]
-    # The raw transaction/user_account FKs are replaced by links: the selects would list every row.
+
     fieldsets = (
         (
             None,

@@ -11,8 +11,6 @@ logger = logging.getLogger(__name__)
 
 @transaction.atomic
 def ensure_defaults(user):
-    """Give a signing-up user a profile, one account, one portfolio and preferences pointing at them.
-    Idempotent: existing rows are reused and only missing selections are filled in."""
     profile, _ = UserProfile.objects.get_or_create(user=user)
 
     account = profile.user_accounts.first()

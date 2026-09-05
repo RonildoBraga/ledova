@@ -7,7 +7,6 @@ from .review_request import ReviewableRequest
 
 
 class ShareIssuanceRequest(ReviewableRequest):
-    """Created already submitted by ShareTokenService.create_issuance_request, so there is no draft stage."""
 
     objects = ShareIssuanceRequestQuerySet.as_manager()
 

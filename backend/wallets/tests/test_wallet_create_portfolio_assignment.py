@@ -1,5 +1,3 @@
-"""POST /api/wallets/ attaches the new wallet to the requester's selected portfolio when it is in the same account."""
-
 from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
 
@@ -22,7 +20,7 @@ class WalletCreatePortfolioAssignmentTest(APITestCase):
             selected_account=self.account,
             selected_portfolio=self.portfolio,
         )
-        # A fresh row: the request must read preferences from the DB, not the instances cached above.
+
         self.client.force_authenticate(User.objects.get(pk=self.user.pk))
 
     def create_wallet(self, address_character):
@@ -43,7 +41,7 @@ class WalletCreatePortfolioAssignmentTest(APITestCase):
     def test_new_wallet_is_not_added_when_the_selected_portfolio_belongs_to_another_account(self):
         foreign_account = UserAccount.objects.create(account_number="WALLET-FOREIGN")
         foreign_portfolio = Portfolio.objects.create(user_account=foreign_account, name="Foreign portfolio")
-        # Write the row directly, the way a stale selection left behind by a membership change looks.
+
         UserPreferences.objects.filter(pk=self.preferences.pk).update(selected_portfolio=foreign_portfolio)
 
         wallet = self.create_wallet("b")

@@ -1,10 +1,3 @@
-"""
-OpenAI-compatible chat client for document extraction.
-
-The documents are private financial records, so only loopback and host-container endpoints are accepted.
-Ollama requires a non-empty API key but ignores its value.
-"""
-
 from __future__ import annotations
 
 import base64
@@ -79,7 +72,6 @@ class LlmExtractClient:
         prompt: str,
         schema: Type[BaseModel],
     ) -> ExtractionResult:
-        """One image plus prompt in, the schema-validated object plus the raw reply and timing out."""
         b64 = base64.b64encode(image_bytes).decode("ascii")
 
         client = OpenAI(

@@ -23,5 +23,4 @@ class Portfolio(BaseModel):
         return self.name or f"Portfolio for {self.user_account}"
 
     def account_wallets(self):
-        """Return only wallet links that agree with the portfolio's tenant."""
         return self.wallets.filter(user_account_id=self.user_account_id)

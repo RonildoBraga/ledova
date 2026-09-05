@@ -1,5 +1,3 @@
-"""The wallet endpoints keep the balance keys the dashboard and mobile app read, computed in the list query."""
-
 from decimal import Decimal
 
 from rest_framework.test import APITestCase
@@ -24,7 +22,7 @@ class WalletReadContractTest(APITestCase):
     def test_list_reports_string_balances_from_holdings_without_per_row_queries(self):
         Wallet.objects.create(user_account=self.tenant.account, address="0x" + "9" * 40, chain="ethereum")
 
-        with self.assertNumQueries(2):  # count, page
+        with self.assertNumQueries(2):
             response = self.client.get("/api/wallets/")
 
         self.assertEqual(response.status_code, 200)
@@ -33,7 +31,7 @@ class WalletReadContractTest(APITestCase):
         wallet = rows[str(self.tenant.wallet.uuid)]
         self.assertEqual(wallet["nativeBalance"], "0.500000000000000000")
         self.assertEqual(wallet["nativeMarketValue"], "1500.000000000000000000")
-        # 0.5 ETH * 3000 + the tenant fixture's 5 TENANT * 2
+
         self.assertEqual(wallet["marketValue"], "1510.000000000000000000")
         for key in CLIENT_KEYS:
             self.assertEqual(rows[str(self.tenant.spare_wallet.uuid)][key], "0.000000000000000000")

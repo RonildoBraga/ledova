@@ -28,7 +28,6 @@ export const useIdentityVerification = () => {
     closeFormModal,
   } = useIdentityVerificationApi();
 
-  // Display state: combine local justSubmitted with API-derived hasSubmitted
   const showPendingBanner = (justSubmitted || hasSubmitted) && !isVerified && !isRejected;
   const showOnHoldBanner = isOnHold && !justSubmitted;
   const showRejectedBanner = isRejected && !justSubmitted;
@@ -37,7 +36,6 @@ export const useIdentityVerification = () => {
   const showContinue = isVerified || hasSubmitted || justSubmitted;
   const showSkip = !isVerified && !hasSubmitted && !justSubmitted;
 
-  // Handle continue to next screen — refresh both status and profile caches
   const prepareForNextScreen = async () => {
     setIsContinuing(true);
     try {
@@ -52,12 +50,10 @@ export const useIdentityVerification = () => {
   };
 
   return {
-    // Verification status
     status,
     isLoadingStatus,
     isVerified,
 
-    // Display flags
     showPendingBanner,
     showOnHoldBanner,
     showRejectedBanner,
@@ -66,22 +62,17 @@ export const useIdentityVerification = () => {
     showContinue,
     showSkip,
 
-    // Errors
     tokenError,
     sdkError,
 
-    // Actions
     launchVerification,
     prepareForNextScreen,
 
-    // Loading states
     isLaunching,
     isContinuing,
 
-    // Provider flags
     hasApplicant,
 
-    // Form modal
     accessToken,
     formUrl,
     showVerificationForm,

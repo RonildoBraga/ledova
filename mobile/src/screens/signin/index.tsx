@@ -195,9 +195,6 @@ export function SignInScreen() {
   } = useAppLock();
   const [biometricLoading, setBiometricLoading] = useState(false);
 
-  // Clear all cached query data when navigating to signin screen
-  // This prevents data from incomplete signup flows from bleeding into new sessions.
-  // Also re-read the biometric sign-in state: sign-out deletes the gated refresh token.
   useFocusEffect(
     useCallback(() => {
       queryClient.clear();
@@ -226,16 +223,13 @@ export function SignInScreen() {
   }, [navigation]);
 
   const handleSignIn = async () => {
-    // Smart login: if Face ID enabled AND no credentials entered, use biometric login
     const hasCredentialsEntered = form.email.trim() || form.password;
     if (showBiometricLogin && !hasCredentialsEntered) {
       await handleBiometricLogin();
       return;
     }
 
-    // Otherwise, use password login
     await handleSubmit(async () => {
-      // If biometrics are available and biometric sign in is not enabled yet, offer it
       if (biometricsAvailable && !biometricLoginEnabled) {
         Alert.alert(
           `Enable ${biometricType} Sign In?`,
@@ -249,8 +243,6 @@ export function SignInScreen() {
             {
               text: 'Enable',
               onPress: async () => {
-                // Stores a biometric-gated copy of the session's refresh token; the password is never stored.
-                // A failure is silent: the user can enable it later in settings.
                 await enableBiometricLogin();
                 navigateToMainApp();
               },
@@ -263,7 +255,6 @@ export function SignInScreen() {
     });
   };
 
-  // Biometric sign in: the OS prompt unlocks the gated refresh token, which is exchanged for a new session
   const handleBiometricLogin = async () => {
     setBiometricLoading(true);
     try {
@@ -271,7 +262,6 @@ export function SignInScreen() {
       if (result.token) {
         const signedIn = await loginWithRefreshToken(result.token, navigateToMainApp);
         if (!signedIn) {
-          // Revoked by a sign-out or expired: the gated copy is gone and the password form takes over
           await reloadBiometricLogin();
         }
       } else if (result.missing) {
@@ -282,7 +272,6 @@ export function SignInScreen() {
     }
   };
 
-  // Show biometric login option if available and a gated refresh token is on the device
   const showBiometricLogin = biometricsAvailable && hasBiometricLogin;
 
   return (
@@ -290,7 +279,6 @@ export function SignInScreen() {
       <SafeAreaView style={styles.container}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.keyboardView}>
           <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-            {/* Header */}
             <View style={styles.header}>
               <View style={styles.iconContainer}>
                 <LockIcon
@@ -302,9 +290,7 @@ export function SignInScreen() {
               <Text style={styles.title}>Welcome Back</Text>
             </View>
 
-            {/* Form Container */}
             <View style={styles.formContainer}>
-              {/* General Error */}
               {generalError && (
                 <View style={styles.errorContainer}>
                   <WarningCircleIcon
@@ -316,7 +302,6 @@ export function SignInScreen() {
                 </View>
               )}
 
-              {/* Email Field */}
               <View style={styles.fieldContainer}>
                 <Text style={styles.label}>Email</Text>
                 <View style={styles.inputWrapper}>
@@ -340,7 +325,6 @@ export function SignInScreen() {
                 {errors.email && !generalError && <Text style={styles.fieldError}>{errors.email.join(' ')}</Text>}
               </View>
 
-              {/* Password Field */}
               <View style={styles.fieldContainer}>
                 <View style={styles.labelRow}>
                   <Text style={styles.label}>Password</Text>
@@ -379,7 +363,6 @@ export function SignInScreen() {
                 {errors.password && !generalError && <Text style={styles.fieldError}>{errors.password.join(' ')}</Text>}
               </View>
 
-              {/* Sign In Button - Smart: uses Face ID if enabled and no credentials entered */}
               <PrimaryButton
                 onPress={handleSignIn}
                 loading={isLoading || biometricLoading}
@@ -397,14 +380,12 @@ export function SignInScreen() {
               </PrimaryButton>
             </View>
 
-            {/* Divider */}
             <View style={styles.divider}>
               <View style={styles.dividerLine} />
               <Text style={styles.dividerText}>or</Text>
               <View style={styles.dividerLine} />
             </View>
 
-            {/* Get Started Section */}
             <View style={styles.signUpSection}>
               <Text style={styles.signUpText}>
                 Don&apos;t have an account?{' '}

@@ -26,7 +26,6 @@ TEST_STORAGES = {
 
 @override_settings(STORAGES=TEST_STORAGES)
 class UsersAdminPagesTest(TestCase):
-    """Every users ModelAdmin must still render its changelist, add form and change form."""
 
     def setUp(self):
         self.admin = User.objects.create_superuser(email="admin@example.test", password="pw-12345678")

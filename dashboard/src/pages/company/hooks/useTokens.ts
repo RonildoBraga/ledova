@@ -66,7 +66,6 @@ export function useTokensList() {
   };
 }
 
-/** One token with its cap table, issuances and capital increases; the issuer controls invalidate the token and the list. */
 export function useTokenDetail(uuid: string) {
   const [showCapitalIncreaseForm, setShowCapitalIncreaseForm] = useState(false);
   const queryClient = useQueryClient();

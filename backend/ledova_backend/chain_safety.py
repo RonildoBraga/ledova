@@ -1,5 +1,3 @@
-"""Fail-closed network selection for the experimental chain integrations."""
-
 from django.core.exceptions import ImproperlyConfigured
 
 SUPPORTED_EVM_CHAIN_IDS = frozenset({1337, 31337, 84532, 11155111})

@@ -65,7 +65,7 @@ export function ContactCard({
       color: theme.colors.text.primary,
     },
   }));
-  // Clone the icon with soft, calming styling - smaller for inline display
+
   const styledIcon =
     icon && React.isValidElement(icon)
       ? React.cloneElement(icon as React.ReactElement<{ size?: number; color?: string; weight?: string }>, {

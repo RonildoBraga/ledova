@@ -17,7 +17,6 @@ class DocumentViewSet(
     mixins.DestroyModelMixin,
     viewsets.GenericViewSet,
 ):
-    """Upload returns 202: extraction runs in a worker and clients poll the document for its result."""
 
     permission_classes = [IsAuthenticated]
     lookup_field = "uuid"

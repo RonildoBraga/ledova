@@ -1,5 +1,3 @@
-# Generated manually - Remove InvestorType field from UserProfile
-
 from django.db import migrations
 
 

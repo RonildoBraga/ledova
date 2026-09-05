@@ -1,10 +1,3 @@
-"""Two-tenant cross-access tests for trading orders (deferred-hardening #1).
-
-Regression net for the confirmed CRITICAL/HIGH IDORs on the trading order
-endpoints: a tenant must never read another tenant's order — by list, by UUID
-retrieve, or via a detail @action.
-"""
-
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import Mock, patch

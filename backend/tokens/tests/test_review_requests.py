@@ -1,5 +1,3 @@
-"""The shared review workflow: model transitions, dilution, the status data migration, execute_request and its task."""
-
 import importlib
 from datetime import timedelta
 from unittest.mock import patch
@@ -171,7 +169,6 @@ class ExecuteRequestServiceTest(TestCase):
         self.token.refresh_from_db()
 
     def _set_authorized_contract(self):
-        """The chain answers a setAuthorizedShares send with 0xset and its receipt on the wait."""
         self.chain.send_transaction.return_value = ("0xset", None)
         self.chain.wait_for_receipt.return_value = {
             "blockNumber": 5,
@@ -216,7 +213,6 @@ class ExecuteRequestServiceTest(TestCase):
         self.assertFalse(ShareIssuance.objects.exists())
 
     def test_capital_increase_not_above_the_chain_cap_is_refused_before_any_transaction(self):
-        """Two increases approved against one cap: once the first ran, the second would lower the cap."""
         request = self._approved(self.tenant.capital_increase)
         CapitalIncreaseRequest.objects.filter(pk=request.pk).update(new_authorized_total=1200)
         request.refresh_from_db()
@@ -254,7 +250,6 @@ class ExecuteRequestServiceTest(TestCase):
         self.assertEqual(record.block_hash, "0x" + "cd" * 32)
 
     def test_a_chain_cap_equal_to_the_request_with_the_db_cap_behind_is_adopted_instead_of_refused(self):
-        """A worker killed between the send and the hash write: nothing recorded, the chain already at the cap."""
         request = self._approved(self.tenant.capital_increase)
         self._set_authorized_contract()
         with patch(SUPPLY, return_value=(1100, 0)):
@@ -272,7 +267,6 @@ class ExecuteRequestServiceTest(TestCase):
         self.assertEqual(self.token.total_supply, "1100")
         self.assertFalse(self._increase_records(request).exists())
 
-        # The DB cap already there means a genuinely stale request: still refused.
         stale = self._approved(self.tenant.capital_increase)
         CapitalIncreaseRequest.objects.filter(pk=stale.pk).update(status=RequestStatus.APPROVED)
         stale.refresh_from_db()
@@ -299,7 +293,6 @@ class ExecuteRequestServiceTest(TestCase):
         self.assertEqual(self._increase_records(request).count(), 1)
 
     def test_capital_increase_holds_a_row_lock_on_the_token_from_the_cap_read_to_the_cap_write(self):
-        """Two workers in one block window: the second reads the cap only after the first has committed."""
         if connection.vendor != "postgresql":
             self.skipTest("select_for_update is a no-op on SQLite")
         request = self._approved(self.tenant.capital_increase)
@@ -321,7 +314,6 @@ class ExecuteRequestServiceTest(TestCase):
         self.assertEqual((request.status, self.token.total_supply), (RequestStatus.EXECUTED, "1100"))
 
     def test_a_stale_copy_of_an_executed_request_completes_without_touching_the_chain(self):
-        """Loaded before the first executor finished, it finds the completed issuance and mints nothing."""
         request = self._approved(issuance_request(self.token, amount=10))
         stale = ShareIssuanceRequest.objects.get(pk=request.pk)
         self.chain.send_transaction.return_value = ("0xmint", None)
@@ -373,7 +365,6 @@ class ExecuteRequestServiceTest(TestCase):
         self.assertEqual(request.status, RequestStatus.APPROVED)
 
     def test_a_second_executor_loses_the_claim_and_does_not_mint(self):
-        """The first worker has created the issuance row but not yet written the mint hash."""
         request = self._approved(issuance_request(self.token, amount=10))
         ShareIssuance.objects.create(
             token=self.token,
@@ -412,7 +403,6 @@ class ExecuteRequestServiceTest(TestCase):
         self.assertEqual(self._increase_records(request).get().status, TransactionStatus.CONFIRMED)
 
     def test_set_authorized_hash_is_recorded_before_the_wait_and_a_retry_completes_from_it_without_sending(self):
-        """A receipt lost after setAuthorizedShares mined: the chain cap is raised, the DB cap is not yet."""
         request = self._approved(self.tenant.capital_increase)
         self._set_authorized_contract()
         self.chain.wait_for_receipt.side_effect = RuntimeError("rpc timed out after the call mined")
@@ -496,7 +486,6 @@ class ExecuteRequestServiceTest(TestCase):
         self.assertEqual((old.status, request.status, self.token.total_supply), ("confirmed", "executed", "1100"))
 
     def test_a_resumed_increase_never_lowers_a_cap_a_later_one_raised(self):
-        """The first increase lost its receipt, a second (higher) one executed meanwhile, then the first is retried."""
         request = self._approved(self.tenant.capital_increase)
         request.mark_failed("rpc down")
         self._recorded_increase(request)
@@ -725,7 +714,6 @@ class ExecuteRequestServiceTest(TestCase):
 
 
 class ExecutingIssuanceSweepTest(TestCase):
-    """check_executing_issuance_requests: a worker killed after the mint was sent, before the completion writes."""
 
     def setUp(self):
         self.chain = patch(CHAIN_CLIENT).start().return_value
@@ -833,7 +821,6 @@ class ExecutingIssuanceSweepTest(TestCase):
         self.assertEqual(self.token.total_supply, "1000")
 
     def test_an_increase_another_worker_completed_meanwhile_is_left_alone(self):
-        """The sweep read EXECUTING, the executor finished before the lock: no second cap write, no confirm."""
         request, record = self._stuck_increase()
         self.chain.get_transaction_receipt.return_value = {"status": 1, **RECEIPT}
         CapitalIncreaseRequest.objects.filter(pk=request.pk).update(status=RequestStatus.EXECUTED)

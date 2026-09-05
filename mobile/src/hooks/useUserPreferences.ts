@@ -3,21 +3,6 @@ import { getCurrentUserPreferences, CACHE_TIMING } from '@ledova/shared';
 import { apiClient } from '../services/apiClient';
 import { useAuth } from './useAuth';
 
-/**
- * Custom hook that fetches user preferences with full nested objects.
- *
- * The API returns full objects for selectedAccount and selectedPortfolio,
- * so no additional queries are needed to get portfolio/account details.
- *
- * Note: User preferences are guaranteed to exist as they are created
- * during signup in the backend.
- *
- * @returns preferences - User preferences with nested selectedAccount and selectedPortfolio
- * @returns selectedPortfolio - Convenience accessor for the selected portfolio object
- * @returns selectedAccount - Convenience accessor for the selected account object
- * @returns isLoading - Loading state
- * @returns isError - Error state
- */
 export function useUserPreferences() {
   const { isAuthenticated } = useAuth();
 
@@ -32,19 +17,15 @@ export function useUserPreferences() {
   const preferences = preferencesQuery.data?.data;
 
   return {
-    // Full preferences object
     preferences,
 
-    // Convenience accessors for common use cases
     selectedPortfolio: preferences?.selectedPortfolio ?? null,
     selectedAccount: preferences?.selectedAccount ?? null,
 
-    // Loading and error states
     isLoading: preferencesQuery.isLoading,
     isError: preferencesQuery.isError,
     error: preferencesQuery.error,
 
-    // Refetch function
     refetch: preferencesQuery.refetch,
   };
 }

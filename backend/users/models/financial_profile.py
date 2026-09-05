@@ -6,7 +6,6 @@ from users.querysets.financial_profile import FinancialProfileQuerySet
 
 
 class FinancialProfile(BaseModel):
-    """Occupation, source of funds and intended use collected for AML/CTF customer due diligence."""
 
     user_profile = models.OneToOneField("users.UserProfile", on_delete=models.CASCADE, related_name="financial_profile")
 

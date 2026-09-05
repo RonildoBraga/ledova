@@ -1,7 +1,5 @@
 from decimal import Decimal
 
-# THRESHOLDS & TIME PERIODS
-
 ALERT_THRESHOLD_AUD = Decimal("10000")
 SCREENING_THRESHOLD_AUD = Decimal("5000")
 
@@ -12,8 +10,8 @@ RISK_THRESHOLD_HIGH = 8
 NEW_CUSTOMER_DAYS = 30
 RISK_REVIEW_PERIOD_MONTHS = 24
 BATCH_MONITORING_LOOKBACK_HOURS = 2
-# Only transactions mined within this window are screened on creation; older ones
-# arrive through historical wallet syncs and are handled by the batch task.
+
+
 TRANSACTION_MONITORING_WINDOW_HOURS = 1
 
 DOMESTIC_PEP_RISK_ADJUSTMENT = 2
@@ -28,7 +26,6 @@ ROUND_AMOUNT_DIVISOR = Decimal("5000")
 ROUND_AMOUNT_COUNT_THRESHOLD = 3
 ROUND_AMOUNT_PERIOD_DAYS = 30
 
-# CUSTOMER RISK ASSESSMENT
 
 ASSESSMENT_STATUS_PENDING = "pending"
 ASSESSMENT_STATUS_COMPLETE = "complete"
@@ -54,7 +51,6 @@ RISK_RATING_CHOICES = [
 
 HIGH_RISK_RATINGS = [RISK_RATING_HIGH, RISK_RATING_EXTREME]
 
-# MONITORING RULES
 
 RULE_TYPE_THRESHOLD = "threshold"
 RULE_TYPE_RAPID_TRANSACTIONS = "rapid_transactions"
@@ -80,9 +76,7 @@ RULE_TYPE_CHOICES = [
     (RULE_TYPE_EXTREME_RISK, "Extreme Risk Customer"),
 ]
 
-# COMPLIANCE ALERTS
 
-# Transaction-based alerts
 ALERT_TYPE_LARGE_TRANSACTION = "large_transaction"
 ALERT_TYPE_RAPID_TRANSACTIONS = "rapid_transactions"
 ALERT_TYPE_STRUCTURING = "structuring"
@@ -93,14 +87,14 @@ ALERT_TYPE_ROUND_AMOUNTS = "round_amounts"
 ALERT_TYPE_NEW_CUSTOMER_SOF = "new_customer_sof"
 ALERT_TYPE_EXTREME_RISK_TRANSACTION = "extreme_risk_transaction"
 
-# Blockchain/address-based alerts
+
 ALERT_TYPE_HIGH_RISK_WALLET = "high_risk_wallet"
 ALERT_TYPE_SANCTIONED_ADDRESS = "sanctioned_address"
 ALERT_TYPE_MIXER_TUMBLER = "mixer_tumbler"
 ALERT_TYPE_DARKNET_ASSOCIATION = "darknet_association"
 ALERT_TYPE_RANSOMWARE_ASSOCIATION = "ransomware_association"
 
-# Customer-based alerts
+
 ALERT_TYPE_ADVERSE_MEDIA_SERIOUS = "adverse_media_serious"
 ALERT_TYPE_ADVERSE_MEDIA_MINOR = "adverse_media_minor"
 ALERT_TYPE_PEP_LIMIT_BREACH = "pep_limit_breach"
@@ -108,20 +102,19 @@ ALERT_TYPE_INFO_DISCREPANCY = "info_discrepancy"
 ALERT_TYPE_FAILED_DOCUMENTATION = "failed_documentation"
 ALERT_TYPE_MULTIPLE_ALERTS = "multiple_alerts"
 
-# External/regulatory alerts
+
 ALERT_TYPE_SANCTIONS_MATCH = "sanctions_match"
 ALERT_TYPE_LAW_ENFORCEMENT = "law_enforcement"
 ALERT_TYPE_TERRORISM_FINANCING = "terrorism_financing"
 ALERT_TYPE_SANCTIONS_LIST_UPDATE = "sanctions_list_update"
 
-# Review-based alerts
+
 ALERT_TYPE_PERIODIC_REVIEW = "periodic_review"
 
-# Other
+
 ALERT_TYPE_MANUAL = "manual"
 
 ALERT_TYPE_CHOICES = [
-    # Transaction-based
     (ALERT_TYPE_LARGE_TRANSACTION, "Large Transaction (≥AUD 10,000)"),
     (ALERT_TYPE_RAPID_TRANSACTIONS, "Rapid Transactions (5+ in 1 hour)"),
     (ALERT_TYPE_STRUCTURING, "Structuring Pattern"),
@@ -131,27 +124,22 @@ ALERT_TYPE_CHOICES = [
     (ALERT_TYPE_ROUND_AMOUNTS, "Round Amount Transactions"),
     (ALERT_TYPE_NEW_CUSTOMER_SOF, "New Customer SOF Required"),
     (ALERT_TYPE_EXTREME_RISK_TRANSACTION, "Extreme Risk Customer Transaction"),
-    # Blockchain/address-based
     (ALERT_TYPE_HIGH_RISK_WALLET, "High-Risk Wallet Address"),
     (ALERT_TYPE_SANCTIONED_ADDRESS, "Sanctioned Address"),
     (ALERT_TYPE_MIXER_TUMBLER, "Mixer/Tumbler Involvement"),
     (ALERT_TYPE_DARKNET_ASSOCIATION, "Darknet Association"),
     (ALERT_TYPE_RANSOMWARE_ASSOCIATION, "Ransomware Association"),
-    # Customer-based
     (ALERT_TYPE_ADVERSE_MEDIA_SERIOUS, "Adverse Media (Serious)"),
     (ALERT_TYPE_ADVERSE_MEDIA_MINOR, "Adverse Media (Minor)"),
     (ALERT_TYPE_PEP_LIMIT_BREACH, "PEP Hard Limit Breach"),
     (ALERT_TYPE_INFO_DISCREPANCY, "Customer Information Discrepancy"),
     (ALERT_TYPE_FAILED_DOCUMENTATION, "Failed Documentation Request"),
     (ALERT_TYPE_MULTIPLE_ALERTS, "Multiple Alerts (3+) Same Customer"),
-    # External/regulatory
     (ALERT_TYPE_SANCTIONS_MATCH, "Sanctions Match"),
     (ALERT_TYPE_LAW_ENFORCEMENT, "Law Enforcement Inquiry"),
     (ALERT_TYPE_TERRORISM_FINANCING, "Terrorism Financing Indicators"),
     (ALERT_TYPE_SANCTIONS_LIST_UPDATE, "New Sanctions List Publication"),
-    # Review-based
     (ALERT_TYPE_PERIODIC_REVIEW, "Periodic Review Due"),
-    # Other
     (ALERT_TYPE_MANUAL, "Manual Alert"),
 ]
 
@@ -179,7 +167,6 @@ ALERT_STATUS_CHOICES = [
     (ALERT_STATUS_CLOSED, "Closed"),
 ]
 
-# TRANSACTION SCREENING
 
 SCREENING_STATUS_PENDING = "pending"
 SCREENING_STATUS_COMPLETED = "completed"
@@ -201,7 +188,6 @@ SCREENING_RESULT_CHOICES = [
     (SCREENING_RESULT_REJECTED, "Rejected"),
 ]
 
-# INVESTIGATIONS & SMR
 
 INVESTIGATION_OUTCOME_FALSE_POSITIVE = "false_positive"
 INVESTIGATION_OUTCOME_LEGITIMATE = "legitimate_activity"
@@ -241,7 +227,6 @@ ACCOUNT_ACTION_CHOICES = [
     (ACCOUNT_ACTION_TERMINATED, "Account Terminated"),
 ]
 
-# PEP (POLITICALLY EXPOSED PERSONS)
 
 PEP_TYPE_NONE = "none"
 PEP_TYPE_DOMESTIC = "domestic"
@@ -266,11 +251,9 @@ PEP_REJECTION_TYPES = [
     PEP_TYPE_ASSOCIATE,
 ]
 
-# GEOGRAPHIC RISK (FATF BLACKLIST)
 
 FATF_BLACKLIST_COUNTRIES = ["KP", "IR", "MM"]
 
-# HIGH-RISK OCCUPATIONS
 
 HIGH_RISK_OCCUPATIONS = [
     "politician",
@@ -287,7 +270,6 @@ HIGH_RISK_OCCUPATIONS = [
     "arms_dealer",
 ]
 
-# ALERT PROCEDURE TEMPLATES
 
 PROCEDURE_PRIORITY_CRITICAL = "critical"
 PROCEDURE_PRIORITY_HIGH = "high"

@@ -7,7 +7,6 @@ from whitelist.querysets.entry import WhitelistEntryQuerySet
 
 
 class WhitelistEntry(BaseModel):
-    """A registry entry for a user's wallet, or (wallet None) for a treasury/custodian address the operator holds."""
 
     objects = WhitelistEntryQuerySet.as_manager()
 
@@ -48,7 +47,6 @@ class WhitelistEntry(BaseModel):
                 condition=models.Q(wallet__isnull=False) | ~models.Q(address=""),
                 name="whitelist_entry_wallet_or_address",
             ),
-            # Wallet-backed entries are unique through the wallet; a treasury address is unique on its own.
             models.UniqueConstraint(
                 fields=["address"],
                 condition=models.Q(wallet__isnull=True),

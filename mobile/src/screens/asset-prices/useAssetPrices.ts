@@ -20,7 +20,6 @@ export function useAssetPrices() {
   const [filters, setFilters] = useState<AssetFilters>(DEFAULT_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState<AssetFilters>(DEFAULT_FILTERS);
 
-  // Build query params from applied filters
   const buildQueryParams = (filters: AssetFilters): AssetQueryParams => {
     const params: AssetQueryParams = {
       is_active: 'true',
@@ -40,7 +39,6 @@ export function useAssetPrices() {
     return params;
   };
 
-  // Fetch assets with infinite query for pagination
   const {
     data: assetsData,
     isLoading,
@@ -57,7 +55,6 @@ export function useAssetPrices() {
     gcTime: CACHE_TIMING.LONG_GC_TIME,
   });
 
-  // Flatten all pages into a single array
   const assets = assetsData?.pages.flatMap((page) => page.data?.results || []) || [];
   const totalCount = assetsData?.pages[0]?.data?.count || 0;
 
@@ -114,7 +111,7 @@ export function useAssetPriceHistory(assetUuid: string | null) {
         start_date,
         end_date,
         max_points: MAX_CHART_POINTS,
-        order_by: 'source_timestamp', // Oldest first for chronological chart display
+        order_by: 'source_timestamp',
       }),
     enabled: !!assetUuid,
     staleTime: CACHE_TIMING.SHORT_STALE_TIME,
@@ -130,7 +127,7 @@ export function useAssetPriceHistory(assetUuid: string | null) {
     const data: ChartDataPoint[] = snapshots.map(
       (snapshot: { price: string; sourceTimestamp: string }, index: number) => {
         const price = parseFloat(snapshot.price) || 0;
-        // Calculate change from start of period
+
         const changePercent = firstPrice > 0 ? ((price - firstPrice) / firstPrice) * 100 : 0;
 
         return {
@@ -142,7 +139,6 @@ export function useAssetPriceHistory(assetUuid: string | null) {
       },
     );
 
-    // Calculate overall period change (first to last)
     const lastPrice = parseFloat(snapshots[snapshots.length - 1].price) || 0;
     const overallChange = firstPrice > 0 ? ((lastPrice - firstPrice) / firstPrice) * 100 : null;
 

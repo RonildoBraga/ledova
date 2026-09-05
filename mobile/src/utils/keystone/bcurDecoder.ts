@@ -12,13 +12,6 @@ import {
 
 export type { DerivedAddress, ParentKeyData, HardwareWalletImport, HardwareWalletNetworkType };
 
-/**
- * Extracts wallet data from a Keystone QR code (crypto-multi-accounts UR type)
- *
- * For account-level keys (e.g., m/44'/60'/0'):
- * - Derives the first address (index 0) for display
- * - Stores the external chain key (m/44'/60'/0'/0) as parent for future derivation
- */
 export function extractFromKeystoneQR(urString: string): HardwareWalletImport | null {
   try {
     const decoder = new URDecoder();
@@ -58,7 +51,6 @@ export function extractFromKeystoneQR(urString: string): HardwareWalletImport | 
 
       const accountDerivationPath = normalizeDerivationPath(originPath);
 
-      // For Bitcoin, only accept Native SegWit (m/84') accounts
       if (networkType === 'BTC') {
         const purposeMatch = accountDerivationPath.match(/^m\/(\d+)'/);
         const purpose = purposeMatch ? parseInt(purposeMatch[1]) : 0;
@@ -67,16 +59,13 @@ export function extractFromKeystoneQR(urString: string): HardwareWalletImport | 
         }
       }
 
-      // Account-level keys have 3 path components: purpose'/coin'/account'
       const pathComponents = accountDerivationPath.split('/').filter((c) => c && c !== 'm');
       const isAccountLevel = pathComponents.length === 3;
 
       if (isAccountLevel) {
-        // Step 1: Derive external chain key (change=0) - this is the parent for address derivation
         const externalChainKey = deriveNonHardenedChild(accountPublicKey, accountChainCode, 0);
         const parentDerivationPath = `${accountDerivationPath}/0`;
 
-        // Step 2: Derive first address (index=0) from external chain key
         const addressKey = deriveNonHardenedChild(externalChainKey.publicKey, externalChainKey.chainCode, 0);
         const address =
           networkType === 'BTC'
@@ -84,7 +73,6 @@ export function extractFromKeystoneQR(urString: string): HardwareWalletImport | 
             : deriveEthereumAddress(addressKey.publicKey);
         const derivationPath = `${parentDerivationPath}/0`;
 
-        // Store the address for display
         addresses.push({
           address,
           addressIndex: 0,
@@ -92,15 +80,12 @@ export function extractFromKeystoneQR(urString: string): HardwareWalletImport | 
           networkType,
         });
 
-        // Store the parent key (external chain level) for deriving more addresses
         parentKeys.push({
           parentPublicKey: externalChainKey.publicKey.toString('hex'),
           parentChainCode: externalChainKey.chainCode.toString('hex'),
           parentDerivationPath,
         });
       } else {
-        // Pre-derived address key (5 components) - use as-is
-        // This shouldn't happen with Keystone but handle it just in case
         const address =
           networkType === 'BTC' ? deriveBitcoinAddress(accountPublicKey) : deriveEthereumAddress(accountPublicKey);
 
@@ -123,15 +108,6 @@ export function extractFromKeystoneQR(urString: string): HardwareWalletImport | 
   }
 }
 
-/**
- * Derives a new address from stored parent key data
- *
- * @param parentPublicKey - Public key at external chain level (hex string)
- * @param parentChainCode - Chain code at external chain level (hex string)
- * @param parentDerivationPath - Derivation path of parent key (e.g., "m/44'/60'/0'/0")
- * @param addressIndex - Index of the address to derive (0, 1, 2, ...)
- * @returns The derived address information
- */
 export function deriveAddressFromParentKey(
   parentPublicKey: string,
   parentChainCode: string,
@@ -141,16 +117,13 @@ export function deriveAddressFromParentKey(
   const parentPubKeyBuffer = Buffer.from(parentPublicKey, 'hex');
   const parentChainCodeBuffer = Buffer.from(parentChainCode, 'hex');
 
-  // Derive child key at the specified index
   const childKey = deriveNonHardenedChild(parentPubKeyBuffer, parentChainCodeBuffer, addressIndex);
 
-  // Determine network type from parent derivation path
   const networkType = detectNetworkFromPath(parentDerivationPath);
   if (networkType === 'UNKNOWN') {
     throw new Error('Unable to detect network type from parent derivation path');
   }
 
-  // Derive the address based on network type
   const address =
     networkType === 'BTC' ? deriveBitcoinAddress(childKey.publicKey) : deriveEthereumAddress(childKey.publicKey);
 

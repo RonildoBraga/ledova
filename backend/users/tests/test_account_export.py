@@ -13,7 +13,6 @@ User = get_user_model()
 
 
 class AccountExportTest(APITestCase):
-    """Pins the camelCase document the dashboard and mobile settings screens write out verbatim."""
 
     def setUp(self):
         self.user = User.objects.create_user(email="export@example.test", password="pw-12345678")

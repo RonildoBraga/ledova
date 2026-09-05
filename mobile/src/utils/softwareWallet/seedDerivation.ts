@@ -12,31 +12,24 @@ export interface SoftwareWalletImport {
   parentKeys: ParentKeyData[];
 }
 
-/**
- * Derive ETH and BTC addresses from a mnemonic.
- * Returns the same structure as HardwareWalletImport for compatibility.
- */
 export function deriveAccountsFromMnemonic(mnemonic: string): SoftwareWalletImport {
   const seed = mnemonicToSeedSync(mnemonic);
   const masterKey = HDKey.fromMasterSeed(seed);
 
-  // Master fingerprint: first 4 bytes (8 hex chars) of hash of master public key
   const masterPubHash = sha256(masterKey.publicKey!);
   const masterFingerprint = bytesToHex(masterPubHash).slice(0, 8);
 
   const addresses: DerivedAddress[] = [];
   const parentKeys: ParentKeyData[] = [];
 
-  // --- ETH: m/44'/60'/0' ---
   const ethAccount = masterKey.derive("m/44'/60'/0'");
-  // External chain key: m/44'/60'/0'/0
+
   const ethExternal = ethAccount.deriveChild(0);
   const ethParentPath = "m/44'/60'/0'/0";
 
   const ethExternalPubKey = Buffer.from(ethExternal.publicKey!);
   const ethExternalChainCode = Buffer.from(ethExternal.chainCode!);
 
-  // First address: m/44'/60'/0'/0/0
   const ethAddressKey = deriveNonHardenedChild(ethExternalPubKey, ethExternalChainCode, 0);
   const ethAddress = deriveEthereumAddress(ethAddressKey.publicKey);
 
@@ -53,16 +46,14 @@ export function deriveAccountsFromMnemonic(mnemonic: string): SoftwareWalletImpo
     parentDerivationPath: ethParentPath,
   });
 
-  // --- BTC testnet: m/84'/1'/0' (Native SegWit) ---
   const btcAccount = masterKey.derive("m/84'/1'/0'");
-  // External chain key: m/84'/1'/0'/0
+
   const btcExternal = btcAccount.deriveChild(0);
   const btcParentPath = "m/84'/1'/0'/0";
 
   const btcExternalPubKey = Buffer.from(btcExternal.publicKey!);
   const btcExternalChainCode = Buffer.from(btcExternal.chainCode!);
 
-  // First address: m/84'/1'/0'/0/0
   const btcAddressKey = deriveNonHardenedChild(btcExternalPubKey, btcExternalChainCode, 0);
   const btcAddress = deriveBitcoinAddress(btcAddressKey.publicKey);
 
@@ -79,7 +70,6 @@ export function deriveAccountsFromMnemonic(mnemonic: string): SoftwareWalletImpo
     parentDerivationPath: btcParentPath,
   });
 
-  // Wipe sensitive key material from memory
   seed.fill(0);
   masterKey.privateKey?.fill(0);
   ethAccount.privateKey?.fill(0);

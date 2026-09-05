@@ -4,7 +4,6 @@ from shared.models import BaseModel
 
 
 class OrderModificationLog(BaseModel):
-    """Immutable audit trail: one row per changed field per signed order modification."""
 
     order = models.ForeignKey(
         "tokens.TransferOrder",

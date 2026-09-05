@@ -173,7 +173,7 @@ class BackfillTests(TestCase):
         self.yesterday = midnight(self.now) - timedelta(days=1)
         self.client_mock = MagicMock()
         self.client_mock.fetch_prices_by_symbols.return_value = {}
-        # Two points on the same day collapse into that day's midnight row; the later point wins.
+
         self.client_mock.fetch_historical_prices_bulk.return_value = [
             {"timestamp": self.day_before + timedelta(hours=12), "price": Decimal("1")},
             {"timestamp": self.yesterday + timedelta(hours=12), "price": Decimal("2")},
@@ -193,7 +193,6 @@ class BackfillTests(TestCase):
         ):
             result = AssetSyncService.sync_assets(backfill_days=3)
 
-        # BTC gains one day; ETH, USDC and USDT (the other CoinGecko-backed assets) gain two each.
         self.assertEqual(result["historical_snapshots"], 7)
         self.assertEqual(self.client_mock.fetch_historical_prices_bulk.call_count, 4)
         rows = AssetSnapshot.objects.filter(asset=self.btc).order_by("source_timestamp")

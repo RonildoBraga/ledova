@@ -55,7 +55,6 @@ export const useSignIn = () => {
     try {
       await signin(apiClient, form);
 
-      // This ensures the auth state is properly initialized before navigation
       await queryClient.refetchQueries({ queryKey: AUTH_QUERY_KEY, exact: true });
 
       if (onSuccess) {
@@ -66,7 +65,6 @@ export const useSignIn = () => {
       setErrors({});
       setGeneralError(null);
 
-      // Check for user-friendly errors first
       if (err && typeof err === 'object' && 'isUserFriendly' in err) {
         const userFriendlyError = err as UserFriendlyError;
         setGeneralError(userFriendlyError.message);

@@ -6,7 +6,6 @@ from tokens.models.choices import TransferOrderStatus, TransferOrderType
 
 class TransferOrderQuerySet(QuerySet):
     def ownership_bound(self):
-        """Return orders whose immutable tenant and address snapshots match."""
         return self.filter(
             wallet__user_account_id=models.F("owner_account_id"),
             wallet__address__iexact=models.F("wallet_address"),
@@ -16,9 +15,6 @@ class TransferOrderQuerySet(QuerySet):
         if user is None or not user.is_authenticated:
             return self.none()
 
-        # Authorization is anchored to the exact wallet row selected when the
-        # order was created. Address matching is unsafe because public wallet
-        # addresses may be registered under more than one tenant.
         return (
             self.ownership_bound()
             .filter(
@@ -50,13 +46,11 @@ class TransferOrderQuerySet(QuerySet):
         return self.filter(order_type=TransferOrderType.SELL)
 
     def open_or_partial(self):
-        """Orders that can still receive matches (open or partially filled)."""
         return self.filter(
             status__in=[TransferOrderStatus.OPEN, TransferOrderStatus.PARTIALLY_FILLED],
         )
 
     def committed_sell_quantity(self, token, wallet_address, exclude_uuid=None) -> int:
-        """Quantity locked in open SELL orders; subtracted from the token balance to size new sells."""
         qs = self.ownership_bound().filter(
             token=token,
             wallet_address__iexact=wallet_address,
@@ -72,7 +66,6 @@ class TransferOrderQuerySet(QuerySet):
         return result or 0
 
     def order_book_levels(self, token, order_type: str, limit: int = 20):
-        """Remaining quantity aggregated per price level."""
         qs = self.ownership_bound().open().filter(token=token)
 
         if order_type == TransferOrderType.BUY:

@@ -1,5 +1,3 @@
-"""Every portfolios ModelAdmin renders; the portfolio changelist counts wallets in the list query."""
-
 from django.contrib import admin
 from django.test import TestCase, override_settings
 from django.urls import reverse

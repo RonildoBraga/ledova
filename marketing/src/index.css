@@ -1,7 +1,6 @@
 @import 'tailwindcss';
 @import './tokens.css';
 
-/* === BASE STYLES === */
 html {
   scroll-behavior: smooth;
 }
@@ -20,7 +19,6 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* === SCROLLBAR === */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;

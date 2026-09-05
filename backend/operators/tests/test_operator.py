@@ -1,5 +1,3 @@
-"""The operator singleton: seed, row guard, admin change page, and the exact shape of GET /api/operator/."""
-
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction

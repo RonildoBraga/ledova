@@ -1,5 +1,3 @@
-"""Every wallets ModelAdmin renders; the wallet changelist counts holdings in the list query."""
-
 from decimal import Decimal
 from unittest.mock import patch
 

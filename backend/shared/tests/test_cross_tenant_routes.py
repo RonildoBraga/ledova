@@ -1,5 +1,3 @@
-"""Every detail route and custom action, for every actor, against the other tenant's rows."""
-
 from collections import namedtuple
 from unittest.mock import patch
 
@@ -63,9 +61,6 @@ def _create_issuance_request(token, recipient, amount, user, reason="", issuance
     )
 
 
-# `{name}` placeholders resolve to the target tenant's identifiers (own, foreign or phantom);
-# `{own_name}` always resolves to the acting tenant's. foreign is the status expected when the
-# target belongs to another tenant; prepare puts the actor's own row into the state the action needs.
 Route = namedtuple("Route", "method path payload foreign prepare", defaults=(None, 404, None))
 
 CAPITAL_INCREASE = {
@@ -146,7 +141,6 @@ ROUTES = (
         "post",
         "/api/v1/companies/{company}/documents/",
         {
-            # This nested viewset uses the plain multipart/JSON parsers, not the camel-case ones.
             "document_type": "bank_statement",
             "name": "Statement",
             "external_url": "https://docs.example.test/statement",
@@ -201,9 +195,7 @@ ROUTES = (
     Route("delete", "/api/v1/documents/{document}/"),
 )
 
-# Operator routes (IsAdminUser) are deliberately unscoped: staff and superusers reach every tenant's
-# row, while a regular user gets the same 403 for a foreign row as for one that does not exist.
-# Here prepare runs against the target tenant, whose row the operator acts on.
+
 OPERATOR_ROUTES = (
     Route("get", "/api/v1/companies/{company}/api-key/"),
     Route("post", "/api/v1/companies/{company}/api-key/", {}),
@@ -215,7 +207,7 @@ OPERATOR_ROUTES = (
     ),
 )
 
-# Collection routes and the keys of the rows the acting tenant must see, and nothing else.
+
 LIST_ROUTES = (
     ("/api/user-profiles/", ("profile",)),
     ("/api/financial-profiles/", ("financial_profile",)),
@@ -239,7 +231,7 @@ SINGLETON_ROUTES = (
     ("/api/user-preferences/", "preferences"),
     ("/api/notification-preferences/", "notification_preferences"),
 )
-# Deployment-wide singletons: the same body for every authenticated actor, 401 for nobody.
+
 GLOBAL_ROUTES = ("/api/operator/",)
 
 
@@ -319,8 +311,6 @@ class CrossTenantRouteMatrixTest(APITestCase):
         foreign = route_context(self.other)
         phantom = phantom_context(self.other)
 
-        # No savepoint on purpose: a foreign 404 must leave the actor's own rows untouched too,
-        # so every later row runs against whatever the earlier rows left behind.
         for actor in self.actors:
             self.client.force_authenticate(actor.user)
             for route in ROUTES:
@@ -341,7 +331,7 @@ class CrossTenantRouteMatrixTest(APITestCase):
             own = route_context(actor)
             for route in ROUTES:
                 with self.subTest(actor=actor.label, route=f"{route.method} {route.path}"):
-                    # Each row runs against the pristine graph: the savepoint discards its side effects.
+
                     with transaction.atomic():
                         if route.prepare:
                             route.prepare(actor)

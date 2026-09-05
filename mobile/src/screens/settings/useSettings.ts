@@ -9,24 +9,14 @@ import { clearTokens } from '../../services/tokenStorage';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import { APP_STORE_URL, MARKETING_URL } from '../../config/publicLinks';
 
-/**
- * Custom hook for Settings screen actions.
- *
- * Handles account management (export, delete, change password) and app actions (rate, share).
- */
 export function useSettings() {
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
   const queryClient = useQueryClient();
 
-  // Loading states
   const [isExporting, setIsExporting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
-  /**
-   * Change the user's password.
-   * The backend keeps the current session, so the biometric-gated refresh token stays valid.
-   */
   const changeUserPassword = useCallback(
     async (currentPassword: string, newPassword: string, newPasswordConfirm: string): Promise<boolean> => {
       setIsChangingPassword(true);
@@ -60,9 +50,6 @@ export function useSettings() {
     [],
   );
 
-  /**
-   * Export user account data as JSON and share it.
-   */
   const exportData = useCallback(async (): Promise<boolean> => {
     setIsExporting(true);
     try {
@@ -84,19 +71,14 @@ export function useSettings() {
     }
   }, []);
 
-  /**
-   * Delete the user's account and navigate to sign in.
-   */
   const deleteUserAccount = useCallback(async (): Promise<boolean> => {
     setIsDeleting(true);
     try {
       await deleteAccount(apiClient);
 
-      // Clear local data, the biometric-gated refresh token included
       await clearTokens();
       queryClient.clear();
 
-      // Navigate to sign in
       navigation.reset({
         index: 0,
         routes: [{ name: 'SignIn' }],
@@ -111,9 +93,6 @@ export function useSettings() {
     }
   }, [navigation, queryClient]);
 
-  /**
-   * Open the app store review prompt or fallback to App Store link.
-   */
   const rateApp = useCallback(async () => {
     const isAvailable = await StoreReview.isAvailableAsync();
     if (isAvailable) {
@@ -125,34 +104,25 @@ export function useSettings() {
     }
   }, []);
 
-  /**
-   * Share the app with friends via system share sheet.
-   */
   const shareApp = useCallback(async () => {
     try {
       await Share.share({
         message: `Explore the Ledova experimental reference implementation: ${MARKETING_URL}`,
         title: 'Share Ledova',
       });
-    } catch {
-      // Silently handle error
-    }
+    } catch {}
   }, []);
 
   return {
-    // Change password
     changeUserPassword,
     isChangingPassword,
 
-    // Export data
     exportData,
     isExporting,
 
-    // Delete account
     deleteUserAccount,
     isDeleting,
 
-    // App actions
     rateApp,
     shareApp,
   };

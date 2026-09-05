@@ -1,9 +1,5 @@
 import type { KYCProvider, ReviewAnswer, VerificationStatus } from './identity-verification';
 
-/**
- * Mirrors backend `UserProfileSerializer.Meta.fields` (camelCase via the renderer).
- * The profile endpoint does not emit `createdAt` / `updatedAt`.
- */
 export interface UserProfile {
   uuid: string;
   fullName: string;
@@ -36,7 +32,6 @@ export interface UserProfile {
   sumsubVerificationStatus: VerificationStatus;
 }
 
-/** Keys the serializer emits but never accepts (`read_only_fields` plus the user and country lookups). */
 type UserProfileResponseOnly =
   | 'uuid'
   | 'email'
@@ -61,10 +56,6 @@ export type UpdateUserProfile = Partial<Omit<UserProfile, UserProfileResponseOnl
 
 export type CompleteUserProfile = Pick<UserProfile, 'termsAndConditions' | 'isSignupCompleted'>;
 
-/**
- * Form data for user profile editing (signup flow and profile management).
- * Contains the editable fields users can modify directly.
- */
 export interface UserProfileFormData {
   fullName: string;
   dateOfBirth: string;

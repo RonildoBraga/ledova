@@ -18,7 +18,6 @@ logger = logging.getLogger(__name__)
 
 @transaction.atomic
 def delete_account(user):
-    """Tombstone the login and blank the personal fields; shared accounts and their records stay."""
     logger.info("Account deletion requested")
 
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
@@ -47,8 +46,6 @@ def delete_account(user):
 
 
 def export_account_data(user):
-    """Everything the user owns as one document; the camelCase renderer names the keys and
-    DRF's encoder formats dates and UUIDs. Decimals stay strings so 18-decimal amounts are exact."""
     logger.info("Data export requested")
 
     data = {

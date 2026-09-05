@@ -86,13 +86,11 @@ export function WalletSortModal({ isOpen, selectedSort, onClose, onApply }: Wall
       onConfirm={handleApply}
       size="sm"
     >
-      {/* Header */}
       <div className="flex flex-col items-center pb-3">
         <FunnelIcon size={ICON_LG} className="text-brand-mid mb-1" />
         <h3 className="text-lg font-semibold text-text-primary">Sort Wallets</h3>
       </div>
 
-      {/* Sort Options */}
       <p className="text-xs font-medium text-text-subtle uppercase tracking-wide mb-2">Sort By</p>
       <div className="space-y-1.5">
         {sortOptions.map((option) => {

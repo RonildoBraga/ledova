@@ -18,7 +18,6 @@ export function useTransactions() {
   const [appliedFilters, setAppliedFilters] = useState<TransactionQueryParams>({});
   const [currentMockPage, setCurrentMockPage] = useState(1);
 
-  // Fetch wallets for filter dropdown
   const { data: walletsResponse } = useQuery({
     queryKey: ['wallets'],
     queryFn: () => getWallets(apiClient),
@@ -28,11 +27,9 @@ export function useTransactions() {
 
   const wallets: Wallet[] = walletsResponse?.data?.results || [];
 
-  // Group wallets by chain
   const ethWallets = useMemo(() => wallets.filter((w) => w.chain === BLOCKCHAIN.ETHEREUM), [wallets]);
   const btcWallets = useMemo(() => wallets.filter((w) => w.chain === BLOCKCHAIN.BITCOIN), [wallets]);
 
-  // Fetch transactions with infinite query for pagination (always called to satisfy React Hooks rules)
   const {
     data: transactionsData,
     isLoading,
@@ -56,7 +53,6 @@ export function useTransactions() {
     }
   }, [USE_MOCK_DATA, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  // Return mock data if flag is enabled
   if (USE_MOCK_DATA) {
     const mockPages: MockPage[] = [];
     for (let i = 1; i <= currentMockPage; i++) {
@@ -112,7 +108,6 @@ export function useTransactions() {
     };
   }
 
-  // Real API data
   const transactions = transactionsData?.pages.flatMap((page) => page.data?.results || []) || [];
   const totalCount = transactionsData?.pages[0]?.data?.count || 0;
 

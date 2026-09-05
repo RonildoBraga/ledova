@@ -30,7 +30,7 @@ class WalletSyncService:
             chain = normalize_chain(wallet.chain)
             transactions_data = get_blockchain_client(chain).get_transaction_history(wallet.address)
             for tx in transactions_data:
-                # _process_single_transaction reads tx["chain"]; the client payload has no chain key.
+
                 tx["chain"] = chain
 
             result = WalletSyncService._process_transactions(wallet, transactions_data)
@@ -129,7 +129,6 @@ class WalletSyncService:
 
     @staticmethod
     def _resolve_asset(wallet: Wallet, tx_data: Dict) -> Asset:
-        """Identity is (chain, contract address), never the self-declared symbol; an unknown contract is quarantined."""
         contract_address = tx_data.get("contract_address")
         if not contract_address:
             return native_asset_for_chain(wallet.chain)
@@ -156,7 +155,6 @@ class WalletSyncService:
                 holding.save(update_fields=["quantity", "last_synced_at"])
                 updated += 1
 
-                # One row per holding per day, so a wallet with no transactions still has a daily series.
                 HoldingSnapshot.objects.update_or_create(
                     holding=holding,
                     snapshot_date=timezone.now().date(),

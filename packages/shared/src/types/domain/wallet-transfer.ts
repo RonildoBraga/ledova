@@ -53,7 +53,6 @@ export interface PrepareTransferResponse {
   toAddress: string;
 }
 
-/** prepare_bitcoin_transaction: amounts and the fee estimate only; the user builds and signs the transaction elsewhere. */
 export interface PrepareBitcoinTransferResponse {
   fromAddress: string;
   toAddress: string;

@@ -25,7 +25,6 @@ export function DeriveAddressModal({
   useEffect(() => {
     if (isOpen && wallet?.parentPublicKey && wallet?.parentChainCode && wallet?.parentDerivationPath) {
       try {
-        // Derive the next address (current index + 1)
         const nextIndex = (wallet.addressIndex ?? 0) + 1;
         const newAddress = deriveAddressFromParentKey(
           wallet.parentPublicKey,
@@ -77,19 +76,16 @@ export function DeriveAddressModal({
           </div>
         ) : derivedAddress ? (
           <div className="space-y-0">
-            {/* Network */}
             <div className="flex items-center justify-between py-2.5 border-b border-border-subtle">
               <span className="text-sm text-text-muted">Network</span>
               <span className="text-sm font-medium text-text-primary">{networkName}</span>
             </div>
 
-            {/* Address Index */}
             <div className="flex items-center justify-between py-2.5 border-b border-border-subtle">
               <span className="text-sm text-text-muted">Address Index</span>
               <span className="text-sm font-medium text-text-primary">{derivedAddress.addressIndex}</span>
             </div>
 
-            {/* New Address */}
             <div className="py-2.5 border-b border-border-subtle">
               <span className="text-sm text-text-muted">New Address</span>
               <p className="text-sm font-mono text-text-primary mt-1 break-all">{derivedAddress.address}</p>

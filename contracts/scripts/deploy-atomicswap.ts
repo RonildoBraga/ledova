@@ -30,7 +30,6 @@ async function main() {
   const atomicSwapAddress = await atomicSwap.getAddress();
   console.log("   AtomicSwap deployed to:", atomicSwapAddress);
 
-  // Get EIP-712 domain info
   const domainSeparator = await atomicSwap.getDomainSeparator();
   const chainId = await atomicSwap.getChainId();
   console.log("   Domain separator:", domainSeparator);

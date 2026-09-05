@@ -10,7 +10,6 @@ from ledova_backend.procrastinate_app import app
 logger = logging.getLogger(__name__)
 
 
-# The usual failure is a cold or unreachable local LLM, which a short retry wait resolves.
 @app.task(retry=RetryStrategy(max_attempts=3, wait=30))
 def extract_document(document_uuid: str) -> Dict[str, Any]:
     try:

@@ -15,14 +15,8 @@ interface VerificationFormModalProps {
   onClose: () => void;
 }
 
-/** Redirect URL configured in the KYCAID form. When the form redirects here, verification is done. */
 const REDIRECT_HOST = new URL(MARKETING_URL).hostname;
 
-/**
- * Build HTML page that loads the Sumsub WebSDK via CDN and initialises it with the access token.
- * Uses dynamic script loading with onload/onerror to handle WebView constraints.
- * On `idCheck.onApplicantSubmitted` it posts `{ event: 'FORM_COMPLETED' }` to ReactNativeWebView.
- */
 function buildSumsubHtml(token: string, themeColors: { bg: string; muted: string; error: string }): string {
   return `<!DOCTYPE html>
 <html>
@@ -83,7 +77,6 @@ function buildSumsubHtml(token: string, themeColors: { bg: string; muted: string
       }
     }
 
-    // Dynamically load the SDK script to get proper onload/onerror callbacks
     var script = document.createElement('script');
     script.src = 'https://static.sumsub.com/idensic/static/sns-websdk-builder.js';
     script.onload = initSdk;
@@ -94,9 +87,6 @@ function buildSumsubHtml(token: string, themeColors: { bg: string; muted: string
 </html>`;
 }
 
-/**
- * JS injected into the KYCAID WebView to listen for form completion events.
- */
 const KYCAID_INJECTED_JS = `
   (function() {
     window.addEventListener('message', function(event) {
@@ -210,7 +200,6 @@ export function VerificationFormModal({
     onComplete();
   }, [onComplete]);
 
-  // Reset completion flag when modal opens
   React.useEffect(() => {
     if (visible && (accessToken || formUrl)) {
       completedRef.current = false;
@@ -223,34 +212,26 @@ export function VerificationFormModal({
       if (data.event === 'FORM_COMPLETED') {
         triggerComplete();
       } else if (data.event === 'SDK_ERROR') {
-        // Error is displayed inside the WebView HTML — don't auto-close
         console.warn('[VerificationFormModal] SDK error:', data.message);
       }
-    } catch {
-      // Ignore non-JSON messages
-    }
+    } catch {}
   };
 
   const handleNavigationStateChange = (navState: WebViewNavigation) => {
-    // KYCAID redirect detection
     if (!formUrl) return;
     try {
       const url = new URL(navState.url);
       if (url.hostname === REDIRECT_HOST || url.hostname === `www.${REDIRECT_HOST}`) {
         triggerComplete();
       }
-    } catch {
-      // Ignore invalid URLs
-    }
+    } catch {}
   };
 
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
-      {/* Overlay — only direct taps on the backdrop close the modal */}
       <Pressable style={styles.overlay} onPress={onClose}>
         <Pressable style={styles.modalContainer} onPress={(e) => e.stopPropagation()}>
           <View style={styles.modal}>
-            {/* Header */}
             <View style={styles.header}>
               <Text style={styles.headerTitle}>Identity Verification</Text>
               <TouchableOpacity onPress={onClose} style={styles.closeButton} hitSlop={16}>
@@ -258,7 +239,6 @@ export function VerificationFormModal({
               </TouchableOpacity>
             </View>
 
-            {/* WebView */}
             <View style={styles.webviewContainer}>
               {accessToken ? (
                 <WebView

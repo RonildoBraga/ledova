@@ -34,13 +34,11 @@ export function MarketOverview({ tokens, selectedTokenUuid, onSelectToken, isLoa
 
   return (
     <div className="bg-surface-raised rounded-xl border border-border-subtle overflow-hidden">
-      {/* Header */}
       <div className="px-4 py-4 border-b border-border-subtle">
         <h2 className="text-base font-semibold text-text-primary">Market</h2>
         <p className="text-xs text-text-muted mt-0.5">Select a token to view orders and trade</p>
       </div>
 
-      {/* Table Header */}
       <div className="grid grid-cols-12 gap-2 px-4 py-2.5 text-xs font-medium text-text-muted border-b border-border-subtle/50">
         <div className="col-span-2">Token</div>
         <div className="col-span-4">Company</div>
@@ -48,7 +46,6 @@ export function MarketOverview({ tokens, selectedTokenUuid, onSelectToken, isLoa
         <div className="col-span-3 text-right">Supply</div>
       </div>
 
-      {/* Token Rows */}
       {tokens.map((token) => {
         const isSelected = token.uuid === selectedTokenUuid;
         const lastPrice = token.lastPrice ? parseFloat(token.lastPrice) : null;

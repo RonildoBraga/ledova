@@ -5,7 +5,6 @@ from tokens.models import CapitalIncreaseRequest, ShareToken, TransferOrder
 
 
 class CommaSeparatedCharFilter(CharFilter):
-    """Filter that accepts comma-separated values and filters with __in lookup."""
 
     def filter(self, qs, value):
         if not value:

@@ -1,5 +1,3 @@
-"""Every Quick Actions button on the company admin page goes through the one table-driven transition view."""
-
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -16,7 +14,7 @@ TEST_STORAGES = {
     "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
 }
 REASON_FIELDS = ("info_request_reason", "rejection_reason", "warning_reason", "suspension_reason", "delisting_reason")
-# (action slug, status the button is offered in, status after the transition)
+
 CASES = [
     ("start-review", CompanyStatus.SUBMITTED, CompanyStatus.REVIEW),
     ("request-info", CompanyStatus.REVIEW, CompanyStatus.INFO_REQUIRED),
@@ -50,7 +48,6 @@ class CompanyAdminTransitionTest(TestCase):
         self.company.save(update_fields=["status"])
 
     def _follow(self, response):
-        """Land on the change page so its rendering consumes the messages, as the operator's browser would."""
         self.assertRedirects(response, self.change_url, fetch_redirect_response=False)
         page = self.client.get(self.change_url)
         return [str(message) for message in page.context["messages"]]

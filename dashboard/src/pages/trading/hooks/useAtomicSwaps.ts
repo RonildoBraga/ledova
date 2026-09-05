@@ -80,7 +80,7 @@ export function useOrderSwapApprovalStatus(orderUuid: string | undefined, wallet
     queryKey: swapQueryKeys.orderSwapApprovalStatus(orderUuid || '', walletAddress || ''),
     queryFn: () => getOrderSwapApprovalStatus(apiClient, orderUuid!, walletAddress!).then((res) => res.data),
     enabled: !!orderUuid && !!walletAddress,
-    staleTime: 5000, // Check frequently as approval state can change
+    staleTime: 5000,
     gcTime: CACHE_TIMING.DEFAULT_GC_TIME,
   });
 }

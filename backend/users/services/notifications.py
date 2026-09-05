@@ -19,11 +19,9 @@ class NotificationService:
         data: Optional[Dict[str, Any]] = None,
         notification_type: str = "general",
     ) -> Dict[str, Any]:
-        # Looked up before the row exists so a missing profile cannot fail the task after the insert
-        # (a retry would duplicate the row); no preferences row means every type is allowed.
+
         prefs = NotificationPreferences.objects.filter(user_profile__user=user).first()
 
-        # Always create an in-app notification record regardless of push preferences
         Notification.objects.create(
             user=user,
             title=title,

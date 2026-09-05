@@ -2,9 +2,6 @@ import { HOLDING_ASSET_TYPE, getChartColor, getHoldingAssetTypeLabel, type TimeR
 import type { HoldingWithWallet, HoldingsSummary, AssetAllocationItem } from '@ledova/shared';
 import { MOCK_ASSETS, MOCK_ASSET_VALUES, MOCK_WALLETS } from '../../../_mock/mockConfig';
 
-/**
- * Chart data point interface
- */
 interface MockPortfolioSnapshot {
   dayIndex: number;
   date: string;
@@ -14,9 +11,6 @@ interface MockPortfolioSnapshot {
   assetSymbols: string[];
 }
 
-/**
- * Helper functions for calculating summaries and allocation
- */
 function calculateSummary(holdings: HoldingWithWallet[], walletsCount: number): HoldingsSummary {
   const assetTypeMap = new Map<string, { totalValue: number; holdingsCount: number }>();
   let totalValue = 0;
@@ -84,14 +78,10 @@ function calculateAssetAllocation(holdings: HoldingWithWallet[], totalValue: num
     .sort((a, b) => b.totalValue - a.totalValue)
     .map((item, index) => ({
       ...item,
-      color: getChartColor(index), // Re-assign colors after sorting
+      color: getChartColor(index),
     }));
 }
 
-/**
- * Generates mock holdings data with realistic asset distribution
- * Uses shared mock configuration to ensure consistency
- */
 export const generateMockHoldingsData = () => {
   const mockAssets = MOCK_ASSETS.map((asset) => ({
     uuid: asset.uuid,
@@ -103,7 +93,6 @@ export const generateMockHoldingsData = () => {
 
   const mockWallets = MOCK_WALLETS.map((w) => ({ ...w }));
 
-  // Create holdings distributed across wallets
   const holdings: HoldingWithWallet[] = mockAssets.flatMap((asset, assetIndex) => {
     const walletsForAsset = assetIndex % 2 === 0 ? [mockWallets[0]] : [mockWallets[1]];
 
@@ -154,35 +143,28 @@ export const generateMockHoldingsData = () => {
   };
 };
 
-/**
- * Generates mock portfolio performance chart data for a given time range
- * Uses the same asset values from holdings to ensure consistency
- */
 export const generateMockPortfolioChartData = (timeRange: TimeRange): MockPortfolioSnapshot[] => {
-  // Map time ranges to data points (days)
   const dataPointsMap: Record<TimeRange, number> = {
     '3M': 90,
     '6M': 180,
     '1Y': 365,
     '2Y': 730,
     '3Y': 1095,
-    ALL: 1460, // ~4 years
+    ALL: 1460,
   };
 
   const dataPoints = dataPointsMap[timeRange];
   const today = new Date();
 
-  // Get current holdings data to use as the baseline
   const currentHoldings = generateMockHoldingsData();
   const { assetAllocation, summary } = currentHoldings;
 
-  // Create a map of current asset values and calculate quantities based on mock asset values
   const currentAssetValues: Record<string, number> = {};
   const currentAssetQuantities: Record<string, number> = {};
 
   assetAllocation.forEach((asset) => {
     currentAssetValues[asset.symbol] = asset.totalValue;
-    // Calculate quantity from total value and mock asset price
+
     const assetPrice = MOCK_ASSET_VALUES[asset.symbol as keyof typeof MOCK_ASSET_VALUES];
     currentAssetQuantities[asset.symbol] = asset.totalValue / assetPrice;
   });
@@ -195,7 +177,6 @@ export const generateMockPortfolioChartData = (timeRange: TimeRange): MockPortfo
 
     const isLastDataPoint = i === dataPoints - 1;
 
-    // For the last data point (today), use exact values from current holdings
     if (isLastDataPoint) {
       const sortedAssets = assets.slice().sort((a, b) => currentAssetValues[b] - currentAssetValues[a]);
 
@@ -209,37 +190,32 @@ export const generateMockPortfolioChartData = (timeRange: TimeRange): MockPortfo
       };
     }
 
-    // Generate realistic price fluctuations with different trends for historical data
     const dayProgress = i / dataPoints;
-    const trend = 0.0003; // 0.03% daily upward trend
+    const trend = 0.0003;
 
     const assetValues: Record<string, number> = {};
     const assetQuantities: Record<string, number> = {};
     let totalMarketValue = 0;
 
     assets.forEach((symbol) => {
-      // Different volatility and trends for each asset
       const assetVolatility = symbol === 'BTC' ? 0.015 : symbol === 'ETH' ? 0.02 : symbol === 'SOL' ? 0.035 : 0.045;
 
       const assetTrend =
         symbol === 'BTC' ? trend : symbol === 'ETH' ? trend * 1.2 : symbol === 'SOL' ? trend * 1.5 : trend * 0.8;
 
-      // Add some cyclical patterns for realism
       const cyclicalFactor = 1 + 0.1 * Math.sin(dayProgress * Math.PI * 4);
 
       const randomWalk = 1 + (Math.random() - 0.5) * 2 * assetVolatility;
       const trendFactor = 1 + assetTrend * i;
 
-      // Calculate historical value based on current value and trends
       const currentValue = currentAssetValues[symbol];
       const historicalValue = currentValue / trendFactor / cyclicalFactor / randomWalk;
 
       assetValues[symbol] = historicalValue;
-      assetQuantities[symbol] = currentAssetQuantities[symbol]; // Quantities remain constant
+      assetQuantities[symbol] = currentAssetQuantities[symbol];
       totalMarketValue += historicalValue;
     });
 
-    // Sort assets by value (highest first) to ensure consistent color mapping
     const sortedAssets = assets.slice().sort((a, b) => assetValues[b] - assetValues[a]);
 
     return {

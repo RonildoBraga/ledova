@@ -63,8 +63,7 @@ async function main() {
   console.log("   Ledova ShareToken deployed to:", shareTokenAddress);
 
   console.log("\n4. Adding test accounts to whitelist...");
-  // Public Besu/Truffle development accounts. These are fixtures, not Ledova
-  // users or recommended accounts, and this script refuses non-local chains.
+
   const testAccounts = [
     ethers.getAddress("0xfe3b557e8fb62b89f4916b721be55ceb828dbd73"),
     ethers.getAddress("0x627306090abaB3A6e1400e9345bC60c78a8BEf57"),

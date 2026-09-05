@@ -22,7 +22,6 @@ def badge(text, colour, title=""):
 
 
 def choice_badge(value, colours):
-    """Badge for a choices value: '-' when unset, grey when the value has no colour."""
     if not value:
         return "-"
     return badge(value.upper().replace("_", " "), colours.get(value, GREY))

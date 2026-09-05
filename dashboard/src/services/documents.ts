@@ -1,11 +1,3 @@
-/**
- * Documents API service.
- *
- * Mirrors the wallets.ts pattern from @ledova/shared
- * (taking apiClient explicitly), but lives in the dashboard for the
- * PoC. Lift later if mobile needs the same surface.
- */
-
 import type { AxiosInstance } from 'axios';
 import type { Document, DocumentType } from '../types/document';
 

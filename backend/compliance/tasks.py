@@ -1,9 +1,3 @@
-"""Background tasks for compliance (AML/CTF).
-
-- run_batch_monitoring: hourly pattern-rule sweep over recent transactions.
-- check_periodic_reviews: daily flag of risk assessments overdue for 24-month review.
-"""
-
 import logging
 from datetime import timedelta
 
@@ -29,11 +23,6 @@ logger = logging.getLogger(__name__)
     retry=RetryStrategy(max_attempts=4, wait=60),
 )
 def run_batch_monitoring(timestamp: int) -> str:
-    """Run batch pattern-rule monitoring over recent transactions.
-
-    Some AML/CTF patterns (velocity, structuring) require historical analysis and may
-    flag transactions that individually looked fine.
-    """
     from compliance.models import MonitoringRule
     from compliance.services.transaction_monitoring import TransactionMonitoringService
     from users.models import UserAccount
@@ -66,7 +55,6 @@ def run_batch_monitoring(timestamp: int) -> str:
     retry=RetryStrategy(max_attempts=4, wait=60),
 )
 def check_periodic_reviews(timestamp: int) -> str:
-    """Raise one open periodic-review alert per assessment whose review date has passed. Runs daily at 04:00 UTC."""
     from compliance.models import ComplianceAlert, CustomerRiskAssessment
 
     due_for_review = CustomerRiskAssessment.objects.filter(

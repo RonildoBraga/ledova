@@ -1,5 +1,3 @@
-"""Signed order modifications write one audit row per changed field and surface service errors as-is."""
-
 from decimal import Decimal
 from unittest.mock import patch
 
@@ -100,7 +98,6 @@ class OrderModificationTest(APITestCase):
 
     @patch("rest_framework.throttling.SimpleRateThrottle.allow_request", return_value=True)
     def test_pending_swap_conflicts_before_the_status_check(self, _throttle):
-        """The fixture order has a CREATED swap; partially filled is otherwise a modifiable status."""
         self.client.force_authenticate(self.tenant.user)
         TransferOrder.objects.filter(pk=self.tenant.order.pk).update(
             status=TransferOrderStatus.PARTIALLY_FILLED, filled_quantity=4

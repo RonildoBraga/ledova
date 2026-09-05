@@ -84,9 +84,7 @@ export function CompanyScreen() {
       await updateCompany(formData);
       setShowEditModal(false);
       setFormData({});
-    } catch {
-      // Error handled by hook
-    }
+    } catch {}
   };
 
   const updateField = (field: keyof CompanyUpdate, value: string) => {
@@ -148,7 +146,6 @@ export function CompanyScreen() {
           />
         }
       >
-        {/* Compact Company Header */}
         <View style={styles.headerCard}>
           <View style={styles.headerRow}>
             <View style={styles.headerIcon}>
@@ -172,7 +169,6 @@ export function CompanyScreen() {
           </View>
         </View>
 
-        {/* Interactive Stat Tabs */}
         {stats ? (
           <View style={styles.statsRow}>
             <StatTab
@@ -199,7 +195,6 @@ export function CompanyScreen() {
           </View>
         ) : null}
 
-        {/* Dynamic Content Area */}
         <View style={styles.contentCard}>
           {activeTab === 'tokens' && (
             <TokensSection
@@ -227,13 +222,11 @@ export function CompanyScreen() {
           )}
         </View>
 
-        {/* Edit Company Button */}
         <PrimaryButton onPress={handleOpenEdit} fullWidth>
           Edit Company
         </PrimaryButton>
       </ScrollView>
 
-      {/* Edit Company Modal */}
       <CustomModal
         visible={showEditModal}
         onClose={() => setShowEditModal(false)}
@@ -417,7 +410,7 @@ function useStyles() {
       textAlign: 'center' as const,
       paddingHorizontal: theme.spacing.xl,
     },
-    // Compact header
+
     headerCard: {
       backgroundColor: theme.colors.surface.raised,
       borderRadius: theme.borderRadius.md,
@@ -460,12 +453,12 @@ function useStyles() {
       fontSize: theme.fontSize.xs,
       fontWeight: theme.fontWeight.semibold,
     },
-    // Stats
+
     statsRow: {
       flexDirection: 'row' as const,
       gap: theme.spacing.sm,
     },
-    // Content area
+
     contentCard: {
       backgroundColor: theme.colors.surface.raised,
       borderRadius: theme.borderRadius.md,
@@ -473,7 +466,7 @@ function useStyles() {
       borderColor: theme.colors.border.default,
       padding: theme.spacing.sm,
     },
-    // Pending empty state
+
     pendingEmpty: {
       alignItems: 'center' as const,
       paddingVertical: theme.spacing.xl,
@@ -488,7 +481,7 @@ function useStyles() {
       fontSize: theme.fontSize.sm,
       color: theme.colors.text.muted,
     },
-    // Modal form
+
     modalTitle: {
       fontSize: theme.fontSize.base,
       fontWeight: theme.fontWeight.semibold,

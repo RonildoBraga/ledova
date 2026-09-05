@@ -1,6 +1,3 @@
-"""Wallet transfers reach the client for the wallet's own chain; Bitcoin keeps its branch; a token
-contract the allowlist has not verified is refused before anything is prepared or broadcast."""
-
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -125,7 +122,6 @@ class TransferRoutingTest(SimpleTestCase):
 @patch.object(TransferService, "_schedule_confirmation_checks")
 @patch("wallets.services.transfers.get_blockchain_client")
 class QuarantinedContractTransferApiTest(APITestCase):
-    """prepare-transfer and broadcast-transfer answer 400 for a quarantined contract and never reach the chain."""
 
     def setUp(self):
         self.user = get_user_model().objects.create_user(email="routing@example.test", password="pw-12345678")

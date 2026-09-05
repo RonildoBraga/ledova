@@ -1,14 +1,3 @@
-/**
- * Asset type classification - must match backend AssetType enum in assets/models/asset.py
- *
- * Backend source of truth:
- * - NATIVE_CRYPTO: BTC, ETH, SOL (chain-native coins)
- * - ERC20_TOKEN: LINK, UNI, AAVE (ERC-20 tokens on Ethereum)
- * - STABLECOIN: USDC, USDT, DAI
- * - TOKENIZED_SECURITY: AAPL.t, VAS.t
- * - TOKENIZED_RWA: US Treasuries, bonds
- * - SYNTHETIC: Synthetic tracking tokens
- */
 export const HOLDING_ASSET_TYPE = {
   NATIVE_CRYPTO: 'native_crypto',
   ERC20_TOKEN: 'erc20_token',

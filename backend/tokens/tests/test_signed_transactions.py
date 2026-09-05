@@ -1,5 +1,3 @@
-"""The trading broadcast validator decodes real signed transactions (legacy and EIP-1559) without a node."""
-
 from django.test import SimpleTestCase, TestCase, override_settings
 from eth_account import Account
 from web3 import Web3

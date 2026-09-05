@@ -125,7 +125,6 @@ class TransferOrder(BaseModel):
 
     @property
     def effective_min_quantity(self):
-        """min_quantity of 0 means exact-match mode: the whole remaining quantity."""
         if self.min_quantity == 0:
             return self.remaining_quantity
         return min(self.min_quantity, self.remaining_quantity)
@@ -158,7 +157,6 @@ class TransferOrder(BaseModel):
         )
 
     def partial_match_with(self, other_order: "TransferOrder", match_quantity: int):
-        """Full fills become MATCHED and partial fills PARTIALLY_FILLED on both orders."""
         self.filled_quantity = (self.filled_quantity or 0) + match_quantity
         self.matched_order = other_order
 
@@ -215,7 +213,6 @@ class TransferOrder(BaseModel):
         self.save(update_fields=["status", "updated_at"])
 
     def record_original_values(self):
-        """Snapshot the pre-modification values the first time an order is modified."""
         if self.original_quantity is None:
             self.original_quantity = self.quantity
         if self.original_price is None:

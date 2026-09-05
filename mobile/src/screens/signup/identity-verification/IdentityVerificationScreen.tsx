@@ -178,7 +178,6 @@ export function IdentityVerificationScreen() {
     <GradientBackground>
       <SafeAreaView style={styles.container}>
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          {/* Header */}
           <View style={styles.header}>
             <View style={styles.iconContainer}>
               <ShieldCheckIcon
@@ -193,9 +192,7 @@ export function IdentityVerificationScreen() {
             </Text>
           </View>
 
-          {/* Form Container */}
           <View style={styles.formContainer}>
-            {/* Loading Status */}
             {(isLoadingStatus || isLaunching) && (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color={theme.colors.interactive.active} />
@@ -205,7 +202,6 @@ export function IdentityVerificationScreen() {
               </View>
             )}
 
-            {/* Status Banners */}
             <StatusBanners
               isVerified={isVerified}
               showPendingBanner={showPendingBanner}
@@ -215,7 +211,6 @@ export function IdentityVerificationScreen() {
               rejectionLabels={status?.rejectionLabels}
             />
 
-            {/* Error Messages */}
             {(sdkError || tokenError) && (
               <View style={styles.errorContainer}>
                 <WarningCircleIcon
@@ -227,7 +222,6 @@ export function IdentityVerificationScreen() {
               </View>
             )}
 
-            {/* Verification Info (only before first attempt) */}
             {showForm && !isLoadingStatus && !hasApplicant && (
               <View style={styles.infoBox}>
                 <Text style={styles.infoBoxTitle}>What You&apos;ll Need:</Text>
@@ -239,7 +233,6 @@ export function IdentityVerificationScreen() {
               </View>
             )}
 
-            {/* Action Buttons */}
             <View style={styles.buttonContainer}>
               {showForm && (
                 <PrimaryButton onPress={launchVerification} loading={isLaunching} disabled={isLoadingStatus} fullWidth>
@@ -267,14 +260,12 @@ export function IdentityVerificationScreen() {
             </View>
           </View>
 
-          {/* Divider */}
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
             <Text style={styles.dividerText}>or</Text>
             <View style={styles.dividerLine} />
           </View>
 
-          {/* Back Link */}
           <TouchableOpacity style={styles.backLink} onPress={handleBack} disabled={isLaunching || isLoadingStatus}>
             <Text style={styles.backLinkText}>Go Back</Text>
           </TouchableOpacity>

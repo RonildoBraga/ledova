@@ -9,11 +9,6 @@ from .share_issuance import ShareIssuance
 
 
 class ReviewableRequest(BaseModel):
-    """Staff review workflow (submit, review, approve or reject, execute) shared by the two share-request models.
-
-    Each concrete model adds its own fields plus `share_delta`, the number of shares the request adds (minted for
-    an issuance, authorized for a capital increase).
-    """
 
     share_delta: int
     EXECUTABLE_STATUSES = (RequestStatus.APPROVED, RequestStatus.FAILED)
@@ -77,7 +72,6 @@ class ReviewableRequest(BaseModel):
 
     @property
     def can_be_executed(self) -> bool:
-        """Approved requests execute; failed ones may be retried."""
         return self.status in self.EXECUTABLE_STATUSES
 
     def calculate_dilution(self) -> float:
@@ -110,7 +104,6 @@ class ReviewableRequest(BaseModel):
         self.save(update_fields=["status", "reviewed_by", "reviewed_at", *fields, "updated_at"])
 
     def mark_executing(self) -> None:
-        """Claim the request with a compare-and-set on the stored status, so only one executor ever wins."""
         now = timezone.now()
         claimed = (
             type(self)
@@ -124,14 +117,12 @@ class ReviewableRequest(BaseModel):
         self.updated_at = now
 
     def mark_executed(self, issuance=None) -> None:
-        """A capital increase mints nothing, so it executes without an issuance."""
         self.status = RequestStatus.EXECUTED
         self.executed_issuance = issuance
         self.executed_at = timezone.now()
         self.save(update_fields=["status", "executed_issuance", "executed_at", "updated_at"])
 
     def mark_refused(self, reason: str) -> None:
-        """Refused before any transaction: the request stays executable and the notes say why."""
         self.review_notes = f"Execution refused: {reason}"
         self.save(update_fields=["review_notes", "updated_at"])
 

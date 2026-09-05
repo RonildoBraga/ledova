@@ -25,14 +25,13 @@ export const useUserProfile = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [existingProfileUuid, setExistingProfileUuid] = useState<string | null>(null);
-  const [selectedCountry, setSelectedCountry] = useState<CountryData>(COUNTRIES[0]); // Default to Australia
+  const [selectedCountry, setSelectedCountry] = useState<CountryData>(COUNTRIES[0]);
 
   const loadUserProfile = useCallback(async () => {
     setIsLoading(true);
     setGeneralError('');
 
     try {
-      // Fetch user profile (already populated from identity verification)
       const profileResponse = await getUserProfiles(apiClient);
       const profileData = profileResponse.data;
 
@@ -40,7 +39,6 @@ export const useUserProfile = () => {
         const existingProfile = profileData.results[0];
         setExistingProfileUuid(existingProfile.uuid);
 
-        // Set selected country from existing phone country code
         if (existingProfile.phoneCountryCode) {
           const detectedCountry = COUNTRIES.find((c) => c.phoneCode === existingProfile.phoneCountryCode);
           if (detectedCountry) {
@@ -48,7 +46,6 @@ export const useUserProfile = () => {
           }
         }
 
-        // Format existing phone number for display
         let formattedPhoneNumber = existingProfile.phoneNumber || '';
         if (existingProfile.phoneNumber && existingProfile.phoneCountryCode) {
           const country = COUNTRIES.find((c) => c.phoneCode === existingProfile.phoneCountryCode) || selectedCountry;
@@ -78,7 +75,6 @@ export const useUserProfile = () => {
     let processedValue = value;
 
     if (field === 'phoneNumber') {
-      // Apply country-specific formatting for display
       const cleanValue = cleanPhoneNumber(value);
       processedValue = formatPhoneForDisplay(cleanValue, selectedCountry);
     }
@@ -99,7 +95,6 @@ export const useUserProfile = () => {
   const handleCountryChange = (country: CountryData) => {
     setSelectedCountry(country);
 
-    // Update form with new country code and reformat phone number
     setForm((prev) => {
       const cleanNumber = prev.phoneNumber ? cleanPhoneNumber(prev.phoneNumber) : '';
       const formattedNumber = cleanNumber ? formatPhoneForDisplay(cleanNumber, country) : '';
@@ -111,7 +106,6 @@ export const useUserProfile = () => {
       };
     });
 
-    // Clear any phone number errors when country changes
     if (errors.phoneNumber || errors.phoneCountryCode) {
       const newErrors = { ...errors };
       delete newErrors.phoneNumber;
@@ -157,7 +151,6 @@ export const useUserProfile = () => {
         throw new Error('User profile not found. Please contact support.');
       }
 
-      // Update editable fields
       const formattedData = {
         fullName: form.fullName.trim(),
         dateOfBirth: form.dateOfBirth.trim(),
