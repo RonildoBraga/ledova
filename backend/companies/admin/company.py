@@ -165,12 +165,13 @@ class CompanyAdmin(admin.ModelAdmin):
         "acn",
         "company_type",
         "status_badge",
+        "is_open_to_investors",
         "owner_email",
         "city",
         "state",
         "created_at",
     ]
-    list_filter = ["status", "company_type", "state", "created_at"]
+    list_filter = ["status", "is_open_to_investors", "company_type", "state", "created_at"]
     search_fields = ["name", "trading_name", "acn", "abn", "owner__email"]
     readonly_fields = [
         "uuid",
@@ -215,7 +216,12 @@ class CompanyAdmin(admin.ModelAdmin):
                 "fields": [
                     "status",
                     "status_actions",
-                ]
+                    "is_open_to_investors",
+                ],
+                "description": (
+                    "The owner opts a company into the investor directory; clearing this box takes it out "
+                    "again and no company is listed until its owner opts in."
+                ),
             },
         ),
         (

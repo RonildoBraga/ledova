@@ -3,3 +3,4 @@ export * from './investments';
 export * from './holdings';
 export * from './wallets';
 export * from './trading';
+export * from './directory';

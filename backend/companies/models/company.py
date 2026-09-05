@@ -129,6 +129,11 @@ class Company(BaseModel):
     industry = models.CharField(max_length=100, blank=True)
     founded_year = models.PositiveIntegerField(null=True, blank=True)
 
+    is_open_to_investors = models.BooleanField(
+        default=False,
+        help_text="Show this company's share classes in the investor directory.",
+    )
+
     class Meta:
         verbose_name = "Company"
         verbose_name_plural = "Companies"

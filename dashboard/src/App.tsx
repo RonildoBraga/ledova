@@ -23,6 +23,9 @@ import CompanyPage from '@pages/company';
 import InvestorEligibilityPage from '@pages/investor-eligibility';
 
 import ListingPage from '@pages/company/listing';
+import OfferingPage from '@pages/company/offering';
+import DirectoryPage from '@pages/directory';
+import DirectoryTokenPage from '@pages/directory/detail';
 import { SignupAccountType } from '@pages/signup/account-type';
 import { SignupCompanyRegistration } from '@pages/signup/company-registration';
 import Layout from '@components/Layout';
@@ -196,6 +199,31 @@ function App() {
           element={
             <ProtectedRoute>
               <ListingPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/company/offering"
+          element={
+            <ProtectedRoute>
+              <OfferingPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/directory"
+          element={
+            <ProtectedRoute>
+              <DirectoryPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/directory/:uuid"
+          element={
+            <ProtectedRoute>
+              <DirectoryTokenPage />
             </ProtectedRoute>
           }
         />

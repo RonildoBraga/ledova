@@ -1,6 +1,7 @@
+import { Link } from 'react-router-dom';
 import { SpinnerGapIcon } from '@phosphor-icons/react';
 import type { ShareToken } from '@ledova/shared';
-import { formatCurrency, DESIGN_TOKENS } from '@ledova/shared';
+import { formatCurrency, DESIGN_TOKENS, DIRECTORY_COPY } from '@ledova/shared';
 import { Panel } from '@components/Panel';
 
 const ICON_SM = DESIGN_TOKENS.icon.sizes.sm;
@@ -11,9 +12,16 @@ interface MarketOverviewProps {
   selectedTokenUuid: string | null;
   onSelectToken: (uuid: string) => void;
   isLoading: boolean;
+  isEligible: boolean;
 }
 
-export function MarketOverview({ tokens, selectedTokenUuid, onSelectToken, isLoading }: MarketOverviewProps) {
+export function MarketOverview({
+  tokens,
+  selectedTokenUuid,
+  onSelectToken,
+  isLoading,
+  isEligible,
+}: MarketOverviewProps) {
   if (isLoading) {
     return (
       <Panel title="Market" icon={<SpinnerGapIcon size={ICON_SM} className="animate-spin" />}>
@@ -27,7 +35,19 @@ export function MarketOverview({ tokens, selectedTokenUuid, onSelectToken, isLoa
   if (tokens.length === 0) {
     return (
       <Panel title="Market">
-        <div className="text-center py-8 text-text-muted text-sm">No tokenized securities available for trading.</div>
+        <div className="py-8 px-4 text-center space-y-3">
+          <p className="text-sm font-medium text-text-primary">
+            {isEligible ? DIRECTORY_COPY.MARKET_EMPTY_TITLE : DIRECTORY_COPY.INELIGIBLE_TITLE}
+          </p>
+          <p className="text-sm text-text-muted max-w-xl mx-auto">
+            {isEligible ? DIRECTORY_COPY.MARKET_EMPTY_BODY : DIRECTORY_COPY.MARKET_INELIGIBLE_BODY}
+          </p>
+          {!isEligible && (
+            <Link to="/investor-eligibility" className="inline-block text-sm font-medium text-brand-light">
+              Verify my investor status
+            </Link>
+          )}
+        </div>
       </Panel>
     );
   }

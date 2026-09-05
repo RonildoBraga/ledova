@@ -17,6 +17,8 @@ import {
   BuildingsIcon,
   FileTextIcon,
   ShieldCheckIcon,
+  MegaphoneIcon,
+  StorefrontIcon,
 } from '@phosphor-icons/react';
 import { signout, DESIGN_TOKENS } from '@ledova/shared';
 import apiClient from '@services/apiClient';
@@ -65,6 +67,7 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
     (): NavItem[] => [
       { label: 'Company', path: '/company', icon: BuildingsIcon },
       { label: 'Listing', path: '/company/listing', icon: FileTextIcon },
+      { label: 'Offering', path: '/company/offering', icon: MegaphoneIcon },
       { label: 'Wallets', path: '/wallets', icon: WalletIcon },
     ],
     [],
@@ -83,12 +86,16 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
       items.push(
         { label: 'Transactions', path: '/transactions', icon: LinkIcon },
         { label: 'Market', path: '/asset-prices', icon: ChartBarIcon },
+        { label: 'Directory', path: '/directory', icon: StorefrontIcon },
         { label: 'Eligibility', path: '/investor-eligibility', icon: ShieldCheckIcon },
       );
     }
 
     if (isCompany && isInvestor) {
-      items.push({ label: 'Company', path: '/company', icon: BuildingsIcon });
+      items.push(
+        { label: 'Company', path: '/company', icon: BuildingsIcon },
+        { label: 'Offering', path: '/company/offering', icon: MegaphoneIcon },
+      );
     }
 
     return items;

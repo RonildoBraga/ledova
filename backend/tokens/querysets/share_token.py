@@ -33,6 +33,28 @@ class ShareTokenQuerySet(QuerySet):
     def with_company(self):
         return self.select_related("company")
 
+    def in_directory(self):
+        from companies.models import Company
+
+        return self.deployed_with_contract().filter(company__in=Company.objects.open_to_investors())
+
+    def with_issued_shares(self):
+        from tokens.querysets.share_issuance import completed_supply_annotation
+
+        return self.annotate(issued_shares=completed_supply_annotation(OuterRef("pk")))
+
+    def with_open_offering(self):
+        from offerings.models import Offering
+
+        offering = Offering.objects.filter(token=OuterRef("pk")).open_now().order_by("-created_at")
+        return self.annotate(
+            open_offering_uuid=Subquery(offering.values("uuid")[:1]),
+            open_offering_price=Subquery(offering.values("price_per_share")[:1]),
+            open_offering_currency=Subquery(offering.values("price_currency")[:1]),
+            open_offering_opens_at=Subquery(offering.values("opens_at")[:1]),
+            open_offering_closes_at=Subquery(offering.values("closes_at")[:1]),
+        )
+
     def with_market_summary(self):
         from tokens.models import SwapOrder, TransferOrder
 

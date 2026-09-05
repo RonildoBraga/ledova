@@ -44,6 +44,7 @@ COMPANY_DETAIL_KEYS = {
     "is_approved",
     "is_pending_review",
     "can_issue_tokens",
+    "is_open_to_investors",
     "primary_contact",
     "documents",
     "created_at",

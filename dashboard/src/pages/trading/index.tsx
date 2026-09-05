@@ -18,6 +18,7 @@ import { MarketOverview } from './components/MarketOverview';
 import { OrdersPanel } from './components/OrdersPanel';
 import { PlaceOrderPanel } from './components/PlaceOrderPanel';
 import { useTradingEvents } from './hooks/useTradingEvents';
+import { useInvestorEligibilityQuery } from './useTrading';
 
 const ICON_XL = DESIGN_TOKENS.icon.sizes.xl;
 
@@ -73,6 +74,8 @@ function OrderSuccessModal({
 
 export function TradingPage() {
   const { data: tokens, isLoading } = useShareTokens();
+  const { data: eligibility } = useInvestorEligibilityQuery();
+  const isEligible = eligibility?.isEligible ?? false;
   const [selectedTokenUuid, setSelectedTokenUuid] = useState<string | null>(null);
 
   const [successModalOpen, setSuccessModalOpen] = useState(false);
@@ -194,6 +197,7 @@ export function TradingPage() {
             selectedTokenUuid={selectedTokenUuid}
             onSelectToken={setSelectedTokenUuid}
             isLoading={isLoading}
+            isEligible={isEligible}
           />
 
           {selectedToken && (

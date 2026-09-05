@@ -95,4 +95,14 @@ export {
 } from './investorClassifications';
 export { getFeatureFlags } from './featureFlags';
 export { getOperator } from './operator';
+export { getDirectoryTokens, getDirectoryToken } from './directory';
+export {
+  getOfferings,
+  getOffering,
+  createOffering,
+  updateOffering,
+  deleteOffering,
+  submitOffering,
+  withdrawOffering,
+} from './offerings';
 export { getExchangeRate } from './exchangeRates';

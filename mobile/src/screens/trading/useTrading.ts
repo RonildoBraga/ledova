@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient, useQueries } from '@tanstack/react-query';
 import {
   getShareTokens,
+  getInvestorEligibility,
   getOrders,
   getUserOrders,
   getOrderCreateMessage,
@@ -313,5 +314,13 @@ export function useOrderBook(tokenUuid: string | undefined) {
     enabled: !!tokenUuid,
     staleTime: CACHE_TIMING.SHORT_STALE_TIME,
     refetchInterval: TRADING_CONFIG.ORDER_BOOK_FALLBACK_INTERVAL,
+  });
+}
+
+export function useInvestorEligibilityQuery() {
+  return useQuery({
+    queryKey: ['investor-eligibility'],
+    queryFn: () => getInvestorEligibility(apiClient).then((res) => res.data),
+    staleTime: CACHE_TIMING.SHORT_STALE_TIME,
   });
 }

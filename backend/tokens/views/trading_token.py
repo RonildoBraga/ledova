@@ -6,6 +6,7 @@ from shared.views import AuthenticatedReadOnlyViewSet
 from tokens.models import ShareToken
 from tokens.serializers import ShareTokenListSerializer
 from tokens.services import MarketDataService, TradingOrderService
+from users.services.eligibility import investor_eligibility
 
 
 class TradingTokenViewSet(AuthenticatedReadOnlyViewSet):
@@ -15,7 +16,9 @@ class TradingTokenViewSet(AuthenticatedReadOnlyViewSet):
     ordering_fields = ["name", "symbol", "created_at"]
 
     def get_queryset(self):
-        return ShareToken.objects.with_company().deployed().with_market_summary()
+        if not investor_eligibility(self.request.user).is_eligible:
+            return ShareToken.objects.none()
+        return ShareToken.objects.with_company().deployed_with_contract().with_market_summary()
 
     @action(detail=True, methods=["get"], url_path="market-data")
     def market_data(self, request, uuid=None):
