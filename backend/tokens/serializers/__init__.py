@@ -14,7 +14,6 @@ from .share_token import (
     ShareTokenDetailSerializer,
     ShareTokenListSerializer,
 )
-from .stablecoin import StablecoinListSerializer
 from .swap_order import (
     SubmitSignatureSerializer,
     SwapOrderDetailSerializer,
@@ -45,7 +44,6 @@ __all__ = [
     "ShareTokenCreateSerializer",
     "ShareTokenDetailSerializer",
     "ShareTokenListSerializer",
-    "StablecoinListSerializer",
     "SubmitSignatureSerializer",
     "SwapOrderDetailSerializer",
     "SwapOrderListSerializer",

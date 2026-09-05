@@ -1,13 +1,32 @@
+from django import forms
 from django.contrib import admin
+from django.core.exceptions import ValidationError
 from django.http import HttpResponseRedirect
 from django.urls import reverse
 
-from operators.models import Operator
+from operators.models import Operator, settlement_errors
+
+
+class OperatorForm(forms.ModelForm):
+    class Meta:
+        model = Operator
+        fields = "__all__"
+
+    def clean(self):
+        cleaned = super().clean()
+        assets = cleaned.get("supported_settlement_assets")
+        chain = cleaned.get("receiving_wallet_chain")
+        if assets is not None and chain:
+            errors = settlement_errors(assets, "supported_settlement_assets", chain)
+            if errors:
+                raise ValidationError(errors)
+        return cleaned
 
 
 @admin.register(Operator)
 class OperatorAdmin(admin.ModelAdmin):
 
+    form = OperatorForm
     readonly_fields = ["created_at", "updated_at"]
     filter_horizontal = ["supported_settlement_assets"]
     fieldsets = [

@@ -21,7 +21,7 @@ class OrderModificationTest(APITestCase):
         self.order = TransferOrder.objects.create(
             order_type=TransferOrderType.BUY,
             token=self.tenant.deployed_token,
-            payment_token=self.tenant.refs.stablecoin,
+            payment_asset=self.tenant.refs.stablecoin,
             wallet=self.tenant.wallet,
             owner_account=self.tenant.account,
             wallet_address=self.tenant.wallet.address,

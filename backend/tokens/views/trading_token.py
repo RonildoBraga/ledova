@@ -3,8 +3,8 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from shared.views import AuthenticatedReadOnlyViewSet
-from tokens.models import ShareToken, Stablecoin
-from tokens.serializers import ShareTokenListSerializer, StablecoinListSerializer
+from tokens.models import ShareToken
+from tokens.serializers import ShareTokenListSerializer
 from tokens.services import MarketDataService, TradingOrderService
 
 
@@ -28,13 +28,3 @@ class TradingTokenViewSet(AuthenticatedReadOnlyViewSet):
         token = self.get_object()
         order_book = TradingOrderService.get_order_book(token)
         return Response(order_book, status=status.HTTP_200_OK)
-
-
-class TradingStablecoinViewSet(AuthenticatedReadOnlyViewSet):
-
-    serializer_class = StablecoinListSerializer
-    ordering = ["symbol"]
-    ordering_fields = ["symbol", "name", "created_at"]
-
-    def get_queryset(self):
-        return Stablecoin.objects.filter(is_active=True)

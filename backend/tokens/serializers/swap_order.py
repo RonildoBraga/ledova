@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from operators.settlement import deployment_for
 from tokens.models import SwapOrder
 
 
@@ -8,7 +9,7 @@ class SwapOrderListSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     share_token_symbol = serializers.CharField(source="share_token.symbol", read_only=True)
     share_token_name = serializers.CharField(source="share_token.name", read_only=True)
-    payment_token_symbol = serializers.CharField(source="payment_token.symbol", read_only=True)
+    payment_token_symbol = serializers.CharField(source="payment_asset.symbol", read_only=True)
     sell_order_uuid = serializers.UUIDField(source="sell_order.uuid", read_only=True)
     buy_order_uuid = serializers.UUIDField(source="buy_order.uuid", read_only=True)
     seller_has_signed = serializers.BooleanField(read_only=True)
@@ -43,14 +44,18 @@ class SwapOrderDetailSerializer(serializers.ModelSerializer):
     share_token_symbol = serializers.CharField(source="share_token.symbol", read_only=True)
     share_token_name = serializers.CharField(source="share_token.name", read_only=True)
     share_token_address = serializers.CharField(source="share_token.contract_address", read_only=True)
-    payment_token_symbol = serializers.CharField(source="payment_token.symbol", read_only=True)
-    payment_token_address = serializers.CharField(source="payment_token.contract_address", read_only=True)
+    payment_token_symbol = serializers.CharField(source="payment_asset.symbol", read_only=True)
+    payment_token_address = serializers.SerializerMethodField()
     sell_order_uuid = serializers.UUIDField(source="sell_order.uuid", read_only=True)
     buy_order_uuid = serializers.UUIDField(source="buy_order.uuid", read_only=True)
     seller_has_signed = serializers.BooleanField(read_only=True)
     buyer_has_signed = serializers.BooleanField(read_only=True)
     is_expired = serializers.BooleanField(read_only=True)
     is_ready = serializers.BooleanField(read_only=True)
+
+    def get_payment_token_address(self, swap_order) -> str:
+        deployment = deployment_for(swap_order.payment_asset)
+        return deployment.contract_address if deployment else ""
 
     class Meta:
         model = SwapOrder

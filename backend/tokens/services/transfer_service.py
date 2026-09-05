@@ -3,11 +3,13 @@ from typing import Optional, Union
 
 from django.db import transaction
 
+from assets.models import Asset
 from integrations.base_chain import get_base_chain_client
 from integrations.base_chain.exceptions import (
     BaseChainContractError,
     BaseChainTransactionError,
 )
+from operators.settlement import deployment_for
 from tokens.exceptions import (
     InsufficientBalanceException,
     InvalidRecipientAddressException,
@@ -21,7 +23,6 @@ from tokens.exceptions import (
 from tokens.models import (
     ShareToken,
     ShareTokenStatus,
-    Stablecoin,
     TransferOrder,
     TransferOrderStatus,
     TransferOrderType,
@@ -35,23 +36,31 @@ logger = logging.getLogger(__name__)
 
 
 class TransferService:
+    @staticmethod
+    def contract_address(token) -> str:
+        if isinstance(token, Asset):
+            deployment = deployment_for(token)
+            return deployment.contract_address if deployment else ""
+        return token.contract_address
+
     def __init__(self):
         self.chain_client = get_base_chain_client()
         self.whitelist_service = WhitelistService()
 
     def validate_transfer(
         self,
-        token: Union[ShareToken, Stablecoin],
+        token: Union[ShareToken, Asset],
         from_address: str,
         to_address: str,
         amount: int,
     ) -> None:
         if isinstance(token, ShareToken) and token.status == ShareTokenStatus.PAUSED:
             raise TokenPausedException()
-        if isinstance(token, Stablecoin) and not token.is_active:
+        if isinstance(token, Asset) and not token.is_active:
             raise TokenPausedException()
 
-        if not token.contract_address:
+        contract_address = self.contract_address(token)
+        if not contract_address:
             raise InvalidTokenAddressException()
 
         if not self.chain_client.is_valid_address(from_address):
@@ -69,13 +78,13 @@ class TransferService:
         from tokens.services import ShareTokenService
 
         token_service = ShareTokenService()
-        balance = token_service.get_token_balance(token.contract_address, from_address)
+        balance = token_service.get_token_balance(contract_address, from_address)
         if balance < amount:
             raise InsufficientBalanceException(balance, amount)
 
     def prepare_transfer(
         self,
-        token: Union[ShareToken, Stablecoin],
+        token: Union[ShareToken, Asset],
         from_address: str,
         to_address: str,
         amount: int,
@@ -83,11 +92,12 @@ class TransferService:
         try:
             self.validate_transfer(token, from_address, to_address, amount)
 
+            contract_address = self.contract_address(token)
             from_checksum = self.chain_client.to_checksum_address(from_address)
             to_checksum = self.chain_client.to_checksum_address(to_address)
 
-            contract_name = "AUDY" if isinstance(token, Stablecoin) else "ShareToken"
-            token_contract = self.chain_client.load_contract(contract_name, token.contract_address)
+            contract_name = "AUDY" if isinstance(token, Asset) else "ShareToken"
+            token_contract = self.chain_client.load_contract(contract_name, contract_address)
             transfer_fn = token_contract.functions.transfer(to_checksum, amount)
 
             nonce = self.chain_client.get_nonce(from_checksum)
@@ -95,7 +105,7 @@ class TransferService:
             chain_id = self.chain_client.chain_id
 
             tx_data = {
-                "to": token.contract_address,
+                "to": contract_address,
                 "data": transfer_fn._encode_transaction_data(),
                 "value": 0,
                 "nonce": nonce,
@@ -107,7 +117,7 @@ class TransferService:
                 estimated_gas = self.chain_client.w3.eth.estimate_gas(
                     {
                         "from": from_checksum,
-                        "to": token.contract_address,
+                        "to": contract_address,
                         "data": tx_data["data"],
                         "value": 0,
                     }

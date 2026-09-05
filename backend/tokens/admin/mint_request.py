@@ -41,11 +41,11 @@ class MintRequestAdmin(admin.ModelAdmin):
         "requested_by",
         "created_at",
     ]
-    list_filter = ["status", "stablecoin", "yield_token"]
+    list_filter = ["status", "settlement_asset", "yield_token"]
     search_fields = ["recipient_name", "recipient_address", "deposit_reference", "requested_by__email"]
     readonly_fields = [
         "uuid",
-        "stablecoin",
+        "settlement_asset",
         "yield_token",
         "recipient_address",
         "recipient_name",
@@ -76,7 +76,7 @@ class MintRequestAdmin(admin.ModelAdmin):
     )
 
     fieldsets = [
-        ("Request Information", {"fields": ["uuid", "stablecoin", "yield_token", "status", "status_actions"]}),
+        ("Request Information", {"fields": ["uuid", "settlement_asset", "yield_token", "status", "status_actions"]}),
         ("Recipient Details", {"fields": ["recipient_name", "recipient_address", "amount"]}),
         ("Deposit Information", {"fields": ["deposit_reference", "deposit_date"]}),
         ("Notes", {"fields": ["notes"]}),

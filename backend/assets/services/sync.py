@@ -4,6 +4,7 @@ from datetime import timedelta
 from decimal import Decimal
 from typing import Any, Dict, Optional, Tuple
 
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
@@ -45,9 +46,10 @@ SUPPORTED_ASSETS = {
         "coingecko_id": None,
         "name": "AUDY",
         "type": AssetType.STABLECOIN,
-        "chain": "ethereum",
+        "chain": "base",
         "decimals": 2,
         "fixed_price": Decimal("1.00"),
+        "contract_address_setting": "STABLECOIN_CONTRACT_ADDRESS",
     },
     "AUSG": {
         "coingecko_id": None,
@@ -60,6 +62,13 @@ SUPPORTED_ASSETS = {
 }
 
 PRICED_ASSET_TYPES = ("native_crypto", "stablecoin", "erc20_token", "tokenized_rwa")
+
+
+def configured_contract_address(meta: Dict[str, Any]) -> str:
+    setting = meta.get("contract_address_setting")
+    if not setting:
+        return ""
+    return (getattr(settings, setting, "") or "").strip()
 
 
 def _midnight(moment) -> Any:
@@ -99,9 +108,11 @@ class AssetSyncService:
                     "is_verified": True,
                 },
             )
-            AssetChainDeployment.objects.update_or_create(
-                asset=asset, chain=meta["chain"], defaults={"decimals": meta["decimals"], "is_active": True}
-            )
+            defaults = {"decimals": meta["decimals"], "is_active": True}
+            address = configured_contract_address(meta)
+            if address:
+                defaults["contract_address"] = address
+            AssetChainDeployment.objects.update_or_create(asset=asset, chain=meta["chain"], defaults=defaults)
 
     @staticmethod
     def update_price(

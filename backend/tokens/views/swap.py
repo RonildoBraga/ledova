@@ -17,7 +17,7 @@ class SwapOrderViewSet(AuthenticatedListViewSet):
     def get_queryset(self):
         return SwapOrder.objects.select_related(
             "share_token",
-            "payment_token",
+            "payment_asset",
             "sell_order",
             "buy_order",
         )

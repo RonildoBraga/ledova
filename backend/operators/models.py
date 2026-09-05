@@ -10,6 +10,19 @@ from shared.constants import BLOCKCHAIN_BASE, BLOCKCHAIN_ETHEREUM
 
 SINGLETON_PK = 1
 STABLECOIN_ONLY = {"asset_type": AssetType.STABLECOIN.value}
+MAX_PAYMENT_REFERENCE_PREFIX = 10
+NOT_A_STABLECOIN = "{symbol} is not a stablecoin asset."
+
+
+def settlement_errors(assets, field: str, chain: str) -> dict:
+    from operators.settlement import NOT_DEPLOYED, deployment_on_chain
+
+    for asset in assets:
+        if asset.asset_type != AssetType.STABLECOIN.value:
+            return {field: NOT_A_STABLECOIN.format(symbol=asset.symbol)}
+        if deployment_on_chain(asset, chain) is None:
+            return {field: NOT_DEPLOYED.format(symbol=asset.symbol, chain=chain)}
+    return {}
 
 
 class DeploymentMode(models.TextChoices):
@@ -96,15 +109,17 @@ class Operator(models.Model):
         if self.bank_bsb and not re.fullmatch(r"\d{6}", self.bank_bsb):
             errors["bank_bsb"] = "BSB must be exactly 6 digits."
         self.payment_reference_prefix = (self.payment_reference_prefix or "").strip().upper()
-        if self.payment_reference_prefix and not re.fullmatch(r"[A-Z0-9]{2,16}", self.payment_reference_prefix):
-            errors["payment_reference_prefix"] = "Use 2 to 16 letters or digits."
+        if self.payment_reference_prefix and not re.fullmatch(
+            rf"[A-Z0-9]{{2,{MAX_PAYMENT_REFERENCE_PREFIX}}}", self.payment_reference_prefix
+        ):
+            errors["payment_reference_prefix"] = f"Use 2 to {MAX_PAYMENT_REFERENCE_PREFIX} letters or digits."
         self.receiving_wallet_address = (self.receiving_wallet_address or "").strip()
         if self.receiving_wallet_address:
             if Web3.is_address(self.receiving_wallet_address):
                 self.receiving_wallet_address = Web3.to_checksum_address(self.receiving_wallet_address)
             else:
                 errors["receiving_wallet_address"] = "Enter a valid EVM address."
-        if self.issued_stablecoin_id and self.issued_stablecoin.asset_type != AssetType.STABLECOIN.value:
-            errors["issued_stablecoin"] = "Only a stablecoin asset can be the issued stablecoin."
+        if self.issued_stablecoin_id:
+            errors.update(settlement_errors([self.issued_stablecoin], "issued_stablecoin", self.receiving_wallet_chain))
         if errors:
             raise ValidationError(errors)

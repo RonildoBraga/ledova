@@ -35,7 +35,7 @@ class TransferOrderFilter(django_filters.FilterSet):
     status = CommaSeparatedCharFilter()
     order_type = django_filters.CharFilter()
     wallet_address = django_filters.CharFilter(lookup_expr="iexact")
-    payment_token = django_filters.UUIDFilter(field_name="payment_token__uuid")
+    payment_asset = django_filters.UUIDFilter(field_name="payment_asset__uuid")
     search = django_filters.CharFilter(method="filter_search")
 
     class Meta:

@@ -4,9 +4,10 @@ from django.conf import settings
 from rest_framework import serializers
 from web3 import Web3
 
+from assets.models import Asset, AssetType
+from operators.settlement import settlement_assets
 from tokens.models import (
     ShareToken,
-    Stablecoin,
     TransferOrder,
     TransferOrderType,
 )
@@ -172,11 +173,11 @@ class PrepareTransferSerializer(serializers.Serializer):
                 raise serializers.ValidationError("Token is not deployed")
             return token
 
-        token = Stablecoin.objects.filter(uuid=value).first()
-        if token:
-            if not token.is_active:
-                raise serializers.ValidationError("Stablecoin is not active")
-            return token
+        asset = Asset.objects.filter(uuid=value, asset_type=AssetType.STABLECOIN.value).first()
+        if asset:
+            if not settlement_assets().filter(pk=asset.pk).exists():
+                raise serializers.ValidationError("Settlement asset is not available on the settlement chain")
+            return asset
 
         raise serializers.ValidationError("Token not found")
 

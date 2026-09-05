@@ -46,7 +46,9 @@ PUBLIC_JSON_KEYS = {
 
 def stablecoin(symbol="AUDY", chain="base"):
     asset = Asset.objects.create(symbol=symbol, name=f"{symbol} dollar", asset_type="stablecoin", decimals=6)
-    AssetChainDeployment.objects.create(asset=asset, chain=chain, contract_address="0x" + "5" * 40, decimals=6)
+    AssetChainDeployment.objects.create(
+        asset=asset, chain=chain, contract_address="0x" + (symbol * 40)[:40], decimals=6
+    )
     return asset
 
 
@@ -101,6 +103,37 @@ class OperatorModelTest(TestCase):
             set(ctx.exception.message_dict),
             {"abn", "bank_bsb", "payment_reference_prefix", "receiving_wallet_address", "issued_stablecoin"},
         )
+        self.assertEqual(ctx.exception.message_dict["issued_stablecoin"], ["NOTSTABLE is not a stablecoin asset."])
+
+    def test_a_prefix_longer_than_ten_characters_is_refused(self):
+        operator = Operator.get()
+        operator.payment_reference_prefix = "A" * 10
+        operator.clean()
+        self.assertEqual(operator.payment_reference_prefix, "A" * 10)
+
+        operator.payment_reference_prefix = "A" * 11
+        with self.assertRaises(ValidationError) as ctx:
+            operator.clean()
+        self.assertEqual(ctx.exception.message_dict["payment_reference_prefix"], ["Use 2 to 10 letters or digits."])
+
+    def test_the_issued_stablecoin_must_be_deployed_on_the_receiving_chain(self):
+        audy = stablecoin(chain="ethereum")
+        operator = Operator.get()
+        operator.issued_stablecoin = audy
+
+        with self.assertRaises(ValidationError) as ctx:
+            operator.clean()
+        self.assertEqual(
+            ctx.exception.message_dict["issued_stablecoin"],
+            ["AUDY has no active deployment with a contract address on base."],
+        )
+
+        operator.receiving_wallet_chain = ReceivingChain.ETHEREUM
+        operator.clean()
+
+        audy.chain_deployments.update(is_active=False)
+        with self.assertRaises(ValidationError):
+            operator.clean()
 
 
 @override_settings(STORAGES=TEST_STORAGES)
@@ -162,6 +195,48 @@ class OperatorAdminTest(TestCase):
         self.assertEqual((operator.bank_bsb, operator.deployment_mode), ("062000", "single_issuer"))
         self.assertEqual(list(operator.supported_settlement_assets.all()), [audy])
         self.assertEqual(operator.issued_stablecoin, audy)
+
+    def test_a_supported_settlement_asset_must_be_deployed_on_the_receiving_chain(self):
+        audy = stablecoin()
+        elsewhere = stablecoin(symbol="USDX", chain="ethereum")
+        operator = Operator.get()
+        change_url = reverse("admin:operators_operator_change", args=[operator.pk])
+        payload = {
+            "name": "Acme",
+            "contact_email": "ops@acme.test",
+            "deployment_mode": DeploymentMode.REGISTRY,
+            "receiving_wallet_chain": ReceivingChain.BASE,
+            "supported_settlement_assets": [str(audy.pk), str(elsewhere.pk)],
+            "investor_kyc_required": "on",
+        }
+
+        refused = self.client.post(change_url, payload)
+
+        self.assertEqual(refused.status_code, 200)
+        self.assertContains(refused, "USDX has no active deployment with a contract address on base.")
+        self.assertEqual(list(Operator.get().supported_settlement_assets.all()), [])
+
+        payload["supported_settlement_assets"] = [str(audy.pk)]
+        accepted = self.client.post(change_url, payload)
+
+        self.assertRedirects(accepted, self.changelist_url, fetch_redirect_response=False)
+        self.assertEqual(list(Operator.get().supported_settlement_assets.all()), [audy])
+
+    def test_a_prefix_longer_than_ten_characters_is_refused_by_the_change_form(self):
+        operator = Operator.get()
+        change_url = reverse("admin:operators_operator_change", args=[operator.pk])
+        payload = {
+            "name": "Acme",
+            "deployment_mode": DeploymentMode.REGISTRY,
+            "receiving_wallet_chain": ReceivingChain.BASE,
+            "payment_reference_prefix": "LEDOVAPAYMENT",
+            "investor_kyc_required": "on",
+        }
+
+        response = self.client.post(change_url, payload)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Use 2 to 10 letters or digits.")
 
 
 class OperatorApiTest(APITestCase):

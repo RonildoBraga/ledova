@@ -15,7 +15,6 @@ from .order_modification_log import OrderModificationLog
 from .share_issuance import ShareIssuance
 from .share_issuance_request import ShareIssuanceRequest
 from .share_token import ShareToken
-from .stablecoin import Stablecoin
 from .swap_order import SwapOrder
 from .transfer_order import TransferOrder
 from .yield_token import YieldToken
@@ -34,7 +33,6 @@ __all__ = [
     "ShareToken",
     "ShareTokenStatus",
     "ShareTokenType",
-    "Stablecoin",
     "SwapOrder",
     "SwapOrderStatus",
     "TransferOrder",

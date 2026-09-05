@@ -36,7 +36,16 @@ one row, `operators.Operator`, edited in the Django admin.
 | Timestamps (collapsed, read-only) | `created_at`, `updated_at` |
 
 `issued_stablecoin` and `supported_settlement_assets` accept only `assets.Asset`
-rows of type `stablecoin`.
+rows of type `stablecoin`, and each must hold an active `AssetChainDeployment`
+carrying a contract address on `receiving_wallet_chain`. The model refuses the
+first on save; the change form refuses the second, because a many-to-many is
+not saved when `Model.clean()` runs. `operators/settlement.py` is the one
+resolver: `settlement_assets()`, `deployment_for()` and `require_deployment()`.
+Never read `Asset.contract_address` for settlement — it returns the
+alphabetically first chain, so it silently prefers `base` over `ethereum`.
+
+`payment_reference_prefix` is capped at 10 characters, so the prefix plus an
+eight-character code fits the 18-character AU lodgement reference.
 
 `GET /api/operator/` (authenticated; 401 for anonymous) returns `name`,
 `legalName`, `abn`, `contactEmail`, `website`, `deploymentMode`,
@@ -127,7 +136,7 @@ ASGI entrypoint refuses to start — see Media storage.
 | `WHITELIST_CONTRACT_ADDRESS` | empty | Yes for issuance |
 | `SHARE_TOKEN_FACTORY_ADDRESS` | empty | Yes for issuance |
 | `ATOMIC_SWAP_ADDRESS` | empty | Only for settlement |
-| `STABLECOIN_CONTRACT_ADDRESS` | empty | Only for stablecoin payment |
+| `STABLECOIN_CONTRACT_ADDRESS` | empty | Only for stablecoin payment; seeds the `AUDY` deployment on `base` |
 | `SWAP_ORDER_EXPIRY_HOURS` | `24` | No |
 
 ### Media storage
@@ -267,9 +276,9 @@ The published monitoring seed
 AUD 10,000 being the statutory threshold-transaction amount. Operational
 thresholds and evasion-sensitive rules belong outside this repository.
 
-`python manage.py sync_contracts` writes the `AUDY` `Stablecoin` row from
-`STABLECOIN_CONTRACT_ADDRESS` (or `--stablecoin-address`). It is not part of
-the compose chain.
+`asset_sync --seed-only` also writes the `AUDY` `AssetChainDeployment` on
+`base` from `STABLECOIN_CONTRACT_ADDRESS`. An empty setting leaves any address
+already recorded untouched.
 
 ## Asset allowlist
 
@@ -439,6 +448,34 @@ without it.
   `WhitelistEntry.wallet` nullable and adds `address` and `label` with a check
   constraint; `whitelist/0003` adds the partial unique constraint on `address`
   where `wallet` is null.
+- `assets/0012_audy_base_deployment`, `tokens/0014_settlement_asset_columns`,
+  `tokens/0015_fold_stablecoin_into_asset` and `tokens/0016_drop_stablecoin`
+  fold `tokens.Stablecoin` into `assets.Asset`. Apply them in that order.
+  `0014` also makes `SwapOrder.payment_token` nullable, which is what lets
+  `0016` be unapplied on a database that holds swap orders; `0015` reverses by
+  rebuilding a `Stablecoin` row per settlement asset from its deployment on
+  `receiving_wallet_chain` and re-pointing all three foreign keys, so
+  `migrate tokens 0013_remove_transferorder_signature_request` returns the
+  previous release's schema with the order history intact. `reserve_amount`,
+  `reserve_updated_at` and the original `Stablecoin` uuids are not restored.
+- `tokens/0015` refuses to run when a `Stablecoin` address disagrees with the
+  address the matching asset already carries on the settlement chain. The
+  migration is atomic, so the refusal writes nothing and names every
+  conflicting pair: run `python manage.py migrate --noinput` against a restored
+  copy of production to find out whether it fires, and reconcile the addresses
+  before the real run. Overwriting the deployment silently would point mint,
+  swap and transfer at a contract the stablecoin row does not name.
+- `tokens/0015` also adds every folded asset, and `issued_stablecoin`, to
+  `Operator.supported_settlement_assets`. Before the fold the settlement paths
+  accepted any active `Stablecoin` with an address; after it they accept only
+  what that many-to-many lists, so without the seeding
+  `POST /api/v1/trading/transfer/prepare` would start refusing settlement
+  assets and the wallet balance endpoint would stop listing them. Confirm the
+  list in the operator admin after deploying.
+- `assets/0012` moves the `AUDY` deployment from `ethereum` to `base` and gives
+  it `STABLECOIN_CONTRACT_ADDRESS`. Any `AUDY` `Holding` keyed to the ethereum
+  deployment stops resolving until the wallet sync runs again: count them
+  before applying, and run `sync_all_wallets` (or wait one hour) after.
 
 ## Deploy checklist
 
@@ -453,7 +490,9 @@ without it.
 5. Chain variables set and pointing at the intended testnet: RPC URL, chain id,
    operator key, and the four contract addresses.
 6. `python manage.py migrate --noinput`, then `sync_monitoring_rules`,
-   `sync_procedure_templates` and `asset_sync --seed-only`.
+   `sync_procedure_templates` and `asset_sync --seed-only`. On the settlement
+   fold release, read Migration notes first: dry-run the migration against a
+   restored copy, and queue `sync_all_wallets` afterwards.
 7. Open `/admin/operators/operator/` and complete identity, deployment mode and
    payment rails before inviting anyone. Enter the changelist, not
    `/admin/operators/operator/1/change/`: only `OperatorAdmin.changelist_view`
@@ -466,7 +505,7 @@ without it.
     middleware refuses with 403 any request, of any method, whose path starts
     with one of five prefixes
     (`/api/v1/trading/{orders,wallets,transfers,swaps,events}/`). The read-only
-    market routes (`tokens/`, `stablecoins/`) and the whitelist status route sit
+    market route (`tokens/`) and the whitelist status route sit
     outside the gate by design. Enabling the flag does not make the trading
     implementation safe.
 

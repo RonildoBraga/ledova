@@ -8,7 +8,7 @@ from django.contrib.auth import get_user_model
 from django.db import models
 from django.utils import timezone
 
-from assets.models import Asset
+from assets.models import Asset, AssetChainDeployment
 from companies.models import Company, CompanyDocument, CompanyType, DocumentType
 from documents.models import Document
 from portfolios.models import Portfolio
@@ -17,7 +17,6 @@ from tokens.models import (
     CapitalIncreaseRequest,
     ShareToken,
     ShareTokenStatus,
-    Stablecoin,
     SwapOrder,
     TransferOrder,
 )
@@ -65,9 +64,20 @@ def reference_data():
             "is_verified": True,
         },
     )
-    stablecoin, _ = Stablecoin.objects.get_or_create(
+    stablecoin, _ = Asset.objects.get_or_create(
         symbol="TUSD",
-        defaults={"name": "Tenant dollar", "contract_address": "0x" + "5" * 40, "decimals": 2},
+        defaults={
+            "name": "Tenant dollar",
+            "asset_type": "stablecoin",
+            "decimals": 2,
+            "is_active": True,
+            "is_verified": True,
+        },
+    )
+    AssetChainDeployment.objects.get_or_create(
+        asset=stablecoin,
+        chain="base",
+        defaults={"contract_address": "0x" + "5" * 40, "decimals": 2},
     )
     country, _ = Country.objects.get_or_create(code="TST", defaults={"name": "Tenant country", "is_available": True})
     return SimpleNamespace(asset=asset, spare_asset=spare_asset, stablecoin=stablecoin, country=country)
@@ -158,7 +168,7 @@ def make_tenant(label, *, staff=False, superuser=False):
     )
     order_fields = {
         "token": deployed_token,
-        "payment_token": refs.stablecoin,
+        "payment_asset": refs.stablecoin,
         "wallet": wallet,
         "owner_account": account,
         "wallet_address": wallet.address,
@@ -171,7 +181,7 @@ def make_tenant(label, *, staff=False, superuser=False):
         sell_order=order,
         buy_order=counter_order,
         share_token=deployed_token,
-        payment_token=refs.stablecoin,
+        payment_asset=refs.stablecoin,
         seller_address=wallet.address,
         buyer_address=wallet.address,
         share_amount=10,

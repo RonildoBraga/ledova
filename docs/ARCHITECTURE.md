@@ -28,7 +28,7 @@ every one of them.
 | `ShareToken.sol` | One share class. ERC-20 with 0 decimals, burnable, pausable. `authorizedShares` is the cap; `mint` reverts unless the recipient is whitelisted and the cap holds; `_update` blocks any transfer to a non-whitelisted address; `setAuthorizedShares` cannot go below `totalSupply()` |
 | `ShareTokenFactory.sol` | `createShareToken(name, symbol, identifier, authorizedShares, owner)` and `getTokenByIdentifier(identifier)`. The identifier is the deduplication key |
 | `AtomicSwap.sol` | EIP-712 swap settlement between an approved share token and an approved payment token, executed by an authorised relayer |
-| `AUDY.sol` | Minter-gated AUD stablecoin, 2 decimals, used as the payment token |
+| `AUDY.sol` | Minter-gated AUD stablecoin, 2 decimals, used as the payment token. Its `assets.Asset` row plus its `AssetChainDeployment` on the operator's receiving chain are the only representation of a settlement token; `operators/settlement.py` resolves them |
 | `AUSG.sol` | NAV-bearing token with a redemption queue; not part of the issuance flow |
 
 `deploy-all.ts` deploys `WhitelistRegistry`, `ShareTokenFactory`, `AtomicSwap`
@@ -47,7 +47,7 @@ package of per-concern modules re-exported by `settings/__init__.py`.
 | `authentication` | `CustomUser`, the `AuthViewSet`, JWT sessions, email verification codes |
 | `users` | Profiles, accounts, preferences, financial profiles, device tokens, notifications, favourite assets |
 | `companies` | `Company`, its application lifecycle, and company `Document` records |
-| `tokens` | `ShareToken`, `ShareIssuanceRequest`, `ShareIssuance`, `CapitalIncreaseRequest`, `Stablecoin`, and the trading models |
+| `tokens` | `ShareToken`, `ShareIssuanceRequest`, `ShareIssuance`, `CapitalIncreaseRequest`, `MintRequest`, `YieldToken`, and the trading models |
 | `whitelist` | `WhitelistEntry` and the on-chain allowlist sync |
 | `wallets` | `Wallet`, `Holding`, `HoldingSnapshot`, `Transaction`, balance sync and transfer confirmation |
 | `assets` | `Asset`, `AssetChainDeployment`, `AssetSnapshot`, `ExchangeRate`, price sync, asset identity |
@@ -200,12 +200,11 @@ the ORM, not in PostgreSQL: row-level security is not planned.
 
 - Every customer-facing queryset has `visible_to_user(user)` (and
   `manageable_by_user` for writes) that returns `none()` for an anonymous or
-  `None` user, and every viewset calls it from `get_queryset`, with two explicit
-  exceptions: `TradingTokenViewSet` and `TradingStablecoinViewSet`
-  (`tokens/views/trading_token.py`) return every deployed share token and every
-  active stablecoin to any authenticated user. They are the market directory and
-  are deliberately not owner-scoped. Whether that posture is right is an open
-  Phase 1 decision, not a settled one.
+  `None` user, and every viewset calls it from `get_queryset`, with one explicit
+  exception: `TradingTokenViewSet` (`tokens/views/trading_token.py`) returns
+  every deployed share token to any authenticated user. It is the market
+  directory and is deliberately not owner-scoped. Whether that posture is right
+  is an open Phase 1 decision, not a settled one.
 - Owner foreign keys are `NOT NULL`, and writable FKs are scoped in
   `get_fields()`.
 - Global operator routes require `IsAdminUser`.

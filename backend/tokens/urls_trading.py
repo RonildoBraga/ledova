@@ -4,7 +4,6 @@ from rest_framework.routers import DefaultRouter
 from tokens.views import (
     SwapOrderViewSet,
     TradingOrderViewSet,
-    TradingStablecoinViewSet,
     TradingTokenViewSet,
     TradingTransferViewSet,
     TradingWalletViewSet,
@@ -16,7 +15,6 @@ app_name = "trading"
 
 router = DefaultRouter()
 router.register(r"tokens", TradingTokenViewSet, basename="tokens")
-router.register(r"stablecoins", TradingStablecoinViewSet, basename="stablecoins")
 router.register(r"orders", TradingOrderViewSet, basename="orders")
 router.register(r"wallets", TradingWalletViewSet, basename="wallets")
 router.register(r"transfers", TradingTransferViewSet, basename="transfers")
