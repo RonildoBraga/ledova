@@ -4,8 +4,8 @@ import { FormErrors } from '@ledova/shared-types';
 import { validateEmailConfirmation, formatVerificationToken } from '@ledova/shared-utils';
 import { EMAIL_CONFIRMATION_VALIDATION } from '@ledova/shared-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as SecureStore from 'expo-secure-store';
 import { apiClient } from '../../../services/apiClient';
+import { storeTokens } from '../../../services/tokenStorage';
 
 export const useEmailConfirmation = () => {
   const [email, setEmail] = useState('');
@@ -47,8 +47,7 @@ export const useEmailConfirmation = () => {
       if (response.data?.tokens && response.data.tokens.length > 0) {
         const token = response.data.tokens[0];
         if (token.accessToken && token.refreshToken) {
-          await SecureStore.setItemAsync('accessToken', token.accessToken);
-          await SecureStore.setItemAsync('refreshToken', token.refreshToken);
+          await storeTokens({ accessToken: token.accessToken, refreshToken: token.refreshToken });
         }
       }
 

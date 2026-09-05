@@ -11,6 +11,7 @@ SIGNER = Account.from_key("0x" + "11" * 32)
 CONTRACT = Web3.to_checksum_address("0x" + "ab" * 20)
 OTHER = Web3.to_checksum_address("0x" + "cd" * 20)
 CHAIN_ID = 84532
+OTHER_CHAIN_ID = 11155111
 
 
 def _hex(signed) -> str:
@@ -24,10 +25,10 @@ def sign_legacy(to=CONTRACT, chain_id=CHAIN_ID, value=5, data=b"") -> str:
     return _hex(SIGNER.sign_transaction(tx))
 
 
-def sign_eip1559(to=CONTRACT, value=7, data="0x1234") -> str:
+def sign_eip1559(to=CONTRACT, chain_id=CHAIN_ID, value=7, data="0x1234") -> str:
     tx = {
         "type": 2,
-        "chainId": CHAIN_ID,
+        "chainId": chain_id,
         "nonce": 1,
         "maxFeePerGas": 10**9,
         "maxPriorityFeePerGas": 10**8,
@@ -78,7 +79,7 @@ class DecodeSignedTransactionTest(SimpleTestCase):
                 decode_signed_transaction(raw)
 
 
-@override_settings(ATOMIC_SWAP_ADDRESS=CONTRACT)
+@override_settings(ATOMIC_SWAP_ADDRESS=CONTRACT, BLOCKCHAIN_CHAIN_ID=CHAIN_ID)
 class BroadcastTransferSerializerTest(TestCase):
     def errors_for(self, signed_transaction):
         serializer = BroadcastTransferSerializer(data={"signed_transaction": signed_transaction})
@@ -86,9 +87,14 @@ class BroadcastTransferSerializerTest(TestCase):
         return serializer.errors.get("signed_transaction", [])
 
     def test_accepts_legacy_and_eip1559_transactions_to_a_known_contract(self):
-        for signed in (sign_legacy(), sign_eip1559()):
+        for signed in (sign_legacy(), sign_eip1559(), sign_legacy(chain_id=None)):
             with self.subTest(signed=signed[:12]):
                 self.assertEqual(self.errors_for(signed), [])
+
+    def test_rejects_a_transaction_signed_for_another_network(self):
+        for signed in (sign_legacy(chain_id=OTHER_CHAIN_ID), sign_eip1559(chain_id=OTHER_CHAIN_ID)):
+            with self.subTest(signed=signed[:12]):
+                self.assertEqual(self.errors_for(signed), ["Transaction is signed for a different network"])
 
     def test_rejects_a_transaction_without_the_0x_prefix(self):
         self.assertEqual(self.errors_for(sign_legacy()[2:]), ["Signed transaction must start with 0x"])

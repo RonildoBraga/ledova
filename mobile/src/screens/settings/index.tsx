@@ -319,10 +319,9 @@ export function SettingsScreen() {
   const {
     isEnabled: appLockEnabled,
     setEnabled: setAppLockEnabled,
-    biometricLoginEnabled,
-    hasSavedCredentials,
-    setBiometricLoginEnabled,
-    clearCredentials,
+    hasBiometricLogin,
+    enableBiometricLogin,
+    disableBiometricLogin,
     biometricsAvailable,
     biometricType,
   } = useAppLock();
@@ -380,15 +379,8 @@ export function SettingsScreen() {
   const handleBiometricLoginToggle = useCallback(
     async (value: boolean) => {
       if (value) {
-        if (!hasSavedCredentials) {
-          Alert.alert(
-            `Enable ${biometricType} Sign In`,
-            'Sign out and sign back in to save your credentials for biometric login.',
-            [{ text: 'OK' }],
-          );
-          return;
-        }
-        const success = await setBiometricLoginEnabled(true);
+        // Stores a biometric-gated copy of the current session's refresh token; the password is never stored
+        const success = await enableBiometricLogin();
         if (!success) {
           Alert.alert('Authentication Failed', `Could not enable ${biometricType} sign in. Please try again.`, [
             { text: 'OK' },
@@ -397,21 +389,21 @@ export function SettingsScreen() {
       } else {
         Alert.alert(
           `Disable ${biometricType} Sign In`,
-          'This will remove your saved credentials. You will need to enter your email and password next time you sign in.',
+          'You will need to enter your email and password next time you sign in.',
           [
             { text: 'Cancel', style: 'cancel' },
             {
               text: 'Disable',
               style: 'destructive',
               onPress: async () => {
-                await clearCredentials();
+                await disableBiometricLogin();
               },
             },
           ],
         );
       }
     },
-    [setBiometricLoginEnabled, clearCredentials, hasSavedCredentials, biometricType],
+    [enableBiometricLogin, disableBiometricLogin, biometricType],
   );
 
   // Change password handler
@@ -462,7 +454,7 @@ export function SettingsScreen() {
               <ToggleRow
                 label={`${biometricType} Sign In`}
                 description={`Sign in with ${biometricType} instead of password`}
-                value={biometricLoginEnabled && hasSavedCredentials}
+                value={hasBiometricLogin}
                 onValueChange={handleBiometricLoginToggle}
                 disabled={!biometricsAvailable}
               />

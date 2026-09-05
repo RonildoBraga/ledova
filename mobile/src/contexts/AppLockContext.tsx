@@ -2,18 +2,20 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { AppState, AppStateStatus } from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
+import {
+  BiometricLoginState,
+  deleteBiometricRefreshToken,
+  disableBiometricLogin as disableBiometricLoginStorage,
+  enableBiometricLogin as enableBiometricLoginStorage,
+  getAccessToken,
+  getBiometricLoginState,
+  readBiometricRefreshToken as readGatedRefreshToken,
+} from '../services/tokenStorage';
 
 const STORAGE_KEY = 'settings.biometricsEnabled';
-const BIOMETRIC_LOGIN_KEY = 'settings.biometricLoginEnabled';
-const SAVED_EMAIL_KEY = 'credentials.email';
-const SAVED_PASSWORD_KEY = 'credentials.password';
-const AUTH_TOKEN_KEY = 'accessToken';
 const LOCK_DELAY_MS = 3000; // Lock after 3 seconds in background
 
-interface SavedCredentials {
-  email: string;
-  password: string;
-}
+export type BiometricRefreshTokenResult = { token: string; missing: false } | { token: null; missing: boolean };
 
 interface AppLockContextType {
   // App Lock (session protection)
@@ -22,13 +24,13 @@ interface AppLockContextType {
   unlock: () => Promise<boolean>;
   setEnabled: (enabled: boolean) => Promise<boolean>;
 
-  // Biometric Login (credential storage)
+  // Biometric Login (a biometric-gated copy of the refresh token; the password is never stored)
   biometricLoginEnabled: boolean;
-  hasSavedCredentials: boolean;
-  setBiometricLoginEnabled: (enabled: boolean) => Promise<boolean>;
-  saveCredentials: (email: string, password: string) => Promise<void>;
-  clearCredentials: () => Promise<void>;
-  getBiometricCredentials: () => Promise<SavedCredentials | null>;
+  hasBiometricLogin: boolean;
+  enableBiometricLogin: () => Promise<boolean>;
+  disableBiometricLogin: () => Promise<void>;
+  readBiometricRefreshToken: () => Promise<BiometricRefreshTokenResult>;
+  reloadBiometricLogin: () => Promise<void>;
 
   // Shared
   biometricsAvailable: boolean;
@@ -44,8 +46,7 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
   const [isEnabled, setIsEnabled] = useState(false);
 
   // Biometric Login state
-  const [biometricLoginEnabled, setBiometricLoginEnabledState] = useState(false);
-  const [hasSavedCredentials, setHasSavedCredentials] = useState(false);
+  const [biometricLogin, setBiometricLogin] = useState<BiometricLoginState>({ enabled: false, ready: false });
 
   // Shared state
   const [biometricsAvailable, setBiometricsAvailable] = useState(false);
@@ -86,29 +87,38 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
       const appLockEnabled = appLockSaved === 'true';
       setIsEnabled(appLockEnabled);
 
-      // Load biometric login preference
-      const biometricLoginSaved = await SecureStore.getItemAsync(BIOMETRIC_LOGIN_KEY);
-      const biometricLoginEnabledValue = biometricLoginSaved === 'true';
-      setBiometricLoginEnabledState(biometricLoginEnabledValue);
-
-      // Check for saved credentials
-      const savedEmail = await SecureStore.getItemAsync(SAVED_EMAIL_KEY);
-      const savedPassword = await SecureStore.getItemAsync(SAVED_PASSWORD_KEY);
-      const hasCredentials = !!(savedEmail && savedPassword);
-      setHasSavedCredentials(hasCredentials);
+      // Load the biometric login preference and whether a gated refresh token is on the device
+      setBiometricLogin(await getBiometricLoginState());
     } catch {
       // Silently handle preference loading errors
+    }
+  }, []);
+
+  // Re-read after sign-out or a failed biometric sign in changed what is on the device
+  const reloadBiometricLogin = useCallback(async () => {
+    try {
+      setBiometricLogin(await getBiometricLoginState());
+    } catch {
+      // Keep the last known state
     }
   }, []);
 
   // Check if user is logged in
   const isUserLoggedIn = useCallback(async (): Promise<boolean> => {
     try {
-      const token = await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
+      const token = await getAccessToken();
       return !!token;
     } catch {
       return false;
     }
+  }, []);
+
+  // A system prompt sends the app through inactive/active; don't treat the return as a background lock
+  const markJustUnlocked = useCallback(() => {
+    justUnlocked.current = true;
+    setTimeout(() => {
+      justUnlocked.current = false;
+    }, 2000);
   }, []);
 
   // Initialize on mount
@@ -248,109 +258,66 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
     [biometricType],
   );
 
-  // Save credentials for biometric login
-  const saveCredentials = useCallback(async (email: string, password: string): Promise<void> => {
-    await SecureStore.setItemAsync(SAVED_EMAIL_KEY, email);
-    await SecureStore.setItemAsync(SAVED_PASSWORD_KEY, password);
-    await SecureStore.setItemAsync(BIOMETRIC_LOGIN_KEY, 'true');
-    setBiometricLoginEnabledState(true);
-    setHasSavedCredentials(true);
-  }, []);
-
-  // Clear saved credentials
-  const clearCredentials = useCallback(async (): Promise<void> => {
-    try {
-      await SecureStore.deleteItemAsync(SAVED_EMAIL_KEY);
-      await SecureStore.deleteItemAsync(SAVED_PASSWORD_KEY);
-      await SecureStore.setItemAsync(BIOMETRIC_LOGIN_KEY, 'false');
-      setBiometricLoginEnabledState(false);
-      setHasSavedCredentials(false);
-    } catch {
-      // Silently handle credential clearing errors
-    }
-  }, []);
-
-  // Get credentials after biometric authentication
-  const getBiometricCredentials = useCallback(async (): Promise<SavedCredentials | null> => {
-    // Prevent multiple simultaneous auth attempts
+  // Store a biometric-gated copy of the current session's refresh token
+  const enableBiometricLogin = useCallback(async (): Promise<boolean> => {
+    // Prevent auth during the gated write (Android shows the system prompt for it)
     if (isAuthenticating.current) {
-      return null;
+      return false;
     }
 
     isAuthenticating.current = true;
 
     try {
-      // First, verify with biometrics
-      const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: `Sign in with ${biometricType}`,
-        fallbackLabel: 'Use passcode',
-        disableDeviceFallback: false,
-      });
-
-      if (!result.success) {
-        return null;
+      const enabled = await enableBiometricLoginStorage();
+      setBiometricLogin(await getBiometricLoginState());
+      if (enabled) {
+        markJustUnlocked();
       }
-
-      // If successful, retrieve credentials
-      const email = await SecureStore.getItemAsync(SAVED_EMAIL_KEY);
-      const password = await SecureStore.getItemAsync(SAVED_PASSWORD_KEY);
-
-      if (email && password) {
-        justUnlocked.current = true;
-        setTimeout(() => {
-          justUnlocked.current = false;
-        }, 2000);
-
-        return { email, password };
-      }
-
-      return null;
+      return enabled;
     } catch {
-      return null;
+      return false;
     } finally {
       isAuthenticating.current = false;
     }
-  }, [biometricType]);
+  }, [markJustUnlocked]);
 
-  // Enable/disable biometric login
-  const setBiometricLoginEnabled = useCallback(
-    async (enabled: boolean): Promise<boolean> => {
-      if (enabled) {
-        // To enable, we need to verify biometrics first (credentials should be saved separately)
-        if (isAuthenticating.current) {
-          return false;
-        }
+  // Delete the gated copy and remember the choice
+  const disableBiometricLogin = useCallback(async (): Promise<void> => {
+    try {
+      await disableBiometricLoginStorage();
+      setBiometricLogin(await getBiometricLoginState());
+    } catch {
+      // Silently handle storage errors
+    }
+  }, []);
 
-        isAuthenticating.current = true;
+  // Unlock the gated refresh token with the OS prompt
+  const readBiometricRefreshToken = useCallback(async (): Promise<BiometricRefreshTokenResult> => {
+    // Prevent multiple simultaneous auth attempts
+    if (isAuthenticating.current) {
+      return { token: null, missing: false };
+    }
 
-        try {
-          const result = await LocalAuthentication.authenticateAsync({
-            promptMessage: `Enable ${biometricType} sign in`,
-            fallbackLabel: 'Use passcode',
-            disableDeviceFallback: false,
-          });
+    isAuthenticating.current = true;
 
-          if (result.success) {
-            await SecureStore.setItemAsync(BIOMETRIC_LOGIN_KEY, 'true');
-            setBiometricLoginEnabledState(true);
-            justUnlocked.current = true;
-            setTimeout(() => {
-              justUnlocked.current = false;
-            }, 2000);
-            return true;
-          }
-          return false;
-        } finally {
-          isAuthenticating.current = false;
-        }
-      } else {
-        // Disable and clear credentials
-        await clearCredentials();
-        return true;
+    try {
+      const token = await readGatedRefreshToken(`Sign in with ${biometricType}`);
+      if (token) {
+        markJustUnlocked();
+        return { token, missing: false };
       }
-    },
-    [biometricType, clearCredentials],
-  );
+
+      // No entry, or the OS invalidated it after the enrolled biometrics changed
+      await deleteBiometricRefreshToken();
+      setBiometricLogin(await getBiometricLoginState());
+      return { token: null, missing: true };
+    } catch {
+      // The user cancelled or failed the OS prompt
+      return { token: null, missing: false };
+    } finally {
+      isAuthenticating.current = false;
+    }
+  }, [biometricType, markJustUnlocked]);
 
   // Don't render children until initialized
   if (!isInitialized) {
@@ -367,12 +334,12 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
         setEnabled,
 
         // Biometric Login
-        biometricLoginEnabled,
-        hasSavedCredentials,
-        setBiometricLoginEnabled,
-        saveCredentials,
-        clearCredentials,
-        getBiometricCredentials,
+        biometricLoginEnabled: biometricLogin.enabled,
+        hasBiometricLogin: biometricLogin.ready,
+        enableBiometricLogin,
+        disableBiometricLogin,
+        readBiometricRefreshToken,
+        reloadBiometricLogin,
 
         // Shared
         biometricsAvailable,

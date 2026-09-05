@@ -21,7 +21,7 @@ import {
 import { signout } from '@ledova/shared-services';
 import { apiClient } from '../services/apiClient';
 import { notificationsService } from '../services/notificationsService';
-import * as SecureStore from 'expo-secure-store';
+import { clearTokens } from '../services/tokenStorage';
 import { useAppTheme, useThemedStyles } from '../contexts';
 import { NotificationsModal } from '../components/notifications';
 import { useNotifications } from '../hooks/useNotifications';
@@ -211,8 +211,8 @@ export function DrawerNavigator() {
     } catch (error) {
       console.error('Sign-out API call failed:', error);
     } finally {
-      await SecureStore.deleteItemAsync('accessToken');
-      await SecureStore.deleteItemAsync('refreshToken');
+      // The backend revoked the session; drop the pair and the biometric-gated copy with it
+      await clearTokens();
 
       queryClient.clear();
       queryClient.removeQueries();

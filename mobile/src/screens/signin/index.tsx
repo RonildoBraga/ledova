@@ -186,20 +186,23 @@ export function SignInScreen() {
   const queryClient = useQueryClient();
   const {
     biometricsAvailable,
-    hasSavedCredentials,
+    hasBiometricLogin,
     biometricType,
-    getBiometricCredentials,
-    saveCredentials,
     biometricLoginEnabled,
+    enableBiometricLogin,
+    readBiometricRefreshToken,
+    reloadBiometricLogin,
   } = useAppLock();
   const [biometricLoading, setBiometricLoading] = useState(false);
 
   // Clear all cached query data when navigating to signin screen
-  // This prevents data from incomplete signup flows from bleeding into new sessions
+  // This prevents data from incomplete signup flows from bleeding into new sessions.
+  // Also re-read the biometric sign-in state: sign-out deletes the gated refresh token.
   useFocusEffect(
     useCallback(() => {
       queryClient.clear();
-    }, [queryClient]),
+      reloadBiometricLogin();
+    }, [queryClient, reloadBiometricLogin]),
   );
 
   const {
@@ -211,7 +214,8 @@ export function SignInScreen() {
     setFieldValue,
     togglePassword,
     handleSubmit,
-    loginWithCredentials,
+    loginWithRefreshToken,
+    setGeneralError,
   } = useSignIn();
 
   const navigateToMainApp = useCallback(() => {
@@ -231,8 +235,8 @@ export function SignInScreen() {
 
     // Otherwise, use password login
     await handleSubmit(async () => {
-      // If biometrics available and not already saved, offer to save credentials
-      if (biometricsAvailable && !hasSavedCredentials && !biometricLoginEnabled) {
+      // If biometrics are available and biometric sign in is not enabled yet, offer it
+      if (biometricsAvailable && !biometricLoginEnabled) {
         Alert.alert(
           `Enable ${biometricType} Sign In?`,
           `Would you like to use ${biometricType} to sign in next time?`,
@@ -245,11 +249,9 @@ export function SignInScreen() {
             {
               text: 'Enable',
               onPress: async () => {
-                try {
-                  await saveCredentials(form.email, form.password);
-                } catch {
-                  // Silently fail - user can enable later in settings
-                }
+                // Stores a biometric-gated copy of the session's refresh token; the password is never stored.
+                // A failure is silent: the user can enable it later in settings.
+                await enableBiometricLogin();
                 navigateToMainApp();
               },
             },
@@ -261,26 +263,27 @@ export function SignInScreen() {
     });
   };
 
-  // Handle biometric login
+  // Biometric sign in: the OS prompt unlocks the gated refresh token, which is exchanged for a new session
   const handleBiometricLogin = async () => {
     setBiometricLoading(true);
     try {
-      const credentials = await getBiometricCredentials();
-      if (credentials) {
-        await loginWithCredentials(credentials.email, credentials.password, () => {
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'MainApp' }],
-          });
-        });
+      const result = await readBiometricRefreshToken();
+      if (result.token) {
+        const signedIn = await loginWithRefreshToken(result.token, navigateToMainApp);
+        if (!signedIn) {
+          // Revoked by a sign-out or expired: the gated copy is gone and the password form takes over
+          await reloadBiometricLogin();
+        }
+      } else if (result.missing) {
+        setGeneralError(`${biometricType} sign in needs to be set up again. Please sign in with your password.`);
       }
     } finally {
       setBiometricLoading(false);
     }
   };
 
-  // Show biometric login option if available and has saved credentials
-  const showBiometricLogin = biometricsAvailable && hasSavedCredentials;
+  // Show biometric login option if available and a gated refresh token is on the device
+  const showBiometricLogin = biometricsAvailable && hasBiometricLogin;
 
   return (
     <GradientBackground>
