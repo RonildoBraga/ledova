@@ -3,7 +3,7 @@ from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from assets.models import Asset, AssetChainDeployment, AssetSnapshot
@@ -97,6 +97,36 @@ class EnsureSupportedAssetsTests(TestCase):
         self.assertEqual(
             (deployment.contract_address, deployment.decimals, deployment.is_active), ("0x" + "c" * 40, 6, True)
         )
+
+
+AUDY_ADDRESS = "0x" + "a1" * 20
+
+
+class AudyDeploymentTests(TestCase):
+    @override_settings(STABLECOIN_CONTRACT_ADDRESS=AUDY_ADDRESS)
+    def test_audy_is_seeded_on_base_with_the_configured_contract_address(self):
+        AssetSyncService.ensure_supported_assets()
+
+        audy = Asset.objects.get(symbol="AUDY")
+        self.assertEqual(
+            list(audy.chain_deployments.values_list("chain", "contract_address", "decimals")),
+            [("base", AUDY_ADDRESS, 2)],
+        )
+
+    @override_settings(STABLECOIN_CONTRACT_ADDRESS="")
+    def test_an_empty_setting_seeds_the_base_row_and_never_clears_an_address(self):
+        AssetSyncService.ensure_supported_assets()
+
+        audy = Asset.objects.get(symbol="AUDY")
+        deployment = audy.chain_deployments.get()
+        self.assertEqual((deployment.chain, deployment.contract_address), ("base", None))
+
+        deployment.contract_address = AUDY_ADDRESS
+        deployment.save(update_fields=["contract_address"])
+        AssetSyncService.ensure_supported_assets()
+
+        deployment.refresh_from_db()
+        self.assertEqual(deployment.contract_address, AUDY_ADDRESS)
 
 
 class SyncCurrentPricesTests(TestCase):

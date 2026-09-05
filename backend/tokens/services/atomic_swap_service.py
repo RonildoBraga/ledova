@@ -12,6 +12,7 @@ from eth_account.messages import encode_typed_data
 
 from blockchain.models import BlockchainTransaction, TransactionStatus, TransactionType
 from integrations.base_chain import get_base_chain_client
+from operators.settlement import require_deployment
 from shared.utils.blockchain import decode_exception_to_message
 from tokens.exceptions import (
     AtomicSwapNotConfiguredException,
@@ -33,6 +34,10 @@ from whitelist.services import WhitelistService
 logger = logging.getLogger(__name__)
 
 MAX_UINT256 = 2**256 - 1
+
+
+def payment_address(swap_order) -> str:
+    return require_deployment(swap_order.payment_asset).contract_address
 
 
 class AtomicSwapService:
@@ -97,7 +102,7 @@ class AtomicSwapService:
                 "seller": swap_order.seller_address,
                 "buyer": swap_order.buyer_address,
                 "shareToken": swap_order.share_token.contract_address,
-                "paymentToken": swap_order.payment_token.contract_address,
+                "paymentToken": payment_address(swap_order),
                 "shareAmount": swap_order.share_amount,
                 "paymentAmount": swap_order.payment_amount,
                 "nonce": swap_order.nonce,
@@ -145,15 +150,15 @@ class AtomicSwapService:
             )
 
         buyer_balance = self.check_balance(
-            swap_order.payment_token.contract_address,
+            payment_address(swap_order),
             swap_order.buyer_address,
         )
         if buyer_balance < swap_order.payment_amount:
             raise InsufficientBalanceException(
                 balance=buyer_balance,
                 required=swap_order.payment_amount,
-                token_symbol=swap_order.payment_token.symbol,
-                decimals=swap_order.payment_token.decimals,
+                token_symbol=swap_order.payment_asset.symbol,
+                decimals=swap_order.payment_asset.decimals,
             )
 
     def check_swap_allowances(self, swap_order: SwapOrder) -> dict:
@@ -164,7 +169,7 @@ class AtomicSwapService:
         seller_has_allowance = seller_allowance >= swap_order.share_amount
 
         buyer_allowance = self.check_allowance(
-            swap_order.payment_token.contract_address,
+            payment_address(swap_order),
             swap_order.buyer_address,
         )
         buyer_has_allowance = buyer_allowance >= swap_order.payment_amount
@@ -180,8 +185,8 @@ class AtomicSwapService:
             },
             "buyer": {
                 "address": swap_order.buyer_address,
-                "token": swap_order.payment_token.contract_address,
-                "token_symbol": swap_order.payment_token.symbol,
+                "token": payment_address(swap_order),
+                "token_symbol": swap_order.payment_asset.symbol,
                 "required_amount": swap_order.payment_amount,
                 "current_allowance": buyer_allowance,
                 "has_sufficient_allowance": buyer_has_allowance,
@@ -200,10 +205,10 @@ class AtomicSwapService:
             amount = MAX_UINT256 if unlimited else swap_order.share_amount
             token_symbol = swap_order.share_token.symbol
         elif user_role == "buyer":
-            token_address = swap_order.payment_token.contract_address
+            token_address = payment_address(swap_order)
             owner_address = swap_order.buyer_address
             amount = MAX_UINT256 if unlimited else swap_order.payment_amount
-            token_symbol = swap_order.payment_token.symbol
+            token_symbol = swap_order.payment_asset.symbol
         else:
             raise ValueError(f"Invalid user_role: {user_role}")
 
@@ -251,10 +256,10 @@ class AtomicSwapService:
             raise ValueError("buy_order must be a BUY order")
 
         token = sell_order.token
-        payment_token = buy_order.payment_token or sell_order.payment_token
+        payment_asset = buy_order.payment_asset or sell_order.payment_asset
 
-        if not payment_token:
-            raise ValueError("Payment token must be specified on at least one order")
+        if not payment_asset:
+            raise ValueError("Payment asset must be specified on at least one order")
 
         if share_amount is None:
             share_amount = sell_order.quantity
@@ -262,7 +267,7 @@ class AtomicSwapService:
         if price_per_share is None:
             price_per_share = sell_order.price_per_share
 
-        payment_amount = int(share_amount * price_per_share * (10**payment_token.decimals))
+        payment_amount = int(share_amount * price_per_share * (10**payment_asset.decimals))
         nonce = self._generate_nonce()
 
         if expires_hours is None:
@@ -273,7 +278,7 @@ class AtomicSwapService:
             sell_order=sell_order,
             buy_order=buy_order,
             share_token=token,
-            payment_token=payment_token,
+            payment_asset=payment_asset,
             seller_address=self.chain_client.to_checksum_address(sell_order.wallet_address),
             buyer_address=self.chain_client.to_checksum_address(buy_order.wallet_address),
             share_amount=share_amount,
@@ -368,7 +373,7 @@ class AtomicSwapService:
                 "seller": swap_order.seller_address,
                 "buyer": swap_order.buyer_address,
                 "shareToken": swap_order.share_token.contract_address,
-                "paymentToken": swap_order.payment_token.contract_address,
+                "paymentToken": payment_address(swap_order),
                 "shareAmount": str(swap_order.share_amount),
                 "paymentAmount": str(swap_order.payment_amount),
                 "nonce": str(swap_order.nonce),
@@ -385,7 +390,7 @@ class AtomicSwapService:
                 self.chain_client.to_checksum_address(swap_order.seller_address),
                 self.chain_client.to_checksum_address(swap_order.buyer_address),
                 self.chain_client.to_checksum_address(swap_order.share_token.contract_address),
-                self.chain_client.to_checksum_address(swap_order.payment_token.contract_address),
+                self.chain_client.to_checksum_address(payment_address(swap_order)),
                 swap_order.share_amount,
                 swap_order.payment_amount,
                 swap_order.nonce,

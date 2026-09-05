@@ -88,7 +88,7 @@ class TransferOrderQuerySet(QuerySet):
         return self.select_related(
             "token",
             "token__company",
-            "payment_token",
+            "payment_asset",
             "wallet",
             "wallet__user_account",
             "owner_account",

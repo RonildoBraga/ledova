@@ -1,15 +1,21 @@
 import logging
 
-from tokens.models import MintRequest, Stablecoin
+from operators.settlement import require_deployment
+from tokens.models import MintRequest
 from tokens.services.stablecoin_service import StablecoinService
 from tokens.services.yield_token_service import YieldTokenService
 
 logger = logging.getLogger(__name__)
 
 
-def token_service(token):
-    service_class = StablecoinService if isinstance(token, Stablecoin) else YieldTokenService
-    return service_class(contract_address=token.contract_address)
+def asset_service(asset) -> StablecoinService:
+    return StablecoinService(contract_address=require_deployment(asset).contract_address)
+
+
+def token_service(mint_request: MintRequest):
+    if mint_request.settlement_asset_id:
+        return asset_service(mint_request.settlement_asset)
+    return YieldTokenService(contract_address=mint_request.yield_token.contract_address)
 
 
 def execute(mint_request: MintRequest, user, notes: str = ""):
@@ -18,7 +24,7 @@ def execute(mint_request: MintRequest, user, notes: str = ""):
         mint_request.save(update_fields=["notes", "updated_at"])
 
     try:
-        tx_hash, tx_record = token_service(mint_request.token).mint(
+        tx_hash, tx_record = token_service(mint_request).mint(
             to_address=mint_request.recipient_address,
             amount=mint_request.amount,
             related_model="tokens.MintRequest",

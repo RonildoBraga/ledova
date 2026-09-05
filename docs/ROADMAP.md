@@ -94,7 +94,7 @@ Not started, and gated on the trading work in
 `feature_flags/middleware.py` refuses with 403 any request, of any method, whose
 path starts with one of five prefixes
 (`/api/v1/trading/{orders,wallets,transfers,swaps,events}/`); the read-only
-market routes (`tokens/`, `stablecoins/`) and the whitelist status route are
+market route (`tokens/`) and the whitelist status route are
 outside the gate by design. That default stays until the signed-intent,
 concurrency and idempotency designs are fixed and independently reviewed.
 

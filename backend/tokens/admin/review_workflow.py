@@ -4,10 +4,11 @@ from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.urls import path, reverse
 
+from shared.utils.admin_display import action_buttons
 from tokens.models import RequestStatus
 from tokens.tasks import execute_review_request_task
 
-from ._helpers import action_buttons, status_badge
+from ._helpers import status_badge
 
 STATUS_COLORS = {
     RequestStatus.DRAFT: "#6c757d",

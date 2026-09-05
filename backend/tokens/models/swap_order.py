@@ -35,9 +35,9 @@ class SwapOrder(BaseModel):
         on_delete=models.CASCADE,
         related_name="swap_orders",
     )
-    payment_token = models.ForeignKey(
-        "tokens.Stablecoin",
-        on_delete=models.CASCADE,
+    payment_asset = models.ForeignKey(
+        "assets.Asset",
+        on_delete=models.PROTECT,
         related_name="swap_orders",
     )
 

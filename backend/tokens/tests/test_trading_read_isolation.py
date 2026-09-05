@@ -7,11 +7,11 @@ from django.utils import timezone
 from rest_framework.test import APITestCase
 from web3 import Web3
 
+from assets.models import Asset, AssetChainDeployment
 from companies.models import Company
 from feature_flags.models import FeatureFlag
 from tokens.models import (
     ShareToken,
-    Stablecoin,
     SwapOrder,
     TransferOrder,
 )
@@ -45,7 +45,7 @@ class TradingReadIsolationTest(APITestCase):
     def _make_order(self, wallet, order_type):
         return TransferOrder.objects.create(
             token=self.share_token,
-            payment_token=self.stablecoin,
+            payment_asset=self.stablecoin,
             order_type=order_type,
             status=TransferOrderStatus.MATCHED,
             wallet=wallet,
@@ -62,7 +62,7 @@ class TradingReadIsolationTest(APITestCase):
             sell_order=sell_order,
             buy_order=buy_order,
             share_token=self.share_token,
-            payment_token=self.stablecoin,
+            payment_asset=self.stablecoin,
             seller_address=sell_order.wallet_address,
             buyer_address=buy_order.wallet_address,
             share_amount=10,
@@ -100,11 +100,14 @@ class TradingReadIsolationTest(APITestCase):
             contract_address="0x" + "d" * 40,
             deployment_tx_hash="0x" + "0" * 64,
         )
-        self.stablecoin = Stablecoin.objects.create(
+        self.stablecoin = Asset.objects.create(
             name="Test Dollar",
             symbol="TUSD",
-            contract_address="0x" + "e" * 40,
+            asset_type="stablecoin",
             decimals=2,
+        )
+        self.stablecoin_deployment = AssetChainDeployment.objects.create(
+            asset=self.stablecoin, chain="base", contract_address="0x" + "e" * 40, decimals=2
         )
         self.alice_order = self._make_order(self.alice_wallet, TransferOrderType.SELL)
         self.bob_order = self._make_order(self.bob_wallet, TransferOrderType.BUY)
@@ -375,7 +378,7 @@ class TradingReadIsolationTest(APITestCase):
                 "has_sufficient_allowance": True,
             },
             "buyer": {
-                "token": self.stablecoin.contract_address,
+                "token": self.stablecoin_deployment.contract_address,
                 "token_symbol": self.stablecoin.symbol,
                 "required_amount": 1500,
                 "current_allowance": 0,

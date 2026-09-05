@@ -13,6 +13,7 @@ from blockchain.models import BlockchainTransaction, TransactionStatus, Transact
 from companies.models import CompanyStatus
 from integrations.base_chain import get_base_chain_client
 from integrations.base_chain.exceptions import BaseChainContractError
+from operators.settlement import settlement_deployments
 from tokens.exceptions import (
     CompanyNotReadyException,
     ContractLoadException,
@@ -35,7 +36,6 @@ from tokens.models import (
     ShareIssuanceRequest,
     ShareToken,
     ShareTokenStatus,
-    Stablecoin,
 )
 
 logger = logging.getLogger(__name__)
@@ -825,27 +825,23 @@ class ShareTokenService:
             except Exception as e:
                 logger.warning(f"Failed to get balance for {token.symbol}: {e}")
 
-        stablecoins = (
-            Stablecoin.objects.filter(is_active=True)
-            .exclude(contract_address__isnull=True)
-            .exclude(contract_address="")
-        )
-        for stablecoin in stablecoins:
+        for deployment in settlement_deployments():
+            asset = deployment.asset
             try:
-                balance = self._get_balance("AUDY", stablecoin.contract_address, wallet_checksum)
+                balance = self._get_balance("AUDY", deployment.contract_address, wallet_checksum)
                 if balance > 0:
                     balances.append(
                         {
-                            "token": str(stablecoin.uuid),
-                            "symbol": stablecoin.symbol,
-                            "name": stablecoin.name,
+                            "token": str(asset.uuid),
+                            "symbol": asset.symbol,
+                            "name": asset.name,
                             "balance": str(balance),
-                            "contractAddress": stablecoin.contract_address,
-                            "decimals": stablecoin.decimals,
+                            "contractAddress": deployment.contract_address,
+                            "decimals": deployment.decimals,
                             "type": "stablecoin",
                         }
                     )
             except Exception as e:
-                logger.warning(f"Failed to get stablecoin balance for {stablecoin.symbol}: {e}")
+                logger.warning(f"Failed to get settlement asset balance for {asset.symbol}: {e}")
 
         return {"walletAddress": wallet_checksum, "balances": balances}

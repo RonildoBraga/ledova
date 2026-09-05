@@ -78,9 +78,6 @@ export const TRADING_ENDPOINTS = {
   SWAPS: {
     LIST: '/api/v1/trading/swaps/',
   },
-  STABLECOINS: {
-    LIST: '/api/v1/trading/stablecoins/',
-  },
   TRANSFERS: {
     PREPARE: '/api/v1/trading/transfers/prepare/',
     BROADCAST: '/api/v1/trading/transfers/broadcast/',

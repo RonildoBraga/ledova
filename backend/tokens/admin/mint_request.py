@@ -5,10 +5,11 @@ from django.shortcuts import get_object_or_404, render
 from django.urls import path, reverse
 from django.utils.html import format_html
 
+from shared.utils.admin_display import action_buttons
 from tokens.models import MintRequest, MintRequestStatus
 from tokens.services import mint_service
 
-from ._helpers import action_buttons, status_badge
+from ._helpers import status_badge
 
 REJECT = ("Reject", "reject", "#dc3545")
 STATUS_ACTIONS = {
@@ -41,11 +42,11 @@ class MintRequestAdmin(admin.ModelAdmin):
         "requested_by",
         "created_at",
     ]
-    list_filter = ["status", "stablecoin", "yield_token"]
+    list_filter = ["status", "settlement_asset", "yield_token"]
     search_fields = ["recipient_name", "recipient_address", "deposit_reference", "requested_by__email"]
     readonly_fields = [
         "uuid",
-        "stablecoin",
+        "settlement_asset",
         "yield_token",
         "recipient_address",
         "recipient_name",
@@ -76,7 +77,7 @@ class MintRequestAdmin(admin.ModelAdmin):
     )
 
     fieldsets = [
-        ("Request Information", {"fields": ["uuid", "stablecoin", "yield_token", "status", "status_actions"]}),
+        ("Request Information", {"fields": ["uuid", "settlement_asset", "yield_token", "status", "status_actions"]}),
         ("Recipient Details", {"fields": ["recipient_name", "recipient_address", "amount"]}),
         ("Deposit Information", {"fields": ["deposit_reference", "deposit_date"]}),
         ("Notes", {"fields": ["notes"]}),

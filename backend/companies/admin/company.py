@@ -8,7 +8,8 @@ from django.utils.html import format_html
 from companies.exceptions import InvalidStatusTransitionException
 from companies.models import Company, CompanyDocument, CompanyStatus
 from companies.services import transition_company
-from tokens.admin._helpers import action_buttons, status_badge
+from shared.utils.admin_display import action_buttons
+from tokens.admin._helpers import status_badge
 from wallets.models import Wallet
 
 STATUS_COLORS = {

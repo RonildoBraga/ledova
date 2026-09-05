@@ -6,11 +6,11 @@ from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.urls import path, reverse
 
-from tokens.models import NAVUpdate, YieldToken
-from tokens.services import YieldTokenService
+from shared.utils.admin_display import action_buttons, format_units
+from tokens.models import MintRequest, NAVUpdate, YieldToken
+from tokens.services import YieldTokenService, mint_service
 
-from ._helpers import action_buttons
-from .mintable_token import MintableTokenAdmin
+from ._helpers import MintForm, active_badge, hex_column
 
 logger = logging.getLogger(__name__)
 
@@ -56,8 +56,11 @@ class NAVUpdateForm(forms.Form):
 
 
 @admin.register(YieldToken)
-class YieldTokenAdmin(MintableTokenAdmin):
-    mint_request_field = "yield_token"
+class YieldTokenAdmin(admin.ModelAdmin):
+    search_fields = ["name", "symbol", "contract_address"]
+    ordering = ["symbol"]
+    contract_address_short = hex_column("contract_address", "Contract", tail=8)
+    is_active_badge = active_badge
     list_display = [
         "name",
         "symbol",
@@ -85,12 +88,77 @@ class YieldTokenAdmin(MintableTokenAdmin):
     ]
 
     def get_urls(self):
-        update_nav = path(
-            "<uuid:uuid>/update-nav/",
-            self.admin_site.admin_view(self.update_nav_view),
-            name="tokens_yieldtoken_update_nav",
-        )
-        return [update_nav] + super().get_urls()
+        custom = [
+            path(
+                "<uuid:uuid>/update-nav/",
+                self.admin_site.admin_view(self.update_nav_view),
+                name="tokens_yieldtoken_update_nav",
+            ),
+            path(
+                "<uuid:uuid>/mint/",
+                self.admin_site.admin_view(self.mint_view),
+                name="tokens_yieldtoken_mint",
+            ),
+        ]
+        return custom + super().get_urls()
+
+    def mint_url(self, obj):
+        return reverse("admin:tokens_yieldtoken_mint", args=[obj.uuid])
+
+    def mint_view(self, request, uuid):
+        yield_token = get_object_or_404(YieldToken, uuid=uuid)
+        change_url = reverse("admin:tokens_yieldtoken_change", args=[yield_token.pk])
+
+        if not yield_token.is_active:
+            messages.error(request, f"Cannot mint: {yield_token.symbol} is not active")
+            return HttpResponseRedirect(change_url)
+        if not yield_token.contract_address:
+            messages.error(request, f"Cannot mint: {yield_token.symbol} has no contract address")
+            return HttpResponseRedirect(change_url)
+
+        try:
+            service = YieldTokenService(contract_address=yield_token.contract_address)
+            current_supply = format_units(service.get_total_supply(), yield_token.decimals)
+            is_minter = service.is_minter(service.signer_address)
+        except Exception as exc:
+            logger.error(f"Failed to get {yield_token.symbol} contract info: {exc}")
+            current_supply, is_minter = "Error", False
+
+        form = MintForm(request.POST or None, decimals=yield_token.decimals, symbol=yield_token.symbol)
+        if request.method == "POST" and form.is_valid():
+            mint_request = MintRequest.objects.create(
+                yield_token=yield_token,
+                recipient_address=form.cleaned_data["recipient_address"],
+                recipient_name=form.cleaned_data["recipient_name"],
+                amount=form.cleaned_data["amount"],
+                deposit_reference=form.cleaned_data["deposit_reference"],
+                deposit_date=form.cleaned_data["deposit_date"],
+                notes=form.cleaned_data["notes"],
+                requested_by=request.user,
+            )
+            try:
+                tx_hash, _ = mint_service.execute(mint_request, request.user)
+                messages.success(
+                    request,
+                    f"Successfully minted {mint_request.amount_display} {yield_token.symbol} "
+                    f"to {mint_request.recipient_name} (tx: {tx_hash[:16]}...)",
+                )
+            except Exception as exc:
+                messages.error(request, f"Minting failed: {exc}")
+            return HttpResponseRedirect(reverse("admin:tokens_mintrequest_change", args=[mint_request.pk]))
+
+        context = {
+            **self.admin_site.each_context(request),
+            "title": f"Mint {yield_token.symbol}",
+            "subtitle": None,
+            "token": yield_token,
+            "contract_address": yield_token.contract_address,
+            "form": form,
+            "opts": self.opts,
+            "current_supply": current_supply,
+            "is_minter": is_minter,
+        }
+        return render(request, "admin/tokens/mint_form.html", context)
 
     @admin.display(description="NAV/Token")
     def nav_display(self, obj):

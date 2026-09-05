@@ -1,9 +1,10 @@
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from assets.models import Asset, AssetChainDeployment
+from assets.services.sync import AssetSyncService
 from users.models import UserAccount
 from wallets.models import Holding, Transaction, Wallet
 from wallets.services.chain import fetch_chain_balance
@@ -12,6 +13,7 @@ from wallets.services.transaction_confirmation import TransactionConfirmationSer
 from wallets.services.transfers import TransferService
 
 TOKEN = "0x" + "1" * 40
+AUDY_TOKEN = "0x" + "a2" * 20
 
 
 class ChainBalanceTest(TestCase):
@@ -44,6 +46,46 @@ class ChainBalanceTest(TestCase):
         self.client_mock.get_native_balance.assert_called_once_with(self.wallet.address)
         self.client_mock.get_token_balance.assert_called_once_with(
             address=self.wallet.address, contract_address=TOKEN, decimals=6
+        )
+
+    @override_settings(STABLECOIN_CONTRACT_ADDRESS="0x" + "a1" * 20)
+    def test_an_audy_holding_on_an_ethereum_wallet_never_reads_the_native_balance(self):
+        AssetSyncService.ensure_supported_assets()
+        audy = Asset.objects.get(symbol="AUDY")
+        account = self.wallet.user_account
+        ethereum_wallet = Wallet.objects.create(
+            user_account=account, address="0x" + "e" * 40, chain="ethereum", verification_status="VERIFIED"
+        )
+
+        with patch("wallets.services.chain.get_blockchain_client", return_value=self.client_mock):
+            self.assertIsNone(fetch_chain_balance(ethereum_wallet, audy))
+            self.assertEqual(fetch_chain_balance(self.wallet, audy), Decimal("70"))
+
+        self.client_mock.get_native_balance.assert_not_called()
+        self.client_mock.get_token_balance.assert_called_once_with(
+            address=self.wallet.address, contract_address="0x" + "a1" * 20, decimals=2
+        )
+
+    @override_settings(STABLECOIN_CONTRACT_ADDRESS="")
+    def test_a_token_without_a_contract_address_reads_as_unknown_not_as_the_native_balance(self):
+        AssetSyncService.ensure_supported_assets()
+        audy = Asset.objects.get(symbol="AUDY")
+        self.assertEqual([(row.chain, row.contract_address) for row in audy.chain_deployments.all()], [("base", None)])
+
+        with patch("wallets.services.chain.get_blockchain_client", return_value=self.client_mock) as factory:
+            self.assertIsNone(fetch_chain_balance(self.wallet, audy))
+
+        factory.assert_not_called()
+        self.client_mock.get_native_balance.assert_not_called()
+        self.client_mock.get_token_balance.assert_not_called()
+
+        audy.chain_deployments.filter(chain="base").update(contract_address=AUDY_TOKEN)
+        with patch("wallets.services.chain.get_blockchain_client", return_value=self.client_mock):
+            self.assertEqual(fetch_chain_balance(self.wallet, audy), Decimal("70"))
+
+        self.client_mock.get_native_balance.assert_not_called()
+        self.client_mock.get_token_balance.assert_called_once_with(
+            address=self.wallet.address, contract_address=AUDY_TOKEN, decimals=2
         )
 
     def test_fetch_chain_balance_returns_none_without_deployment_or_on_rpc_failure(self):

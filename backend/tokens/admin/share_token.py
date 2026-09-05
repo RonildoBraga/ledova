@@ -6,6 +6,7 @@ from django.shortcuts import get_object_or_404, render
 from django.urls import path, reverse
 
 from integrations.base_chain.exceptions import BaseChainConnectionError
+from shared.utils.admin_display import action_buttons
 from tokens.exceptions import (
     CompanyNotReadyException,
     InvalidTokenStateException,
@@ -14,7 +15,7 @@ from tokens.exceptions import (
 from tokens.models import IssuanceStatus, ShareIssuance, ShareToken, ShareTokenStatus
 from tokens.services import ShareTokenService
 
-from ._helpers import action_buttons, bounded_chain_read, hex_column, status_badge
+from ._helpers import bounded_chain_read, hex_column, status_badge
 
 logger = logging.getLogger(__name__)
 

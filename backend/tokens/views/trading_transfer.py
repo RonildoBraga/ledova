@@ -20,6 +20,7 @@ class TradingTransferViewSet(AuthenticatedGenericViewSet):
         from_address = authorized_wallets.addresses[0]
 
         transfer_service = TransferService()
+        token = data["token"]
 
         tx_data = transfer_service.prepare_transfer(
             token=data["token"],
@@ -31,9 +32,9 @@ class TradingTransferViewSet(AuthenticatedGenericViewSet):
         return Response(
             {
                 "token": {
-                    "uuid": str(data["token"].uuid),
-                    "symbol": data["token"].symbol,
-                    "contract_address": data["token"].contract_address,
+                    "uuid": str(token.uuid),
+                    "symbol": token.symbol,
+                    "contract_address": TransferService.contract_address(token),
                 },
                 "from_address": from_address,
                 "to_address": data["to_address"],

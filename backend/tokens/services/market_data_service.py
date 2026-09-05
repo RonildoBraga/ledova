@@ -14,13 +14,13 @@ class MarketDataService:
         last_trade_price = None
         last_trade_data = None
         if last_trade:
-            payment_full_units = Decimal(last_trade.payment_amount) / (10**last_trade.payment_token.decimals)
+            payment_full_units = Decimal(last_trade.payment_amount) / (10**last_trade.payment_asset.decimals)
             last_trade_price = payment_full_units / Decimal(last_trade.share_amount)
             last_trade_data = {
                 "price": str(last_trade_price),
                 "shares": last_trade.share_amount,
                 "payment_amount": str(payment_full_units),
-                "payment_token": last_trade.payment_token.symbol,
+                "payment_token": last_trade.payment_asset.symbol,
                 "completed_at": (last_trade.completed_at.isoformat() if last_trade.completed_at else None),
             }
 

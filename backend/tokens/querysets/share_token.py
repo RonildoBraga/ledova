@@ -45,7 +45,7 @@ class ShareTokenQuerySet(QuerySet):
             best_ask=Subquery(open_orders.sell_orders().order_by("price_per_share").values("price_per_share")[:1]),
             last_trade_payment_amount=Subquery(last_trade.values("payment_amount")[:1]),
             last_trade_share_amount=Subquery(last_trade.values("share_amount")[:1]),
-            last_trade_decimals=Subquery(last_trade.values("payment_token__decimals")[:1]),
+            last_trade_decimals=Subquery(last_trade.values("payment_asset__decimals")[:1]),
         )
 
     def search(self, query):

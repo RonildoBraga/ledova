@@ -15,8 +15,8 @@ class TransferOrder(BaseModel):
         on_delete=models.CASCADE,
         related_name="transfer_orders",
     )
-    payment_token = models.ForeignKey(
-        "tokens.Stablecoin",
+    payment_asset = models.ForeignKey(
+        "assets.Asset",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,

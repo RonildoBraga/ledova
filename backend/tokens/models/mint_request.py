@@ -3,6 +3,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
+from operators.models import STABLECOIN_ONLY
 from shared.models import BaseModel
 
 
@@ -16,13 +17,14 @@ class MintRequestStatus(models.TextChoices):
 
 class MintRequest(BaseModel):
 
-    stablecoin = models.ForeignKey(
-        "tokens.Stablecoin",
+    settlement_asset = models.ForeignKey(
+        "assets.Asset",
         on_delete=models.PROTECT,
         null=True,
         blank=True,
         related_name="mint_requests",
-        help_text="The stablecoin being minted (if applicable)",
+        limit_choices_to=STABLECOIN_ONLY,
+        help_text="The settlement asset being minted (if applicable)",
     )
 
     yield_token = models.ForeignKey(
@@ -128,14 +130,14 @@ class MintRequest(BaseModel):
 
     def clean(self):
         super().clean()
-        has_stablecoin = self.stablecoin_id is not None
+        has_settlement_asset = self.settlement_asset_id is not None
         has_yield_token = self.yield_token_id is not None
-        if has_stablecoin == has_yield_token:
-            raise ValidationError("Exactly one of stablecoin or yield_token must be set.")
+        if has_settlement_asset == has_yield_token:
+            raise ValidationError("Exactly one of settlement_asset or yield_token must be set.")
 
     @property
     def token(self):
-        return self.stablecoin or self.yield_token
+        return self.settlement_asset or self.yield_token
 
     @property
     def amount_display(self) -> str:
