@@ -293,7 +293,6 @@ class CrossTenantRouteMatrixTest(APITestCase):
         modifications = self._service("tokens.views.trading_order.OrderModificationService").return_value
         modifications.generate_modification_message.return_value = {}
         modifications.apply_modification.side_effect = lambda order, **kwargs: (order, {})
-        modifications.check_for_matches_after_modification.return_value = None
         modifications.get_modification_history.return_value = {}
         swaps = self._service("tokens.views.trading_order.AtomicSwapService").return_value
         swaps.contract_address = "0x" + "8" * 40

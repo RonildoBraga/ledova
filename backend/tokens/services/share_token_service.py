@@ -20,7 +20,6 @@ from tokens.exceptions import (
     InvalidTokenAddressException,
     InvalidTokenStateException,
     OperatorKeyNotConfiguredException,
-    ShareIssuanceFailedException,
     TokenBalanceRetrievalException,
     TokenDeploymentFailedException,
     TokenFactoryNotConfiguredException,
@@ -224,36 +223,6 @@ class ShareTokenService:
         logger.info(f"User {user.email} created issuance request: {amount} {token.symbol} to {recipient}")
 
         return issuance_request
-
-    def mint_shares(self, issuance: ShareIssuance) -> dict:
-        token = issuance.token
-
-        if not token.contract_address or token.status != "deployed":
-            error = "Token is not deployed on blockchain"
-            issuance.mark_failed(error)
-            raise ShareIssuanceFailedException(f"Share issuance failed: {error}")
-
-        issuance.mark_processing()
-
-        try:
-            logger.info(f"Minting {issuance.amount} {token.symbol} to {issuance.recipient_address}")
-
-            result = self._mint_to(token.contract_address, issuance.recipient_address, int(issuance.amount))
-
-            issuance.mark_completed(
-                tx_hash=result["tx_hash"],
-                block_number=result["block_number"],
-                gas_used=result["gas_used"],
-            )
-
-            logger.info(f"Issuance complete: {issuance.amount} {token.symbol} - tx: {result['tx_hash']}")
-
-            return result
-
-        except Exception as e:
-            issuance.mark_failed(str(e))
-            logger.error(f"Issuance mint failed: {e}")
-            raise ShareIssuanceFailedException(f"Share issuance failed: {e}") from e
 
     def execute_request(self, request) -> dict:
         """Run an approved (or failed and retried) review request on-chain.

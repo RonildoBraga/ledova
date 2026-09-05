@@ -226,9 +226,3 @@ class InvalidSignatureException(APIException):
     status_code = status.HTTP_403_FORBIDDEN
     default_detail = "Invalid signature - does not match the expected wallet address."
     default_code = "invalid_signature"
-
-
-class ShareIssuanceFailedException(APIException):
-    status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-    default_detail = "Share issuance failed."
-    default_code = "share_issuance_failed"

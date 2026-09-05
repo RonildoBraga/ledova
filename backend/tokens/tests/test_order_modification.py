@@ -10,7 +10,7 @@ from shared.tests.tenants import make_tenant
 from shared.utils.signature import generate_order_modify_message
 from tokens.exceptions import OrderModificationException
 from tokens.models import OrderModificationLog, TransferOrder
-from tokens.models.choices import TransferOrderType
+from tokens.models.choices import TransferOrderStatus, TransferOrderType
 from tokens.services import OrderModificationService
 
 SIGNATURE = "0x" + "ab" * 65
@@ -89,10 +89,28 @@ class OrderModificationTest(APITestCase):
     @patch("rest_framework.throttling.SimpleRateThrottle.allow_request", return_value=True)
     def test_service_errors_reach_the_client_unwrapped(self, _throttle):
         self.client.force_authenticate(self.tenant.user)
+        TransferOrder.objects.filter(pk=self.order.pk).update(status=TransferOrderStatus.CANCELLED)
 
         response = self.client.post(
-            f"/api/v1/trading/orders/{self.tenant.order.uuid}/modify/message/", {"newQuantity": 5}, format="json"
+            f"/api/v1/trading/orders/{self.order.uuid}/modify/message/", {"newQuantity": 5}, format="json"
         )
 
         self.assertEqual(response.status_code, 400)
-        self.assertEqual(response.json()["detail"], "Order with status 'Open' cannot be modified.")
+        self.assertEqual(response.json()["detail"], "Order with status 'Cancelled' cannot be modified.")
+
+    @patch("rest_framework.throttling.SimpleRateThrottle.allow_request", return_value=True)
+    def test_pending_swap_conflicts_before_the_status_check(self, _throttle):
+        """The fixture order has a CREATED swap; partially filled is otherwise a modifiable status."""
+        self.client.force_authenticate(self.tenant.user)
+        TransferOrder.objects.filter(pk=self.tenant.order.pk).update(
+            status=TransferOrderStatus.PARTIALLY_FILLED, filled_quantity=4
+        )
+
+        response = self.client.post(
+            f"/api/v1/trading/orders/{self.tenant.order.uuid}/modify/message/", {"newQuantity": 12}, format="json"
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(
+            response.json()["detail"], "Cannot modify order with pending swap. Complete or cancel the swap first."
+        )

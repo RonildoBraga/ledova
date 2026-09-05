@@ -74,6 +74,11 @@ deleted; the three `/company/*` redirect routes stay for old bookmarks.
 ## Next work
 
 1. Explicit native body-token endpoints for the mobile app.
+2. Client bundle: drop the shared-constants `TRADING_ENDPOINTS.TRANSACTIONS`
+   key and the shared-types `OrderModificationMatchDetails`, `matchFound` and
+   `matchDetails` entries; the trading cleanup removed the endpoint and fields.
+3. Product call: should modifying an order re-run matching automatically?
+   Creation matches; modification no longer reports a candidate match.
 
 Decisions deferred during the simplification pass (each is a delete-or-keep
 call for the owner; the code is kept and working until decided):

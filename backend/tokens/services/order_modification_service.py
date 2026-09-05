@@ -16,8 +16,12 @@ from tokens.exceptions import (
     OrderModificationConflictException,
     OrderModificationException,
 )
-from tokens.models import OrderModificationLog, TransferOrder, TransferOrderType
-from tokens.services.matching_service import MatchingService
+from tokens.models import (
+    OrderModificationLog,
+    TransferOrder,
+    TransferOrderStatus,
+    TransferOrderType,
+)
 from tokens.services.share_token_service import ShareTokenService
 
 logger = logging.getLogger(__name__)
@@ -26,13 +30,13 @@ logger = logging.getLogger(__name__)
 class OrderModificationService:
 
     def validate_can_modify(self, order: TransferOrder) -> None:
-        if not order.can_be_modified:
-            raise OrderModificationException(f"Order with status '{order.get_status_display()}' cannot be modified.")
-
         if order.has_pending_swap:
             raise OrderModificationConflictException(
                 "Cannot modify order with pending swap. Complete or cancel the swap first."
             )
+
+        if order.status not in (TransferOrderStatus.OPEN, TransferOrderStatus.PARTIALLY_FILLED):
+            raise OrderModificationException(f"Order with status '{order.get_status_display()}' cannot be modified.")
 
     def validate_modifications(
         self,
@@ -223,22 +227,6 @@ class OrderModificationService:
         publish_trading_event("order_modified", str(order.token.uuid))
 
         return order, changes
-
-    def check_for_matches_after_modification(self, order: TransferOrder) -> Optional[dict]:
-        if order.remaining_quantity <= 0:
-            return None
-
-        matching_service = MatchingService()
-        matched_order = matching_service.find_best_match_with_partial_fill(order)
-
-        if matched_order:
-            return {
-                "matched_order_uuid": str(matched_order.uuid),
-                "matched_quantity": min(order.remaining_quantity, matched_order.remaining_quantity),
-                "matched_price": str(matched_order.price_per_share),
-            }
-
-        return None
 
     def _get_available_balance(self, order: TransferOrder) -> int:
         try:

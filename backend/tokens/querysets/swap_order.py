@@ -23,17 +23,11 @@ class SwapOrderQuerySet(QuerySet):
         )
         return self.filter(sell_order_owned | buy_order_owned)
 
-    def completed(self):
-        return self.filter(status=SwapOrderStatus.COMPLETED, tx_hash__isnull=False)
-
     def pending(self):
         return self.exclude(status__in=[SwapOrderStatus.COMPLETED, SwapOrderStatus.FAILED, SwapOrderStatus.EXPIRED])
 
     def with_related(self):
         return self.select_related("share_token", "payment_token", "sell_order", "buy_order")
-
-    def with_tokens(self):
-        return self.select_related("share_token", "payment_token")
 
     def last_completed_for_token(self, token):
         return self.filter(share_token=token, status="completed").order_by("-completed_at").first()

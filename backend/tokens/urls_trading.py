@@ -8,7 +8,6 @@ from tokens.views import (
     TradingTokenViewSet,
     TradingTransferViewSet,
     TradingWalletViewSet,
-    TransactionHistoryViewSet,
 )
 from tokens.views.trading_events import trading_events_stream
 from whitelist.views import WhitelistStatusView
@@ -22,7 +21,6 @@ router.register(r"orders", TradingOrderViewSet, basename="orders")
 router.register(r"wallets", TradingWalletViewSet, basename="wallets")
 router.register(r"transfers", TradingTransferViewSet, basename="transfers")
 router.register(r"swaps", SwapOrderViewSet, basename="swaps")
-router.register(r"transactions", TransactionHistoryViewSet, basename="transactions")
 
 urlpatterns = router.urls + [
     path("whitelist/<str:address>/status/", WhitelistStatusView.as_view(), name="whitelist-status"),

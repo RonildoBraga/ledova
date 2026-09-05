@@ -6,7 +6,12 @@ from eth_utils import from_wei, to_wei
 from web3 import Web3
 
 from integrations.blockchain import get_blockchain_client
-from shared.constants import SUPPORTED_CHAINS
+from shared.constants import (
+    BLOCKCHAIN_BITCOIN,
+    EVM_BLOCKCHAINS,
+    SUPPORTED_CHAINS,
+    normalize_chain,
+)
 from wallets.exceptions import (
     BlockchainAPIError,
     InsufficientBalanceException,
@@ -28,20 +33,21 @@ class TransferService:
         amount_token: Optional[str] = None,
         token_contract: Optional[str] = None,
     ) -> Dict[str, Any]:
-        chain_upper = wallet.chain.upper()
+        chain = normalize_chain(wallet.chain)
 
-        if wallet.chain.lower() not in SUPPORTED_CHAINS:
-            raise UnsupportedChainException(chain_upper)
+        if chain not in SUPPORTED_CHAINS:
+            raise UnsupportedChainException(wallet.chain.upper())
 
-        if chain_upper == "ETHEREUM" and token_contract:
+        if chain in EVM_BLOCKCHAINS and token_contract:
             return TransferService._prepare_erc20_transfer(
                 wallet=wallet,
+                chain=chain,
                 to_address=to_address,
                 amount_token=amount_token,
                 token_contract=token_contract,
             )
 
-        if chain_upper == "ETHEREUM":
+        if chain in EVM_BLOCKCHAINS:
             if not to_address or not amount_eth:
                 raise InvalidTransactionException(
                     "Both 'toAddress' and 'amountEth' are required for Ethereum transfers."
@@ -50,13 +56,14 @@ class TransferService:
             current_balance = TransferService._get_native_balance(wallet)
 
             return prepare_ethereum_transaction(
+                chain=chain,
                 from_address=wallet.address,
                 to_address=to_address,
                 amount_eth=amount,
                 current_balance=current_balance,
             )
 
-        if chain_upper == "BITCOIN":
+        if chain == BLOCKCHAIN_BITCOIN:
             if not to_address or not amount_btc:
                 raise InvalidTransactionException(
                     "Both 'toAddress' and 'amountBtc' are required for Bitcoin transfers."
@@ -71,11 +78,12 @@ class TransferService:
                 current_balance=current_balance,
             )
 
-        raise UnsupportedChainException(chain_upper)
+        raise UnsupportedChainException(chain.upper())
 
     @staticmethod
     def _prepare_erc20_transfer(
         wallet,
+        chain: str,
         to_address: str,
         amount_token: Optional[str],
         token_contract: str,
@@ -98,6 +106,7 @@ class TransferService:
         eth_balance = TransferService._get_native_balance(wallet)
 
         return prepare_erc20_transaction(
+            chain=chain,
             from_address=wallet.address,
             to_address=to_address,
             amount=amount,
@@ -117,18 +126,20 @@ class TransferService:
         transaction_fee: Optional[str] = None,
         token_contract: Optional[str] = None,
     ) -> Dict[str, Any]:
-        chain_upper = wallet.chain.upper()
+        chain = normalize_chain(wallet.chain)
 
-        if wallet.chain.lower() not in SUPPORTED_CHAINS:
-            raise UnsupportedChainException(chain_upper)
+        if chain not in SUPPORTED_CHAINS:
+            raise UnsupportedChainException(wallet.chain.upper())
 
         if not signed_transaction:
             raise InvalidTransactionException("'signedTransaction' is required.")
 
-        if chain_upper == "ETHEREUM":
-            tx_hash = broadcast_ethereum_transaction(signed_transaction)
-        else:  # BITCOIN
+        if chain in EVM_BLOCKCHAINS:
+            tx_hash = broadcast_ethereum_transaction(chain, signed_transaction)
+        elif chain == BLOCKCHAIN_BITCOIN:
             tx_hash = broadcast_bitcoin_transaction(signed_transaction)
+        else:
+            raise UnsupportedChainException(chain.upper())
 
         pending_result = None
         if to_address and amount:
@@ -188,7 +199,7 @@ class TransferService:
 
 
 def prepare_ethereum_transaction(
-    from_address: str, to_address: str, amount_eth: Decimal, current_balance: Decimal
+    chain: str, from_address: str, to_address: str, amount_eth: Decimal, current_balance: Decimal
 ) -> Dict[str, Any]:
     logger.info(f"Preparing transaction: from={from_address[:8]}..., to={to_address[:8]}..., amount={amount_eth} ETH")
 
@@ -202,7 +213,7 @@ def prepare_ethereum_transaction(
         from_address_checksum = Web3.to_checksum_address(from_address)
         to_address_checksum = Web3.to_checksum_address(to_address)
 
-        client = get_blockchain_client("ETH")
+        client = get_blockchain_client(chain)
         gas_price_wei = client.get_gas_price()
 
         gas_limit = 21000
@@ -313,11 +324,11 @@ def prepare_bitcoin_transaction(
         raise BlockchainAPIError(f"Failed to prepare Bitcoin transaction: {str(e)}")
 
 
-def broadcast_ethereum_transaction(signed_tx_hex: str) -> str:
+def broadcast_ethereum_transaction(chain: str, signed_tx_hex: str) -> str:
     try:
-        logger.info("Broadcasting signed Ethereum transaction")
+        logger.info(f"Broadcasting signed {chain} transaction")
 
-        client = get_blockchain_client("ETH")
+        client = get_blockchain_client(chain)
         tx_hash = client.broadcast_transaction(signed_tx_hex)
 
         logger.info(f"Ethereum transaction broadcast successful: {tx_hash}")
@@ -344,6 +355,7 @@ def broadcast_bitcoin_transaction(signed_tx_hex: str) -> str:
 
 
 def prepare_erc20_transaction(
+    chain: str,
     from_address: str,
     to_address: str,
     amount: Decimal,
@@ -376,7 +388,7 @@ def prepare_erc20_transaction(
 
         contract_checksum = Web3.to_checksum_address(contract_address)
 
-        client = get_blockchain_client("ETH")
+        client = get_blockchain_client(chain)
 
         gas_limit = client.estimate_erc20_transfer_gas(
             from_address=from_address,

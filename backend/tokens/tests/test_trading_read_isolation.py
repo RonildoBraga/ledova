@@ -1,6 +1,6 @@
 """Owner-bound regressions for trading endpoints that accept wallet addresses."""
 
-from datetime import date, timedelta
+from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
@@ -9,27 +9,21 @@ from django.utils import timezone
 from rest_framework.test import APITestCase
 from web3 import Web3
 
-from blockchain.models import BlockchainTransaction
 from companies.models import Company
 from feature_flags.models import FeatureFlag
 from tokens.models import (
-    MintRequest,
-    ShareIssuance,
     ShareToken,
     Stablecoin,
     SwapOrder,
     TransferOrder,
 )
 from tokens.models.choices import (
-    IssuanceStatus,
     ShareTokenStatus,
     ShareTokenType,
     SwapOrderStatus,
     TransferOrderStatus,
     TransferOrderType,
 )
-from tokens.models.mint_request import MintRequestStatus
-from tokens.serializers.transaction import SwapShareTransactionSerializer
 from users.models import UserAccount, UserProfile
 from wallets.models import Wallet
 
@@ -231,184 +225,6 @@ class TradingReadIsolationTest(APITestCase):
         visible = SwapOrder.objects.pending_for_wallet_ids([self.bob_wallet.uuid])
 
         self.assertNotIn(malformed_swap.uuid, visible.values_list("uuid", flat=True))
-
-    @patch("tokens.views.transaction.TransactionHistoryService.get_transaction_history")
-    def test_transaction_history_rejects_mixed_addresses_before_service_call(self, get_history):
-        self.client.force_authenticate(self.bob)
-        response = self.client.get(
-            "/api/v1/trading/transactions/",
-            {"wallet_addresses": f"{self.bob_wallet.address},{self.alice_wallet.address}"},
-        )
-
-        self.assertEqual(response.status_code, 404)
-        self.assertNotIn(self.alice_wallet.address.lower(), str(response.data).lower())
-        get_history.assert_not_called()
-
-    @patch("tokens.views.transaction.TransactionHistoryService.get_transaction_history")
-    def test_transaction_history_deduplicates_owned_case_variants(self, get_history):
-        get_history.return_value = {
-            "swap_orders": [],
-            "mint_requests": [],
-            "token_issuances": [],
-        }
-        self.client.force_authenticate(self.bob)
-
-        response = self.client.get(
-            "/api/v1/trading/transactions/",
-            {"wallet_addresses": f"{self.bob_case_variant},{self.bob_wallet.address}"},
-        )
-
-        self.assertEqual(response.status_code, 200)
-        get_history.assert_called_once_with(
-            wallet_ids=(self.bob_wallet.uuid,),
-            start_date=None,
-            end_date=None,
-            transaction_type=None,
-        )
-
-    def test_transaction_serializer_ignores_raw_query_addresses(self):
-        request = self.client.get(
-            "/api/v1/trading/transactions/",
-            {"wallet_addresses": self.alice_wallet.address},
-        ).wsgi_request
-        serializer = SwapShareTransactionSerializer(
-            context={
-                "request": request,
-                "authorized_wallet_addresses": (Web3.to_checksum_address(self.bob_wallet.address),),
-            }
-        )
-
-        self.assertEqual(
-            serializer._get_wallet_address(self.swap, "buyer_address", "seller_address"),
-            Web3.to_checksum_address(self.bob_wallet.address),
-        )
-
-    def test_completed_history_is_scoped_by_exact_order_wallet_fk(self):
-        duplicate_wallet = Wallet.objects.create(
-            user_account=self.bob_account,
-            address=self.alice_wallet.address,
-            chain="base",
-            verification_status="VERIFIED",
-        )
-        charlie_order = self._make_order(self.charlie_wallet, TransferOrderType.BUY)
-        self._make_swap(
-            self.alice_order,
-            charlie_order,
-            "3",
-            status=SwapOrderStatus.COMPLETED,
-        )
-        self.client.force_authenticate(self.bob)
-
-        response = self.client.get(
-            "/api/v1/trading/transactions/",
-            {"wallet_addresses": duplicate_wallet.address},
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["count"], 0)
-
-    def test_completed_history_maps_each_record_to_its_authorized_wallet(self):
-        second_wallet = Wallet.objects.create(
-            user_account=self.bob_account,
-            address="0x" + "7" * 40,
-            chain="base",
-            verification_status="VERIFIED",
-        )
-        second_buy_order = self._make_order(second_wallet, TransferOrderType.BUY)
-
-        self.swap.status = SwapOrderStatus.COMPLETED
-        self.swap.tx_hash = "0x" + "1" * 64
-        self.swap.completed_at = timezone.now() - timedelta(minutes=1)
-        self.swap.save(update_fields=["status", "tx_hash", "completed_at"])
-        self._make_swap(
-            self.alice_order,
-            second_buy_order,
-            "7",
-            status=SwapOrderStatus.COMPLETED,
-        )
-        self.client.force_authenticate(self.bob)
-
-        response = self.client.get(
-            "/api/v1/trading/transactions/",
-            {"wallet_addresses": f"{self.bob_wallet.address},{second_wallet.address}"},
-        )
-
-        first_address = Web3.to_checksum_address(self.bob_wallet.address)
-        second_address = Web3.to_checksum_address(second_wallet.address)
-        returned_addresses = [item["walletAddress"] for item in response.data["results"]]
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["count"], 4)
-        self.assertEqual(returned_addresses.count(first_address), 2)
-        self.assertEqual(returned_addresses.count(second_address), 2)
-
-    def _create_address_only_history(self):
-        transaction = BlockchainTransaction.objects.create(
-            tx_hash="0x" + "4" * 64,
-            from_address="0x" + "f" * 40,
-            to_address=self.alice_wallet.address,
-        )
-        MintRequest.objects.create(
-            stablecoin=self.stablecoin,
-            recipient_address=self.alice_wallet.address,
-            recipient_name="Alice",
-            amount=100,
-            status=MintRequestStatus.EXECUTED,
-            deposit_reference="synthetic-test",
-            deposit_date=date.today(),
-            requested_by=self.alice,
-            executed_by=self.alice,
-            executed_at=timezone.now(),
-            transaction=transaction,
-        )
-        ShareIssuance.objects.create(
-            token=self.share_token,
-            recipient_address=self.alice_wallet.address,
-            recipient_name="Alice",
-            amount="10",
-            status=IssuanceStatus.COMPLETED,
-            completed_at=timezone.now(),
-            initiated_by=self.alice,
-        )
-
-    def test_nonstaff_address_only_history_is_suppressed(self):
-        self._create_address_only_history()
-        duplicate_wallet = Wallet.objects.create(
-            user_account=self.bob_account,
-            address=self.alice_wallet.address,
-            chain="base",
-            verification_status="VERIFIED",
-        )
-        self.client.force_authenticate(self.bob)
-
-        response = self.client.get(
-            "/api/v1/trading/transactions/",
-            {"wallet_addresses": duplicate_wallet.address},
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["count"], 0)
-
-    def test_privileged_address_only_history_is_suppressed(self):
-        self._create_address_only_history()
-        staff, _, _ = self._make_tenant("staff@read.test", self.alice_wallet.address)
-        staff.is_staff = True
-        staff.save(update_fields=["is_staff"])
-        superuser, _, _ = self._make_tenant("superuser@read.test", self.alice_wallet.address)
-        superuser.is_superuser = True
-        superuser.save(update_fields=["is_superuser"])
-
-        for user in (staff, superuser):
-            self.client.force_authenticate(user)
-
-            for transaction_type in (None, "stablecoin_mint", "token_issuance"):
-                params = {"wallet_addresses": self.alice_wallet.address}
-                if transaction_type:
-                    params["transaction_type"] = transaction_type
-
-                with self.subTest(user=user.email, transaction_type=transaction_type):
-                    response = self.client.get("/api/v1/trading/transactions/", params)
-                    self.assertEqual(response.status_code, 200)
-                    self.assertEqual(response.data["count"], 0)
 
     @patch("tokens.views.trading_transfer.TransferService")
     def test_transfer_prepare_rejects_foreign_from_address_before_service_construction(self, service_class):

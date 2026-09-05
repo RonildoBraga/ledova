@@ -124,6 +124,30 @@ class ShareTokenActionTest(APITestCase):
         service.get_token_holders.assert_called_once_with(token)
 
     @patch("tokens.views.share_token.ShareTokenService")
+    def test_issue_rejects_a_bad_amount_with_a_field_error(self, service_class):
+        """Mobile can post a null amount (NaN parseInt); it must be a 400, never a 500."""
+        token = self.tenant.deployed_token
+
+        for amount in (None, "seven", 0):
+            with self.subTest(amount=amount):
+                response = self.client.post(
+                    f"/api/v1/tokens/{token.uuid}/issue/",
+                    {"recipient": RECIPIENT, "amount": amount, "reason": "", "issuanceType": "additional"},
+                    format="json",
+                )
+                self.assertEqual(response.status_code, 400, response.content)
+                self.assertIn("amount", response.json())
+
+        bad_type = self.client.post(
+            f"/api/v1/tokens/{token.uuid}/issue/",
+            {"recipient": RECIPIENT, "amount": 1, "issuanceType": "airdrop"},
+            format="json",
+        )
+        self.assertEqual(bad_type.status_code, 400)
+        self.assertIn("issuanceType", bad_type.json())
+        service_class.return_value.create_issuance_request.assert_not_called()
+
+    @patch("tokens.views.share_token.ShareTokenService")
     def test_detail_actions_keep_filter_params_off_the_token_lookup(self, service_class):
         """?status= narrows the issuances of the named token; ShareTokenFilter only applies to the list."""
         token = self.tenant.deployed_token

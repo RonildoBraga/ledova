@@ -125,10 +125,6 @@ class ShareIssuance(BaseModel):
         return f"{self.token.symbol}: {self.amount} → {self.recipient_address[:10]}..."
 
     @property
-    def is_pending(self) -> bool:
-        return self.status == IssuanceStatus.PENDING
-
-    @property
     def is_completed(self) -> bool:
         return self.status == IssuanceStatus.COMPLETED
 
