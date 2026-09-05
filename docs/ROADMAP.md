@@ -136,9 +136,17 @@ deployment configuration is deliberately absent.
   pinned by tests — a shares-only portfolio draws a flat zero holdings chart
   instead of the empty state, and its allocation doughnut is empty while the
   quantity column shows the real share count.
-- **Shares move by allotment, not by wallet transfer.** `prepare-transfer` and
-  `broadcast-transfer` refuse a `tokenized_security`, which is what keeps the
-  Phase 1 register — a read-model over `ShareIssuance` — correct.
+- **Shares move by allotment, not by wallet transfer.** `prepare-transfer`
+  refuses a `tokenized_security`, and so does `broadcast-transfer` whenever the
+  caller names the token contract. A broadcast that omits the contract carries
+  an opaque signed transaction the backend cannot inspect, so the guard there is
+  advisory rather than absolute. What actually holds the line is on chain:
+  `ShareToken._update` reverts unless the recipient is in the whitelist
+  registry, so a share can never leave the whitelisted set and the Phase 1
+  register — a read-model over `ShareIssuance` reconciled against on-chain
+  balances — stays reconstructible. The register is only *complete* while
+  allotment is the sole way shares move, which is why the trading write routes
+  remain flag-gated. Relaxing either is the trigger for a Phase 2 log indexer.
 - **Two deployment modes, one row.** `deployment_mode` is recorded
   configuration on the operator row
   ([docs/OPERATIONS.md](OPERATIONS.md#operator-configuration)); it does not

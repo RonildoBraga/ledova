@@ -80,3 +80,22 @@ class AssetListExcludesTokenizedSecuritiesTest(APITestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["asset"]["symbol"], "ORD")
+
+    def test_a_stranger_cannot_favourite_another_companys_share_class(self):
+        response = self.client.post(
+            "/api/favourite-assets/",
+            {"user_account": str(self.outsider.account.uuid), "asset": str(self.share.uuid)},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("asset", response.json())
+        self.assertFalse(FavouriteAsset.objects.filter(asset=self.share).exists())
+
+    def test_a_stablecoin_can_still_be_favourited(self):
+        response = self.client.post(
+            "/api/favourite-assets/",
+            {"user_account": str(self.outsider.account.uuid), "asset": str(self.stablecoin.uuid)},
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(FavouriteAsset.objects.filter(asset=self.stablecoin).exists())

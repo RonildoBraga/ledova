@@ -2,6 +2,7 @@ import logging
 from decimal import Decimal
 from typing import Optional
 
+from django.db import transaction
 from django.utils import timezone
 
 from wallets.constants import SNAPSHOT_REASON_DAILY
@@ -17,14 +18,20 @@ def sync_holding(wallet, asset) -> Optional[Holding]:
         logger.info(f"No chain balance for {asset.symbol} on {wallet.chain}; holding left untouched")
         return None
 
-    holding, _ = Holding.objects.get_or_create(wallet=wallet, asset=asset, defaults={"quantity": Decimal("0")})
-    holding.quantity = balance
-    holding.last_synced_at = timezone.now()
-    holding.save(update_fields=["quantity", "last_synced_at", "updated_at"])
-    HoldingSnapshot.objects.update_or_create(
-        holding=holding,
-        snapshot_date=timezone.now().date(),
-        defaults={"quantity": balance},
-        create_defaults={"quantity": balance, "snapshot_reason": SNAPSHOT_REASON_DAILY},
-    )
+    with transaction.atomic():
+        holding, _ = Holding.objects.get_or_create(wallet=wallet, asset=asset, defaults={"quantity": Decimal("0")})
+        if holding.quantity != balance:
+            logger.info(
+                f"Corrected {asset.symbol} on {wallet.chain} "
+                f"from {holding.quantity} to {balance} for wallet {wallet.uuid}"
+            )
+        holding.quantity = balance
+        holding.last_synced_at = timezone.now()
+        holding.save(update_fields=["quantity", "last_synced_at", "updated_at"])
+        HoldingSnapshot.objects.update_or_create(
+            holding=holding,
+            snapshot_date=timezone.now().date(),
+            defaults={"quantity": balance},
+            create_defaults={"quantity": balance, "snapshot_reason": SNAPSHOT_REASON_DAILY},
+        )
     return holding
