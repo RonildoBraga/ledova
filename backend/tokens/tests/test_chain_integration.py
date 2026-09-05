@@ -3,6 +3,7 @@ import secrets
 import threading
 import time
 from datetime import timedelta
+from decimal import Decimal
 from unittest import skipUnless
 from unittest.mock import patch
 
@@ -12,10 +13,12 @@ from django.utils import timezone
 from eth_account import Account
 from rest_framework.test import APITestCase, APITransactionTestCase
 
+from assets.models import Asset, AssetChainDeployment, AssetType
 from blockchain.models import BlockchainTransaction, TransactionStatus, TransactionType
 from companies.models import Company, CompanyStatus
 from integrations.base_chain.client import BaseChainClient, get_base_chain_client
 from integrations.base_chain.exceptions import BaseChainTransactionError
+from integrations.blockchain import BlockchainClientFactory
 from shared.tests.tenants import make_tenant
 from tokens.exceptions import IssuanceRefusedException, TokenDeploymentFailedException
 from tokens.models import (
@@ -41,7 +44,7 @@ from tokens.tasks import (
     execute_review_request_task,
 )
 from wallets.constants import WALLET_VERIFICATION_STATUS_VERIFIED
-from wallets.models import Wallet
+from wallets.models import Holding, Wallet
 from whitelist.services import WhitelistService
 
 CHAIN_ENV = (
@@ -318,6 +321,41 @@ class ShareTokenChainTest(ChainTestMixin, APITestCase):
         self.assertEqual(self.token.status, ShareTokenStatus.DEPLOYED)
         self.assertEqual(self.token.contract_address, contract_address)
         self.assertEqual(self.w3.eth.block_number, blocks_before)
+
+    def test_a_real_deployment_bridges_a_verified_asset_and_an_allotment_writes_the_holding(self):
+        BlockchainClientFactory._clients.clear()
+        self.addCleanup(BlockchainClientFactory._clients.clear)
+        contract_address = self._deployed()["contract_address"]
+
+        self.assertEqual(self.service.get_token_by_identifier(self.identifier), contract_address)
+        deployment = AssetChainDeployment.objects.get(contract_address=contract_address)
+        asset = deployment.asset
+        self.assertEqual((deployment.chain, deployment.decimals), ("base", 0))
+        self.assertEqual(
+            (asset.symbol, asset.asset_type, asset.decimals, asset.is_verified),
+            (self.token.symbol, AssetType.TOKENIZED_SECURITY.value, 0, True),
+        )
+        self.assertEqual(asset.name, f"{self.token.company.name} {self.token.name}")
+        self.assertIsNone(asset.current_price)
+
+        self.token.mark_deploying()
+        rerun = deploy_share_token_task(token_uuid=str(self.token.uuid))
+        self.assertEqual((rerun["adopted"], rerun["contract_address"]), (True, contract_address))
+        self.assertEqual(AssetChainDeployment.objects.filter(contract_address=contract_address).count(), 1)
+        self.assertEqual(Asset.objects.filter(chain_deployments__contract_address=contract_address).count(), 1)
+
+        self.token.refresh_from_db()
+        request = self._whitelisted_request(amount=40)
+        self.assertTrue(self._execute(request)["success"])
+
+        wallet = Wallet.objects.get(address=self.investor)
+        holding = Holding.objects.get(wallet=wallet, asset=asset)
+        self.assertEqual(holding.quantity, Decimal("40"))
+        self.assertIsNotNone(holding.last_synced_at)
+        self.assertIsNone(holding.market_value)
+        snapshot = holding.snapshots.get()
+        self.assertEqual((snapshot.quantity, snapshot.snapshot_reason), (Decimal("40"), "DAILY"))
+        self.assertEqual(self._contract().functions.balanceOf(self.investor).call(), 40)
 
     def test_crash_after_send_keeps_the_token_deploying_until_the_sweep_binds_it(self):
         nonce_before = self._signer_nonce()

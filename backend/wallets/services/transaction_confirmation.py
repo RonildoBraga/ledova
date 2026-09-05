@@ -6,7 +6,7 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
 
-from assets.models import Asset
+from assets.models import Asset, AssetType
 from assets.services.identity import native_asset_for_chain
 from compliance.services.transaction_monitoring import TransactionMonitoringService
 from shared.constants import normalize_chain
@@ -19,9 +19,11 @@ from wallets.constants import (
 )
 from wallets.exceptions import InvalidTransactionException
 from wallets.models import Holding, HoldingSnapshot, Transaction, Wallet
-from wallets.services.chain import fetch_chain_balance
+from wallets.services.holdings import sync_holding
 
 logger = logging.getLogger(__name__)
+
+NOT_TRANSFERABLE = "{symbol} is a tokenized security. Shares move by allotment, not by a wallet transfer."
 
 
 class TransactionConfirmationService:
@@ -36,6 +38,8 @@ class TransactionConfirmationService:
             raise InvalidTransactionException(
                 f"Token contract {token_contract} is not a verified asset on {normalize_chain(wallet.chain)}."
             )
+        if asset.asset_type == AssetType.TOKENIZED_SECURITY.value:
+            raise InvalidTransactionException(NOT_TRANSFERABLE.format(symbol=asset.symbol))
         return asset
 
     @staticmethod
@@ -175,16 +179,7 @@ class TransactionConfirmationService:
 
     @staticmethod
     def _verify_holding_balance(wallet: Wallet, asset: Asset) -> None:
-        blockchain_balance = fetch_chain_balance(wallet, asset)
-        if blockchain_balance is None:
-            return
-
-        holding = Holding.objects.filter(wallet=wallet, asset=asset).first()
-        if holding and holding.quantity != blockchain_balance:
-            logger.warning(f"Balance correction: {holding.quantity} -> {blockchain_balance} {asset.symbol}")
-            holding.quantity = blockchain_balance
-            holding.last_synced_at = timezone.now()
-            holding.save(update_fields=["quantity", "last_synced_at"])
+        sync_holding(wallet, asset)
 
     @staticmethod
     def _update_snapshot_on_confirmation(tx: Transaction) -> None:

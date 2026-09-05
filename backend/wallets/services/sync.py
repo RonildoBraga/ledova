@@ -12,9 +12,9 @@ from assets.services.identity import native_asset_for_chain, quarantine_unknown_
 from compliance.services.transaction_monitoring import TransactionMonitoringService
 from integrations.blockchain import get_blockchain_client
 from shared.constants import normalize_chain
-from wallets.constants import SNAPSHOT_REASON_DAILY, SNAPSHOT_REASON_TRANSACTION
+from wallets.constants import SNAPSHOT_REASON_TRANSACTION
 from wallets.models import Holding, HoldingSnapshot, Transaction, Wallet
-from wallets.services.chain import fetch_chain_balance
+from wallets.services.holdings import sync_holding
 
 logger = logging.getLogger(__name__)
 
@@ -144,25 +144,8 @@ class WalletSyncService:
 
     @staticmethod
     def _sync_holdings_from_blockchain(wallet: Wallet) -> int:
-        updated = 0
-
-        for holding in wallet.holdings.select_related("asset").filter(asset__is_verified=True):
-            blockchain_balance = fetch_chain_balance(wallet, holding.asset)
-
-            if blockchain_balance is not None:
-                holding.quantity = blockchain_balance
-                holding.last_synced_at = timezone.now()
-                holding.save(update_fields=["quantity", "last_synced_at"])
-                updated += 1
-
-                HoldingSnapshot.objects.update_or_create(
-                    holding=holding,
-                    snapshot_date=timezone.now().date(),
-                    defaults={"quantity": blockchain_balance},
-                    create_defaults={"quantity": blockchain_balance, "snapshot_reason": SNAPSHOT_REASON_DAILY},
-                )
-
-        return updated
+        assets = [holding.asset for holding in wallet.holdings.select_related("asset").filter(asset__is_verified=True)]
+        return sum(1 for asset in assets if sync_holding(wallet, asset) is not None)
 
     @staticmethod
     def _calculate_market_value(amount: Decimal, asset: Asset, timestamp: datetime) -> Optional[Decimal]:

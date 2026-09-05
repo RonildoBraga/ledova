@@ -1,5 +1,5 @@
 from datetime import timedelta
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 from django.test import TestCase, override_settings
 from django.utils import timezone
@@ -343,9 +343,10 @@ class PendingDeploymentSweepTest(TestCase):
 
     def test_stale_deploying_rows_resolve_through_the_identifier(self):
         self._age(self.token, 11)
+        identifier = f"{self.tenant.company.acn}:DRF"
         with patch.object(ShareTokenService, "get_token_by_identifier", return_value=CREATED) as lookup:
             self.assertEqual(check_pending_token_deployments(), {"checked": 1, "resolved": 1})
-        lookup.assert_called_once_with(f"{self.tenant.company.acn}:DRF")
+        self.assertEqual(lookup.call_args_list, [call(identifier), call(identifier)])
         self.token.refresh_from_db()
         self.assertEqual((self.token.status, self.token.contract_address), (ShareTokenStatus.DEPLOYED, CREATED))
 

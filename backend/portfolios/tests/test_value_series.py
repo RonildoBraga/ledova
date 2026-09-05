@@ -225,3 +225,36 @@ class PortfolioSnapshotsEndpointTest(ValueSeriesFixtureMixin, APITestCase):
         self.client.force_authenticate(bob)
         self.assertEqual(self.client.get(self.url).status_code, 404)
         self.assertEqual(self.client.get(f"/api/portfolios/{bob_portfolio.uuid}/snapshots/").status_code, 200)
+
+
+class SharesOnlyPortfolioTest(ValueSeriesFixtureMixin, APITestCase):
+    def setUp(self):
+        self.user, _, self.account, self.portfolio, self.wallet = self.make_tenant("shareholder")
+        self.portfolio.wallets.add(self.wallet)
+        self.share = Asset.objects.create(
+            symbol="ORD", name="Acme Ordinary", asset_type="tokenized_security", decimals=0, is_verified=True
+        )
+        holding = Holding.objects.create(wallet=self.wallet, asset=self.share, quantity=Decimal("250"))
+        HoldingSnapshot.objects.create(
+            holding=holding, quantity=Decimal("250"), snapshot_date=self.day(20), snapshot_reason="DAILY"
+        )
+
+    def test_a_shares_only_series_stops_being_empty_and_carries_a_null_total(self):
+        points = portfolio_value_series(self.portfolio)
+
+        self.assertEqual([point["snapshot_date"] for point in points], [self.day(20), self.day(21), self.day(22)])
+        self.assertEqual({point["total_market_value"] for point in points}, {None})
+        self.assertEqual({point["has_value_data"] for point in points}, {False})
+        entry = points[0]["holdings_data"]["ORD"]
+        self.assertEqual(entry["quantity"], "250.000000000000000000")
+        self.assertNotIn("market_value", entry)
+
+    def test_the_holdings_route_reports_the_share_count_with_no_market_value(self):
+        self.client.force_authenticate(self.user)
+
+        response = self.client.get(f"/api/wallets/{self.wallet.uuid}/holdings/")
+
+        self.assertEqual(response.status_code, 200)
+        row = next(row for row in response.json() if row["assetSymbol"] == "ORD")
+        self.assertEqual(row["quantity"], "250.000000000000000000")
+        self.assertIsNone(row["marketValue"])
