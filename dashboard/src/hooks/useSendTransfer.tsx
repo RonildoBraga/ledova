@@ -108,7 +108,6 @@ export function SendTransferProvider({ children }: { children: ReactNode }) {
           }
           toAddress={transferFlow.pendingTransfer.toAddress}
           amount={transferFlow.pendingTransfer.amount}
-          chainType={transferFlow.getChainType()}
           preparedTransaction={transferFlow.signing.preparedTransaction}
           isPreparing={transferFlow.signing.isPreparing}
           prepareError={transferFlow.signing.prepareError}

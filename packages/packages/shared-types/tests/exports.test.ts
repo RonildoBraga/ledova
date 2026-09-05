@@ -6,6 +6,9 @@ import type {
   Portfolio,
   PortfolioSnapshotQueryParams,
   PortfolioSnapshotReason,
+  PrepareBitcoinTransferRequest,
+  PrepareBitcoinTransferResponse,
+  PrepareTransferRequest,
   UpdateUserProfile,
   UserProfile,
 } from '../src';
@@ -42,6 +45,17 @@ describe('shared-types exports', () => {
     const walletKeys: Has<AccountExportData['wallets'][number], 'nativeBalance' | 'marketValue'> = true;
     const legacyWalletKey: Has<AccountExportData['wallets'][number], 'balance'> = false;
     expect([profileKeys, walletKeys, legacyWalletKey]).toEqual([true, true, false]);
+  });
+
+  it('keeps the EVM and Bitcoin prepare-transfer contracts apart', () => {
+    const evmHasNoBtcAmount: Has<PrepareTransferRequest, 'amountBtc'> = false;
+    const btcRequest: PrepareBitcoinTransferRequest = { toAddress: `tb1q${'a'.repeat(38)}`, amountBtc: '0.001' };
+    const btcResponseKeys: Has<
+      PrepareBitcoinTransferResponse,
+      'amountBtc' | 'feeBtc' | 'totalCostBtc' | 'feePerByte' | 'estimatedTxSize'
+    > = true;
+    expect([evmHasNoBtcAmount, btcResponseKeys]).toEqual([false, true]);
+    expect(btcRequest.amountBtc).toBe('0.001');
   });
 
   it('drops the query params and response fields the backend no longer reads or emits', () => {

@@ -10,8 +10,14 @@ import {
   ShieldWarningIcon,
   ShieldCheckIcon,
 } from '@phosphor-icons/react';
-import { getChainShortCode, BLOCKCHAIN, DESIGN_TOKENS, getAddressPlaceholder } from '@ledova/shared-constants';
-import { formatWalletAddressShort } from '@ledova/shared-utils';
+import {
+  getChainShortCode,
+  BLOCKCHAIN,
+  DESIGN_TOKENS,
+  getAddressPlaceholder,
+  getBlockchainDisplayName,
+} from '@ledova/shared-constants';
+import { formatWalletAddressShort, validateWalletAddress } from '@ledova/shared-utils';
 import { useCurrency } from '@hooks/useCurrency';
 import type { Wallet, WhitelistStatus } from '@ledova/shared-types';
 import { Modal } from '@components/Modal';
@@ -64,8 +70,8 @@ export function SendFormModal({
   const [showAddressScanner, setShowAddressScanner] = useState(false);
 
   const chainShortCode = getChainShortCode(wallet.chain);
-  const isEthereum = wallet.chain === BLOCKCHAIN.ETHEREUM;
-  const ChainIcon = isEthereum ? CurrencyEthIcon : CurrencyBtcIcon;
+  const isBitcoin = wallet.chain === BLOCKCHAIN.BITCOIN;
+  const ChainIcon = isBitcoin ? CurrencyBtcIcon : CurrencyEthIcon;
   const displayAddress = formatWalletAddressShort(wallet.address);
 
   useEffect(() => {
@@ -108,9 +114,9 @@ export function SendFormModal({
   const isShareToken = selectedAsset?.type === 'share_token';
   const isCrypto = selectedAsset?.type === 'crypto';
 
-  const isValidAddress = isEthereum
-    ? toAddress.length === 42 && toAddress.startsWith('0x')
-    : toAddress.length >= 26 && toAddress.length <= 62;
+  const isValidAddress = isBitcoin
+    ? validateWalletAddress(toAddress, wallet.chain)
+    : toAddress.length === 42 && toAddress.startsWith('0x');
 
   const parsedAmount = parseFloat(amount);
   const parsedBalance = parseFloat(selectedAsset?.displayBalance.replace(/,/g, '') || '0');
@@ -123,7 +129,7 @@ export function SendFormModal({
     if (!selectedAsset) return;
     if (isCrypto) {
       const balance = parseFloat(wallet.nativeBalance);
-      const estimatedFee = isEthereum ? 0.001 : 0.00001;
+      const estimatedFee = isBitcoin ? 0.00001 : 0.001;
       const maxAmount = Math.max(0, balance - estimatedFee);
       setAmount(maxAmount.toString());
     } else {
@@ -155,10 +161,10 @@ export function SendFormModal({
           <CurrencyCircleDollarIcon size={ICON_MD} className={colorClass} weight={selected ? 'duotone' : 'regular'} />
         );
       case 'crypto':
-        return isEthereum ? (
-          <CurrencyEthIcon size={ICON_MD} className={colorClass} weight={selected ? 'duotone' : 'regular'} />
-        ) : (
+        return isBitcoin ? (
           <CurrencyBtcIcon size={ICON_MD} className={colorClass} weight={selected ? 'duotone' : 'regular'} />
+        ) : (
+          <CurrencyEthIcon size={ICON_MD} className={colorClass} weight={selected ? 'duotone' : 'regular'} />
         );
     }
   };
@@ -278,7 +284,7 @@ export function SendFormModal({
           )}
           {toAddress && !isValidAddress && (
             <p className="text-xs text-warning-light">
-              Please enter a valid {isEthereum ? 'Ethereum' : 'Bitcoin'} address
+              Please enter a valid {getBlockchainDisplayName(chainShortCode)} address
             </p>
           )}
         </div>

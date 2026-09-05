@@ -1,4 +1,3 @@
-from eth_account import Account
 from rest_framework import serializers
 from web3 import Web3
 
@@ -197,19 +196,18 @@ class BroadcastTransferSerializer(serializers.Serializer):
         if not value.startswith("0x"):
             raise serializers.ValidationError("Signed transaction must start with 0x")
 
+        from tokens.services.contracts import known_contract_addresses
+        from tokens.services.signed_transactions import decode_signed_transaction
+
         try:
-            raw_bytes = bytes.fromhex(value[2:])
-            tx = Account.decode_transaction(raw_bytes)
-        except Exception:
+            decoded = decode_signed_transaction(bytes.fromhex(value[2:]))
+        except ValueError:
             raise serializers.ValidationError("Unable to decode signed transaction")
 
-        to_address = tx.get("to")
-        if to_address is None:
+        if decoded.to is None:
             raise serializers.ValidationError("Contract creation transactions are not allowed")
 
-        from tokens.services.contracts import known_contract_addresses
-
-        if to_address.lower() not in known_contract_addresses():
+        if decoded.to.lower() not in known_contract_addresses():
             raise serializers.ValidationError("Transaction target is not a known Ledova contract")
 
         return value

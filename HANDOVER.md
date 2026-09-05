@@ -100,6 +100,21 @@ card and counts; `getUserVerificationStatus` reads `verificationStatus` /
 `Country` type, `TRADING_ENDPOINTS.TRANSACTIONS`, the order-modification
 match fields, the `SWAP`/`MANUAL` snapshot reasons and `CreatePortfolio`.
 
+Branch `claude/b10-bitcoin-manual-signing` restores the Bitcoin send step both
+clients lost: for a Bitcoin wallet the prepare call sends `amountBtc`
+(`prepareBitcoinTransfer`, typed by `PrepareBitcoinTransferResponse`) and the
+sign step shows what to sign (recipient, amount, fee rate, estimated size,
+total), takes the signed raw transaction hex the user produced with their own
+tooling (`normalizeBitcoinRawTransactionHex` strips whitespace and an optional
+`0x`) and broadcasts it; the success state links to the testnet explorer.
+The Keystone QR (dashboard) and software/hardware (mobile) EVM paths are
+unchanged, `useTransferFlow` treats Base as EVM (whitelist query, 18
+decimals, display name from shared-constants) and the trading broadcast
+validator decodes legacy and typed transactions through
+`tokens/services/signed_transactions.py` (`Account.decode_transaction` never
+existed in eth-account 0.14; `tokens/tests/test_signed_transactions.py` signs
+real transactions offline).
+
 ## Next work
 
 1. Product call: should modifying an order re-run matching automatically?
@@ -172,7 +187,10 @@ call for the owner; the code is kept and working until decided):
   `POST /api/fiat-purchases/transak-widget-url/` remains.
 - `NotificationPreferences`: fold into `UserPreferences` with the next
   settings-screen change.
-- Bitcoin support end to end (`integrations/blockchain/bitcoin.py`).
+- Bitcoin is kept as watch-only wallets plus manual signed-transaction sends
+  on testnet/regtest: the app never builds or signs a Bitcoin transaction; the
+  user signs with their own tooling and pastes the raw hex, which the backend
+  broadcasts (decided, not deferred).
 - Mobile app status and the collapse of the four shared TypeScript packages
   into one; both are client-side work and were out of scope here.
 

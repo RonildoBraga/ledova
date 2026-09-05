@@ -1,11 +1,19 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
-import { XIcon, CheckCircleIcon, WarningCircleIcon, SpinnerGapIcon, PaperPlaneTiltIcon } from '@phosphor-icons/react';
+import {
+  XIcon,
+  CheckCircleIcon,
+  WarningCircleIcon,
+  SpinnerGapIcon,
+  PaperPlaneTiltIcon,
+  ArrowSquareOutIcon,
+} from '@phosphor-icons/react';
 import { AnimatedQRCode } from '@keystonehq/animated-qr';
 import { formatWalletAddressMedium } from '@ledova/shared-utils';
-import { DESIGN_TOKENS } from '@ledova/shared-constants';
+import { BLOCKCHAIN, DESIGN_TOKENS, getBlockExplorerTxUrl, getChainShortCode } from '@ledova/shared-constants';
 import { useQRScanner, QRScannerView } from '@components/qr';
 
+const ICON_XS = DESIGN_TOKENS.icon.sizes.xs;
 const ICON_MD = DESIGN_TOKENS.icon.sizes.md;
 const ICON_XL = DESIGN_TOKENS.icon.sizes.xl;
 const ICON_HERO = DESIGN_TOKENS.icon.sizes.hero;
@@ -14,14 +22,16 @@ import type {
   Wallet,
   WalletTokenBalance,
   ShareTokenTransferPrepareResponse,
-  PrepareTransferResponse,
+  PreparedWalletTransfer,
 } from '@ledova/shared-types';
 import { encodeEthereumTransaction } from '@utils/keystone/urEncoder';
 import { decodeKeystoneSignedTransaction } from '@utils/keystone/urDecoder';
+import { BitcoinSignStep } from './BitcoinSignStep';
 
 export type TransferType = 'crypto' | 'stablecoin' | 'share_token';
 
-type SigningStep = 'loading' | 'instructions' | 'show-qr' | 'scan-signature' | 'submitting' | 'success' | 'error';
+type SigningStep =
+  'loading' | 'instructions' | 'show-qr' | 'scan-signature' | 'sign-manual' | 'submitting' | 'success' | 'error';
 
 interface TransferSigningFlowProps {
   isOpen: boolean;
@@ -30,9 +40,8 @@ interface TransferSigningFlowProps {
   wallet: Wallet;
   toAddress?: string;
   amount?: string;
-  chainType?: 'ethereum' | 'bitcoin';
   token?: WalletTokenBalance;
-  preparedTransaction?: ShareTokenTransferPrepareResponse | PrepareTransferResponse | null;
+  preparedTransaction?: ShareTokenTransferPrepareResponse | PreparedWalletTransfer | null;
   isPreparing?: boolean;
   prepareError?: string | null;
   onPrepare?: () => void;
@@ -52,7 +61,7 @@ interface TransactionForQr {
 }
 
 function formatTransactionForQr(
-  preparedTx: ShareTokenTransferPrepareResponse | PrepareTransferResponse,
+  preparedTx: ShareTokenTransferPrepareResponse | PreparedWalletTransfer,
   wallet: Wallet,
 ): TransactionForQr | null {
   if ('transactionData' in preparedTx && preparedTx.transactionData) {
@@ -94,7 +103,6 @@ export function TransferSigningFlow({
   wallet,
   toAddress,
   amount,
-  chainType = 'ethereum',
   token,
   preparedTransaction,
   isPreparing = false,
@@ -108,6 +116,10 @@ export function TransferSigningFlow({
   const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [unsignedTx, setUnsignedTx] = useState<TransactionForQr | null>(null);
+  const [signedTransaction, setSignedTransaction] = useState('');
+
+  const isBitcoin = wallet.chain === BLOCKCHAIN.BITCOIN;
+  const nativeSymbol = getChainShortCode(wallet.chain);
 
   const hasPreparedRef = useRef(false);
   const onPrepareRef = useRef(onPrepare);
@@ -136,6 +148,7 @@ export function TransferSigningFlow({
       setError(null);
       setTxHash(null);
       setUnsignedTx(null);
+      setSignedTransaction('');
 
       if (!hasPreparedRef.current && onPrepareRef.current) {
         hasPreparedRef.current = true;
@@ -148,9 +161,9 @@ export function TransferSigningFlow({
 
   useEffect(() => {
     if (isOpen && preparedTransaction && signingStep === 'loading') {
-      setSigningStep('instructions');
+      setSigningStep(isBitcoin ? 'sign-manual' : 'instructions');
     }
-  }, [isOpen, preparedTransaction, signingStep]);
+  }, [isOpen, preparedTransaction, signingStep, isBitcoin]);
 
   useEffect(() => {
     if (isOpen && prepareError && signingStep === 'loading') {
@@ -162,12 +175,6 @@ export function TransferSigningFlow({
   const generateQrCode = useCallback(() => {
     if (!preparedTransaction || !wallet) {
       setError('Missing transaction data or wallet');
-      setSigningStep('error');
-      return;
-    }
-
-    if (chainType === 'bitcoin') {
-      setError('Bitcoin QR signing is not yet supported. Please use manual signing.');
       setSigningStep('error');
       return;
     }
@@ -195,16 +202,16 @@ export function TransferSigningFlow({
 
     setQrData({ cborHex: encoded.cborHex, type: encoded.type });
     setSigningStep('show-qr');
-  }, [preparedTransaction, wallet, chainType]);
+  }, [preparedTransaction, wallet]);
 
-  const handleSignatureScanned = useCallback(
-    async (signedTransaction: string) => {
+  const submitSignedTransaction = useCallback(
+    async (signedTransactionHex: string) => {
       if (!onBroadcast) return;
 
       setSigningStep('submitting');
 
       try {
-        const hash = await onBroadcast(signedTransaction);
+        const hash = await onBroadcast(signedTransactionHex);
         setTxHash(hash);
         setSigningStep('success');
         onSuccess?.(hash);
@@ -234,7 +241,7 @@ export function TransferSigningFlow({
           : undefined,
       );
       if (signedTx) {
-        handleSignatureScanned(signedTx);
+        submitSignedTransaction(signedTx);
       }
     },
     enabled: signingStep === 'scan-signature',
@@ -247,13 +254,13 @@ export function TransferSigningFlow({
   }, [onClose, signingStep, stopScanner]);
 
   useEffect(() => {
-    if (signingStep === 'success') {
+    if (signingStep === 'success' && !isBitcoin) {
       const timer = setTimeout(() => {
         handleClose();
       }, 2000);
       return () => clearTimeout(timer);
     }
-  }, [signingStep, handleClose]);
+  }, [signingStep, handleClose, isBitcoin]);
 
   const goBack = useCallback(() => {
     if (signingStep === 'scan-signature') {
@@ -261,10 +268,10 @@ export function TransferSigningFlow({
     } else if (signingStep === 'show-qr') {
       setSigningStep('instructions');
     } else if (signingStep === 'error') {
-      setSigningStep('instructions');
+      setSigningStep(isBitcoin ? 'sign-manual' : 'instructions');
       setError(null);
     }
-  }, [signingStep]);
+  }, [signingStep, isBitcoin]);
 
   const renderStepContent = () => {
     if (signingStep === 'loading' || isPreparing) {
@@ -306,7 +313,7 @@ export function TransferSigningFlow({
                   <>
                     <div className="text-text-muted">Amount</div>
                     <div className="text-text-primary font-medium">
-                      {amount} {token?.symbol ?? (chainType === 'ethereum' ? 'ETH' : 'BTC')}
+                      {amount} {token?.symbol ?? nativeSymbol}
                     </div>
                   </>
                 )}
@@ -396,6 +403,18 @@ export function TransferSigningFlow({
           </div>
         );
 
+      case 'sign-manual':
+        if (!preparedTransaction || !('amountBtc' in preparedTransaction)) return null;
+        return (
+          <BitcoinSignStep
+            prepared={preparedTransaction}
+            signedTransaction={signedTransaction}
+            onSignedTransactionChange={setSignedTransaction}
+            onCancel={handleClose}
+            onBroadcast={submitSignedTransaction}
+          />
+        );
+
       case 'scan-signature':
         return (
           <div className="space-y-5">
@@ -426,7 +445,8 @@ export function TransferSigningFlow({
           </div>
         );
 
-      case 'success':
+      case 'success': {
+        const explorerUrl = txHash ? getBlockExplorerTxUrl(wallet.chain, txHash) : '';
         return (
           <div className="space-y-6 py-8">
             <div className="flex justify-center">
@@ -444,10 +464,32 @@ export function TransferSigningFlow({
               <div className="p-4 rounded-lg bg-surface-tertiary border border-border">
                 <p className="text-xs font-semibold text-text-subtle uppercase tracking-wide mb-2">Transaction Hash</p>
                 <p className="text-xs font-mono text-text-primary break-all">{txHash}</p>
+                {explorerUrl && (
+                  <a
+                    href={explorerUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-brand-mid hover:text-brand-light"
+                  >
+                    View on block explorer
+                    <ArrowSquareOutIcon size={ICON_XS} />
+                  </a>
+                )}
               </div>
+            )}
+
+            {isBitcoin && (
+              <button
+                type="button"
+                onClick={handleClose}
+                className="w-full py-3 rounded-lg font-medium text-white bg-brand-mid hover:bg-brand transition-colors"
+              >
+                Done
+              </button>
             )}
           </div>
         );
+      }
 
       case 'error':
         return (

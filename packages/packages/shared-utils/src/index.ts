@@ -30,6 +30,7 @@ export {
   detectChainFromAddress,
   isValidBitcoinNativeSegwitTestAddress,
   isBitcoinTestnetSigningPath,
+  normalizeBitcoinRawTransactionHex,
   formatWalletAddressShort,
   formatWalletAddressMedium,
 } from './validation/wallets';
