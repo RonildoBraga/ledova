@@ -2,12 +2,14 @@ import logging
 from decimal import Decimal
 from typing import Any, Dict, Optional
 
+from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
 
 from assets.models import Asset
 from compliance.services.transaction_monitoring import TransactionMonitoringService
 from shared.constants import get_native_asset_symbol, normalize_chain
+from users.tasks.notifications import send_transaction_notification
 from wallets.constants import (
     SNAPSHOT_REASON_TRANSACTION,
     TRANSACTION_STATUS_CONFIRMED,
@@ -126,6 +128,7 @@ class TransactionConfirmationService:
             TransactionConfirmationService._verify_holding_balance(tx.wallet, tx.asset)
 
             TransactionConfirmationService._update_snapshot_on_confirmation(tx)
+            TransactionConfirmationService._notify_wallet_users(tx, "confirmed")
 
             logger.info(f"Transaction confirmed: tx_hash={tx_hash}, block={block_number}")
 
@@ -152,6 +155,7 @@ class TransactionConfirmationService:
             tx.save(update_fields=["status"])
 
             TransactionConfirmationService._revert_optimistic_holding(tx)
+            TransactionConfirmationService._notify_wallet_users(tx, "failed")
 
             logger.info(f"Transaction marked as failed: tx_hash={tx_hash}, reason={reason}")
 
@@ -160,6 +164,16 @@ class TransactionConfirmationService:
             "tx_hash": tx_hash,
             "reason": reason,
         }
+
+    @staticmethod
+    def _notify_wallet_users(tx: Transaction, event: str) -> None:
+        """Deferred inside the caller's atomic block: the job row rolls back with the status change.
+
+        Recipients are the wallet account's members, the same relation as WalletQuerySet.visible_to_user.
+        """
+        recipients = get_user_model().objects.filter(userprofile__user_accounts__wallets=tx.wallet)
+        for user in recipients:
+            send_transaction_notification.defer(user_id=str(user.pk), transaction_id=str(tx.uuid), event_type=event)
 
     @staticmethod
     def _verify_holding_balance(wallet: Wallet, asset: Asset) -> None:

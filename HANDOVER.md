@@ -117,6 +117,12 @@ clients show it read-only by design.
    ten columns (nine on `wallets`, `holdings.last_synced_block`); all four are
    reversible with `migrate`. Export any `accounts_waitlist` rows you want to
    keep before applying.
+6. Deploy note: notifications are live. Transaction confirmed/failed and the
+   KYC review outcome create `Notification` rows and defer the push tasks, so
+   the in-app inbox (dashboard bell, mobile inbox) fills from day one. Push
+   delivery on the phone additionally needs `extra.eas.projectId` in
+   `mobile/app.json` and a dev or production build (Expo Go cannot receive
+   remote push on SDK 54); the inbox works without it.
 
 Decisions deferred during the simplification pass (each is a delete-or-keep
 call for the owner; the code is kept and working until decided):
@@ -131,8 +137,6 @@ call for the owner; the code is kept and working until decided):
   settings-screen change.
 - The materialised `PortfolioSnapshot` table versus an on-read value series.
 - Bitcoin support end to end (`integrations/blockchain/bitcoin.py`).
-- Push notifications: nothing creates `Notification` rows or defers the send
-  tasks; wire one producer or keep the model as an admin-populated inbox.
 - Mobile app status and the collapse of the four shared TypeScript packages
   into one; both are client-side work and were out of scope here.
 

@@ -22,6 +22,15 @@ from users.models.user_profile import UserProfile
 
 logger = logging.getLogger(__name__)
 
+REVIEW_OUTCOME_MESSAGES = {
+    REVIEW_GREEN: ("Identity verified", "Your identity has been verified."),
+    REVIEW_RED: (
+        "Verification needs attention",
+        "We could not verify your identity. Open the app to see what to do next.",
+    ),
+    REVIEW_YELLOW: ("Verification needs attention", "Your identity verification needs another attempt."),
+}
+
 
 class VerificationTokenGenerationException(APIException):
     status_code = 502
@@ -126,6 +135,7 @@ class IdentityVerificationService:
 
     @staticmethod
     def update_status_from_normalized(user_profile: UserProfile, normalized: NormalizedVerificationResult) -> bool:
+        previous_result = user_profile.review_result
         user_profile.verification_status = normalized.verification_status
         user_profile.review_result = normalized.review_result
         user_profile.rejection_labels = normalized.rejection_labels or None
@@ -152,6 +162,16 @@ class IdentityVerificationService:
 
         if normalized.review_result == REVIEW_GREEN and not was_verified:
             IdentityVerificationService._process_verified_customer(user_profile, normalized.pep_data)
+
+        message = REVIEW_OUTCOME_MESSAGES.get(normalized.review_result)
+        if message and normalized.review_result != previous_result:
+            # Imported here: the task module imports this package.
+            from users.tasks.notifications import send_push_notification
+
+            title, body = message
+            send_push_notification.defer(
+                user_id=str(user_profile.user_id), title=title, body=body, notification_type="general"
+            )
 
         return user_profile.is_id_verified
 

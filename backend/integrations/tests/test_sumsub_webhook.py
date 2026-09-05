@@ -42,7 +42,9 @@ class SumSubWebhookTest(APITestCase):
         )
 
     def test_reviewed_event_reads_sumsub_camel_case_keys_and_verifies(self):
-        with patch.object(IdentityVerificationService, "_trigger_risk_assessment") as risk_assessment:
+        with patch.object(IdentityVerificationService, "_trigger_risk_assessment") as risk_assessment, patch(
+            "users.tasks.notifications.send_push_notification"
+        ) as push_task:
             response = self.post_event(
                 "applicantReviewed", reviewStatus="completed", reviewResult={"reviewAnswer": "GREEN"}
             )
@@ -58,6 +60,7 @@ class SumSubWebhookTest(APITestCase):
         self.assertEqual(self.account.account_status, "active")
         risk_assessment.assert_called_once()
         self.assertEqual(risk_assessment.call_args.args[0], self.account)
+        self.assertEqual(push_task.defer.call_args.kwargs["title"], "Identity verified")
 
     def test_pending_event_updates_the_status_clients_display(self):
         response = self.post_event("applicantPending", reviewStatus="pending")

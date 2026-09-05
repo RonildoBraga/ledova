@@ -19,6 +19,10 @@ class NotificationService:
         data: Optional[Dict[str, Any]] = None,
         notification_type: str = "general",
     ) -> Dict[str, Any]:
+        # Looked up before the row exists so a missing profile cannot fail the task after the insert
+        # (a retry would duplicate the row); no preferences row means every type is allowed.
+        prefs = NotificationPreferences.objects.filter(user_profile__user=user).first()
+
         # Always create an in-app notification record regardless of push preferences
         Notification.objects.create(
             user=user,
@@ -28,18 +32,14 @@ class NotificationService:
             data=data or {},
         )
 
-        try:
-            prefs = NotificationPreferences.objects.get(user_profile=user.userprofile)
-            if not prefs.can_receive_notification(notification_type):
-                logger.info(f"Skipped for user {user.email}: {notification_type} notifications disabled")
-                return {
-                    "status": "skipped",
-                    "reason": f"{notification_type} notifications disabled",
-                    "sent": 0,
-                    "failed": 0,
-                }
-        except NotificationPreferences.DoesNotExist:
-            pass
+        if prefs and not prefs.can_receive_notification(notification_type):
+            logger.info(f"Skipped for user {user.email}: {notification_type} notifications disabled")
+            return {
+                "status": "skipped",
+                "reason": f"{notification_type} notifications disabled",
+                "sent": 0,
+                "failed": 0,
+            }
 
         device_tokens = list(DeviceToken.objects.filter(user=user, is_active=True))
 
@@ -111,10 +111,6 @@ class NotificationService:
             "failed": {
                 "title": "Transaction Failed",
                 "body": f"Your transaction of {transaction.amount} {transaction.asset.symbol} has failed.",
-            },
-            "pending": {
-                "title": "Transaction Pending",
-                "body": f"Your transaction of {transaction.amount} {transaction.asset.symbol} is being processed.",
             },
         }
 

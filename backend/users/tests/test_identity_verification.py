@@ -5,13 +5,19 @@ from django.test import TestCase
 
 from integrations.kyc.base import NormalizedVerificationResult
 from shared.models import Country
-from users.models import UserAccount, UserProfile
+from users.models import Notification, UserAccount, UserProfile
 from users.services.identity import IdentityVerificationService
+from users.tasks.notifications import send_push_notification as run_task
 
 User = get_user_model()
+PUSH_TASK = "users.tasks.notifications.send_push_notification"
 
 
 class IdentityVerificationApprovalTest(TestCase):
+    def setUp(self):
+        self.push_task = patch(PUSH_TASK).start()
+        self.addCleanup(patch.stopall)
+
     def _profile_with_citizenship(self, code):
         user = User.objects.create_user(email=f"{code.lower()}@example.test", password="pw-12345678")
         profile = UserProfile.objects.create(
@@ -72,6 +78,28 @@ class IdentityVerificationApprovalTest(TestCase):
         profile.refresh_from_db()
         self.assertTrue(profile.needs_verification_retry)
         self.assertFalse(profile.is_id_verified)
+
+    def test_a_changed_review_result_creates_one_general_notification(self):
+        profile, _ = self._profile_with_citizenship("IE")
+        self.push_task.defer.side_effect = run_task  # run the deferred job inline so the row it writes is visible
+        yellow = NormalizedVerificationResult(
+            verification_status="completed", review_result="YELLOW", is_verified=False
+        )
+
+        with patch.object(IdentityVerificationService, "_trigger_risk_assessment"):
+            IdentityVerificationService.update_status_from_normalized(profile, yellow)
+            IdentityVerificationService.update_status_from_normalized(profile, yellow)
+            IdentityVerificationService.update_status_from_normalized(profile, self._green())
+
+        self.assertEqual(self.push_task.defer.call_count, 2)
+        self.push_task.defer.assert_called_with(
+            user_id=str(profile.user.pk),
+            title="Identity verified",
+            body="Your identity has been verified.",
+            notification_type="general",
+        )
+        rows = Notification.objects.filter(user=profile.user, notification_type="general").order_by("created_at")
+        self.assertEqual([row.title for row in rows], ["Verification needs attention", "Identity verified"])
 
 
 class PopulateProfileTest(TestCase):
