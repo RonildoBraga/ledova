@@ -91,13 +91,6 @@ class TransferOrder(BaseModel):
         blank=True,
         related_name="matched_by",
     )
-    signature_request = models.ForeignKey(
-        "companies.SignatureRequest",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="transfer_orders",
-    )
 
     exchange_order_id = models.CharField(max_length=66, blank=True)
 

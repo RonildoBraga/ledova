@@ -100,7 +100,6 @@ class TransferOrderQuerySet(QuerySet):
             "wallet__user_account",
             "owner_account",
             "matched_order",
-            "signature_request",
         )
 
     def search(self, query):

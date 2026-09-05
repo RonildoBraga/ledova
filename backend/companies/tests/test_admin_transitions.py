@@ -54,7 +54,7 @@ class CompanyAdminTransitionTest(TestCase):
     def test_cases_cover_every_declared_transition_and_button(self):
         self.assertEqual({action for action, *_ in CASES}, set(TRANSITIONS))
         offered = {slug for buttons in STATUS_BUTTONS.values() for _, slug, *_ in buttons if slug}
-        self.assertEqual(offered, set(TRANSITIONS) | {"assign-reviewers"})
+        self.assertEqual(offered, set(TRANSITIONS))
         self.assertEqual(set(STATUS_BUTTONS), set(CompanyStatus))
 
     def test_each_button_moves_the_company_and_reports_it(self):
@@ -125,11 +125,7 @@ class CompanyAdminTransitionTest(TestCase):
                 self.assertEqual(response.status_code, 200)
                 for label, slug, *_ in buttons:
                     self.assertContains(response, label)
-                    if slug == "assign-reviewers":
-                        self.assertContains(
-                            response, reverse("admin:companies_company_assign_reviewers", args=[self.company.uuid])
-                        )
-                    elif slug:
+                    if slug:
                         self.assertContains(response, self._url(slug))
 
     def test_unknown_action_is_not_a_transition_route(self):
@@ -140,11 +136,3 @@ class CompanyAdminTransitionTest(TestCase):
         self.assertNotEqual(response.status_code, 200)
         self.company.refresh_from_db()
         self.assertEqual(self.company.status, CompanyStatus.REVIEW)
-
-    def test_assign_reviewers_page_still_renders(self):
-        self._set_status(CompanyStatus.SUBMITTED)
-
-        response = self.client.get(reverse("admin:companies_company_assign_reviewers", args=[self.company.uuid]))
-
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "admin/companies/company/assign_reviewers_form.html")

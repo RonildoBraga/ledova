@@ -1,21 +1,13 @@
 from django import forms
 from django.contrib import admin, messages
-from django.contrib.auth import get_user_model
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
-from django.urls import path, re_path, reverse
+from django.urls import re_path, reverse
 from django.utils.html import format_html
 
 from companies.exceptions import InvalidStatusTransitionException
-from companies.models import (
-    ApplicationReview,
-    Company,
-    CompanyDocument,
-    CompanyStatus,
-)
+from companies.models import Company, CompanyDocument, CompanyStatus
 from tokens.admin._helpers import action_buttons, status_badge
-
-User = get_user_model()
 
 STATUS_COLORS = {
     CompanyStatus.DRAFT: "#6c757d",
@@ -120,18 +112,12 @@ TRANSITIONS = {
     ),
 }
 
-ASSIGN_REVIEWERS = ("👥 Assign Reviewers", "assign-reviewers", "#6f42c1")
 REJECT = ("✗ Reject", "reject", "#dc3545")
 SUSPEND = ("⏸ Suspend", "suspend", "#dc3545")
 DELIST = ("✗ Delist", "delist", "#343a40")
 STATUS_BUTTONS = {
-    CompanyStatus.SUBMITTED: [ASSIGN_REVIEWERS, ("▶ Start Review", "start-review", "#007bff"), REJECT],
-    CompanyStatus.REVIEW: [
-        ASSIGN_REVIEWERS,
-        ("? Request Info", "request-info", "#fd7e14"),
-        ("✓ Approve", "approve", "#20c997"),
-        REJECT,
-    ],
+    CompanyStatus.SUBMITTED: [("▶ Start Review", "start-review", "#007bff"), REJECT],
+    CompanyStatus.REVIEW: [("? Request Info", "request-info", "#fd7e14"), ("✓ Approve", "approve", "#20c997"), REJECT],
     CompanyStatus.INFO_REQUIRED: [("⏳ Awaiting Response", None, "#fd7e14")],
     CompanyStatus.APPROVED: [("✓ Activate Company", "activate", "#28a745")],
     CompanyStatus.ACTIVE: [("⚠ Issue Warning", "issue-warning", "#ffc107", "black"), SUSPEND, DELIST],
@@ -158,35 +144,6 @@ class CompanyDocumentInline(admin.TabularInline):
         return "-"
 
     file_link.short_description = "File"
-
-
-class ApplicationReviewInline(admin.TabularInline):
-    model = ApplicationReview
-    extra = 0
-    fields = ["review_order", "reviewer", "decision", "decision_at", "decision_reason"]
-    readonly_fields = ["decision_at"]
-    can_delete = False
-
-
-class AssignReviewersForm(forms.Form):
-    reviewer_1 = forms.ModelChoiceField(
-        queryset=User.objects.filter(is_staff=True, is_active=True),
-        label="Primary Reviewer",
-        help_text="First reviewer to evaluate the application.",
-    )
-    reviewer_2 = forms.ModelChoiceField(
-        queryset=User.objects.filter(is_staff=True, is_active=True),
-        label="Secondary Reviewer",
-        help_text="Second reviewer to evaluate the application.",
-    )
-
-    def clean(self):
-        cleaned_data = super().clean()
-        reviewer_1 = cleaned_data.get("reviewer_1")
-        reviewer_2 = cleaned_data.get("reviewer_2")
-        if reviewer_1 and reviewer_2 and reviewer_1 == reviewer_2:
-            raise forms.ValidationError("Reviewers must be different people.")
-        return cleaned_data
 
 
 class ReasonForm(forms.Form):
@@ -344,7 +301,7 @@ class CompanyAdmin(admin.ModelAdmin):
         ),
     ]
 
-    inlines = [ApplicationReviewInline, CompanyDocumentInline]
+    inlines = [CompanyDocumentInline]
 
     actions = ["start_review_action", "approve_action", "activate_action"]
 
@@ -352,11 +309,6 @@ class CompanyAdmin(admin.ModelAdmin):
 
     def get_urls(self):
         custom_urls = [
-            path(
-                "<uuid:uuid>/assign-reviewers/",
-                self.admin_site.admin_view(self.assign_reviewers_view),
-                name="companies_company_assign_reviewers",
-            ),
             re_path(
                 rf"^(?P<uuid>[0-9a-f-]+)/(?P<action>{'|'.join(TRANSITIONS)})/$",
                 self.admin_site.admin_view(self.transition_view),
@@ -374,8 +326,6 @@ class CompanyAdmin(admin.ModelAdmin):
     def _action_url(self, obj, slug):
         if slug is None:
             return None
-        if slug == "assign-reviewers":
-            return reverse("admin:companies_company_assign_reviewers", args=[obj.uuid])
         return reverse("admin:companies_company_transition", args=[obj.uuid, slug])
 
     @admin.display(description="Quick Actions")
@@ -418,55 +368,6 @@ class CompanyAdmin(admin.ModelAdmin):
         else:
             messages.add_message(request, spec.get("level", messages.SUCCESS), spec["done"].format(name=company.name))
         return HttpResponseRedirect(change_url)
-
-    def assign_reviewers_view(self, request, uuid):
-        company = get_object_or_404(Company, uuid=uuid)
-
-        if company.status not in [CompanyStatus.SUBMITTED, CompanyStatus.REVIEW]:
-            messages.error(
-                request,
-                f"Cannot assign reviewers: status is '{company.get_status_display()}'",
-            )
-            return HttpResponseRedirect(reverse("admin:companies_company_change", args=[company.pk]))
-
-        if request.method == "POST":
-            form = AssignReviewersForm(request.POST)
-            if form.is_valid():
-                from companies.services import ReviewService
-
-                reviewers = [
-                    form.cleaned_data["reviewer_1"],
-                    form.cleaned_data["reviewer_2"],
-                ]
-                ReviewService.assign_reviewers(
-                    company=company,
-                    reviewers=reviewers,
-                    assigned_by=request.user,
-                )
-
-                if company.status == CompanyStatus.SUBMITTED:
-                    company.start_review()
-
-                messages.success(
-                    request,
-                    f"Reviewers assigned to '{company.name}': " f"{reviewers[0].email} and {reviewers[1].email}",
-                )
-                return HttpResponseRedirect(reverse("admin:companies_company_change", args=[company.pk]))
-        else:
-            form = AssignReviewersForm()
-
-        existing_reviews = ApplicationReview.objects.filter(company=company)
-
-        context = {
-            **self.admin_site.each_context(request),
-            "title": f"Assign Reviewers: {company.name}",
-            "subtitle": None,
-            "company": company,
-            "form": form,
-            "existing_reviews": existing_reviews,
-            "opts": self.model._meta,
-        }
-        return render(request, "admin/companies/company/assign_reviewers_form.html", context)
 
     @admin.action(description="Start review for selected submitted applications")
     def start_review_action(self, request, queryset):

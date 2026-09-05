@@ -25,5 +25,6 @@ class CompanyDocumentAdmin(admin.ModelAdmin):
         count = queryset.filter(is_verified=False).update(
             is_verified=True,
             verified_at=timezone.now(),
+            verified_by=request.user,
         )
         self.message_user(request, f"{count} documents verified.")
