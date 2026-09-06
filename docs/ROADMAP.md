@@ -567,10 +567,13 @@ decision below). Mainnet deployment configuration is deliberately absent.
   instead of the empty state, and its allocation doughnut is empty while the
   quantity column shows the real share count.
 - **Shares move by allotment, not by wallet transfer.** `prepare-transfer`
-  refuses a `tokenized_security`, and so does `broadcast-transfer` whenever the
-  caller names the token contract. A broadcast that omits the contract carries
-  an opaque signed transaction the backend cannot inspect, so the guard there is
-  advisory rather than absolute. What actually holds the line is on chain:
+  refuses a `tokenized_security`, and so does `broadcast-transfer`, which no
+  longer depends on the caller naming the token contract: an EVM broadcast is
+  decoded before anything reaches the chain, and the decode refuses a share
+  token target, a foreign chain id, contract creation, and any payload that is
+  neither a plain native send nor an ERC-20 `transfer`. The recorded
+  `Transaction` row is written from the decoded transaction, not from the
+  request body. What also holds the line is on chain:
   `ShareToken._update` reverts unless the recipient is in the whitelist
   registry, so a share can never leave the whitelisted set and the Phase 1
   register — a read-model over `ShareIssuance` reconciled against on-chain
@@ -594,7 +597,9 @@ decision below). Mainnet deployment configuration is deliberately absent.
   Staff change it from the admin, which revokes every session of that user.
 - **Bitcoin is watch-only plus manual signed sends** on testnet or regtest. The
   app never builds or signs a Bitcoin transaction: the user signs with their own
-  tooling and pastes the raw hex, which the backend broadcasts.
+  tooling and pastes the raw hex, which the backend broadcasts. There is no
+  Bitcoin transaction decoder, so on that chain alone `broadcast-transfer` still
+  records the recipient and amount the caller declares.
 - **The published compliance seed is public by design.** Its figures are the
   generic AUSTRAC-public ones. Operational thresholds and evasion-sensitive
   rules live outside this repository.

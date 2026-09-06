@@ -227,7 +227,7 @@ class TradingReadIsolationTest(APITestCase):
 
         self.assertNotIn(malformed_swap.uuid, visible.values_list("uuid", flat=True))
 
-    @patch("tokens.views.trading_transfer.TransferService")
+    @patch("tokens.views.trading_transfer.TokenTransferService")
     def test_transfer_prepare_rejects_foreign_from_address_before_service_construction(self, service_class):
         self.client.force_authenticate(self.bob)
         response = self.client.post(
@@ -244,7 +244,7 @@ class TradingReadIsolationTest(APITestCase):
         self.assertEqual(response.status_code, 404)
         service_class.assert_not_called()
 
-    @patch("tokens.views.trading_transfer.TransferService")
+    @patch("tokens.views.trading_transfer.TokenTransferService")
     def test_transfer_prepare_uses_canonical_owned_from_address(self, service_class):
         service_class.return_value.prepare_transfer.return_value = {"to": self.share_token.contract_address}
         self.client.force_authenticate(self.bob)

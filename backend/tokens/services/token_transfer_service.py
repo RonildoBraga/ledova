@@ -35,7 +35,7 @@ from whitelist.services import WhitelistService
 logger = logging.getLogger(__name__)
 
 
-class TransferService:
+class TokenTransferService:
     @staticmethod
     def contract_address(token) -> str:
         if isinstance(token, Asset):

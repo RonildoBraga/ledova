@@ -18,7 +18,7 @@ from tokens.models.choices import (
     TransferOrderType,
 )
 from tokens.serializers import TransferOrderCreateSerializer
-from tokens.services import TransferService
+from tokens.services import TokenTransferService
 from users.models import UserAccount, UserProfile
 from wallets.models import Wallet
 
@@ -315,7 +315,7 @@ class TransferOrderOwnershipBindingTest(APITestCase):
         mismatched.owner_account = counter_account
         mismatched.save(update_fields=["owner_account"])
 
-        service = TransferService.__new__(TransferService)
+        service = TokenTransferService.__new__(TokenTransferService)
         match = service.find_matching_order(incoming)
         sell_levels = list(TransferOrder.objects.order_book_levels(self.token, TransferOrderType.SELL))
 
@@ -326,8 +326,8 @@ class TransferOrderOwnershipBindingTest(APITestCase):
         self.assertEqual(TransferOrder.objects.best_ask(self.token), valid_candidate)
 
     @patch("tokens.events.publish_trading_event")
-    @patch("tokens.services.transfer_service.WhitelistService")
-    @patch("tokens.services.transfer_service.get_base_chain_client")
+    @patch("tokens.services.token_transfer_service.WhitelistService")
+    @patch("tokens.services.token_transfer_service.get_base_chain_client")
     def test_service_persists_wallet_and_account_snapshot(self, get_client, whitelist_service, _publish_trading_event):
         chain_client = Mock()
         chain_client.is_valid_address.return_value = True
@@ -335,7 +335,7 @@ class TransferOrderOwnershipBindingTest(APITestCase):
         get_client.return_value = chain_client
         whitelist_service.return_value.is_whitelisted.return_value = True
 
-        service = TransferService()
+        service = TokenTransferService()
         service.find_matching_order = Mock(return_value=None)
         order, match = service.create_order_and_match(
             token=self.token,
@@ -353,8 +353,8 @@ class TransferOrderOwnershipBindingTest(APITestCase):
         self.assertEqual(order.owner_account, self.account)
         self.assertEqual(order.wallet_address, Web3.to_checksum_address(self.wallet.address))
 
-    @patch("tokens.services.transfer_service.WhitelistService")
-    @patch("tokens.services.transfer_service.get_base_chain_client")
+    @patch("tokens.services.token_transfer_service.WhitelistService")
+    @patch("tokens.services.token_transfer_service.get_base_chain_client")
     def test_service_rejects_wallet_changed_after_validation(self, get_client, whitelist_service):
         chain_client = Mock()
         chain_client.is_valid_address.return_value = True
@@ -365,7 +365,7 @@ class TransferOrderOwnershipBindingTest(APITestCase):
         Wallet.objects.filter(pk=self.wallet.pk).update(verification_status="PENDING")
 
         with self.assertRaises(InvalidRecipientAddressException):
-            TransferService().create_order_and_match(
+            TokenTransferService().create_order_and_match(
                 token=self.token,
                 order_type=TransferOrderType.BUY,
                 actor=self.user,
@@ -382,7 +382,7 @@ class TransferOrderOwnershipBindingTest(APITestCase):
         Wallet.objects.filter(pk=self.wallet.pk).update(user_account=replacement_account)
 
         with self.assertRaises(InvalidRecipientAddressException):
-            TransferService().create_order_and_match(
+            TokenTransferService().create_order_and_match(
                 token=self.token,
                 order_type=TransferOrderType.BUY,
                 actor=self.user,
@@ -393,8 +393,8 @@ class TransferOrderOwnershipBindingTest(APITestCase):
                 price_per_share=Decimal("1.50"),
             )
 
-    @patch("tokens.services.transfer_service.WhitelistService")
-    @patch("tokens.services.transfer_service.get_base_chain_client")
+    @patch("tokens.services.token_transfer_service.WhitelistService")
+    @patch("tokens.services.token_transfer_service.get_base_chain_client")
     def test_service_rechecks_actor_membership_after_validation(self, get_client, whitelist_service):
         serializer = self._serializer(self._payload())
         self.assertTrue(serializer.is_valid(), serializer.errors)
@@ -402,7 +402,7 @@ class TransferOrderOwnershipBindingTest(APITestCase):
         self.account.user_profiles.remove(self.profile)
 
         with self.assertRaises(InvalidRecipientAddressException):
-            TransferService().create_order_and_match(
+            TokenTransferService().create_order_and_match(
                 token=self.token,
                 order_type=TransferOrderType.BUY,
                 actor=self.user,

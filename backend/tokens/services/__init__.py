@@ -4,8 +4,8 @@ from .market_data_service import MarketDataService
 from .order_modification_service import OrderModificationService
 from .share_token_service import ShareTokenService
 from .stablecoin_service import StablecoinService
+from .token_transfer_service import TokenTransferService
 from .trading_order_service import TradingOrderService
-from .transfer_service import TransferService
 from .yield_token_service import YieldTokenService
 
 __all__ = [
@@ -15,7 +15,7 @@ __all__ = [
     "OrderModificationService",
     "ShareTokenService",
     "StablecoinService",
+    "TokenTransferService",
     "TradingOrderService",
-    "TransferService",
     "YieldTokenService",
 ]
