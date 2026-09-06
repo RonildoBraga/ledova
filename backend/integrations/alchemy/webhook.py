@@ -40,7 +40,7 @@ class AlchemyWebhookView(APIView):
 
         if not signing_key or not verify_alchemy_signature(request.body, signature, signing_key):
             logger.warning(
-                "[WEBHOOK:ALCHEMY] Rejected webhook: %s",
+                "Rejected webhook: %s",
                 "signing key not configured" if not signing_key else "invalid signature",
             )
             return Response({"error": "Invalid signature"}, status=status.HTTP_401_UNAUTHORIZED)
@@ -50,19 +50,17 @@ class AlchemyWebhookView(APIView):
             webhook_type = data.get("type")
             event = data.get("event", {})
 
-            logger.info(f"[WEBHOOK:ALCHEMY] Received webhook: {webhook_type}")
-
             if webhook_type == "ADDRESS_ACTIVITY":
                 self._handle_address_activity(event)
             elif webhook_type == "MINED_TRANSACTION":
                 self._handle_mined_transaction(event)
             else:
-                logger.info(f"[WEBHOOK:ALCHEMY] Unhandled webhook type: {webhook_type}")
+                logger.warning("Unhandled webhook type: %s", webhook_type)
 
             return Response({"success": True}, status=status.HTTP_200_OK)
 
-        except Exception as e:
-            logger.error(f"[WEBHOOK:ALCHEMY] Error processing webhook: {e}", exc_info=True)
+        except Exception:
+            logger.exception("Error processing webhook")
             return Response({"error": "Internal server error"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def _handle_address_activity(self, event: dict) -> None:
@@ -131,14 +129,10 @@ class AlchemyWebhookView(APIView):
 
             if tx and tx.status == "pending":
                 confirm_pending_transaction.defer(tx_hash=tx_hash, wallet_uuid=str(wallet.uuid))
-                logger.info(f"[WEBHOOK:ALCHEMY] Queued confirmation for pending tx: {tx_hash}")
             elif not tx:
                 from wallets.tasks import sync_wallet
 
                 sync_wallet.defer(wallet_uuid=str(wallet.uuid))
-                logger.info(f"[WEBHOOK:ALCHEMY] Queued wallet sync for new tx: {tx_hash}")
-            else:
-                logger.debug(f"[WEBHOOK:ALCHEMY] Transaction already processed: {tx_hash}")
 
-        except Exception as e:
-            logger.error(f"[WEBHOOK:ALCHEMY] Error processing tx {tx_hash}: {e}")
+        except Exception:
+            logger.exception("Error processing a webhook transaction")

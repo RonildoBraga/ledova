@@ -34,14 +34,10 @@ class SumSubWebhookView(APIView):
     def post(self, request):
         signature = request.headers.get("X-Payload-Digest", "")
 
-        logger.info(f"[WEBHOOK] Received webhook request, signature present: {bool(signature)}")
-
         sumsub_service = SumSubService()
         if not sumsub_service.verify_webhook_signature(request.body, signature):
-            logger.warning(f"[WEBHOOK] Invalid webhook signature. Body length: {len(request.body)}")
+            logger.warning("Rejected webhook: invalid signature")
             return Response({"error": "Invalid signature"}, status=status.HTTP_400_BAD_REQUEST)
-
-        logger.info("[WEBHOOK] Signature verified successfully")
 
         try:
             data = request.data
@@ -49,13 +45,8 @@ class SumSubWebhookView(APIView):
             applicant_id = data.get("applicantId")
             external_user_id = data.get("externalUserId")
 
-            logger.info(
-                f"[WEBHOOK] Received SumSub webhook: {webhook_type} for applicant {applicant_id}, "
-                f"externalUserId: {external_user_id}"
-            )
-
             if not external_user_id:
-                logger.warning(f"[WEBHOOK] Missing externalUserId for applicant {applicant_id}")
+                logger.warning("Rejected webhook: no externalUserId")
                 return Response({"error": "Missing externalUserId"}, status=status.HTTP_400_BAD_REQUEST)
 
             try:
@@ -64,10 +55,9 @@ class SumSubWebhookView(APIView):
                 if user_profile.sumsub_applicant_id != applicant_id:
                     user_profile.sumsub_applicant_id = applicant_id
                     user_profile.save(update_fields=["sumsub_applicant_id"])
-                    logger.info(f"[WEBHOOK] Updated applicant ID to {applicant_id} for profile {external_user_id}")
 
             except (UserProfile.DoesNotExist, ValueError, ValidationError):
-                logger.warning(f"[WEBHOOK] User profile not found or invalid UUID: {external_user_id}")
+                logger.warning("Rejected webhook: externalUserId matched no profile")
                 return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
 
             if webhook_type == SUMSUB_EVENT_APPLICANT_CREATED:
@@ -82,19 +72,16 @@ class SumSubWebhookView(APIView):
                 IdentityVerificationService.update_status_from_normalized(
                     user_profile, sumsub_service.normalize_webhook(data)
                 )
-                logger.info(f"[WEBHOOK] Processed applicantReviewed for {applicant_id}")
 
             elif webhook_type == SUMSUB_EVENT_APPLICANT_ON_HOLD:
                 user_profile.sumsub_verification_status = STATUS_ON_HOLD
                 user_profile.save()
 
             else:
-                logger.info(f"[WEBHOOK] Unhandled webhook type: {webhook_type}")
-
-            logger.info(f"[WEBHOOK] Updated user profile {user_profile.user.id} from webhook")
+                logger.warning("Unhandled webhook type: %s", webhook_type)
 
             return Response({"success": True}, status=status.HTTP_200_OK)
 
-        except Exception as e:
-            logger.error(f"Error processing webhook: {str(e)}", exc_info=True)
+        except Exception:
+            logger.exception("Error processing webhook")
             return Response({"error": "Internal server error"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
