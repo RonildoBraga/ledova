@@ -58,7 +58,7 @@ export function useFeatureFlags() {
   const allFlags: FeatureFlag[] = query.data?.data?.results || [];
   const flags = allFlags.filter((flag: FeatureFlag) => filterFlagForPlatform(flag) && filterFlagForVersion(flag));
 
-  const isEnabled = (name: string): boolean => flags.some((flag: FeatureFlag) => flag.name === name);
+  const isEnabled = (name: string): boolean => flags.some((flag: FeatureFlag) => flag.name === name && flag.enabled);
 
   return {
     flags,
