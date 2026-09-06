@@ -9,6 +9,7 @@ from users.serializers import (
     RegisterDeviceTokenSerializer,
     UnregisterDeviceTokenSerializer,
 )
+from users.services import register_device_token, unregister_device_token
 
 
 class DeviceTokenViewSet(AuthenticatedModelViewSet):
@@ -25,30 +26,23 @@ class DeviceTokenViewSet(AuthenticatedModelViewSet):
         serializer = RegisterDeviceTokenSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        push_token = serializer.validated_data["push_token"]
-        device_type = serializer.validated_data["device_type"]
-
-        device_token, created = DeviceToken.objects.update_or_create(
-            push_token=push_token,
-            defaults={"user": request.user, "device_type": device_type, "is_active": True},
+        device_token, created = register_device_token(
+            request.user,
+            serializer.validated_data["push_token"],
+            serializer.validated_data["device_type"],
         )
 
-        if created:
-            response_status = status.HTTP_201_CREATED
-        else:
-            response_status = status.HTTP_200_OK
-
-        return Response(DeviceTokenSerializer(device_token).data, status=response_status)
+        return Response(
+            DeviceTokenSerializer(device_token).data,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
 
     @action(detail=False, methods=["post"], url_path="unregister")
     def unregister_token(self, request):
         serializer = UnregisterDeviceTokenSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        push_token = serializer.validated_data["push_token"]
-
-        deleted_count, _ = DeviceToken.objects.visible_to_user(request.user).filter(push_token=push_token).delete()
-        if deleted_count:
+        if unregister_device_token(request.user, serializer.validated_data["push_token"]):
             return Response(status=status.HTTP_204_NO_CONTENT)
 
         return Response(
