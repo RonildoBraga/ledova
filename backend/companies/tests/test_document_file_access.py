@@ -140,9 +140,7 @@ class CompanyDocumentFileViewTest(APITestCase):
 
     def test_a_document_reached_through_the_wrong_company_is_404(self):
         self.client.force_authenticate(self.other_user)
-        mismatched = (
-            f"/api/v1/companies/{self.other_company.uuid}/documents/{self.document.uuid}/file/"
-        )
+        mismatched = f"/api/v1/companies/{self.other_company.uuid}/documents/{self.document.uuid}/file/"
 
         self.assertEqual(self.client.get(mismatched).status_code, 404)
 
@@ -158,9 +156,7 @@ class CompanyDocumentFileViewTest(APITestCase):
         external = make_document(self.company, external_url=EXTERNAL_URL)
         self.client.force_authenticate(self.user)
 
-        response = self.client.get(
-            f"/api/v1/companies/{self.company.uuid}/documents/{external.uuid}/file/"
-        )
+        response = self.client.get(f"/api/v1/companies/{self.company.uuid}/documents/{external.uuid}/file/")
 
         self.assertEqual(response.status_code, 404)
 
@@ -168,9 +164,7 @@ class CompanyDocumentFileViewTest(APITestCase):
         self.client.force_authenticate(None)
         self.client.force_login(self.staff)
 
-        response = self.client.get(
-            reverse("admin:companies_companydocument_file", args=[self.document.uuid])
-        )
+        response = self.client.get(reverse("admin:companies_companydocument_file", args=[self.document.uuid]))
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self._streamed(response), DOCUMENT_BYTES)
@@ -179,9 +173,7 @@ class CompanyDocumentFileViewTest(APITestCase):
         self.client.force_authenticate(None)
         self.client.force_login(self.user)
 
-        response = self.client.get(
-            reverse("admin:companies_companydocument_file", args=[self.document.uuid])
-        )
+        response = self.client.get(reverse("admin:companies_companydocument_file", args=[self.document.uuid]))
 
         self.assertIn(response.status_code, (302, 403))
 
@@ -227,9 +219,7 @@ class CompanyDocumentIsNotServedFromMediaTest(TestCase):
     def test_the_document_admin_change_page_prints_no_media_href(self):
         self.client.force_login(self.staff)
 
-        response = self.client.get(
-            reverse("admin:companies_companydocument_change", args=[self.document.pk])
-        )
+        response = self.client.get(reverse("admin:companies_companydocument_change", args=[self.document.pk]))
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(re.findall(r'href="(/media/[^"]*)"', response.content.decode()), [])
