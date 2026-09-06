@@ -16,7 +16,22 @@ from tokens.models import (
 from wallets.models import Wallet
 
 RECIPIENT = "0x" + "9" * 40
-HOLDERS = [{"address": RECIPIENT, "name": None, "balance": "5", "source": "issuances", "percentage": 100.0}]
+HOLDERS = [
+    {
+        "address": RECIPIENT,
+        "name": "Register Holder",
+        "balance": "5",
+        "percentage": 100.0,
+        "source": "issuances",
+        "holder_type": "member",
+        "holder_type_display": "Member",
+        "entered_on": None,
+        "share_class": "DEP",
+        "whitelist_status": "Active",
+        "residential_address": "1 Register Street",
+        "amount_paid": None,
+    }
+]
 
 
 class ShareTokenActionTest(APITestCase):
@@ -123,15 +138,16 @@ class ShareTokenActionTest(APITestCase):
         self.assertEqual(response.status_code, 400, response.content)
         self.assertEqual(response.json(), {"nonFieldErrors": ["The fields company, symbol must make a unique set."]})
 
+    @patch("tokens.views.share_token.token_register")
     @patch("tokens.views.share_token.ShareTokenService")
-    def test_issue_and_holders_shapes(self, service_class):
+    def test_issue_and_holders_shapes(self, service_class, register):
         token = self.tenant.deployed_token
         issuance_request = ShareIssuanceRequest.objects.create(
             token=token, recipient_address=RECIPIENT, amount=7, reason="Owner request", submitted_by=self.tenant.user
         )
         service = service_class.return_value
         service.create_issuance_request.return_value = issuance_request
-        service.get_token_holders.return_value = HOLDERS
+        register.return_value = HOLDERS
 
         issue = self.client.post(
             f"/api/v1/tokens/{token.uuid}/issue/",
@@ -151,9 +167,23 @@ class ShareTokenActionTest(APITestCase):
 
         holders = self.client.get(f"/api/v1/tokens/{token.uuid}/holders/")
         self.assertEqual(holders.status_code, 200)
-        self.assertEqual(holders.json()["holders"], HOLDERS)
+        self.assertEqual(
+            holders.json()["holders"],
+            [
+                {
+                    "address": RECIPIENT,
+                    "name": "Register Holder",
+                    "balance": "5",
+                    "percentage": 100.0,
+                    "source": "issuances",
+                    "holderType": "member",
+                    "enteredOn": None,
+                    "shareClass": "DEP",
+                }
+            ],
+        )
         self.assertEqual(holders.json()["totalHolders"], 1)
-        service.get_token_holders.assert_called_once_with(token)
+        register.assert_called_once_with(token)
 
     @patch("tokens.views.share_token.ShareTokenService")
     def test_issue_rejects_a_bad_amount_with_a_field_error(self, service_class):
@@ -185,7 +215,6 @@ class ShareTokenActionTest(APITestCase):
             token=token, recipient_address=RECIPIENT, amount="5", status=IssuanceStatus.COMPLETED
         )
         ShareIssuance.objects.create(token=token, recipient_address=RECIPIENT, amount="3")
-        service_class.return_value.get_token_holders.return_value = HOLDERS
 
         unfiltered = self.client.get(f"/api/v1/tokens/{token.uuid}/issuances/")
         self.assertEqual(unfiltered.status_code, 200)

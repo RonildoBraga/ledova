@@ -57,6 +57,25 @@ export interface SubscriptionDetail extends Subscription {
   updatedAt: string;
 }
 
+export interface IssuerSubscription {
+  uuid: string;
+  status: SubscriptionStatus;
+  statusDisplay: string;
+  investorName: string;
+  quantity: number;
+  allottedQuantity: number | null;
+  pricePerShare: string;
+  amountDue: string;
+  amountReceived: string | null;
+  settlementRailDisplay: string;
+  reference: string;
+  paymentDueAt: string | null;
+  paymentConfirmedAt: string | null;
+  allotmentState: string;
+  walletAddress: string;
+  createdAt: string;
+}
+
 export interface SubscriptionInput {
   offering: string;
   userAccount: string;

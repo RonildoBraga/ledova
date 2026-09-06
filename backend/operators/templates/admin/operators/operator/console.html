@@ -1,0 +1,86 @@
+{% extends "admin/base_custom.html" %}
+{% load i18n admin_urls %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Home</a>
+    &rsaquo; Operator console
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="admin-custom-form admin-custom-form--wide">
+
+    <div class="action-row mt-0">
+        <a href="{{ configuration_url }}" class="btn btn-primary">Operator configuration</a>
+    </div>
+
+    <div class="admin-card">
+        <div class="admin-card-header">Configuration health</div>
+        <div class="admin-card-body">
+            <table class="admin-table">
+                {% for check in health %}
+                <tr>
+                    <td class="label-col">{{ check.label }}</td>
+                    <td>
+                        {% if check.ok %}
+                        <span class="badge badge-success">OK</span>
+                        {% else %}
+                        <span class="badge badge-danger">Fix</span>
+                        {% endif %}
+                        {{ check.detail }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+    </div>
+
+    <div class="admin-card">
+        <div class="admin-card-header">Waiting on the operator</div>
+        <div class="admin-card-body">
+            <table class="admin-table">
+                {% for row in worklist %}
+                <tr>
+                    <td class="label-col"><a href="{{ row.url }}">{{ row.label }}</a></td>
+                    <td>
+                        {% if row.count %}
+                        <span class="badge badge-danger">{{ row.count }}</span>
+                        {% else %}
+                        <span class="badge badge-success">0</span>
+                        {% endif %}
+                        <span class="help-text">{{ row.severity }}</span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+    </div>
+
+    <div class="admin-card">
+        <div class="admin-card-header">Deployment mode: {{ deployment_mode }}</div>
+        <div class="admin-card-body">
+            <p class="help-text mt-0">{{ registrant_note }}</p>
+            {% if registrants %}
+            <table class="admin-table">
+                <tr>
+                    <td class="label-col">Company</td>
+                    <td class="label-col">ACN</td>
+                    <td class="label-col">Register kept by</td>
+                </tr>
+                {% for entry in registrants %}
+                <tr>
+                    <td>{{ entry.company }}</td>
+                    <td class="monospace">{{ entry.acn }}</td>
+                    <td>{{ entry.registrant }}</td>
+                </tr>
+                {% endfor %}
+            </table>
+            {% else %}
+            <p class="mb-0">No active company on this deployment yet.</p>
+            {% endif %}
+        </div>
+    </div>
+
+</div>
+{% endblock %}

@@ -10,9 +10,12 @@ class InvestorClassificationQuerySet(QuerySet):
         return self.filter(user_account__user_profiles__user=user)
 
     def manageable_by_user(self, user):
+        return self.visible_to_user(user).submitted()
+
+    def submitted(self):
         from users.models.investor_classification import InvestorClassificationStatus
 
-        return self.visible_to_user(user).filter(status=InvestorClassificationStatus.SUBMITTED)
+        return self.filter(status=InvestorClassificationStatus.SUBMITTED)
 
     def live(self):
         from users.models.investor_classification import InvestorClassificationStatus

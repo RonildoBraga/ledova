@@ -43,10 +43,10 @@ Complete.
 
 ## Phase 1 — Investor directory and primary offering
 
-Under way. The investor classification, the one eligibility predicate, the
-eligibility-gated directory, the `Offering`, and the subscription, payment
-confirmation and allotment flow are all shipped. What remains is the operator
-console that gathers the worklists together.
+Complete. The investor classification, the one eligibility predicate, the
+eligibility-gated directory, the `Offering`, the subscription, payment
+confirmation and allotment flow, the register of members and the operator
+console are all shipped.
 
 - The directory is `GET /api/v1/directory/tokens/`, a new route beside the
   secondary market at `GET /api/v1/trading/tokens/`, which stays where it is.
@@ -303,6 +303,44 @@ console that gathers the worklists together.
   `manage.py bridge_share_assets`, which is idempotent and never runs on its
   own.
 
+- **The register of members is a read-model, and it is complete only while
+  allotment is the sole way shares move.** `tokens/services/register.py` reads
+  allotments from `ShareIssuance`, confirms every balance with `balanceOf` —
+  the chain wins over the allotment record, and a former member whose balance
+  is zero drops off — and resolves identity in one query through
+  `WhitelistEntry -> Wallet -> UserAccount -> UserProfile`. Four holder types
+  come out: `member`, `treasury` from the whitelist label, `ambiguous` where
+  two wallets share one address, and `unidentified` where no whitelist entry
+  exists; the last two are red rows on the console. No new model, no log
+  indexer. **The trigger condition for the Phase 2 indexer is written down
+  rather than left as folklore: if the trading write prefixes are ungated, or
+  if `resolve_transfer_asset` stops refusing a `tokenized_security`, a
+  transferee who never received an allotment becomes invisible and the register
+  is wrong from that moment.** Nothing else in Phase 1 depends on that
+  assumption, and nothing enforces it but those two guards.
+- **Amount paid on the register is blank where it is unknown, never zero.** It
+  comes from the `Subscription` that produced the allotment; a holding that
+  predates the platform has none, and a zero would be a false record rather
+  than a missing one. There is no operator override field in Phase 1.
+- **The residential address is in the CSV and nowhere else.** The dashboard
+  register shows name, holder type and holding. `GET
+  /api/v1/tokens/{uuid}/register/export/` writes the s169-shaped CSV, and every
+  export logs who ran it and how many rows it carried. `GET
+  /api/v1/tokens/{uuid}/holders/` keeps its path and its four original keys and
+  gains `holderType`, `enteredOn` and `shareClass`; both routes are scoped by
+  `visible_to_user` and pinned in the cross-tenant route matrix.
+- **The operator console is one page and costs nothing structural.** It replaces
+  the dead redirect at `/admin/operators/operator/` — no `AdminSite` subclass,
+  no URL namespace, no model. It carries a configuration health strip that
+  fails closed before an offering opens rather than at payment-instruction
+  time, twelve worklist counts each linking to a filtered changelist, and the
+  deployment mode with the register keeper named for each active company.
+- **The console states who keeps the register; it does not say who is obliged
+  to.** Naming the registrant is a fact about this deployment. Whether that
+  party carries the section 168 obligation is a question for the issuer and its
+  advisers, and the console says so in as many words. Counsel question,
+  flagged.
+
 ## Phase 2 — Eligibility and the register
 
 Not started, except that the Phase 1 predicate already reads the investor
@@ -331,7 +369,10 @@ switch.
   reader, through `eligible_for_any_company(user)`, and the whitelist admin's
   read-only column and add-form warning remain the fourth.
 - A share register that is the authoritative record, reconciled against the
-  chain rather than derived from it ad hoc.
+  chain rather than derived from it ad hoc. The Phase 1 register is derived, and
+  the trigger for replacing it with a `Transfer` log indexer is written above:
+  the moment a share can move by anything other than allotment, a transferee who
+  never received one is invisible to it.
 - Director authority, ownership immutability, ACN and ABN validation and
   authorized-capital limits, none of which the models check today.
 
@@ -361,11 +402,11 @@ fixed and independently reviewed.
 ## Not on the roadmap
 
 There is no off-ramp. No route lists investors: `GET /api/v1/directory/tokens/`
-is a directory of deployed share classes open to investors, not of people. There
-is no subscription, no payment confirmation and no allotment from an offering
-yet. Retail offerings are out of scope for the first releases (see the
-wholesale/sophisticated decision below). Mainnet deployment configuration is
-deliberately absent.
+is a directory of deployed share classes open to investors, not of people. The
+register of members is per share class, is read only by the issuer that owns it
+and by the operator, and is not a route anyone else can reach. Retail offerings
+are out of scope for the first releases (see the wholesale/sophisticated
+decision below). Mainnet deployment configuration is deliberately absent.
 
 ## Decisions taken
 

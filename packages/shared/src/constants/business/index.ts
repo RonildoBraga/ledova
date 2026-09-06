@@ -5,3 +5,4 @@ export * from './wallets';
 export * from './trading';
 export * from './directory';
 export * from './subscriptions';
+export * from './register';

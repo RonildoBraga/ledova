@@ -1,20 +1,21 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeftIcon, InfoIcon, MegaphoneIcon, XCircleIcon } from '@phosphor-icons/react';
+import { ArrowLeftIcon, InfoIcon, MegaphoneIcon, UsersThreeIcon, XCircleIcon } from '@phosphor-icons/react';
 import { Panel } from '@components/Panel';
 import {
   OFFERING_EXEMPTION_LABELS,
   OFFERING_WITHDRAWABLE_STATUSES,
+  REGISTER_COPY,
   formatDate,
   getErrorMessage,
   updateCompany,
 } from '@ledova/shared';
-import type { Offering, OfferingExemption, OfferingInput } from '@ledova/shared';
+import type { IssuerSubscription, Offering, OfferingExemption, OfferingInput } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 import { PageWrapper } from '../components/PageWrapper';
 import { useCompany } from '../hooks/useCompany';
-import { useOfferingActions, useOfferings } from './useOffering';
+import { useOfferingActions, useOfferings, useOfferingSubscriptions } from './useOffering';
 import { OfferingForm } from './OfferingForm';
 
 const ACTION_ERROR_FALLBACK = 'The request was refused. Please try again.';
@@ -86,6 +87,71 @@ function OfferingRow({
         )}
       </div>
     </div>
+  );
+}
+
+function SubscriptionsPanel({ offerings }: { offerings: Offering[] }) {
+  const [selected, setSelected] = useState<string>('');
+  const uuid = selected || offerings[0]?.uuid;
+  const { subscriptions, isLoading } = useOfferingSubscriptions(uuid);
+
+  if (offerings.length === 0) {
+    return null;
+  }
+
+  return (
+    <Panel title={REGISTER_COPY.SUBSCRIPTIONS_TITLE} icon={<UsersThreeIcon size={20} />}>
+      <div className="px-2 py-2 space-y-3">
+        <p className="text-sm text-text-secondary">{REGISTER_COPY.SUBSCRIPTIONS_NOTE}</p>
+        <select
+          value={uuid}
+          onChange={(event) => setSelected(event.target.value)}
+          className="rounded-lg border border-border bg-surface-secondary px-3 py-2 text-sm text-text-primary"
+        >
+          {offerings.map((offering) => (
+            <option key={offering.uuid} value={offering.uuid}>
+              {offering.tokenSymbol} &mdash; {offering.statusDisplay}
+            </option>
+          ))}
+        </select>
+        {isLoading ? (
+          <div className="py-4 text-center">
+            <div className="h-5 w-5 border-2 border-brand-subtle border-t-brand rounded-full animate-spin mx-auto" />
+          </div>
+        ) : subscriptions.length === 0 ? (
+          <p className="text-sm text-text-muted">{REGISTER_COPY.SUBSCRIPTIONS_EMPTY}</p>
+        ) : (
+          <div className="overflow-x-auto rounded-lg border border-border">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="px-3 py-2 text-left text-xs font-medium text-text-muted">Investor</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-text-muted">Shares</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-text-muted">Due</th>
+                  <th className="px-3 py-2 text-right text-xs font-medium text-text-muted">Received</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-text-muted">Status</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-text-muted">Allotment</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border-subtle">
+                {subscriptions.map((row: IssuerSubscription) => (
+                  <tr key={row.uuid}>
+                    <td className="px-3 py-2 text-text-primary">{row.investorName || row.walletAddress}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-text-primary">
+                      {(row.allottedQuantity ?? row.quantity).toLocaleString()}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-text-muted">{row.amountDue}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-text-muted">{row.amountReceived ?? '—'}</td>
+                    <td className="px-3 py-2 text-text-secondary">{row.statusDisplay}</td>
+                    <td className="px-3 py-2 text-text-secondary">{row.allotmentState}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </Panel>
   );
 }
 
@@ -192,6 +258,8 @@ export default function OfferingPage() {
           </div>
         )}
       </Panel>
+
+      <SubscriptionsPanel offerings={offerings} />
 
       <OfferingForm tokens={tokens} busy={busy} onCreate={handleCreate} />
 

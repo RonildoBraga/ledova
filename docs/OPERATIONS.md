@@ -14,12 +14,46 @@ instance, or a registry provider hosting many companies. Its configuration is
 one row, `operators.Operator`, edited in the Django admin.
 
 - The admin changelist, `/admin/operators/operator/`, seeds the row if it is
-  missing and redirects to the single change page,
+  missing and renders the **operator console** — the configuration health
+  strip, the worklist, and the deployment mode with the register keeper for
+  each active company — with a button through to the single change page,
   `/admin/operators/operator/1/change/`. Always enter through the changelist:
   the change URL alone redirects to `/admin/` on a fresh install, because
   `changelist_view` is the only thing that creates the row. Add is offered only
   while no row exists; delete never is. One row is enforced three ways: a fixed primary key
   of 1, a `CheckConstraint` on it, and a guard in `save()`.
+
+### The operator console
+
+`/admin/operators/operator/` is the one page that says what is waiting. It adds
+no model, no URL namespace and no `AdminSite` subclass: it is
+`OperatorAdmin.changelist_view` rendering a template over
+`operators/services.py`.
+
+- **Configuration health** fails closed before an offering opens rather than at
+  payment-instruction time. Five checks: the operator row carries a name, legal
+  name, ABN and contact email; `WHITELIST_CONTRACT_ADDRESS` is set;
+  `SHARE_TOKEN_FACTORY_ADDRESS` is set; `payment_reference_prefix` is present
+  and at most ten characters, so the prefix plus the eight-character code fits
+  the eighteen-character AU lodgement limit; and every supported settlement
+  asset holds an active deployment on `receiving_wallet_chain`. A fresh install
+  starts with an empty settlement-asset set, which the strip reports rather
+  than passing silently — an offering can then only be paid by bank transfer.
+- **The worklist** is twelve labelled counts, each one `.count()` on an
+  existing queryset method, each linking to the admin changelist already
+  filtered: company applications submitted, in review or needing information;
+  classifications awaiting verification; offerings submitted or under review;
+  offerings at their cap and still open; subscriptions awaiting payment;
+  subscriptions paid and not allotted; subscriptions whose mint is broadcast
+  and unresolved; whitelist entries pending; issuance and capital-increase
+  requests submitted, approved-not-executed or failed; share tokens stuck in
+  `DEPLOYING` past the pending-deployment age; and allotments to an address
+  with no whitelist entry at all.
+- **Deployment mode and the registrant.** The console names the mode
+  (`registry` or `single_issuer`) and, for each active company, who keeps the
+  register on this deployment. It states that fact and nothing more: it does
+  not assert who carries the section 168 obligation, which is a question for
+  the issuer and its advisers.
 - The row is created lazily the first time the admin page or
   `GET /api/operator/` asks for it, named from `OPERATOR_NAME` (default
   `Ledova operator`). Nothing in the compose `migrate` chain creates it.
@@ -524,7 +558,8 @@ without it.
    fold release, read Migration notes first: dry-run the migration against a
    restored copy, and queue `sync_all_wallets` afterwards.
 7. Open `/admin/operators/operator/` and complete identity, deployment mode and
-   payment rails before inviting anyone. Enter the changelist, not
+   payment rails before inviting anyone; the console's health strip must be all
+   green before an offering opens. Enter the changelist, not
    `/admin/operators/operator/1/change/`: only `OperatorAdmin.changelist_view`
    seeds the row, so on a fresh install the change URL redirects to `/admin/`.
 8. Confirm a worker is running; check the deployment, issuance and confirmation

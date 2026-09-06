@@ -43,7 +43,7 @@ package of per-concern modules re-exported by `settings/__init__.py`.
 
 | App | Owns |
 | --- | --- |
-| `operators` | The single `Operator` configuration row and `GET /api/operator/` |
+| `operators` | The single `Operator` configuration row, `GET /api/operator/`, and the operator console: `worklist()` and `configuration_health()` rendered by `OperatorAdmin.changelist_view` |
 | `authentication` | `CustomUser`, the `AuthViewSet`, JWT sessions, email verification codes |
 | `users` | Profiles, accounts, preferences, financial profiles, device tokens, notifications, favourite assets, `InvestorClassification` and the investor-eligibility predicate |
 | `companies` | `Company`, its application lifecycle, and company `Document` records |
@@ -334,11 +334,67 @@ them after `make build` and fails on any drift.
    `failed` with the mint out and nothing else looks at it. The daily
    `expire_unpaid_subscriptions` only touches rows with no payment recorded.
 9. Allotment stays an admin action. The API carries create, list, detail, submit
-   and withdraw for the investor and no operator write route at all.
+   and withdraw for the investor and no operator write route at all. The issuer
+   reads its own offering's subscriptions at `GET
+   /api/v1/offerings/{uuid}/subscriptions/`, scoped by the offering's own
+   `visible_to_user` and read-only, so payment confirmed and allotment pending
+   are visible without emailing support and without a second writable surface.
+   `ShareIssuanceListSerializer` carries `subscriptionReference`, so an
+   allotment links back to the payment that bought it.
 10. `Subscription.offering`, `.user_account` and `.wallet` are `PROTECT`, so a
     money record cannot be destroyed by a cascade. The handler turns the
     resulting `ProtectedError` into a 409 that says how many rows hold the
     target, rather than the 503 a raw database error produced.
+
+## The register of members
+
+The Phase 1 register is a read-model, not a table. `tokens/services/register.py`
+holds it, because its subject is one share class and its two callers are the two
+`tokens` routes; it reaches `offerings.Subscription` through the reverse
+`OneToOne` chain the way `ShareTokenQuerySet.with_open_offering` reaches
+`Offering`, so no new app dependency is introduced.
+
+1. Allotments come from completed `ShareIssuance` rows for the share class,
+   grouped by recipient address, carrying the earliest completion as the date
+   the holder entered the register.
+2. Every balance is confirmed with `get_token_balance`. **The chain wins.** An
+   address whose allotment record says a hundred and whose `balanceOf` says
+   forty-two is on the register for forty-two, and a former member whose
+   balance is now zero is off it. Only when no balance can be read at all does
+   the register fall back to the allotment record, and it says so in `source`.
+3. Identity is one query. `WhitelistEntryQuerySet.for_addresses()` plus
+   `.with_holder_identity()` resolve `WhitelistEntry -> Wallet -> UserAccount ->
+   UserProfile`, and `whitelist/services/identity.py` turns each entry into a
+   holder type. The whitelist admin's owner column is the second caller of the
+   same pair, so the by-hand walk it used to do is gone.
+4. Four holder types come out. `member` is named from the account's profiles and
+   carries the residential address; `treasury` takes the whitelist entry's
+   label; `ambiguous` is two wallets on one address, which the `OneToOne` on
+   `WhitelistEntry.wallet` permits and `WhitelistService._resolve_wallet`
+   already refuses to act on; `unidentified` is an address with no whitelist
+   entry, whose only name is the fallback in
+   `ShareIssuanceQuerySet.unique_holders_with_names`. The last two are red rows
+   on the operator console.
+5. Amount paid comes from the `Subscription` that produced the allotment, and is
+   **blank** where there is none — never zero. A holding that predates the
+   platform is unknown, and printing a zero against it would be a false record.
+
+`GET /api/v1/tokens/{uuid}/holders/` keeps its path and its four original keys —
+`address`, `name`, `balance`, `percentage` — and gains `holderType`, `enteredOn`
+and `shareClass`. `GET /api/v1/tokens/{uuid}/register/export/` writes the
+s169-shaped CSV: Name, Residential address, Wallet address, Holder type, Class,
+Shares held, Date entered, Whitelist status, Amount paid. Both are scoped by
+`ShareToken.objects.visible_to_user` and pinned in the cross-tenant route
+matrix. The privacy boundary is deliberate: the dashboard shows name, holder
+type and holding, the residential address appears in the CSV only, and every
+export writes a log line naming the user and the row count.
+
+**The register is complete only while allotment is the sole way shares move.**
+That holds in Phase 1 because the trading write prefixes are flag-gated and
+`resolve_transfer_asset` refuses a `tokenized_security`. Relax either and a
+transferee becomes invisible, at which point the register is wrong and the
+Phase 2 log indexer is owed. [ROADMAP.md](ROADMAP.md#phase-2--eligibility-and-the-register)
+carries that as the trigger condition.
 
 Transaction hashes are stored 0x-prefixed. `is_transferable` and
 `is_divisible` on `ShareToken` are display-only and have no on-chain effect.

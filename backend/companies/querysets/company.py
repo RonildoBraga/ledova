@@ -18,6 +18,11 @@ class CompanyQuerySet(QuerySet):
 
         return self.filter(status=CompanyStatus.ACTIVE)
 
+    def awaiting_review(self):
+        from companies.models import CompanyStatus
+
+        return self.filter(status__in=[CompanyStatus.SUBMITTED, CompanyStatus.REVIEW, CompanyStatus.INFO_REQUIRED])
+
     def open_to_investors(self):
         return self.active().filter(is_open_to_investors=True)
 

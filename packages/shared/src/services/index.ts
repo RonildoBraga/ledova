@@ -81,6 +81,7 @@ export {
   pauseCompanyToken,
   unpauseCompanyToken,
   getCompanyTokenHolders,
+  downloadTokenRegister,
   getCompanyTokenIssuances,
   issueCompanyShares,
   getCapitalIncreases,
@@ -104,6 +105,7 @@ export {
   deleteOffering,
   submitOffering,
   withdrawOffering,
+  getOfferingSubscriptions,
 } from './offerings';
 export {
   getSubscriptions,

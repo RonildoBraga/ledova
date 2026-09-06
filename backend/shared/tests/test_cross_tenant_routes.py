@@ -206,6 +206,7 @@ ROUTES = (
     ),
     Route("get", "/api/v1/tokens/{deployed_token}/issuances/"),
     Route("get", "/api/v1/tokens/{deployed_token}/holders/"),
+    Route("get", "/api/v1/tokens/{deployed_token}/register/export/"),
     Route(
         "post",
         "/api/v1/tokens/",
@@ -224,6 +225,7 @@ ROUTES = (
     Route("delete", "/api/v1/offerings/{offering}/", prepare=_clear_subscriptions),
     Route("post", "/api/v1/offerings/{offering}/submit/", {}, prepare=_activate_company),
     Route("post", "/api/v1/offerings/{offering}/withdraw/", {}),
+    Route("get", "/api/v1/offerings/{offering}/subscriptions/"),
     Route("post", "/api/v1/offerings/", {"token": "{deployed_token}", **OFFERING}, foreign=400),
     Route("get", "/api/v1/subscriptions/{subscription}/"),
     Route("post", "/api/v1/subscriptions/{subscription}/submit/", {}, prepare=_open_the_offering_to_the_actor),
@@ -335,7 +337,6 @@ class CrossTenantRouteMatrixTest(APITestCase):
         self._service("tokens.tasks.deploy_share_token_task")
         share_tokens = self._service("tokens.views.share_token.ShareTokenService").return_value
         share_tokens.create_issuance_request.side_effect = _create_issuance_request
-        share_tokens.get_token_holders.return_value = []
         trading_orders = self._service("tokens.views.trading_order.TradingOrderService")
         trading_orders.cancel_order.side_effect = lambda order: order
         trading_orders.get_order_cancel_message.return_value = {}

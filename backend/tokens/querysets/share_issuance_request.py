@@ -23,6 +23,16 @@ class ShareIssuanceRequestQuerySet(QuerySet):
         user_companies = Company.objects.manageable_by_user(user)
         return self.filter(token__company__in=user_companies)
 
+    def needing_attention(self):
+        return self.filter(
+            status__in=(
+                RequestStatus.SUBMITTED,
+                RequestStatus.UNDER_REVIEW,
+                RequestStatus.APPROVED,
+                RequestStatus.FAILED,
+            )
+        )
+
     def unminted(self, token):
         from tokens.models import ShareIssuance
 

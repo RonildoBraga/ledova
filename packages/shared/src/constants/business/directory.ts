@@ -19,6 +19,7 @@ export const OFFERING_ENDPOINTS = {
   DETAIL: (uuid: string) => `/api/v1/offerings/${uuid}/` as const,
   SUBMIT: (uuid: string) => `/api/v1/offerings/${uuid}/submit/` as const,
   WITHDRAW: (uuid: string) => `/api/v1/offerings/${uuid}/withdraw/` as const,
+  SUBSCRIPTIONS: (uuid: string) => `/api/v1/offerings/${uuid}/subscriptions/` as const,
 } as const;
 
 export const OFFERING_EXEMPTION_LABELS: Record<OfferingExemption, string> = {

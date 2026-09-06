@@ -1,3 +1,5 @@
+import type { HolderType } from '../../constants';
+
 export type TokenStatus = 'draft' | 'deploying' | 'deployed' | 'paused';
 export type TokenType = 'ordinary' | 'preference' | 'redeemable';
 export type IssuanceStatus = 'pending' | 'processing' | 'completed' | 'failed';
@@ -41,6 +43,9 @@ export interface TokenHolder {
   balance: string;
   percentage: number;
   source: 'blockchain' | 'issuances';
+  holderType: HolderType;
+  enteredOn: string | null;
+  shareClass: string;
 }
 
 export interface TokenHoldersResponse {
@@ -61,6 +66,7 @@ export interface TokenIssuance {
   tokenSymbol: string;
   recipientAddress: string;
   recipientName: string;
+  subscriptionReference: string | null;
   amount: string;
   issuanceType: IssuanceType;
   issuanceTypeDisplay: string;

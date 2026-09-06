@@ -2,8 +2,9 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from offerings.exceptions import OfferingRefusedException
-from offerings.models import Offering
+from offerings.models import Offering, Subscription
 from offerings.serializers import (
+    IssuerSubscriptionSerializer,
     OfferingDetailSerializer,
     OfferingListSerializer,
     OfferingWithdrawSerializer,
@@ -45,6 +46,12 @@ class OfferingViewSet(AuthenticatedModelViewSet):
         offering = self.get_object()
         submit_offering(offering, submitted_by=request.user)
         return Response(OfferingDetailSerializer(offering, context=self.get_serializer_context()).data)
+
+    @action(detail=True, methods=["get"])
+    def subscriptions(self, request, uuid=None):
+        offering = self.get_object()
+        page = self.paginate_queryset(Subscription.objects.for_issuer(offering))
+        return self.get_paginated_response(IssuerSubscriptionSerializer(page, many=True).data)
 
     @action(detail=True, methods=["post"])
     def withdraw(self, request, uuid=None):
