@@ -174,13 +174,17 @@ payment confirmation and allotment are not.
 - `CompanyDocument.get_file_url` still returns a plain `MEDIA_URL` path, so on a
   deployment running `DEBUG=true` every uploaded ASIC extract and constitution
   is readable with no session. Lower sensitivity than net-asset evidence and
-  left standing because repointing it breaks the mobile client, which
-  authenticates with a bearer token an `<img>` cannot send — but it is an
-  exposure, not merely a rough edge, and closing it means giving the clients a
-  streaming endpoint the way classification evidence has one.
-- There is no retention or auto-deletion rule for rejected and expired
-  classifications. Evidence is kept until someone decides the rule. Account
-  deletion behaviour is unchanged. Flagged for the owner and counsel.
+  an exposure, not merely a rough edge. It will be closed the same way
+  classification evidence was: a streaming endpoint reading through the storage
+  backend's `open()`, scoped by `visible_to_user`, identical on local disk and
+  S3. Both clients change with it, because the mobile app authenticates with a
+  bearer token an `<img>` cannot send.
+- Rejected and expired classifications keep their evidence for a fixed period
+  and are then purged automatically, leaving the classification record and its
+  outcome behind. The retention period itself is not settled and is the part
+  that needs counsel; Australian financial-record and AML/CTF
+  customer-identification obligations are the constraints to confirm against.
+  Nothing implements this yet, and account deletion behaviour is unchanged.
 - A primary offering: a company publishes an offer, an investor subscribes, the
   operator records the payment (AUD bank transfer against the reference prefix,
   or a supported stablecoin to the receiving wallet) and allots the shares.
@@ -315,6 +319,8 @@ deliberately absent.
   rules live outside this repository.
 - **One shared package, consumed from source.** `@ledova/shared` has no build
   step, and both clients compile its TypeScript themselves.
+- **Classification evidence is kept for a fixed period, then purged.** The
+  period is open and needs counsel; the shape is not.
 - **No comments and no docstrings in source.** Settled, and now mechanically
   gated by `make check-comments` rather than held by review alone. See the
   coding rules in [ARCHITECTURE.md](ARCHITECTURE.md#coding-rules).

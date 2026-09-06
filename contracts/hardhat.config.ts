@@ -3,6 +3,8 @@ import "@nomicfoundation/hardhat-toolbox";
 
 const DEPLOYER_PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY || "";
 
+const HARDHAT_NODE_DEV_ACCOUNTS = "remote";
+
 const config: HardhatUserConfig = {
   solidity: {
     version: "0.8.24",
@@ -18,9 +20,7 @@ const config: HardhatUserConfig = {
   networks: {
     localhost: {
       url: "http://127.0.0.1:8545",
-      // Use the development accounts exposed by `hardhat node` unless a
-      // caller explicitly supplies a local test key.
-      accounts: DEPLOYER_PRIVATE_KEY ? [DEPLOYER_PRIVATE_KEY] : "remote",
+      accounts: DEPLOYER_PRIVATE_KEY ? [DEPLOYER_PRIVATE_KEY] : HARDHAT_NODE_DEV_ACCOUNTS,
     },
     baseSepolia: {
       url:
