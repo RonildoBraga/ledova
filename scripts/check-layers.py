@@ -1,0 +1,223 @@
+#!/usr/bin/env python3
+"""Fail when a backend layer contains something the layer table forbids.
+
+The layers, what each owns and what each never contains are stated in
+docs/ARCHITECTURE.md under "Backend layers". This script is the mechanical half
+of the "Never contains" column; keep the two in step.
+
+Every offender that exists today is listed in LEGACY, so the gate is green on
+the day it lands and blocks only new violations. LEGACY is the migration
+backlog made visible: delete an entry when the file is cleaned, and the gate
+holds the ground. An entry that no longer violates anything is reported as
+stale, so the list cannot quietly outlive the problem.
+"""
+
+from __future__ import annotations
+
+import argparse
+import ast
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+BACKEND = ROOT / "backend"
+
+SKIP_ANYWHERE = frozenset({"__pycache__", "migrations", "tests", ".git", "node_modules"})
+
+SCOPING_CALLS = frozenset(
+    {
+        "visible_to_user",
+        "manageable_by_user",
+        "none",
+        "get_object",
+        "get_queryset",
+        "eligible_investor_companies",
+        "investor_eligibility",
+    }
+)
+
+VIEW_ORM = "raw-orm-in-view"
+VIEW_TRANSACTION = "transaction-in-view"
+VIEW_LOCK = "select-for-update-in-view"
+VIEW_LOGGER = "logger-in-view"
+MODEL_QUERY = "query-in-model"
+TASK_TRANSACTION = "transaction-in-task"
+
+RULES = {
+    VIEW_ORM: "views reach the ORM only through visible_to_user or manageable_by_user",
+    VIEW_TRANSACTION: "transaction.atomic belongs in the service that owns the workflow",
+    VIEW_LOCK: "select_for_update belongs in the service that owns the workflow",
+    VIEW_LOGGER: "log in services and tasks, not in views",
+    MODEL_QUERY: "a model transition does not query other models",
+    TASK_TRANSACTION: "a task loads a row and calls one service; the service owns the transaction",
+}
+
+LEGACY = frozenset(
+    {
+        "backend/assets/models/asset.py:query-in-model",
+        "backend/authentication/views/user.py:raw-orm-in-view",
+        "backend/companies/models/company.py:query-in-model",
+        "backend/documents/views/document.py:raw-orm-in-view",
+        "backend/feature_flags/views/feature_flag.py:raw-orm-in-view",
+        "backend/operators/models.py:query-in-model",
+        "backend/shared/models/country.py:query-in-model",
+        "backend/tokens/models/review_request.py:query-in-model",
+        "backend/tokens/views/swap.py:raw-orm-in-view",
+        "backend/tokens/views/trading_events.py:raw-orm-in-view",
+        "backend/users/views/device_token.py:raw-orm-in-view",
+        "backend/users/views/financial_profile.py:select-for-update-in-view",
+        "backend/users/views/financial_profile.py:transaction-in-view",
+        "backend/users/views/notification.py:raw-orm-in-view",
+        "backend/users/views/notification_preferences.py:raw-orm-in-view",
+        "backend/users/views/notification_preferences.py:select-for-update-in-view",
+        "backend/users/views/notification_preferences.py:transaction-in-view",
+        "backend/users/views/user_account.py:select-for-update-in-view",
+        "backend/users/views/user_account.py:transaction-in-view",
+        "backend/users/views/user_preferences.py:raw-orm-in-view",
+        "backend/users/views/user_preferences.py:select-for-update-in-view",
+        "backend/users/views/user_preferences.py:transaction-in-view",
+        "backend/users/views/user_profile.py:select-for-update-in-view",
+        "backend/users/views/user_profile.py:transaction-in-view",
+        "backend/wallets/models/holding_snapshot.py:query-in-model",
+        "backend/wallets/views/wallet.py:logger-in-view",
+        "backend/wallets/views/wallet.py:raw-orm-in-view",
+        "backend/wallets/views/wallet.py:select-for-update-in-view",
+        "backend/wallets/views/wallet.py:transaction-in-view",
+        "backend/whitelist/views/entry.py:raw-orm-in-view",
+        "backend/whitelist/views/status.py:logger-in-view",
+    }
+)
+
+
+def layer_of(path: Path) -> str | None:
+    parts = path.relative_to(BACKEND).parts
+    for index, part in enumerate(parts):
+        if part in ("views", "models", "tasks"):
+            return part
+        if index == 1 and part in ("views.py", "models.py", "tasks.py"):
+            return part[:-3]
+    return None
+
+
+def python_files():
+    for path in sorted(BACKEND.rglob("*.py")):
+        if any(part in SKIP_ANYWHERE for part in path.relative_to(BACKEND).parts):
+            continue
+        layer = layer_of(path)
+        if layer is not None:
+            yield path, layer
+
+
+def attribute_chain(node: ast.AST) -> str:
+    parts = []
+    while isinstance(node, ast.Attribute):
+        parts.append(node.attr)
+        node = node.value
+    if isinstance(node, ast.Name):
+        parts.append(node.id)
+    return ".".join(reversed(parts))
+
+
+def names_in(node: ast.AST) -> set[str]:
+    return {inner.attr for inner in ast.walk(node) if isinstance(inner, ast.Attribute)} | {
+        inner.id for inner in ast.walk(node) if isinstance(inner, ast.Name)
+    }
+
+
+def unscoped_orm_lines(scope: ast.AST) -> list[int]:
+    if names_in(scope) & SCOPING_CALLS:
+        return []
+    return [
+        node.lineno
+        for node in ast.walk(scope)
+        if isinstance(node, ast.Attribute) and node.attr == "objects" and isinstance(node.value, ast.Name)
+    ]
+
+
+def findings_for(tree: ast.AST, layer: str):
+    found = []
+
+    if layer == "views":
+        for scope in ast.walk(tree):
+            if isinstance(scope, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                found.extend((line, VIEW_ORM) for line in unscoped_orm_lines(scope))
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Attribute):
+            continue
+        chain = attribute_chain(node)
+
+        if layer == "views":
+            if chain.endswith("transaction.atomic") or chain == "atomic":
+                found.append((node.lineno, VIEW_TRANSACTION))
+            if chain.endswith("select_for_update"):
+                found.append((node.lineno, VIEW_LOCK))
+            if chain.endswith("logging.getLogger"):
+                found.append((node.lineno, VIEW_LOGGER))
+
+        if layer == "models" and ".objects." in chain:
+            found.append((node.lineno, MODEL_QUERY))
+
+        if layer == "tasks" and (chain.endswith("transaction.atomic") or chain == "atomic"):
+            found.append((node.lineno, TASK_TRANSACTION))
+
+    return found
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--show-legacy", action="store_true")
+    arguments = parser.parse_args()
+
+    violations: list[str] = []
+    excused: list[str] = []
+    seen_keys: set[str] = set()
+    checked = 0
+
+    for path, layer in python_files():
+        checked += 1
+        relative = path.relative_to(ROOT)
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8-sig", errors="replace"))
+        except SyntaxError as error:
+            print(f"{relative}: could not parse: {error}", file=sys.stderr)
+            return 1
+
+        for line, rule in findings_for(tree, layer):
+            key = f"{relative}:{rule}"
+            seen_keys.add(key)
+            entry = f"{relative}:{line}: {RULES[rule]}"
+            (excused if key in LEGACY else violations).append(entry)
+
+    stale = sorted(LEGACY - seen_keys)
+
+    if arguments.show_legacy:
+        for entry in sorted(excused):
+            print(entry)
+        print(f"\n{len(excused)} excused finding(s) across {len(LEGACY)} legacy entries.\n")
+
+    if stale:
+        print(f"These LEGACY entries no longer violate anything ({len(stale)}):\n", file=sys.stderr)
+        for key in stale:
+            print(f"  {key}", file=sys.stderr)
+        print("\nDelete them from LEGACY in scripts/check-layers.py.", file=sys.stderr)
+        return 1
+
+    if violations:
+        print(f"Backend layer violations ({len(violations)}):\n", file=sys.stderr)
+        for entry in violations:
+            print(f"  {entry}", file=sys.stderr)
+        print(
+            "\nThe layer that owns this is named in docs/ARCHITECTURE.md, "
+            '"Backend layers".\nMove the logic rather than adding to LEGACY: '
+            "that list only shrinks.",
+            file=sys.stderr,
+        )
+        return 1
+
+    print(f"Backend layers clean in {checked} files ({len(excused)} known findings still in LEGACY).")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

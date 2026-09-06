@@ -17,6 +17,8 @@ jobs:
           python-version: '3.13'
       - name: Comment and docstring gate
         run: python scripts/check-comments.py
+      - name: Backend layer gate
+        run: python scripts/check-layers.py
 
   javascript:
     name: Build & test (JS workspaces + contracts)
