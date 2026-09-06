@@ -44,8 +44,9 @@ Complete.
 ## Phase 1 — Investor directory and primary offering
 
 Under way. The investor classification, the one eligibility predicate, the
-eligibility-gated directory and the `Offering` are shipped. Subscriptions,
-payment confirmation and allotment are not.
+eligibility-gated directory, the `Offering`, and the subscription, payment
+confirmation and allotment flow are all shipped. What remains is the operator
+console that gathers the worklists together.
 
 - The directory is `GET /api/v1/directory/tokens/`, a new route beside the
   secondary market at `GET /api/v1/trading/tokens/`, which stays where it is.
@@ -188,6 +189,106 @@ payment confirmation and allotment are not.
 - A primary offering: a company publishes an offer, an investor subscribes, the
   operator records the payment (AUD bank transfer against the reference prefix,
   or a supported stablecoin to the receiving wallet) and allots the shares.
+  Shipped, as `offerings.Subscription` plus `POST /api/v1/subscriptions/`.
+- **Payment confirmation is columns on the subscription row, not a second
+  model.** The first offerings are tens of subscriptions, and Django's admin
+  `LogEntry` already records who changed what and when. Partial payment is the
+  operator confirming the amount that actually arrived and, when accepting it as
+  final, scaling `allotted_quantity` to `floor(received / price)` with the
+  sub-share residual recorded as a refund owed. The trade-off is named rather
+  than hidden: multi-tranche reconciliation against a bank statement is not
+  supported, and a second tranche is the operator updating the total with a
+  note. Adding a `SubscriptionPayment` table later is purely additive.
+- **Reject and withdraw are refused once any money is recorded.** The operator
+  must record a refund first; only then does the row accept a rejection or a
+  withdrawal. Money that arrived cannot be waved away by a status change, and
+  the API's withdraw route refuses it the same way the admin does.
+- **Money out never leaves shares out.** A subscription stays `paid` from the
+  Allot click until the deferred task runs, which is minutes with the retry
+  strategy, and the admin offers Record refund throughout that window.
+  `record_refund` therefore claims the linked issuance request first: a
+  compare-and-set from `EXECUTABLE_STATUSES` to `rejected` inside the refund's
+  transaction, so either the refund wins and `execute_request` refuses the mint,
+  or the worker's `mark_executing` won and the refund is refused by name. Once
+  the request is `executing` or `executed` — including the reconciler window
+  where the shares are minted but the row still reads `paid` — a refund, a
+  rejection, a withdrawal and a restated payment are all refused. The request
+  status alone is not enough: `EXECUTABLE_STATUSES` includes `failed`, and a
+  mint that was broadcast and then lost its receipt to an RPC timeout leaves the
+  request `failed` with the shares already out, so a status-only guard let the
+  money go back while they stood. What settles it is the discriminator the
+  issuance model already carries — `mark_reverted` clears `tx_hash` because a
+  reverted mint is safe to refund, `mark_failed` keeps it because a broadcast
+  mint of unknown fate is not — so every money move is refused while the linked
+  `ShareIssuance` carries a hash, and only the executing sweep releases it, by
+  completing the mint or by clearing the hash on a revert.
+- **A lost receipt is swept, not left for someone to notice.**
+  `check_executing_issuance_requests` takes `executing` requests and also
+  `failed` ones whose issuance still carries a `tx_hash`. The allotment task
+  retries four times on a receipt timeout and then gives up, and before this the
+  row stayed `failed` with a mint out: the reconciler only flips `executed` rows
+  and the sweep only looked at `executing` ones. Both ends now close on their
+  own — the mint completes and the subscription mirrors to `allotted`, or the
+  revert clears the hash and the refund reopens.
+- **Two sequential batches cannot jointly outrun the authorized supply.**
+  `totalSupply()` counts minted shares, not promised ones, so a batch judged
+  only against `authorized - issued` fits while the requests approved by the
+  previous batch are still unexecuted. The chain half of the headroom therefore
+  subtracts every request for the token that can still mint — `approved`,
+  `executing`, and `failed` while its issuance carries a hash. Nothing was
+  over-minted before the fix, because `execute_request` and the contract both
+  refuse, but `mark_refused` leaves the request `approved`, so the second
+  subscription sat `paid` with the money in, no shares, and a task that failed
+  on every retry.
+- **Eligibility is re-checked at acceptance, not only at submission.** A
+  certificate can lapse in between and the law cares about status at
+  acceptance, so `accept` runs `require_subscription_eligibility(account,
+  company, amount)` again. Both calls name the subscription's own account: a
+  user with two investor accounts earns a qualification on one and must not
+  spend it on the other.
+- **Nothing may mint twice.** A subscription's allotment rests on three
+  mechanisms that already existed and were not weakened: the `OneToOne` from
+  `Subscription.issuance_request`, claimed under `select_for_update` so two
+  simultaneous clicks produce one request; the unique
+  `ShareIssuance.idempotency_key`, derived from that request's uuid; and the
+  compare-and-set in `ReviewableRequest.mark_executing`. Allotment reimplements
+  none of the mint: it calls `create_issuance_request`, `approve`, links the
+  request and defers a task onto the untouched `execute_request`.
+  `backend/offerings/tests/test_chain_allotment.py` proves it on a live Hardhat
+  node, sequentially and with two workers racing.
+- **One on-chain transfer cannot fund two subscriptions.** A partial unique
+  constraint on `Lower(Subscription.payment_tx_hash)` where it is non-empty says
+  so at the database level, and the service refuses the second confirmation by
+  name before it gets there. The fold is not cosmetic: an Ethereum transaction
+  hash is case-insensitive hex with no checksum encoding, so an explorer and a
+  CSV export of the same transfer differ in case, and a byte-exact index would
+  let that one transfer fund two subscriptions. `confirm_payment` normalises the
+  hash to lower case and refuses anything that is not `0x` plus 64 hexadecimal
+  characters. The payment reference is unique the same way.
+- **A payment reference is normalised on generation as well as on lookup**, so a
+  mangled bank narrative still matches: the prefix and an eight-character
+  Crockford base32 code are both upper-cased with `O`, `I` and `L` folded onto
+  `0`, `1` and `1`, and the search box in the subscription admin applies the
+  same normalisation to whatever the operator pastes in.
+- **Bulk allotment refuses the whole batch rather than part-filling it.** It
+  groups by offering, takes `select_for_update` on the offering row, makes one
+  `share_supply()` read for the batch, and refuses everything when the total
+  exceeds `min(offering headroom, authorized - issued)`. Allotting a first-come
+  subset would destroy the pro-rata fairness that scale-back exists to provide.
+- **`reconcile_subscriptions` earns its five-minute slot.**
+  `check_executing_issuance_requests` finishes the *request* a killed worker
+  left behind; without a mirror on the subscription side the *subscription*
+  sits `paid` forever with the shares already on chain. The periodic flips a
+  paid subscription to allotted when its linked request reached `executed`, and
+  touches nothing else. The daily `expire_unpaid_subscriptions` only ever
+  touches a row with no payment recorded against it.
+- **Allotment stays an admin action; there is no operator write route.** The API
+  carries create, list, detail, submit and withdraw for the investor and nothing
+  else, so there is no staff API surface to mis-permission.
+- **A subscription is a money record, so its foreign keys are `PROTECT`.** A
+  company or an offering that has taken a subscription cannot be deleted, and
+  the refusal is a 409 naming how many rows hold it rather than the 503 a raw
+  `ProtectedError` produced.
 - The payment rails on the operator row exist for this. The directory detail
   page renders `paymentInstructions` from `GET /api/operator/` rather than
   duplicating bank details onto the offering, so there is one copy of the
@@ -240,6 +341,10 @@ Not started.
 
 - Automate what an operator does by hand now: matching a received payment to a
   subscription, allotting, whitelisting, minting and issuing the confirmation.
+  Phase 1 does each of those from the admin with one click; Phase 3 is where a
+  bank feed and a chain watcher propose the match instead of the operator
+  reading a statement, and where `SubscriptionPayment` earns its place if
+  multi-tranche reconciliation is still wanted then.
 
 ## Phase 4 — Secondary transfers
 

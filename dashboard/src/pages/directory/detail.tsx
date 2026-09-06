@@ -1,8 +1,11 @@
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeftIcon, BankIcon, CoinsIcon } from '@phosphor-icons/react';
 import { Panel } from '@components/Panel';
 import { formatDate } from '@ledova/shared';
 import type { Operator } from '@ledova/shared';
+import { useSelectedPortfolio } from '@hooks';
+import { SubscribeForm } from '@pages/subscriptions/SubscribeForm';
+import { useCreateSubscription, useSubscribableWallets } from '@pages/subscriptions/useSubscriptions';
 import { useDirectoryToken } from './useDirectory';
 
 function PageWrapper({ children }: { children: React.ReactNode }) {
@@ -68,7 +71,11 @@ function PaymentPanel({ operator }: { operator: Operator | null }) {
 
 export default function DirectoryTokenPage() {
   const { uuid } = useParams<{ uuid: string }>();
+  const navigate = useNavigate();
   const { token, operator, isLoading, notFound } = useDirectoryToken(uuid);
+  const { selectedAccount } = useSelectedPortfolio();
+  const { wallets } = useSubscribableWallets();
+  const create = useCreateSubscription((created) => navigate(`/subscriptions/${created}`));
 
   if (isLoading) {
     return (
@@ -127,6 +134,19 @@ export default function DirectoryTokenPage() {
           )}
         </div>
       </Panel>
+
+      {offering && (
+        <SubscribeForm
+          offering={offering}
+          wallets={wallets}
+          accountUuid={selectedAccount?.uuid ?? null}
+          busy={create.isPending}
+          error={create.error}
+          onSubscribe={({ wallet, quantity }) =>
+            create.mutate({ offering: offering.uuid, userAccount: selectedAccount!.uuid, wallet, quantity })
+          }
+        />
+      )}
 
       <PaymentPanel operator={operator} />
 

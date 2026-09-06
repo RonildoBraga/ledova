@@ -48,7 +48,7 @@ package of per-concern modules re-exported by `settings/__init__.py`.
 | `users` | Profiles, accounts, preferences, financial profiles, device tokens, notifications, favourite assets, `InvestorClassification` and the investor-eligibility predicate |
 | `companies` | `Company`, its application lifecycle, and company `Document` records |
 | `tokens` | `ShareToken`, `ShareIssuanceRequest`, `ShareIssuance`, `CapitalIncreaseRequest`, `MintRequest`, `YieldToken`, and the trading models |
-| `offerings` | `Offering`, its review lifecycle, and the eligibility-gated investor directory at `/api/v1/directory/` |
+| `offerings` | `Offering`, `Subscription`, their review and payment lifecycles, allotment, and the eligibility-gated investor directory at `/api/v1/directory/` |
 | `whitelist` | `WhitelistEntry` and the on-chain allowlist sync |
 | `wallets` | `Wallet`, `Holding`, `HoldingSnapshot`, `Transaction`, balance sync and transfer confirmation |
 | `assets` | `Asset`, `AssetChainDeployment`, `AssetSnapshot`, `ExchangeRate`, price sync, asset identity |
@@ -220,6 +220,125 @@ them after `make build` and fails on any drift.
    an `IntegrityError`; the constraint stays as the backstop against a race.
    Running two tranches at once needs the constraint relaxed, which is a
    migration.
+
+## Data flow of a subscription
+
+1. An eligible investor creates a draft at `POST /api/v1/subscriptions/`, naming
+   an open offering, one of their own verified Base wallets and a whole number
+   of shares. Every writable FK is scoped in `get_fields()`: the offering to
+   `Offering.objects.open_now()` inside `eligible_investor_companies(user)`, the
+   account to the caller's investing accounts, the wallet to
+   `visible_to_user(user).verified_evm()` on Base. `create_draft` snapshots the
+   offering price onto the row, so a later price edit cannot move a live
+   subscription.
+2. `POST .../submit/` runs `require_subscription_eligibility(account, company,
+   amount_due)`. `accept` in the admin runs it **again**: a certificate can
+   lapse between submission and acceptance and the law cares about status at
+   acceptance. Both calls name the subscription's own account, never the request
+   user's first one, because a user with two investor accounts earns a
+   qualification on one and must not spend it on the other.
+3. Accepting issues the payment instruction in the same click.
+   `offerings.services.payments.generate_reference` builds
+   `Operator.payment_reference_prefix` plus an eight-character Crockford base32
+   code, retried on `IntegrityError` against the partial unique index.
+   `normalize_reference` is applied on generation and on admin lookup, so a
+   mangled bank narrative still matches. `build_instruction` returns the
+   rail-dependent payload — the operator's bank fields, or the receiving wallet
+   plus the settlement asset's contract address and decimals resolved through
+   `operators.settlement.require_deployment`, which refuses when the asset has
+   no active deployment on `Operator.receiving_wallet_chain`.
+4. Payment confirmation is columns on the subscription, not a second model.
+   Received equal to due moves the row to `paid`; above due moves it to `paid`
+   with a refund owed; below due keeps it `awaiting_payment` unless the operator
+   accepts it as final, which scales `allotted_quantity` to
+   `floor(received / price)` and records the residual as a refund. On the
+   stablecoin rail the transfer hash is required, is normalised to lower case
+   and refused unless it is `0x` plus 64 hexadecimal characters, and the partial
+   unique index is on `Lower("payment_tx_hash")` — a transaction hash carries no
+   checksum case, so the same transfer pasted from two explorers is the same
+   transfer and cannot fund two subscriptions. Two operators confirming that one
+   hash at the same instant both pass the pre-check, so `confirm_payment` also
+   catches the index's `IntegrityError` and turns it into the same refusal the
+   pre-check gives, rather than a 500 for whoever loses. The bank rail has no
+   such key: settlement there is operator-attested, so a statement line already
+   recorded against another subscription is a **warning** on the confirming
+   operator's screen, naming the other references, not a refusal. Every money
+   action in the admin — acceptance, confirmation, refund, rejection, retry,
+   bulk allotment and scale back — writes a `LogEntry`, so a restated
+   `amount_received` leaves the earlier figure in the object's history even
+   though the column now holds only the latest one; restating downwards warns
+   as well.
+5. Reject and withdraw are refused while money is recorded and unrefunded, and
+   the test is arithmetic, not a flag: `has_money_in` compares `amount_received`
+   against the refunds that have actually gone back, so a zero refund closes
+   nothing and a partial one leaves the rest held. A refund must be above zero
+   and cannot exceed what is still returnable; `refund_amount` accumulates
+   across refunds once `refunded_at` is set, and only when every cent is back
+   does the row become closeable. Before allotment the whole amount is
+   returnable and the refund unwinds the allotment; after allotment only the
+   residual that no allotted share paid for can come back — asking for a cent
+   more is refused as a claimed mint, because money never leaves while the
+   shares it bought stay out. Nothing about the money moves once the shares are
+   claimed: recording a refund rejects a
+   still-executable issuance request in the same transaction — a compare-and-set
+   against `EXECUTABLE_STATUSES`, so the worker's `mark_executing` and the
+   refund cannot both win — and a refund, a rejection, a withdrawal or a
+   restated payment is refused outright once the request is `executing` or
+   `executed`. The status alone is not the test, because `EXECUTABLE_STATUSES`
+   includes `failed` and a mint that was broadcast and then lost its receipt
+   fails the request with the shares already out. The discriminator the codebase
+   already carries settles it: `ShareIssuance.mark_reverted` clears `tx_hash`
+   and `mark_failed` keeps it, so a linked issuance with a `tx_hash` means a mint
+   is out and every money move is refused by `ShareTokenService.broadcast_mint`
+   until the executing sweep resolves it — completing it if it was mined, or
+   clearing the hash if it reverted, which reopens the refund. Money never goes
+   back while the shares stay out.
+6. Allotment reuses the issuance machinery unchanged.
+   `ShareTokenService.create_issuance_request` then `request.approve(...)` then
+   the `OneToOne` link then a task on the untouched `execute_request`. Three
+   existing mechanisms make a double mint impossible and none of them was
+   weakened: the `OneToOne`, claimed under `select_for_update` so two
+   simultaneous clicks end in one request and one refusal; the unique
+   `ShareIssuance.idempotency_key` derived from the request uuid; and the
+   compare-and-set in `ReviewableRequest.mark_executing`.
+7. The headroom test lives in `allot()`, the exported single-subscription entry
+   point, so the offering cap — a disclosure limit, not an internal convenience
+   — is guarded however the shares are raised. Bulk allotment groups by
+   offering, takes `select_for_update` on the offering row the way
+   `_execute_capital_increase` does on the share class, drops the rows `allot()`
+   would refuse anyway — already linked to a request, not `paid`, scaled to
+   nothing — before it sums, so one stale row in a large selection is refused on
+   its own instead of poisoning the batch, makes one `share_supply()` read for
+   the batch, hands that headroom down to each `allot()` call, and refuses the
+   **whole** remaining batch when the total exceeds
+   `min(offering headroom, authorized - issued - unminted)`.
+   `totalSupply()` counts what is on chain, not what has already been promised,
+   so the chain half of that `min()` also subtracts the shares of every request
+   for the token that can still mint — `approved`, `executing`, and `failed`
+   while its issuance still carries a `tx_hash`. Without that subtraction two
+   sequential batches each fit on their own and jointly do not, and the second
+   one ends as a `paid` row whose task refuses forever. Part-filling first-come
+   would destroy the pro-rata fairness `scale_back` exists to give. `scale_back`
+   itself writes the money it strands: cutting `allotted_quantity` leaves
+   `amount_due` and `amount_received` alone by design, so the difference between
+   what arrived and what the scaled shares cost is recorded as `refund_amount`
+   the same way the partial-payment path records its residual, and the clamp
+   floors at zero so a negative headroom scales a row to nothing rather than to
+   a quantity the database check constraint rejects.
+8. `reconcile_subscriptions` runs every five minutes and is the mirror of
+   `check_executing_issuance_requests` on the subscription side: the latter
+   finishes the request a killed worker left, and without the mirror the
+   subscription sits `paid` forever with the shares already on chain. That sweep
+   takes `executing` requests and also `failed` ones whose issuance still carries
+   a `tx_hash`, because the last retry of a lost receipt leaves the request
+   `failed` with the mint out and nothing else looks at it. The daily
+   `expire_unpaid_subscriptions` only touches rows with no payment recorded.
+9. Allotment stays an admin action. The API carries create, list, detail, submit
+   and withdraw for the investor and no operator write route at all.
+10. `Subscription.offering`, `.user_account` and `.wallet` are `PROTECT`, so a
+    money record cannot be destroyed by a cascade. The handler turns the
+    resulting `ProtectedError` into a 409 that says how many rows hold the
+    target, rather than the 503 a raw database error produced.
 
 Transaction hashes are stored 0x-prefixed. `is_transferable` and
 `is_divisible` on `ShareToken` are display-only and have no on-chain effect.

@@ -1,0 +1,111 @@
+{% extends "admin/base_custom.html" %}
+{% load i18n admin_urls %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_label|capfirst }}</a>
+    &rsaquo; <a href="{% url 'admin:offerings_subscription_changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+    &rsaquo; <a href="{% url 'admin:offerings_subscription_change' subscription.pk %}">
+        {{ subscription.reference|default:subscription.uuid }}</a>
+    &rsaquo; {{ transition.title }}
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="admin-custom-form admin-custom-form--wide">
+    <div class="alert alert-{{ transition.alert }}">
+        <strong>&#9888; {{ transition.heading }}:</strong> {{ transition.intro }}
+    </div>
+
+    <div class="admin-card">
+        <div class="admin-card-header">Subscription Details</div>
+        <div class="admin-card-body">
+            <table class="admin-table">
+                <tr>
+                    <td class="label-col">Share Class</td>
+                    <td>
+                        <strong>{{ subscription.offering.token.name }}
+                            ({{ subscription.offering.token.symbol }})</strong>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="label-col">Company</td>
+                    <td>{{ subscription.offering.token.company.name }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Investor Account</td>
+                    <td>{{ subscription.user_account.account_number }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Recipient Wallet</td>
+                    <td>{{ subscription.wallet.address }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Status</td>
+                    <td>{{ subscription.get_status_display }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Shares</td>
+                    <td>
+                        {{ subscription.quantity }} requested,
+                        {{ subscription.allotment_quantity }} to allot at
+                        {{ subscription.price_per_share }} each
+                    </td>
+                </tr>
+                <tr>
+                    <td class="label-col">Amount Due</td>
+                    <td>{{ subscription.amount_due }} {{ subscription.offering.price_currency }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Amount Received</td>
+                    <td>{{ subscription.amount_received|default:"nothing yet" }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Reference</td>
+                    <td>{{ subscription.reference|default:"not issued" }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Settlement</td>
+                    <td>
+                        {{ subscription.get_settlement_rail_display }}
+                        {% if subscription.settlement_asset %} in
+                            {{ subscription.settlement_asset.symbol }}{% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <td class="label-col">Issuance Request</td>
+                    <td>{{ subscription.issuance_request.uuid|default:"none" }}</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <form method="post" class="admin-form">
+        {% csrf_token %}
+        {% if form %}
+        <fieldset>
+            <legend>{{ transition.legend }}</legend>
+            {% for field in form %}
+            <div class="form-group">
+                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% if field.help_text %}<p class="help">{{ field.help_text }}</p>{% endif %}
+                {% if field.errors %}
+                <ul class="errorlist">
+                    {% for error in field.errors %}<li>{{ error }}</li>{% endfor %}
+                </ul>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </fieldset>
+        {% endif %}
+
+        <div class="action-row">
+            <button type="submit" class="btn {{ transition.button.1 }}">{{ transition.button.0 }}</button>
+            <a href="{% url 'admin:offerings_subscription_change' subscription.pk %}"
+               class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

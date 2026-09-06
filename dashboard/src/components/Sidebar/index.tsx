@@ -19,6 +19,7 @@ import {
   ShieldCheckIcon,
   MegaphoneIcon,
   StorefrontIcon,
+  HandCoinsIcon,
 } from '@phosphor-icons/react';
 import { signout, DESIGN_TOKENS } from '@ledova/shared';
 import apiClient from '@services/apiClient';
@@ -87,6 +88,7 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
         { label: 'Transactions', path: '/transactions', icon: LinkIcon },
         { label: 'Market', path: '/asset-prices', icon: ChartBarIcon },
         { label: 'Directory', path: '/directory', icon: StorefrontIcon },
+        { label: 'Subscriptions', path: '/subscriptions', icon: HandCoinsIcon },
         { label: 'Eligibility', path: '/investor-eligibility', icon: ShieldCheckIcon },
       );
     }

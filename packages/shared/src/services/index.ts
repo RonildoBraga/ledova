@@ -105,4 +105,11 @@ export {
   submitOffering,
   withdrawOffering,
 } from './offerings';
+export {
+  getSubscriptions,
+  getSubscription,
+  createSubscription,
+  submitSubscription,
+  withdrawSubscription,
+} from './subscriptions';
 export { getExchangeRate } from './exchangeRates';

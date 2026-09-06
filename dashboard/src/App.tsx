@@ -26,6 +26,8 @@ import ListingPage from '@pages/company/listing';
 import OfferingPage from '@pages/company/offering';
 import DirectoryPage from '@pages/directory';
 import DirectoryTokenPage from '@pages/directory/detail';
+import SubscriptionsPage from '@pages/subscriptions';
+import SubscriptionDetailPage from '@pages/subscriptions/detail';
 import { SignupAccountType } from '@pages/signup/account-type';
 import { SignupCompanyRegistration } from '@pages/signup/company-registration';
 import Layout from '@components/Layout';
@@ -224,6 +226,23 @@ function App() {
           element={
             <ProtectedRoute>
               <DirectoryTokenPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/subscriptions"
+          element={
+            <ProtectedRoute>
+              <SubscriptionsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/subscriptions/:uuid"
+          element={
+            <ProtectedRoute>
+              <SubscriptionDetailPage />
             </ProtectedRoute>
           }
         />
