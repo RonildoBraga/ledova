@@ -1,4 +1,5 @@
 import logging
+from decimal import Decimal
 
 from integrations.base_chain.exceptions import BaseChainConnectionError
 from shared.utils import csv_cell
@@ -8,6 +9,8 @@ from whitelist.models import HolderType
 from whitelist.services.identity import UNIDENTIFIED, identities_for
 
 logger = logging.getLogger(__name__)
+
+ZERO = Decimal("0.00")
 
 SOURCE_CHAIN = "blockchain"
 SOURCE_ALLOTMENTS = "issuances"
@@ -48,18 +51,34 @@ def _allotments(token) -> dict:
     issuances = ShareIssuance.objects.filter_by_token(token).completed().with_subscription().order_by("created_at")
     for issuance in issuances:
         row = grouped.setdefault(
-            issuance.recipient_address, {"shares": 0, "entered_on": None, "paid": None, "unbacked": 0}
+            issuance.recipient_address, {"shares": 0, "entered_on": None, "paid": ZERO, "backed": 0, "unbacked": 0}
         )
-        row["shares"] += _amount(issuance)
+        shares = _amount(issuance)
+        row["shares"] += shares
         moment = issuance.completed_at or issuance.created_at
         if row["entered_on"] is None or (moment is not None and moment < row["entered_on"]):
             row["entered_on"] = moment
-        subscription = _subscription(issuance)
-        if subscription is None:
+        backing = _backing(issuance, shares)
+        if backing is None:
             row["unbacked"] += 1
         else:
-            row["paid"] = (row["paid"] or 0) + subscription.money_held
+            row["paid"] += backing
+            row["backed"] += shares
     return grouped
+
+
+def _backing(issuance, shares):
+    subscription = _subscription(issuance)
+    if subscription is None or subscription.allotment_quantity != shares:
+        return None
+    backing = subscription.money_backing_shares
+    return backing if backing > ZERO else None
+
+
+def _amount_paid(allotment, balance):
+    if allotment["unbacked"] or allotment["backed"] != int(balance):
+        return None
+    return allotment["paid"]
 
 
 def _amount(issuance) -> int:
@@ -119,7 +138,7 @@ def _register(token, reader) -> list[dict]:
                 "share_class": token.symbol,
                 "whitelist_status": identity.whitelist_status,
                 "residential_address": identity.residential_address,
-                "amount_paid": None if allotment["unbacked"] else allotment["paid"],
+                "amount_paid": _amount_paid(allotment, balance),
             }
         )
 

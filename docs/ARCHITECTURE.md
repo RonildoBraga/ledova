@@ -362,6 +362,9 @@ holds it, because its subject is one share class and its two callers are the two
    forty-two is on the register for forty-two, and a former member whose
    balance is now zero is off it. Only when no balance can be read at all does
    the register fall back to the allotment record, and it says so in `source`.
+   The chain winning the share count is exactly why it also has to win the
+   amount paid: a hundred shares' worth of consideration against a balance of
+   forty-two would read as the price of the forty-two. Point 5 blanks it.
 3. Identity is one query. `WhitelistEntryQuerySet.for_addresses()` plus
    `.with_holder_identity()` resolve `WhitelistEntry -> Wallet -> UserAccount ->
    UserProfile`, and `whitelist/services/identity.py` turns each entry into a
@@ -386,18 +389,44 @@ holds it, because its subject is one share class and its two callers are the two
    chain-confirmed register rows, so a former member who transferred out and
    was never identified can still be counted. The count is therefore never
    lower than the register's, which is the safe direction for a queue.
-5. Amount paid comes from the `Subscription` that produced the allotment, and is
-   **blank** where any share on the row lacks one — never zero, and never a
-   part of the total presented as the whole. A holding that predates the
-   platform is unknown, and printing a zero against it would be a false record.
-   The mixed row is the ordinary case, not the corner: a founder allotted a
-   thousand shares directly who then subscribes for ten more has twenty dollars
-   known against a thousand shares unknown, and summing only the known part
-   against the whole holding reads to an auditor as the consideration for all
-   one thousand and ten. `_allotments()` therefore counts the completed
-   issuances with no subscription behind them, and the column is blank whenever
-   that count is not zero. Showing the known part would need its own column and
-   its own sentence here; it is not worth one in Phase 1.
+5. Amount paid is the consideration for **the shares the row prints**, and is
+   **blank** whenever that figure is not exactly known — never zero, never a
+   part presented as the whole, and never money the company is holding for some
+   other reason. Three things have to line up, and any one of them missing
+   blanks the column.
+
+   - Every share on the row is subscribed. A holding that predates the platform
+     is unknown, and printing a zero against it would be a false record. The
+     mixed row is the ordinary case, not the corner: a founder allotted a
+     thousand shares directly who then subscribes for ten more has twenty-five
+     dollars known against a thousand shares unknown, and summing only the
+     known part against the whole holding reads to an auditor as the
+     consideration for all one thousand and ten. `_allotments()` counts the
+     completed issuances with no subscription behind them, and one is enough.
+   - The subscribed share count equals the balance the row prints. This is
+     point 2 arriving here. The chain is what decides the share count, so the
+     amount has to be measured against the chain, not against the allotment
+     record: a subscription for a hundred behind a `balanceOf` of forty-two is
+     blank, and so is a subscription for ten behind a balance of a thousand and
+     ten. Guarding the divergence inside the allotment record alone would leave
+     the false figure standing on the branch the register prefers.
+   - The money record itself stands behind those shares. The figure is
+     `Subscription.money_backing_shares` — `allotment_quantity` times
+     `price_per_share` — and never `money_held`. A scaled-back subscription is
+     why: `scale_back()` writes `allotted_quantity` and `refund_amount` but not
+     `refunded_at`, so `refunded_total` and therefore `money_held` stay at the
+     full amount received until an operator records the refund, and `allot()`
+     does not wait for that. Two hundred and fifty dollars received against
+     forty shares kept is one hundred dollars of consideration and a hundred
+     and fifty owed back; `money_held` would print the whole two hundred and
+     fifty. `money_backing_shares` is zero for any subscription not yet
+     `allotted`, which is the window between the issuance completing and
+     `_mirror_allotted` catching up, so that too blanks rather than printing a
+     nil consideration.
+
+   Showing the known part of a mixed row, or the residual `amount_refundable`,
+   would each need their own column and their own sentence here; neither is
+   worth one in Phase 1.
 
 `GET /api/v1/tokens/{uuid}/holders/` keeps its path and its four original keys —
 `address`, `name`, `balance`, `percentage` — and gains `holderType`, `enteredOn`

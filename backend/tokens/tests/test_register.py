@@ -16,6 +16,7 @@ from offerings.models import (
     Subscription,
     SubscriptionStatus,
 )
+from offerings.services.subscription import scale_back
 from tokens.models import (
     IssuanceStatus,
     RequestStatus,
@@ -115,6 +116,47 @@ class RegisterTestBase(APITestCase):
             status=SubscriptionStatus.ALLOTTED,
             issuance_request=request,
         )
+        return issuance
+
+    def _offering(self, cap_shares=1000):
+        return Offering.objects.create(
+            token=self.token,
+            exemption=OfferingExemption.PROFESSIONAL,
+            price_per_share=Decimal("2.50"),
+            minimum_shares=1,
+            target_shares=10,
+            cap_shares=cap_shares,
+            opens_at=timezone.now() - timedelta(days=1),
+        )
+
+    def _subscription(self, offering, account, wallet, quantity, received):
+        return Subscription.objects.create(
+            offering=offering,
+            user_account=account,
+            wallet=wallet,
+            quantity=quantity,
+            price_per_share=Decimal("2.50"),
+            amount_due=Decimal(quantity) * Decimal("2.50"),
+            amount_received=received,
+            status=SubscriptionStatus.PAID,
+        )
+
+    def _issue_against(self, subscription, mark_allotted=True):
+        allotted = subscription.allotment_quantity
+        request = ShareIssuanceRequest.objects.create(
+            token=self.token,
+            recipient_address=subscription.wallet.address,
+            amount=allotted,
+            reason="Allotment",
+            status=RequestStatus.EXECUTED,
+        )
+        issuance = self._allot(subscription.wallet.address, allotted)
+        request.executed_issuance = issuance
+        request.save(update_fields=["executed_issuance"])
+        subscription.issuance_request = request
+        subscription.save(update_fields=["issuance_request"])
+        if mark_allotted:
+            subscription.mark_allotted()
         return issuance
 
     def _wallet(self, account, address):
@@ -262,6 +304,56 @@ class RegisterTruthTest(RegisterTestBase):
         row = list(csv.reader(io.StringIO(response.content.decode())))[1]
         self.assertEqual(row[0], "Mia Mixed")
         self.assertEqual(row[5], "1010")
+        self.assertEqual(row[9], "")
+
+    def test_a_chain_balance_below_the_allotment_prints_no_amount_paid(self):
+        account = _account("cut@example.test", "Cut Down", RESIDENCE)
+        wallet = self._wallet(account, MEMBER)
+        WhitelistEntry.objects.create(wallet=wallet, status=WhitelistStatus.ACTIVE, is_whitelisted=True)
+        self._paid_allotment(account, wallet, MEMBER, 100, Decimal("250.00"))
+        self._balances({MEMBER: 42})
+
+        response = self.client.get(f"/api/v1/tokens/{self.token.uuid}/register/export/")
+
+        row = list(csv.reader(io.StringIO(response.content.decode())))[1]
+        self.assertEqual(row[5], "42")
+        self.assertEqual(row[6], SOURCE_LABELS[SOURCE_CHAIN])
+        self.assertEqual(row[9], "")
+
+    def test_a_scaled_back_subscription_prints_the_money_backing_the_shares_not_the_money_received(self):
+        account = _account("sca@example.test", "Sam Scaled", RESIDENCE)
+        wallet = self._wallet(account, MEMBER)
+        WhitelistEntry.objects.create(wallet=wallet, status=WhitelistStatus.ACTIVE, is_whitelisted=True)
+        offering = self._offering(cap_shares=40)
+        subscription = self._subscription(offering, account, wallet, 100, Decimal("250.00"))
+        scale_back(offering)
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.allotted_quantity, 40)
+        self.assertEqual(subscription.refund_amount, Decimal("150.00"))
+        self.assertIsNone(subscription.refunded_at)
+        self.assertEqual(subscription.money_held, Decimal("250.00"))
+        self._issue_against(subscription)
+        self._balances({MEMBER: 40})
+
+        response = self.client.get(f"/api/v1/tokens/{self.token.uuid}/register/export/")
+
+        row = list(csv.reader(io.StringIO(response.content.decode())))[1]
+        self.assertEqual(row[5], "40")
+        self.assertEqual(row[9], "100.00")
+
+    def test_an_allotment_the_money_record_has_not_caught_up_with_prints_no_amount_paid(self):
+        account = _account("lag@example.test", "Lagging Mirror", RESIDENCE)
+        wallet = self._wallet(account, MEMBER)
+        WhitelistEntry.objects.create(wallet=wallet, status=WhitelistStatus.ACTIVE, is_whitelisted=True)
+        subscription = self._subscription(self._offering(), account, wallet, 40, Decimal("100.00"))
+        self._issue_against(subscription, mark_allotted=False)
+        self.assertEqual(subscription.status, SubscriptionStatus.PAID)
+        self._balances({MEMBER: 40})
+
+        response = self.client.get(f"/api/v1/tokens/{self.token.uuid}/register/export/")
+
+        row = list(csv.reader(io.StringIO(response.content.decode())))[1]
+        self.assertEqual(row[5], "40")
         self.assertEqual(row[9], "")
 
     def test_a_holding_every_share_of_which_was_subscribed_prints_the_total_paid(self):
