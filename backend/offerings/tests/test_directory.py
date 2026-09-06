@@ -7,9 +7,19 @@ from rest_framework.test import APITestCase
 from companies.models import Company
 from offerings.models import Offering, OfferingStatus
 from offerings.serializers import DIRECTORY_COMPANY_FIELDS
-from shared.tests.tenants import make_eligible, make_tenant, open_to_investors
+from shared.tests.tenants import (
+    make_associated,
+    make_eligible,
+    make_tenant,
+    open_to_investors,
+)
 from tokens.models import ShareIssuance
 from tokens.models.choices import IssuanceStatus
+from users.models import (
+    InvestorClassification,
+    InvestorClassificationStatus,
+    UserProfile,
+)
 
 LIST = "/api/v1/directory/tokens/"
 
@@ -145,3 +155,88 @@ class DirectoryPayloadTest(APITestCase):
     def test_the_published_offering_never_carries_a_status(self):
         self._set(status=OfferingStatus.APPROVED, opens_at=timezone.now() - timedelta(days=1))
         self.assertNotIn("status", self._row()["openOffering"])
+
+
+class DirectoryAssociatedPersonTest(APITestCase):
+    def setUp(self):
+        self.holder = make_tenant("associate")
+        self.named = make_tenant("named-issuer")
+        self.stranger = make_tenant("stranger-issuer")
+        open_to_investors(self.named)
+        open_to_investors(self.stranger)
+        self.association = make_associated(self.holder, self.named.company)
+        self.client.force_authenticate(self.holder.user)
+
+    def _listed(self):
+        response = self.client.get(LIST)
+        self.assertEqual(response.status_code, 200, response.content)
+        return [row["uuid"] for row in response.json()["results"]]
+
+    def _is_a_phantom(self, token):
+        real = self.client.get(_detail(token))
+        phantom = self.client.get(f"{LIST}{uuid4()}/")
+        self.assertEqual(real.status_code, 404, real.content)
+        self.assertEqual(phantom.status_code, 404, phantom.content)
+        self.assertEqual(real.content, phantom.content)
+
+    def test_the_directory_carries_the_named_issuer_and_nothing_else(self):
+        self.assertEqual(self._listed(), [str(self.named.deployed_token.uuid)])
+
+    def test_the_named_issuer_resolves_and_every_other_issuer_is_a_phantom(self):
+        self.assertEqual(self.client.get(_detail(self.named.deployed_token)).status_code, 200)
+        self._is_a_phantom(self.stranger.deployed_token)
+
+    def test_the_named_issuer_becomes_a_phantom_once_it_closes_its_listing(self):
+        Company.objects.filter(pk=self.named.company.pk).update(is_open_to_investors=False)
+        self.assertEqual(self._listed(), [])
+        self._is_a_phantom(self.named.deployed_token)
+
+    def test_a_revoked_association_empties_the_directory_and_hides_the_named_issuer(self):
+        InvestorClassification.objects.filter(pk=self.association.pk).update(
+            status=InvestorClassificationStatus.REVOKED
+        )
+        self.assertEqual(self._listed(), [])
+        self._is_a_phantom(self.named.deployed_token)
+
+    def test_an_expired_association_empties_the_directory_and_hides_the_named_issuer(self):
+        InvestorClassification.objects.filter(pk=self.association.pk).update(
+            expires_at=timezone.now() - timedelta(minutes=1)
+        )
+        self.assertEqual(self._listed(), [])
+        self._is_a_phantom(self.named.deployed_token)
+
+    def test_an_association_never_reaches_a_second_issuer_it_does_not_name(self):
+        make_associated(self.holder, self.stranger.company)
+        self.assertEqual(
+            sorted(self._listed()),
+            sorted([str(self.named.deployed_token.uuid), str(self.stranger.deployed_token.uuid)]),
+        )
+
+    def test_a_general_claim_beside_the_association_reaches_every_issuer(self):
+        make_eligible(self.holder)
+        self.assertEqual(
+            sorted(self._listed()),
+            sorted([str(self.named.deployed_token.uuid), str(self.stranger.deployed_token.uuid)]),
+        )
+        self.assertEqual(self.client.get(_detail(self.stranger.deployed_token)).status_code, 200)
+
+    def test_an_unverified_holder_reaches_nothing_even_with_a_live_association(self):
+        UserProfile.objects.filter(pk=self.holder.profile.pk).update(is_id_verified=False)
+        self.assertEqual(self._listed(), [])
+        self._is_a_phantom(self.named.deployed_token)
+
+    def test_a_general_claim_alone_still_reaches_every_issuer(self):
+        outsider = make_tenant("general-holder")
+        make_eligible(outsider)
+        self.client.force_authenticate(outsider.user)
+        self.assertEqual(
+            sorted(self._listed()),
+            sorted([str(self.named.deployed_token.uuid), str(self.stranger.deployed_token.uuid)]),
+        )
+
+    def test_a_holder_with_neither_claim_still_reaches_nothing(self):
+        nobody = make_tenant("nobody")
+        self.client.force_authenticate(nobody.user)
+        self.assertEqual(self._listed(), [])
+        self._is_a_phantom(self.named.deployed_token)
+        self._is_a_phantom(self.stranger.deployed_token)

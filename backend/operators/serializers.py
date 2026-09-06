@@ -3,6 +3,7 @@ from rest_framework import serializers
 from assets.models import Asset
 from assets.serializers.asset import AssetChainDeploymentSerializer
 from operators.models import Operator
+from users.services.eligibility import eligible_for_any_company
 
 PAYMENT_FIELDS = (
     "bank_account_name",
@@ -46,7 +47,16 @@ class OperatorSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_payment_instructions(self, operator):
+        if not self._may_see_payment_instructions():
+            return None
         instructions = {field: getattr(operator, field) for field in PAYMENT_FIELDS if getattr(operator, field)}
         if operator.receiving_wallet_address:
             instructions["receiving_wallet_chain"] = operator.receiving_wallet_chain
         return instructions
+
+    def _may_see_payment_instructions(self) -> bool:
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if user is None or not user.is_authenticated:
+            return False
+        return bool(user.is_staff) or eligible_for_any_company(user)

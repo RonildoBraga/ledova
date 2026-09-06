@@ -3,12 +3,30 @@ from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.urls import re_path, reverse
 
-from offerings.exceptions import InvalidOfferingTransitionException
+from offerings.exceptions import (
+    InvalidOfferingTransitionException,
+    OfferingRefusedException,
+)
 from offerings.models import Offering, OfferingStatus
 from offerings.services import transition_offering, unissued_headroom
 from shared.utils.admin_display import action_buttons
 from tokens.admin._helpers import status_badge
 from tokens.admin.review_workflow import ApproveForm, RejectForm
+
+LOCKED_PAST_DRAFT = [
+    "token",
+    "exemption",
+    "price_per_share",
+    "price_currency",
+    "settlement_assets",
+    "accepts_bank_transfer",
+    "minimum_shares",
+    "target_shares",
+    "cap_shares",
+    "maximum_shares",
+    "opens_at",
+    "closes_at",
+]
 
 STATUS_COLORS = {
     OfferingStatus.DRAFT: "#6c757d",
@@ -159,6 +177,12 @@ class OfferingAdmin(admin.ModelAdmin):
     def has_add_permission(self, request):
         return False
 
+    def get_readonly_fields(self, request, obj=None):
+        readonly = list(super().get_readonly_fields(request, obj))
+        if obj is not None and obj.status != OfferingStatus.DRAFT:
+            readonly += LOCKED_PAST_DRAFT
+        return readonly
+
     @admin.display(description="Token", ordering="token__symbol")
     def token_symbol(self, obj):
         return obj.token.symbol
@@ -232,7 +256,7 @@ class OfferingAdmin(admin.ModelAdmin):
 
         try:
             transition_offering(offering, spec["method"], **kwargs)
-        except InvalidOfferingTransitionException as exc:
+        except (InvalidOfferingTransitionException, OfferingRefusedException) as exc:
             messages.error(request, str(exc.detail))
         else:
             messages.add_message(request, spec.get("level", messages.SUCCESS), spec["done"])

@@ -4,10 +4,17 @@ from unittest.mock import patch
 from django.test import TestCase
 from django.utils import timezone
 
-from offerings.exceptions import InvalidOfferingTransitionException
+from companies.models import Company, CompanyStatus
+from offerings.exceptions import (
+    InvalidOfferingTransitionException,
+    OfferingRefusedException,
+)
 from offerings.models import Offering, OfferingStatus
-from offerings.services import transition_offering
+from offerings.services import submit_offering, transition_offering
+from offerings.services.offering import CAP_ABOVE_HEADROOM
 from shared.tests.tenants import make_tenant
+from tokens.models import ShareIssuance
+from tokens.models.choices import IssuanceStatus
 
 LEGAL = [
     (OfferingStatus.DRAFT, "submit", OfferingStatus.SUBMITTED),
@@ -115,3 +122,71 @@ class TransitionOfferingTest(TestCase):
         self.offering.refresh_from_db()
         self.assertFalse(self.offering.is_open)
         self.assertEqual(list(Offering.objects.open_now()), [])
+
+
+class ApproveHeadroomTest(TestCase):
+    def setUp(self):
+        self.push = patch("offerings.services.offering.send_push_notification").start()
+        self.addCleanup(patch.stopall)
+        self.tenant = make_tenant("issuer")
+        Company.objects.filter(pk=self.tenant.company.pk).update(status=CompanyStatus.ACTIVE)
+        self.tenant.company.refresh_from_db()
+        self.token = self.tenant.deployed_token
+        self.offering = self.tenant.offering
+        self.offering.refresh_from_db()
+        submit_offering(self.offering, submitted_by=self.tenant.user)
+        self.push.reset_mock()
+
+    def _issue(self, amount):
+        ShareIssuance.objects.create(
+            token=self.token,
+            recipient_address="0x" + "1" * 40,
+            amount=amount,
+            status=IssuanceStatus.COMPLETED,
+        )
+
+    def test_an_issuance_landing_after_submit_refuses_the_approval_and_names_the_shortfall(self):
+        self._issue("950")
+
+        with self.assertRaises(OfferingRefusedException) as raised:
+            transition_offering(self.offering, "approve")
+
+        self.assertEqual(
+            str(raised.exception.detail),
+            CAP_ABOVE_HEADROOM.format(
+                cap=100, symbol=self.token.symbol, authorized=1000, issued=950, reserved=0, headroom=50
+            ),
+        )
+        self.offering.refresh_from_db()
+        self.assertEqual(self.offering.status, OfferingStatus.SUBMITTED)
+        self.push.defer.assert_not_called()
+
+    def test_an_issuance_that_leaves_the_cap_covered_still_approves(self):
+        self._issue("900")
+
+        transition_offering(self.offering, "approve")
+
+        self.offering.refresh_from_db()
+        self.assertEqual(self.offering.status, OfferingStatus.APPROVED)
+        self.assertEqual(self.push.defer.call_args.kwargs["title"], "Offering approved")
+
+    def test_a_pending_issuance_never_counts_against_the_headroom(self):
+        ShareIssuance.objects.create(
+            token=self.token,
+            recipient_address="0x" + "2" * 40,
+            amount="950",
+            status=IssuanceStatus.PENDING,
+        )
+
+        transition_offering(self.offering, "approve")
+
+        self.offering.refresh_from_db()
+        self.assertEqual(self.offering.status, OfferingStatus.APPROVED)
+
+    def test_rejecting_and_closing_never_ask_about_the_headroom(self):
+        self._issue("1000")
+
+        transition_offering(self.offering, "reject", reason="Out of headroom")
+
+        self.offering.refresh_from_db()
+        self.assertEqual(self.offering.status, OfferingStatus.REJECTED)

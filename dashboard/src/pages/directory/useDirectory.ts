@@ -39,13 +39,14 @@ export function useDirectoryToken(uuid: string | undefined) {
   const operator = useQuery({
     queryKey: ['operator'],
     queryFn: () => getOperator(apiClient),
+    enabled: token.isSuccess,
     staleTime: CACHE_TIMING.EXTRA_LONG_GC_TIME,
   });
 
   return {
     token: token.data?.data ?? null,
     operator: operator.data?.data ?? null,
-    isLoading: token.isLoading,
+    isLoading: token.isLoading || operator.isLoading,
     notFound: token.isError,
   };
 }

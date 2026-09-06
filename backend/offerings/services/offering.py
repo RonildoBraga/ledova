@@ -6,7 +6,7 @@ from django.db import transaction
 from offerings.exceptions import OfferingRefusedException
 from offerings.models import Offering
 from operators.settlement import require_deployment
-from tokens.models import ShareIssuance
+from tokens.models import ShareIssuance, ShareToken
 from users.models.investor_classification import PRODUCT_VALUE_THRESHOLD_AUD
 from users.tasks.notifications import send_push_notification
 
@@ -41,28 +41,6 @@ ISSUER_NOTIFICATIONS = {
 }
 
 
-@transaction.atomic
-def transition_offering(offering: Offering, method: str, **kwargs) -> Offering:
-    getattr(offering, method)(**kwargs)
-    message = ISSUER_NOTIFICATIONS.get(method)
-    if message:
-        title, body = message
-        company = offering.token.company
-        send_push_notification.defer(
-            user_id=str(company.owner_id),
-            title=title,
-            body=body.format(name=offering.token.name, reason=kwargs.get("reason", "")),
-            data={
-                "type": "offering",
-                "event": method,
-                "offering_id": str(offering.uuid),
-                "status": offering.status,
-            },
-            notification_type="general",
-        )
-    return offering
-
-
 def unissued_headroom(offering: Offering) -> dict:
     token = offering.token
     authorized = int(token.total_supply or 0)
@@ -88,6 +66,30 @@ def _check_bounds(offering: Offering) -> None:
         raise OfferingRefusedException(
             MAXIMUM_ABOVE_CAP.format(maximum=offering.maximum_shares, cap=offering.cap_shares)
         )
+
+
+@transaction.atomic
+def transition_offering(offering: Offering, method: str, **kwargs) -> Offering:
+    if method == "approve":
+        _check_bounds(offering)
+    getattr(offering, method)(**kwargs)
+    message = ISSUER_NOTIFICATIONS.get(method)
+    if message:
+        title, body = message
+        company = offering.token.company
+        send_push_notification.defer(
+            user_id=str(company.owner_id),
+            title=title,
+            body=body.format(name=offering.token.name, reason=kwargs.get("reason", "")),
+            data={
+                "type": "offering",
+                "event": method,
+                "offering_id": str(offering.uuid),
+                "status": offering.status,
+            },
+            notification_type="general",
+        )
+    return offering
 
 
 def _check_not_already_live(offering: Offering) -> None:
@@ -130,7 +132,8 @@ def _check_exemption(offering: Offering) -> None:
 
 @transaction.atomic
 def submit_offering(offering: Offering, submitted_by) -> Offering:
-    token = offering.token
+    token = ShareToken.objects.select_for_update().get(pk=offering.token_id)
+    offering.token = token
     company = token.company
     if not token.is_deployed:
         raise OfferingRefusedException(TOKEN_NOT_DEPLOYED.format(symbol=token.symbol))

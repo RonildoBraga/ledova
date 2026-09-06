@@ -176,19 +176,32 @@ them after `make build` and fails on any drift.
    attach. Every writable FK is scoped in `get_fields()`.
 3. `POST /api/v1/offerings/{uuid}/submit/` calls
    `offerings.services.offering.submit_offering`, the twin of
-   `submit_application`. It refuses unless the token is deployed, the company
-   can issue tokens, the share class has no other live offering, `cap_shares`
-   fits inside `total_supply` less the completed supply less the caps of other
-   live offerings (naming `CapitalIncreaseRequest` in the refusal, because
-   `setAuthorizedShares` cannot go below `totalSupply`), every settlement asset
-   resolves through `operators.settlement`, at least one payment rail is
-   configured, and, for `s708_8_minimum_amount`, the minimum subscription is
-   worth at least AUD 500,000.
+   `submit_application`. It takes a `select_for_update` on the `ShareToken` row
+   first, the way `_execute_capital_increase` does, so the liveness read and the
+   status write are serialised per share class and two simultaneous submissions
+   produce one submission and one 400 rather than the `IntegrityError` the
+   partial unique index turns into a 503. It then refuses unless the token is
+   deployed, the company can issue tokens, the share class has no other live
+   offering, `cap_shares` fits inside `total_supply` less the completed supply
+   less the caps of other live offerings (naming `CapitalIncreaseRequest` in the
+   refusal, because `setAuthorizedShares` cannot go below `totalSupply`), every
+   settlement asset resolves through `operators.settlement`, at least one
+   payment rail is configured, and, for `s708_8_minimum_amount`, the minimum
+   subscription is worth at least AUD 500,000.
 4. `transition_offering` is the single chokepoint for every status change and
-   fires one push to the owner, exactly as `transition_company` does.
+   fires one push to the owner, exactly as `transition_company` does. It is also
+   where `approve` re-runs the headroom check, because an issuance completing
+   between the submission and the approval shrinks the headroom the submission
+   measured; the approval is refused with the same message the submission would
+   have used.
 5. The operator reviews in the Django admin — start review, approve, reject,
    close. There is no approve, reject or close route on the API at all, so
-   there is no staff API surface to mis-permission.
+   there is no staff API surface to mis-permission. The admin cannot rewrite
+   what the review is about either: `OfferingAdmin.get_readonly_fields` freezes
+   the share class, exemption, price, bounds, payment rails and window on any
+   row past `DRAFT` (`LOCKED_PAST_DRAFT`). Freezing them is the whole guard
+   rather than repeating the submit checks in the form's `clean`, so there is
+   one authority on the economics and no second copy to drift from it.
 6. There is no `OPEN` status and no scheduler. Open-now is derived, by
    `OfferingQuerySet.open_now()`: approved, `opens_at <= now`, and `closes_at`
    null or in the future. Nothing can be left in flight, so there is nothing for
@@ -250,19 +263,38 @@ the ORM, not in PostgreSQL: row-level security is not planned.
   exception: the two cross-tenant share-class listings,
   `DirectoryTokenViewSet` (`offerings/views/directory.py`) and
   `TradingTokenViewSet` (`tokens/views/trading_token.py`). Neither is
-  owner-scoped and neither ever was, but neither is unscoped either. Both ask
-  `users.services.eligibility.investor_eligibility(user)` and return
-  `ShareToken.objects.none()` when the answer is no, so an ineligible caller
-  gets an empty list and a 404 on every detail that is byte-identical to a
-  phantom uuid. Neither answers 403, which would confirm the row exists. They
+  owner-scoped and neither ever was, but neither is unscoped either. Both are
+  scoped by `users.services.eligibility`, so an ineligible caller gets an empty
+  list and a 404 on every detail that is byte-identical to a phantom uuid.
+  Neither answers 403, which would confirm the row exists. The market asks
+  `investor_eligibility(user)` and returns `ShareToken.objects.none()` when the
+  answer is no. The directory asks `eligible_investor_companies(user)` and
+  filters on it, because one of the four classification categories is scoped to
+  a single issuer: `investor_eligibility(user)` first, and only when that
+  refuses, the companies named by the caller's live `associated_person` claims
+  that `investor_eligibility(user, company=...)` then accepts. A caller whose
+  only live claim is an association with company A therefore sees company A's
+  share classes and nothing else, and every other issuer is the same 404 as a
+  phantom uuid; a caller with an unscoped claim keeps seeing every listed
+  issuer; a caller with neither keeps seeing nothing. The two listings also
   differ in what an eligible caller sees, and deliberately: the directory is
   `ShareToken.objects.in_directory()` — deployed with a contract address,
   company `ACTIVE`, and `is_open_to_investors` set by the owner — because it
   advertises an offer; the secondary market is
   `ShareToken.objects.deployed_with_contract()`, because whether an issuer
   advertises itself has nothing to do with whether its existing holders have a
-  market. `DIRECTORY_ROUTES` and `MARKET_ROUTES` in
+  market. An `associated_person` claim does not widen the market for the same
+  reason: s708(12) is about one issuer's offer, not about a market in shares
+  that already exist. `DIRECTORY_ROUTES` and `MARKET_ROUTES` in
   `backend/shared/tests/test_cross_tenant_routes.py` pin both.
+- `GET /api/operator/` is the one global singleton route an ordinary caller can
+  read, and it is not uniform. Its `payment_instructions` block — bank account
+  name, BSB, account number, reference prefix and receiving wallet — is served
+  only to staff and to callers `eligible_for_any_company(user)` accepts, which
+  is the same predicate the directory is scoped by rather than a second one.
+  Everyone else gets the key with `null` in it, which an unconfigured rail set
+  is indistinguishable from. The rest of the payload is identical for every
+  caller.
 - Owner foreign keys are `NOT NULL`, and writable FKs are scoped in
   `get_fields()`.
 - Global operator routes require `IsAdminUser`.

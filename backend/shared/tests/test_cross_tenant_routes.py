@@ -11,6 +11,7 @@ from companies.models import (
     CompanyStatus,
 )
 from feature_flags.models import FeatureFlag
+from operators.models import Operator
 from shared.tests.tenants import (
     make_eligible,
     make_tenant,
@@ -271,6 +272,7 @@ MARKET_ROUTES = (
 )
 
 GLOBAL_ROUTES = ("/api/operator/",)
+RAILS = {"bankBsb": "062000"}
 
 
 def _body(response):
@@ -464,14 +466,33 @@ class CrossTenantRouteMatrixTest(APITestCase):
                     self.assertEqual(response.json()["uuid"], own[key])
 
     def test_global_singleton_routes_answer_every_actor_and_refuse_anonymous(self):
+        operator = Operator.get()
+        operator.bank_bsb = "062000"
+        operator.save(update_fields=["bank_bsb"])
         for path in GLOBAL_ROUTES:
-            bodies = []
+            bodies = {}
             for actor in self.actors:
                 self.client.force_authenticate(actor.user)
                 response = self.client.get(path)
                 with self.subTest(actor=actor.label, path=path):
                     self.assertEqual(response.status_code, 200, response.content)
-                bodies.append(response.json())
-            self.assertEqual(len({str(body) for body in bodies}), 1)
+                bodies[actor.label] = response.json()
+            rails = {label: body.pop("paymentInstructions") for label, body in bodies.items()}
+            self.assertEqual(rails, {"alice": None, "staff": RAILS, "root": RAILS})
+            self.assertEqual(len({str(body) for body in bodies.values()}), 1)
             self.client.force_authenticate(None)
             self.assertEqual(self.client.get(path).status_code, 401)
+
+    def test_the_operator_rails_follow_the_eligibility_predicate_not_the_session(self):
+        operator = Operator.get()
+        operator.bank_bsb = "062000"
+        operator.save(update_fields=["bank_bsb"])
+        alice = self.actors[0]
+        self.client.force_authenticate(alice.user)
+
+        self.assertIsNone(self.client.get(GLOBAL_ROUTES[0]).json()["paymentInstructions"])
+
+        with transaction.atomic():
+            make_eligible(alice)
+            self.assertEqual(self.client.get(GLOBAL_ROUTES[0]).json()["paymentInstructions"], RAILS)
+            transaction.set_rollback(True)

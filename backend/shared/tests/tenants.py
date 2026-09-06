@@ -272,6 +272,24 @@ def make_eligible(tenant):
     )
 
 
+def make_associated(tenant, company):
+    UserProfile.objects.filter(pk=tenant.profile.pk).update(is_id_verified=True)
+    UserAccount.objects.filter(pk=tenant.account.pk).update(account_status=ACCOUNT_STATUS_ACTIVE)
+    return InvestorClassification.objects.create(
+        user_account=tenant.account,
+        company=company,
+        category=InvestorCategory.ASSOCIATED_PERSON,
+        status=InvestorClassificationStatus.VERIFIED,
+        expires_at=timezone.now() + timedelta(days=365),
+        declaration_accepted=True,
+        declaration_text="Declared",
+        declared_basis=f"{tenant.label} association",
+        evidence_file_size=len(tenant.label),
+        evidence_mime_type="application/pdf",
+        submitted_at=timezone.now(),
+    )
+
+
 def open_to_investors(tenant):
     Company.objects.filter(pk=tenant.company.pk).update(status=CompanyStatus.ACTIVE, is_open_to_investors=True)
 

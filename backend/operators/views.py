@@ -10,4 +10,4 @@ class OperatorView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        return Response(OperatorSerializer(Operator.get()).data)
+        return Response(OperatorSerializer(Operator.get(), context={"request": request}).data)

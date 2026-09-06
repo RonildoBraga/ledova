@@ -8,6 +8,8 @@ from rest_framework.test import APITestCase
 from assets.models import Asset, AssetChainDeployment
 from operators.models import SINGLETON_PK, DeploymentMode, Operator, ReceivingChain
 from operators.serializers import OperatorSerializer
+from shared.tests.tenants import make_associated, make_eligible, make_tenant
+from users.models import InvestorClassification, InvestorClassificationStatus
 
 User = get_user_model()
 
@@ -253,7 +255,37 @@ class OperatorApiTest(APITestCase):
     url = "/api/operator/"
 
     def setUp(self):
-        self.user = User.objects.create_user(email="investor@example.test", password="pw-12345678")
+        self.investor = make_tenant("rails-investor")
+        make_eligible(self.investor)
+        self.user = self.investor.user
+        self.outsider = User.objects.create_user(email="outsider@example.test", password="pw-12345678")
+        self.staff = User.objects.create_user(email="rails-staff@example.test", password="pw-12345678", is_staff=True)
+
+    def _with_rails(self):
+        operator = Operator.get()
+        operator.bank_account_name = "Acme Registry Pty Ltd"
+        operator.bank_bsb = "062000"
+        operator.bank_account_number = "12345678"
+        operator.payment_reference_prefix = "ACME"
+        operator.receiving_wallet_address = WALLET
+        operator.receiving_wallet_chain = ReceivingChain.BASE
+        operator.save()
+        return {
+            "bankAccountName": "Acme Registry Pty Ltd",
+            "bankBsb": "062000",
+            "bankAccountNumber": "12345678",
+            "paymentReferencePrefix": "ACME",
+            "receivingWalletAddress": WALLET,
+            "receivingWalletChain": "base",
+        }
+
+    def _payment_instructions(self, user):
+        self.client.force_authenticate(user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200, response.content)
+        body = response.json()
+        self.assertEqual(set(body), PUBLIC_JSON_KEYS)
+        return body["paymentInstructions"]
 
     def test_anonymous_is_refused_and_nothing_is_seeded(self):
         self.assertEqual(self.client.get(self.url).status_code, 401)
@@ -265,7 +297,7 @@ class OperatorApiTest(APITestCase):
 
         self.assertEqual(set(data), PUBLIC_KEYS)
         self.assertEqual(data["name"], "Acme Registry")
-        self.assertEqual(data["payment_instructions"], {})
+        self.assertIsNone(data["payment_instructions"])
         self.assertIsNone(data["issued_stablecoin"])
         self.assertEqual(data["supported_settlement_assets"], [])
         for secret in ("id", "uuid", "created_at", "updated_at", "bank_bsb", "receiving_wallet_address"):
@@ -330,9 +362,43 @@ class OperatorApiTest(APITestCase):
         operator = Operator.get()
         operator.bank_bsb = "062000"
         operator.save(update_fields=["bank_bsb"])
-        self.client.force_authenticate(self.user)
 
-        body = self.client.get(self.url).json()
+        instructions = self._payment_instructions(self.user)
 
-        self.assertEqual(body["paymentInstructions"], {"bankBsb": "062000"})
-        self.assertNotIn("receivingWalletChain", body["paymentInstructions"])
+        self.assertEqual(instructions, {"bankBsb": "062000"})
+        self.assertNotIn("receivingWalletChain", instructions)
+
+    def test_an_eligible_investor_is_handed_the_rails(self):
+        expected = self._with_rails()
+
+        self.assertEqual(self._payment_instructions(self.user), expected)
+
+    def test_an_ineligible_caller_is_handed_no_rails_at_all(self):
+        self._with_rails()
+
+        self.client.force_authenticate(self.outsider)
+        response = self.client.get(self.url)
+
+        self.assertIsNone(response.json()["paymentInstructions"])
+        for secret in ("Acme Registry Pty Ltd", "062000", "12345678", "ACME", WALLET):
+            self.assertNotIn(secret, response.content.decode())
+
+    def test_staff_are_handed_the_rails_without_an_investor_classification(self):
+        expected = self._with_rails()
+
+        self.assertEqual(self._payment_instructions(self.staff), expected)
+
+    def test_an_associated_person_reaches_the_rails_of_the_issuer_they_can_subscribe_to(self):
+        expected = self._with_rails()
+        associate = make_tenant("rails-associate")
+        make_associated(associate, self.investor.company)
+
+        self.assertEqual(self._payment_instructions(associate.user), expected)
+
+    def test_a_revoked_classification_takes_the_rails_away_again(self):
+        self._with_rails()
+        InvestorClassification.objects.filter(user_account=self.investor.account).update(
+            status=InvestorClassificationStatus.REVOKED
+        )
+
+        self.assertIsNone(self._payment_instructions(self.user))
