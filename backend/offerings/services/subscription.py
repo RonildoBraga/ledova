@@ -38,12 +38,32 @@ MONEY_ALREADY_IN = (
 TX_HASH_REQUIRED = "A stablecoin payment must carry the transfer hash, so one transfer cannot fund two subscriptions."
 TX_HASH_ALREADY_USED = "{tx_hash} already funds another subscription."
 RECEIVED_NOT_POSITIVE = "The amount received must be greater than zero."
+REFUND_NOT_POSITIVE = (
+    "A refund must be greater than zero. Recording a zero or negative refund would close the money out of the "
+    "record without returning a cent of it."
+)
+REFUND_ABOVE_HELD = (
+    "{amount} is more than the {refundable} still returnable against {reference}: {received} arrived and "
+    "{refunded} has already gone back."
+)
+PAYMENT_RESTATED_DOWN = (
+    "The amount received against {reference} was restated down from {before} to {after}. The earlier figure is "
+    "gone from the row and survives only in this history entry."
+)
+REFERENCE_SEEN_REUSED = (
+    "That statement line is already recorded against {others}. Bank settlement is operator-attested so this is "
+    "not refused, but one line must not fund two subscriptions: check the statement before allotting."
+)
 NOTHING_COVERED = (
     "{received} covers no whole share at {price} each. Refund it instead of accepting it as the final payment."
 )
 ALREADY_ALLOTTED = "This subscription already has issuance request {uuid}; it cannot be allotted twice."
 NOT_PAID = "Only a paid subscription can be allotted; this one is {status}."
 NOTHING_TO_ALLOT = "This subscription has been scaled back to zero shares; refund it instead."
+ALLOTMENT_ABOVE_HEADROOM = (
+    "Allotting {amount} shares of {symbol} would exceed the {room} still available "
+    "({cap_room} left under the offering cap, {chain_room} left of the authorized supply)."
+)
 BATCH_ABOVE_HEADROOM = (
     "Allotting {total} shares of {symbol} would exceed the {room} still available "
     "({cap_room} left under the offering cap, {chain_room} left of the authorized supply). "
@@ -201,18 +221,53 @@ def confirm_payment(
         raise SubscriptionRefusedException(TX_HASH_ALREADY_USED.format(tx_hash=tx_hash))
 
     allotted, refund, status = _payment_outcome(subscription, received, accept_as_final)
-    subscription.record_payment(
-        status=status,
-        allotted_quantity=allotted,
-        refund_amount=refund,
-        confirmed_by=confirmed_by,
-        amount_received=received,
-        payment_received_on=received_on,
-        payment_reference_seen=reference_seen,
-        payment_tx_hash=tx_hash,
-        payment_notes=notes,
-    )
+    try:
+        with transaction.atomic():
+            subscription.record_payment(
+                status=status,
+                allotted_quantity=allotted,
+                refund_amount=refund,
+                confirmed_by=confirmed_by,
+                amount_received=received,
+                payment_received_on=received_on,
+                payment_reference_seen=reference_seen,
+                payment_tx_hash=tx_hash,
+                payment_notes=notes,
+            )
+    except IntegrityError as exc:
+        if not tx_hash:
+            raise
+        raise SubscriptionRefusedException(TX_HASH_ALREADY_USED.format(tx_hash=tx_hash)) from exc
     return subscription
+
+
+def subscriptions_sharing_statement_line(subscription: Subscription) -> list[str]:
+    line = (subscription.payment_reference_seen or "").strip()
+    if not line:
+        return []
+    others = (
+        Subscription.objects.filter(payment_reference_seen__iexact=line)
+        .exclude(pk=subscription.pk)
+        .exclude(status__in=[SubscriptionStatus.REJECTED, SubscriptionStatus.WITHDRAWN])
+        .order_by("created_at")
+    )
+    return [row.reference or str(row.uuid) for row in others]
+
+
+def payment_warnings(subscription: Subscription, previous_amount) -> list[str]:
+    warnings = []
+    if previous_amount is not None and subscription.amount_received < previous_amount:
+        warnings.append(
+            PAYMENT_RESTATED_DOWN.format(
+                reference=subscription.reference or subscription.uuid,
+                before=previous_amount,
+                after=subscription.amount_received,
+            )
+        )
+    others = subscriptions_sharing_statement_line(subscription)
+    if others:
+        warnings.append(REFERENCE_SEEN_REUSED.format(others=", ".join(others)))
+    return warnings
 
 
 def _payment_outcome(subscription: Subscription, received: Decimal, accept_as_final: bool):
@@ -288,10 +343,25 @@ def _refuse_the_issuance(subscription: Subscription, verb: str) -> None:
 @transaction.atomic
 def record_refund(subscription: Subscription, amount: Decimal, reference: str = "", notes: str = "") -> Subscription:
     locked = Subscription.objects.select_for_update().get(pk=subscription.pk)
-    _refuse_the_issuance(locked, "A refund")
-    locked.mark_refunded(amount=_quantize(amount), reference=reference, notes=notes)
+    value = _quantize(amount)
+    if value <= 0:
+        raise SubscriptionRefusedException(REFUND_NOT_POSITIVE)
+    refundable = locked.amount_refundable
+    if not (locked.status == SubscriptionStatus.ALLOTTED and value <= refundable):
+        _refuse_the_issuance(locked, "A refund")
+    if value > refundable:
+        raise SubscriptionRefusedException(
+            REFUND_ABOVE_HELD.format(
+                amount=value,
+                refundable=refundable,
+                reference=locked.reference or locked.uuid,
+                received=locked.amount_received or Decimal("0.00"),
+                refunded=locked.refunded_total,
+            )
+        )
+    locked.mark_refunded(amount=value, reference=reference, notes=notes)
     subscription.refresh_from_db()
-    logger.info(f"Refund of {amount} recorded against subscription {subscription.uuid}")
+    logger.info(f"Refund of {value} recorded against subscription {subscription.uuid}")
     return subscription
 
 
@@ -299,7 +369,7 @@ def _refuse_if_money_in(subscription: Subscription) -> None:
     if subscription.has_money_in:
         raise SubscriptionRefusedException(
             MONEY_ALREADY_IN.format(
-                amount=subscription.amount_received, reference=subscription.reference or subscription.uuid
+                amount=subscription.money_held, reference=subscription.reference or subscription.uuid
             )
         )
 
@@ -325,6 +395,18 @@ def cap_headroom(offering: Offering) -> int:
     return offering.cap_shares - committed
 
 
+def offering_headroom(offering: Offering, service=None) -> tuple[int, int]:
+    service = service or ShareTokenService()
+    authorized, issued = service.share_supply(offering.token.contract_address)
+    unminted = ShareIssuanceRequest.objects.unminted(offering.token).share_total()
+    return cap_headroom(offering), authorized - issued - unminted
+
+
+def _residual_owed(subscription: Subscription, allotted: int):
+    residual = subscription.money_held - _quantize(Decimal(allotted) * subscription.price_per_share)
+    return residual if residual > 0 else None
+
+
 @transaction.atomic
 def scale_back(offering: Offering) -> dict:
     locked = Offering.objects.select_for_update().get(pk=offering.pk)
@@ -337,30 +419,47 @@ def scale_back(offering: Offering) -> dict:
     scaled = 0
     for subscription in pending:
         base = subscription.allotment_quantity
-        allotted = min(base, base * room // requested)
+        allotted = max(min(base, base * room // requested), 0)
         if allotted == base:
             continue
         subscription.allotted_quantity = allotted
-        subscription.save(update_fields=["allotted_quantity", "updated_at"])
+        subscription.refund_amount = _residual_owed(subscription, allotted)
+        subscription.save(update_fields=["allotted_quantity", "refund_amount", "updated_at"])
         scaled += 1
     logger.info(f"Scaled {scaled} subscriptions of {locked.token.symbol} from {requested} into {room} shares")
     return {"scaled": scaled, "requested": requested, "room": room}
 
 
+def _not_allottable(subscription: Subscription):
+    if subscription.issuance_request_id is not None:
+        return ALREADY_ALLOTTED.format(uuid=subscription.issuance_request_id)
+    if subscription.status != SubscriptionStatus.PAID:
+        return NOT_PAID.format(status=subscription.get_status_display().lower())
+    if subscription.allotment_quantity < 1:
+        return NOTHING_TO_ALLOT
+    return None
+
+
 @transaction.atomic
-def allot(subscription: Subscription, operator_user, notes: str = ""):
+def allot(subscription: Subscription, operator_user, notes: str = "", headroom=None):
     from offerings.tasks import allot_subscription_task
 
+    offering = Offering.objects.select_for_update().select_related("token").get(pk=subscription.offering_id)
     locked = Subscription.objects.select_for_update().get(pk=subscription.pk)
-    if locked.issuance_request_id is not None:
-        raise SubscriptionRefusedException(ALREADY_ALLOTTED.format(uuid=locked.issuance_request_id))
-    if locked.status != SubscriptionStatus.PAID:
-        raise SubscriptionRefusedException(NOT_PAID.format(status=locked.get_status_display().lower()))
+    refusal = _not_allottable(locked)
+    if refusal is not None:
+        raise SubscriptionRefusedException(refusal)
     amount = locked.allotment_quantity
-    if amount < 1:
-        raise SubscriptionRefusedException(NOTHING_TO_ALLOT)
 
-    offering = Offering.objects.select_related("token", "token__company").get(pk=locked.offering_id)
+    cap_room, chain_room = headroom if headroom is not None else offering_headroom(offering)
+    room = min(cap_room, chain_room)
+    if amount > room:
+        raise SubscriptionRefusedException(
+            ALLOTMENT_ABOVE_HEADROOM.format(
+                amount=amount, symbol=offering.token.symbol, room=room, cap_room=cap_room, chain_room=chain_room
+            )
+        )
+
     request = ShareTokenService().create_issuance_request(
         offering.token,
         recipient=locked.wallet.address,
@@ -388,31 +487,43 @@ def allot_batch(subscriptions, operator_user, notes: str = "", service=None) -> 
 
     result = {"allotted": 0, "refusals": []}
     for offering_id, group in grouped.items():
-        try:
-            result["allotted"] += _allot_group(offering_id, group, operator_user, notes, service)
-        except SubscriptionRefusedException as exc:
-            result["refusals"].append(str(exc.detail))
+        allotted, refusals = _allot_group(offering_id, group, operator_user, notes, service)
+        result["allotted"] += allotted
+        result["refusals"].extend(refusals)
     return result
 
 
-def _allot_group(offering_id, group, operator_user, notes, service) -> int:
+def _allot_group(offering_id, group, operator_user, notes, service) -> tuple[int, list[str]]:
+    ready, refusals = [], []
+    for subscription in group:
+        refusal = _not_allottable(subscription)
+        if refusal is None:
+            ready.append(subscription)
+        else:
+            refusals.append(refusal)
+    if not ready:
+        return 0, refusals
+    try:
+        return _allot_ready(offering_id, ready, operator_user, notes, service), refusals
+    except SubscriptionRefusedException as exc:
+        return 0, refusals + [str(exc.detail)]
+
+
+def _allot_ready(offering_id, ready, operator_user, notes, service) -> int:
     with transaction.atomic():
         offering = Offering.objects.select_for_update().select_related("token").get(pk=offering_id)
-        authorized, issued = service.share_supply(offering.token.contract_address)
-        unminted = ShareIssuanceRequest.objects.unminted(offering.token).share_total()
-        cap_room = cap_headroom(offering)
-        chain_room = authorized - issued - unminted
+        cap_room, chain_room = offering_headroom(offering, service)
         room = min(cap_room, chain_room)
-        total = sum(subscription.allotment_quantity for subscription in group)
+        total = sum(subscription.allotment_quantity for subscription in ready)
         if total > room:
             raise SubscriptionRefusedException(
                 BATCH_ABOVE_HEADROOM.format(
                     total=total, symbol=offering.token.symbol, room=room, cap_room=cap_room, chain_room=chain_room
                 )
             )
-        for subscription in group:
-            allot(subscription, operator_user, notes)
-    return len(group)
+        for subscription in ready:
+            allot(subscription, operator_user, notes, headroom=(cap_room, chain_room))
+    return len(ready)
 
 
 def retry_allotment(subscription: Subscription, operator_user) -> Subscription:

@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.conf import settings
 from django.db import models
 from django.db.models.functions import Lower
@@ -9,6 +11,8 @@ from operators.models import STABLECOIN_ONLY
 from shared.models import BaseModel
 
 MAX_REFERENCE_LENGTH = 18
+ZERO = Decimal("0.00")
+CENTS = Decimal("0.01")
 RAIL_ASSET_PAIRING_ERROR = "A bank transfer carries no settlement asset, and a stablecoin settlement must name one."
 ALLOTTED_ABOVE_REQUESTED_ERROR = "A subscription cannot be allotted more shares than it asked for."
 QUANTITY_POSITIVE_ERROR = "A subscription must ask for at least one share."
@@ -40,6 +44,13 @@ OPEN_SUBSCRIPTION_STATUSES = [
 ]
 
 CLOSEABLE_SUBSCRIPTION_STATUSES = OPEN_SUBSCRIPTION_STATUSES + [SubscriptionStatus.REFUNDED]
+
+REFUNDABLE_SUBSCRIPTION_STATUSES = [
+    SubscriptionStatus.AWAITING_PAYMENT,
+    SubscriptionStatus.PAID,
+    SubscriptionStatus.ALLOTTED,
+    SubscriptionStatus.REFUNDED,
+]
 
 REFUND_FIELDS = ["status", "refund_amount", "refund_reference", "refunded_at", "payment_notes", "updated_at"]
 
@@ -160,12 +171,28 @@ class Subscription(BaseModel):
         return self.amount_due - (self.amount_received or 0)
 
     @property
-    def has_money_in(self) -> bool:
-        return self.amount_received is not None and self.refunded_at is None
+    def refunded_total(self) -> Decimal:
+        if self.refunded_at is None:
+            return ZERO
+        return self.refund_amount or ZERO
 
     @property
-    def can_be_edited(self) -> bool:
-        return self.status == SubscriptionStatus.DRAFT
+    def money_held(self) -> Decimal:
+        return (self.amount_received or ZERO) - self.refunded_total
+
+    @property
+    def money_backing_shares(self) -> Decimal:
+        if self.status != SubscriptionStatus.ALLOTTED:
+            return ZERO
+        return (Decimal(self.allotment_quantity) * self.price_per_share).quantize(CENTS)
+
+    @property
+    def amount_refundable(self) -> Decimal:
+        return max(self.money_held - self.money_backing_shares, ZERO)
+
+    @property
+    def has_money_in(self) -> bool:
+        return self.amount_received is not None and self.money_held > ZERO
 
     def _require_status(self, allowed, to_status):
         if self.status not in allowed:
@@ -236,13 +263,13 @@ class Subscription(BaseModel):
         self.save(update_fields=["status", "updated_at"])
 
     def mark_refunded(self, amount, reference, notes):
-        allowed = [SubscriptionStatus.AWAITING_PAYMENT, SubscriptionStatus.PAID]
-        self._require_status(allowed, SubscriptionStatus.REFUNDED)
-        self.status = SubscriptionStatus.REFUNDED
-        self.refund_amount = amount
+        self._require_status(REFUNDABLE_SUBSCRIPTION_STATUSES, SubscriptionStatus.REFUNDED)
+        self.refund_amount = self.refunded_total + amount
         self.refund_reference = reference
         self.refunded_at = timezone.now()
         self.payment_notes = notes
+        if self.status != SubscriptionStatus.ALLOTTED:
+            self.status = SubscriptionStatus.REFUNDED
         self.save(update_fields=REFUND_FIELDS)
 
     def reject(self, notes):

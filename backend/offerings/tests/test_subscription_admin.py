@@ -1,19 +1,22 @@
 from decimal import Decimal
 from unittest.mock import patch
 
+from django import forms
+from django.contrib.admin.models import LogEntry
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from web3 import Web3
 
+from offerings.admin.subscription import ACTIONS
 from offerings.models import (
     Offering,
     SettlementRail,
     Subscription,
     SubscriptionStatus,
 )
-from offerings.services.subscription import BATCH_ABOVE_HEADROOM
+from offerings.services.subscription import BATCH_ABOVE_HEADROOM, REFUND_NOT_POSITIVE
 from offerings.tests.factories import (
     configure_operator,
     draft_subscription,
@@ -39,7 +42,7 @@ TEST_STORAGES = {
 
 
 @override_settings(STORAGES=TEST_STORAGES)
-class SubscriptionAdminTest(TestCase):
+class SubscriptionAdminTestCase(TestCase):
     def setUp(self):
         chain = patch(CHAIN_CLIENT).start().return_value
         chain.is_valid_address.return_value = True
@@ -71,6 +74,18 @@ class SubscriptionAdminTest(TestCase):
         subscription.refresh_from_db()
         return subscription
 
+    def _allot(self, subscriptions):
+        return self.client.post(
+            reverse("admin:offerings_subscription_changelist"),
+            {
+                "action": "allot_selected",
+                "_selected_action": [str(row.pk) for row in subscriptions],
+            },
+            follow=True,
+        )
+
+
+class SubscriptionAdminTest(SubscriptionAdminTestCase):
     def test_the_add_form_is_closed_and_every_field_is_read_only(self):
         subscription = draft_subscription(self.tenant)
         add = self.client.get(reverse("admin:offerings_subscription_add"))
@@ -166,16 +181,6 @@ class SubscriptionAdminTest(TestCase):
         response = self.client.post(self._url(subscription, "retry"), {}, follow=True)
         self.assertEqual(self.defer.call_count, 1)
         self.assertIn("Allotment retried; the task is running in the background.", self._messages(response))
-
-    def _allot(self, subscriptions):
-        return self.client.post(
-            reverse("admin:offerings_subscription_changelist"),
-            {
-                "action": "allot_selected",
-                "_selected_action": [str(row.pk) for row in subscriptions],
-            },
-            follow=True,
-        )
 
     def test_the_bulk_action_allots_a_batch_inside_the_headroom(self):
         rows = [paid_subscription(self.tenant, quantity=40, wallet=extra_wallet(self.tenant, n)) for n in "12"]
@@ -275,3 +280,140 @@ class SubscriptionAdminTest(TestCase):
 
         self.assertEqual(ShareIssuanceRequest.objects.count(), 1)
         self.assertIn("cannot be allotted twice", self._messages(response)[0])
+
+
+@override_settings(STORAGES=TEST_STORAGES)
+class SubscriptionAdminMoneyTest(SubscriptionAdminTestCase):
+    def _awaiting(self, quantity=10, wallet=None):
+        subscription = self._submitted(quantity=quantity, wallet=wallet)
+        self.client.post(self._url(subscription, "accept"), {"settlement_rail": SettlementRail.BANK_TRANSFER})
+        subscription.refresh_from_db()
+        return subscription
+
+    def _confirm(self, subscription, amount, received_on="2026-09-01", line=""):
+        return self.client.post(
+            self._url(subscription, "confirm-payment"),
+            {
+                "amount_received": amount,
+                "payment_received_on": received_on,
+                "payment_reference_seen": line,
+            },
+            follow=True,
+        )
+
+    def _warnings(self, response):
+        return [str(message) for message in response.wsgi_request._messages if message.level_tag == "warning"]
+
+    def test_the_refund_form_will_not_take_a_zero(self):
+        subscription = paid_subscription(self.tenant)
+        response = self.client.post(
+            self._url(subscription, "refund"), {"refund_amount": "0.00", "refund_reference": "NOTHING"}
+        )
+        subscription.refresh_from_db()
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("refund_amount", response.context["form"].errors)
+        self.assertEqual(subscription.status, SubscriptionStatus.PAID)
+        self.assertIsNone(subscription.refunded_at)
+
+    def test_a_zero_refund_that_dodges_the_form_is_still_refused_by_the_service(self):
+        subscription = paid_subscription(self.tenant)
+        loose = {**ACTIONS["refund"], "form": ZeroTolerantRefundForm}
+        with patch.dict("offerings.admin.subscription.ACTIONS", {"refund": loose}):
+            response = self.client.post(self._url(subscription, "refund"), {"refund_amount": "0.00"}, follow=True)
+        subscription.refresh_from_db()
+        self.assertEqual(self._messages(response), [REFUND_NOT_POSITIVE])
+        self.assertEqual(subscription.status, SubscriptionStatus.PAID)
+
+        rejected = self.client.post(self._url(subscription, "reject"), {"reason": "gone"}, follow=True)
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.status, SubscriptionStatus.PAID)
+        self.assertIn("Record a refund before rejecting", self._messages(rejected)[0])
+
+    def test_every_money_action_leaves_an_entry_in_the_admin_history(self):
+        subscription = self._awaiting()
+        self._confirm(subscription, "25.00")
+        self.client.post(
+            self._url(subscription, "refund"), {"refund_amount": "25.00", "refund_reference": "RTGS-9"}, follow=True
+        )
+        self.client.post(self._url(subscription, "reject"), {"reason": "Unwound"}, follow=True)
+
+        entries = [entry.change_message for entry in LogEntry.objects.order_by("action_time")]
+        self.assertEqual(len(entries), 4)
+        self.assertIn(f"Accepted and issued payment instruction {subscription.reference}", entries[0])
+        self.assertIn("Recorded 25.00 received on 2026-09-01", entries[1])
+        self.assertIn("Recorded a refund of 25.00", entries[2])
+        self.assertIn("Rejected the subscription: Unwound", entries[3])
+        self.assertEqual({entry.user_id for entry in LogEntry.objects.all()}, {self.operator.pk})
+
+    def test_a_restatement_downwards_warns_the_operator_and_records_the_old_figure(self):
+        subscription = self._awaiting()
+        self._confirm(subscription, "25.00")
+        response = self._confirm(subscription, "1.00", received_on="2026-09-02")
+        subscription.refresh_from_db()
+
+        self.assertEqual(subscription.amount_received, Decimal("1.00"))
+        self.assertIn("restated down from 25.00 to 1.00", self._warnings(response)[0])
+        self.assertIn("Recorded 25.00 received", LogEntry.objects.order_by("action_time")[1].change_message)
+
+    def test_a_statement_line_recorded_twice_warns_rather_than_passing_silently(self):
+        first = self._awaiting()
+        second = self._awaiting(wallet=extra_wallet(self.tenant, "8"))
+        line = "CBA 04/09 DEPOSIT 000123456"
+
+        self.assertEqual(self._warnings(self._confirm(first, "25.00", line=line)), [])
+        warned = self._warnings(self._confirm(second, "25.00", line=line))
+
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual(second.status, SubscriptionStatus.PAID)
+        self.assertIn(f"already recorded against {first.reference}", warned[0])
+
+    def test_a_bulk_allotment_and_a_scale_back_both_reach_the_admin_history(self):
+        rows = [paid_subscription(self.tenant, quantity=60, wallet=extra_wallet(self.tenant, n)) for n in "12"]
+        Offering.objects.filter(pk=self.offering.pk).update(minimum_shares=1, target_shares=60, cap_shares=60)
+        self.client.post(
+            reverse("admin:offerings_subscription_changelist"),
+            {"action": "scale_back_selected", "_selected_action": [str(row.pk) for row in rows]},
+            follow=True,
+        )
+        with patch(SUPPLY, return_value=(1000, 0)):
+            self._allot(rows)
+
+        entries = [entry.change_message for entry in LogEntry.objects.order_by("action_time")]
+        self.assertEqual(len([entry for entry in entries if entry.startswith("Scaled back to 30 share(s)")]), 2)
+        self.assertEqual(len([entry for entry in entries if entry.startswith("Allotted 30 share(s)")]), 2)
+
+    def test_an_allotted_row_can_still_return_the_residual_a_scale_back_stranded(self):
+        subscription = paid_subscription(self.tenant, quantity=10)
+        Offering.objects.filter(pk=self.offering.pk).update(minimum_shares=1, target_shares=5, cap_shares=5)
+        self.client.post(
+            reverse("admin:offerings_subscription_changelist"),
+            {"action": "scale_back_selected", "_selected_action": [str(subscription.pk)]},
+            follow=True,
+        )
+        with patch(SUPPLY, return_value=(1000, 0)):
+            self._allot([subscription])
+        subscription.refresh_from_db()
+        ShareIssuanceRequest.objects.filter(pk=subscription.issuance_request_id).update(status=RequestStatus.EXECUTED)
+        subscription.refresh_from_db()
+        subscription.mark_allotted()
+
+        change = self.client.get(self._change_url(subscription))
+        self.assertIn(self._url(subscription, "refund"), change.content.decode())
+
+        response = self.client.post(
+            self._url(subscription, "refund"),
+            {"refund_amount": "12.50", "refund_reference": "RTGS-RESIDUAL"},
+            follow=True,
+        )
+        subscription.refresh_from_db()
+        self.assertEqual(self._messages(response)[-1], "Refund recorded.")
+        self.assertEqual(subscription.status, SubscriptionStatus.ALLOTTED)
+        self.assertEqual(subscription.refund_amount, Decimal("12.50"))
+
+
+class ZeroTolerantRefundForm(forms.Form):
+
+    refund_amount = forms.DecimalField(max_digits=18, decimal_places=2)
+    refund_reference = forms.CharField(max_length=140, required=False)
+    payment_notes = forms.CharField(required=False)

@@ -8,6 +8,7 @@ from web3 import Web3
 from offerings.exceptions import SubscriptionRefusedException
 from offerings.models import Offering, Subscription, SubscriptionStatus
 from offerings.services.subscription import (
+    ALLOTMENT_ABOVE_HEADROOM,
     ALREADY_ALLOTTED,
     BATCH_ABOVE_HEADROOM,
     ISSUANCE_ALREADY_CLAIMED,
@@ -46,7 +47,9 @@ from tokens.services import ShareTokenService
 
 CHAIN_CLIENT = "tokens.services.share_token_service.get_base_chain_client"
 DEFER = "offerings.tasks.subscription.allot_subscription_task.defer"
+SUPPLY = "tokens.services.share_token_service.ShareTokenService.share_supply"
 SIGNER = "0x" + "e" * 40
+ROOMY = (1000000, 0)
 
 
 class AllotmentTestCase(TestCase):
@@ -56,6 +59,7 @@ class AllotmentTestCase(TestCase):
         chain.to_checksum_address.side_effect = Web3.to_checksum_address
         chain.get_address_from_private_key.return_value = SIGNER
         self.defer = patch(DEFER).start()
+        self.supply = patch(SUPPLY, return_value=ROOMY).start()
         self.addCleanup(patch.stopall)
 
         self.tenant = make_tenant("allot")
@@ -489,3 +493,159 @@ class ScaleBackTest(AllotmentTestCase):
         subscription.refresh_from_db()
         self.assertEqual(subscription.amount_due, Decimal("150.00"))
         self.assertEqual(subscription.allotted_quantity, 50)
+
+
+class SingleAllotmentHeadroomTest(AllotmentTestCase):
+    def test_the_cap_is_guarded_on_the_single_entry_point_not_only_on_the_batch(self):
+        rows = [
+            paid_subscription(self.tenant, quantity=10, wallet=extra_wallet(self.tenant, letter))
+            for letter in ("1", "2", "3")
+        ]
+        self._cap(self.offering, 10)
+        self.supply.return_value = (10, 0)
+
+        self.assertEqual(allot(rows[0], self.operator_user).amount, 10)
+        for row in rows[1:]:
+            with self.subTest(row=row.pk):
+                with self.assertRaises(SubscriptionRefusedException) as raised:
+                    allot(row, self.operator_user)
+                self.assertEqual(
+                    str(raised.exception.detail),
+                    ALLOTMENT_ABOVE_HEADROOM.format(
+                        amount=10, symbol=self.offering.token.symbol, room=0, cap_room=0, chain_room=0
+                    ),
+                )
+
+        self.assertEqual(cap_headroom(self.offering), 0)
+        self.assertEqual(ShareIssuanceRequest.objects.count(), 1)
+        self.assertEqual(self.defer.call_count, 1)
+
+    def test_the_authorized_supply_stops_a_single_allotment_the_cap_would_allow(self):
+        subscription = paid_subscription(self.tenant, quantity=40)
+        self.supply.return_value = (30, 0)
+
+        with self.assertRaises(SubscriptionRefusedException) as raised:
+            allot(subscription, self.operator_user)
+
+        self.assertEqual(
+            str(raised.exception.detail),
+            ALLOTMENT_ABOVE_HEADROOM.format(
+                amount=40, symbol=self.offering.token.symbol, room=30, cap_room=500, chain_room=30
+            ),
+        )
+        self.assertFalse(ShareIssuanceRequest.objects.exists())
+
+    def test_a_batch_still_reads_the_chain_supply_once_for_the_whole_group(self):
+        rows = [
+            paid_subscription(self.tenant, quantity=10, wallet=extra_wallet(self.tenant, letter))
+            for letter in ("1", "2", "3")
+        ]
+        service = self._supply(authorized=1000, issued=0)
+
+        self.assertEqual(allot_batch(rows, self.operator_user, service=service)["allotted"], 3)
+        self.assertEqual(service.share_supply.call_count, 1)
+
+    def test_a_stale_row_is_refused_on_its_own_and_the_rest_of_the_batch_still_goes(self):
+        already = paid_subscription(self.tenant, quantity=40, wallet=extra_wallet(self.tenant, "1"))
+        allot(already, self.operator_user)
+        fresh = paid_subscription(self.tenant, quantity=40, wallet=extra_wallet(self.tenant, "2"))
+        self._cap(self.offering, 80)
+
+        service = self._supply(authorized=1000, issued=0)
+        result = allot_batch([already, fresh], self.operator_user, service=service)
+        fresh.refresh_from_db()
+
+        self.assertEqual(result["allotted"], 1)
+        self.assertEqual(result["refusals"], [ALREADY_ALLOTTED.format(uuid=already.issuance_request_id)])
+        self.assertIsNotNone(fresh.issuance_request_id)
+
+    def test_a_group_of_nothing_but_stale_rows_reads_no_supply_and_refuses_each_row(self):
+        already = paid_subscription(self.tenant, quantity=10, wallet=extra_wallet(self.tenant, "1"))
+        allot(already, self.operator_user)
+        unpaid = draft_subscription(self.tenant, quantity=10, wallet=extra_wallet(self.tenant, "2"))
+
+        service = self._supply(authorized=1000, issued=0)
+        result = allot_batch([already, unpaid], self.operator_user, service=service)
+
+        self.assertEqual(result["allotted"], 0)
+        self.assertEqual(
+            result["refusals"],
+            [ALREADY_ALLOTTED.format(uuid=already.issuance_request_id), NOT_PAID.format(status="draft")],
+        )
+        self.assertEqual(service.share_supply.call_count, 0)
+
+
+class ScaleBackResidualTest(AllotmentTestCase):
+    def _scaled(self, quantity=10, cap=5):
+        subscription = paid_subscription(self.tenant, quantity=quantity)
+        self._cap(self.offering, cap)
+        scale_back(self.offering)
+        subscription.refresh_from_db()
+        return subscription
+
+    def test_scale_back_records_the_money_it_strands_the_way_a_partial_payment_does(self):
+        subscription = self._scaled()
+        self.assertEqual(subscription.allotted_quantity, 5)
+        self.assertEqual(subscription.amount_received, Decimal("25.00"))
+        self.assertEqual(subscription.refund_amount, Decimal("12.50"))
+        self.assertEqual(subscription.money_held, Decimal("25.00"))
+
+    def test_scale_back_owes_nothing_when_the_scaled_shares_still_use_every_cent(self):
+        first = paid_subscription(self.tenant, quantity=10, wallet=extra_wallet(self.tenant, "1"))
+        second = paid_subscription(self.tenant, quantity=10, wallet=extra_wallet(self.tenant, "2"))
+        Subscription.objects.filter(pk=second.pk).update(amount_received=None)
+        self._cap(self.offering, 10)
+
+        scale_back(self.offering)
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual((first.allotted_quantity, first.refund_amount), (5, Decimal("12.50")))
+        self.assertEqual((second.allotted_quantity, second.refund_amount), (5, None))
+
+    def test_a_negative_headroom_scales_to_zero_rather_than_a_negative_quantity(self):
+        soaked = paid_subscription(self.tenant, quantity=40, wallet=extra_wallet(self.tenant, "1"))
+        allot(soaked, self.operator_user)
+        pending = paid_subscription(self.tenant, quantity=10, wallet=extra_wallet(self.tenant, "2"))
+        self._cap(self.offering, 10)
+
+        self.assertEqual(cap_headroom(self.offering), -30)
+        self.assertEqual(scale_back(self.offering), {"scaled": 1, "requested": 10, "room": -30})
+
+        pending.refresh_from_db()
+        self.assertEqual(pending.allotted_quantity, 0)
+        self.assertEqual(pending.refund_amount, Decimal("25.00"))
+
+    def test_the_stranded_residual_is_refundable_once_the_shares_are_allotted(self):
+        subscription = self._scaled()
+        allot(subscription, self.operator_user)
+        subscription.refresh_from_db()
+        ShareIssuanceRequest.objects.filter(pk=subscription.issuance_request_id).update(status=RequestStatus.EXECUTED)
+        subscription.refresh_from_db()
+        subscription.mark_allotted()
+
+        self.assertEqual(subscription.amount_refundable, Decimal("12.50"))
+        with self.assertRaises(SubscriptionRefusedException) as raised:
+            record_refund(subscription, amount=Decimal("12.51"))
+        self.assertIn("already claimed on chain", str(raised.exception.detail))
+
+        record_refund(subscription, amount=Decimal("12.50"), reference="RTGS-RESIDUAL")
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.status, SubscriptionStatus.ALLOTTED)
+        self.assertEqual(subscription.refund_amount, Decimal("12.50"))
+        self.assertEqual(subscription.money_held, Decimal("12.50"))
+        self.assertEqual(subscription.amount_refundable, Decimal("0.00"))
+
+    def test_the_money_that_paid_for_allotted_shares_can_never_come_back(self):
+        subscription = paid_subscription(self.tenant, quantity=10)
+        allot(subscription, self.operator_user)
+        subscription.refresh_from_db()
+        ShareIssuanceRequest.objects.filter(pk=subscription.issuance_request_id).update(status=RequestStatus.EXECUTED)
+        subscription.refresh_from_db()
+        subscription.mark_allotted()
+
+        self.assertEqual(subscription.amount_refundable, Decimal("0.00"))
+        with self.assertRaises(SubscriptionRefusedException) as raised:
+            record_refund(subscription, amount=Decimal("0.01"))
+        self.assertIn("already claimed on chain", str(raised.exception.detail))
+        subscription.refresh_from_db()
+        self.assertIsNone(subscription.refunded_at)

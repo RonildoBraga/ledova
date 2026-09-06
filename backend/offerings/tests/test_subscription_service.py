@@ -18,6 +18,8 @@ from offerings.services.subscription import (
     NOTHING_COVERED,
     OFFERING_NOT_OPEN,
     RECEIVED_NOT_POSITIVE,
+    REFUND_ABOVE_HELD,
+    REFUND_NOT_POSITIVE,
     TX_HASH_ALREADY_USED,
     TX_HASH_REQUIRED,
     WALLET_NOT_ON_ACCOUNT,
@@ -41,7 +43,7 @@ from users.exceptions import InvestorNotEligibleException
 from users.models import InvestorClassification, InvestorClassificationStatus
 
 
-class SubscriptionServiceTest(TestCase):
+class SubscriptionServiceTestCase(TestCase):
     def setUp(self):
         self.tenant = make_tenant("investor")
         self.stablecoin = self.tenant.refs.stablecoin
@@ -61,6 +63,8 @@ class SubscriptionServiceTest(TestCase):
         issue_instruction(subscription, rail=rail, settlement_asset=asset)
         return subscription
 
+
+class SubscriptionServiceTest(SubscriptionServiceTestCase):
     def test_a_draft_snapshots_the_price_and_the_amount_due(self):
         subscription = draft_subscription(self.tenant, quantity=12)
         self.assertEqual(subscription.status, SubscriptionStatus.DRAFT)
@@ -385,3 +389,117 @@ class SubscriptionServiceTest(TestCase):
         withdraw(pulled, reason="Investor pulled out")
         pulled.refresh_from_db()
         self.assertEqual(pulled.status, SubscriptionStatus.WITHDRAWN)
+
+
+class RefundGuardTest(SubscriptionServiceTestCase):
+    def _paid(self, amount=Decimal("25.00")):
+        subscription = self._to_awaiting()
+        confirm_payment(
+            subscription,
+            confirmed_by=self.tenant.user,
+            amount_received=amount,
+            received_on=timezone.now().date(),
+        )
+        subscription.refresh_from_db()
+        return subscription
+
+    def test_a_zero_or_negative_refund_returns_nothing_and_is_refused(self):
+        subscription = self._paid()
+        for amount in (Decimal("0.00"), Decimal("-100.00")):
+            with self.subTest(amount=amount):
+                self.assertEqual(self._refusal(record_refund, subscription, amount), REFUND_NOT_POSITIVE)
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.status, SubscriptionStatus.PAID)
+        self.assertIsNone(subscription.refunded_at)
+        self.assertTrue(subscription.has_money_in)
+
+    def test_a_refund_above_what_arrived_is_refused(self):
+        subscription = self._paid()
+        self.assertEqual(
+            self._refusal(record_refund, subscription, Decimal("2500.00")),
+            REFUND_ABOVE_HELD.format(
+                amount=Decimal("2500.00"),
+                refundable=Decimal("25.00"),
+                reference=subscription.reference,
+                received=Decimal("25.00"),
+                refunded=Decimal("0.00"),
+            ),
+        )
+        subscription.refresh_from_db()
+        self.assertIsNone(subscription.refund_amount)
+        self.assertEqual(subscription.status, SubscriptionStatus.PAID)
+
+    def test_a_zero_refund_never_opens_the_door_to_a_reject_or_a_withdrawal(self):
+        subscription = self._paid()
+        self._refusal(record_refund, subscription, Decimal("0.00"))
+        subscription.refresh_from_db()
+        expected = MONEY_ALREADY_IN.format(amount=Decimal("25.00"), reference=subscription.reference)
+        self.assertEqual(self._refusal(reject, subscription, "No longer proceeding"), expected)
+        self.assertEqual(self._refusal(withdraw, subscription, "No longer proceeding"), expected)
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.status, SubscriptionStatus.PAID)
+
+    def test_a_partial_refund_leaves_the_rest_in_and_the_row_still_cannot_close(self):
+        subscription = self._paid()
+        record_refund(subscription, amount=Decimal("1.00"), reference="RTGS-PART")
+        subscription.refresh_from_db()
+
+        self.assertEqual(subscription.status, SubscriptionStatus.REFUNDED)
+        self.assertEqual(subscription.money_held, Decimal("24.00"))
+        self.assertTrue(subscription.has_money_in)
+        self.assertEqual(
+            self._refusal(reject, subscription, "No longer proceeding"),
+            MONEY_ALREADY_IN.format(amount=Decimal("24.00"), reference=subscription.reference),
+        )
+
+    def test_refunds_accumulate_until_every_cent_is_back(self):
+        subscription = self._paid()
+        record_refund(subscription, amount=Decimal("1.00"), reference="RTGS-1")
+        subscription.refresh_from_db()
+        self.assertEqual(
+            self._refusal(record_refund, subscription, Decimal("24.01")),
+            REFUND_ABOVE_HELD.format(
+                amount=Decimal("24.01"),
+                refundable=Decimal("24.00"),
+                reference=subscription.reference,
+                received=Decimal("25.00"),
+                refunded=Decimal("1.00"),
+            ),
+        )
+
+        record_refund(subscription, amount=Decimal("24.00"), reference="RTGS-2")
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.refund_amount, Decimal("25.00"))
+        self.assertEqual(subscription.money_held, Decimal("0.00"))
+        self.assertFalse(subscription.has_money_in)
+
+        reject(subscription, reason="Unwound once it was all back")
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.status, SubscriptionStatus.REJECTED)
+
+    def test_a_refund_cannot_be_recorded_against_money_that_never_arrived(self):
+        subscription = self._to_awaiting()
+        self.assertEqual(
+            self._refusal(record_refund, subscription, Decimal("25.00")),
+            REFUND_ABOVE_HELD.format(
+                amount=Decimal("25.00"),
+                refundable=Decimal("0.00"),
+                reference=subscription.reference,
+                received=Decimal("0.00"),
+                refunded=Decimal("0.00"),
+            ),
+        )
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.status, SubscriptionStatus.AWAITING_PAYMENT)
+
+    def test_an_overpayment_owed_is_not_yet_money_that_went_back(self):
+        subscription = self._paid(amount=Decimal("30.00"))
+        self.assertEqual(subscription.refund_amount, Decimal("5.00"))
+        self.assertEqual(subscription.refunded_total, Decimal("0.00"))
+        self.assertEqual(subscription.money_held, Decimal("30.00"))
+        self.assertTrue(subscription.has_money_in)
+
+        record_refund(subscription, amount=Decimal("5.00"), reference="RTGS-OVER")
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.refund_amount, Decimal("5.00"))
+        self.assertEqual(subscription.money_held, Decimal("25.00"))

@@ -256,10 +256,30 @@ them after `make build` and fails on any drift.
    and refused unless it is `0x` plus 64 hexadecimal characters, and the partial
    unique index is on `Lower("payment_tx_hash")` — a transaction hash carries no
    checksum case, so the same transfer pasted from two explorers is the same
-   transfer and cannot fund two subscriptions.
-5. Reject and withdraw are refused while money is recorded and unrefunded. The
-   operator records a refund first; only then does the row close. Nothing about
-   the money moves once the shares are claimed: recording a refund rejects a
+   transfer and cannot fund two subscriptions. Two operators confirming that one
+   hash at the same instant both pass the pre-check, so `confirm_payment` also
+   catches the index's `IntegrityError` and turns it into the same refusal the
+   pre-check gives, rather than a 500 for whoever loses. The bank rail has no
+   such key: settlement there is operator-attested, so a statement line already
+   recorded against another subscription is a **warning** on the confirming
+   operator's screen, naming the other references, not a refusal. Every money
+   action in the admin — acceptance, confirmation, refund, rejection, retry,
+   bulk allotment and scale back — writes a `LogEntry`, so a restated
+   `amount_received` leaves the earlier figure in the object's history even
+   though the column now holds only the latest one; restating downwards warns
+   as well.
+5. Reject and withdraw are refused while money is recorded and unrefunded, and
+   the test is arithmetic, not a flag: `has_money_in` compares `amount_received`
+   against the refunds that have actually gone back, so a zero refund closes
+   nothing and a partial one leaves the rest held. A refund must be above zero
+   and cannot exceed what is still returnable; `refund_amount` accumulates
+   across refunds once `refunded_at` is set, and only when every cent is back
+   does the row become closeable. Before allotment the whole amount is
+   returnable and the refund unwinds the allotment; after allotment only the
+   residual that no allotted share paid for can come back — asking for a cent
+   more is refused as a claimed mint, because money never leaves while the
+   shares it bought stay out. Nothing about the money moves once the shares are
+   claimed: recording a refund rejects a
    still-executable issuance request in the same transaction — a compare-and-set
    against `EXECUTABLE_STATUSES`, so the worker's `mark_executing` and the
    refund cannot both win — and a refund, a rejection, a withdrawal or a
@@ -281,17 +301,30 @@ them after `make build` and fails on any drift.
    simultaneous clicks end in one request and one refusal; the unique
    `ShareIssuance.idempotency_key` derived from the request uuid; and the
    compare-and-set in `ReviewableRequest.mark_executing`.
-7. Bulk allotment groups by offering, takes `select_for_update` on the offering
-   row the way `_execute_capital_increase` does on the share class, makes one
-   `share_supply()` read for the batch and refuses the **whole** batch when the
-   total exceeds `min(offering headroom, authorized - issued - unminted)`.
+7. The headroom test lives in `allot()`, the exported single-subscription entry
+   point, so the offering cap — a disclosure limit, not an internal convenience
+   — is guarded however the shares are raised. Bulk allotment groups by
+   offering, takes `select_for_update` on the offering row the way
+   `_execute_capital_increase` does on the share class, drops the rows `allot()`
+   would refuse anyway — already linked to a request, not `paid`, scaled to
+   nothing — before it sums, so one stale row in a large selection is refused on
+   its own instead of poisoning the batch, makes one `share_supply()` read for
+   the batch, hands that headroom down to each `allot()` call, and refuses the
+   **whole** remaining batch when the total exceeds
+   `min(offering headroom, authorized - issued - unminted)`.
    `totalSupply()` counts what is on chain, not what has already been promised,
    so the chain half of that `min()` also subtracts the shares of every request
    for the token that can still mint — `approved`, `executing`, and `failed`
    while its issuance still carries a `tx_hash`. Without that subtraction two
    sequential batches each fit on their own and jointly do not, and the second
    one ends as a `paid` row whose task refuses forever. Part-filling first-come
-   would destroy the pro-rata fairness `scale_back` exists to give.
+   would destroy the pro-rata fairness `scale_back` exists to give. `scale_back`
+   itself writes the money it strands: cutting `allotted_quantity` leaves
+   `amount_due` and `amount_received` alone by design, so the difference between
+   what arrived and what the scaled shares cost is recorded as `refund_amount`
+   the same way the partial-payment path records its residual, and the clamp
+   floors at zero so a negative headroom scales a row to nothing rather than to
+   a quantity the database check constraint rejects.
 8. `reconcile_subscriptions` runs every five minutes and is the mirror of
    `check_executing_issuance_requests` on the subscription side: the latter
    finishes the request a killed worker left, and without the mirror the

@@ -17,6 +17,7 @@ from offerings.services.subscription import (
     allot_batch,
     confirm_payment,
     issue_instruction,
+    payment_warnings,
     record_refund,
     reject,
     retry_allotment,
@@ -68,7 +69,10 @@ STATUS_BUTTONS = {
         ("↻ Retry allotment", "retry", "#17a2b8"),
         ("↩ Record refund", "refund", "#6f42c1"),
     ],
-    SubscriptionStatus.ALLOTTED: [("Allotted", None, "#e9ecef", "#6c757d")],
+    SubscriptionStatus.ALLOTTED: [
+        ("Allotted", None, "#e9ecef", "#6c757d"),
+        ("↩ Record refund", "refund", "#6f42c1"),
+    ],
     SubscriptionStatus.REJECTED: [("Subscription Rejected", None, "#e9ecef", "#6c757d")],
     SubscriptionStatus.WITHDRAWN: [("Subscription Withdrawn", None, "#e9ecef", "#6c757d")],
     SubscriptionStatus.REFUNDED: [("✗ Reject", "reject", "#dc3545")],
@@ -103,7 +107,9 @@ class ConfirmPaymentForm(forms.Form):
 
 class RefundForm(forms.Form):
 
-    refund_amount = forms.DecimalField(max_digits=18, decimal_places=2, label="Refund Amount (AUD)")
+    refund_amount = forms.DecimalField(
+        max_digits=18, decimal_places=2, min_value=Decimal("0.01"), label="Refund Amount (AUD)"
+    )
     refund_reference = forms.CharField(max_length=140, required=False, label="Refund Reference")
     payment_notes = forms.CharField(widget=forms.Textarea(attrs={"rows": 3}), required=False, label="Notes")
 
@@ -148,8 +154,10 @@ ACTIONS = {
         alert="warning",
         heading="Refund",
         intro=(
-            "Record money sent back to the investor. The subscription is unwound with nothing allotted, and only "
-            "then can it be rejected or withdrawn."
+            "Record money that has actually gone back to the investor; it must be above zero and cannot exceed "
+            "what is still held. Before allotment the subscription is unwound with nothing allotted, and only "
+            "then can it be rejected or withdrawn. After allotment only the residual no share paid for can come "
+            "back, because the shares are already out."
         ),
         legend="Refund",
         button=("Record Refund", "btn-dark"),
@@ -181,6 +189,46 @@ ACTIONS = {
 }
 
 
+def _log_accept(subscription, data):
+    return (
+        f"Accepted and issued payment instruction {subscription.reference} on the "
+        f"{subscription.get_settlement_rail_display().lower()} rail for {subscription.amount_due}."
+    )
+
+
+def _log_confirm_payment(subscription, data):
+    return (
+        f"Recorded {subscription.amount_received} received on {subscription.payment_received_on} against "
+        f"{subscription.reference or subscription.uuid}; the row is now "
+        f"{subscription.get_status_display().lower()}."
+    )
+
+
+def _log_refund(subscription, data):
+    return (
+        f"Recorded a refund of {data['refund_amount']} (reference "
+        f"{data.get('refund_reference') or 'none given'}); {subscription.refund_amount} has now gone back and "
+        f"{subscription.money_held} is still held."
+    )
+
+
+def _log_reject(subscription, data):
+    return f"Rejected the subscription: {data['reason']}"
+
+
+def _log_retry(subscription, data):
+    return f"Re-deferred the mint of issuance request {subscription.issuance_request_id}."
+
+
+LOGS = {
+    "accept": _log_accept,
+    "confirm-payment": _log_confirm_payment,
+    "refund": _log_refund,
+    "reject": _log_reject,
+    "retry": _log_retry,
+}
+
+
 @admin.register(Subscription)
 class SubscriptionAdmin(admin.ModelAdmin):
 
@@ -192,6 +240,7 @@ class SubscriptionAdmin(admin.ModelAdmin):
         "allotted_quantity",
         "amount_due",
         "amount_received",
+        "refund_amount",
         "status_badge",
         "tx_hash_short",
         "created_at",
@@ -336,11 +385,15 @@ class SubscriptionAdmin(admin.ModelAdmin):
 
         data = form.cleaned_data if form is not None else {}
         try:
-            RUNNERS[action](subscription, request, data)
+            warnings = RUNNERS[action](subscription, request, data) or []
         except REFUSALS as exc:
             messages.error(request, str(exc.detail))
         else:
+            subscription.refresh_from_db()
+            self.log_change(request, subscription, LOGS[action](subscription, data))
             messages.add_message(request, spec.get("level", messages.SUCCESS), spec["done"])
+            for warning in warnings:
+                messages.warning(request, warning)
         return HttpResponseRedirect(change_url)
 
     @staticmethod
@@ -366,8 +419,10 @@ class SubscriptionAdmin(admin.ModelAdmin):
 
     @admin.action(description="Allot selected subscriptions")
     def allot_selected(self, request, queryset):
-        result = allot_batch(list(queryset.with_relations()), request.user)
+        rows = list(queryset.with_relations())
+        result = allot_batch(rows, request.user)
         if result["allotted"]:
+            self._log_allotted(request, rows)
             self.message_user(request, f"Allotted {result['allotted']} subscription(s).", messages.SUCCESS)
         for refusal in result["refusals"]:
             self.message_user(request, refusal, messages.ERROR)
@@ -378,12 +433,37 @@ class SubscriptionAdmin(admin.ModelAdmin):
     def scale_back_selected(self, request, queryset):
         offerings = {row.offering_id: row.offering for row in queryset.select_related("offering", "offering__token")}
         for offering in offerings.values():
+            pending = Subscription.objects.for_offering(offering).awaiting_allotment()
+            before = dict(pending.values_list("pk", "allotted_quantity"))
             result = scale_back(offering)
+            self._log_scaled(request, offering, before, result)
             self.message_user(
                 request,
                 f"{offering.token.symbol}: {result['scaled']} subscription(s) scaled; "
                 f"{result['requested']} shares requested against {result['room']} available.",
                 messages.SUCCESS if result["scaled"] else messages.INFO,
+            )
+
+    def _log_allotted(self, request, rows):
+        for row in rows:
+            row.refresh_from_db()
+            if row.issuance_request_id is None:
+                continue
+            self.log_change(
+                request,
+                row,
+                f"Allotted {row.allotment_quantity} share(s) through issuance request {row.issuance_request_id}.",
+            )
+
+    def _log_scaled(self, request, offering, before, result):
+        for row in Subscription.objects.for_offering(offering).awaiting_allotment():
+            if row.allotted_quantity == before.get(row.pk):
+                continue
+            self.log_change(
+                request,
+                row,
+                f"Scaled back to {row.allotment_quantity} share(s) of the {result['requested']} requested against "
+                f"{result['room']} available; {row.refund_amount or 0} is owed back.",
             )
 
     @admin.action(description="Whitelist the wallets of the selected subscriptions")
@@ -421,6 +501,7 @@ def _run_accept(subscription, request, data):
 
 
 def _run_confirm_payment(subscription, request, data):
+    previous = subscription.amount_received
     confirm_payment(
         subscription,
         confirmed_by=request.user,
@@ -431,6 +512,8 @@ def _run_confirm_payment(subscription, request, data):
         notes=data.get("payment_notes") or "",
         accept_as_final=bool(data.get("accept_as_final")),
     )
+    subscription.refresh_from_db()
+    return payment_warnings(subscription, previous)
 
 
 def _run_refund(subscription, request, data):
@@ -442,10 +525,18 @@ def _run_refund(subscription, request, data):
     )
 
 
+def _run_reject(subscription, request, data):
+    reject(subscription, reason=data["reason"])
+
+
+def _run_retry(subscription, request, data):
+    retry_allotment(subscription, request.user)
+
+
 RUNNERS = {
     "accept": _run_accept,
     "confirm-payment": _run_confirm_payment,
     "refund": _run_refund,
-    "reject": lambda subscription, request, data: reject(subscription, reason=data["reason"]),
-    "retry": lambda subscription, request, data: retry_allotment(subscription, request.user),
+    "reject": _run_reject,
+    "retry": _run_retry,
 }

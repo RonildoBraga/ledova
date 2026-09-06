@@ -53,7 +53,9 @@ function Summary({ subscription }: { subscription: SubscriptionDetail }) {
         <Row label="Price per share" value={subscription.pricePerShare} />
         <Row label="Amount due" value={subscription.amountDue} />
         {subscription.amountReceived && <Row label="Amount received" value={subscription.amountReceived} />}
-        {subscription.refundAmount && <Row label="Refund" value={subscription.refundAmount} />}
+        {subscription.refundAmount && (
+          <Row label={subscription.refundedAt ? 'Refunded' : 'Refund owed to you'} value={subscription.refundAmount} />
+        )}
         <Row
           label="Receiving wallet"
           value={<span className="font-mono break-all">{subscription.walletAddress}</span>}
