@@ -1,17 +1,17 @@
 from django.db import migrations, models
 
-import companies.models.document
+import documents.models.document
 import shared.storage
 from shared.utils.migrations import move_uploads, widen_char_column
 
-MODEL = ("companies", "CompanyDocument", "file")
+MODEL = ("documents", "Document", "file")
 FILE_MAX_LENGTH = 255
 
 
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("companies", "0005_company_is_open_to_investors"),
+        ("documents", "0001_initial"),
     ]
 
     operations = [
@@ -22,15 +22,12 @@ class Migration(migrations.Migration):
         migrations.SeparateDatabaseAndState(
             state_operations=[
                 migrations.AlterField(
-                    model_name="companydocument",
+                    model_name="document",
                     name="file",
                     field=models.FileField(
-                        blank=True,
-                        help_text="Uploaded file (preferred)",
                         max_length=FILE_MAX_LENGTH,
-                        null=True,
                         storage=shared.storage.private_storage,
-                        upload_to=companies.models.document.company_document_path,
+                        upload_to=documents.models.document.document_upload_path,
                     ),
                 ),
             ],

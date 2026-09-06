@@ -40,6 +40,7 @@ export interface Document {
   originalFilename: string;
   mimeType: string;
   note: string;
+  fileUrl: string | null;
   latestExtraction: DocumentExtraction | null;
   createdAt: string;
   updatedAt: string;

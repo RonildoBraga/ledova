@@ -1,11 +1,11 @@
 from django.contrib import admin
 from django.shortcuts import get_object_or_404
-from django.urls import path, reverse
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import format_html
 
 from companies.models import CompanyDocument
-from shared.views import stream_stored_file
+from shared.utils.admin_files import admin_file_path
 
 
 @admin.register(CompanyDocument)
@@ -45,17 +45,13 @@ class CompanyDocumentAdmin(admin.ModelAdmin):
 
     def get_urls(self):
         custom_urls = [
-            path(
-                "<uuid:uuid>/file/",
-                self.admin_site.admin_view(self.file_view),
-                name="companies_companydocument_file",
-            ),
+            admin_file_path(self, "<uuid:uuid>/file/", "companies_companydocument_file", self._resolve_file),
         ]
         return custom_urls + super().get_urls()
 
-    def file_view(self, request, uuid):
+    def _resolve_file(self, request, uuid):
         document = get_object_or_404(CompanyDocument, uuid=uuid)
-        return stream_stored_file(document.file, document.mime_type)
+        return document, document.file, document.mime_type
 
     @admin.action(description="Verify selected documents")
     def verify_documents(self, request, queryset):

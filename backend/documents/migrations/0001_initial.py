@@ -46,7 +46,7 @@ class Migration(migrations.Migration):
                 ),
                 ("original_filename", models.CharField(max_length=255)),
                 ("mime_type", models.CharField(blank=True, max_length=64)),
-                ("file", models.FileField(upload_to=documents.models.document.upload_to)),
+                ("file", models.FileField(upload_to=documents.models.document.document_upload_path)),
                 ("note", models.CharField(blank=True, max_length=255)),
                 (
                     "uploaded_by",

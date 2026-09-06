@@ -1,6 +1,8 @@
+from django.urls import reverse
 from rest_framework import serializers
 
 from documents.models import Document, DocumentExtraction
+from shared.uploads import validate_upload
 
 
 class DocumentExtractionSerializer(serializers.ModelSerializer):
@@ -25,6 +27,7 @@ class DocumentExtractionSerializer(serializers.ModelSerializer):
 
 class DocumentSerializer(serializers.ModelSerializer):
     latest_extraction = serializers.SerializerMethodField()
+    file_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Document
@@ -34,11 +37,12 @@ class DocumentSerializer(serializers.ModelSerializer):
             "original_filename",
             "mime_type",
             "note",
+            "file_url",
             "latest_extraction",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["uuid", "mime_type", "latest_extraction", "created_at", "updated_at"]
+        read_only_fields = ["uuid", "mime_type", "file_url", "latest_extraction", "created_at", "updated_at"]
 
     def get_latest_extraction(self, obj: Document):
 
@@ -47,6 +51,13 @@ class DocumentSerializer(serializers.ModelSerializer):
             return None
         return DocumentExtractionSerializer(latest).data
 
+    def get_file_url(self, obj: Document):
+        if not obj.file:
+            return None
+        url = reverse("documents:documents-file", kwargs={"uuid": obj.uuid})
+        request = self.context.get("request")
+        return request.build_absolute_uri(url) if request else url
+
 
 class DocumentUploadSerializer(serializers.ModelSerializer):
     file = serializers.FileField(write_only=True)
@@ -54,3 +65,7 @@ class DocumentUploadSerializer(serializers.ModelSerializer):
     class Meta:
         model = Document
         fields = ["document_type", "note", "file"]
+
+    def validate(self, data):
+        _, data["mime_type"] = validate_upload(data["file"])
+        return data
