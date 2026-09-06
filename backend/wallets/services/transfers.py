@@ -149,7 +149,7 @@ class TransferService:
             raise UnsupportedChainException(chain.upper())
 
         pending_result = None
-        if to_address and amount:
+        if to_address is not None and amount is not None:
             amount_decimal = Decimal(amount)
             fee_decimal = Decimal(transaction_fee) if transaction_fee else None
 

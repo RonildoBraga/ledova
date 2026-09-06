@@ -3,7 +3,7 @@ from rest_framework.response import Response
 
 from shared.views import AuthenticatedGenericViewSet
 from tokens.serializers import BroadcastTransferSerializer, PrepareTransferSerializer
-from tokens.services import TransferService
+from tokens.services import TokenTransferService
 from tokens.trading_wallet_access import resolve_verified_evm_wallets
 
 
@@ -19,7 +19,7 @@ class TradingTransferViewSet(AuthenticatedGenericViewSet):
         authorized_wallets = resolve_verified_evm_wallets(request.user, [data["from_address"]])
         from_address = authorized_wallets.addresses[0]
 
-        transfer_service = TransferService()
+        transfer_service = TokenTransferService()
         token = data["token"]
 
         tx_data = transfer_service.prepare_transfer(
@@ -34,7 +34,7 @@ class TradingTransferViewSet(AuthenticatedGenericViewSet):
                 "token": {
                     "uuid": str(token.uuid),
                     "symbol": token.symbol,
-                    "contract_address": TransferService.contract_address(token),
+                    "contract_address": TokenTransferService.contract_address(token),
                 },
                 "from_address": from_address,
                 "to_address": data["to_address"],
@@ -49,7 +49,7 @@ class TradingTransferViewSet(AuthenticatedGenericViewSet):
         serializer.is_valid(raise_exception=True)
 
         data = serializer.validated_data
-        transfer_service = TransferService()
+        transfer_service = TokenTransferService()
 
         tx_hash, receipt = transfer_service.broadcast_transfer(data["signed_transaction"])
 

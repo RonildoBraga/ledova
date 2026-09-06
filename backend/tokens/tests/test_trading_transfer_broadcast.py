@@ -20,7 +20,7 @@ class TradingTransferBroadcastContractTest(APITestCase):
         self.client.force_authenticate(User.objects.create_user(email="signer@example.test", password="pw-12345678"))
 
     @override_settings(ATOMIC_SWAP_ADDRESS=CONTRACT)
-    @patch("tokens.views.trading_transfer.TransferService")
+    @patch("tokens.views.trading_transfer.TokenTransferService")
     def test_camel_case_key_reaches_the_service_and_the_receipt_is_camel_cased(self, service_class):
         service_class.return_value.broadcast_transfer.return_value = (TX_HASH, {"blockNumber": 7, "gasUsed": 21000})
         signed = sign_legacy()
@@ -31,7 +31,7 @@ class TradingTransferBroadcastContractTest(APITestCase):
         self.assertEqual(response.json(), {"txHash": TX_HASH, "blockNumber": 7, "gasUsed": 21000})
         service_class.return_value.broadcast_transfer.assert_called_once_with(signed)
 
-    @patch("tokens.views.trading_transfer.TransferService")
+    @patch("tokens.views.trading_transfer.TokenTransferService")
     def test_snake_case_key_with_a_short_suffix_is_not_converted(self, service_class):
         response = self.client.post(self.url, {"signed_tx": "0x02"}, format="json")
 

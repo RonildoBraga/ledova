@@ -11,7 +11,7 @@ from tokens.filters import TransferOrderFilter
 from tokens.models import TransferOrder
 from tokens.serializers import PrepareTransferSerializer
 from tokens.services.atomic_swap_service import AtomicSwapService, payment_address
-from tokens.services.transfer_service import TransferService
+from tokens.services.token_transfer_service import TokenTransferService
 
 BASE_ADDRESS = "0x" + "5" * 40
 ETHEREUM_ADDRESS = "0x" + "e" * 40
@@ -79,14 +79,14 @@ class TransferSettlementAddressTest(TestCase):
             asset=self.asset, chain="ethereum", contract_address=ETHEREUM_ADDRESS, decimals=2
         )
 
-        self.assertEqual(TransferService.contract_address(self.asset), BASE_ADDRESS)
+        self.assertEqual(TokenTransferService.contract_address(self.asset), BASE_ADDRESS)
         self.assertEqual(
-            TransferService.contract_address(self.tenant.deployed_token),
+            TokenTransferService.contract_address(self.tenant.deployed_token),
             self.tenant.deployed_token.contract_address,
         )
 
         AssetChainDeployment.objects.filter(asset=self.asset, chain="base").update(is_active=False)
-        self.assertEqual(TransferService.contract_address(self.asset), "")
+        self.assertEqual(TokenTransferService.contract_address(self.asset), "")
 
     def test_prepare_transfer_accepts_a_supported_settlement_asset_only(self):
         payload = {

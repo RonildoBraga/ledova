@@ -14,7 +14,7 @@ from tokens.exceptions import (
     TransferBroadcastException,
 )
 from tokens.services.share_token_service import ShareTokenService
-from tokens.services.transfer_service import TransferService
+from tokens.services.token_transfer_service import TokenTransferService
 
 
 class TokenExceptionTests(SimpleTestCase):
@@ -41,7 +41,7 @@ class TokenExceptionTests(SimpleTestCase):
 
 class ServiceErrorMessageTests(SimpleTestCase):
     def test_broadcast_transfer_reports_invalid_hex_with_prefix(self):
-        service = TransferService.__new__(TransferService)
+        service = TokenTransferService.__new__(TokenTransferService)
         with self.assertRaises(TransferBroadcastException) as ctx:
             service.broadcast_transfer("0xzz")
         self.assertEqual(str(ctx.exception.detail), "Transfer broadcast failed: Invalid transaction format")

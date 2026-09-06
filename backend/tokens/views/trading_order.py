@@ -22,8 +22,8 @@ from tokens.serializers.swap_order import (
 from tokens.services import (
     AtomicSwapService,
     OrderModificationService,
+    TokenTransferService,
     TradingOrderService,
-    TransferService,
 )
 from tokens.trading_wallet_access import resolve_verified_evm_wallets
 
@@ -62,7 +62,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
             signature=request.data.get("signature"),
         )
 
-        transfer_service = TransferService()
+        transfer_service = TokenTransferService()
         order, match_result = transfer_service.create_order_and_match(
             token=data["token"],
             order_type=data["order_type"],

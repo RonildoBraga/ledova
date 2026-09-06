@@ -7,7 +7,11 @@ from shared.views.base import AuthenticatedModelViewSet
 from wallets.constants import WALLET_VERIFICATION_STATUS_PENDING
 from wallets.filters import WalletFilter
 from wallets.models import Wallet
-from wallets.serializers import HoldingSerializer, WalletSerializer
+from wallets.serializers import (
+    BroadcastTransferSerializer,
+    HoldingSerializer,
+    WalletSerializer,
+)
 from wallets.services import (
     BalanceService,
     TransferService,
@@ -22,6 +26,10 @@ class WalletViewSet(AuthenticatedModelViewSet):
     filterset_class = WalletFilter
     ordering = ["-created_at"]
     ordering_fields = ["created_at", "chain", "verification_status"]
+
+    def get_throttles(self):
+        self.throttle_scope = "broadcast" if self.action == "broadcast_transfer" else None
+        return super().get_throttles()
 
     def get_queryset(self):
         queryset = Wallet.objects.visible_to_user(self.request.user)
@@ -111,14 +119,10 @@ class WalletViewSet(AuthenticatedModelViewSet):
     def broadcast_transfer(self, request, uuid=None):
         wallet = self.get_object()
 
-        result = TransferService.broadcast_transfer(
-            wallet=wallet,
-            signed_transaction=request.data.get("signed_transaction"),
-            to_address=request.data.get("to_address"),
-            amount=request.data.get("amount"),
-            transaction_fee=request.data.get("transaction_fee"),
-            token_contract=request.data.get("token_contract"),
-        )
+        serializer = BroadcastTransferSerializer(data=request.data, context={"wallet": wallet})
+        serializer.is_valid(raise_exception=True)
+
+        result = TransferService.broadcast_transfer(wallet=wallet, **serializer.validated_data)
 
         return Response(result, status=status.HTTP_200_OK)
 
