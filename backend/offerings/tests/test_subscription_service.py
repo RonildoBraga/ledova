@@ -9,6 +9,7 @@ from offerings.exceptions import (
     SubscriptionRefusedException,
 )
 from offerings.models import SettlementRail, SubscriptionStatus
+from offerings.services.payments import TX_HASH_MALFORMED
 from offerings.services.subscription import (
     ABOVE_CAP,
     ABOVE_MAXIMUM,
@@ -301,6 +302,54 @@ class SubscriptionServiceTest(TestCase):
         )
         second.refresh_from_db()
         self.assertEqual(second.status, SubscriptionStatus.AWAITING_PAYMENT)
+
+    def test_the_same_transfer_hash_in_another_case_is_the_same_transfer(self):
+        first = self._to_awaiting(rail=SettlementRail.STABLECOIN, asset=self.stablecoin)
+        second = self._to_awaiting(
+            draft_subscription(self.tenant), rail=SettlementRail.STABLECOIN, asset=self.stablecoin
+        )
+        lower = "0x" + "abab" * 16
+        confirm_payment(
+            first,
+            confirmed_by=self.tenant.user,
+            amount_received=Decimal("25.00"),
+            received_on=timezone.now().date(),
+            tx_hash=lower.upper(),
+        )
+        first.refresh_from_db()
+        self.assertEqual(first.payment_tx_hash, lower)
+        self.assertEqual(
+            self._refusal(
+                confirm_payment,
+                second,
+                confirmed_by=self.tenant.user,
+                amount_received=Decimal("25.00"),
+                received_on=timezone.now().date(),
+                tx_hash=f"  {lower}  ",
+            ),
+            TX_HASH_ALREADY_USED.format(tx_hash=lower),
+        )
+        second.refresh_from_db()
+        self.assertEqual(second.status, SubscriptionStatus.AWAITING_PAYMENT)
+
+    def test_something_that_is_not_a_transfer_hash_is_refused_before_it_is_stored(self):
+        subscription = self._to_awaiting(rail=SettlementRail.STABLECOIN, asset=self.stablecoin)
+        for candidate in ("0xdeadbeef", "0x" + "z" * 64, "ab" * 32):
+            with self.subTest(candidate=candidate):
+                self.assertEqual(
+                    self._refusal(
+                        confirm_payment,
+                        subscription,
+                        confirmed_by=self.tenant.user,
+                        amount_received=Decimal("25.00"),
+                        received_on=timezone.now().date(),
+                        tx_hash=candidate,
+                    ),
+                    TX_HASH_MALFORMED.format(tx_hash=candidate),
+                )
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.payment_tx_hash, "")
+        self.assertEqual(subscription.status, SubscriptionStatus.AWAITING_PAYMENT)
 
     def test_reject_and_withdraw_are_refused_once_money_arrived_and_allowed_after_a_refund(self):
         subscription = self._to_awaiting()

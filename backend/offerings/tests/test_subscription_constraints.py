@@ -8,6 +8,7 @@ from offerings.tests.factories import forget_fixture_subscriptions
 from shared.tests.tenants import make_tenant
 
 TX_HASH = "0x" + "9" * 64
+MIXED_CASE_TX_HASH = "0x" + "aBcD" * 16
 
 
 class SubscriptionConstraintTest(TestCase):
@@ -50,8 +51,15 @@ class SubscriptionConstraintTest(TestCase):
     def test_one_on_chain_transfer_cannot_fund_two_subscriptions(self):
         self._build(payment_tx_hash=TX_HASH).save()
         message = self._refuses(payment_tx_hash=TX_HASH)
-        self._named(message, "subscription_payment_tx_hash_unique", "offerings_subscription.payment_tx_hash")
+        self._named(message, "subscription_payment_tx_hash_unique", "subscription_payment_tx_hash_unique")
         self.assertEqual(Subscription.objects.filter(payment_tx_hash=TX_HASH).count(), 1)
+
+    def test_the_same_transfer_in_another_case_is_still_one_transfer(self):
+        self._build(payment_tx_hash=MIXED_CASE_TX_HASH).save()
+        for variant in (MIXED_CASE_TX_HASH.lower(), MIXED_CASE_TX_HASH.upper(), MIXED_CASE_TX_HASH):
+            message = self._refuses(payment_tx_hash=variant)
+            self._named(message, "subscription_payment_tx_hash_unique", "subscription_payment_tx_hash_unique")
+        self.assertEqual(Subscription.objects.exclude(payment_tx_hash="").count(), 1)
 
     def test_any_number_of_subscriptions_carry_no_transfer_hash(self):
         for _ in range(3):

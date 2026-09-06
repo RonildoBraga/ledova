@@ -252,10 +252,19 @@ them after `make build` and fails on any drift.
    with a refund owed; below due keeps it `awaiting_payment` unless the operator
    accepts it as final, which scales `allotted_quantity` to
    `floor(received / price)` and records the residual as a refund. On the
-   stablecoin rail the transfer hash is required and is globally unique where
-   non-empty, so one transfer cannot fund two subscriptions.
+   stablecoin rail the transfer hash is required, is normalised to lower case
+   and refused unless it is `0x` plus 64 hexadecimal characters, and the partial
+   unique index is on `Lower("payment_tx_hash")` — a transaction hash carries no
+   checksum case, so the same transfer pasted from two explorers is the same
+   transfer and cannot fund two subscriptions.
 5. Reject and withdraw are refused while money is recorded and unrefunded. The
-   operator records a refund first; only then does the row close.
+   operator records a refund first; only then does the row close. Nothing about
+   the money moves once the shares are claimed: recording a refund rejects a
+   still-executable issuance request in the same transaction — a compare-and-set
+   against `EXECUTABLE_STATUSES`, so the worker's `mark_executing` and the
+   refund cannot both win — and a refund, a rejection, a withdrawal or a
+   restated payment is refused outright once the request is `executing` or
+   `executed`. Money never goes back while the shares stay out.
 6. Allotment reuses the issuance machinery unchanged.
    `ShareTokenService.create_issuance_request` then `request.approve(...)` then
    the `OneToOne` link then a task on the untouched `execute_request`. Three

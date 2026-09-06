@@ -10,10 +10,11 @@ from offerings.models import Offering, SettlementRail, Subscription, Subscriptio
 from offerings.services.payments import (
     REFERENCE_ATTEMPTS,
     generate_reference,
+    normalize_tx_hash,
     raw_settlement_amount,
 )
 from operators.models import Operator
-from tokens.models import IssuanceType
+from tokens.models import IssuanceType, RequestStatus, ShareIssuanceRequest
 from tokens.services import ShareTokenService
 from users.services.eligibility import require_subscription_eligibility
 
@@ -49,6 +50,11 @@ BATCH_ABOVE_HEADROOM = (
 )
 NOT_RETRYABLE = "Issuance request {uuid} is {status}; there is nothing to retry."
 NO_REQUEST_TO_RETRY = "This subscription has no issuance request yet; allot it first."
+ISSUANCE_ALREADY_CLAIMED = (
+    "Issuance request {uuid} is {status}, so the shares are already claimed on chain. "
+    "{verb} is refused while that mint stands; the money cannot go back while the shares stay out."
+)
+ISSUANCE_REFUSED_BY_REFUND = "Refused: subscription {reference} was refunded before the shares were minted."
 
 
 def _quantize(value: Decimal) -> Decimal:
@@ -181,7 +187,8 @@ def confirm_payment(
     received = _quantize(amount_received)
     if received <= 0:
         raise SubscriptionRefusedException(RECEIVED_NOT_POSITIVE)
-    tx_hash = (tx_hash or "").strip()
+    _refuse_if_issuance_claimed(subscription, "Restating the payment")
+    tx_hash = normalize_tx_hash(tx_hash)
     if subscription.settlement_rail == SettlementRail.STABLECOIN and not tx_hash:
         raise SubscriptionRefusedException(TX_HASH_REQUIRED)
     if tx_hash and Subscription.objects.filter(payment_tx_hash=tx_hash).exclude(pk=subscription.pk).exists():
@@ -217,9 +224,49 @@ def _payment_outcome(subscription: Subscription, received: Decimal, accept_as_fi
     return allotted, (residual or None), SubscriptionStatus.PAID
 
 
+def _linked_request(subscription: Subscription):
+    if subscription.issuance_request_id is None:
+        return None
+    return ShareIssuanceRequest.objects.get(pk=subscription.issuance_request_id)
+
+
+def _refuse_if_issuance_claimed(subscription: Subscription, verb: str) -> None:
+    request = _linked_request(subscription)
+    if request is None or request.status == RequestStatus.REJECTED:
+        return
+    raise SubscriptionRefusedException(
+        ISSUANCE_ALREADY_CLAIMED.format(uuid=request.uuid, status=request.get_status_display().lower(), verb=verb)
+    )
+
+
+def _refuse_the_issuance(subscription: Subscription, verb: str) -> None:
+    request = _linked_request(subscription)
+    if request is None or request.status == RequestStatus.REJECTED:
+        return
+    now = timezone.now()
+    claimed = ShareIssuanceRequest.objects.filter(
+        pk=request.pk, status__in=ShareIssuanceRequest.EXECUTABLE_STATUSES
+    ).update(
+        status=RequestStatus.REJECTED,
+        rejection_reason=ISSUANCE_REFUSED_BY_REFUND.format(reference=subscription.reference or subscription.uuid),
+        reviewed_at=now,
+        updated_at=now,
+    )
+    if claimed:
+        logger.info(f"Issuance request {request.uuid} rejected because subscription {subscription.uuid} was refunded")
+        return
+    request.refresh_from_db(fields=["status"])
+    raise SubscriptionRefusedException(
+        ISSUANCE_ALREADY_CLAIMED.format(uuid=request.uuid, status=request.get_status_display().lower(), verb=verb)
+    )
+
+
 @transaction.atomic
 def record_refund(subscription: Subscription, amount: Decimal, reference: str = "", notes: str = "") -> Subscription:
-    subscription.mark_refunded(amount=_quantize(amount), reference=reference, notes=notes)
+    locked = Subscription.objects.select_for_update().get(pk=subscription.pk)
+    _refuse_the_issuance(locked, "A refund")
+    locked.mark_refunded(amount=_quantize(amount), reference=reference, notes=notes)
+    subscription.refresh_from_db()
     logger.info(f"Refund of {amount} recorded against subscription {subscription.uuid}")
     return subscription
 
@@ -235,6 +282,7 @@ def _refuse_if_money_in(subscription: Subscription) -> None:
 
 @transaction.atomic
 def reject(subscription: Subscription, reason: str) -> Subscription:
+    _refuse_if_issuance_claimed(subscription, "Rejecting it")
     _refuse_if_money_in(subscription)
     subscription.reject(notes=reason)
     return subscription
@@ -242,6 +290,7 @@ def reject(subscription: Subscription, reason: str) -> Subscription:
 
 @transaction.atomic
 def withdraw(subscription: Subscription, reason: str = "") -> Subscription:
+    _refuse_if_issuance_claimed(subscription, "Withdrawing it")
     _refuse_if_money_in(subscription)
     subscription.withdraw(notes=reason)
     return subscription

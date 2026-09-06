@@ -203,6 +203,16 @@ console that gathers the worklists together.
   must record a refund first; only then does the row accept a rejection or a
   withdrawal. Money that arrived cannot be waved away by a status change, and
   the API's withdraw route refuses it the same way the admin does.
+- **Money out never leaves shares out.** A subscription stays `paid` from the
+  Allot click until the deferred task runs, which is minutes with the retry
+  strategy, and the admin offers Record refund throughout that window.
+  `record_refund` therefore claims the linked issuance request first: a
+  compare-and-set from `EXECUTABLE_STATUSES` to `rejected` inside the refund's
+  transaction, so either the refund wins and `execute_request` refuses the mint,
+  or the worker's `mark_executing` won and the refund is refused by name. Once
+  the request is `executing` or `executed` — including the reconciler window
+  where the shares are minted but the row still reads `paid` — a refund, a
+  rejection, a withdrawal and a restated payment are all refused.
 - **Eligibility is re-checked at acceptance, not only at submission.** A
   certificate can lapse in between and the law cares about status at
   acceptance, so `accept` runs `require_subscription_eligibility(account,
@@ -220,9 +230,14 @@ console that gathers the worklists together.
   `backend/offerings/tests/test_chain_allotment.py` proves it on a live Hardhat
   node, sequentially and with two workers racing.
 - **One on-chain transfer cannot fund two subscriptions.** A partial unique
-  constraint on `Subscription.payment_tx_hash` where it is non-empty says so at
-  the database level, and the service refuses the second confirmation by name
-  before it gets there. The payment reference is unique the same way.
+  constraint on `Lower(Subscription.payment_tx_hash)` where it is non-empty says
+  so at the database level, and the service refuses the second confirmation by
+  name before it gets there. The fold is not cosmetic: an Ethereum transaction
+  hash is case-insensitive hex with no checksum encoding, so an explorer and a
+  CSV export of the same transfer differ in case, and a byte-exact index would
+  let that one transfer fund two subscriptions. `confirm_payment` normalises the
+  hash to lower case and refuses anything that is not `0x` plus 64 hexadecimal
+  characters. The payment reference is unique the same way.
 - **A payment reference is normalised on generation as well as on lookup**, so a
   mangled bank narrative still matches: the prefix and an eight-character
   Crockford base32 code are both upper-cased with `O`, `I` and `L` folded onto

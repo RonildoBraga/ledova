@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.db.models.functions import Lower
 from django.utils import timezone
 
 from offerings.exceptions import InvalidSubscriptionTransitionException
@@ -124,7 +125,7 @@ class Subscription(BaseModel):
                 name="subscription_reference_unique",
             ),
             models.UniqueConstraint(
-                fields=["payment_tx_hash"],
+                Lower("payment_tx_hash"),
                 condition=~models.Q(payment_tx_hash=""),
                 name="subscription_payment_tx_hash_unique",
             ),

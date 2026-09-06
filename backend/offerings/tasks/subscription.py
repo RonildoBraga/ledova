@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 SUBSCRIPTION_NOT_FOUND = "Subscription not found"
 NO_ISSUANCE_REQUEST = "Subscription has no issuance request to execute"
 EXPIRY_NOTE = "Payment was not received by {due}; the subscription lapsed."
+SWEEP_BATCH = 200
 
 
 @app.task(retry=RetryStrategy(max_attempts=4, wait=30))
@@ -61,7 +62,7 @@ def _mirror_allotted(subscription: Subscription) -> bool:
 @app.task
 def reconcile_subscriptions(timestamp: int = 0):
     flipped = 0
-    for subscription in executed_requests_pending_allotment():
+    for subscription in executed_requests_pending_allotment()[:SWEEP_BATCH]:
         if _mirror_allotted(subscription):
             flipped += 1
             logger.info(f"Subscription {subscription.uuid} mirrored to allotted from an executed request")
@@ -74,7 +75,7 @@ def reconcile_subscriptions(timestamp: int = 0):
 def expire_unpaid_subscriptions(timestamp: int = 0):
     now = timezone.now()
     expired = 0
-    for subscription in Subscription.objects.unpaid_past_due(now):
+    for subscription in Subscription.objects.unpaid_past_due(now)[:SWEEP_BATCH]:
         subscription.reject(notes=EXPIRY_NOTE.format(due=subscription.payment_due_at.isoformat()))
         expired += 1
     logger.info(f"Unpaid subscriptions expired: {expired}")

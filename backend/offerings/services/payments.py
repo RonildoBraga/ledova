@@ -11,6 +11,7 @@ CROCKFORD_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 REFERENCE_CODE_LENGTH = 8
 REFERENCE_ATTEMPTS = 6
 CONFUSABLE = str.maketrans({"O": "0", "I": "1", "L": "1"})
+TX_HASH_PATTERN = re.compile(r"0x[0-9a-f]{64}")
 
 NO_REFERENCE_PREFIX = (
     "The operator has no payment reference prefix configured, so a subscription reference cannot be issued. "
@@ -25,6 +26,7 @@ WALLET_NOT_CONFIGURED = (
     "The operator has no receiving wallet configured, so a stablecoin instruction cannot be issued. "
     "Set Operator.receiving_wallet_address first."
 )
+TX_HASH_MALFORMED = "{tx_hash} is not a transfer hash; a transfer hash is 0x followed by 64 hexadecimal characters."
 AMOUNT_NOT_REPRESENTABLE = (
     "{amount} {currency} cannot be expressed in whole units of {symbol}, which carries {decimals} decimals on "
     "{chain}. Price the offering to the settlement asset's precision."
@@ -33,6 +35,15 @@ AMOUNT_NOT_REPRESENTABLE = (
 
 def normalize_reference(text: str) -> str:
     return re.sub(r"[^0-9A-Z]", "", (text or "").upper()).translate(CONFUSABLE)
+
+
+def normalize_tx_hash(text: str) -> str:
+    candidate = (text or "").strip().lower()
+    if not candidate:
+        return ""
+    if not TX_HASH_PATTERN.fullmatch(candidate):
+        raise SubscriptionRefusedException(TX_HASH_MALFORMED.format(tx_hash=(text or "").strip()))
+    return candidate
 
 
 def _code() -> str:

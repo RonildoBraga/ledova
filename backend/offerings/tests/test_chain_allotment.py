@@ -9,6 +9,7 @@ from django.utils import timezone
 from rest_framework.test import APITestCase, APITransactionTestCase
 
 from assets.models import Asset
+from offerings.exceptions import SubscriptionRefusedException
 from offerings.models import (
     Offering,
     OfferingExemption,
@@ -24,6 +25,7 @@ from offerings.services.subscription import (
     confirm_payment,
     create_draft,
     issue_instruction,
+    record_refund,
     submit,
 )
 from offerings.tasks import allot_subscription_task, reconcile_subscriptions
@@ -158,6 +160,45 @@ class SubscriptionAllotmentChainTest(AllotmentChainMixin, APITestCase):
         self.assertEqual(self.w3.eth.block_number, blocks_before)
         self.assertEqual(ShareIssuanceRequest.objects.count(), 1)
         self.assertEqual(self._contract().functions.totalSupply().call(), 10)
+
+    def test_a_refund_between_the_click_and_the_worker_leaves_no_shares_on_chain(self):
+        self._deployed()
+        WhitelistService().add_to_whitelist(self.investor)
+        subscription = self._paid(self._offering(), quantity=30)
+        request = allot(subscription, self.staff)
+
+        record_refund(subscription, amount=Decimal("75.00"), reference="RTGS-CHAIN")
+
+        nonce_before = self._signer_nonce()
+        result = self._run_task(subscription)
+
+        subscription.refresh_from_db()
+        request.refresh_from_db()
+        self.assertFalse(result["success"], result)
+        self.assertEqual(subscription.status, SubscriptionStatus.REFUNDED)
+        self.assertEqual(request.status, RequestStatus.REJECTED)
+        self.assertEqual(self._signer_nonce(), nonce_before)
+        self.assertFalse(ShareIssuance.objects.exists())
+        self.assertEqual(self._contract().functions.balanceOf(self.investor).call(), 0)
+        self.assertEqual(self._contract().functions.totalSupply().call(), 0)
+
+    def test_a_refund_is_refused_once_the_shares_are_on_chain(self):
+        self._deployed()
+        WhitelistService().add_to_whitelist(self.investor)
+        subscription = self._paid(self._offering(), quantity=20)
+        allot(subscription, self.staff)
+
+        with patch("offerings.tasks.subscription._mirror_allotted", return_value=False):
+            self.assertTrue(self._run_task(subscription)["success"])
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.status, SubscriptionStatus.PAID)
+
+        with self.assertRaises(SubscriptionRefusedException) as raised:
+            record_refund(subscription, amount=Decimal("50.00"))
+        self.assertIn("already claimed on chain", str(raised.exception.detail))
+        subscription.refresh_from_db()
+        self.assertIsNone(subscription.refunded_at)
+        self.assertEqual(self._contract().functions.balanceOf(self.investor).call(), 20)
 
     def test_a_killed_worker_leaves_the_row_paid_until_reconcile_mirrors_the_executed_request(self):
         self._deployed()

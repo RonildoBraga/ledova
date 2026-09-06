@@ -2,6 +2,7 @@ from decimal import Decimal
 from unittest.mock import patch
 
 from django.test import TestCase
+from django.utils import timezone
 from web3 import Web3
 
 from offerings.exceptions import SubscriptionRefusedException
@@ -9,6 +10,7 @@ from offerings.models import Offering, Subscription, SubscriptionStatus
 from offerings.services.subscription import (
     ALREADY_ALLOTTED,
     BATCH_ABOVE_HEADROOM,
+    ISSUANCE_ALREADY_CLAIMED,
     NO_REQUEST_TO_RETRY,
     NOT_PAID,
     NOT_RETRYABLE,
@@ -16,9 +18,14 @@ from offerings.services.subscription import (
     allot,
     allot_batch,
     cap_headroom,
+    confirm_payment,
+    record_refund,
+    reject,
     retry_allotment,
     scale_back,
+    withdraw,
 )
+from offerings.tasks.subscription import allot_subscription_task
 from offerings.tests.factories import (
     configure_operator,
     draft_subscription,
@@ -28,7 +35,7 @@ from offerings.tests.factories import (
     paid_subscription,
 )
 from shared.tests.tenants import make_tenant
-from tokens.models import RequestStatus, ShareIssuanceRequest
+from tokens.models import RequestStatus, ShareIssuance, ShareIssuanceRequest
 
 CHAIN_CLIENT = "tokens.services.share_token_service.get_base_chain_client"
 DEFER = "offerings.tasks.subscription.allot_subscription_task.defer"
@@ -149,6 +156,96 @@ class AllotOneSubscriptionTest(AllotmentTestCase):
         with self.assertRaises(SubscriptionRefusedException) as raised:
             retry_allotment(subscription, self.operator_user)
         self.assertEqual(str(raised.exception.detail), NO_REQUEST_TO_RETRY)
+
+
+class MoneyOutNeverLeavesSharesOutTest(AllotmentTestCase):
+    def _allotted(self, **kwargs):
+        subscription = paid_subscription(self.tenant, quantity=10, **kwargs)
+        return subscription, allot(subscription, self.operator_user)
+
+    def _claimed(self, request, verb):
+        request.refresh_from_db()
+        return ISSUANCE_ALREADY_CLAIMED.format(
+            uuid=request.uuid, status=request.get_status_display().lower(), verb=verb
+        )
+
+    def test_a_refund_before_the_mint_rejects_the_request_so_the_task_mints_nothing(self):
+        subscription, request = self._allotted()
+        record_refund(subscription, amount=Decimal("25.00"), reference="RTGS-9")
+
+        subscription.refresh_from_db()
+        request.refresh_from_db()
+        self.assertEqual(subscription.status, SubscriptionStatus.REFUNDED)
+        self.assertEqual(request.status, RequestStatus.REJECTED)
+        self.assertFalse(request.can_be_executed)
+        self.assertIn(str(subscription.reference), request.rejection_reason)
+
+        result = allot_subscription_task.func(subscription_uuid=str(subscription.uuid))
+        self.assertFalse(result["success"])
+        self.assertIn("Rejected", result["error"])
+        self.assertFalse(ShareIssuance.objects.exists())
+
+    def test_a_refund_is_refused_once_the_worker_has_claimed_the_mint(self):
+        subscription, request = self._allotted()
+        ShareIssuanceRequest.objects.filter(pk=request.pk).update(status=RequestStatus.EXECUTING)
+
+        with self.assertRaises(SubscriptionRefusedException) as raised:
+            record_refund(subscription, amount=Decimal("25.00"))
+        self.assertEqual(str(raised.exception.detail), self._claimed(request, "A refund"))
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.status, SubscriptionStatus.PAID)
+        self.assertIsNone(subscription.refunded_at)
+
+    def test_a_refund_is_refused_after_the_mint_and_before_the_reconciler_catches_up(self):
+        subscription, request = self._allotted()
+        ShareIssuanceRequest.objects.filter(pk=request.pk).update(status=RequestStatus.EXECUTED)
+
+        with self.assertRaises(SubscriptionRefusedException) as raised:
+            record_refund(subscription, amount=Decimal("25.00"))
+        self.assertEqual(str(raised.exception.detail), self._claimed(request, "A refund"))
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.status, SubscriptionStatus.PAID)
+
+    def test_reject_and_withdraw_are_refused_while_a_mint_stands(self):
+        subscription, request = self._allotted()
+        ShareIssuanceRequest.objects.filter(pk=request.pk).update(status=RequestStatus.EXECUTED)
+
+        for call, verb in ((reject, "Rejecting it"), (withdraw, "Withdrawing it")):
+            with self.subTest(verb=verb):
+                with self.assertRaises(SubscriptionRefusedException) as raised:
+                    call(subscription, "Unwinding")
+                self.assertEqual(str(raised.exception.detail), self._claimed(request, verb))
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.status, SubscriptionStatus.PAID)
+
+    def test_the_payment_cannot_be_restated_once_the_shares_are_claimed(self):
+        subscription, request = self._allotted()
+        with self.assertRaises(SubscriptionRefusedException) as raised:
+            confirm_payment(
+                subscription,
+                confirmed_by=self.operator_user,
+                amount_received=Decimal("5.00"),
+                received_on=timezone.now().date(),
+                accept_as_final=True,
+            )
+        self.assertEqual(str(raised.exception.detail), self._claimed(request, "Restating the payment"))
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.amount_received, Decimal("25.00"))
+        self.assertIsNone(subscription.allotted_quantity)
+
+    def test_a_refunded_subscription_can_be_closed_and_never_retried(self):
+        subscription, request = self._allotted()
+        record_refund(subscription, amount=Decimal("25.00"))
+        subscription.refresh_from_db()
+
+        with self.assertRaises(SubscriptionRefusedException) as raised:
+            retry_allotment(subscription, self.operator_user)
+        request.refresh_from_db()
+        self.assertEqual(str(raised.exception.detail), NOT_RETRYABLE.format(uuid=request.uuid, status="rejected"))
+
+        reject(subscription, reason="Unwound after the refund")
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.status, SubscriptionStatus.REJECTED)
 
 
 class BulkAllotmentTest(AllotmentTestCase):

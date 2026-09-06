@@ -23,7 +23,12 @@ from offerings.tests.factories import (
     paid_subscription,
 )
 from shared.tests.tenants import make_tenant
-from tokens.models import IssuanceStatus, RequestStatus, ShareIssuance
+from tokens.models import (
+    IssuanceStatus,
+    RequestStatus,
+    ShareIssuance,
+    ShareIssuanceRequest,
+)
 from tokens.services import ShareTokenService
 
 CHAIN_CLIENT = "tokens.services.share_token_service.get_base_chain_client"
@@ -142,6 +147,16 @@ class SubscriptionTaskTest(TestCase):
         self.assertEqual(pending.status, SubscriptionStatus.PAID)
 
         self.assertEqual(reconcile_subscriptions(), {"flipped": 0})
+
+    def test_a_sweep_takes_a_bounded_bite_and_the_next_run_takes_the_rest(self):
+        rows = [self._allotted(wallet=extra_wallet(self.tenant, letter)) for letter in ("1", "2", "3")]
+        ShareIssuanceRequest.objects.filter(subscription__in=rows).update(status=RequestStatus.EXECUTED)
+
+        with patch("offerings.tasks.subscription.SWEEP_BATCH", 2):
+            self.assertEqual(reconcile_subscriptions(), {"flipped": 2})
+            self.assertEqual(reconcile_subscriptions(), {"flipped": 1})
+        self.assertEqual(reconcile_subscriptions(), {"flipped": 0})
+        self.assertEqual(Subscription.objects.filter(status=SubscriptionStatus.ALLOTTED).count(), 3)
 
     def test_expiry_only_touches_a_row_with_no_payment_recorded(self):
         overdue = draft_subscription(self.tenant, wallet=extra_wallet(self.tenant, "1"))
