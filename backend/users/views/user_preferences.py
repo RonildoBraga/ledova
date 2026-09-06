@@ -15,7 +15,10 @@ class UserPreferencesViewSet(AuthenticatedModelViewSet):
     ordering_fields = ["created_at"]
 
     def get_queryset(self):
-        return UserPreferences.objects.visible_to_user(self.request.user)
+        queryset = UserPreferences.objects.visible_to_user(self.request.user)
+        if self.action == "create":
+            return queryset.select_for_update()
+        return queryset
 
     def list(self, request):
         preferences = self.get_queryset().first()
@@ -25,16 +28,13 @@ class UserPreferencesViewSet(AuthenticatedModelViewSet):
             )
         return Response(self.get_serializer(preferences).data)
 
+    @transaction.atomic
     def create(self, request):
         user_profile = get_object_or_404(UserProfile, user=request.user)
-        with transaction.atomic():
-            try:
-                preferences = UserPreferences.objects.select_for_update().get(user_profile=user_profile)
-                serializer = self.get_serializer(preferences, data=request.data, partial=True)
-            except UserPreferences.DoesNotExist:
-                serializer = self.get_serializer(data=request.data)
+        existing = self.get_queryset().first()
 
-            serializer.is_valid(raise_exception=True)
-            serializer.save(user_profile=user_profile)
+        serializer = self.get_serializer(existing, data=request.data, partial=existing is not None)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(user_profile=user_profile)
 
-            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.data, status=status.HTTP_200_OK)
