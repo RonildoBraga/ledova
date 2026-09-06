@@ -873,7 +873,7 @@ CI runs it in the source-gates job. Like the other two it needs no dependencies:
 Python 3 and a checkout are enough. `make test-gates` runs its unit tests in
 `scripts/tests/`, which is the evidence that it fires rather than merely runs.
 
-It enforces three rules, each chosen because it is decidable from the syntax
+It enforces four rules, each chosen because it is decidable from the syntax
 alone. A gate that has to guess what a value holds at run time is a gate that
 gets allowlisted into meaninglessness.
 
@@ -882,11 +882,18 @@ Clients -- `dashboard/src`, `mobile/src`, `packages/shared/src` and
 gate uses. Every argument of `console.assert`, `console.debug`, `console.dir`,
 `console.error`, `console.info`, `console.log`, `console.table`,
 `console.trace` and `console.warn` must be one string literal or one template
-literal, and no template may reach for `JSON.stringify`. The guarantee that buys
-is total: the only thing such a call can emit is what template stringification
-produces, and `String(axiosError)` is the error's message, never its request.
-An argument that is a plain string variable is refused too. That is the price of
-the rule being decidable, and the fix is to inline it into the template.
+literal, and no template may reach for `JSON.stringify`. That stops the whole
+object arriving, and `String(axiosError)` is the error's message rather than its
+request. An argument that is a plain string variable is refused too. That is the
+price of the rule being decidable, and the fix is to inline it into the template.
+
+A literal alone is not sufficient, because a template can reach into the object
+the rule was meant to exclude. So a fourth rule refuses a template that
+interpolates `.body`, `.config`, `.data`, `.params`, `.request` or `.response`,
+which is how an AxiosError's serialised request body is reached. Nothing in the
+tree does this today; the rule exists because
+``console.error(`API failed: ${error.config?.data}`)`` prints a failed sign-in's
+password and passes every other rule here.
 
 Backend -- every `.py` under `backend/`. No call on a `logger`, `logging` or
 `log` object may reference an email address, a password or a push token, where

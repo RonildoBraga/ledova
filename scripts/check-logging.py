@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import re
 import sys
 from pathlib import Path
 
@@ -49,12 +50,14 @@ SKIP_AT_TOP = frozenset({".expo", ".next", ".venv", "build", "coverage", "dist",
 
 CONSOLE_ARGUMENT = "console-argument-is-not-a-literal"
 CONSOLE_STRINGIFY = "console-argument-stringifies-an-object"
+CONSOLE_BODY = "console-argument-interpolates-a-request-or-response-body"
 LOG_PRIVATE = "private-value-in-a-log-line"
 LOG_BODY = "provider-body-in-a-log-line"
 
 RULES = {
     CONSOLE_ARGUMENT: "a console argument must be a string literal or a template literal, never an object",
     CONSOLE_STRINGIFY: "JSON.stringify inside a console argument serialises the object the literal was meant to keep out",
+    CONSOLE_BODY: "a template literal that interpolates a request or response body prints what the literal was meant to keep out",
     LOG_PRIVATE: "log an identifier an operator can resolve, never an email address, a password or a push token",
     LOG_BODY: "log the fields an operator needs, never a whole provider response body",
 }
@@ -269,6 +272,19 @@ def console_arguments(tokens: list[tuple[str, str, int]], start: int) -> tuple[l
     return groups, cursor
 
 
+CONSOLE_BODY_ATTRIBUTES = frozenset({"body", "config", "data", "params", "request", "response"})
+
+SUBSTITUTION = re.compile(r"\$\{([^{}]*)\}")
+
+
+def interpolated_body(template: str) -> str | None:
+    for span in SUBSTITUTION.findall(template):
+        for attribute in re.findall(r"\.\s*([A-Za-z_$][\w$]*)", span):
+            if attribute in CONSOLE_BODY_ATTRIBUTES:
+                return f".{attribute}"
+    return None
+
+
 def script_findings(text: str) -> list[tuple[int, str, str]]:
     tokens = tokenize_script(text)
     findings: list[tuple[int, str, str]] = []
@@ -296,6 +312,8 @@ def script_findings(text: str) -> list[tuple[int, str, str]]:
                 findings.append((line, CONSOLE_ARGUMENT, f"{call}({render(''.join(part[1] for part in group))})"))
             elif "JSON.stringify" in group[0][1].replace(" ", ""):
                 findings.append((line, CONSOLE_STRINGIFY, f"{call}({render(group[0][1])})"))
+            elif group[0][0] == "template" and interpolated_body(group[0][1]):
+                findings.append((line, CONSOLE_BODY, f"{call}({render(group[0][1])})"))
         index = after
     return findings
 

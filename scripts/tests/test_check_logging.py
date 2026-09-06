@@ -180,3 +180,22 @@ class RepositoryScan(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ClientBodyRule(unittest.TestCase):
+
+    def test_a_template_reaching_into_the_request_body_is_refused(self):
+        findings = gate.script_findings("console.error(`API failed: ${error.config?.data}`);")
+        self.assertEqual([f[1] for f in findings], [gate.CONSOLE_BODY])
+
+    def test_every_body_attribute_is_refused(self):
+        for attribute in ("body", "config", "data", "params", "request", "response"):
+            findings = gate.script_findings("console.warn(`x ${e.%s}`);" % attribute)
+            self.assertEqual([f[1] for f in findings], [gate.CONSOLE_BODY], attribute)
+
+    def test_a_narrow_interpolation_is_allowed(self):
+        for span in ("${status}", "${error.code}", "${response.status}", "${describeFailure(error)}"):
+            self.assertEqual(gate.script_findings("console.error(`x %s`);" % span), [])
+
+    def test_a_plain_literal_is_allowed(self):
+        self.assertEqual(gate.script_findings("console.error('plain message');"), [])
