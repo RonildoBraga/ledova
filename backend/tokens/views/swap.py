@@ -15,12 +15,7 @@ class SwapOrderViewSet(AuthenticatedListViewSet):
     ordering_fields = ["created_at", "status"]
 
     def get_queryset(self):
-        return SwapOrder.objects.select_related(
-            "share_token",
-            "payment_asset",
-            "sell_order",
-            "buy_order",
-        )
+        return SwapOrder.objects.none()
 
     def list(self, request, *args, **kwargs):
         wallet_address = request.query_params.get("wallet_address")
