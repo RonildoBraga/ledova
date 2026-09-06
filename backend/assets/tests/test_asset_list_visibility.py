@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
 
 from assets.models import Asset, AssetChainDeployment
-from shared.tests.tenants import make_tenant
+from shared.tests.tenants import make_eligible, make_tenant
 from users.models import FavouriteAsset
 from wallets.models import Holding
 
@@ -62,7 +62,8 @@ class AssetListExcludesTokenizedSecuritiesTest(APITestCase):
         self.assertEqual(rows["ORD"]["quantity"], "250.000000000000000000")
         self.assertIsNone(rows["ORD"]["marketValue"])
 
-    def test_the_directory_shaped_token_listing_is_unaffected(self):
+    def test_the_token_listing_still_carries_the_share_class_for_an_eligible_investor(self):
+        make_eligible(self.tenant)
         self.client.force_authenticate(self.tenant.user)
 
         response = self.client.get("/api/v1/trading/tokens/")
