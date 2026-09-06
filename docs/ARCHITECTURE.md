@@ -70,15 +70,24 @@ subpackage per provider), and `blockchain/`, `compliance/`,
 lines. Delete before abstracting; add a layer only when a second caller needs
 the same logic.
 
-| Layer | Owns | Never contains |
-| --- | --- | --- |
-| `models/` | Fields, `TextChoices`, constraints, `__str__`, properties over own fields, single-row transitions (guard, set fields, `save(update_fields=...)`, at most about ten lines, raising the app's `APIException` on a bad state) | Queries on other models, multi-step workflows, external I/O |
-| `querysets/` | Every reusable query: `visible_to_user`, `manageable_by_user`, status filters, `select_related` bundles, annotations, aggregates; wired with `objects = XQuerySet.as_manager()` | Saves, side effects, calls into services |
-| `services/` | Orchestration across models, external I/O (chain, KYC, email), `transaction.atomic` and `select_for_update`; the one place a multi-model workflow lives; plain functions or a class of staticmethods | HTTP objects, serializers, `Response` |
-| `serializers/` | JSON shape and input validation; writable FKs scoped in `get_fields()` with `visible_to_user` | Business rules, locking, queries beyond FK scoping |
-| `views/` | Permissions, `get_queryset()` returning `Model.objects.visible_to_user(user)...`, serializer choice, one service call, `Response` | Raw `.objects.filter`, try/except that re-wraps an `APIException`, log lines that restate the request |
-| `tasks/` | `@app.task` / `@app.periodic`: load the row by uuid, call one service, return a dict | Orchestration, state machines |
-| `admin/` | Registration, list/search/filter, operator actions that call the same model transition or service the API calls | A second implementation of a workflow, HTML badge builders |
+`offerings/` is the reference app for the whole shape: about 924 lines of
+service against 138 of view. When a rule below and an existing file disagree,
+the rule wins and the file is the backlog.
+
+| Layer | Owns | Never contains | Reference |
+| --- | --- | --- | --- |
+| `models/` | Fields, `TextChoices`, constraints, `__str__`, properties over own fields, single-row transitions (guard, set fields, `save(update_fields=...)`, at most about ten lines, raising the app's `APIException` on a bad state) | Queries on other models, multi-step workflows, external I/O | `companies/models/company.py` |
+| `querysets/` | Every reusable query: `visible_to_user`, `manageable_by_user`, status filters, `select_related` bundles, annotations, aggregates; wired with `objects = XQuerySet.as_manager()` | Saves, side effects, calls into services | `offerings/querysets/offering.py` |
+| `services/` | Orchestration across models, external I/O (chain, KYC, email), `transaction.atomic` and `select_for_update`; the one place a multi-model workflow lives. Plain module-level `verb_noun` functions, named after the noun | HTTP objects, serializers, `Response` | `offerings/services/subscription.py` |
+| `serializers/` | JSON shape and input validation; writable FKs scoped in `get_fields()` with `visible_to_user` | Business rules, locking, queries beyond FK scoping | `offerings/serializers/subscription.py` |
+| `views/` | Permissions, `get_queryset()` returning `Model.objects.visible_to_user(user)...`, serializer choice, one service call, `Response` | Raw `.objects.filter`, try/except that re-wraps an `APIException`, log lines that restate the request | `offerings/views/subscription.py` |
+| `tasks/` | `@app.task` / `@app.periodic`: load the row by uuid, call one service, return a dict | Orchestration, state machines | `users/tasks/retention.py` |
+| `admin/` | Registration, list/search/filter, operator actions that call the same model transition or service the API calls | A second implementation of a workflow, HTML badge builders | `users/admin/investor_classification.py` |
+
+A service is a module of plain functions. The exception is a stateful client
+that holds a connection — the chain clients under `integrations/` — which stays
+a class because it has something to hold. A class whose methods are all
+`staticmethod` is a module spelled awkwardly: do not add one.
 
 ### When not to add a layer
 
@@ -544,13 +553,43 @@ the ORM, not in PostgreSQL: row-level security is not planned.
 
 ## Coding rules
 
-These are held by review, with two exceptions that fail a build on their own:
-the comment rule, through `make check-comments`, and the "one migration per
-model change" half of the migrations rule, through CI's `makemigrations --check
---dry-run`. The generated design tokens are gated too, by the `git diff
---exit-code` step, though that rule is stated under [Clients and the shared
-package](#clients-and-the-shared-package). For every other rule here, a green
-pipeline means nobody checked.
+**A rule belongs here only with two things attached: the file that is its
+reference implementation, and the gate that enforces it.** A rule that can get
+neither is demoted to a documented exception or deleted. This is the standard
+this document is being held to, and the sections above now cite a reference for
+each layer; the gates are landing behind them.
+
+The reason is stated plainly rather than hidden: most of these rules were held
+by review, and a rule held by review means a green pipeline means nobody
+checked. Three are gated today — the comment rule through `make
+check-comments`, the "one migration per model change" half of the migrations
+rule through CI's `makemigrations --check --dry-run`, and the generated design
+tokens through the `git diff --exit-code` step (stated under [Clients and the
+shared package](#clients-and-the-shared-package)).
+
+A new gate ships with an explicit allowlist of the offenders that exist on the
+day it lands, so it is green immediately and blocks only new violations. That
+allowlist is the migration backlog made visible, and CI fails if it grows. The
+convergence this enables is tracked in
+[issue #115](https://github.com/RonildoBraga/ledova/issues/115).
+
+### Why the codebase diverges from these rules
+
+The divergence is generational, not architectural, and knowing that changes
+what to do about it. Every one of the 27 `XService` classes dates from the
+initial seed commit; every one of the service modules added since is plain
+`verb_noun` functions, and none has been added as a class. Post-seed view
+modules average about 35 lines, while every view module over 140 lines is
+seed-era. `tokens/services/register.py` escapes CSV cells in the service;
+`whitelist/views/entry.py` hand-rolls them in the view.
+
+So this is a half-finished migration whose destination already exists in the
+tree, not an absent standard. The consequence for how to finish it: **do not
+convert the seed-era service classes in a batch.** The direction of travel is
+already settled by every commit since; a sweeping rewrite would conflict with
+everything in flight and buy nothing the rule below does not. New and touched
+service modules are plain functions; the stateful chain clients stay classes;
+the rest converts when it is next edited for another reason.
 
 - No Django signals. A side effect is an explicit call in the service (or in
   `perform_create`) that creates the row.
