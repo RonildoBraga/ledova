@@ -244,8 +244,8 @@ def make_tenant(label, *, staff=False, superuser=False):
         document_type="payslip",
         original_filename=f"{label}.pdf",
         mime_type="application/pdf",
-        file=f"documents/fixtures/{label}.pdf",
     )
+    document.file.save(f"{label}-payslip.pdf", ContentFile(f"payslip for {label}".encode()), save=True)
     return SimpleNamespace(
         label=label,
         refs=refs,
