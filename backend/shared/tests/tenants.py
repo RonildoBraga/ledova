@@ -18,7 +18,7 @@ from companies.models import (
     DocumentType,
 )
 from documents.models import Document
-from offerings.models import Offering, OfferingExemption
+from offerings.models import Offering, OfferingExemption, Subscription
 from portfolios.models import Portfolio
 from shared.models import Country
 from tokens.models import (
@@ -225,6 +225,15 @@ def make_tenant(label, *, staff=False, superuser=False):
         closes_at=timezone.now() + timedelta(days=30),
         summary=f"{label} offering",
     )
+    subscription = Subscription.objects.create(
+        offering=offering,
+        user_account=account,
+        wallet=wallet,
+        submitted_by=user,
+        quantity=10,
+        price_per_share=Decimal("2.50"),
+        amount_due=Decimal("25.00"),
+    )
     document = Document.objects.create(
         uploaded_by=user,
         document_type="payslip",
@@ -257,6 +266,7 @@ def make_tenant(label, *, staff=False, superuser=False):
         deployed_token=deployed_token,
         capital_increase=capital_increase,
         offering=offering,
+        subscription=subscription,
         order=order,
         counter_order=counter_order,
         swap=swap,

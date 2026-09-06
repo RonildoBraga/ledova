@@ -3,12 +3,15 @@ import logging
 from django.core.exceptions import ImproperlyConfigured, ObjectDoesNotExist
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import DatabaseError
+from django.db.models import ProtectedError
 from rest_framework import exceptions, status
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import exception_handler
 
 logger = logging.getLogger(__name__)
+
+PROTECTED_DETAIL = "This record is referenced by {count} row(s) that must be kept, so it cannot be deleted."
 
 
 def custom_exception_handler(exc, context):
@@ -26,6 +29,15 @@ def custom_exception_handler(exc, context):
             response = Response(
                 {"error": "Service not configured", "detail": "This feature is not configured on this server."},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        elif isinstance(exc, ProtectedError):
+            logger.warning(f"Protected row not deleted: {exc}")
+            response = Response(
+                {
+                    "error": "Referenced by records that must be kept",
+                    "detail": PROTECTED_DETAIL.format(count=len(exc.protected_objects)),
+                },
+                status=status.HTTP_409_CONFLICT,
             )
         elif isinstance(exc, DatabaseError):
             logger.error(f"Database error: {exc}", exc_info=True)

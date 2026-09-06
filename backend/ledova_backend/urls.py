@@ -54,6 +54,7 @@ urlpatterns = [
     path("api/v1/companies/", include("companies.urls", namespace="companies")),
     path("api/v1/tokens/", include("tokens.urls", namespace="tokens")),
     path("api/v1/offerings/", include("offerings.urls", namespace="offerings")),
+    path("api/v1/subscriptions/", include("offerings.urls_subscriptions", namespace="subscriptions")),
     path("api/v1/directory/", include("offerings.urls_directory", namespace="directory")),
     path("api/v1/whitelist/", include("whitelist.urls", namespace="whitelist")),
     path("api/v1/trading/", include("tokens.urls_trading", namespace="trading")),

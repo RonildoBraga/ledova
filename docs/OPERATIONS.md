@@ -392,12 +392,21 @@ one.
 
 | Schedule | Task |
 | --- | --- |
-| every 5 min | `check_pending_token_deployments`, `check_executing_issuance_requests`, `check_pending_transactions`, `check_all_pending_transactions` |
+| every 5 min | `check_pending_token_deployments`, `check_executing_issuance_requests`, `offerings.reconcile_subscriptions`, `check_pending_transactions`, `check_all_pending_transactions` |
 | every 10 min | `assets.sync_all_assets`, `assets.sync_exchange_rates` |
 | every 30 min | whitelist `sync_all_entries` |
 | hourly | `sync_all_wallets`, `compliance.tasks.run_batch_monitoring` |
-| daily 03:00 | `cleanup_failed_transactions`, `cleanup_stale_pending_transactions` |
+| daily 03:00 | `cleanup_failed_transactions`, `cleanup_stale_pending_transactions`, `offerings.expire_unpaid_subscriptions` |
 | daily 04:00 | `compliance.tasks.check_periodic_reviews` |
+
+`reconcile_subscriptions` is the mirror of `check_executing_issuance_requests`
+on the subscription row. The issuance sweep finishes a request a killed worker
+left mid-execution; without the mirror the subscription that request belongs to
+sits `paid` forever while the shares are already on chain. It flips a paid
+subscription to allotted when its linked request reached `executed` and touches
+nothing else. `expire_unpaid_subscriptions` only ever touches a subscription
+that is awaiting payment, past its due date, and has no payment recorded
+against it — a part-paid row is left for the operator.
 
 `GET /health/` is answered by middleware before any database access.
 

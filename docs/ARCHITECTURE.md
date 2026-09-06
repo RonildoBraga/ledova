@@ -48,7 +48,7 @@ package of per-concern modules re-exported by `settings/__init__.py`.
 | `users` | Profiles, accounts, preferences, financial profiles, device tokens, notifications, favourite assets, `InvestorClassification` and the investor-eligibility predicate |
 | `companies` | `Company`, its application lifecycle, and company `Document` records |
 | `tokens` | `ShareToken`, `ShareIssuanceRequest`, `ShareIssuance`, `CapitalIncreaseRequest`, `MintRequest`, `YieldToken`, and the trading models |
-| `offerings` | `Offering`, its review lifecycle, and the eligibility-gated investor directory at `/api/v1/directory/` |
+| `offerings` | `Offering`, `Subscription`, their review and payment lifecycles, allotment, and the eligibility-gated investor directory at `/api/v1/directory/` |
 | `whitelist` | `WhitelistEntry` and the on-chain allowlist sync |
 | `wallets` | `Wallet`, `Holding`, `HoldingSnapshot`, `Transaction`, balance sync and transfer confirmation |
 | `assets` | `Asset`, `AssetChainDeployment`, `AssetSnapshot`, `ExchangeRate`, price sync, asset identity |
@@ -220,6 +220,66 @@ them after `make build` and fails on any drift.
    an `IntegrityError`; the constraint stays as the backstop against a race.
    Running two tranches at once needs the constraint relaxed, which is a
    migration.
+
+## Data flow of a subscription
+
+1. An eligible investor creates a draft at `POST /api/v1/subscriptions/`, naming
+   an open offering, one of their own verified Base wallets and a whole number
+   of shares. Every writable FK is scoped in `get_fields()`: the offering to
+   `Offering.objects.open_now()` inside `eligible_investor_companies(user)`, the
+   account to the caller's investing accounts, the wallet to
+   `visible_to_user(user).verified_evm()` on Base. `create_draft` snapshots the
+   offering price onto the row, so a later price edit cannot move a live
+   subscription.
+2. `POST .../submit/` runs `require_subscription_eligibility(account, company,
+   amount_due)`. `accept` in the admin runs it **again**: a certificate can
+   lapse between submission and acceptance and the law cares about status at
+   acceptance. Both calls name the subscription's own account, never the request
+   user's first one, because a user with two investor accounts earns a
+   qualification on one and must not spend it on the other.
+3. Accepting issues the payment instruction in the same click.
+   `offerings.services.payments.generate_reference` builds
+   `Operator.payment_reference_prefix` plus an eight-character Crockford base32
+   code, retried on `IntegrityError` against the partial unique index.
+   `normalize_reference` is applied on generation and on admin lookup, so a
+   mangled bank narrative still matches. `build_instruction` returns the
+   rail-dependent payload — the operator's bank fields, or the receiving wallet
+   plus the settlement asset's contract address and decimals resolved through
+   `operators.settlement.require_deployment`, which refuses when the asset has
+   no active deployment on `Operator.receiving_wallet_chain`.
+4. Payment confirmation is columns on the subscription, not a second model.
+   Received equal to due moves the row to `paid`; above due moves it to `paid`
+   with a refund owed; below due keeps it `awaiting_payment` unless the operator
+   accepts it as final, which scales `allotted_quantity` to
+   `floor(received / price)` and records the residual as a refund. On the
+   stablecoin rail the transfer hash is required and is globally unique where
+   non-empty, so one transfer cannot fund two subscriptions.
+5. Reject and withdraw are refused while money is recorded and unrefunded. The
+   operator records a refund first; only then does the row close.
+6. Allotment reuses the issuance machinery unchanged.
+   `ShareTokenService.create_issuance_request` then `request.approve(...)` then
+   the `OneToOne` link then a task on the untouched `execute_request`. Three
+   existing mechanisms make a double mint impossible and none of them was
+   weakened: the `OneToOne`, claimed under `select_for_update` so two
+   simultaneous clicks end in one request and one refusal; the unique
+   `ShareIssuance.idempotency_key` derived from the request uuid; and the
+   compare-and-set in `ReviewableRequest.mark_executing`.
+7. Bulk allotment groups by offering, takes `select_for_update` on the offering
+   row the way `_execute_capital_increase` does on the share class, makes one
+   `share_supply()` read for the batch and refuses the **whole** batch when the
+   total exceeds `min(offering headroom, authorized - issued)`. Part-filling
+   first-come would destroy the pro-rata fairness `scale_back` exists to give.
+8. `reconcile_subscriptions` runs every five minutes and is the mirror of
+   `check_executing_issuance_requests` on the subscription side: the latter
+   finishes the request a killed worker left, and without the mirror the
+   subscription sits `paid` forever with the shares already on chain. The daily
+   `expire_unpaid_subscriptions` only touches rows with no payment recorded.
+9. Allotment stays an admin action. The API carries create, list, detail, submit
+   and withdraw for the investor and no operator write route at all.
+10. `Subscription.offering`, `.user_account` and `.wallet` are `PROTECT`, so a
+    money record cannot be destroyed by a cascade. The handler turns the
+    resulting `ProtectedError` into a 409 that says how many rows hold the
+    target, rather than the 503 a raw database error produced.
 
 Transaction hashes are stored 0x-prefixed. `is_transferable` and
 `is_divisible` on `ShareToken` are display-only and have no on-chain effect.

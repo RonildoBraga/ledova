@@ -1,7 +1,9 @@
 from collections import namedtuple
+from datetime import timedelta
 from unittest.mock import patch
 
 from django.db import transaction
+from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from companies.models import (
@@ -11,6 +13,7 @@ from companies.models import (
     CompanyStatus,
 )
 from feature_flags.models import FeatureFlag
+from offerings.models import Offering, OfferingStatus, Subscription
 from operators.models import Operator
 from shared.tests.tenants import (
     make_eligible,
@@ -54,6 +57,17 @@ def _upload_listing_documents(tenant):
         )
 
 
+def _clear_subscriptions(tenant):
+    Subscription.objects.filter(user_account=tenant.account).delete()
+
+
+def _open_the_offering_to_the_actor(tenant):
+    make_eligible(tenant)
+    Offering.objects.filter(pk=tenant.offering.pk).update(
+        status=OfferingStatus.APPROVED, opens_at=timezone.now() - timedelta(days=1)
+    )
+
+
 def _pause_token(tenant):
     ShareToken.objects.filter(pk=tenant.deployed_token.pk).update(status=ShareTokenStatus.PAUSED)
 
@@ -81,6 +95,11 @@ OFFERING = {
     "closesAt": "2027-02-01T00:00:00Z",
     "summary": "New tranche",
     "useOfProceeds": "Working capital",
+}
+SUBSCRIPTION = {
+    "userAccount": "{account}",
+    "wallet": "{wallet}",
+    "quantity": 10,
 }
 CAPITAL_INCREASE = {
     "additionalShares": 100,
@@ -152,7 +171,7 @@ ROUTES = (
     Route("get", "/api/v1/companies/{company}/"),
     Route("put", "/api/v1/companies/{company}/", {"name": "Renamed", "acn": "{acn}"}),
     Route("patch", "/api/v1/companies/{company}/", {"name": "Renamed"}),
-    Route("delete", "/api/v1/companies/{company}/"),
+    Route("delete", "/api/v1/companies/{company}/", prepare=_clear_subscriptions),
     Route("post", "/api/v1/companies/{company}/submit/", {"confirm": True}, prepare=_upload_listing_documents),
     Route("post", "/api/v1/companies/{company}/resubmit/", {"response": "Done"}, prepare=_request_company_info),
     Route("post", "/api/v1/companies/{company}/withdraw/", {}),
@@ -202,10 +221,20 @@ ROUTES = (
     Route("get", "/api/v1/offerings/{offering}/"),
     Route("put", "/api/v1/offerings/{offering}/", {"token": "{deployed_token}", **OFFERING}),
     Route("patch", "/api/v1/offerings/{offering}/", {"summary": "Changed"}),
-    Route("delete", "/api/v1/offerings/{offering}/"),
+    Route("delete", "/api/v1/offerings/{offering}/", prepare=_clear_subscriptions),
     Route("post", "/api/v1/offerings/{offering}/submit/", {}, prepare=_activate_company),
     Route("post", "/api/v1/offerings/{offering}/withdraw/", {}),
     Route("post", "/api/v1/offerings/", {"token": "{deployed_token}", **OFFERING}, foreign=400),
+    Route("get", "/api/v1/subscriptions/{subscription}/"),
+    Route("post", "/api/v1/subscriptions/{subscription}/submit/", {}, prepare=_open_the_offering_to_the_actor),
+    Route("post", "/api/v1/subscriptions/{subscription}/withdraw/", {"reason": "Changed my mind"}),
+    Route(
+        "post",
+        "/api/v1/subscriptions/",
+        {"offering": "{offering}", **SUBSCRIPTION},
+        foreign=400,
+        prepare=_open_the_offering_to_the_actor,
+    ),
     Route("get", "/api/v1/trading/orders/{order}/"),
     Route("post", "/api/v1/trading/orders/{order}/cancel/", {"message": "cancel", "signature": SIGNATURE}),
     Route("get", "/api/v1/trading/orders/{order}/cancel/message/"),
@@ -255,6 +284,7 @@ LIST_ROUTES = (
     ("/api/v1/tokens/", ("token", "deployed_token")),
     ("/api/v1/tokens/capital-increases/", ("capital_increase",)),
     ("/api/v1/offerings/", ("offering",)),
+    ("/api/v1/subscriptions/", ("subscription",)),
     ("/api/v1/trading/orders/", ("order", "counter_order")),
     ("/api/v1/documents/", ("document",)),
 )
