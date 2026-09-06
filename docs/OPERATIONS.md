@@ -433,7 +433,7 @@ Hardhat account #0 key as `BLOCKCHAIN_OPERATOR_KEY`.
 Share-token explorer links follow the chain the contract is actually on.
 `ShareToken.chain` records it, written next to `contract_address` by
 `mark_deployed()` when `ShareTokenService._finish_deployment` confirms the
-factory receipt, so it is the chain the deployer really used and it cannot be
+factory receipt, so it is the chain the deployment path recorded and it cannot be
 lost afterwards. `ShareTokenDetailSerializer` carries it read-only; the clients
 render an explorer link only when both `chain` and `contractAddress` are set.
 

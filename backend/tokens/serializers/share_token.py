@@ -32,6 +32,7 @@ class ShareTokenListSerializer(serializers.ModelSerializer):
             "status",
             "status_display",
             "contract_address",
+            "chain",
             "total_supply",
             "decimals",
             "is_transferable",
