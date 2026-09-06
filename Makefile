@@ -6,7 +6,7 @@ PYTHON ?= python3
 
 .PHONY: help install install-backend init-local check-local-env build generate-tokens check check-comments check-layers audit test \
 	dev-up dev-down dev-logs contracts-compile contracts-test contracts-deploy-local \
-	contracts-deploy-testnet chain-test
+	contracts-deploy-testnet chain-test smoke
 
 # CHAIN_TEST_PORT is the single knob for the local chain: it moves the Hardhat node, the backend's
 # BLOCKCHAIN_RPC_URL and, through LOCALHOST_RPC_URL, the `localhost` network in contracts/hardhat.config.ts
@@ -20,6 +20,11 @@ CHAIN_TEST_OPERATOR_KEY ?= 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae7
 # also runs the concurrency case, which needs a database that honours row locks.
 CHAIN_TEST_SETTINGS ?= ledova_backend.settings.test
 
+# `make smoke` installs the Chromium that Playwright drives. On a developer machine the system
+# libraries are already there; a bare CI image is not, so CI passes PLAYWRIGHT_BROWSER_DEPS=--with-deps
+# and takes the sudo apt-get install that flag performs. Left empty, the target needs no root.
+PLAYWRIGHT_BROWSER_DEPS ?=
+
 help:
 	@echo "Ledova local development"
 	@echo "  make install                  Install JavaScript dependencies"
@@ -31,7 +36,8 @@ help:
 	@echo "  make check-comments           Fail on any comment or docstring in source"
 	@echo "  make check-layers             Fail on a new backend layer violation"
 	@echo "  make audit                    Fail on a new production dependency advisory"
-	@echo "  make test                     Run workspace and contract tests"
+	@echo "  make test                     Run workspace, mobile, and contract tests"
+	@echo "  make smoke                    Run the dashboard smoke tests against the built bundle"
 	@echo "  make dev-up                   Start the local Docker Compose stack"
 	@echo "  make dev-down                 Stop the local Docker Compose stack"
 	@echo "  make dev-logs                 Follow local stack logs"
@@ -83,7 +89,12 @@ audit:
 
 test:
 	$(NPM) test
+	$(NPM) --prefix mobile test
 	$(NPM) --prefix contracts test
+
+smoke:
+	$(NPM) exec -- playwright install $(PLAYWRIGHT_BROWSER_DEPS) chromium
+	$(NPM) run test:smoke -w dashboard
 
 dev-up: check-local-env
 	docker compose up --build

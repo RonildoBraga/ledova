@@ -49,6 +49,13 @@ export default tseslint.config(
     },
   },
   {
+    files: ['babel.config.js', 'jest.config.js'],
+    languageOptions: {
+      sourceType: 'commonjs',
+      globals: { module: 'writable', require: 'readonly', process: 'readonly', __dirname: 'readonly' },
+    },
+  },
+  {
     ignores: ['node_modules/', 'dist/', '.expo/', 'ios/', 'android/', 'plugins/'],
   },
 );

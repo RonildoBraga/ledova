@@ -15,6 +15,8 @@
     "ios": "expo run:ios",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "test": "jest",
+    "test:watch": "jest --watch",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "type-check": "tsc --noEmit"
@@ -84,6 +86,8 @@
   "devDependencies": {
     "@babel/core": "^7.28.5",
     "@eslint/js": "^9.39.0",
+    "@testing-library/react-native": "^14.0.1",
+    "@types/jest": "^30.0.0",
     "@types/react": "~19.1.10",
     "@types/uuid": "^10.0.0",
     "eslint": "^9.39.0",
@@ -93,7 +97,10 @@
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-native": "^5.0.0",
+    "jest": "^30.5.1",
+    "jest-expo": "~54.0.18",
     "prettier": "^3.6.2",
+    "react-test-renderer": "^19.1.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.2"
   },

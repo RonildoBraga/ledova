@@ -729,6 +729,28 @@ the rest converts when it is next edited for another reason.
 - Tests: `APITestCase` under `<app>/tests/`, superusers via `create_superuser`.
   `make test` runs on SQLite; CI also runs the migration-stage tests and the
   whole suite on PostgreSQL.
+- Client tests: every JavaScript workspace has a runner and CI runs all of them
+  through `make test`. `packages/shared` and `mobile/` use Jest, the dashboard
+  uses Vitest, `contracts/` uses Hardhat. Mobile's config is `mobile/jest.config.js`
+  (the `jest-expo` preset); its tests sit beside the code they cover as
+  `*.test.ts`/`*.test.tsx`, the same convention the dashboard follows, so the
+  comment gate reaches them and they carry no comments either.
+  `mobile/src/hooks/useFeatureFlags.test.tsx` is the reference: it mounts the
+  hook with `renderHook` from `@testing-library/react-native` — asynchronous
+  since version 14, so it must be awaited — over a `QueryClientProvider`, and
+  mocks `../services/apiClient` rather than the `@ledova/shared` service that
+  calls it. A test must leave no promise pending when it ends: a request stubbed
+  with a promise that never settles keeps Jest alive after the run reports
+  success, so stub with a deferred you resolve before the test returns.
+- The dashboard smoke: `dashboard/tests/smoke/*.smoke.ts` drives a real Chromium
+  against the built bundle, and `make smoke` runs it in CI on every pull request.
+  It answers one question — does the shipped bundle boot and route without
+  throwing — so it stubs `**/api/**` with a 401 instead of expecting a backend.
+  The console-error assertion filters exactly the noise that stub provokes and
+  nothing else, which is what keeps it able to fail: an uncaught exception from
+  the bundle still ends up in the same list. A smoke test never depends on the
+  API, the database or the chain; anything that does belongs in the Django suite
+  or `make chain-test`.
 - Migrations: one per model change, never edit an applied one. On testnet an
   unapplied one may be deleted.
 - Dependencies: nothing in `requirements.txt` or a `package.json` without an

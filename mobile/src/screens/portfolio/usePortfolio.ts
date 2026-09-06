@@ -16,10 +16,10 @@ import { apiClient } from '../../services/apiClient';
 import type { HoldingWithWallet, PortfolioSnapshot, Wallet, WalletHolding } from '@ledova/shared';
 import { generateMockHoldingsData, generateMockPortfolioChartData } from './_mock/mock';
 import { useUserPreferences } from '../../hooks/useUserPreferences';
-import { useMockData } from '../../_mock/useMockData';
+import { mockDataEnabled } from '../../_mock/mockDataEnabled';
 
 export function usePortfolio() {
-  const USE_MOCK_DATA = useMockData();
+  const USE_MOCK_DATA = mockDataEnabled();
   const { selectedPortfolio } = useUserPreferences();
   const [selectedTimeRange, setSelectedTimeRange] = useState<TimeRange>('3M');
   const { start_date, end_date } = getDateRange(selectedTimeRange);

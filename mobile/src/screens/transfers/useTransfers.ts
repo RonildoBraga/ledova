@@ -20,7 +20,7 @@ import {
 } from '@ledova/shared';
 import { apiClient } from '../../services/apiClient';
 import { useUserPreferences } from '../../hooks/useUserPreferences';
-import { useMockData } from '../../_mock/useMockData';
+import { mockDataEnabled } from '../../_mock/mockDataEnabled';
 import { generateMockTransferableAssets, generateMockTransactionData, generateMockTxHash } from './_mock/mock';
 import { generateMockWalletsData } from '../wallets/_mock/mock';
 import type {
@@ -89,7 +89,7 @@ function buildTransferableAssets(wallet: Wallet, holdings: WalletHolding[]): Tra
 }
 
 export function useTransfers() {
-  const USE_MOCK_DATA = useMockData();
+  const USE_MOCK_DATA = mockDataEnabled();
   const queryClient = useQueryClient();
   const { selectedAccount } = useUserPreferences();
   const [state, setState] = useState<TransferState>(INITIAL_STATE);
