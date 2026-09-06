@@ -331,8 +331,8 @@ class CrossTenantRouteMatrixTest(APITestCase):
         wallet_transfer = self._service("wallets.views.wallet.TransferService")
         wallet_transfer.prepare_transfer.return_value = {"transaction": {}}
         wallet_transfer.broadcast_transfer.return_value = {"success": True}
-        self._service("wallets.views.wallet.verify_wallet_signature", return_value=True)
-        self._service("wallets.views.wallet.sync_wallet").defer.return_value = "job"
+        self._service("wallets.services.verification.verify_wallet_signature", return_value=True)
+        self._service("wallets.tasks.sync_wallet").defer.return_value = "job"
         self._service("wallets.views.fiat_purchase.generate_transak_widget_url", return_value="https://widget.test")
         self._service("companies.services.company.send_push_notification")
         self._service("offerings.services.offering.send_push_notification")

@@ -8,6 +8,10 @@ from wallets.services.transfers import (
     prepare_bitcoin_transaction,
     prepare_ethereum_transaction,
 )
+from wallets.services.verification import (
+    complete_wallet_verification,
+    start_wallet_verification,
+)
 from wallets.services.wallets import (
     generate_verification_challenge,
     verify_bitcoin_signature,
@@ -16,6 +20,8 @@ from wallets.services.wallets import (
 )
 
 __all__ = [
+    "start_wallet_verification",
+    "complete_wallet_verification",
     "prepare_ethereum_transaction",
     "prepare_bitcoin_transaction",
     "broadcast_ethereum_transaction",
