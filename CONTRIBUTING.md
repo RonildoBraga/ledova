@@ -73,6 +73,7 @@ exceptions are noted below the table.
 | Area | Command |
 | --- | --- |
 | Comments and docstrings | `make check-comments` from the root (no dependencies needed) |
+| Dependency advisories | `make audit` from the root |
 | Everything JavaScript | `make build`, `make check`, `make test` from the root |
 | Design tokens | `make generate-tokens`, then confirm `dashboard/src/styles/tokens.css` and `marketing/src/tokens.css` are unchanged |
 | Backend | from `backend/`: `make lint` (black, isort, flake8), `make check`, `make test` |
