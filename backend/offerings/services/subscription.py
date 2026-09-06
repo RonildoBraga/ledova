@@ -199,6 +199,10 @@ def _scaled_quantity(subscription: Subscription, received: Decimal) -> int:
     return min(subscription.quantity, int(covered))
 
 
+def _locked(subscription: Subscription) -> Subscription:
+    return Subscription.objects.select_for_update().get(pk=subscription.pk)
+
+
 @transaction.atomic
 def confirm_payment(
     subscription: Subscription,
@@ -210,20 +214,21 @@ def confirm_payment(
     notes: str = "",
     accept_as_final: bool = False,
 ) -> Subscription:
+    locked = _locked(subscription)
     received = _quantize(amount_received)
     if received <= 0:
         raise SubscriptionRefusedException(RECEIVED_NOT_POSITIVE)
-    _refuse_if_issuance_claimed(subscription, "Restating the payment")
+    _refuse_if_issuance_claimed(locked, "Restating the payment")
     tx_hash = normalize_tx_hash(tx_hash)
-    if subscription.settlement_rail == SettlementRail.STABLECOIN and not tx_hash:
+    if locked.settlement_rail == SettlementRail.STABLECOIN and not tx_hash:
         raise SubscriptionRefusedException(TX_HASH_REQUIRED)
-    if tx_hash and Subscription.objects.filter(payment_tx_hash=tx_hash).exclude(pk=subscription.pk).exists():
+    if tx_hash and Subscription.objects.filter(payment_tx_hash=tx_hash).exclude(pk=locked.pk).exists():
         raise SubscriptionRefusedException(TX_HASH_ALREADY_USED.format(tx_hash=tx_hash))
 
-    allotted, refund, status = _payment_outcome(subscription, received, accept_as_final)
+    allotted, refund, status = _payment_outcome(locked, received, accept_as_final)
     try:
         with transaction.atomic():
-            subscription.record_payment(
+            locked.record_payment(
                 status=status,
                 allotted_quantity=allotted,
                 refund_amount=refund,
@@ -238,6 +243,7 @@ def confirm_payment(
         if not tx_hash:
             raise
         raise SubscriptionRefusedException(TX_HASH_ALREADY_USED.format(tx_hash=tx_hash)) from exc
+    subscription.refresh_from_db()
     return subscription
 
 
@@ -342,7 +348,7 @@ def _refuse_the_issuance(subscription: Subscription, verb: str) -> None:
 
 @transaction.atomic
 def record_refund(subscription: Subscription, amount: Decimal, reference: str = "", notes: str = "") -> Subscription:
-    locked = Subscription.objects.select_for_update().get(pk=subscription.pk)
+    locked = _locked(subscription)
     value = _quantize(amount)
     if value <= 0:
         raise SubscriptionRefusedException(REFUND_NOT_POSITIVE)
@@ -376,17 +382,21 @@ def _refuse_if_money_in(subscription: Subscription) -> None:
 
 @transaction.atomic
 def reject(subscription: Subscription, reason: str) -> Subscription:
-    _refuse_if_issuance_claimed(subscription, "Rejecting it")
-    _refuse_if_money_in(subscription)
-    subscription.reject(notes=reason)
+    locked = _locked(subscription)
+    _refuse_if_issuance_claimed(locked, "Rejecting it")
+    _refuse_if_money_in(locked)
+    locked.reject(notes=reason)
+    subscription.refresh_from_db()
     return subscription
 
 
 @transaction.atomic
 def withdraw(subscription: Subscription, reason: str = "") -> Subscription:
-    _refuse_if_issuance_claimed(subscription, "Withdrawing it")
-    _refuse_if_money_in(subscription)
-    subscription.withdraw(notes=reason)
+    locked = _locked(subscription)
+    _refuse_if_issuance_claimed(locked, "Withdrawing it")
+    _refuse_if_money_in(locked)
+    locked.withdraw(notes=reason)
+    subscription.refresh_from_db()
     return subscription
 
 
@@ -445,7 +455,7 @@ def allot(subscription: Subscription, operator_user, notes: str = "", headroom=N
     from offerings.tasks import allot_subscription_task
 
     offering = Offering.objects.select_for_update().select_related("token").get(pk=subscription.offering_id)
-    locked = Subscription.objects.select_for_update().get(pk=subscription.pk)
+    locked = _locked(subscription)
     refusal = _not_allottable(locked)
     if refusal is not None:
         raise SubscriptionRefusedException(refusal)

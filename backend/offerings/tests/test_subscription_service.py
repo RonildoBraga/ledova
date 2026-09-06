@@ -8,7 +8,7 @@ from offerings.exceptions import (
     InvalidSubscriptionTransitionException,
     SubscriptionRefusedException,
 )
-from offerings.models import SettlementRail, SubscriptionStatus
+from offerings.models import SettlementRail, Subscription, SubscriptionStatus
 from offerings.services.payments import TX_HASH_MALFORMED
 from offerings.services.subscription import (
     ABOVE_CAP,
@@ -389,6 +389,69 @@ class SubscriptionServiceTest(SubscriptionServiceTestCase):
         withdraw(pulled, reason="Investor pulled out")
         pulled.refresh_from_db()
         self.assertEqual(pulled.status, SubscriptionStatus.WITHDRAWN)
+
+
+class StaleRowGuardTest(SubscriptionServiceTestCase):
+    def _stale_pair(self):
+        subscription = self._to_awaiting()
+        return subscription, Subscription.objects.get(pk=subscription.pk)
+
+    def test_reject_and_withdraw_re_read_the_row_so_money_that_landed_meanwhile_is_not_waved_away(self):
+        subscription, stale = self._stale_pair()
+        confirm_payment(
+            subscription,
+            confirmed_by=self.tenant.user,
+            amount_received=Decimal("25.00"),
+            received_on=timezone.now().date(),
+        )
+        self.assertIsNone(stale.amount_received)
+
+        expected = MONEY_ALREADY_IN.format(amount=Decimal("25.00"), reference=subscription.reference)
+        self.assertEqual(self._refusal(reject, stale, "Changed our mind"), expected)
+        self.assertEqual(self._refusal(withdraw, stale, "Changed my mind"), expected)
+
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.status, SubscriptionStatus.PAID)
+        self.assertEqual(subscription.money_held, Decimal("25.00"))
+
+    def test_confirm_payment_re_reads_the_row_so_a_closed_subscription_is_not_reopened(self):
+        subscription, stale = self._stale_pair()
+        reject(subscription, reason="Not proceeding")
+
+        with self.assertRaises(InvalidSubscriptionTransitionException):
+            confirm_payment(
+                stale,
+                confirmed_by=self.tenant.user,
+                amount_received=Decimal("25.00"),
+                received_on=timezone.now().date(),
+            )
+
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.status, SubscriptionStatus.REJECTED)
+        self.assertIsNone(subscription.amount_received)
+
+    def test_a_refund_recorded_meanwhile_is_not_undone_by_a_stale_confirmation(self):
+        subscription, _ = self._stale_pair()
+        confirm_payment(
+            subscription,
+            confirmed_by=self.tenant.user,
+            amount_received=Decimal("25.00"),
+            received_on=timezone.now().date(),
+        )
+        stale = Subscription.objects.get(pk=subscription.pk)
+        record_refund(subscription, amount=Decimal("25.00"), reference="RTGS-9")
+
+        with self.assertRaises(InvalidSubscriptionTransitionException):
+            confirm_payment(
+                stale,
+                confirmed_by=self.tenant.user,
+                amount_received=Decimal("25.00"),
+                received_on=timezone.now().date(),
+            )
+
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.status, SubscriptionStatus.REFUNDED)
+        self.assertEqual(subscription.refund_amount, Decimal("25.00"))
 
 
 class RefundGuardTest(SubscriptionServiceTestCase):

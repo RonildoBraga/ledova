@@ -8,16 +8,22 @@ from django.db import close_old_connections, connection
 from django.test import TransactionTestCase
 from web3 import Web3
 
-from offerings.exceptions import SubscriptionRefusedException
+from offerings.exceptions import (
+    InvalidSubscriptionTransitionException,
+    SubscriptionRefusedException,
+)
 from offerings.models import SettlementRail, Subscription, SubscriptionStatus
 from offerings.services import payments as payment_service
 from offerings.services.subscription import (
+    MONEY_ALREADY_IN,
     TX_HASH_ALREADY_USED,
     accept,
     allot,
     confirm_payment,
     issue_instruction,
+    reject,
     submit,
+    withdraw,
 )
 from offerings.tests.factories import (
     configure_operator,
@@ -78,6 +84,75 @@ class SubscriptionConcurrencyTest(TransactionTestCase):
             outcomes[name] = exc
         finally:
             connection.close()
+
+    def _awaiting(self, suffix, reference):
+        subscription = draft_subscription(self.tenant, wallet=extra_wallet(self.tenant, suffix))
+        Subscription.objects.filter(pk=subscription.pk).update(
+            status=SubscriptionStatus.AWAITING_PAYMENT, reference=reference
+        )
+        subscription.refresh_from_db()
+        return subscription
+
+    def _race_closing_against_a_payment(self, close, subscription):
+        payer_ready = threading.Event()
+        real_close = getattr(Subscription, close.__name__)
+
+        def wait_then_write(row, notes):
+            payer_ready.wait(timeout=JOIN_TIMEOUT)
+            return real_close(row, notes)
+
+        def closing():
+            with patch.object(Subscription, close.__name__, wait_then_write):
+                return close(Subscription.objects.get(pk=subscription.pk), "Changed our mind")
+
+        def paying():
+            payer_ready.set()
+            return confirm_payment(
+                Subscription.objects.get(pk=subscription.pk),
+                confirmed_by=self.operator_user,
+                amount_received=Decimal("25.00"),
+                received_on=date(2026, 9, 1),
+            )
+
+        return self._run([("close", closing), ("pay", paying)])
+
+    def test_a_reject_beside_a_payment_never_closes_the_row_over_the_money(self):
+        subscription = self._awaiting("a", "PAYRACE01")
+
+        outcomes = self._race_closing_against_a_payment(reject, subscription)
+
+        subscription.refresh_from_db()
+        self.assertFalse(subscription.has_money_in and subscription.status == SubscriptionStatus.REJECTED, outcomes)
+        if subscription.status == SubscriptionStatus.REJECTED:
+            self.assertIsInstance(outcomes["pay"], InvalidSubscriptionTransitionException)
+            self.assertIsNone(subscription.amount_received)
+        else:
+            self.assertEqual(subscription.status, SubscriptionStatus.PAID)
+            self.assertEqual(subscription.money_held, Decimal("25.00"))
+            self.assertIsInstance(outcomes["close"], SubscriptionRefusedException, outcomes)
+            self.assertEqual(
+                str(outcomes["close"].detail),
+                MONEY_ALREADY_IN.format(amount=Decimal("25.00"), reference="PAYRACE01"),
+            )
+
+    def test_a_withdrawal_beside_a_payment_never_closes_the_row_over_the_money(self):
+        subscription = self._awaiting("b", "PAYRACE02")
+
+        outcomes = self._race_closing_against_a_payment(withdraw, subscription)
+
+        subscription.refresh_from_db()
+        self.assertFalse(subscription.has_money_in and subscription.status == SubscriptionStatus.WITHDRAWN, outcomes)
+        if subscription.status == SubscriptionStatus.WITHDRAWN:
+            self.assertIsInstance(outcomes["pay"], InvalidSubscriptionTransitionException)
+            self.assertIsNone(subscription.amount_received)
+        else:
+            self.assertEqual(subscription.status, SubscriptionStatus.PAID)
+            self.assertEqual(subscription.money_held, Decimal("25.00"))
+            self.assertIsInstance(outcomes["close"], SubscriptionRefusedException, outcomes)
+            self.assertEqual(
+                str(outcomes["close"].detail),
+                MONEY_ALREADY_IN.format(amount=Decimal("25.00"), reference="PAYRACE02"),
+            )
 
     def test_two_concurrent_allotments_of_one_subscription_create_exactly_one_request(self):
         subscription = paid_subscription(self.tenant, quantity=10)
