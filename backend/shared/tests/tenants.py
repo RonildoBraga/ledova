@@ -175,6 +175,9 @@ def make_tenant(label, *, staff=False, superuser=False):
         file_size=1,
         mime_type="application/pdf",
     )
+    company_document.file.save(
+        f"{label}-asic-extract.pdf", ContentFile(f"asic extract for {label}".encode()), save=True
+    )
     token = ShareToken.objects.create(company=company, name=f"{label} draft shares", symbol="DRF", total_supply="1000")
     deployed_token = ShareToken.objects.create(
         company=company,

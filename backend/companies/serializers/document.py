@@ -1,3 +1,4 @@
+from django.urls import reverse
 from rest_framework import serializers
 
 from companies.models import CompanyDocument
@@ -39,13 +40,14 @@ class CompanyDocumentSerializer(serializers.ModelSerializer):
         read_only_fields = ["uuid", "is_verified", "verified_at", "created_at"]
 
     def get_file_url(self, obj):
+        if not obj.file:
+            return obj.external_url
+        url = reverse(
+            "companies:documents-file",
+            kwargs={"company_uuid": obj.company.uuid, "uuid": obj.uuid},
+        )
         request = self.context.get("request")
-        if obj.file:
-            url = obj.file.url
-            if request:
-                return request.build_absolute_uri(url)
-            return url
-        return obj.external_url
+        return request.build_absolute_uri(url) if request else url
 
     def validate(self, data):
         file = data.get("file")

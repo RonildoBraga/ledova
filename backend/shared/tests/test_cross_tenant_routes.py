@@ -191,6 +191,8 @@ ROUTES = (
     ),
     Route("get", "/api/v1/companies/{company}/documents/{company_document}/"),
     Route("get", "/api/v1/companies/{own_company}/documents/{company_document}/"),
+    Route("get", "/api/v1/companies/{company}/documents/{company_document}/file/"),
+    Route("get", "/api/v1/companies/{own_company}/documents/{company_document}/file/"),
     Route("delete", "/api/v1/companies/{company}/documents/{company_document}/"),
     Route("get", "/api/v1/tokens/{token}/"),
     Route("put", "/api/v1/tokens/{token}/", {"name": "Renamed"}),

@@ -6,7 +6,6 @@ import {
   submitApplication,
   resubmitApplication,
   withdrawApplication,
-  CACHE_TIMING,
 } from '@ledova/shared';
 import type { CompanyDocument, DocumentType } from '@ledova/shared';
 import { apiClient } from '../../services/apiClient';
@@ -20,7 +19,6 @@ export function useCompanyDocuments() {
     queryKey: ['company-documents', companyUuid],
     queryFn: () => getCompanyDocuments(apiClient, companyUuid!),
     enabled: !!companyUuid,
-    refetchInterval: CACHE_TIMING.SIGNED_URL_REFETCH_INTERVAL,
   });
 
   const responseData = docsData?.data;

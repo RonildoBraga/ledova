@@ -6,6 +6,7 @@ from django.db import models
 
 from companies.querysets.document import CompanyDocumentQuerySet
 from shared.models import BaseModel
+from shared.storage import private_storage
 
 
 def company_document_path(instance, filename):
@@ -67,6 +68,8 @@ class CompanyDocument(BaseModel):
 
     file = models.FileField(
         upload_to=company_document_path,
+        storage=private_storage,
+        max_length=255,
         null=True,
         blank=True,
         help_text="Uploaded file (preferred)",
@@ -78,12 +81,6 @@ class CompanyDocument(BaseModel):
 
     file_size = models.PositiveIntegerField()
     mime_type = models.CharField(max_length=100)
-
-    @property
-    def file_url(self):
-        if self.file:
-            return self.file.url
-        return self.external_url
 
     valid_from = models.DateField(null=True, blank=True)
     valid_until = models.DateField(null=True, blank=True)

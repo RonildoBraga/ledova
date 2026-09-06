@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Linking, TextInput } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, TextInput } from 'react-native';
 import {
   CheckCircleIcon,
   CircleIcon,
@@ -13,6 +13,8 @@ import {
   XCircleIcon,
 } from 'phosphor-react-native';
 import * as DocumentPicker from 'expo-document-picker';
+import { File, Paths } from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import { useQuery } from '@tanstack/react-query';
 import { getOperator, getErrorMessage, CACHE_TIMING } from '@ledova/shared';
 import type { Company, DocumentType } from '@ledova/shared';
@@ -23,6 +25,18 @@ import { CustomModal } from '../../components/modal';
 import { PrimaryButton, SecondaryButton } from '../../components/buttons';
 import { apiClient } from '../../services/apiClient';
 import { useCompanyDocuments } from './useCompanyDocuments';
+
+const EXTENSION_BY_MIME_TYPE: Record<string, string> = {
+  'application/pdf': '.pdf',
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+};
+
+const UTI_BY_MIME_TYPE: Record<string, string> = {
+  'application/pdf': 'com.adobe.pdf',
+  'image/png': 'public.png',
+  'image/jpeg': 'public.jpeg',
+};
 
 const REQUIRED_DOCUMENTS: { type: DocumentType; label: string }[] = [
   { type: 'cert_inc', label: 'Certificate of Incorporation' },
@@ -468,10 +482,33 @@ function DocumentRow({
   theme,
 }: DocumentRowProps) {
   const styles = useStyles();
+  const [isOpening, setIsOpening] = useState(false);
 
-  const handleView = () => {
-    if (uploaded?.fileUrl) {
-      Linking.openURL(uploaded.fileUrl);
+  const handleView = async () => {
+    if (!uploaded?.fileUrl || isOpening) {
+      return;
+    }
+
+    setIsOpening(true);
+    try {
+      const response = await apiClient.get<ArrayBuffer>(uploaded.fileUrl, { responseType: 'arraybuffer' });
+      const mimeType = String(response.headers['content-type'] || 'application/octet-stream').split(';')[0];
+      const cached = new File(Paths.cache, `${uploaded.uuid}${EXTENSION_BY_MIME_TYPE[mimeType] || ''}`);
+      if (cached.exists) {
+        cached.delete();
+      }
+      cached.create({ intermediates: true, overwrite: true });
+      cached.write(new Uint8Array(response.data));
+
+      if (!(await Sharing.isAvailableAsync())) {
+        Alert.alert('Cannot open document', 'Sharing is not available on this device.');
+        return;
+      }
+      await Sharing.shareAsync(cached.uri, { mimeType, UTI: UTI_BY_MIME_TYPE[mimeType] });
+    } catch (error) {
+      Alert.alert('Cannot open document', getErrorMessage(error) || 'The document could not be opened.');
+    } finally {
+      setIsOpening(false);
     }
   };
 
@@ -497,11 +534,14 @@ function DocumentRow({
       <View style={styles.docRowRight}>
         {uploaded ? (
           <>
-            {uploaded.fileUrl && (
-              <TouchableOpacity onPress={handleView} hitSlop={8}>
-                <EyeIcon size={18} color={theme.colors.interactive.default} weight="regular" />
-              </TouchableOpacity>
-            )}
+            {uploaded.fileUrl &&
+              (isOpening ? (
+                <ActivityIndicator size="small" color={theme.colors.interactive.default} />
+              ) : (
+                <TouchableOpacity onPress={handleView} hitSlop={8}>
+                  <EyeIcon size={18} color={theme.colors.interactive.default} weight="regular" />
+                </TouchableOpacity>
+              ))}
             {canEdit && (
               <TouchableOpacity onPress={onDelete} disabled={isDeleting} hitSlop={8}>
                 <TrashIcon size={18} color={theme.colors.status.error.icon} weight="regular" />
