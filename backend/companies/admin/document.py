@@ -1,7 +1,11 @@
 from django.contrib import admin
+from django.shortcuts import get_object_or_404
+from django.urls import path, reverse
 from django.utils import timezone
+from django.utils.html import format_html
 
 from companies.models import CompanyDocument
+from shared.views import stream_stored_file
 
 
 @admin.register(CompanyDocument)
@@ -16,9 +20,42 @@ class CompanyDocumentAdmin(admin.ModelAdmin):
     ]
     list_filter = ["document_type", "is_verified", "created_at"]
     search_fields = ["name", "company__name"]
-    readonly_fields = ["uuid", "created_at"]
+    readonly_fields = ["uuid", "file_link", "created_at"]
+
+    fieldsets = [
+        ("Document", {"fields": ["company", "document_type", "name"]}),
+        ("File", {"fields": ["file_link", "external_url", "file_size", "mime_type"]}),
+        ("Validity", {"fields": ["valid_from", "valid_until"], "classes": ["collapse"]}),
+        (
+            "Verification",
+            {"fields": ["is_verified", "verified_at", "verified_by"], "classes": ["collapse"]},
+        ),
+        ("Notes", {"fields": ["notes", "rejection_reason"], "classes": ["collapse"]}),
+        ("Timestamps", {"fields": ["uuid", "created_at"], "classes": ["collapse"]}),
+    ]
 
     actions = ["verify_documents"]
+
+    @admin.display(description="File")
+    def file_link(self, obj):
+        if obj.pk is None or not obj.file:
+            return "-"
+        url = reverse("admin:companies_companydocument_file", args=[obj.uuid])
+        return format_html('<a href="{}" target="_blank">Open document</a>', url)
+
+    def get_urls(self):
+        custom_urls = [
+            path(
+                "<uuid:uuid>/file/",
+                self.admin_site.admin_view(self.file_view),
+                name="companies_companydocument_file",
+            ),
+        ]
+        return custom_urls + super().get_urls()
+
+    def file_view(self, request, uuid):
+        document = get_object_or_404(CompanyDocument, uuid=uuid)
+        return stream_stored_file(document.file, document.mime_type)
 
     @admin.action(description="Verify selected documents")
     def verify_documents(self, request, queryset):

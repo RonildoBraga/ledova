@@ -213,6 +213,19 @@ ASGI entrypoint refuses to start — see Media storage.
 | `STABLECOIN_CONTRACT_ADDRESS` | empty | Only for stablecoin payment; seeds the `AUDY` deployment on `base` |
 | `SWAP_ORDER_EXPIRY_HOURS` | `24` | No |
 
+### Data retention
+
+| Variable | Default | Required |
+| --- | --- | --- |
+| `CLASSIFICATION_EVIDENCE_RETENTION_DAYS` | `2557` | No; `0` retains indefinitely and purges nothing |
+
+Days an investor classification's evidence file is kept after the claim is
+rejected, revoked or expires. The default is a **placeholder pending counsel,
+not advice**: 2557 days is seven calendar years including two leap days.
+Australian financial-record and AML/CTF customer-identification obligations are
+the constraints to confirm it against. Set `0` while the period is undecided —
+serving and purging both stop, and nothing is deleted.
+
 ### Media storage
 
 | Variable | Default | Required |
@@ -353,6 +366,39 @@ thresholds and evasion-sensitive rules belong outside this repository.
 `asset_sync --seed-only` also writes the `AUDY` `AssetChainDeployment` on
 `base` from `STABLECOIN_CONTRACT_ADDRESS`. An empty setting leaves any address
 already recorded untouched.
+
+### Demo data
+
+`python manage.py seed_demo` creates a browser-ready local demo in one run: the
+operator row with payment rails, a superuser, a company owner who can sign in,
+an `ACTIVE` company with a verified issuer wallet recorded as its
+`operator_wallet` and a draft share class, and an investor with a verified
+wallet, a live wholesale classification and a whitelist row. Without it,
+reaching that state by hand means a signup, nine document uploads, a listing
+submission, three admin transitions and a wallet the dashboard cannot verify —
+the Verify flow is hardware-wallet only, so a typed address only reaches
+`verified` through the admin.
+
+No password is stored in the repository. The command takes `--password`, falls
+back to `$LEDOVA_DEMO_PASSWORD`, and otherwise generates one and prints it with
+the rest of the credentials. Re-running applies whichever it resolves, so the
+credentials it prints are always the ones that work.
+
+**It is deliberately not in the compose `migrate` chain**, and it refuses to run
+unless `DEBUG` is on. That chain runs wherever the stack is deployed, and this
+command creates accounts with a known password; `--force` overrides the guard
+for a throwaway database that runs with `DEBUG` off. It is idempotent — a second
+run reports `0 created` — and it refuses rather than adopting a company whose
+ACN it wants but whose owner is someone else.
+
+It writes **nothing to any chain**. The share class stays a draft and the
+whitelist row is a database row only: `WhitelistEntry` alone does not put an
+address on the `WhitelistRegistry`, and the on-chain reads in
+`share_token_service` and `transfer_service` ask the contract, not the table. So
+a seeded investor is not actually whitelisted on chain — deploying the token and
+minting to them are the deliberate next steps, and both write real transactions.
+The wallet addresses are Hardhat accounts #0 and #1 rather than invented
+strings, so the seeded data survives contact with a local node.
 
 ## Asset allowlist
 

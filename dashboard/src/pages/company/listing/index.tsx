@@ -72,7 +72,6 @@ export default function ListingPage() {
     queryKey: ['company-documents', companyUuid],
     queryFn: () => getCompanyDocuments(apiClient, companyUuid!),
     enabled: !!companyUuid,
-    refetchInterval: CACHE_TIMING.SIGNED_URL_REFETCH_INTERVAL,
   });
 
   const { data: operatorData } = useQuery({

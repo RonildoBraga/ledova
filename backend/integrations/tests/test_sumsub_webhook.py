@@ -6,6 +6,7 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.test import override_settings
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from users.models import UserAccount, UserProfile
@@ -32,7 +33,7 @@ class SumSubWebhookTest(APITestCase):
             "externalUserId": str(self.profile.uuid),
             "correlationId": "req-1",
             "levelName": "basic-kyc-level",
-            "createdAtMs": "2026-09-03 00:00:00.000",
+            "createdAtMs": timezone.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3],
             **extra,
         }
         body = json.dumps(payload).encode()
