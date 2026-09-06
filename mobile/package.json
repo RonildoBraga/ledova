@@ -98,15 +98,10 @@
     "typescript-eslint": "^8.46.2"
   },
   "overrides": {
-    "@xmldom/xmldom": "^0.8.13",
-    "browserslist": "^4.28.7",
-    "fast-uri": "^3.1.4",
-    "form-data": "^4.0.6",
-    "js-yaml": "^3.15.0",
-    "nanoid": "^3.3.16",
-    "shell-quote": "^1.8.4",
-    "tar": "^7.5.16",
-    "undici": "^6.27.0",
-    "ws": "^8.20.1"
+    "js-yaml@3": "^3.15.2",
+    "js-yaml@4": "^4.3.2",
+    "ws@6": "^6.2.6",
+    "ws@7": "^7.5.13",
+    "ws@8": "^8.20.1"
   }
 }
