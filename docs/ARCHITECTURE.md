@@ -371,10 +371,19 @@ holds it, because its subject is one share class and its two callers are the two
    carries the residential address; `treasury` takes the whitelist entry's
    label; `ambiguous` is two wallets on one address, which the `OneToOne` on
    `WhitelistEntry.wallet` permits and `WhitelistService._resolve_wallet`
-   already refuses to act on; `unidentified` is an address with no whitelist
-   entry, whose only name is the fallback in
-   `ShareIssuanceQuerySet.unique_holders_with_names`. The last two are red rows
-   on the operator console.
+   already refuses to act on; `unidentified` is an address the whitelist cannot
+   put a person behind — no entry at all, or an entry whose wallet carries no
+   named profile — whose only name is the fallback in
+   `ShareIssuanceQuerySet.unique_holders_with_names`. The last two are two red
+   rows on the operator console, and they are the only surface that tells the
+   operator, who is the only party able to resolve a duplicate wallet. Both
+   rows count distinct completed `ShareIssuance.recipient_address` values
+   through the same `whitelist/services/identity.py` the register uses, so the
+   console and the register never disagree about what a holder type means. The
+   console makes **no chain read**: it counts allotment addresses, not
+   chain-confirmed register rows, so a former member who transferred out and
+   was never identified can still be counted. The count is therefore never
+   lower than the register's, which is the safe direction for a queue.
 5. Amount paid comes from the `Subscription` that produced the allotment, and is
    **blank** where there is none — never zero. A holding that predates the
    platform is unknown, and printing a zero against it would be a false record.
@@ -391,7 +400,12 @@ export writes a log line naming the user and the row count.
 
 **The register is complete only while allotment is the sole way shares move.**
 That holds in Phase 1 because the trading write prefixes are flag-gated and
-`resolve_transfer_asset` refuses a `tokenized_security`. Relax either and a
+`resolve_transfer_asset` refuses a `tokenized_security`. The second guard is
+conditional and worth stating plainly: `WalletService.broadcast_transfer` calls
+it only `if token_contract`, so a client that signs an ERC-20 transfer and omits
+`tokenContract` is not refused. `ShareToken.sol` still restricts the recipient
+to a whitelisted address, so such a move stays inside the whitelist, but the
+register does not see it. Relax either guard — or exercise that gap — and a
 transferee becomes invisible, at which point the register is wrong and the
 Phase 2 log indexer is owed. [ROADMAP.md](ROADMAP.md#phase-2--eligibility-and-the-register)
 carries that as the trigger condition.

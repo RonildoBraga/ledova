@@ -39,17 +39,39 @@ no model, no URL namespace and no `AdminSite` subclass: it is
   asset holds an active deployment on `receiving_wallet_chain`. A fresh install
   starts with an empty settlement-asset set, which the strip reports rather
   than passing silently — an offering can then only be paid by bank transfer.
-- **The worklist** is twelve labelled counts, each one `.count()` on an
-  existing queryset method, each linking to the admin changelist already
-  filtered: company applications submitted, in review or needing information;
-  classifications awaiting verification; offerings submitted or under review;
-  offerings whose paid and allotted subscriptions have reached the cap while
-  the offering is still open; subscriptions awaiting payment;
-  subscriptions paid and not allotted; subscriptions whose mint is broadcast
-  and unresolved; whitelist entries pending; issuance and capital-increase
-  requests submitted, approved-not-executed or failed; share tokens stuck in
-  `DEPLOYING` past the pending-deployment age; and allotments to an address
-  with no whitelist entry at all.
+- **The worklist** is thirteen labelled counts, each linking to the admin
+  changelist already filtered: company applications submitted, in review or
+  needing information; classifications awaiting verification; offerings
+  submitted or under review; offerings whose paid and allotted subscriptions
+  have reached the cap while the offering is still open; subscriptions awaiting
+  payment; subscriptions paid and not allotted; subscriptions whose mint is
+  broadcast and unresolved; whitelist entries pending; issuance and
+  capital-increase requests submitted, approved-not-executed or failed; share
+  tokens stuck in `DEPLOYING` past the pending-deployment age; and the two
+  register queues below. Eleven of them are one `.count()` on an existing
+  queryset method; the last two share one identity read. Nothing on the page
+  touches the chain, so it cannot hang on a flaky RPC.
+- **The two register queues are the operator's only sight of a holder who
+  cannot be named.** "Allotment addresses with two wallets, so no member can be
+  named" is the `ambiguous` holder type: two `WhitelistEntry` rows on one
+  address, which only the operator can resolve, since
+  `WhitelistService._resolve_wallet` refuses to act on it. "Allotment
+  addresses with no member behind them" is `unidentified`: no whitelist entry
+  at all, or an entry whose wallet carries no named profile. Both are red,
+  because a register row that cannot name a member of the company is a section
+  169 defect and the issuer's own token modal is otherwise the only place it
+  shows. Both count distinct completed allotment addresses through
+  `whitelist/services/identity.py`, the same code the register uses, so a
+  holder type means the same thing on both surfaces. They count allotment addresses rather than chain-confirmed register
+  rows, so an unidentified former member who has transferred out can still
+  appear; the queue is never shorter than the register, which is the safe
+  direction. To clear one: open the whitelist changelist, find the address, and
+  either link the wallet to an account with a named profile or remove the
+  duplicate entry. The cost is a fixed number of queries whatever the size —
+  the distinct addresses, their whitelist entries, and the profiles behind them
+  — holding one address per member of every company on the deployment in
+  memory. Calling the same identity code as the register was preferred to a
+  second definition of the holder types in SQL, which could drift from it.
 - **Deployment mode and the registrant.** The console names the mode
   (`registry` or `single_issuer`) and, for each active company, who keeps the
   register on this deployment. It states that fact and nothing more: it does

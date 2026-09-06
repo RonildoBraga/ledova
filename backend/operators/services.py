@@ -17,6 +17,7 @@ from tokens.models import (
 from tokens.tasks.deployment import PENDING_DEPLOYMENT_AGE
 from users.models import InvestorClassification
 from whitelist.models import WhitelistEntry
+from whitelist.services.identity import unnameable_addresses
 
 SEVERITY_INFO = "info"
 SEVERITY_WARNING = "warning"
@@ -75,6 +76,7 @@ def _changelist(app_label: str, model_name: str, query: str = "") -> str:
 
 def worklist() -> list[WorklistRow]:
     cutoff = timezone.now() - PENDING_DEPLOYMENT_AGE
+    unnameable = unnameable_addresses(ShareIssuance.objects.distinct_recipient_addresses())
     return [
         WorklistRow(
             "Company applications waiting",
@@ -143,8 +145,14 @@ def worklist() -> list[WorklistRow]:
             SEVERITY_DANGER,
         ),
         WorklistRow(
-            "Allotments to an address with no whitelist entry",
-            ShareIssuance.objects.without_whitelist_entry().values("recipient_address").distinct().count(),
+            "Allotment addresses with two wallets, so no member can be named",
+            unnameable.ambiguous,
+            _changelist("whitelist", "whitelistentry"),
+            SEVERITY_DANGER,
+        ),
+        WorklistRow(
+            "Allotment addresses with no member behind them",
+            unnameable.unidentified,
             _changelist("whitelist", "whitelistentry"),
             SEVERITY_DANGER,
         ),

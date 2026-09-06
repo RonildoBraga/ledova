@@ -1,8 +1,11 @@
 from datetime import timedelta
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.db import connection
 from django.test import TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 from web3 import Web3
@@ -27,6 +30,7 @@ from tokens.models import (
     ShareToken,
     ShareTokenStatus,
 )
+from tokens.services.register import token_register
 from tokens.tasks.deployment import PENDING_DEPLOYMENT_AGE
 from users.models import (
     InvestorCategory,
@@ -36,7 +40,7 @@ from users.models import (
     UserProfile,
 )
 from wallets.models import Wallet
-from whitelist.models import WhitelistEntry, WhitelistStatus
+from whitelist.models import HolderType, WhitelistEntry, WhitelistStatus
 
 User = get_user_model()
 
@@ -49,6 +53,10 @@ CONFIGURED = {
     "SHARE_TOKEN_FACTORY_ADDRESS": "0x" + "2" * 40,
 }
 STRANGER = Web3.to_checksum_address("0x" + "d4" * 20)
+SHARED = Web3.to_checksum_address("0x" + "c3" * 20)
+NAMELESS_ADDRESS = Web3.to_checksum_address("0x" + "e1" * 20)
+AMBIGUOUS_ROW = "Allotment addresses with two wallets, so no member can be named"
+UNIDENTIFIED_ROW = "Allotment addresses with no member behind them"
 
 
 def _counts():
@@ -180,7 +188,8 @@ class WorklistTest(TestCase):
                 "Share issuance requests needing attention": 1,
                 "Capital increase requests needing attention": 1,
                 "Share tokens stuck deploying": 1,
-                "Allotments to an address with no whitelist entry": 1,
+                "Allotment addresses with two wallets, so no member can be named": 0,
+                "Allotment addresses with no member behind them": 1,
             },
         )
 
@@ -218,14 +227,100 @@ class WorklistTest(TestCase):
 
         self.assertEqual(_counts()["Offerings at their cap and still open"], 0)
 
-    def test_an_allotment_to_a_whitelisted_wallet_is_not_flagged(self):
+    def test_an_allotment_to_a_wallet_the_whitelist_can_name_is_not_flagged(self):
         token = self._token("WLT")
         WhitelistEntry.objects.create(wallet=self.wallet, status=WhitelistStatus.ACTIVE)
         ShareIssuance.objects.create(
             token=token, recipient_address=self.wallet.address, amount="10", status=IssuanceStatus.COMPLETED
         )
 
-        self.assertEqual(_counts()["Allotments to an address with no whitelist entry"], 0)
+        counts = _counts()
+
+        self.assertEqual(counts[AMBIGUOUS_ROW], 0)
+        self.assertEqual(counts[UNIDENTIFIED_ROW], 0)
+
+    def test_two_wallets_on_one_allotment_address_raise_the_red_queue(self):
+        token = self._token("AMB")
+        first = self._whitelisted_wallet("amb-one@example.test", "AMBONE", "Ann One", SHARED)
+        second = self._whitelisted_wallet("amb-two@example.test", "AMBTWO", "Bob Two", SHARED)
+        self.assertNotEqual(first.pk, second.pk)
+        ShareIssuance.objects.create(
+            token=token, recipient_address=SHARED, amount="25", status=IssuanceStatus.COMPLETED
+        )
+
+        counts = _counts()
+
+        self.assertEqual(counts[AMBIGUOUS_ROW], 1)
+        self.assertEqual(counts[UNIDENTIFIED_ROW], 0)
+        register = token_register(token, service=None)
+        self.assertEqual([row["holder_type"] for row in register], [HolderType.AMBIGUOUS.value])
+
+    def test_a_whitelisted_address_whose_wallet_names_nobody_raises_the_red_queue(self):
+        token = self._token("NON")
+        nameless = UserAccount.objects.create(account_number="NAMELESS")
+        wallet = Wallet.objects.create(user_account=nameless, address=NAMELESS_ADDRESS, chain="base")
+        WhitelistEntry.objects.create(wallet=wallet, status=WhitelistStatus.ACTIVE)
+        ShareIssuance.objects.create(
+            token=token, recipient_address=NAMELESS_ADDRESS, amount="40", status=IssuanceStatus.COMPLETED
+        )
+
+        counts = _counts()
+
+        self.assertEqual(counts[UNIDENTIFIED_ROW], 1)
+        register = token_register(token, service=None)
+        self.assertEqual([row["holder_type"] for row in register], [HolderType.UNIDENTIFIED.value])
+
+    def test_the_queue_is_never_smaller_than_the_register_it_stands_for(self):
+        token = self._token("BTH")
+        self._whitelisted_wallet("both-one@example.test", "BOTHONE", "Ann One", SHARED)
+        self._whitelisted_wallet("both-two@example.test", "BOTHTWO", "Bob Two", SHARED)
+        WhitelistEntry.objects.create(wallet=self.wallet, status=WhitelistStatus.ACTIVE)
+        for address, amount in ((SHARED, "25"), (STRANGER, "10"), (self.wallet.address, "5")):
+            ShareIssuance.objects.create(
+                token=token, recipient_address=address, amount=amount, status=IssuanceStatus.COMPLETED
+            )
+
+        counts = _counts()
+        unnameable = [
+            row
+            for row in token_register(token, service=None)
+            if row["holder_type"] in {HolderType.AMBIGUOUS.value, HolderType.UNIDENTIFIED.value}
+        ]
+
+        self.assertEqual(len(unnameable), 2)
+        self.assertGreaterEqual(counts[AMBIGUOUS_ROW] + counts[UNIDENTIFIED_ROW], len(unnameable))
+
+    def test_the_console_costs_the_same_whatever_the_register_holds_and_never_reads_the_chain(self):
+        token = self._token("BIG")
+
+        def allot(start, stop):
+            for index in range(start, stop):
+                ShareIssuance.objects.create(
+                    token=token,
+                    recipient_address=Web3.to_checksum_address(f"0x{index + 1:040x}"),
+                    amount="1",
+                    status=IssuanceStatus.COMPLETED,
+                )
+
+        with patch("tokens.services.share_token_service.ShareTokenService.get_token_balance") as balance:
+            allot(0, 2)
+            with CaptureQueriesContext(connection) as few:
+                _counts()
+            allot(2, 40)
+            with CaptureQueriesContext(connection) as many:
+                counts = _counts()
+
+        self.assertEqual(counts[UNIDENTIFIED_ROW], 40)
+        self.assertEqual(len(many), len(few))
+        balance.assert_not_called()
+
+    def _whitelisted_wallet(self, email, number, name, address):
+        user = User.objects.create_user(email=email, password="pw-12345678")
+        profile = UserProfile.objects.create(user=user, full_name=name)
+        account = UserAccount.objects.create(account_number=number)
+        account.user_profiles.add(profile)
+        wallet = Wallet.objects.create(user_account=account, address=address, chain="base")
+        return WhitelistEntry.objects.create(wallet=wallet, status=WhitelistStatus.ACTIVE)
 
 
 @override_settings(STORAGES=TEST_STORAGES, **CONFIGURED)

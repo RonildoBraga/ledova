@@ -1,5 +1,4 @@
-from tokens.models import CapitalIncreaseRequest, ShareToken
-from tokens.services.register import register_addresses
+from tokens.models import CapitalIncreaseRequest, ShareIssuance, ShareToken
 
 
 def company_stats(company) -> dict:
@@ -7,7 +6,7 @@ def company_stats(company) -> dict:
     pending = CapitalIncreaseRequest.objects.filter(token__company=company).pending().count()
     return {
         "totalTokens": deployed.count(),
-        "totalShareholders": len(register_addresses(deployed)),
+        "totalShareholders": ShareIssuance.objects.filter(token__in=deployed).distinct_recipient_addresses().count(),
         "pendingActions": pending,
         "pendingCapitalIncreases": pending,
     }

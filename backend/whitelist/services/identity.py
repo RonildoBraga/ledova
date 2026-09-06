@@ -20,6 +20,12 @@ class HolderIdentity(NamedTuple):
 UNIDENTIFIED = HolderIdentity(HolderType.UNIDENTIFIED.value, "", "", "")
 
 
+class UnnameableAddresses(NamedTuple):
+
+    ambiguous: int
+    unidentified: int
+
+
 def _profiles(entry: WhitelistEntry) -> list:
     if entry.wallet_id is None or entry.wallet.user_account_id is None:
         return []
@@ -61,3 +67,10 @@ def identities_for(addresses) -> dict:
         key: (_ambiguous(entries) if len(entries) > 1 else entry_identity(entries[0]))
         for key, entries in grouped.items()
     }
+
+
+def unnameable_addresses(addresses) -> UnnameableAddresses:
+    keys = {(address or "").lower() for address in addresses if address}
+    identities = identities_for(keys)
+    types = [identities.get(key, UNIDENTIFIED).holder_type for key in keys]
+    return UnnameableAddresses(types.count(HolderType.AMBIGUOUS.value), types.count(HolderType.UNIDENTIFIED.value))

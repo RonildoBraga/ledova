@@ -1,9 +1,6 @@
 from django.db.models import (
     BigIntegerField,
-    Exists,
     Max,
-    OuterRef,
-    Q,
     QuerySet,
     Subquery,
     Sum,
@@ -64,13 +61,8 @@ class ShareIssuanceQuerySet(QuerySet):
         )
         return int(total or 0)
 
-    def without_whitelist_entry(self):
-        from whitelist.models import WhitelistEntry
-
-        entries = WhitelistEntry.objects.filter(
-            Q(wallet__address__iexact=OuterRef("recipient_address")) | Q(address__iexact=OuterRef("recipient_address"))
-        )
-        return self.completed().annotate(has_entry=Exists(entries)).filter(has_entry=False)
+    def distinct_recipient_addresses(self):
+        return self.completed().values_list("recipient_address", flat=True).distinct()
 
     def pending(self):
         return self.filter(status=IssuanceStatus.PENDING)

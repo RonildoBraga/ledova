@@ -311,14 +311,23 @@ console are all shipped.
   resolves identity in one query through
   `WhitelistEntry -> Wallet -> UserAccount -> UserProfile`. Four holder types
   come out: `member`, `treasury` from the whitelist label, `ambiguous` where
-  two wallets share one address, and `unidentified` where no whitelist entry
-  exists; the last two are red rows on the console. No new model, no log
-  indexer. **The trigger condition for the Phase 2 indexer is written down
-  rather than left as folklore: if the trading write prefixes are ungated, or
-  if `resolve_transfer_asset` stops refusing a `tokenized_security`, a
+  two wallets share one address, and `unidentified` where the whitelist can put
+  no person behind the address — no entry at all, or an entry whose wallet
+  carries no named profile. The last two are two red rows on the console, both
+  counted from distinct completed allotment addresses through the same
+  `whitelist/services/identity.py` the register uses and with no chain read, so
+  the console can never be lower than the register it stands for. No new model,
+  no log indexer. **The trigger condition for the Phase 2 indexer is written
+  down rather than left as folklore: if the trading write prefixes are ungated,
+  or if `resolve_transfer_asset` stops refusing a `tokenized_security`, a
   transferee who never received an allotment becomes invisible and the register
-  is wrong from that moment.** Nothing else in Phase 1 depends on that
-  assumption, and nothing enforces it but those two guards.
+  is wrong from that moment.** That second guard is already conditional —
+  `WalletService.broadcast_transfer` runs it only `if token_contract`, so a
+  self-signed ERC-20 transfer posted without `tokenContract` reaches the chain
+  unchecked; `ShareToken.sol` keeps it whitelist-to-whitelist, but the register
+  does not see it. Closing that gap belongs to the transfer path, not to the
+  register. Nothing else in Phase 1 depends on the assumption, and nothing
+  enforces it but those two guards.
 - **The chain read is all or nothing, and the register never quietly loses a
   member.** A single `balanceOf` that cannot be read discards the whole chain
   read for that share class and the register falls back to the allotment record
@@ -330,9 +339,15 @@ console are all shipped.
   row carries `source`, the CSV carries a `Balance source` column reading
   `Confirmed on chain` or `Allotment record, not confirmed on chain`, and an
   export that is not chain-confirmed logs a `WARNING` beside the export line.
-  The same rule keeps `company_stats.totalShareholders` from undercounting on a
-  flaky RPC: it degrades to the allotment record rather than to a smaller
-  number.
+  `company_stats.totalShareholders` deliberately does **not** run this read.
+  `GET /api/v1/companies/{uuid}/stats/` is loaded by the dashboard company page
+  and by the mobile company screen, and putting the register behind it would
+  put one sequential `balanceOf` per member on a hot path, unbounded and
+  uncached, and would make a headline number move with RPC reachability with
+  nothing in the payload to say so. The tile stays one `COUNT(DISTINCT
+  recipient_address)` over completed allotments: cheap, deterministic, and
+  honestly an allotment count rather than a register count — a former member on
+  zero is still in it. The register, not the tile, is the statutory artefact.
 - **The register export neutralises anything that opens like a formula.** Name
   and residential address come from `users.UserProfile`, which the investor
   sets themselves, and the treasury label from `WhitelistEntry`. Any cell whose
@@ -355,8 +370,10 @@ console are all shipped.
   the dead redirect at `/admin/operators/operator/` — no `AdminSite` subclass,
   no URL namespace, no model. It carries a configuration health strip that
   fails closed before an offering opens rather than at payment-instruction
-  time, twelve worklist counts each linking to a filtered changelist, and the
-  deployment mode with the register keeper named for each active company.
+  time, thirteen worklist counts each linking to a filtered changelist, and the
+  deployment mode with the register keeper named for each active company. Every
+  count is a `.count()` or an identity read over allotment addresses; the page
+  makes no chain call, so it cannot hang on a flaky RPC.
 - **"Offerings at their cap and still open" counts money in, not allotments
   out.** Decision 8 keeps closing manual and asks the console to catch a fully
   subscribed offering sitting open. The row therefore reads
