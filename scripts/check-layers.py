@@ -65,7 +65,6 @@ LEGACY = frozenset(
         "backend/operators/models.py:query-in-model",
         "backend/shared/models/country.py:query-in-model",
         "backend/tokens/models/review_request.py:query-in-model",
-        "backend/tokens/views/swap.py:raw-orm-in-view",
         "backend/tokens/views/trading_events.py:raw-orm-in-view",
         "backend/users/views/device_token.py:raw-orm-in-view",
         "backend/users/views/notification.py:raw-orm-in-view",
