@@ -123,6 +123,54 @@ class BackendLogRule(unittest.TestCase):
         self.assertEqual([rule for _, rule, _ in findings], [gate.LOG_PRIVATE])
 
 
+class BackendBodyRule(unittest.TestCase):
+    def rules(self, source):
+        return [rule for _, rule, _ in gate.python_findings(source)]
+
+    def test_a_whole_response_in_an_fstring_is_refused(self):
+        self.assertEqual(self.rules('logger.info(f"Applicant data for {applicant_id}: {response}")'), [gate.LOG_BODY])
+
+    def test_the_offending_call_is_named_and_located(self):
+        source = 'import logging\nlogger = logging.getLogger(__name__)\nlogger.info(f"{response}")\n'
+        self.assertEqual(gate.python_findings(source), [(3, gate.LOG_BODY, "logger.info(... response ...)")])
+
+    def test_a_named_field_of_the_response_is_allowed(self):
+        self.assertEqual(self.rules('logger.info(f"{applicant_id}: {response.status_code}")'), [])
+
+    def test_the_review_answer_read_through_a_helper_is_allowed(self):
+        self.assertEqual(self.rules('logger.info(f"{applicant_id}: {self._review_answer(response)}")'), [])
+
+    def test_the_response_text_attribute_is_refused(self):
+        self.assertEqual(self.rules('logger.error(f"API Error: {response.status_code} - {response.text}")'), [gate.LOG_BODY])
+
+    def test_a_parsed_json_body_is_refused(self):
+        self.assertEqual(self.rules('logger.error(f"{response.json()}")'), [gate.LOG_BODY])
+
+    def test_a_details_subobject_is_refused(self):
+        self.assertEqual(self.rules('logger.warning(f"failed: {ticket.get(\'details\')}")'), [gate.LOG_BODY])
+
+    def test_the_error_code_inside_the_details_is_allowed(self):
+        self.assertEqual(self.rules('logger.warning(f"failed: {reason.get(\'error\')}")'), [])
+
+    def test_a_positional_argument_is_refused(self):
+        self.assertEqual(self.rules('logger.info("provider said %s", payload)'), [gate.LOG_BODY])
+
+    def test_str_around_the_body_does_not_get_it_past_the_gate(self):
+        self.assertEqual(self.rules('logger.info(f"{str(webhook_data)}")'), [gate.LOG_BODY])
+
+    def test_json_dumps_around_the_body_does_not_get_it_past_the_gate(self):
+        self.assertEqual(self.rules('logger.info(f"{json.dumps(response)}")'), [gate.LOG_BODY])
+
+    def test_format_around_the_body_does_not_get_it_past_the_gate(self):
+        self.assertEqual(self.rules('logger.info("provider said {}".format(error_body))'), [gate.LOG_BODY])
+
+    def test_a_body_handed_to_something_that_is_not_logging_is_not_the_gate_s_business(self):
+        self.assertEqual(self.rules("cache.set(key, response)"), [])
+
+    def test_a_provider_error_message_string_is_deliberately_ungated(self):
+        self.assertEqual(self.rules('logger.warning(f"failed: {ticket.get(\'message\')}")'), [])
+
+
 class RepositoryScan(unittest.TestCase):
     def test_the_tree_is_clean(self):
         violations, checked = gate.scan()

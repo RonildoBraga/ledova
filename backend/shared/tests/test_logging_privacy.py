@@ -1,14 +1,15 @@
 import logging
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from rest_framework import serializers
 
 from authentication.services.sessions import SessionService
 from companies.models import LISTING_REQUIRED_DOCUMENTS, Company, CompanyDocument
 from companies.services.company import submit_application
-from integrations.expo_push import ExpoPushError
+from integrations.expo_push import ExpoPushClient, ExpoPushError
+from integrations.sumsub.client import SumSubService
 from users.models import DeviceToken, UserProfile
 from users.services.notifications import NotificationService
 from users.services.setup import ensure_defaults
@@ -165,3 +166,127 @@ class CompanyLoggingTest(LoggingPrivacyTestCase):
 
         text = self.assert_private(captured)
         self.assertIn(f"Application submitted: {company.uuid} (Draft Pty Ltd) by user {owner.pk}", text)
+
+
+APPLICANT_ID = "app_dossier_0001"
+
+APPLICANT_DOSSIER = {
+    "id": APPLICANT_ID,
+    "externalUserId": "0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0",
+    "email": EMAIL,
+    "phone": "+61400111222",
+    "review": {"reviewResult": {"reviewAnswer": "GREEN"}, "reviewStatus": "completed"},
+    "info": {
+        "firstName": "Ada",
+        "lastName": "Lovelace",
+        "dob": "1815-12-10",
+        "country": "AUS",
+        "idDocs": [{"idDocType": "PASSPORT", "number": "PA1234567"}],
+        "addresses": [{"street": "12 Byron Lane", "formattedAddress": "12 Byron Lane, Sydney NSW 2000"}],
+    },
+}
+
+APPLICANT_STATUS = {
+    "reviewId": "rev_0001",
+    "reviewStatus": "completed",
+    "reviewResult": {
+        "reviewAnswer": "RED",
+        "rejectLabels": ["FORGERY"],
+        "moderationComment": "The passport PA1234567 of Ada Lovelace, born 1815-12-10, looks altered",
+        "clientComment": f"{EMAIL} was rejected",
+    },
+}
+
+DOSSIER_FRAGMENTS = ("Lovelace", "1815-12-10", "Byron Lane", "PA1234567", "+61400111222", "looks altered")
+
+
+@override_settings(
+    SUMSUB_API_KEY="api-key",
+    SUMSUB_SECRET_KEY="secret-key",
+    SUMSUB_BASE_URL="https://sumsub.example.test",
+    SUMSUB_LEVEL_NAME="basic-kyc",
+)
+class IdentityProviderLoggingTest(LoggingPrivacyTestCase):
+    def assert_no_dossier(self, captured):
+        text = self.assert_private(captured)
+        for fragment in DOSSIER_FRAGMENTS:
+            self.assertNotIn(fragment, text)
+        return text
+
+    @patch("integrations.sumsub.client.requests.request")
+    def test_fetching_applicant_data_logs_the_review_answer_not_the_dossier(self, request):
+        request.return_value = MagicMock(ok=True, json=MagicMock(return_value=APPLICANT_DOSSIER))
+
+        with self.capture() as captured:
+            SumSubService().get_applicant_data(APPLICANT_ID)
+
+        text = self.assert_no_dossier(captured)
+        self.assertIn(f"Applicant data for {APPLICANT_ID}: review answer GREEN", text)
+
+    @patch("integrations.sumsub.client.requests.request")
+    def test_polling_applicant_status_logs_the_review_answer_not_the_moderation_comment(self, request):
+        request.return_value = MagicMock(ok=True, json=MagicMock(return_value=APPLICANT_STATUS))
+
+        with self.capture() as captured:
+            SumSubService().get_applicant_status(APPLICANT_ID)
+
+        text = self.assert_no_dossier(captured)
+        self.assertIn(f"Status for {APPLICANT_ID}: review answer RED", text)
+
+    @patch("integrations.sumsub.client.requests.request")
+    def test_a_provider_error_logs_the_status_and_the_route_not_the_error_body(self, request):
+        request.return_value = MagicMock(
+            ok=False,
+            status_code=403,
+            text=f"forbidden for {EMAIL}",
+            json=MagicMock(return_value={"description": f"forbidden for {EMAIL}"}),
+            raise_for_status=Mock(side_effect=Exception("403")),
+        )
+
+        with self.capture() as captured:
+            with self.assertRaises(Exception):
+                SumSubService().get_applicant_status(APPLICANT_ID)
+
+        text = self.assert_no_dossier(captured)
+        self.assertIn(f"SumSub API Error: 403 for GET /resources/applicants/{APPLICANT_ID}/status", text)
+
+
+class PushProviderLoggingTest(LoggingPrivacyTestCase):
+    def push_client(self):
+        client = ExpoPushClient()
+        client.session = MagicMock()
+        return client
+
+    def test_an_unregistered_device_logs_the_expo_error_code_not_the_token(self):
+        client = self.push_client()
+        ticket = {
+            "status": "error",
+            "message": f'"{PUSH_TOKEN}" is not a registered push notification recipient device',
+            "details": {"error": "DeviceNotRegistered", "expoPushToken": PUSH_TOKEN},
+        }
+        client.session.post.return_value = MagicMock(ok=True, json=MagicMock(return_value={"data": [ticket]}))
+
+        with self.capture() as captured:
+            client.send_batch([{"to": PUSH_TOKEN, "title": "title", "body": "body"}])
+
+        text = self.assert_private(captured)
+        self.assertIn("Notification 0 failed: DeviceNotRegistered", text)
+
+    def test_a_rejected_batch_logs_the_status_and_the_size_not_the_provider_body(self):
+        client = self.push_client()
+        client.session.post.return_value = MagicMock(
+            ok=False, status_code=400, text=f'{{"errors":[{{"message":""{PUSH_TOKEN}" is invalid"}}]}}'
+        )
+
+        with self.capture() as captured:
+            with self.assertRaises(ExpoPushError):
+                client.send_batch([{"to": PUSH_TOKEN, "title": "title", "body": "body"}])
+
+        text = self.assert_private(captured)
+        self.assertIn("API Error: 400 for 1 notification(s)", text)
+
+    def test_a_malformed_token_is_reported_by_its_position_in_the_batch(self):
+        with self.assertRaises(ExpoPushError) as raised:
+            self.push_client().send_batch([{"to": PUSH_TOKEN[:-1], "title": "title", "body": "body"}])
+
+        self.assertEqual(str(raised.exception), "Invalid Expo push token format in message 0")

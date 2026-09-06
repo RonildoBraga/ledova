@@ -873,7 +873,7 @@ CI runs it in the source-gates job. Like the other two it needs no dependencies:
 Python 3 and a checkout are enough. `make test-gates` runs its unit tests in
 `scripts/tests/`, which is the evidence that it fires rather than merely runs.
 
-It enforces two rules, each chosen because it is decidable from the syntax
+It enforces three rules, each chosen because it is decidable from the syntax
 alone. A gate that has to guess what a value holds at run time is a gate that
 gets allowlisted into meaninglessness.
 
@@ -895,6 +895,24 @@ Backend -- every `.py` under `backend/`. No call on a `logger`, `logging` or
 `push_token`; or a constant string subscript with one of those keys. Positional
 arguments, keyword arguments and f-string substitutions are all walked.
 
+Backend, second rule -- no logging call may hand a whole provider response body
+to the formatter. Naming a field is a decision about what an operator needs; a
+whole body is whatever the provider chose to send, and for a KYC provider that
+is the applicant dossier: legal name, date of birth, residential address,
+document number, email address. The syntax that says "whole body" is a bare
+name from the gate's `BODY_NAMES` (`response`, `payload`, `body`, `data`,
+`result`, `error_body`, `webhook_data`, `applicant_data`, `status_data` and the
+rest), a `.text`, `.content`, `.data`, `.details` or `.body` attribute, a
+`.json()` call, or a constant subscript or `.get()` of one of those keys --
+reached directly or through `str()`, `repr()`, `json.dumps()` or `.format()`.
+The rule looks only at the value handed to the formatter, so
+`f"{response.status_code}"` and `f"{ticket.get('id')}"` are fine and
+`f"{response}"` is not. `SumSubService.get_applicant_data` and
+`get_applicant_status` log the applicant id and the review answer, which is
+what `IdentityVerificationService.get_verification_status` polls them for;
+`ExpoPushClient` logs the Expo error code rather than the ticket, whose
+`message` and `details` both echo the push token.
+
 What it does not cover, deliberately. `print` and a management command's
 `self.stdout.write` are ungated: the only `print` calls in `backend/` are the
 progress counters in `assets/migrations/0009_...`, and no command writes an
@@ -907,7 +925,18 @@ client scanner lexes strings, templates, comments and regex literals so that a
 `console.error(` inside any of them is not a call, but it has no JSX mode: an
 apostrophe in JSX text can hide the rest of that line from it. Console calls sit
 on their own lines, so that costs nothing today, and a call hidden that way
-would be a false negative, never a false positive.
+would be a false negative, never a false positive. Nor does anything reach the
+content of a string field: a provider's own error message -- Expo's is
+`"ExponentPushToken[...]" is not a registered push notification recipient
+device` -- is a `str` like any other, so `ticket.get('message')` is refused
+only by review, not by the gate. The same holds on the clients, where the
+literal-only rule certifies a template whatever it interpolates:
+`mobile/src/components/ErrorBoundary.tsx` logs `error.message` and
+`info.componentStack`, and
+`mobile/src/screens/signup/identity-verification/components/VerificationFormModal.tsx`
+logs the `message` of a WebView `postMessage`. Both are provider- or
+SDK-authored strings today; if one ever carries user input, the gate will not
+say so.
 
 ### Shared TypeScript types
 

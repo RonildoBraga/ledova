@@ -19,6 +19,15 @@ Backend: no logging call may reference an email address, a password or a push
 token. "Reference" means an expression whose own syntax names one: an attribute
 access, a bare name, or a constant string subscript. A user's primary key
 identifies them for an operator without putting an email in a log aggregator.
+
+Backend, second rule: no logging call may hand a whole provider response body to
+the formatter. A named field is a decision about what an operator needs; a whole
+body is whatever the provider chose to send, and for a KYC provider that is the
+applicant dossier - legal name, date of birth, residential address, document
+number, email address. The syntax that says "whole body" is a bare name from
+BODY_NAMES, a `.text` / `.content` / `.data` / `.details` attribute, a `.json()`
+call, or a constant subscript or `.get()` of one of those keys, reached directly
+or through str(), repr(), json.dumps() or .format().
 """
 
 from __future__ import annotations
@@ -41,11 +50,13 @@ SKIP_AT_TOP = frozenset({".expo", ".next", ".venv", "build", "coverage", "dist",
 CONSOLE_ARGUMENT = "console-argument-is-not-a-literal"
 CONSOLE_STRINGIFY = "console-argument-stringifies-an-object"
 LOG_PRIVATE = "private-value-in-a-log-line"
+LOG_BODY = "provider-body-in-a-log-line"
 
 RULES = {
     CONSOLE_ARGUMENT: "a console argument must be a string literal or a template literal, never an object",
     CONSOLE_STRINGIFY: "JSON.stringify inside a console argument serialises the object the literal was meant to keep out",
     LOG_PRIVATE: "log an identifier an operator can resolve, never an email address, a password or a push token",
+    LOG_BODY: "log the fields an operator needs, never a whole provider response body",
 }
 
 CONSOLE_METHODS = frozenset({"assert", "debug", "dir", "error", "info", "log", "table", "trace", "warn"})
@@ -53,6 +64,28 @@ CONSOLE_METHODS = frozenset({"assert", "debug", "dir", "error", "info", "log", "
 LOG_OBJECTS = frozenset({"logger", "logging", "log"})
 LOG_METHODS = frozenset({"critical", "debug", "error", "exception", "fatal", "info", "log", "warn", "warning"})
 PRIVATE_NAMES = frozenset({"email", "password", "push_token"})
+
+BODY_NAMES = frozenset(
+    {
+        "applicant_data",
+        "body",
+        "content",
+        "data",
+        "error_body",
+        "error_data",
+        "payload",
+        "raw",
+        "resp",
+        "response",
+        "response_data",
+        "result",
+        "status_data",
+        "webhook_data",
+    }
+)
+BODY_ATTRIBUTES = frozenset({"body", "content", "data", "details", "text"})
+BODY_KEYS = frozenset({"body", "content", "data", "details", "payload", "raw", "response", "result"})
+STRINGIFIERS = frozenset({"dumps", "format", "pformat", "pprint", "repr", "str"})
 
 IDENT_CHARS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_$")
 REGEX_KEYWORDS = frozenset(
@@ -293,6 +326,44 @@ def private_reference(node: ast.expr) -> str | None:
     return None
 
 
+def body_reference(node: ast.expr, depth: int = 0) -> str | None:
+    if depth > 3:
+        return None
+    if isinstance(node, ast.Name) and node.id in BODY_NAMES:
+        return node.id
+    if isinstance(node, ast.Attribute) and node.attr in BODY_ATTRIBUTES:
+        return f".{node.attr}"
+    if isinstance(node, ast.Subscript) and isinstance(node.slice, ast.Constant) and node.slice.value in BODY_KEYS:
+        return f"[{node.slice.value!r}]"
+    if not isinstance(node, ast.Call):
+        return None
+    if isinstance(node.func, ast.Attribute):
+        if node.func.attr == "json" and not node.args:
+            return ".json()"
+        if node.func.attr == "get" and node.args:
+            first = node.args[0]
+            if isinstance(first, ast.Constant) and first.value in BODY_KEYS:
+                return f".get({first.value!r})"
+        if node.func.attr in STRINGIFIERS and node.args:
+            return body_reference(node.args[0], depth + 1)
+    if isinstance(node.func, ast.Name) and node.func.id in STRINGIFIERS and node.args:
+        return body_reference(node.args[0], depth + 1)
+    return None
+
+
+def logged_values(node: ast.Call) -> list[ast.expr]:
+    values: list[ast.expr] = []
+    for argument in list(node.args) + [keyword.value for keyword in node.keywords]:
+        values.append(argument)
+        for inner in ast.walk(argument):
+            if isinstance(inner, ast.FormattedValue):
+                values.append(inner.value)
+            elif isinstance(inner, ast.BinOp) and isinstance(inner.op, ast.Mod):
+                right = inner.right
+                values.extend(right.elts if isinstance(right, ast.Tuple) else [right])
+    return values
+
+
 def python_findings(text: str) -> list[tuple[int, str, str]]:
     try:
         tree = ast.parse(text)
@@ -311,6 +382,10 @@ def python_findings(text: str) -> list[tuple[int, str, str]]:
                 reference = private_reference(inner)
                 if reference:
                     findings.append((getattr(inner, "lineno", node.lineno), LOG_PRIVATE, f"{call}(... {reference} ...)"))
+        for value in logged_values(node):
+            reference = body_reference(value)
+            if reference:
+                findings.append((getattr(value, "lineno", node.lineno), LOG_BODY, f"{call}(... {reference} ...)"))
     return sorted(set(findings))
 
 
