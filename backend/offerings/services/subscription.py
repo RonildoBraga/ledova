@@ -57,8 +57,8 @@ REFUND_ABOVE_HELD = (
     "{refunded} has already gone back."
 )
 PAYMENT_RESTATED_DOWN = (
-    "The amount received against {reference} was restated down from {before} to {after}. The earlier figure is "
-    "gone from the row and survives only in this history entry."
+    "The amount received against {reference} was restated down from {before} to {after}. The row now carries only "
+    "{after}; the earlier figure survives in the preceding entry of this row's admin history."
 )
 REFERENCE_SEEN_REUSED = (
     "That statement line is already recorded against {others}. Bank settlement is operator-attested so this is "
