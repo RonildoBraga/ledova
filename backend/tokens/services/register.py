@@ -48,15 +48,16 @@ def _allotments(token) -> dict:
     issuances = ShareIssuance.objects.filter_by_token(token).completed().with_subscription().order_by("created_at")
     for issuance in issuances:
         row = grouped.setdefault(
-            issuance.recipient_address, {"shares": 0, "entered_on": None, "paid": None, "subscriptions": 0}
+            issuance.recipient_address, {"shares": 0, "entered_on": None, "paid": None, "unbacked": 0}
         )
         row["shares"] += _amount(issuance)
         moment = issuance.completed_at or issuance.created_at
         if row["entered_on"] is None or (moment is not None and moment < row["entered_on"]):
             row["entered_on"] = moment
         subscription = _subscription(issuance)
-        if subscription is not None:
-            row["subscriptions"] += 1
+        if subscription is None:
+            row["unbacked"] += 1
+        else:
             row["paid"] = (row["paid"] or 0) + subscription.money_held
     return grouped
 
@@ -118,7 +119,7 @@ def _register(token, reader) -> list[dict]:
                 "share_class": token.symbol,
                 "whitelist_status": identity.whitelist_status,
                 "residential_address": identity.residential_address,
-                "amount_paid": allotment["paid"] if allotment["subscriptions"] else None,
+                "amount_paid": None if allotment["unbacked"] else allotment["paid"],
             }
         )
 
@@ -131,14 +132,6 @@ def _register(token, reader) -> list[dict]:
 
 def token_register(token, service=None) -> list[dict]:
     return _register(token, service if service is not None else chain_service())
-
-
-def register_addresses(tokens) -> set:
-    reader = chain_service()
-    addresses = set()
-    for token in tokens:
-        addresses.update(row["address"] for row in _register(token, reader))
-    return addresses
 
 
 def api_holders(rows) -> list[dict]:

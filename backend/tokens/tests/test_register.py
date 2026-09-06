@@ -222,7 +222,7 @@ class RegisterExportTest(RegisterTestBase):
         self.assertIn(RESIDENCE, export.content.decode())
 
     @patch("tokens.services.register.logger")
-    def test_every_export_is_logged_with_who_ran_it_and_how_many_rows(self, log):
+    def test_every_export_writes_one_log_line_with_who_ran_it_and_how_many_rows(self, log):
         self._allot(MEMBER, 100)
         self._balances({MEMBER: 100})
 
@@ -248,6 +248,35 @@ class RegisterTruthTest(RegisterTestBase):
         self.assertEqual({row["address"] for row in holders["holders"]}, {MEMBER, TREASURY})
         self.assertEqual({row["source"] for row in holders["holders"]}, {SOURCE_ALLOTMENTS})
         self.assertEqual({row["percentage"] for row in holders["holders"]}, {71.43, 28.57})
+
+    def test_a_holding_only_part_of_which_was_subscribed_prints_no_amount_paid(self):
+        account = _account("mia@example.test", "Mia Mixed", RESIDENCE)
+        wallet = self._wallet(account, MEMBER)
+        WhitelistEntry.objects.create(wallet=wallet, status=WhitelistStatus.ACTIVE, is_whitelisted=True)
+        self._allot(MEMBER, 1000)
+        self._paid_allotment(account, wallet, MEMBER, 10, Decimal("20.00"))
+        self._balances({MEMBER: 1010})
+
+        response = self.client.get(f"/api/v1/tokens/{self.token.uuid}/register/export/")
+
+        row = list(csv.reader(io.StringIO(response.content.decode())))[1]
+        self.assertEqual(row[0], "Mia Mixed")
+        self.assertEqual(row[5], "1010")
+        self.assertEqual(row[9], "")
+
+    def test_a_holding_every_share_of_which_was_subscribed_prints_the_total_paid(self):
+        account = _account("sue@example.test", "Sue Subscribed", RESIDENCE)
+        wallet = self._wallet(account, MEMBER)
+        WhitelistEntry.objects.create(wallet=wallet, status=WhitelistStatus.ACTIVE, is_whitelisted=True)
+        self._paid_allotment(account, wallet, MEMBER, 40, Decimal("100.00"))
+        self._paid_allotment(account, wallet, MEMBER, 10, Decimal("25.00"))
+        self._balances({MEMBER: 50})
+
+        response = self.client.get(f"/api/v1/tokens/{self.token.uuid}/register/export/")
+
+        row = list(csv.reader(io.StringIO(response.content.decode())))[1]
+        self.assertEqual(row[5], "50")
+        self.assertEqual(row[9], "125.00")
 
     def test_a_register_that_is_not_chain_confirmed_says_so_on_every_csv_row(self):
         self._allot(MEMBER, 100)

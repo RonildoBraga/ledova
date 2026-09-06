@@ -355,25 +355,54 @@ console are all shipped.
   with a leading apostrophe by `shared.utils.csv_cell`, so an issuer opening
   `register-<SYMBOL>.csv` in Excel or Sheets cannot be made to run a formula
   against a sheet of every other member's residential address.
-- **Amount paid on the register is blank where it is unknown, never zero.** It
-  comes from the `Subscription` that produced the allotment; a holding that
-  predates the platform has none, and a zero would be a false record rather
-  than a missing one. There is no operator override field in Phase 1.
+- **Amount paid on the register is blank where it is unknown, never zero, and
+  never a part shown as the whole.** It comes from the `Subscription` that
+  produced the allotment; a holding that predates the platform has none, and a
+  zero would be a false record rather than a missing one. The same reasoning
+  settles the mixed row, which is ordinary rather than a corner: a founder
+  allotted a thousand shares directly who then subscribes for ten more has
+  twenty dollars known and a thousand shares unknown, and printing the twenty
+  beside a holding of one thousand and ten reads as the consideration for the
+  lot — a false record that looks authoritative, which is worse than a blank.
+  The column is blank whenever any share on the row has no subscription behind
+  it. Showing the known part instead would need a column of its own and a
+  sentence saying what it means; neither is worth it in Phase 1. There is no
+  operator override field either.
 - **The residential address is in the CSV and nowhere else.** The dashboard
   register shows name, holder type and holding. `GET
-  /api/v1/tokens/{uuid}/register/export/` writes the s169-shaped CSV, and every
-  export logs who ran it and how many rows it carried. `GET
+  /api/v1/tokens/{uuid}/register/export/` writes the s169-shaped CSV. `GET
   /api/v1/tokens/{uuid}/holders/` keeps its path and its four original keys and
   gains `holderType`, `enteredOn` and `shareClass`; both routes are scoped by
   `visible_to_user` and pinned in the cross-tenant route matrix.
+- **The export trail is one log line, and nothing more than that.** Each export
+  writes an application log line naming the requesting user's primary key and
+  the row count. There is no export audit model, nothing queryable, and no
+  retention past whatever the deployment keeps its logs for. Every download is
+  a full sheet of members' residential addresses, so a durable and queryable
+  record of who took one is owed. It is deliberately not built in Phase 1 and
+  is not claimed to be: Phase 2 carries it.
+- **Past members are not retained, and that is a gap.** The register drops a
+  holder whose balance reaches zero, which is right for a list of current
+  members. Section 169(3) also wants members who ceased in the last seven years
+  kept on the register with the date they ceased. Phase 1 does not meet that
+  and nothing here builds it: the read-model has no record of a holding that
+  ended, only of allotments that happened. Whether a derived register can
+  satisfy 169(3) at all, or whether it forces the Phase 2 `Transfer` log
+  indexer and a stored ceased-on date, is the question. Counsel question,
+  flagged.
 - **The operator console is one page and costs nothing structural.** It replaces
   the dead redirect at `/admin/operators/operator/` — no `AdminSite` subclass,
   no URL namespace, no model. It carries a configuration health strip that
   fails closed before an offering opens rather than at payment-instruction
-  time, thirteen worklist counts each linking to a filtered changelist, and the
-  deployment mode with the register keeper named for each active company. Every
-  count is a `.count()` or an identity read over allotment addresses; the page
-  makes no chain call, so it cannot hang on a flaky RPC.
+  time, thirteen worklist counts — eleven linking to a filtered changelist, and
+  the two register queues to the unfiltered whitelist changelist, because no
+  filter on it expresses their condition and for `unidentified` none could,
+  its commonest case being an address with no whitelist row to filter to — and
+  the deployment mode with the register keeper named for each active company.
+  Every count is a `.count()` or an identity read over allotment addresses; the
+  identity read is chunked, so its SQL is the same size on a deployment of ten
+  addresses and ten thousand. The page makes no chain call, so it cannot hang
+  on a flaky RPC.
 - **"Offerings at their cap and still open" counts money in, not allotments
   out.** Decision 8 keeps closing manual and asks the console to catch a fully
   subscribed offering sitting open. The row therefore reads
@@ -419,7 +448,10 @@ switch.
   chain rather than derived from it ad hoc. The Phase 1 register is derived, and
   the trigger for replacing it with a `Transfer` log indexer is written above:
   the moment a share can move by anything other than allotment, a transferee who
-  never received one is invisible to it.
+  never received one is invisible to it. Two more things wait on the same work:
+  section 169(3) retention of members who ceased in the last seven years, which
+  a derived current-holders read-model cannot express, and a durable queryable
+  record of every register export, which today is one application log line.
 - Director authority, ownership immutability, ACN and ABN validation and
   authorized-capital limits, none of which the models check today.
 

@@ -39,8 +39,10 @@ no model, no URL namespace and no `AdminSite` subclass: it is
   asset holds an active deployment on `receiving_wallet_chain`. A fresh install
   starts with an empty settlement-asset set, which the strip reports rather
   than passing silently — an offering can then only be paid by bank transfer.
-- **The worklist** is thirteen labelled counts, each linking to the admin
-  changelist already filtered: company applications submitted, in review or
+- **The worklist** is thirteen labelled counts. Eleven link to the admin
+  changelist already filtered; the two register queues link to the whitelist
+  changelist unfiltered, for the reason given below. The thirteen are: company
+  applications submitted, in review or
   needing information; classifications awaiting verification; offerings
   submitted or under review; offerings whose paid and allotted subscriptions
   have reached the cap while the offering is still open; subscriptions awaiting
@@ -65,13 +67,21 @@ no model, no URL namespace and no `AdminSite` subclass: it is
   holder type means the same thing on both surfaces. They count allotment addresses rather than chain-confirmed register
   rows, so an unidentified former member who has transferred out can still
   appear; the queue is never shorter than the register, which is the safe
-  direction. To clear one: open the whitelist changelist, find the address, and
-  either link the wallet to an account with a named profile or remove the
-  duplicate entry. The cost is a fixed number of queries whatever the size —
-  the distinct addresses, their whitelist entries, and the profiles behind them
-  — holding one address per member of every company on the deployment in
-  memory. Calling the same identity code as the register was preferred to a
-  second definition of the holder types in SQL, which could drift from it.
+  direction. **Neither row can carry a filter, and both land on the unfiltered
+  whitelist changelist.** No filter on `WhitelistEntryAdmin` expresses either
+  condition, and for `unidentified` none could: its commonest case is an
+  allotment address with no whitelist entry at all, so there is no row on that
+  changelist to filter to. To clear one: open the whitelist changelist, paste
+  the address from the issuer's token modal into the search box, and either
+  link the wallet to an account with a named profile, remove the duplicate
+  entry, or add the missing entry. The identity read is chunked at five hundred
+  addresses a query, so the SQL stays the same size whatever the deployment
+  holds; the cost is at most three queries a chunk — the whitelist entries,
+  their accounts and the profiles behind them — over one address per member of
+  every
+  company on the deployment, held in memory. Calling the same identity code as
+  the register was preferred to a second definition of the holder types in SQL,
+  which could drift from it.
 - **Deployment mode and the registrant.** The console names the mode
   (`registry` or `single_issuer`) and, for each active company, who keeps the
   register on this deployment. It states that fact and nothing more: it does

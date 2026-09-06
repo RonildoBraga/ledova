@@ -7,6 +7,7 @@ TREASURY_FALLBACK = "Operator (treasury/custodian)"
 AMBIGUOUS_NAME = "Two wallets share this address"
 NAME_SEPARATOR = " & "
 ADDRESS_SEPARATOR = "; "
+ADDRESS_CHUNK = 500
 
 
 class HolderIdentity(NamedTuple):
@@ -59,9 +60,24 @@ def _ambiguous(entries: list) -> HolderIdentity:
     return HolderIdentity(HolderType.AMBIGUOUS.value, AMBIGUOUS_NAME, "", oldest.get_status_display())
 
 
+def _distinct_addresses(addresses) -> list:
+    seen = {}
+    for address in addresses:
+        candidate = (address or "").strip()
+        if candidate:
+            seen.setdefault(candidate.lower(), candidate)
+    return list(seen.values())
+
+
+def _entries(keys):
+    for start in range(0, len(keys), ADDRESS_CHUNK):
+        chunk = keys[start : start + ADDRESS_CHUNK]
+        yield from WhitelistEntry.objects.for_addresses(chunk).with_holder_identity()
+
+
 def identities_for(addresses) -> dict:
     grouped = defaultdict(list)
-    for entry in WhitelistEntry.objects.for_addresses(addresses).with_holder_identity():
+    for entry in _entries(_distinct_addresses(addresses)):
         grouped[entry.wallet_address.lower()].append(entry)
     return {
         key: (_ambiguous(entries) if len(entries) > 1 else entry_identity(entries[0]))
@@ -70,7 +86,7 @@ def identities_for(addresses) -> dict:
 
 
 def unnameable_addresses(addresses) -> UnnameableAddresses:
-    keys = {(address or "").lower() for address in addresses if address}
+    keys = [address.lower() for address in _distinct_addresses(addresses)]
     identities = identities_for(keys)
     types = [identities.get(key, UNIDENTIFIED).holder_type for key in keys]
     return UnnameableAddresses(types.count(HolderType.AMBIGUOUS.value), types.count(HolderType.UNIDENTIFIED.value))

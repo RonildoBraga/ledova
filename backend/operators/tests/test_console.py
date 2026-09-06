@@ -41,6 +41,8 @@ from users.models import (
 )
 from wallets.models import Wallet
 from whitelist.models import HolderType, WhitelistEntry, WhitelistStatus
+from whitelist.querysets.entry import WhitelistEntryQuerySet
+from whitelist.services.identity import ADDRESS_CHUNK
 
 User = get_user_model()
 
@@ -313,6 +315,31 @@ class WorklistTest(TestCase):
         self.assertEqual(counts[UNIDENTIFIED_ROW], 40)
         self.assertEqual(len(many), len(few))
         balance.assert_not_called()
+
+    def test_the_identity_read_is_chunked_so_the_console_answers_on_a_deployment_of_many_addresses(self):
+        token = self._token("MNY")
+        addresses = [Web3.to_checksum_address(f"0x{index + 1:040x}") for index in range(11)]
+        ShareIssuance.objects.bulk_create(
+            ShareIssuance(token=token, recipient_address=address, amount="1", status=IssuanceStatus.COMPLETED)
+            for address in addresses
+        )
+        self._whitelisted_wallet("many@example.test", "MANY", "Zoe Last", addresses[-1])
+
+        with (
+            patch("whitelist.services.identity.ADDRESS_CHUNK", 4),
+            patch.object(
+                WhitelistEntryQuerySet,
+                "for_addresses",
+                autospec=True,
+                side_effect=WhitelistEntryQuerySet.for_addresses,
+            ) as reads,
+        ):
+            counts = _counts()
+
+        self.assertEqual(sorted(len(call.args[1]) for call in reads.call_args_list), [3, 4, 4])
+        self.assertEqual(counts[UNIDENTIFIED_ROW], 10)
+        self.assertEqual(counts[AMBIGUOUS_ROW], 0)
+        self.assertLessEqual(ADDRESS_CHUNK, 1000)
 
     def _whitelisted_wallet(self, email, number, name, address):
         user = User.objects.create_user(email=email, password="pw-12345678")

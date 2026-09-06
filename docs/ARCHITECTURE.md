@@ -379,24 +379,40 @@ holds it, because its subject is one share class and its two callers are the two
    operator, who is the only party able to resolve a duplicate wallet. Both
    rows count distinct completed `ShareIssuance.recipient_address` values
    through the same `whitelist/services/identity.py` the register uses, so the
-   console and the register never disagree about what a holder type means. The
-   console makes **no chain read**: it counts allotment addresses, not
+   console and the register never disagree about what a holder type means. That
+   identity read is chunked at `ADDRESS_CHUNK` addresses a query, so any one
+   query it builds is the same size on a deployment of ten addresses and ten
+   thousand. The console makes **no chain read**: it counts allotment addresses, not
    chain-confirmed register rows, so a former member who transferred out and
    was never identified can still be counted. The count is therefore never
    lower than the register's, which is the safe direction for a queue.
 5. Amount paid comes from the `Subscription` that produced the allotment, and is
-   **blank** where there is none — never zero. A holding that predates the
+   **blank** where any share on the row lacks one — never zero, and never a
+   part of the total presented as the whole. A holding that predates the
    platform is unknown, and printing a zero against it would be a false record.
+   The mixed row is the ordinary case, not the corner: a founder allotted a
+   thousand shares directly who then subscribes for ten more has twenty dollars
+   known against a thousand shares unknown, and summing only the known part
+   against the whole holding reads to an auditor as the consideration for all
+   one thousand and ten. `_allotments()` therefore counts the completed
+   issuances with no subscription behind them, and the column is blank whenever
+   that count is not zero. Showing the known part would need its own column and
+   its own sentence here; it is not worth one in Phase 1.
 
 `GET /api/v1/tokens/{uuid}/holders/` keeps its path and its four original keys —
 `address`, `name`, `balance`, `percentage` — and gains `holderType`, `enteredOn`
 and `shareClass`. `GET /api/v1/tokens/{uuid}/register/export/` writes the
-s169-shaped CSV: Name, Residential address, Wallet address, Holder type, Class,
-Shares held, Date entered, Whitelist status, Amount paid. Both are scoped by
-`ShareToken.objects.visible_to_user` and pinned in the cross-tenant route
-matrix. The privacy boundary is deliberate: the dashboard shows name, holder
-type and holding, the residential address appears in the CSV only, and every
-export writes a log line naming the user and the row count.
+s169-shaped CSV, ten columns: Name, Residential address, Wallet address, Holder
+type, Class, Shares held, Balance source, Date entered, Whitelist status,
+Amount paid. Both are scoped by `ShareToken.objects.visible_to_user` and pinned
+in the cross-tenant route matrix. The privacy boundary is deliberate: the
+dashboard shows name, holder type and holding, and the residential address
+appears in the CSV only. Each export writes one application log line naming the
+requesting user's primary key and the row count, and that is the whole of the
+trail: there is no export audit model, nothing queryable, and no retention
+beyond whatever the deployment keeps its logs for. Every download is a full
+sheet of members' residential addresses, so a durable record of who took one is
+owed; it is a Phase 2 item, not a Phase 1 claim.
 
 **The register is complete only while allotment is the sole way shares move.**
 That holds in Phase 1 because the trading write prefixes are flag-gated and
