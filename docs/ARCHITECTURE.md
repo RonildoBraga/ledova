@@ -511,7 +511,13 @@ and `CompanyDocument.file`, and a third such field takes the same one.
 - The admin reads the same bytes through an admin view registered in
   `get_urls()`, and the change form shows only that link. The raw `FileField`
   stays out of `fieldsets`: Django renders it as an `<a href>` on `value.url`,
-  editable or readonly, which raises now that there is no url.
+  editable or readonly, which raises now that there is no url. Every admin that
+  renders the field goes through one helper — `companies.admin._helpers.
+  document_file_link` serves both `CompanyDocumentAdmin` and the inline on
+  `CompanyAdmin`. A second copy is not a 500 you would notice:
+  `AdminReadonlyField.contents()` swallows `ValueError` and prints
+  `empty_value_display`, so a missed call site silently loses the link on the
+  operator's review screen.
 - Both clients open the route. The dashboard's anchor is a top-level `GET`, so
   the `Lax` session cookie rides along and CSRF does not apply; mobile
   authenticates with a bearer header no anchor can send, so it fetches the bytes
@@ -524,6 +530,20 @@ and `CompanyDocument.file`, and a third such field takes the same one.
   row whose file is gone from disk, and no-ops when the two aliases resolve to
   the same backend. `companies/migrations/0006_company_document_private_storage.py`
   is the worked example.
+- Such a migration widens the column, and the reverse must not narrow it again.
+  `company_document_path` generates keys of 102 to 118 characters, so the moment
+  a document is uploaded after the migration is applied a plain reverse
+  `AlterField` back to `varchar(100)` fails with
+  `value too long for type character varying(100)`. The widening therefore uses
+  `AlterFieldLeavingTheColumnWidened`, whose `database_backwards` is a no-op: the
+  reverse restores the storage and the file locations and leaves the wider column
+  in place, which is a harmless superset. The narrow reverse would also fail
+  destructively, because `RunPython` moves files on disk and the DDL transaction
+  that rolls back cannot undo that — the rows would be back under `MEDIA_ROOT`,
+  served to anonymous callers under `DEBUG`, while `django_migrations` still
+  claimed the migration was applied. Reversibility here is proven against a key
+  generated *after* the migration, not against the legacy rows Django had already
+  truncated to fit `max_length=100`.
 
 ## Tenancy model
 

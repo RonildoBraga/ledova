@@ -3,8 +3,8 @@ from django.contrib import admin, messages
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.urls import re_path, reverse
-from django.utils.html import format_html
 
+from companies.admin._helpers import document_file_link
 from companies.exceptions import InvalidStatusTransitionException
 from companies.models import Company, CompanyDocument, CompanyStatus
 from companies.services import transition_company
@@ -139,14 +139,9 @@ class CompanyDocumentInline(admin.TabularInline):
     fields = ["document_type", "name", "file_link", "is_verified", "created_at"]
     readonly_fields = ["file_link", "is_verified", "created_at"]
 
+    @admin.display(description="File")
     def file_link(self, obj):
-        if obj.file:
-            return format_html('<a href="{}" target="_blank">View File</a>', obj.file.url)
-        elif obj.external_url:
-            return format_html('<a href="{}" target="_blank">External Link</a>', obj.external_url)
-        return "-"
-
-    file_link.short_description = "File"
+        return document_file_link(obj)
 
 
 class ReasonForm(forms.Form):

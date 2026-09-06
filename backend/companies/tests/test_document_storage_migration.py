@@ -131,3 +131,27 @@ class CompanyDocumentPrivateStorageMigrationTest(TransactionTestCase):
         self.assertTrue(self.public.exists(name))
         self.assertFalse(self.private.exists(name))
         self.assertEqual(self.read(self.public, name), MARKER)
+
+    def upload_beneficial_ownership(self, filename):
+        document = CompanyDocument.objects.create(
+            company=self.company,
+            document_type=DocumentType.BENEFICIAL_OWNERSHIP,
+            name="Declaration",
+            file_size=len(MARKER),
+            mime_type="application/pdf",
+        )
+        document.file.save(filename, ContentFile(MARKER), save=True)
+        self.names.append(document.file.name)
+        return document.file.name
+
+    def test_the_reverse_survives_a_key_generated_after_the_column_was_widened(self):
+        self.migrate(MIGRATE_TO)
+        name = self.upload_beneficial_ownership("declaration.pdf")
+        self.assertGreater(len(name), 100)
+
+        self.migrate(MIGRATE_FROM)
+
+        self.assertTrue(self.public.exists(name))
+        self.assertFalse(self.private.exists(name))
+        self.assertEqual(self.read(self.public, name), MARKER)
+        self.assertGreater(len(self.upload_beneficial_ownership("second.pdf")), 100)

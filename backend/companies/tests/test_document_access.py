@@ -4,6 +4,7 @@ import re
 from itertools import count
 
 from django.conf import settings
+from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -12,6 +13,7 @@ from django.urls import clear_url_caches, reverse
 from rest_framework.test import APIClient, APITestCase
 
 from authentication.services import TokenService
+from companies.admin.company import CompanyDocumentInline
 from companies.models import Company, CompanyDocument, CompanyType, DocumentType
 
 User = get_user_model()
@@ -213,6 +215,31 @@ class CompanyDocumentAdminTest(TestCase):
             reverse("admin:companies_companydocument_file", args=[self.document.uuid]),
             response.content.decode(),
         )
+
+    def test_the_inline_on_the_company_page_links_a_hosted_document_to_the_streaming_view(self):
+        self.client.force_login(self.staff)
+        linked = make_document(
+            self.company,
+            payload=None,
+            document_type=DocumentType.PROSPECTUS,
+            external_url="https://issuer.example.test/prospectus.pdf",
+            file_size=1,
+        )
+        streaming_url = reverse("admin:companies_companydocument_file", args=[self.document.uuid])
+
+        inline = CompanyDocumentInline(Company, admin.site)
+        self.assertIn(streaming_url, inline.file_link(self.document))
+        self.assertIn(linked.external_url, inline.file_link(linked))
+
+        response = self.client.get(reverse("admin:companies_company_change", args=[self.company.pk]))
+        body = response.content.decode()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(streaming_url, body)
+        self.assertIn(linked.external_url, body)
+        self.assertEqual(re.findall(r'href="(/media/[^"]*)"', body), [])
+        cells = re.findall(r'<td class="field-file_link">(.*?)</td>', body, re.S)
+        self.assertEqual(sum(1 for cell in cells if streaming_url in cell), 1)
 
     def test_the_changelist_and_add_pages_render(self):
         self.client.force_login(self.staff)

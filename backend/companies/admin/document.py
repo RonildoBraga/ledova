@@ -1,9 +1,9 @@
 from django.contrib import admin
 from django.shortcuts import get_object_or_404
-from django.urls import path, reverse
+from django.urls import path
 from django.utils import timezone
-from django.utils.html import format_html
 
+from companies.admin._helpers import document_file_link
 from companies.models import CompanyDocument
 from shared.views import stream_stored_file
 
@@ -35,10 +35,7 @@ class CompanyDocumentAdmin(admin.ModelAdmin):
 
     @admin.display(description="File")
     def file_link(self, obj):
-        if obj.pk is None or not obj.file:
-            return "-"
-        url = reverse("admin:companies_companydocument_file", args=[obj.uuid])
-        return format_html('<a href="{}" target="_blank">Open document</a>', url)
+        return document_file_link(obj)
 
     def get_urls(self):
         custom_urls = [

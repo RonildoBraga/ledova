@@ -9,6 +9,12 @@ import shared.storage
 logger = logging.getLogger(__name__)
 
 
+class AlterFieldLeavingTheColumnWidened(migrations.AlterField):
+
+    def database_backwards(self, app_label, schema_editor, from_state, to_state):
+        return
+
+
 def _relocate(apps, source_alias, target_alias):
     source = storages[source_alias]
     target = storages[target_alias]
@@ -42,7 +48,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AlterField(
+        AlterFieldLeavingTheColumnWidened(
             model_name="companydocument",
             name="file",
             field=models.FileField(
