@@ -11,17 +11,27 @@ updates:
       root-and-workspaces:
         patterns: ["*"]
 
+  # The Expo and React Native toolchain is deliberately excluded, not grouped.
+  # Its version is entangled with the client work in flight, and an SDK upgrade
+  # is a deliberate change someone owns rather than an automated batch. Drop the
+  # ignore block when Phase 1 settles and someone takes the upgrade.
   - package-ecosystem: npm
     directory: /mobile
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: expo
+      - dependency-name: expo-*
+      - dependency-name: "@expo/*"
+      - dependency-name: react-native
+      - dependency-name: react-native-*
+      - dependency-name: "@react-native/*"
+      - dependency-name: metro
+      - dependency-name: metro-*
     groups:
-      expo-and-react-native:
-        patterns: ["expo", "expo-*", "@expo/*", "react-native", "react-native-*", "metro", "metro-*", "@react-native/*"]
-      everything-else:
+      all:
         patterns: ["*"]
-        exclude-patterns: ["expo", "expo-*", "@expo/*", "react-native", "react-native-*", "metro", "metro-*", "@react-native/*"]
 
   - package-ecosystem: npm
     directory: /marketing
