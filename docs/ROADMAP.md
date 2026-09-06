@@ -305,9 +305,10 @@ console are all shipped.
 
 - **The register of members is a read-model, and it is complete only while
   allotment is the sole way shares move.** `tokens/services/register.py` reads
-  allotments from `ShareIssuance`, confirms every balance with `balanceOf` —
-  the chain wins over the allotment record, and a former member whose balance
-  is zero drops off — and resolves identity in one query through
+  allotments from `ShareIssuance`, confirms every one of those balances with
+  `balanceOf` whenever the chain can be reached — the chain wins over the
+  allotment record, and a former member whose balance is zero drops off — and
+  resolves identity in one query through
   `WhitelistEntry -> Wallet -> UserAccount -> UserProfile`. Four holder types
   come out: `member`, `treasury` from the whitelist label, `ambiguous` where
   two wallets share one address, and `unidentified` where no whitelist entry
@@ -318,6 +319,27 @@ console are all shipped.
   transferee who never received an allotment becomes invisible and the register
   is wrong from that moment.** Nothing else in Phase 1 depends on that
   assumption, and nothing enforces it but those two guards.
+- **The chain read is all or nothing, and the register never quietly loses a
+  member.** A single `balanceOf` that cannot be read discards the whole chain
+  read for that share class and the register falls back to the allotment record
+  for every holder, logged at `ERROR`. It never omits the address it could not
+  read, and it never recomputes the percentage column over the survivors: a
+  statutory register that silently drops a member on a transient RPC error, and
+  then asserts the remaining holders own the rest, is a false record. The
+  fallback is stated in the artefact rather than inferred from it — every API
+  row carries `source`, the CSV carries a `Balance source` column reading
+  `Confirmed on chain` or `Allotment record, not confirmed on chain`, and an
+  export that is not chain-confirmed logs a `WARNING` beside the export line.
+  The same rule keeps `company_stats.totalShareholders` from undercounting on a
+  flaky RPC: it degrades to the allotment record rather than to a smaller
+  number.
+- **The register export neutralises anything that opens like a formula.** Name
+  and residential address come from `users.UserProfile`, which the investor
+  sets themselves, and the treasury label from `WhitelistEntry`. Any cell whose
+  first character is `=`, `+`, `-`, `@`, a tab or a carriage return is written
+  with a leading apostrophe by `shared.utils.csv_cell`, so an issuer opening
+  `register-<SYMBOL>.csv` in Excel or Sheets cannot be made to run a formula
+  against a sheet of every other member's residential address.
 - **Amount paid on the register is blank where it is unknown, never zero.** It
   comes from the `Subscription` that produced the allotment; a holding that
   predates the platform has none, and a zero would be a false record rather
@@ -335,6 +357,14 @@ console are all shipped.
   fails closed before an offering opens rather than at payment-instruction
   time, twelve worklist counts each linking to a filtered changelist, and the
   deployment mode with the register keeper named for each active company.
+- **"Offerings at their cap and still open" counts money in, not allotments
+  out.** Decision 8 keeps closing manual and asks the console to catch a fully
+  subscribed offering sitting open. The row therefore reads
+  `Subscription.paid_or_allotted()`, which is every subscription whose money has
+  arrived, rather than B5's `committed_to_shares()`, which additionally requires
+  an issuance request and so only fires after the operator has already processed
+  the allotment the row exists to prompt. B5's headroom guard is unchanged and
+  still reads `committed_to_shares()`.
 - **The console states who keeps the register; it does not say who is obliged
   to.** Naming the registrant is a fact about this deployment. Whether that
   party carries the section 168 obligation is a question for the issuer and its

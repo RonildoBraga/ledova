@@ -14,6 +14,9 @@ export const REGISTER_COPY = {
   PRIVACY_NOTE:
     'Names, holder types and holdings are shown here. Residential addresses are in the CSV only, and every ' +
     'download is logged.',
+  NOT_CONFIRMED_NOTE:
+    'These holdings could not be confirmed on chain, so they are the allotment record instead. The CSV says so ' +
+    'on every row. Try again once the chain is reachable before relying on this register.',
   AMBIGUOUS_NOTE:
     'Two wallets share this address, so the holder cannot be named. Resolve the duplicate wallet before relying ' +
     'on the register.',

@@ -48,24 +48,24 @@ class OfferingQuerySet(QuerySet):
 
         return self.filter(status__in=[OfferingStatus.SUBMITTED, OfferingStatus.UNDER_REVIEW])
 
-    def with_committed_shares(self):
+    def with_subscribed_shares(self):
         from offerings.models import Subscription
 
-        committed = (
-            Subscription.objects.committed_to_shares()
+        subscribed = (
+            Subscription.objects.paid_or_allotted()
             .filter(offering=OuterRef("pk"))
             .values("offering")
             .annotate(total=Sum(Coalesce("allotted_quantity", "quantity")))
             .values("total")
         )
         return self.annotate(
-            committed_shares=Coalesce(
-                Subquery(committed, output_field=IntegerField()), Value(0), output_field=IntegerField()
+            subscribed_shares=Coalesce(
+                Subquery(subscribed, output_field=IntegerField()), Value(0), output_field=IntegerField()
             )
         )
 
     def cap_reached(self):
-        return self.open_now().with_committed_shares().filter(committed_shares__gte=F("cap_shares"))
+        return self.open_now().with_subscribed_shares().filter(subscribed_shares__gte=F("cap_shares"))
 
     def for_token(self, token):
         return self.filter(token=token)

@@ -904,6 +904,9 @@ function TokenDetailModal({
             </button>
           </div>
           <p className="text-xs text-text-muted mb-2">{REGISTER_COPY.PRIVACY_NOTE}</p>
+          {holders.some((h: TokenHolder) => h.source !== 'blockchain') && (
+            <p className="text-xs text-warning-light mb-2">{REGISTER_COPY.NOT_CONFIRMED_NOTE}</p>
+          )}
           {registerError && <p className="text-xs text-error-light mb-2">{REGISTER_COPY.DOWNLOAD_FAILED}</p>}
           {isLoadingHolders ? (
             <div className="py-4 text-center">

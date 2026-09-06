@@ -35,12 +35,13 @@ class SubscriptionQuerySet(QuerySet):
     def awaiting_allotment(self):
         return self.paid().filter(issuance_request__isnull=True)
 
-    def committed_to_shares(self):
+    def paid_or_allotted(self):
         from offerings.models.subscription import SubscriptionStatus
 
-        return self.filter(status__in=[SubscriptionStatus.PAID, SubscriptionStatus.ALLOTTED]).exclude(
-            issuance_request__isnull=True
-        )
+        return self.filter(status__in=[SubscriptionStatus.PAID, SubscriptionStatus.ALLOTTED])
+
+    def committed_to_shares(self):
+        return self.paid_or_allotted().exclude(issuance_request__isnull=True)
 
     def executed_but_not_allotted(self):
         from tokens.models import RequestStatus

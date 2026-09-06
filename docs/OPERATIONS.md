@@ -43,7 +43,8 @@ no model, no URL namespace and no `AdminSite` subclass: it is
   existing queryset method, each linking to the admin changelist already
   filtered: company applications submitted, in review or needing information;
   classifications awaiting verification; offerings submitted or under review;
-  offerings at their cap and still open; subscriptions awaiting payment;
+  offerings whose paid and allotted subscriptions have reached the cap while
+  the offering is still open; subscriptions awaiting payment;
   subscriptions paid and not allotted; subscriptions whose mint is broadcast
   and unresolved; whitelist entries pending; issuance and capital-increase
   requests submitted, approved-not-executed or failed; share tokens stuck in

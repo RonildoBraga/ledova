@@ -33,7 +33,7 @@ from tokens.models import (
     ShareTokenStatus,
 )
 from tokens.services import ShareTokenService
-from tokens.services.register import REGISTER_HEADERS
+from tokens.services.register import REGISTER_HEADERS, SOURCE_CHAIN, SOURCE_LABELS
 from tokens.services.share_token_service import (
     CAP_NOT_RAISED,
     EXCEEDS_AUTHORIZED,
@@ -263,7 +263,8 @@ class ShareTokenChainTest(ChainTestMixin, APITestCase):
         rows = list(csv.reader(io.StringIO(register.content.decode())))
         self.assertEqual(rows[0], REGISTER_HEADERS)
         self.assertEqual(rows[1][:6], [self.tenant.profile.full_name, "", self.investor, "Member", "DRF", "10"])
-        self.assertEqual(rows[1][7:], ["Active", ""])
+        self.assertEqual(rows[1][6], SOURCE_LABELS[SOURCE_CHAIN])
+        self.assertEqual(rows[1][8:], ["Active", ""])
         self.assertEqual(holders.json()["token"]["totalSupply"], str(CAP))
 
         increase = CapitalIncreaseRequest.objects.create(

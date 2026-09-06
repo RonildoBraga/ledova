@@ -1,3 +1,4 @@
+from shared.utils.csv_export import csv_cell
 from shared.utils.request import get_client_ip
 from shared.utils.signature import (
     generate_order_cancel_message,
@@ -9,6 +10,7 @@ from shared.utils.signature import (
 )
 
 __all__ = [
+    "csv_cell",
     "get_client_ip",
     "generate_order_cancel_message",
     "generate_order_create_message",

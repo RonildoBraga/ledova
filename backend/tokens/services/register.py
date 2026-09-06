@@ -1,6 +1,7 @@
 import logging
 
 from integrations.base_chain.exceptions import BaseChainConnectionError
+from shared.utils import csv_cell
 from tokens.models import ShareIssuance
 from tokens.services.share_token_service import ShareTokenService
 from whitelist.models import HolderType
@@ -11,6 +12,11 @@ logger = logging.getLogger(__name__)
 SOURCE_CHAIN = "blockchain"
 SOURCE_ALLOTMENTS = "issuances"
 
+SOURCE_LABELS = {
+    SOURCE_CHAIN: "Confirmed on chain",
+    SOURCE_ALLOTMENTS: "Allotment record, not confirmed on chain",
+}
+
 REGISTER_HEADERS = [
     "Name",
     "Residential address",
@@ -18,6 +24,7 @@ REGISTER_HEADERS = [
     "Holder type",
     "Class",
     "Shares held",
+    "Balance source",
     "Date entered",
     "Whitelist status",
     "Amount paid",
@@ -76,10 +83,11 @@ def _chain_balances(token, addresses, reader):
         try:
             balances[address] = reader.get_token_balance(token.contract_address, address)
         except Exception as exc:
-            logger.warning(f"Register could not read the balance of {address} on {token.symbol}: {exc}")
-    if not balances:
-        logger.error(f"Register read no balance at all for {token.symbol}; falling back to the allotment record")
-        return None
+            logger.error(
+                f"Register could not read the balance of {address} on {token.symbol}: {exc}; discarding the whole "
+                f"chain read and falling back to the allotment record for every holder"
+            )
+            return None
     return balances
 
 
@@ -94,7 +102,7 @@ def _register(token, reader) -> list[dict]:
 
     rows = []
     for address, allotment in allotments.items():
-        balance = allotment["shares"] if balances is None else balances.get(address)
+        balance = allotment["shares"] if balances is None else balances[address]
         if not balance or balance <= 0:
             continue
         identity = identities.get(address.lower(), UNIDENTIFIED)
@@ -143,19 +151,28 @@ def export_rows(token, requested_by) -> list[list]:
         f"Register export of {token.symbol} for company {token.company_id}: "
         f"{len(rows)} rows, requested by user {getattr(requested_by, 'pk', None)}"
     )
+    if any(row["source"] != SOURCE_CHAIN for row in rows):
+        logger.warning(
+            f"Register export of {token.symbol} for company {token.company_id} is not confirmed on chain; "
+            f"every row carries {SOURCE_LABELS[SOURCE_ALLOTMENTS]}"
+        )
     return [_csv_row(row) for row in rows]
 
 
 def _csv_row(row) -> list:
     entered_on = row["entered_on"]
     return [
-        row["name"] or "",
-        row["residential_address"],
-        row["address"],
-        row["holder_type_display"],
-        row["share_class"],
-        row["balance"],
-        entered_on.date().isoformat() if entered_on else "",
-        row["whitelist_status"] or NO_WHITELIST_ENTRY,
-        "" if row["amount_paid"] is None else f"{row['amount_paid']:.2f}",
+        csv_cell(value)
+        for value in (
+            row["name"] or "",
+            row["residential_address"],
+            row["address"],
+            row["holder_type_display"],
+            row["share_class"],
+            row["balance"],
+            SOURCE_LABELS[row["source"]],
+            entered_on.date().isoformat() if entered_on else "",
+            row["whitelist_status"] or NO_WHITELIST_ENTRY,
+            "" if row["amount_paid"] is None else f"{row['amount_paid']:.2f}",
+        )
     ]

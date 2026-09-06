@@ -201,6 +201,23 @@ class WorklistTest(TestCase):
 
         self.assertEqual(_counts()["Subscriptions whose mint is broadcast and unresolved"], 1)
 
+    def test_a_sold_out_offering_is_flagged_before_the_allotment_is_processed(self):
+        token = self._token("CAP")
+        offering = self._offering(token, OfferingStatus.APPROVED, cap=10)
+        self._subscription(offering, SubscriptionStatus.PAID, quantity=10)
+
+        counts = _counts()
+
+        self.assertEqual(counts["Offerings at their cap and still open"], 1)
+        self.assertEqual(counts["Subscriptions paid and not allotted"], 1)
+
+    def test_an_unpaid_subscription_does_not_flag_an_offering_as_sold_out(self):
+        token = self._token("UNP")
+        offering = self._offering(token, OfferingStatus.APPROVED, cap=10)
+        self._subscription(offering, SubscriptionStatus.AWAITING_PAYMENT, quantity=10)
+
+        self.assertEqual(_counts()["Offerings at their cap and still open"], 0)
+
     def test_an_allotment_to_a_whitelisted_wallet_is_not_flagged(self):
         token = self._token("WLT")
         WhitelistEntry.objects.create(wallet=self.wallet, status=WhitelistStatus.ACTIVE)

