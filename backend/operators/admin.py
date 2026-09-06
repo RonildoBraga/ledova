@@ -1,10 +1,16 @@
 from django import forms
 from django.contrib import admin
 from django.core.exceptions import ValidationError
-from django.http import HttpResponseRedirect
+from django.shortcuts import render
 from django.urls import reverse
 
 from operators.models import Operator
+from operators.services import (
+    REGISTRANT_NOTE,
+    configuration_health,
+    registrants,
+    worklist,
+)
 from operators.settlement import settlement_errors
 
 
@@ -72,7 +78,20 @@ class OperatorAdmin(admin.ModelAdmin):
     ]
 
     def changelist_view(self, request, extra_context=None):
-        return HttpResponseRedirect(reverse("admin:operators_operator_change", args=[Operator.get().pk]))
+        operator = Operator.get()
+        context = {
+            **self.admin_site.each_context(request),
+            **(extra_context or {}),
+            "title": "Operator console",
+            "opts": self.model._meta,
+            "configuration_url": reverse("admin:operators_operator_change", args=[operator.pk]),
+            "worklist": worklist(),
+            "health": configuration_health(),
+            "deployment_mode": operator.get_deployment_mode_display(),
+            "registrants": registrants(),
+            "registrant_note": REGISTRANT_NOTE,
+        }
+        return render(request, "admin/operators/operator/console.html", context)
 
     def has_add_permission(self, request):
         return not Operator.objects.exists()

@@ -126,12 +126,16 @@ class OperatorAdminTest(TestCase):
         self.changelist_url = reverse("admin:operators_operator_changelist")
         self.add_url = reverse("admin:operators_operator_add")
 
-    def test_changelist_seeds_the_row_and_lands_on_its_change_page(self):
+    def test_changelist_seeds_the_row_and_renders_the_console(self):
         response = self.client.get(self.changelist_url)
 
         change_url = reverse("admin:operators_operator_change", args=[SINGLETON_PK])
-        self.assertRedirects(response, change_url, fetch_redirect_response=False)
+        self.assertEqual(response.status_code, 200)
         self.assertEqual(Operator.objects.count(), 1)
+        self.assertContains(response, "Operator console")
+        self.assertContains(response, "Waiting on the operator")
+        self.assertContains(response, "Configuration health")
+        self.assertContains(response, change_url)
         page = self.client.get(change_url)
         self.assertEqual(page.status_code, 200)
         for legend in ("Identity", "Deployment", "Payments", "Eligibility"):

@@ -34,6 +34,9 @@ export const unpauseCompanyToken = (apiClient: AxiosInstance, uuid: string) =>
 export const getCompanyTokenHolders = (apiClient: AxiosInstance, uuid: string) =>
   apiClient.get<TokenHoldersResponse>(COMPANY_TOKEN_ENDPOINTS.HOLDERS(uuid));
 
+export const downloadTokenRegister = (apiClient: AxiosInstance, uuid: string) =>
+  apiClient.get<Blob>(COMPANY_TOKEN_ENDPOINTS.REGISTER_EXPORT(uuid), { responseType: 'blob' });
+
 export const getCompanyTokenIssuances = (
   apiClient: AxiosInstance,
   uuid: string,

@@ -1,4 +1,4 @@
-from django.db.models import QuerySet, Sum
+from django.db.models import Q, QuerySet, Sum
 
 
 class SubscriptionQuerySet(QuerySet):
@@ -16,15 +16,32 @@ class SubscriptionQuerySet(QuerySet):
 
         return self.filter(status=SubscriptionStatus.PAID)
 
+    def awaiting_payment(self):
+        from offerings.models.subscription import SubscriptionStatus
+
+        return self.filter(status=SubscriptionStatus.AWAITING_PAYMENT)
+
+    def mint_unresolved(self):
+        from tokens.models import RequestStatus, ShareIssuance
+
+        return self.filter(
+            Q(issuance_request__status=RequestStatus.EXECUTING)
+            | Q(
+                issuance_request__status=RequestStatus.FAILED,
+                issuance_request__uuid__in=ShareIssuance.objects.unconfirmed_request_uuids(),
+            )
+        )
+
     def awaiting_allotment(self):
         return self.paid().filter(issuance_request__isnull=True)
 
-    def committed_to_shares(self):
+    def paid_or_allotted(self):
         from offerings.models.subscription import SubscriptionStatus
 
-        return self.filter(status__in=[SubscriptionStatus.PAID, SubscriptionStatus.ALLOTTED]).exclude(
-            issuance_request__isnull=True
-        )
+        return self.filter(status__in=[SubscriptionStatus.PAID, SubscriptionStatus.ALLOTTED])
+
+    def committed_to_shares(self):
+        return self.paid_or_allotted().exclude(issuance_request__isnull=True)
 
     def executed_but_not_allotted(self):
         from tokens.models import RequestStatus
@@ -46,6 +63,14 @@ class SubscriptionQuerySet(QuerySet):
 
         total = self.aggregate(total=Coalesce(Sum(Coalesce("allotted_quantity", "quantity")), 0))
         return int(total["total"])
+
+    def for_issuer(self, offering):
+        return (
+            self.for_offering(offering)
+            .with_relations()
+            .prefetch_related("user_account__user_profiles__user")
+            .order_by("-created_at")
+        )
 
     def with_relations(self):
         return self.select_related(

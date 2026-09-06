@@ -109,6 +109,7 @@ export const COMPANY_TOKEN_ENDPOINTS = {
   PAUSE: (uuid: string) => `/api/v1/tokens/${uuid}/pause/` as const,
   UNPAUSE: (uuid: string) => `/api/v1/tokens/${uuid}/unpause/` as const,
   HOLDERS: (uuid: string) => `/api/v1/tokens/${uuid}/holders/` as const,
+  REGISTER_EXPORT: (uuid: string) => `/api/v1/tokens/${uuid}/register/export/` as const,
   ISSUANCES: (uuid: string) => `/api/v1/tokens/${uuid}/issuances/` as const,
   ISSUE: (uuid: string) => `/api/v1/tokens/${uuid}/issue/` as const,
   CAPITAL_INCREASES: '/api/v1/tokens/capital-increases/',

@@ -7,6 +7,7 @@ import {
   pauseCompanyToken,
   unpauseCompanyToken,
   getCompanyTokenHolders,
+  downloadTokenRegister,
   getCompanyTokenIssuances,
   getCapitalIncreases,
   createCompanyToken,
@@ -66,6 +67,17 @@ export function useTokensList() {
   };
 }
 
+function saveCsv(data: Blob, filename: string) {
+  const url = URL.createObjectURL(data);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function useTokenDetail(uuid: string) {
   const [showCapitalIncreaseForm, setShowCapitalIncreaseForm] = useState(false);
   const queryClient = useQueryClient();
@@ -120,6 +132,13 @@ export function useTokenDetail(uuid: string) {
     onSuccess: invalidateToken,
   });
 
+  const registerMutation = useMutation({
+    mutationFn: async () => {
+      const response = await downloadTokenRegister(apiClient, uuid);
+      saveCsv(response.data, `register-${token?.symbol ?? uuid}.csv`);
+    },
+  });
+
   const createCapitalIncreaseMutation = useMutation({
     mutationFn: (data: CapitalIncreaseCreate) => createCapitalIncrease(apiClient, data),
     onSuccess: () => {
@@ -141,6 +160,9 @@ export function useTokenDetail(uuid: string) {
     token,
     isLoading,
     error,
+    downloadRegister: registerMutation.mutateAsync,
+    isDownloadingRegister: registerMutation.isPending,
+    registerError: registerMutation.error,
     holders: holders?.holders || [],
     totalHolders: holders?.totalHolders || 0,
     isLoadingHolders,

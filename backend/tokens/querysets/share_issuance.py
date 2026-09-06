@@ -1,4 +1,11 @@
-from django.db.models import BigIntegerField, Max, QuerySet, Subquery, Sum, Value
+from django.db.models import (
+    BigIntegerField,
+    Max,
+    QuerySet,
+    Subquery,
+    Sum,
+    Value,
+)
 from django.db.models.functions import Cast, Coalesce
 
 from tokens.models.choices import IssuanceStatus
@@ -54,6 +61,9 @@ class ShareIssuanceQuerySet(QuerySet):
         )
         return int(total or 0)
 
+    def distinct_recipient_addresses(self):
+        return self.completed().values_list("recipient_address", flat=True).distinct()
+
     def pending(self):
         return self.filter(status=IssuanceStatus.PENDING)
 
@@ -62,6 +72,9 @@ class ShareIssuanceQuerySet(QuerySet):
 
     def with_initiated_by(self):
         return self.select_related("initiated_by")
+
+    def with_subscription(self):
+        return self.select_related("shareissuancerequest__subscription")
 
     def unique_holders_with_names(self):
         latest_per_address = self.completed().values("recipient_address").annotate(latest_created=Max("created_at"))
@@ -76,30 +89,3 @@ class ShareIssuanceQuerySet(QuerySet):
                 address_names[addr] = issuance.recipient_name
 
         return address_names
-
-    def holders_with_aggregated_balances(self):
-        return (
-            self.completed()
-            .values("recipient_address", "recipient_name")
-            .annotate(total_balance=Sum(Cast("amount", BigIntegerField())))
-            .order_by("-total_balance")
-        )
-
-    def holders_as_list(self):
-        holders = []
-        for item in self.holders_with_aggregated_balances():
-            try:
-                balance = int(item["total_balance"]) if item["total_balance"] else 0
-            except (ValueError, TypeError):
-                balance = 0
-
-            if balance > 0:
-                holders.append(
-                    {
-                        "address": item["recipient_address"],
-                        "name": item.get("recipient_name") or None,
-                        "balance": str(balance),
-                        "source": "issuances",
-                    }
-                )
-        return holders

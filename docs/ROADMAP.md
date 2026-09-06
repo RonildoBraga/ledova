@@ -43,10 +43,10 @@ Complete.
 
 ## Phase 1 — Investor directory and primary offering
 
-Under way. The investor classification, the one eligibility predicate, the
-eligibility-gated directory, the `Offering`, and the subscription, payment
-confirmation and allotment flow are all shipped. What remains is the operator
-console that gathers the worklists together.
+Complete. The investor classification, the one eligibility predicate, the
+eligibility-gated directory, the `Offering`, the subscription, payment
+confirmation and allotment flow, the register of members and the operator
+console are all shipped.
 
 - The directory is `GET /api/v1/directory/tokens/`, a new route beside the
   secondary market at `GET /api/v1/trading/tokens/`, which stays where it is.
@@ -303,6 +303,130 @@ console that gathers the worklists together.
   `manage.py bridge_share_assets`, which is idempotent and never runs on its
   own.
 
+- **The register of members is a read-model, and it is complete only while
+  allotment is the sole way shares move.** `tokens/services/register.py` reads
+  allotments from `ShareIssuance`, confirms every one of those balances with
+  `balanceOf` whenever the chain can be reached — the chain wins over the
+  allotment record, and a former member whose balance is zero drops off — and
+  resolves identity in one query through
+  `WhitelistEntry -> Wallet -> UserAccount -> UserProfile`. Four holder types
+  come out: `member`, `treasury` from the whitelist label, `ambiguous` where
+  two wallets share one address, and `unidentified` where the whitelist can put
+  no person behind the address — no entry at all, or an entry whose wallet
+  carries no named profile. The last two are two red rows on the console, both
+  counted from distinct completed allotment addresses through the same
+  `whitelist/services/identity.py` the register uses and with no chain read, so
+  the console can never be lower than the register it stands for. No new model,
+  no log indexer. **The trigger condition for the Phase 2 indexer is written
+  down rather than left as folklore: if the trading write prefixes are ungated,
+  or if `resolve_transfer_asset` stops refusing a `tokenized_security`, a
+  transferee who never received an allotment becomes invisible and the register
+  is wrong from that moment.** That second guard is already conditional —
+  `WalletService.broadcast_transfer` runs it only `if token_contract`, so a
+  self-signed ERC-20 transfer posted without `tokenContract` reaches the chain
+  unchecked; `ShareToken.sol` keeps it whitelist-to-whitelist, but the register
+  does not see it. Closing that gap belongs to the transfer path, not to the
+  register. Nothing else in Phase 1 depends on the assumption, and nothing
+  enforces it but those two guards.
+- **The chain read is all or nothing, and the register never quietly loses a
+  member.** A single `balanceOf` that cannot be read discards the whole chain
+  read for that share class and the register falls back to the allotment record
+  for every holder, logged at `ERROR`. It never omits the address it could not
+  read, and it never recomputes the percentage column over the survivors: a
+  statutory register that silently drops a member on a transient RPC error, and
+  then asserts the remaining holders own the rest, is a false record. The
+  fallback is stated in the artefact rather than inferred from it — every API
+  row carries `source`, the CSV carries a `Balance source` column reading
+  `Confirmed on chain` or `Allotment record, not confirmed on chain`, and an
+  export that is not chain-confirmed logs a `WARNING` beside the export line.
+  `company_stats.totalShareholders` deliberately does **not** run this read.
+  `GET /api/v1/companies/{uuid}/stats/` is loaded by the dashboard company page
+  and by the mobile company screen, and putting the register behind it would
+  put one sequential `balanceOf` per member on a hot path, unbounded and
+  uncached, and would make a headline number move with RPC reachability with
+  nothing in the payload to say so. The tile stays one `COUNT(DISTINCT
+  recipient_address)` over completed allotments: cheap, deterministic, and
+  honestly an allotment count rather than a register count — a former member on
+  zero is still in it. The register, not the tile, is the statutory artefact.
+- **The register export neutralises anything that opens like a formula.** Name
+  and residential address come from `users.UserProfile`, which the investor
+  sets themselves, and the treasury label from `WhitelistEntry`. Any cell whose
+  first character is `=`, `+`, `-`, `@`, a tab or a carriage return is written
+  with a leading apostrophe by `shared.utils.csv_cell`, so an issuer opening
+  `register-<SYMBOL>.csv` in Excel or Sheets cannot be made to run a formula
+  against a sheet of every other member's residential address.
+- **Amount paid on the register is blank where it is unknown, never zero, and
+  never a part shown as the whole.** It comes from the `Subscription` that
+  produced the allotment; a holding that predates the platform has none, and a
+  zero would be a false record rather than a missing one. The same reasoning
+  settles the mixed row, which is ordinary rather than a corner: a founder
+  allotted a thousand shares directly who then subscribes for ten more has
+  twenty-five dollars known and a thousand shares unknown, and printing the
+  twenty-five beside a holding of one thousand and ten reads as the
+  consideration for the lot — a false record that looks authoritative, which is
+  worse than a blank.
+
+  The column blanks under any of three conditions, all three spelled out in
+  [ARCHITECTURE.md](ARCHITECTURE.md): a share on the row has no subscription
+  behind it; the subscribed count disagrees with the balance the row actually
+  prints, which is what happens whenever the chain and the allotment record
+  diverge; or the money record has not yet caught up with the allotment. The
+  figure printed is the consideration for the shares kept, not the cash
+  received, so a scaled-back subscription awaiting its refund does not overstate
+  what the company is entitled to.
+
+  Showing the known part instead would need a column of its own and a sentence
+  saying what it means; neither is worth it in Phase 1. There is no operator
+  override field either.
+- **The residential address is in the CSV and nowhere else.** The dashboard
+  register shows name, holder type and holding. `GET
+  /api/v1/tokens/{uuid}/register/export/` writes the s169-shaped CSV. `GET
+  /api/v1/tokens/{uuid}/holders/` keeps its path and its four original keys and
+  gains `holderType`, `enteredOn` and `shareClass`; both routes are scoped by
+  `visible_to_user` and pinned in the cross-tenant route matrix.
+- **The export trail is one log line, and nothing more than that.** Each export
+  writes an application log line naming the requesting user's primary key and
+  the row count. There is no export audit model, nothing queryable, and no
+  retention past whatever the deployment keeps its logs for. Every download is
+  a full sheet of members' residential addresses, so a durable and queryable
+  record of who took one is owed. It is deliberately not built in Phase 1 and
+  is not claimed to be: Phase 2 carries it.
+- **Past members are not retained, and that is a gap.** The register drops a
+  holder whose balance reaches zero, which is right for a list of current
+  members. Section 169(3) also wants members who ceased in the last seven years
+  kept on the register with the date they ceased. Phase 1 does not meet that
+  and nothing here builds it: the read-model has no record of a holding that
+  ended, only of allotments that happened. Whether a derived register can
+  satisfy 169(3) at all, or whether it forces the Phase 2 `Transfer` log
+  indexer and a stored ceased-on date, is the question. Counsel question,
+  flagged.
+- **The operator console is one page and costs nothing structural.** It replaces
+  the dead redirect at `/admin/operators/operator/` — no `AdminSite` subclass,
+  no URL namespace, no model. It carries a configuration health strip that
+  fails closed before an offering opens rather than at payment-instruction
+  time, thirteen worklist counts — eleven linking to a filtered changelist, and
+  the two register queues to the unfiltered whitelist changelist, because no
+  filter on it expresses their condition and for `unidentified` none could,
+  its commonest case being an address with no whitelist row to filter to — and
+  the deployment mode with the register keeper named for each active company.
+  Every count is a `.count()` or an identity read over allotment addresses; the
+  identity read is chunked, so its SQL is the same size on a deployment of ten
+  addresses and ten thousand. The page makes no chain call, so it cannot hang
+  on a flaky RPC.
+- **"Offerings at their cap and still open" counts money in, not allotments
+  out.** Decision 8 keeps closing manual and asks the console to catch a fully
+  subscribed offering sitting open. The row therefore reads
+  `Subscription.paid_or_allotted()`, which is every subscription whose money has
+  arrived, rather than B5's `committed_to_shares()`, which additionally requires
+  an issuance request and so only fires after the operator has already processed
+  the allotment the row exists to prompt. B5's headroom guard is unchanged and
+  still reads `committed_to_shares()`.
+- **The console states who keeps the register; it does not say who is obliged
+  to.** Naming the registrant is a fact about this deployment. Whether that
+  party carries the section 168 obligation is a question for the issuer and its
+  advisers, and the console says so in as many words. Counsel question,
+  flagged.
+
 ## Phase 2 — Eligibility and the register
 
 Not started, except that the Phase 1 predicate already reads the investor
@@ -331,7 +455,13 @@ switch.
   reader, through `eligible_for_any_company(user)`, and the whitelist admin's
   read-only column and add-form warning remain the fourth.
 - A share register that is the authoritative record, reconciled against the
-  chain rather than derived from it ad hoc.
+  chain rather than derived from it ad hoc. The Phase 1 register is derived, and
+  the trigger for replacing it with a `Transfer` log indexer is written above:
+  the moment a share can move by anything other than allotment, a transferee who
+  never received one is invisible to it. Two more things wait on the same work:
+  section 169(3) retention of members who ceased in the last seven years, which
+  a derived current-holders read-model cannot express, and a durable queryable
+  record of every register export, which today is one application log line.
 - Director authority, ownership immutability, ACN and ABN validation and
   authorized-capital limits, none of which the models check today.
 
@@ -361,11 +491,11 @@ fixed and independently reviewed.
 ## Not on the roadmap
 
 There is no off-ramp. No route lists investors: `GET /api/v1/directory/tokens/`
-is a directory of deployed share classes open to investors, not of people. There
-is no subscription, no payment confirmation and no allotment from an offering
-yet. Retail offerings are out of scope for the first releases (see the
-wholesale/sophisticated decision below). Mainnet deployment configuration is
-deliberately absent.
+is a directory of deployed share classes open to investors, not of people. The
+register of members is per share class, is read only by the issuer that owns it
+and by the operator, and is not a route anyone else can reach. Retail offerings
+are out of scope for the first releases (see the wholesale/sophisticated
+decision below). Mainnet deployment configuration is deliberately absent.
 
 ## Decisions taken
 

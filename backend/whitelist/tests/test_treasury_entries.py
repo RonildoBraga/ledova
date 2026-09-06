@@ -139,6 +139,13 @@ class TreasuryEntryAdminTest(TestCase):
             self.assertContains(response, TREASURY_CHECKSUM)
             self.assertContains(response, "Custodian")
         changelist = self.client.get(reverse("admin:whitelist_whitelistentry_changelist"))
+        self.assertContains(changelist, "Custodian")
+
+    def test_an_unlabelled_treasury_entry_shows_the_generic_owner(self):
+        WhitelistEntry.objects.create(address="0x" + "cd" * 20, label="")
+
+        changelist = self.client.get(reverse("admin:whitelist_whitelistentry_changelist"))
+
         self.assertContains(changelist, "Operator (treasury/custodian)")
 
 

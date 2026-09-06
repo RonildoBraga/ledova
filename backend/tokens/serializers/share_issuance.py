@@ -9,6 +9,7 @@ class ShareIssuanceListSerializer(serializers.ModelSerializer):
     issuance_type_display = serializers.CharField(source="get_issuance_type_display", read_only=True)
     initiated_by_email = serializers.EmailField(source="initiated_by.email", read_only=True, allow_null=True)
     token_symbol = serializers.CharField(source="token.symbol", read_only=True)
+    subscription_reference = serializers.SerializerMethodField()
 
     class Meta:
         model = ShareIssuance
@@ -16,6 +17,7 @@ class ShareIssuanceListSerializer(serializers.ModelSerializer):
             "uuid",
             "token",
             "token_symbol",
+            "subscription_reference",
             "recipient_address",
             "recipient_name",
             "amount",
@@ -33,3 +35,8 @@ class ShareIssuanceListSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = fields
+
+    def get_subscription_reference(self, issuance):
+        request = getattr(issuance, "shareissuancerequest", None)
+        subscription = None if request is None else getattr(request, "subscription", None)
+        return None if subscription is None else (subscription.reference or str(subscription.uuid))

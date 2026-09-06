@@ -15,12 +15,15 @@ import {
   ListBulletsIcon,
   ArrowSquareOutIcon,
   TrendUpIcon,
+  DownloadSimpleIcon,
 } from '@phosphor-icons/react';
 import { Panel } from '@components/Panel';
 import { Modal } from '@components/Modal';
 import {
   DESIGN_TOKENS,
   BLOCKCHAIN,
+  HOLDER_TYPE_LABELS,
+  REGISTER_COPY,
   updateCompany,
   issueCompanyShares,
   getBlockExplorerAddressUrl,
@@ -38,6 +41,7 @@ import type {
   TokenType,
   TokenCreate,
   TokenHolder,
+  HolderType,
   TokenIssuance,
   CapitalIncreaseRequest,
   CapitalIncreaseStatus,
@@ -48,6 +52,20 @@ const ICON_SM = DESIGN_TOKENS.icon.sizes.sm;
 const ICON_MD = DESIGN_TOKENS.icon.sizes.md;
 const ICON_LG = DESIGN_TOKENS.icon.sizes.lg;
 const ICON_XL = DESIGN_TOKENS.icon.sizes.xl;
+
+const HOLDER_TYPE_BADGES: Record<HolderType, string> = {
+  member: 'bg-success-light/15 text-success-light',
+  treasury: 'bg-info-light/15 text-info-light',
+  ambiguous: 'bg-error-light/15 text-error-light',
+  unidentified: 'bg-warning-light/15 text-warning-light',
+};
+
+const HOLDER_TYPE_NOTES: Record<HolderType, string> = {
+  member: 'Named on the register through a whitelisted wallet.',
+  treasury: 'An operator treasury or custodian address, named by its whitelist label.',
+  ambiguous: REGISTER_COPY.AMBIGUOUS_NOTE,
+  unidentified: REGISTER_COPY.UNIDENTIFIED_NOTE,
+};
 
 const STATUS_LABELS: Record<CompanyStatus, string> = {
   draft: 'Draft',
@@ -473,6 +491,9 @@ function TokenDetailModal({
     isPausing,
     unpause,
     isUnpausing,
+    downloadRegister,
+    isDownloadingRegister,
+    registerError,
     createCapitalIncrease,
     isCreatingCapitalIncrease,
     submitCapitalIncrease,
@@ -870,10 +891,23 @@ function TokenDetailModal({
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-semibold text-text-primary flex items-center gap-1.5">
               <UsersThreeIcon size={ICON_SM} className="text-text-muted" />
-              Cap Table
+              {REGISTER_COPY.TITLE}
               <span className="text-text-muted font-normal">({totalHolders})</span>
             </h3>
+            <button
+              onClick={() => downloadRegister().catch(() => undefined)}
+              disabled={isDownloadingRegister || holders.length === 0}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-brand-mid hover:bg-brand disabled:bg-surface-disabled px-3 py-1.5 text-xs font-semibold text-white transition-colors"
+            >
+              <DownloadSimpleIcon size={ICON_SM} />
+              {REGISTER_COPY.DOWNLOAD}
+            </button>
           </div>
+          <p className="text-xs text-text-muted mb-2">{REGISTER_COPY.PRIVACY_NOTE}</p>
+          {holders.some((h: TokenHolder) => h.source !== 'blockchain') && (
+            <p className="text-xs text-warning-light mb-2">{REGISTER_COPY.NOT_CONFIRMED_NOTE}</p>
+          )}
+          {registerError && <p className="text-xs text-error-light mb-2">{REGISTER_COPY.DOWNLOAD_FAILED}</p>}
           {isLoadingHolders ? (
             <div className="py-4 text-center">
               <div className="h-5 w-5 border-2 border-brand-subtle border-t-brand rounded-full animate-spin mx-auto" />
@@ -884,6 +918,7 @@ function TokenDetailModal({
                 <thead>
                   <tr className="border-b border-border">
                     <th className="px-3 py-2 text-left text-xs font-medium text-text-muted">Holder</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-text-muted">Type</th>
                     <th className="px-3 py-2 text-right text-xs font-medium text-text-muted">Shares</th>
                     <th className="px-3 py-2 text-right text-xs font-medium text-text-muted">Ownership</th>
                   </tr>
@@ -908,6 +943,14 @@ function TokenDetailModal({
                             )}
                           </button>
                         </div>
+                      </td>
+                      <td className="px-3 py-2">
+                        <span
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${HOLDER_TYPE_BADGES[h.holderType]}`}
+                          title={HOLDER_TYPE_NOTES[h.holderType]}
+                        >
+                          {HOLDER_TYPE_LABELS[h.holderType]}
+                        </span>
                       </td>
                       <td className="px-3 py-2 text-right font-medium text-text-primary tabular-nums">
                         {parseInt(h.balance).toLocaleString()}
@@ -951,6 +994,11 @@ function TokenDetailModal({
                   <code className="text-xs font-mono text-text-primary">
                     {iss.recipientAddress.slice(0, 6)}...{iss.recipientAddress.slice(-4)}
                   </code>
+                  {iss.subscriptionReference && (
+                    <span className="text-xs text-text-muted" title="The subscription that paid for this allotment">
+                      {iss.subscriptionReference}
+                    </span>
+                  )}
                   <span className="text-sm font-semibold text-success-light ml-auto tabular-nums">
                     +{parseInt(iss.amount).toLocaleString()}
                   </span>

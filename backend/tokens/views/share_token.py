@@ -1,3 +1,6 @@
+import csv
+
+from django.http import HttpResponse
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
@@ -18,6 +21,12 @@ from tokens.serializers import (
     ShareTokenListSerializer,
 )
 from tokens.services import ShareTokenService
+from tokens.services.register import (
+    REGISTER_HEADERS,
+    api_holders,
+    export_rows,
+    token_register,
+)
 
 MANAGE_ACTIONS = ("create", "update", "partial_update", "destroy", "deploy", "pause", "unpause", "issue")
 
@@ -102,7 +111,7 @@ class ShareTokenViewSet(AuthenticatedModelViewSet):
     @action(detail=True, methods=["get"])
     def issuances(self, request, uuid=None):
         token = self.get_object()
-        issuances = ShareIssuance.objects.with_token().with_initiated_by().filter_by_token(token)
+        issuances = ShareIssuance.objects.with_token().with_initiated_by().with_subscription().filter_by_token(token)
         if request.query_params.get("status"):
             issuances = issuances.filter(status=request.query_params["status"])
         page = self.paginate_queryset(issuances.order_by("-completed_at"))
@@ -111,7 +120,7 @@ class ShareTokenViewSet(AuthenticatedModelViewSet):
     @action(detail=True, methods=["get"])
     def holders(self, request, uuid=None):
         token = self.get_object()
-        holders_data = ShareTokenService().get_token_holders(token)
+        rows = token_register(token)
         return Response(
             {
                 "token": {
@@ -121,7 +130,19 @@ class ShareTokenViewSet(AuthenticatedModelViewSet):
                     "status": token.status,
                     "total_supply": token.total_supply,
                 },
-                "holders": holders_data,
-                "total_holders": len(holders_data),
+                "holders": api_holders(rows),
+                "total_holders": len(rows),
             }
         )
+
+    @action(detail=True, methods=["get"], url_path="register/export")
+    def register_export(self, request, uuid=None):
+        token = self.get_object()
+        rows = export_rows(token, request.user)
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = f'attachment; filename="register-{token.symbol}.csv"'
+        writer = csv.writer(response)
+        writer.writerow(REGISTER_HEADERS)
+        for row in rows:
+            writer.writerow(row)
+        return response

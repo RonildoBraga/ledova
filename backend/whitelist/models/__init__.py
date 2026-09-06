@@ -1,4 +1,4 @@
-from whitelist.models.choices import WhitelistStatus
+from whitelist.models.choices import HolderType, WhitelistStatus
 from whitelist.models.entry import WhitelistEntry
 
-__all__ = ["WhitelistStatus", "WhitelistEntry"]
+__all__ = ["HolderType", "WhitelistStatus", "WhitelistEntry"]

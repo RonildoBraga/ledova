@@ -27,6 +27,16 @@ class CapitalIncreaseRequestQuerySet(QuerySet):
     def pending(self):
         return self.filter(status__in=[RequestStatus.SUBMITTED, RequestStatus.UNDER_REVIEW, RequestStatus.APPROVED])
 
+    def needing_attention(self):
+        return self.filter(
+            status__in=[
+                RequestStatus.SUBMITTED,
+                RequestStatus.UNDER_REVIEW,
+                RequestStatus.APPROVED,
+                RequestStatus.FAILED,
+            ]
+        )
+
     def with_relations(self):
         return self.select_related(
             "token",

@@ -81,6 +81,53 @@ class SubscriptionDetailSerializer(SubscriptionListSerializer):
             return None
 
 
+ISSUER_SUBSCRIPTION_FIELDS = [
+    "uuid",
+    "status",
+    "status_display",
+    "investor_name",
+    "quantity",
+    "allotted_quantity",
+    "price_per_share",
+    "amount_due",
+    "amount_received",
+    "settlement_rail_display",
+    "reference",
+    "payment_due_at",
+    "payment_confirmed_at",
+    "allotment_state",
+    "wallet_address",
+    "created_at",
+]
+
+NOT_ALLOTTED = "Not allotted"
+
+
+class IssuerSubscriptionSerializer(serializers.ModelSerializer):
+
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    settlement_rail_display = serializers.CharField(source="get_settlement_rail_display", read_only=True)
+    wallet_address = serializers.CharField(source="wallet.address", read_only=True)
+    investor_name = serializers.SerializerMethodField()
+    allotment_state = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Subscription
+        fields = ISSUER_SUBSCRIPTION_FIELDS
+        read_only_fields = fields
+
+    def get_investor_name(self, subscription):
+        names = [
+            (profile.full_name or "").strip() or profile.user.email
+            for profile in subscription.user_account.user_profiles.all()
+        ]
+        return " & ".join(name for name in names if name)
+
+    def get_allotment_state(self, subscription):
+        request = subscription.issuance_request
+        return NOT_ALLOTTED if request is None else request.get_status_display()
+
+
 class SubscriptionCreateSerializer(serializers.ModelSerializer):
 
     offering = serializers.SlugRelatedField(slug_field="uuid", queryset=Offering.objects.none())

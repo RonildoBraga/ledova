@@ -14,12 +14,79 @@ instance, or a registry provider hosting many companies. Its configuration is
 one row, `operators.Operator`, edited in the Django admin.
 
 - The admin changelist, `/admin/operators/operator/`, seeds the row if it is
-  missing and redirects to the single change page,
+  missing and renders the **operator console** — the configuration health
+  strip, the worklist, and the deployment mode with the register keeper for
+  each active company — with a button through to the single change page,
   `/admin/operators/operator/1/change/`. Always enter through the changelist:
   the change URL alone redirects to `/admin/` on a fresh install, because
   `changelist_view` is the only thing that creates the row. Add is offered only
   while no row exists; delete never is. One row is enforced three ways: a fixed primary key
   of 1, a `CheckConstraint` on it, and a guard in `save()`.
+
+### The operator console
+
+`/admin/operators/operator/` is the one page that says what is waiting. It adds
+no model, no URL namespace and no `AdminSite` subclass: it is
+`OperatorAdmin.changelist_view` rendering a template over
+`operators/services.py`.
+
+- **Configuration health** fails closed before an offering opens rather than at
+  payment-instruction time. Five checks: the operator row carries a name, legal
+  name, ABN and contact email; `WHITELIST_CONTRACT_ADDRESS` is set;
+  `SHARE_TOKEN_FACTORY_ADDRESS` is set; `payment_reference_prefix` is present
+  and at most ten characters, so the prefix plus the eight-character code fits
+  the eighteen-character AU lodgement limit; and every supported settlement
+  asset holds an active deployment on `receiving_wallet_chain`. A fresh install
+  starts with an empty settlement-asset set, which the strip reports rather
+  than passing silently — an offering can then only be paid by bank transfer.
+- **The worklist** is thirteen labelled counts. Eleven link to the admin
+  changelist already filtered; the two register queues link to the whitelist
+  changelist unfiltered, for the reason given below. The thirteen are: company
+  applications submitted, in review or
+  needing information; classifications awaiting verification; offerings
+  submitted or under review; offerings whose paid and allotted subscriptions
+  have reached the cap while the offering is still open; subscriptions awaiting
+  payment; subscriptions paid and not allotted; subscriptions whose mint is
+  broadcast and unresolved; whitelist entries pending; issuance and
+  capital-increase requests submitted, approved-not-executed or failed; share
+  tokens stuck in `DEPLOYING` past the pending-deployment age; and the two
+  register queues below. Eleven of them are one `.count()` on an existing
+  queryset method; the last two share one identity read. Nothing on the page
+  touches the chain, so it cannot hang on a flaky RPC.
+- **The two register queues are the operator's only sight of a holder who
+  cannot be named.** "Allotment addresses with two wallets, so no member can be
+  named" is the `ambiguous` holder type: two `WhitelistEntry` rows on one
+  address, which only the operator can resolve, since
+  `WhitelistService._resolve_wallet` refuses to act on it. "Allotment
+  addresses with no member behind them" is `unidentified`: no whitelist entry
+  at all, or an entry whose wallet carries no named profile. Both are red,
+  because a register row that cannot name a member of the company is a section
+  169 defect and the issuer's own token modal is otherwise the only place it
+  shows. Both count distinct completed allotment addresses through
+  `whitelist/services/identity.py`, the same code the register uses, so a
+  holder type means the same thing on both surfaces. They count allotment addresses rather than chain-confirmed register
+  rows, so an unidentified former member who has transferred out can still
+  appear; the queue is never shorter than the register, which is the safe
+  direction. **Neither row can carry a filter, and both land on the unfiltered
+  whitelist changelist.** No filter on `WhitelistEntryAdmin` expresses either
+  condition, and for `unidentified` none could: its commonest case is an
+  allotment address with no whitelist entry at all, so there is no row on that
+  changelist to filter to. To clear one: open the whitelist changelist, paste
+  the address from the issuer's token modal into the search box, and either
+  link the wallet to an account with a named profile, remove the duplicate
+  entry, or add the missing entry. The identity read is chunked at five hundred
+  addresses a query, so the SQL stays the same size whatever the deployment
+  holds; the cost is at most three queries a chunk — the whitelist entries,
+  their accounts and the profiles behind them — over one address per member of
+  every
+  company on the deployment, held in memory. Calling the same identity code as
+  the register was preferred to a second definition of the holder types in SQL,
+  which could drift from it.
+- **Deployment mode and the registrant.** The console names the mode
+  (`registry` or `single_issuer`) and, for each active company, who keeps the
+  register on this deployment. It states that fact and nothing more: it does
+  not assert who carries the section 168 obligation, which is a question for
+  the issuer and its advisers.
 - The row is created lazily the first time the admin page or
   `GET /api/operator/` asks for it, named from `OPERATOR_NAME` (default
   `Ledova operator`). Nothing in the compose `migrate` chain creates it.
@@ -524,7 +591,8 @@ without it.
    fold release, read Migration notes first: dry-run the migration against a
    restored copy, and queue `sync_all_wallets` afterwards.
 7. Open `/admin/operators/operator/` and complete identity, deployment mode and
-   payment rails before inviting anyone. Enter the changelist, not
+   payment rails before inviting anyone; the console's health strip must be all
+   green before an offering opens. Enter the changelist, not
    `/admin/operators/operator/1/change/`: only `OperatorAdmin.changelist_view`
    seeds the row, so on a fresh install the change URL redirects to `/admin/`.
 8. Confirm a worker is running; check the deployment, issuance and confirmation

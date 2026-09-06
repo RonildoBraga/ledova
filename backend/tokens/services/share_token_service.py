@@ -821,44 +821,6 @@ class ShareTokenService:
             logger.error(f"Error getting balance: {e}")
             raise TokenBalanceRetrievalException() from e
 
-    def get_token_holders(self, token) -> list[dict]:
-        holders_data = []
-
-        if token.status == "deployed" and token.contract_address:
-            try:
-                issuances_qs = ShareIssuance.objects.filter_by_token(token)
-                address_names = issuances_qs.unique_holders_with_names()
-
-                for address in address_names.keys():
-                    try:
-                        balance = self.get_token_balance(token.contract_address, address)
-                        if balance > 0:
-                            holders_data.append(
-                                {
-                                    "address": address,
-                                    "name": address_names.get(address) or None,
-                                    "balance": str(balance),
-                                    "source": "blockchain",
-                                }
-                            )
-                    except Exception as e:
-                        logger.warning(f"Failed to get balance for {address}: {e}")
-
-            except Exception as e:
-                logger.error(f"Failed to query blockchain for holders: {e}")
-                holders_data = ShareIssuance.objects.filter_by_token(token).holders_as_list()
-        else:
-            holders_data = ShareIssuance.objects.filter_by_token(token).holders_as_list()
-
-        total_supply = sum(int(h["balance"]) for h in holders_data) if holders_data else 0
-        for holder in holders_data:
-            balance = int(holder["balance"])
-            holder["percentage"] = round((balance / total_supply * 100), 2) if total_supply > 0 else 0
-
-        holders_data.sort(key=lambda x: int(x["balance"]), reverse=True)
-
-        return holders_data
-
     def get_wallet_token_balances(self, wallet_address: str) -> dict:
         wallet_checksum = self._validate_address(wallet_address)
 

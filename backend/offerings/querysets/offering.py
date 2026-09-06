@@ -1,4 +1,14 @@
-from django.db.models import Q, QuerySet
+from django.db.models import (
+    F,
+    IntegerField,
+    OuterRef,
+    Q,
+    QuerySet,
+    Subquery,
+    Sum,
+    Value,
+)
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 
@@ -32,6 +42,30 @@ class OfferingQuerySet(QuerySet):
         return self.filter(status=OfferingStatus.APPROVED, opens_at__lte=now).filter(
             Q(closes_at__isnull=True) | Q(closes_at__gt=now)
         )
+
+    def awaiting_review(self):
+        from offerings.models.offering import OfferingStatus
+
+        return self.filter(status__in=[OfferingStatus.SUBMITTED, OfferingStatus.UNDER_REVIEW])
+
+    def with_subscribed_shares(self):
+        from offerings.models import Subscription
+
+        subscribed = (
+            Subscription.objects.paid_or_allotted()
+            .filter(offering=OuterRef("pk"))
+            .values("offering")
+            .annotate(total=Sum(Coalesce("allotted_quantity", "quantity")))
+            .values("total")
+        )
+        return self.annotate(
+            subscribed_shares=Coalesce(
+                Subquery(subscribed, output_field=IntegerField()), Value(0), output_field=IntegerField()
+            )
+        )
+
+    def cap_reached(self):
+        return self.open_now().with_subscribed_shares().filter(subscribed_shares__gte=F("cap_shares"))
 
     def for_token(self, token):
         return self.filter(token=token)

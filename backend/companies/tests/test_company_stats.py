@@ -1,5 +1,10 @@
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from rest_framework.test import APITestCase
+from web3 import Web3
 
 from companies.models import Company
 from tokens.models import (
@@ -61,3 +66,23 @@ class CompanyStatsTest(APITestCase):
             response.json(),
             {"totalTokens": 1, "totalShareholders": 2, "pendingActions": 3, "pendingCapitalIncreases": 3},
         )
+
+    def test_the_shareholder_count_never_reads_the_chain_and_costs_the_same_at_any_size(self):
+        self.client.force_authenticate(self.owner)
+        url = f"/api/v1/companies/{self.company.uuid}/stats/"
+
+        def allot(start, stop):
+            for index in range(start, stop):
+                self._issuance(self.deployed, Web3.to_checksum_address(f"0x{index + 1:040x}"))
+
+        with patch("tokens.services.share_token_service.ShareTokenService.get_token_balance") as balance:
+            allot(0, 2)
+            with CaptureQueriesContext(connection) as few:
+                self.client.get(url)
+            allot(2, 200)
+            with CaptureQueriesContext(connection) as many:
+                response = self.client.get(url)
+
+        self.assertEqual(response.json()["totalShareholders"], 200)
+        self.assertEqual(len(many), len(few))
+        balance.assert_not_called()

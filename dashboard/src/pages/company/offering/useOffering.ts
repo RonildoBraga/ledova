@@ -5,6 +5,7 @@ import {
   deleteOffering,
   getCompanyTokens,
   getOfferings,
+  getOfferingSubscriptions,
   submitOffering,
   updateOffering,
   withdrawOffering,
@@ -37,6 +38,17 @@ export function useOfferings() {
     isLoading: offeringsQuery.isLoading || tokensQuery.isLoading,
     refresh,
   };
+}
+
+export function useOfferingSubscriptions(uuid: string | undefined) {
+  const query = useQuery({
+    queryKey: ['offering-subscriptions', uuid],
+    queryFn: () => getOfferingSubscriptions(apiClient, uuid!),
+    enabled: !!uuid,
+    staleTime: CACHE_TIMING.SHORT_STALE_TIME,
+  });
+
+  return { subscriptions: query.data?.data?.results ?? [], isLoading: query.isLoading };
 }
 
 export function useOfferingActions(onSettled: () => void) {

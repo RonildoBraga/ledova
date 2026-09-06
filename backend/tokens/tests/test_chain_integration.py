@@ -1,3 +1,5 @@
+import csv
+import io
 import os
 import secrets
 import threading
@@ -31,6 +33,7 @@ from tokens.models import (
     ShareTokenStatus,
 )
 from tokens.services import ShareTokenService
+from tokens.services.register import REGISTER_HEADERS, SOURCE_CHAIN, SOURCE_LABELS
 from tokens.services.share_token_service import (
     CAP_NOT_RAISED,
     EXCEEDS_AUTHORIZED,
@@ -240,16 +243,28 @@ class ShareTokenChainTest(ChainTestMixin, APITestCase):
         holders = self.client.get(f"/api/v1/tokens/{self.token.uuid}/holders/")
         self.assertEqual(holders.status_code, 200)
         self.assertEqual(holders.json()["totalHolders"], 1)
+        holder = holders.json()["holders"][0]
         self.assertEqual(
-            holders.json()["holders"][0],
+            {key: holder[key] for key in ("address", "name", "balance", "source", "percentage")},
             {
                 "address": self.investor,
-                "name": "Investor",
+                "name": self.tenant.profile.full_name,
                 "balance": "10",
                 "source": "blockchain",
                 "percentage": 100.0,
             },
         )
+        self.assertEqual(holder["holderType"], "member")
+        self.assertEqual(holder["shareClass"], self.token.symbol)
+        self.assertIsNotNone(holder["enteredOn"])
+
+        register = self.client.get(f"/api/v1/tokens/{self.token.uuid}/register/export/")
+        self.assertEqual(register.status_code, 200)
+        rows = list(csv.reader(io.StringIO(register.content.decode())))
+        self.assertEqual(rows[0], REGISTER_HEADERS)
+        self.assertEqual(rows[1][:6], [self.tenant.profile.full_name, "", self.investor, "Member", "DRF", "10"])
+        self.assertEqual(rows[1][6], SOURCE_LABELS[SOURCE_CHAIN])
+        self.assertEqual(rows[1][8:], ["Active", ""])
         self.assertEqual(holders.json()["token"]["totalSupply"], str(CAP))
 
         increase = CapitalIncreaseRequest.objects.create(

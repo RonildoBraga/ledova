@@ -10,6 +10,7 @@ from web3 import Web3
 from users.services.eligibility import account_eligibility
 from wallets.models import Wallet
 from whitelist.models import WhitelistEntry, WhitelistStatus
+from whitelist.services.identity import entry_identity
 
 
 def entry_eligibility(wallet):
@@ -97,7 +98,6 @@ class WhitelistEntryAdmin(admin.ModelAdmin):
         "label",
         "wallet__user_account__uuid",
     ]
-    list_select_related = ["wallet", "wallet__user_account"]
     readonly_fields = [
         "uuid",
         "status",
@@ -156,13 +156,13 @@ class WhitelistEntryAdmin(admin.ModelAdmin):
 
     short_address.short_description = "Wallet Address"
 
+    def get_queryset(self, request):
+        return super().get_queryset(request).with_holder_identity()
+
     def wallet_owner(self, obj):
-        if obj.wallet and obj.wallet.user_account:
-            profiles = obj.wallet.user_account.user_profiles.all()
-            if profiles:
-                return profiles[0].user.email
-        if obj.wallet_id is None:
-            return "Operator (treasury/custodian)"
+        identity = entry_identity(obj)
+        if identity.name:
+            return identity.name
         return mark_safe('<span style="color: #dc3545;">Unassigned</span>')
 
     wallet_owner.short_description = "Owner"

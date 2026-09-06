@@ -10,6 +10,7 @@ from offerings.serializers.offering import (
     OfferingWriteSerializer,
 )
 from offerings.serializers.subscription import (
+    IssuerSubscriptionSerializer,
     SubscriptionCreateSerializer,
     SubscriptionDetailSerializer,
     SubscriptionListSerializer,
@@ -24,6 +25,7 @@ __all__ = [
     "OfferingListSerializer",
     "OfferingWithdrawSerializer",
     "OfferingWriteSerializer",
+    "IssuerSubscriptionSerializer",
     "SubscriptionCreateSerializer",
     "SubscriptionDetailSerializer",
     "SubscriptionListSerializer",
