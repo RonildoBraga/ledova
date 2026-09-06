@@ -8,9 +8,13 @@ PYTHON ?= python3
 	dev-up dev-down dev-logs contracts-compile contracts-test contracts-deploy-local \
 	contracts-deploy-testnet chain-test
 
-# Hardhat account #0: a public development key that only ever holds local test ether.
+# CHAIN_TEST_PORT is the single knob for the local chain: it moves the Hardhat node, the backend's
+# BLOCKCHAIN_RPC_URL and, through LOCALHOST_RPC_URL, the `localhost` network in contracts/hardhat.config.ts
+# that `deploy:local:core` connects to. Two worktrees can therefore run `make chain-test` at once on
+# different ports. The default stays 8545, which is what a bare `npx hardhat node` uses.
 CHAIN_TEST_PORT ?= 8545
 CHAIN_TEST_RPC_URL ?= http://127.0.0.1:$(CHAIN_TEST_PORT)
+# Hardhat account #0: a public development key that only ever holds local test ether.
 CHAIN_TEST_OPERATOR_KEY ?= 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 # Django settings for the chain test; ledova_backend.settings.test_postgres (with the POSTGRES_* variables set)
 # also runs the concurrency case, which needs a database that honours row locks.
@@ -93,13 +97,14 @@ contracts-test:
 	$(NPM) --prefix contracts test
 
 contracts-deploy-local:
-	$(NPM) --prefix contracts run deploy:local:core
+	LOCALHOST_RPC_URL=$(CHAIN_TEST_RPC_URL) $(NPM) --prefix contracts run deploy:local:core
 
 contracts-deploy-testnet:
 	$(NPM) --prefix contracts run deploy:testnet
 
 chain-test:
 	@set -e; \
+	$(PYTHON) scripts/check-port-free.py $(CHAIN_TEST_PORT); \
 	$(NPM) --prefix contracts run compile; \
 	( cd contracts && exec node_modules/.bin/hardhat node --port $(CHAIN_TEST_PORT) ) > .hardhat-node.log 2>&1 & \
 	node_pid=$$!; \
@@ -114,7 +119,7 @@ chain-test:
 	if [ "$$ready" != 1 ]; then \
 		echo "Hardhat node did not answer on $(CHAIN_TEST_RPC_URL) within 60s; see .hardhat-node.log" >&2; exit 1; \
 	fi; \
-	$(NPM) --prefix contracts run deploy:local:core; \
+	LOCALHOST_RPC_URL=$(CHAIN_TEST_RPC_URL) $(NPM) --prefix contracts run deploy:local:core; \
 	set -a; . ./.deployed-contracts.env; set +a; \
 	cd backend && \
 	CHAIN_TEST_RPC_URL=$(CHAIN_TEST_RPC_URL) BLOCKCHAIN_RPC_URL=$(CHAIN_TEST_RPC_URL) BLOCKCHAIN_CHAIN_ID=31337 \

@@ -21,7 +21,6 @@ import { Panel } from '@components/Panel';
 import { Modal } from '@components/Modal';
 import {
   DESIGN_TOKENS,
-  BLOCKCHAIN,
   HOLDER_TYPE_LABELS,
   REGISTER_COPY,
   updateCompany,
@@ -125,8 +124,6 @@ const CAPITAL_INCREASE_STATUS_COLORS: Record<CapitalIncreaseStatus, string> = {
   executed: 'bg-success-light/20 text-success-light',
   failed: 'bg-error-light/20 text-error-light',
 };
-
-const TOKEN_CHAIN = BLOCKCHAIN.BASE;
 
 const INPUT_CLASS =
   'w-full rounded-lg border border-border bg-surface-raised px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-mid focus:outline-none focus:ring-1 focus:ring-brand-mid';
@@ -563,8 +560,10 @@ function TokenDetailModal({
   const isPaused = token.status === 'paused';
   const isDraft = token.status === 'draft';
   const companyIsActive = companyStatus === 'active';
-  const contractUrl = token.contractAddress ? getBlockExplorerAddressUrl(TOKEN_CHAIN, token.contractAddress) : '';
-  const deploymentTxUrl = token.deploymentTxHash ? getBlockExplorerTxUrl(TOKEN_CHAIN, token.deploymentTxHash) : '';
+  const contractUrl =
+    token.chain && token.contractAddress ? getBlockExplorerAddressUrl(token.chain, token.contractAddress) : '';
+  const deploymentTxUrl =
+    token.chain && token.deploymentTxHash ? getBlockExplorerTxUrl(token.chain, token.deploymentTxHash) : '';
 
   const additionalShares = parseInt(capitalForm.additionalShares) || 0;
   const newAuthorizedTotal = currentSupply + additionalShares;

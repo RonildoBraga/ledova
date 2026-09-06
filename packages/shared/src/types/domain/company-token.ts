@@ -16,6 +16,7 @@ export interface CompanyShareToken {
   tokenType: TokenType;
   status: TokenStatus;
   contractAddress: string | null;
+  chain: string | null;
   totalSupply: string;
   decimals: number;
   isTransferable: boolean;
