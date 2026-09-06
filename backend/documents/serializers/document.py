@@ -2,6 +2,7 @@ from django.urls import reverse
 from rest_framework import serializers
 
 from documents.models import Document, DocumentExtraction
+from shared.uploads import validate_upload
 
 
 class DocumentExtractionSerializer(serializers.ModelSerializer):
@@ -64,3 +65,7 @@ class DocumentUploadSerializer(serializers.ModelSerializer):
     class Meta:
         model = Document
         fields = ["document_type", "note", "file"]
+
+    def validate(self, data):
+        _, data["mime_type"] = validate_upload(data["file"])
+        return data

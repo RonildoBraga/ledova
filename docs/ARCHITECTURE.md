@@ -591,7 +591,24 @@ this codebase, and `MEDIA_ROOT` holds nothing an authenticated route serves.
   on a row checks the matching permission itself —
   `InvestorClassificationAdmin.transition_view` checks
   `has_change_permission`, because verifying or revoking a wholesale-investor
-  claim is a compliance control, not a read.
+  claim is a compliance control, not a read. **This is an operational change,
+  not only a code one**: a staff account that carried nothing but `is_staff`
+  could previously open every one of these routes. Before deploying, grant
+  `documents.view_document`, `companies.view_companydocument`,
+  `users.view_investorclassification` and `users.change_investorclassification`
+  to the operators who need them — the last of those is what verify, reject and
+  revoke now require.
+- **Uploads are allowlisted at the serializer, not at the reader.**
+  `shared.uploads.validate_upload` caps the size and admits only
+  `application/pdf`, `image/png` and `image/jpeg` by both content type and
+  extension; every upload serializer calls it, including
+  `DocumentUploadSerializer`. The stored `mime_type` is the value it returned,
+  never `upload.content_type` read straight off the request, because that
+  column is echoed back as the `Content-Type` of the streamed response. An
+  admin file route streams with `Content-Disposition: attachment` so a row that
+  predates the allowlist downloads instead of rendering script on the `/admin/`
+  origin; the owner-scoped API route stays `inline`, since it only ever hands a
+  caller their own bytes.
 - Moving a field onto private storage is one migration per model, shaped like
   `companies/migrations/0006_company_document_private_storage.py`:
   1. `RunPython(move_uploads(..., to_private=True), move_uploads(..., to_private=False))`
@@ -600,19 +617,34 @@ this codebase, and `MEDIA_ROOT` holds nothing an authenticated route serves.
   2. `SeparateDatabaseAndState(state_operations=[AlterField(...)])` carries the
      storage and `max_length` change in the migration state only.
   3. `RunPython(widen_char_column(...), noop)` widens the column on PostgreSQL.
-  The helpers are in `backend/shared/utils/migrations.py`. **The order is the
-  point.** Operations reverse back to front, so the bytes move last: a reverse
-  that returned files to `MEDIA_ROOT` and then failed on the column would leave
-  them publicly readable with the ledger still claiming the migration applied,
-  because a `RunPython` file move is not covered by the DDL transaction. And
-  the widening reverses to a no-op rather than to `AlterField`'s auto-derived
+  The helpers are in `backend/shared/utils/migrations.py`. **A file move is not
+  covered by the DDL transaction, so it undoes itself.** `_relocate` records
+  every file it has moved and, when a move raises, puts them all back before
+  re-raising: a reverse that dies halfway leaves the whole corpus where it
+  started rather than half of it publicly readable under `MEDIA_ROOT` with the
+  ledger still claiming the migration applied. That half-moved state was
+  unrecoverable by any normal operator action — Django will not re-run an
+  operation belonging to an applied migration, so neither `migrate <app>` nor
+  `migrate` touches it. Operations still reverse back to front, which puts the
+  byte move last on a reverse, so nothing runs after it that could roll the
+  database back out from under a move that already succeeded.
+  If the put-back itself fails, the migration raises `UploadRelocationError`
+  naming every file it could not return, and `manage.py
+  reconcile_private_media` repairs the corpus: it walks every `FileField` bound
+  to `PrivateMediaStorage`, moves any stored key whose bytes are sitting under
+  `MEDIA_ROOT` back under `PRIVATE_MEDIA_ROOT`, drops a public copy that
+  duplicates a private one byte for byte, and refuses to guess when the two
+  copies differ. `--check` reports without moving anything and exits non-zero,
+  so it also works as an audit.
+  The widening reverses to a no-op rather than to `AlterField`'s auto-derived
   narrowing, which would raise `value too long for type character varying(100)`
   on any document uploaded after the migration — the generated keys run to 118
   characters. A rollback leaves the column wider than the state claims, which
   costs nothing, and strands no bytes.
   `backend/shared/tests/test_private_storage_migrations.py` round-trips both
   migrations with real bytes, a row whose file is missing, and a key generated
-  after the widening.
+  after the widening, and drives a reverse that fails partway through the byte
+  move in both the recoverable and the unrecoverable shape.
 
 ## Coding rules
 

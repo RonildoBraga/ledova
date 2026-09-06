@@ -47,7 +47,7 @@ class DocumentViewSet(
             document_type=write_ser.validated_data["document_type"],
             note=write_ser.validated_data.get("note", ""),
             original_filename=upload.name,
-            mime_type=getattr(upload, "content_type", "") or "",
+            mime_type=write_ser.validated_data["mime_type"],
             file=upload,
         )
         extract_document.defer(document_uuid=str(document.uuid))

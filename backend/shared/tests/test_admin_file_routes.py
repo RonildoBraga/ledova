@@ -14,6 +14,7 @@ from users.tests.factories import attach_evidence, make_classification, make_inv
 User = get_user_model()
 PASSWORD = "pw-12345678"
 FILE_BYTES = b"%PDF-1.4 admin route bytes"
+HTML_BYTES = b"<html><script>alert(document.cookie)</script></html>"
 ADMIN_STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "private": {"BACKEND": "shared.storage.PrivateMediaStorage"},
@@ -114,6 +115,33 @@ class AdminFileRouteAuthorizationTest(TestCase):
 
                 self.assertEqual(response.status_code, 302)
                 self.assertIn(reverse("admin:login"), response.headers["Location"])
+
+    def test_every_route_downloads_rather_than_rendering_in_the_admin_origin(self):
+        self.client.force_login(self.superuser)
+
+        for model, url in self.routes.items():
+            with self.subTest(model=model.__name__):
+                response = self.client.get(url)
+
+                self.assertTrue(response.headers["Content-Disposition"].startswith("attachment;"))
+                self.assertEqual(response.headers["X-Content-Type-Options"], "nosniff")
+
+    def test_a_row_whose_stored_mime_type_is_html_still_downloads(self):
+        uploader = User.objects.create_user(email="admin-files-legacy@example.test", password=PASSWORD)
+        document = Document.objects.create(
+            uploaded_by=uploader,
+            document_type=DocumentType.PAYSLIP,
+            original_filename="payslip.html",
+            mime_type="text/html",
+            file=ContentFile(HTML_BYTES, name="payslip.html"),
+        )
+        self.client.force_login(self.superuser)
+
+        response = self.client.get(reverse("admin:documents_document_file", args=[document.uuid]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self._body(response), HTML_BYTES)
+        self.assertTrue(response.headers["Content-Disposition"].startswith("attachment;"))
 
     def test_the_permission_is_checked_per_model(self):
         for granted, url in self.routes.items():

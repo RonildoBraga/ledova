@@ -14,6 +14,6 @@ def admin_file_path(model_admin, route, name, resolve):
         _require_view_permission(model_admin, request)
         instance, *stream_arguments = resolve(request, *args, **kwargs)
         _require_view_permission(model_admin, request, instance)
-        return stream_stored_file(*stream_arguments)
+        return stream_stored_file(*stream_arguments, as_attachment=True)
 
     return path(route, model_admin.admin_site.admin_view(view), name=name)

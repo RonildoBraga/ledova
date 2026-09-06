@@ -4,6 +4,10 @@ import shutil
 from django.conf import settings
 
 
+class UploadRelocationError(RuntimeError):
+    pass
+
+
 def _stored_names(apps, app_label, model_name, field_name):
     model = apps.get_model(app_label, model_name)
     return list(
@@ -13,14 +17,41 @@ def _stored_names(apps, app_label, model_name, field_name):
     )
 
 
+def _move(source, destination):
+    os.makedirs(os.path.dirname(destination), exist_ok=True)
+    shutil.move(source, destination)
+
+
+def _put_back(moved):
+    stranded = []
+    for destination, source in reversed(moved):
+        try:
+            _move(destination, source)
+        except OSError:
+            stranded.append(destination)
+    return stranded
+
+
 def _relocate(names, source_root, destination_root):
-    for name in names:
-        source = os.path.join(source_root, name)
-        destination = os.path.join(destination_root, name)
-        if not os.path.isfile(source) or os.path.exists(destination):
-            continue
-        os.makedirs(os.path.dirname(destination), exist_ok=True)
-        shutil.move(source, destination)
+    moved = []
+    try:
+        for name in names:
+            source = os.path.join(source_root, name)
+            destination = os.path.join(destination_root, name)
+            if not os.path.isfile(source) or os.path.exists(destination):
+                continue
+            _move(source, destination)
+            moved.append((destination, source))
+    except BaseException as error:
+        stranded = _put_back(moved)
+        if stranded:
+            raise UploadRelocationError(
+                "Relocating uploads failed and these files could not be put back: "
+                + ", ".join(sorted(stranded))
+                + ". Run 'manage.py reconcile_private_media' to move every stray upload "
+                "back under PRIVATE_MEDIA_ROOT."
+            ) from error
+        raise
 
 
 def move_uploads(app_label, model_name, field_name, to_private):

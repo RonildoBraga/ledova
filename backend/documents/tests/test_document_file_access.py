@@ -12,10 +12,12 @@ from django.urls import clear_url_caches, reverse
 from rest_framework.test import APITestCase
 
 from documents.models import Document, DocumentType
+from shared.uploads import MAX_UPLOAD_SIZE
 
 User = get_user_model()
 
 DOCUMENT_BYTES = b"%PDF-1.4 payslip that must stay private"
+SCRIPT_BYTES = b"<html><script>alert(document.cookie)</script></html>"
 PASSWORD = "pw-12345678"
 ADMIN_STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
@@ -142,6 +144,54 @@ class DocumentFileUrlTest(APITestCase):
         self.assertNotIn("jane-smith-payslip-march", document.file.name)
         self.assertNotIn(f"/{self.owner.pk}/", document.file.name)
         self.assertTrue(document.file.name.startswith(f"documents/{document.uuid}/"))
+
+
+class DocumentUploadAllowlistTest(APITestCase):
+
+    def setUp(self):
+        self.owner = make_user("doc-allowlist-owner")
+        self.client.force_authenticate(self.owner)
+
+    def _upload(self, filename, content_type, payload=DOCUMENT_BYTES):
+        return self.client.post(
+            "/api/v1/documents/",
+            {
+                "document_type": DocumentType.PAYSLIP.value,
+                "file": SimpleUploadedFile(filename, payload, content_type=content_type),
+            },
+            format="multipart",
+        )
+
+    def test_an_html_upload_is_refused(self):
+        response = self._upload("payslip.html", "text/html", SCRIPT_BYTES)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Document.objects.count(), 0)
+
+    def test_a_pdf_name_carrying_an_html_content_type_is_refused(self):
+        response = self._upload("payslip.pdf", "text/html", SCRIPT_BYTES)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Document.objects.count(), 0)
+
+    def test_an_svg_upload_is_refused(self):
+        response = self._upload("payslip.svg", "image/svg+xml", SCRIPT_BYTES)
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Document.objects.count(), 0)
+
+    def test_an_oversized_upload_is_refused(self):
+        response = self._upload("payslip.pdf", "application/pdf", b"x" * (MAX_UPLOAD_SIZE + 1))
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Document.objects.count(), 0)
+
+    @patch("documents.views.document.extract_document.defer")
+    def test_a_pdf_upload_is_stored_with_the_allowlisted_mime_type(self, _defer):
+        response = self._upload("payslip.pdf", "application/pdf")
+
+        self.assertEqual(response.status_code, 202, response.content)
+        self.assertEqual(Document.objects.get().mime_type, "application/pdf")
 
 
 @override_settings(STORAGES=ADMIN_STORAGES)
