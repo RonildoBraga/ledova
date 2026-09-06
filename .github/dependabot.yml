@@ -1,0 +1,59 @@
+# Grouped so a weekly run opens a handful of pull requests, not forty.
+# Every manifest in the repository is listed; add one here when a new one appears.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      root-and-workspaces:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /mobile
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      expo-and-react-native:
+        patterns: ["expo", "expo-*", "@expo/*", "react-native", "react-native-*", "metro", "metro-*", "@react-native/*"]
+      everything-else:
+        patterns: ["*"]
+        exclude-patterns: ["expo", "expo-*", "@expo/*", "react-native", "react-native-*", "metro", "metro-*", "@react-native/*"]
+
+  - package-ecosystem: npm
+    directory: /marketing
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      all:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /contracts
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      all:
+        patterns: ["*"]
+
+  - package-ecosystem: pip
+    directory: /backend
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      all:
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      all:
+        patterns: ["*"]

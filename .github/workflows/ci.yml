@@ -45,6 +45,13 @@ jobs:
           npm run typecheck
           npm --prefix marketing run type-check
           npm --prefix mobile run type-check
+      - name: Production dependency advisories
+        run: |
+          npm audit --omit=dev --audit-level=low
+          npm --prefix marketing audit --omit=dev --audit-level=low
+          npm --prefix contracts audit --omit=dev --audit-level=low
+          npm --prefix mobile audit --omit=dev --audit-level=critical
+
       - name: Workspace and contract tests
         run: make test
 
@@ -77,6 +84,8 @@ jobs:
           cache-dependency-path: backend/requirements-dev.txt
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
+      - name: Production dependency advisories
+        run: pip-audit -r requirements.txt --ignore-vuln PYSEC-2026-1845
       - name: Lint
         run: make lint
       - name: Django system check
