@@ -13,8 +13,8 @@ jobs:
     name: No comments or docstrings in source
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
       - name: Comment and docstring gate
@@ -26,8 +26,8 @@ jobs:
     name: Build & test (JS workspaces + contracts)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22.15.1
           cache: npm
@@ -68,7 +68,7 @@ jobs:
 
       - name: Smoke test artefacts
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dashboard-smoke-results
           path: |
@@ -98,8 +98,8 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
           cache: pip
@@ -127,7 +127,7 @@ jobs:
           POSTGRES_DB: ledova
           POSTGRES_USER: ledova
         run: python manage.py test --settings=ledova_backend.settings.test_postgres --noinput
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22.15.1
           cache: npm
