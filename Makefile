@@ -4,7 +4,7 @@
 NPM ?= npm
 PYTHON ?= python3
 
-.PHONY: help install install-backend init-local check-local-env build generate-tokens check check-comments audit test \
+.PHONY: help install install-backend init-local check-local-env build generate-tokens check check-comments check-layers audit test \
 	dev-up dev-down dev-logs contracts-compile contracts-test contracts-deploy-local \
 	contracts-deploy-testnet chain-test
 
@@ -25,6 +25,7 @@ help:
 	@echo "  make generate-tokens          Regenerate the CSS design tokens from packages/shared"
 	@echo "  make check                    Run static checks, including mobile and Django"
 	@echo "  make check-comments           Fail on any comment or docstring in source"
+	@echo "  make check-layers             Fail on a new backend layer violation"
 	@echo "  make audit                    Fail on a new production dependency advisory"
 	@echo "  make test                     Run workspace and contract tests"
 	@echo "  make dev-up                   Start the local Docker Compose stack"
@@ -57,7 +58,7 @@ build:
 generate-tokens:
 	$(NPM) exec -- tsx packages/scripts/generate-css-tokens.mjs
 
-check: check-comments install-backend
+check: check-comments check-layers install-backend
 	$(NPM) run typecheck
 	$(NPM) --prefix marketing run type-check
 	$(NPM) --prefix mobile run type-check
@@ -65,6 +66,9 @@ check: check-comments install-backend
 
 check-comments:
 	$(PYTHON) scripts/check-comments.py
+
+check-layers:
+	$(PYTHON) scripts/check-layers.py
 
 audit:
 	$(NPM) audit --omit=dev --audit-level=low
