@@ -7,7 +7,7 @@ PYTHON ?= python3
 .PHONY: help install install-backend init-local check-local-env build generate-tokens check check-comments check-layers \
 	check-logging test-gates audit test \
 	dev-up dev-down dev-logs contracts-compile contracts-test contracts-deploy-local \
-	contracts-deploy-testnet chain-test smoke
+	contracts-deploy-testnet chain-test smoke lint
 
 # CHAIN_TEST_PORT is the single knob for the local chain: it moves the Hardhat node, the backend's
 # BLOCKCHAIN_RPC_URL and, through LOCALHOST_RPC_URL, the `localhost` network in contracts/hardhat.config.ts
@@ -34,6 +34,7 @@ help:
 	@echo "  make build                    Build dashboard, marketing, and contracts"
 	@echo "  make generate-tokens          Regenerate the CSS design tokens from packages/shared"
 	@echo "  make check                    Run static checks, including mobile and Django"
+	@echo "  make lint                     Run ESLint and solhint across every workspace"
 	@echo "  make check-comments           Fail on any comment or docstring in source"
 	@echo "  make check-layers             Fail on a new backend layer violation"
 	@echo "  make check-logging            Fail on a log line that can carry a credential or an email"
@@ -77,6 +78,12 @@ check: check-comments check-layers check-logging install-backend
 	$(NPM) --prefix mobile run type-check
 	$(NPM) --prefix mobile run check:resolution
 	cd backend && SECRET_KEY="$$( $(PYTHON) -c 'import secrets; print(secrets.token_urlsafe(32))')" STORAGE_BACKEND=local $(PYTHON) manage.py check
+
+lint:
+	$(NPM) run lint
+	$(NPM) --prefix marketing run lint
+	$(NPM) --prefix mobile run lint
+	$(NPM) --prefix contracts run lint
 
 check-comments:
 	$(PYTHON) scripts/check-comments.py

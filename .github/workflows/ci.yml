@@ -57,6 +57,9 @@ jobs:
       - name: Mobile imports resolve from mobile/node_modules
         run: npm --prefix mobile run check:resolution
 
+      - name: Lint workspaces
+        run: make lint
+
       - name: Production dependency advisories
         run: |
           npm audit --omit=dev --audit-level=low

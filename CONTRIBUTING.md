@@ -80,16 +80,17 @@ exceptions are noted below the table.
 | Design tokens | `make generate-tokens`, then confirm `dashboard/src/styles/tokens.css` and `marketing/src/tokens.css` are unchanged |
 | Backend | from `backend/`: `make lint` (black, isort, flake8), `make check`, `make test` |
 | Backend migrations | from `backend/`: `python manage.py makemigrations --check --dry-run` |
-| Contracts | from `contracts/`: `npm run format:check && npm run lint && npx hardhat test` |
+| Contracts | from `contracts/`: `npm run format:check && npx hardhat test` |
+| Lint | `make lint` from the root (ESLint across the workspaces, solhint for the contracts) |
 | Real chain | `make chain-test` from the root |
 | Dashboard smoke | `make build`, then `make smoke` from the root |
 
-Local-only: `.github/workflows/ci.yml` has no contracts lint or format step, so
-`npm run format:check` and `npm run lint` from `contracts/` are yours to run.
-Root `npm run lint` is not a gate either.
+Local-only: `.github/workflows/ci.yml` has no format step for any workspace, so
+`npm run format:check` is yours to run. Linting is no longer in that list — CI
+runs `make lint` on every pull request.
 
-CI runs `make test` (dashboard, `packages/shared`, mobile and contracts) and
-`make smoke` on every pull request. It additionally runs the whole Django suite
+CI runs `make lint`, `make test` (dashboard, `packages/shared`, mobile and
+contracts) and `make smoke` on every pull request. It additionally runs the whole Django suite
 on PostgreSQL, the SQLite migration tests, and `make chain-test` twice, the
 second time on PostgreSQL. The source gates are their own CI job, running
 `check-comments.py`, `check-layers.py` and `check-logging.py` directly and then
