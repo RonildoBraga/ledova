@@ -190,12 +190,19 @@ The connection is configured with `CONN_MAX_AGE` 300 seconds, a 10 second
 connect timeout and TCP keepalives.
 
 Compose sets `POSTGRES_HOST` to `postgres`, `REDIS_URL` to
-`redis://redis:6379/0` and `STORAGE_BACKEND` to `local` for the `migrate`,
-`backend` and `worker` services. These are `environment:` entries, so they win
-over `backend/.env`: a `STORAGE_BACKEND=s3` or a custom `REDIS_URL` in that file
-is silently ignored inside the local stack. Because the stack forces local
-storage, `backend/.env` must keep `DEBUG=true` (as `.env.example` does) or the
-ASGI entrypoint refuses to start — see Media storage.
+`redis://redis:6379/0`, `STORAGE_BACKEND` to `local` and `DEBUG` to `true` for
+the `migrate`, `backend` and `worker` services, from one `x-backend-environment`
+anchor so the three cannot drift. These are `environment:` entries, so they win
+over `backend/.env`: a `STORAGE_BACKEND=s3`, a `DEBUG=false` or a custom
+`REDIS_URL` in that file is silently ignored inside the local stack. `DEBUG` is
+forced alongside the storage backend because local storage is only servable
+while `DEBUG` is true — see Media storage — so the pair is set together rather
+than left half in a file this compose file declares optional.
+
+`backend/.env` is still needed: `SECRET_KEY` and `POSTGRES_PASSWORD` come only
+from it, and no committed file can supply them. Without it `postgres` refuses to
+initialise and `migrate` dies on `KeyError: 'SECRET_KEY'` before anything
+reaches the media guard. Run `make init-local` first; `make dev-up` checks.
 
 ### Blockchain
 
@@ -469,12 +476,22 @@ The deployment writes `WHITELIST_CONTRACT_ADDRESS`,
 `backend/.env` with `BLOCKCHAIN_RPC_URL`, `BLOCKCHAIN_CHAIN_ID=31337` and the
 Hardhat account #0 key as `BLOCKCHAIN_OPERATOR_KEY`.
 
-Share-token explorer links in both clients are hardcoded to Base:
-`dashboard/src/pages/company/index.tsx` and
-`mobile/src/screens/company-tokens/TokenDetailScreen.tsx` each set
-`const TOKEN_CHAIN = BLOCKCHAIN.BASE` because the share-token serializer carries
-no chain field. Deploy share tokens anywhere else and those links point at the
-wrong explorer.
+Share-token explorer links follow the chain the contract is actually on.
+`ShareToken.chain` records it, written next to `contract_address` by
+`mark_deployed()` when `ShareTokenService._finish_deployment` confirms the
+factory receipt, so it is the chain the deployment path recorded and it cannot be
+lost afterwards. `ShareTokenDetailSerializer` carries it read-only; the clients
+render an explorer link only when both `chain` and `contractAddress` are set.
+
+The address alone cannot supply the chain. `AssetChainDeployment` is unique on
+`(chain, contract_address)`, so the same address may legitimately exist on
+several chains — routine for CREATE2 and bridged tokens — and matching an
+`AssetChainDeployment` by address would pick whichever row happened to be
+created first, from any asset. Nor can the asset bridge supply it: every silent
+return in `bridge_share_asset` leaves a confirmed deployment with no
+`AssetChainDeployment` row at all. Migration `tokens.0017_share_token_chain`
+backfills every existing token that has a contract address to `base`, the only
+chain the factory has ever deployed to.
 
 Base Sepolia (chain id 84532) is the supported public testnet:
 `npm --prefix contracts run deploy:testnet`, with `DEPLOYER_PRIVATE_KEY` and
@@ -489,7 +506,12 @@ operator address immediately after deploying. Otherwise the backend's
 node, waits for `eth_chainId`, deploys the core contracts, sources
 `.deployed-contracts.env` and runs
 `backend/tokens/tests/test_chain_integration.py`, then stops the node.
-`CHAIN_TEST_PORT` moves the node.
+`CHAIN_TEST_PORT` moves the whole thing — the node, the `localhost` network the
+deploy connects to (through `LOCALHOST_RPC_URL`, which
+`contracts/hardhat.config.ts` reads) and the backend's `BLOCKCHAIN_RPC_URL` — so
+two worktrees can run the chain test at the same time on different ports. The
+target refuses to start when that port is already taken, naming the port rather
+than failing later with Hardhat's `HH108`.
 `CHAIN_TEST_SETTINGS=ledova_backend.settings.test_postgres` (with the
 `POSTGRES_*` variables set) runs it on PostgreSQL, which adds the two-worker
 capital-increase case that needs real row locks. CI runs both.

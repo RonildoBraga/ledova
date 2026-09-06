@@ -336,7 +336,7 @@ class ShareTokenService:
         return contract_address
 
     def _finish_deployment(self, token: ShareToken, contract_address: str) -> None:
-        token.mark_deployed(contract_address)
+        token.mark_deployed(contract_address, SHARE_ASSET_CHAIN)
         self.bridge_share_asset(token, contract_address)
         self._approve_for_swap(token)
 

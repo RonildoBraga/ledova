@@ -31,7 +31,7 @@ import type {
   CapitalIncreaseRequest,
   CapitalIncreaseStatus,
 } from '@ledova/shared';
-import { BLOCKCHAIN, getBlockExplorerAddressUrl, getErrorMessage } from '@ledova/shared';
+import { getBlockExplorerAddressUrl, getErrorMessage } from '@ledova/shared';
 import { GradientBackground } from '../../components/GradientBackground';
 import { PrimaryButton } from '../../components/buttons';
 import { CustomModal } from '../../components/modal';
@@ -81,8 +81,6 @@ const CAPITAL_INCREASE_STATUS_LABELS: Record<CapitalIncreaseStatus, string> = {
   executed: 'Executed',
   failed: 'Failed',
 };
-
-const TOKEN_CHAIN = BLOCKCHAIN.BASE;
 
 function formatNumber(value: string | number): string {
   return Number(value).toLocaleString();
@@ -204,7 +202,8 @@ export function TokenDetailScreen({ route }: Props) {
   const statusColor = statusColors[token.status];
   const isDeployed = token.status === 'deployed';
   const isDraft = token.status === 'draft';
-  const contractUrl = token.contractAddress ? getBlockExplorerAddressUrl(TOKEN_CHAIN, token.contractAddress) : '';
+  const contractUrl =
+    token.chain && token.contractAddress ? getBlockExplorerAddressUrl(token.chain, token.contractAddress) : '';
 
   return (
     <GradientBackground>

@@ -1,5 +1,15 @@
 name: ledova
 
+# Every service built from ./backend gets the same forced settings. STORAGE_BACKEND=local is only
+# servable while DEBUG is true -- ledova_backend/environment.py refuses that pair at the ASGI/WSGI
+# import -- so the two are set together here instead of being left to ./backend/.env, which this
+# file declares optional. These are `environment:` entries, so they also win over that file.
+x-backend-environment: &backend-environment
+  POSTGRES_HOST: postgres
+  REDIS_URL: redis://redis:6379/0
+  STORAGE_BACKEND: local
+  DEBUG: "true"
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -34,10 +44,7 @@ services:
     env_file:
       - path: ./backend/.env
         required: false
-    environment:
-      POSTGRES_HOST: postgres
-      REDIS_URL: redis://redis:6379/0
-      STORAGE_BACKEND: local
+    environment: *backend-environment
     command: sh -c "python manage.py migrate --noinput && python manage.py sync_monitoring_rules && python manage.py sync_procedure_templates && python manage.py asset_sync --seed-only"
     volumes:
       - media_data:/usr/src/app/media
@@ -54,10 +61,7 @@ services:
     env_file:
       - path: ./backend/.env
         required: false
-    environment:
-      POSTGRES_HOST: postgres
-      REDIS_URL: redis://redis:6379/0
-      STORAGE_BACKEND: local
+    environment: *backend-environment
     command: uvicorn ledova_backend.asgi:application --host 0.0.0.0 --port 8000
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -76,10 +80,7 @@ services:
     env_file:
       - path: ./backend/.env
         required: false
-    environment:
-      POSTGRES_HOST: postgres
-      REDIS_URL: redis://redis:6379/0
-      STORAGE_BACKEND: local
+    environment: *backend-environment
     command: python manage.py procrastinate worker --queues=default,builtin
     extra_hosts:
       - "host.docker.internal:host-gateway"

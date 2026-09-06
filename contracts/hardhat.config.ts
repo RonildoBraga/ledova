@@ -5,6 +5,8 @@ const DEPLOYER_PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY || "";
 
 const HARDHAT_NODE_DEV_ACCOUNTS = "remote";
 
+const LOCALHOST_RPC_URL = process.env.LOCALHOST_RPC_URL || "http://127.0.0.1:8545";
+
 const config: HardhatUserConfig = {
   solidity: {
     version: "0.8.24",
@@ -19,7 +21,7 @@ const config: HardhatUserConfig = {
   },
   networks: {
     localhost: {
-      url: "http://127.0.0.1:8545",
+      url: LOCALHOST_RPC_URL,
       accounts: DEPLOYER_PRIVATE_KEY ? [DEPLOYER_PRIVATE_KEY] : HARDHAT_NODE_DEV_ACCOUNTS,
     },
     baseSepolia: {

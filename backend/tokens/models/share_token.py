@@ -40,6 +40,12 @@ class ShareToken(BaseModel):
         default=ShareTokenStatus.DRAFT,
     )
     contract_address = models.CharField(max_length=42, blank=True, null=True, unique=True)
+    chain = models.CharField(
+        max_length=32,
+        blank=True,
+        null=True,
+        help_text="Blockchain the contract was deployed to (null until deployment confirms)",
+    )
     deployment_tx_hash = models.CharField(
         max_length=66,
         blank=True,
@@ -132,11 +138,12 @@ class ShareToken(BaseModel):
         self.deployment_transaction = None
         self.save(update_fields=["deployment_tx_hash", "deployment_transaction", "updated_at"])
 
-    def mark_deployed(self, contract_address: str) -> None:
+    def mark_deployed(self, contract_address: str, chain: str) -> None:
         self.status = ShareTokenStatus.DEPLOYED
         self.contract_address = contract_address
+        self.chain = chain
         self.deployed_at = timezone.now()
-        self.save(update_fields=["status", "contract_address", "deployed_at", "updated_at"])
+        self.save(update_fields=["status", "contract_address", "chain", "deployed_at", "updated_at"])
 
     def mark_paused(self) -> None:
         self.status = ShareTokenStatus.PAUSED
