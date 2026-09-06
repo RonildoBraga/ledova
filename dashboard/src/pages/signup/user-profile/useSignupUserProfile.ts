@@ -11,6 +11,7 @@ import {
   formatPhoneForDisplay,
   cleanPhoneNumber,
   COUNTRIES,
+  describeFailure,
 } from '@ledova/shared';
 import type { CountryData } from '@ledova/shared';
 import apiClient from '@services/apiClient';
@@ -100,7 +101,7 @@ export const useSignupUserProfile = () => {
         });
       }
     } catch (error) {
-      console.error('Failed to load profile data:', error);
+      console.error(`Failed to load profile data: ${describeFailure(error)}`);
       setGeneralError('Failed to load profile data. Please try again.');
     } finally {
       setIsLoading(false);
@@ -203,7 +204,7 @@ export const useSignupUserProfile = () => {
 
       onSuccess();
     } catch (error: unknown) {
-      console.error('User profile update failed:', error);
+      console.error(`User profile update failed: ${describeFailure(error)}`);
       const axiosError = error as { response?: { data?: unknown } };
       if (axiosError.response?.data) {
         const errorData = axiosError.response.data;

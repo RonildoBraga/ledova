@@ -5,6 +5,7 @@ import {
   isSupportedEvmTestChainId,
   isBitcoinTestnetSigningPath,
   isValidBitcoinNativeSegwitTestAddress,
+  describeFailure,
 } from '@ledova/shared';
 
 export function encodeEthereumTypedData(
@@ -136,7 +137,7 @@ export function encodeEthereumTransaction(
 
     return { type: 'eth-sign-request', cbor, cborHex, urString };
   } catch (error) {
-    console.error('Failed to encode transaction:', error);
+    console.error(`Failed to encode transaction: ${describeFailure(error)}`);
     return null;
   }
 }

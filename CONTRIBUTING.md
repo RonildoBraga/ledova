@@ -73,6 +73,8 @@ exceptions are noted below the table.
 | Area | Command |
 | --- | --- |
 | Comments and docstrings | `make check-comments` from the root (no dependencies needed) |
+| Backend layers | `make check-layers` from the root (no dependencies needed) |
+| Logging privacy | `make check-logging` and `make test-gates` from the root (no dependencies needed) |
 | Dependency advisories | `make audit` from the root |
 | Everything JavaScript | `make build`, `make check`, `make test` from the root |
 | Design tokens | `make generate-tokens`, then confirm `dashboard/src/styles/tokens.css` and `marketing/src/tokens.css` are unchanged |
@@ -89,9 +91,10 @@ Root `npm run lint` is not a gate either.
 CI runs `make test` (dashboard, `packages/shared`, mobile and contracts) and
 `make smoke` on every pull request. It additionally runs the whole Django suite
 on PostgreSQL, the SQLite migration tests, and `make chain-test` twice, the
-second time on PostgreSQL. The comment gate is its own CI job, running `python
-scripts/check-comments.py` directly, so a stray comment fails the pipeline
-without waiting for anything to be built.
+second time on PostgreSQL. The source gates are their own CI job, running
+`check-comments.py`, `check-layers.py` and `check-logging.py` directly and then
+`make test-gates`, so a stray comment, a new layer violation or a log line that
+can carry a credential fails the pipelinewithout waiting for anything to be built.
 
 ## Reporting security issues
 

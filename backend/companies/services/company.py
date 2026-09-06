@@ -56,5 +56,5 @@ def submit_application(company: Company, submitted_by) -> Company:
         raise MissingRequiredDocumentsException(sorted(DocumentType(t).label for t in missing_types))
 
     transition_company(company, "submit", submitted_by=submitted_by)
-    logger.info(f"Application submitted: {company.name} by {submitted_by.email}")
+    logger.info(f"Application submitted: {company.uuid} ({company.name}) by user {submitted_by.pk}")
     return company

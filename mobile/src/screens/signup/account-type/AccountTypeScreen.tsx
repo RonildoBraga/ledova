@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { UserIcon, BuildingsIcon } from 'phosphor-react-native';
-import { CACHE_TIMING } from '@ledova/shared';
+import { CACHE_TIMING, describeFailure } from '@ledova/shared';
 import { GradientBackground } from '../../../components/GradientBackground';
 import { apiClient } from '../../../services/apiClient';
 import type { RootStackParamList } from '../../../navigation/AppNavigator';
@@ -157,7 +157,7 @@ export function AccountTypeScreen() {
         navigation.navigate('IdentityVerification');
       }
     } catch (error) {
-      console.error('Failed to update account role:', error);
+      console.error(`Failed to update account role: ${describeFailure(error)}`);
       setIsSubmitting(false);
     }
   };

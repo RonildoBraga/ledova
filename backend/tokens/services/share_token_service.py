@@ -414,7 +414,10 @@ class ShareTokenService:
         issuance_request.dilution_percentage = issuance_request.calculate_dilution()
         issuance_request.save(update_fields=["dilution_percentage", "updated_at"])
 
-        logger.info(f"User {user.email} created issuance request: {amount} {token.symbol} to {recipient}")
+        logger.info(
+            f"User {user.pk} created issuance request {issuance_request.uuid}: "
+            f"{amount} {token.symbol} to {recipient}"
+        )
 
         return issuance_request
 

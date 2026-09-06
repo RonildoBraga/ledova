@@ -19,7 +19,7 @@ import {
   FileTextIcon,
   ShieldCheckIcon,
 } from 'phosphor-react-native';
-import { signout } from '@ledova/shared';
+import { signout, describeFailure } from '@ledova/shared';
 import { apiClient } from '../services/apiClient';
 import { notificationsService } from '../services/notificationsService';
 import { clearTokens } from '../services/tokenStorage';
@@ -211,7 +211,7 @@ export function DrawerNavigator() {
       await notificationsService.unregisterToken();
       await signout(apiClient);
     } catch (error) {
-      console.error('Sign-out API call failed:', error);
+      console.error(`Sign-out API call failed: ${describeFailure(error)}`);
     } finally {
       await clearTokens();
 

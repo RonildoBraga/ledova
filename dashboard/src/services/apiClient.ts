@@ -1,5 +1,5 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
-import { AUTH_ENDPOINTS, createUserFriendlyError, hasServiceErrorDetail } from '@ledova/shared';
+import { AUTH_ENDPOINTS, createUserFriendlyError, describeFailure, hasServiceErrorDetail } from '@ledova/shared';
 
 export type { UserFriendlyError } from '@ledova/shared';
 
@@ -29,7 +29,7 @@ apiClient.interceptors.response.use(
       return apiClient.get(AUTH_ENDPOINTS.VERIFY).then(() => apiClient.request(config));
     }
 
-    console.error('API Client Error:', error);
+    console.error(`API request failed: ${describeFailure(error)}`);
 
     if (!error.response) {
       if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {

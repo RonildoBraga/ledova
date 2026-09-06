@@ -15,7 +15,7 @@ models, and the coding rules the repository enforces.
 | `packages/shared/` | `@ledova/shared`: TypeScript constants, types, API services, utilities used by both clients |
 | `packages/scripts/` | `generate-css-tokens.mjs`, the CSS design-token generator |
 | `marketing/` | Static React + Vite public site |
-| `scripts/` | `init-local-env.py`, the local environment bootstrapper, and `check-comments.py`, the comment gate |
+| `scripts/` | `init-local-env.py`, the local environment bootstrapper, and the gates: `check-comments.py`, `check-layers.py`, `check-logging.py`, with their unit tests in `scripts/tests/` |
 
 ## Contracts
 
@@ -718,7 +718,15 @@ the rest converts when it is next edited for another reason.
   `detail`.
 - Logging: `logging.getLogger(__name__)`, no prefix constants. Log errors in
   services and tasks, not requests in views. Never log an email address or a
-  token.
+  token: log the primary key instead, which identifies the row for an operator
+  without putting a person's address in a log aggregator. On the clients, a
+  `console` call takes a message and never an object -- an `AxiosError` carries
+  `config.data`, the serialised request body, so logging one prints the password
+  a failed sign-in was sent with. `describeFailure` in `packages/shared` turns
+  any thrown value into the narrow line worth keeping: status, error code, and
+  the method and path with the query string cut off.
+  [The logging privacy gate](#the-logging-privacy-gate) below is the mechanical
+  half of this rule.
 - Constants: `TextChoices` next to the model, numeric thresholds as module
   constants in the app's `constants.py`.
 - **No comments and no docstrings in source.** Names and tests carry the
@@ -731,7 +739,7 @@ the rest converts when it is next edited for another reason.
   `contracts/scripts`, `contracts/test`, and the root build config of
   `dashboard/`, `marketing/`, `mobile/` and `contracts/`, each by the extensions
   the gate lists. The root `scripts/`
-  tree is outside them: both files there carry a module docstring. The only comment
+  tree is outside them: every file there carries a module docstring. The only comment
   lines permitted are functional directives the tooling reads: `# noqa`,
   `# type:`, `# pragma`, `# fmt:`, `# isort` and the shebang/coding lines in
   Python; `eslint-disable`/`eslint-enable`, `@ts-ignore`/`@ts-expect-error`/
@@ -856,6 +864,50 @@ both times the tell was the same — one shape appearing in several files at onc
 The general form: when a rule flags the reference app, or the same shape in
 several files at once, the rule is wrong and the fix is to sharpen it. Never
 excuse a file into `LEGACY` to make a number go down.
+
+### The logging privacy gate
+
+`scripts/check-logging.py` is the mechanical half of "never log an email
+address or a token". `make check-logging` runs it, `make check` includes it, and
+CI runs it in the source-gates job. Like the other two it needs no dependencies:
+Python 3 and a checkout are enough. `make test-gates` runs its unit tests in
+`scripts/tests/`, which is the evidence that it fires rather than merely runs.
+
+It enforces two rules, each chosen because it is decidable from the syntax
+alone. A gate that has to guess what a value holds at run time is a gate that
+gets allowlisted into meaninglessness.
+
+Clients -- `dashboard/src`, `mobile/src`, `packages/shared/src` and
+`marketing/src`, by the same TypeScript and JavaScript extensions the comment
+gate uses. Every argument of `console.assert`, `console.debug`, `console.dir`,
+`console.error`, `console.info`, `console.log`, `console.table`,
+`console.trace` and `console.warn` must be one string literal or one template
+literal, and no template may reach for `JSON.stringify`. The guarantee that buys
+is total: the only thing such a call can emit is what template stringification
+produces, and `String(axiosError)` is the error's message, never its request.
+An argument that is a plain string variable is refused too. That is the price of
+the rule being decidable, and the fix is to inline it into the template.
+
+Backend -- every `.py` under `backend/`. No call on a `logger`, `logging` or
+`log` object may reference an email address, a password or a push token, where
+"reference" means an expression whose own syntax names one: the attribute
+`.email`, `.password` or `.push_token`; a bare name `email`, `password` or
+`push_token`; or a constant string subscript with one of those keys. Positional
+arguments, keyword arguments and f-string substitutions are all walked.
+
+What it does not cover, deliberately. `print` and a management command's
+`self.stdout.write` are ungated: the only `print` calls in `backend/` are the
+progress counters in `assets/migrations/0009_...`, and no command writes an
+address. An object whose `__str__` returns an email -- `CustomUser.__str__`
+does -- is ungated too: `f"{user}"` in a log line is a leak the syntax cannot
+tell apart from `f"{token}"`, and no site does it today. `contracts/`,
+`packages/scripts/` and the root build config of each client are outside the
+client trees; they are build tooling that never holds a user's request. The
+client scanner lexes strings, templates, comments and regex literals so that a
+`console.error(` inside any of them is not a call, but it has no JSX mode: an
+apostrophe in JSX text can hide the rest of that line from it. Console calls sit
+on their own lines, so that costs nothing today, and a call hidden that way
+would be a false negative, never a false positive.
 
 ### Shared TypeScript types
 

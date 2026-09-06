@@ -212,7 +212,7 @@ export function VerificationFormModal({
       if (data.event === 'FORM_COMPLETED') {
         triggerComplete();
       } else if (data.event === 'SDK_ERROR') {
-        console.warn('[VerificationFormModal] SDK error:', data.message);
+        console.warn(`[VerificationFormModal] SDK error: ${data.message}`);
       }
     } catch {}
   };

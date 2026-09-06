@@ -7,6 +7,7 @@ import {
   getActiveChains,
   getChainByShortName,
   getChainConfig,
+  describeFailure,
 } from '@ledova/shared';
 import type { CreateWallet, DerivedAddress, HardwareWalletImport } from '@ledova/shared';
 
@@ -202,7 +203,7 @@ export function useWalletForm({ userAccountUuid, onSubmit, onBatchSubmit, presel
         }
       })
       .catch((err) => {
-        console.error('Failed to start QR scanner:', err);
+        console.error(`Failed to start QR scanner: ${describeFailure(err)}`);
         setScannerError('Unable to access camera. Please check permissions.');
       });
   }, [handleQRScanResult]);

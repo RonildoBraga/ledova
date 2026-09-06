@@ -61,7 +61,6 @@ export const useSignIn = () => {
         onSuccess();
       }
     } catch (err: unknown) {
-      console.error('❌ Sign-in error:', err);
       setErrors({});
       setGeneralError(null);
 

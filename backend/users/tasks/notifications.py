@@ -33,7 +33,7 @@ def send_push_notification(
         notification_type=notification_type,
     )
 
-    logger.info(f"[NOTIFICATION_TASK] Sent notification to {user.email}: {result['status']}")
+    logger.info(f"[NOTIFICATION_TASK] Sent notification to user {user_id}: {result['status']}")
     return result
 
 
@@ -64,5 +64,7 @@ def send_transaction_notification(
         event_type=event_type,
     )
 
-    logger.info(f"[NOTIFICATION_TASK] Sent transaction notification to {user.email}: {event_type} - {result['status']}")
+    logger.info(
+        f"[NOTIFICATION_TASK] Sent transaction notification to user {user_id}: {event_type} - {result['status']}"
+    )
     return result

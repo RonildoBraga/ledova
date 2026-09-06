@@ -152,3 +152,70 @@ describe('apiClient 5xx handling', () => {
     });
   });
 });
+
+describe('apiClient failure logging', () => {
+  const originalAdapter = apiClient.defaults.adapter;
+  const password = 'correct-horse-battery-staple';
+  const email = 'investor@example.test';
+
+  afterEach(() => {
+    apiClient.defaults.adapter = originalAdapter;
+    vi.restoreAllMocks();
+  });
+
+  const rejectSignin = (status: number) =>
+    vi.fn(async (config: InternalAxiosRequestConfig) => {
+      const response: AxiosResponse = {
+        status,
+        statusText: 'Unauthorized',
+        data: { error: 'Invalid email or password.' },
+        headers: {},
+        config,
+      };
+      throw new AxiosError('Request failed with status code 401', AxiosError.ERR_BAD_REQUEST, config, {}, response);
+    });
+
+  const loggedText = (spy: ReturnType<typeof vi.spyOn>) => {
+    const args = spy.mock.calls.flat();
+    expect(args.length).toBeGreaterThan(0);
+    for (const argument of args) {
+      expect(typeof argument).toBe('string');
+    }
+    return args.join(' ');
+  };
+
+  it('logs a failed sign-in without the request body it was sent', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    apiClient.defaults.adapter = rejectSignin(401);
+
+    await expect(apiClient.post('/api/auth/signin/', { email, password })).rejects.toBeInstanceOf(AxiosError);
+
+    const line = loggedText(spy);
+    expect(line).not.toContain(password);
+    expect(line).not.toContain(email);
+    expect(line).toContain('status=401');
+    expect(line).toContain('/api/auth/signin/');
+  });
+
+  it('logs a failed change-password without the old or the new password', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    apiClient.defaults.adapter = rejectSignin(400);
+
+    await expect(
+      apiClient.post('/api/change-password/', { oldPassword: password, newPassword: `${password}-2` }),
+    ).rejects.toBeInstanceOf(AxiosError);
+
+    expect(loggedText(spy)).not.toContain(password);
+  });
+
+  it('keeps the query string of a failing request out of the log', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    apiClient.defaults.adapter = rejectSignin(404);
+
+    await expect(apiClient.get(`/api/users/?email=${encodeURIComponent(email)}`)).rejects.toBeInstanceOf(AxiosError);
+
+    const line = loggedText(spy);
+    expect(line).toContain('/api/users/');
+    expect(line).not.toContain('email');
+  });
+});
