@@ -1,3 +1,4 @@
+from django.urls import reverse
 from rest_framework import serializers
 
 from documents.models import Document, DocumentExtraction
@@ -25,6 +26,7 @@ class DocumentExtractionSerializer(serializers.ModelSerializer):
 
 class DocumentSerializer(serializers.ModelSerializer):
     latest_extraction = serializers.SerializerMethodField()
+    file_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Document
@@ -34,11 +36,12 @@ class DocumentSerializer(serializers.ModelSerializer):
             "original_filename",
             "mime_type",
             "note",
+            "file_url",
             "latest_extraction",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["uuid", "mime_type", "latest_extraction", "created_at", "updated_at"]
+        read_only_fields = ["uuid", "mime_type", "file_url", "latest_extraction", "created_at", "updated_at"]
 
     def get_latest_extraction(self, obj: Document):
 
@@ -46,6 +49,13 @@ class DocumentSerializer(serializers.ModelSerializer):
         if not latest:
             return None
         return DocumentExtractionSerializer(latest).data
+
+    def get_file_url(self, obj: Document):
+        if not obj.file:
+            return None
+        url = reverse("documents:documents-file", kwargs={"uuid": obj.uuid})
+        request = self.context.get("request")
+        return request.build_absolute_uri(url) if request else url
 
 
 class DocumentUploadSerializer(serializers.ModelSerializer):

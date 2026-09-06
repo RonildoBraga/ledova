@@ -3,7 +3,7 @@ import os
 from django.http import FileResponse, Http404
 
 
-def stream_stored_file(field, mime_type=""):
+def stream_stored_file(field, mime_type="", filename=""):
     if not field:
         raise Http404("No file")
     try:
@@ -13,5 +13,5 @@ def stream_stored_file(field, mime_type=""):
     return FileResponse(
         handle,
         content_type=mime_type or "application/octet-stream",
-        filename=os.path.basename(field.name),
+        filename=filename or os.path.basename(field.name),
     )

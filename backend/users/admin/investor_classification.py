@@ -1,12 +1,13 @@
 from django import forms
 from django.contrib import admin, messages
+from django.core.exceptions import PermissionDenied
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
-from django.urls import path, re_path, reverse
+from django.urls import re_path, reverse
 from django.utils.html import format_html
 
 from shared.utils.admin_display import action_buttons
-from shared.views import stream_stored_file
+from shared.utils.admin_files import admin_file_path
 from tokens.admin._helpers import status_badge
 from users.exceptions import InvalidClassificationTransitionException
 from users.models import InvestorClassification, InvestorClassificationStatus
@@ -217,10 +218,11 @@ class InvestorClassificationAdmin(admin.ModelAdmin):
 
     def get_urls(self):
         custom_urls = [
-            path(
+            admin_file_path(
+                self,
                 "<uuid:uuid>/evidence/",
-                self.admin_site.admin_view(self.evidence_view),
-                name="users_investorclassification_evidence",
+                "users_investorclassification_evidence",
+                self._resolve_evidence,
             ),
             re_path(
                 rf"^(?P<uuid>[0-9a-f-]+)/(?P<action>{'|'.join(TRANSITIONS)})/$",
@@ -230,11 +232,11 @@ class InvestorClassificationAdmin(admin.ModelAdmin):
         ]
         return custom_urls + super().get_urls()
 
-    def evidence_view(self, request, uuid):
+    def _resolve_evidence(self, request, uuid):
         classification = get_object_or_404(InvestorClassification, uuid=uuid)
         if not classification.evidence_retained:
             raise Http404("No evidence")
-        return stream_stored_file(classification.evidence_file, classification.evidence_mime_type)
+        return classification, classification.evidence_file, classification.evidence_mime_type
 
     def _build_form(self, request, classification, spec):
         if spec["form"] == "verify":
@@ -242,7 +244,11 @@ class InvestorClassificationAdmin(admin.ModelAdmin):
         return ReasonForm(request.POST or None, label=spec["label"], help_text=spec["help"])
 
     def transition_view(self, request, uuid, action):
+        if not self.has_change_permission(request):
+            raise PermissionDenied
         classification = get_object_or_404(InvestorClassification, uuid=uuid)
+        if not self.has_change_permission(request, classification):
+            raise PermissionDenied
         spec = TRANSITIONS[action]
         change_url = reverse("admin:users_investorclassification_change", args=[classification.pk])
         form = self._build_form(request, classification, spec)

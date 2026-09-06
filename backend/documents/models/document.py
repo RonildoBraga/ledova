@@ -1,7 +1,11 @@
+import os
+import uuid as uuid_lib
+
 from django.db import models
 
 from documents.querysets.document import DocumentQuerySet
 from shared.models import BaseModel
+from shared.storage import private_storage
 
 
 class DocumentType(models.TextChoices):
@@ -11,8 +15,9 @@ class DocumentType(models.TextChoices):
     OTHER = "other", "Other"
 
 
-def upload_to(instance: "Document", filename: str) -> str:
-    return f"documents/{instance.uploaded_by_id}/{instance.uuid}/{filename}"
+def document_upload_path(instance: "Document", filename: str) -> str:
+    ext = os.path.splitext(filename)[1].lower()
+    return f"documents/{instance.uuid}/{uuid_lib.uuid4()}{ext}"
 
 
 class Document(BaseModel):
@@ -30,7 +35,11 @@ class Document(BaseModel):
     )
     original_filename = models.CharField(max_length=255)
     mime_type = models.CharField(max_length=64, blank=True)
-    file = models.FileField(upload_to=upload_to)
+    file = models.FileField(
+        upload_to=document_upload_path,
+        storage=private_storage,
+        max_length=255,
+    )
     note = models.CharField(max_length=255, blank=True)
 
     class Meta:

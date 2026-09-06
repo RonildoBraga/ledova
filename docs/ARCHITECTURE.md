@@ -551,6 +551,69 @@ the ORM, not in PostgreSQL: row-level security is not planned.
 - `deployment_mode` on the operator row (`single_issuer` or `registry`) records
   which shape a deployment is; it does not change the isolation rules.
 
+## Uploaded files
+
+Every uploaded file is private. There is no such thing as a public upload in
+this codebase, and `MEDIA_ROOT` holds nothing an authenticated route serves.
+
+- A `FileField` that holds an upload carries `storage=private_storage`
+  (`backend/shared/storage.py`) and `max_length=255`, because a private key is
+  a uuid path rather than a filename. `PrivateMediaStorage.base_url` is `None`,
+  so reading `.url` raises rather than quietly returning a `/media/` path that
+  `django.conf.urls.static` would serve to anyone while `DEBUG` is true. The
+  three today are `companies.CompanyDocument.file`,
+  `documents.Document.file` and `users.InvestorClassification.evidence_file`.
+- The upload path names nothing about the uploader. `company_document_path`,
+  `document_upload_path` and `investor_evidence_path` all build
+  `<owner uuid>/.../<random uuid><ext>`: a leaked key says which row it belongs
+  to and nothing else. Never put a primary key, an email address or the
+  caller's original filename in a stored key — the original filename lives in
+  a column and is handed back in `Content-Disposition` by
+  `stream_stored_file(field, mime_type, filename)`.
+- The bytes reach a caller through one authenticated action per model, which
+  resolves the row through the app's own owner-scoped queryset and then calls
+  `shared.views.stream_stored_file`. A foreign row is the same 404 as a phantom
+  uuid; an anonymous caller is 401. The serializer's `file_url` is that route,
+  never a media path.
+- **A streaming admin route is registered with
+  `shared.utils.admin_files.admin_file_path`, never with a bare
+  `self.admin_site.admin_view(...)`.** `admin_view` checks only that the caller
+  is active and staff, which is weaker than the change page beside it: a staff
+  account with no model permissions was refused the change page and handed the
+  bytes. `admin_file_path` couples the two — it checks
+  `has_view_permission(request)` before resolving the row and again with the
+  row, and only then streams — so a new file route cannot forget the check
+  without abandoning the helper. It answers **403, not 404**: the caller is a
+  named staff member who reached the route from the admin, the sibling change
+  page already answers 403 for the same row, and hiding a permission gap as a
+  missing object would only mislead the operator who has to fix it. Existence
+  is not the secret here; the bytes are. Any other custom admin view that acts
+  on a row checks the matching permission itself —
+  `InvestorClassificationAdmin.transition_view` checks
+  `has_change_permission`, because verifying or revoking a wholesale-investor
+  claim is a compliance control, not a read.
+- Moving a field onto private storage is one migration per model, shaped like
+  `companies/migrations/0006_company_document_private_storage.py`:
+  1. `RunPython(move_uploads(..., to_private=True), move_uploads(..., to_private=False))`
+     relocates the existing bytes between `MEDIA_ROOT` and `PRIVATE_MEDIA_ROOT`,
+     skipping a row whose file is already missing from disk.
+  2. `SeparateDatabaseAndState(state_operations=[AlterField(...)])` carries the
+     storage and `max_length` change in the migration state only.
+  3. `RunPython(widen_char_column(...), noop)` widens the column on PostgreSQL.
+  The helpers are in `backend/shared/utils/migrations.py`. **The order is the
+  point.** Operations reverse back to front, so the bytes move last: a reverse
+  that returned files to `MEDIA_ROOT` and then failed on the column would leave
+  them publicly readable with the ledger still claiming the migration applied,
+  because a `RunPython` file move is not covered by the DDL transaction. And
+  the widening reverses to a no-op rather than to `AlterField`'s auto-derived
+  narrowing, which would raise `value too long for type character varying(100)`
+  on any document uploaded after the migration — the generated keys run to 118
+  characters. A rollback leaves the column wider than the state claims, which
+  costs nothing, and strands no bytes.
+  `backend/shared/tests/test_private_storage_migrations.py` round-trips both
+  migrations with real bytes, a row whose file is missing, and a key generated
+  after the widening.
+
 ## Coding rules
 
 **A rule belongs here only with two things attached: the file that is its
