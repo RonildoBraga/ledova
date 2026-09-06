@@ -21,6 +21,7 @@ from users.services.eligibility import require_subscription_eligibility
 logger = logging.getLogger(__name__)
 
 DEFAULT_PAYMENT_WINDOW = timedelta(days=7)
+CLAIMED_STATUSES = (RequestStatus.EXECUTING, RequestStatus.EXECUTED)
 
 OFFERING_NOT_OPEN = "The {symbol} offering is not open for subscription."
 BELOW_MINIMUM = "The {symbol} offering asks for at least {minimum} shares; this subscription asks for {quantity}."
@@ -45,7 +46,7 @@ NOT_PAID = "Only a paid subscription can be allotted; this one is {status}."
 NOTHING_TO_ALLOT = "This subscription has been scaled back to zero shares; refund it instead."
 BATCH_ABOVE_HEADROOM = (
     "Allotting {total} shares of {symbol} would exceed the {room} still available "
-    "({cap_room} left under the offering cap, {chain_room} unissued on chain). "
+    "({cap_room} left under the offering cap, {chain_room} left of the authorized supply). "
     "The whole batch is refused; scale back first rather than allotting a first-come subset."
 )
 NOT_RETRYABLE = "Issuance request {uuid} is {status}; there is nothing to retry."
@@ -55,6 +56,11 @@ ISSUANCE_ALREADY_CLAIMED = (
     "{verb} is refused while that mint stands; the money cannot go back while the shares stay out."
 )
 ISSUANCE_REFUSED_BY_REFUND = "Refused: subscription {reference} was refunded before the shares were minted."
+MINT_BROADCAST = (
+    "Issuance request {uuid} broadcast mint {tx_hash} and never confirmed it, so those shares may be out. "
+    "{verb} is refused until that mint is resolved: the executing sweep completes it if it was mined and "
+    "clears the hash if it reverted, and only then is the money free to move."
+)
 
 
 def _quantize(value: Decimal) -> Decimal:
@@ -230,18 +236,38 @@ def _linked_request(subscription: Subscription):
     return ShareIssuanceRequest.objects.get(pk=subscription.issuance_request_id)
 
 
-def _refuse_if_issuance_claimed(subscription: Subscription, verb: str) -> None:
-    request = _linked_request(subscription)
-    if request is None or request.status == RequestStatus.REJECTED:
-        return
-    raise SubscriptionRefusedException(
+def _already_claimed(request: ShareIssuanceRequest, verb: str) -> SubscriptionRefusedException:
+    return SubscriptionRefusedException(
         ISSUANCE_ALREADY_CLAIMED.format(uuid=request.uuid, status=request.get_status_display().lower(), verb=verb)
     )
 
 
+def _refuse_if_the_mint_is_out(request: ShareIssuanceRequest, verb: str) -> None:
+    if request.status in CLAIMED_STATUSES:
+        raise _already_claimed(request, verb)
+    issuance = ShareTokenService.broadcast_mint(request)
+    if issuance is not None:
+        raise SubscriptionRefusedException(
+            MINT_BROADCAST.format(uuid=request.uuid, tx_hash=issuance.tx_hash, verb=verb)
+        )
+
+
+def _refuse_if_issuance_claimed(subscription: Subscription, verb: str) -> None:
+    request = _linked_request(subscription)
+    if request is None:
+        return
+    _refuse_if_the_mint_is_out(request, verb)
+    if request.status == RequestStatus.REJECTED:
+        return
+    raise _already_claimed(request, verb)
+
+
 def _refuse_the_issuance(subscription: Subscription, verb: str) -> None:
     request = _linked_request(subscription)
-    if request is None or request.status == RequestStatus.REJECTED:
+    if request is None:
+        return
+    _refuse_if_the_mint_is_out(request, verb)
+    if request.status == RequestStatus.REJECTED:
         return
     now = timezone.now()
     claimed = ShareIssuanceRequest.objects.filter(
@@ -256,9 +282,7 @@ def _refuse_the_issuance(subscription: Subscription, verb: str) -> None:
         logger.info(f"Issuance request {request.uuid} rejected because subscription {subscription.uuid} was refunded")
         return
     request.refresh_from_db(fields=["status"])
-    raise SubscriptionRefusedException(
-        ISSUANCE_ALREADY_CLAIMED.format(uuid=request.uuid, status=request.get_status_display().lower(), verb=verb)
-    )
+    raise _already_claimed(request, verb)
 
 
 @transaction.atomic
@@ -375,8 +399,9 @@ def _allot_group(offering_id, group, operator_user, notes, service) -> int:
     with transaction.atomic():
         offering = Offering.objects.select_for_update().select_related("token").get(pk=offering_id)
         authorized, issued = service.share_supply(offering.token.contract_address)
+        unminted = ShareIssuanceRequest.objects.unminted(offering.token).share_total()
         cap_room = cap_headroom(offering)
-        chain_room = authorized - issued
+        chain_room = authorized - issued - unminted
         room = min(cap_room, chain_room)
         total = sum(subscription.allotment_quantity for subscription in group)
         if total > room:

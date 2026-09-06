@@ -3,6 +3,8 @@ from django.db.models.functions import Cast, Coalesce
 
 from tokens.models.choices import IssuanceStatus
 
+ISSUANCE_KEY_PREFIX = "issuance-request:"
+
 
 def completed_supply_annotation(token_ref):
     from tokens.models import ShareIssuance
@@ -35,6 +37,13 @@ class ShareIssuanceQuerySet(QuerySet):
 
     def completed(self):
         return self.filter(status=IssuanceStatus.COMPLETED)
+
+    def broadcast(self):
+        return self.exclude(tx_hash__isnull=True).exclude(tx_hash="")
+
+    def unconfirmed_request_uuids(self):
+        keys = self.broadcast().exclude(status=IssuanceStatus.COMPLETED).values_list("idempotency_key", flat=True)
+        return [key[len(ISSUANCE_KEY_PREFIX) :] for key in keys if key and key.startswith(ISSUANCE_KEY_PREFIX)]
 
     def completed_supply(self, token) -> int:
         total = (

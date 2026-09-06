@@ -768,6 +768,44 @@ class ExecutingIssuanceSweepTest(TestCase):
         self.assertEqual((issuance.status, issuance.tx_hash), (IssuanceStatus.FAILED, None))
         self.assertIsNone(request.executed_issuance)
 
+    def _lost_receipt(self, tx_hash="0xmint", minutes=11):
+        request, issuance = self._stuck(tx_hash=tx_hash, minutes=minutes)
+        issuance.mark_failed("receipt lost after the transaction was sent")
+        ShareIssuanceRequest.objects.filter(pk=request.pk).update(
+            status=RequestStatus.FAILED, updated_at=timezone.now() - timedelta(minutes=minutes)
+        )
+        request.refresh_from_db()
+        return request, issuance
+
+    def test_a_failed_request_whose_mint_was_broadcast_is_swept_like_an_executing_one(self):
+        request, issuance = self._lost_receipt()
+        self.chain.get_transaction_receipt.return_value = {"status": 1, **RECEIPT}
+
+        self.assertEqual(check_executing_issuance_requests(), {"checked": 1, "resolved": 1})
+
+        self.chain.send_transaction.assert_not_called()
+        request.refresh_from_db()
+        issuance.refresh_from_db()
+        self.assertEqual((request.status, request.executed_issuance), (RequestStatus.EXECUTED, issuance))
+        self.assertEqual(issuance.status, IssuanceStatus.COMPLETED)
+        self.assertEqual(check_executing_issuance_requests(), {"checked": 0, "resolved": 0})
+
+    def test_a_failed_request_whose_mint_reverted_is_left_alone_because_nothing_is_out(self):
+        request, issuance = self._lost_receipt()
+        issuance.mark_reverted("Transaction reverted: 0xmint")
+
+        self.assertEqual(check_executing_issuance_requests(), {"checked": 0, "resolved": 0})
+
+        self.chain.get_transaction_receipt.assert_not_called()
+        request.refresh_from_db()
+        self.assertEqual(request.status, RequestStatus.FAILED)
+
+    def test_a_fresh_failed_request_is_left_for_the_retry_before_the_sweep_takes_it(self):
+        request, _ = self._lost_receipt(minutes=1)
+        self.assertEqual(check_executing_issuance_requests(), {"checked": 0, "resolved": 0})
+        request.refresh_from_db()
+        self.assertEqual(request.status, RequestStatus.FAILED)
+
     def _stuck_increase(self, tx_hash="0xset", minutes=11):
         request = self.tenant.capital_increase
         CapitalIncreaseRequest.objects.filter(pk=request.pk).update(

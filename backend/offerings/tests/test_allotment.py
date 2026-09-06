@@ -11,6 +11,7 @@ from offerings.services.subscription import (
     ALREADY_ALLOTTED,
     BATCH_ABOVE_HEADROOM,
     ISSUANCE_ALREADY_CLAIMED,
+    MINT_BROADCAST,
     NO_REQUEST_TO_RETRY,
     NOT_PAID,
     NOT_RETRYABLE,
@@ -35,7 +36,13 @@ from offerings.tests.factories import (
     paid_subscription,
 )
 from shared.tests.tenants import make_tenant
-from tokens.models import RequestStatus, ShareIssuance, ShareIssuanceRequest
+from tokens.models import (
+    IssuanceStatus,
+    RequestStatus,
+    ShareIssuance,
+    ShareIssuanceRequest,
+)
+from tokens.services import ShareTokenService
 
 CHAIN_CLIENT = "tokens.services.share_token_service.get_base_chain_client"
 DEFER = "offerings.tasks.subscription.allot_subscription_task.defer"
@@ -233,6 +240,86 @@ class MoneyOutNeverLeavesSharesOutTest(AllotmentTestCase):
         self.assertEqual(subscription.amount_received, Decimal("25.00"))
         self.assertIsNone(subscription.allotted_quantity)
 
+    def _broadcast(self, request, tx_hash="0xmint", status=IssuanceStatus.PROCESSING):
+        return ShareIssuance.objects.create(
+            token=self.offering.token,
+            recipient_address=request.recipient_address,
+            amount=str(request.amount),
+            status=status,
+            tx_hash=tx_hash,
+            idempotency_key=ShareTokenService.issuance_key(request),
+        )
+
+    def _lost_the_receipt(self):
+        subscription, request = self._allotted()
+        issuance = self._broadcast(request)
+        issuance.mark_failed("receipt lost after the transaction was sent")
+        request.mark_failed("receipt lost after the transaction was sent")
+        subscription.refresh_from_db()
+        return subscription, request, issuance
+
+    def _broadcast_refusal(self, request, tx_hash, verb):
+        return MINT_BROADCAST.format(uuid=request.uuid, tx_hash=tx_hash, verb=verb)
+
+    def test_a_refund_is_refused_while_a_failed_request_still_carries_a_broadcast_mint(self):
+        subscription, request, issuance = self._lost_the_receipt()
+        self.assertTrue(request.can_be_executed)
+
+        with self.assertRaises(SubscriptionRefusedException) as raised:
+            record_refund(subscription, amount=Decimal("25.00"))
+
+        self.assertEqual(str(raised.exception.detail), self._broadcast_refusal(request, "0xmint", "A refund"))
+        subscription.refresh_from_db()
+        request.refresh_from_db()
+        self.assertEqual(subscription.status, SubscriptionStatus.PAID)
+        self.assertIsNone(subscription.refunded_at)
+        self.assertIsNone(subscription.refund_amount)
+        self.assertEqual(request.status, RequestStatus.FAILED)
+        self.assertEqual(issuance.tx_hash, "0xmint")
+
+    def test_reject_withdraw_and_a_restated_payment_wait_for_the_broadcast_mint_too(self):
+        subscription, request, _ = self._lost_the_receipt()
+        calls = (
+            (lambda: reject(subscription, "Unwinding"), "Rejecting it"),
+            (lambda: withdraw(subscription, "Unwinding"), "Withdrawing it"),
+            (
+                lambda: confirm_payment(
+                    subscription,
+                    confirmed_by=self.operator_user,
+                    amount_received=Decimal("5.00"),
+                    received_on=timezone.now().date(),
+                    accept_as_final=True,
+                ),
+                "Restating the payment",
+            ),
+        )
+        for call, verb in calls:
+            with self.subTest(verb=verb):
+                with self.assertRaises(SubscriptionRefusedException) as raised:
+                    call()
+                self.assertEqual(str(raised.exception.detail), self._broadcast_refusal(request, "0xmint", verb))
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.status, SubscriptionStatus.PAID)
+
+    def test_a_retry_is_still_one_click_away_while_the_mint_is_unresolved(self):
+        subscription, request, _ = self._lost_the_receipt()
+        self.defer.reset_mock()
+        retry_allotment(subscription, self.operator_user)
+        self.assertEqual(self.defer.call_count, 1)
+
+    def test_a_reverted_mint_clears_its_hash_and_the_refund_is_open_again(self):
+        subscription, request, issuance = self._lost_the_receipt()
+        issuance.mark_reverted("Transaction reverted: 0xmint")
+
+        record_refund(subscription, amount=Decimal("25.00"), reference="RTGS-REVERTED")
+
+        subscription.refresh_from_db()
+        request.refresh_from_db()
+        self.assertIsNone(issuance.tx_hash)
+        self.assertEqual(subscription.status, SubscriptionStatus.REFUNDED)
+        self.assertEqual(request.status, RequestStatus.REJECTED)
+        self.assertFalse(request.can_be_executed)
+
     def test_a_refunded_subscription_can_be_closed_and_never_retried(self):
         subscription, request = self._allotted()
         record_refund(subscription, amount=Decimal("25.00"))
@@ -300,6 +387,32 @@ class BulkAllotmentTest(AllotmentTestCase):
         result = allot_batch([third], self.operator_user, service=service)
         self.assertEqual(result["allotted"], 0)
         self.assertIn("20 left under the offering cap", result["refusals"][0])
+
+    def test_a_second_batch_cannot_promise_the_shares_the_first_batch_already_took(self):
+        first, second, third = self._three()
+        service = self._supply(authorized=100, issued=0)
+
+        self.assertEqual(allot_batch([first, second], self.operator_user, service=service)["allotted"], 2)
+
+        result = allot_batch([third], self.operator_user, service=service)
+        third.refresh_from_db()
+
+        self.assertEqual(result["allotted"], 0)
+        self.assertIn("20 left of the authorized supply", result["refusals"][0])
+        self.assertEqual(ShareIssuanceRequest.objects.count(), 2)
+        self.assertIsNone(third.issuance_request_id)
+        self.assertEqual(third.status, SubscriptionStatus.PAID)
+
+    def test_a_request_the_chain_has_already_minted_stops_holding_room(self):
+        first, second, third = self._three()
+        self.assertEqual(
+            allot_batch([first, second], self.operator_user, service=self._supply(authorized=150))["allotted"], 2
+        )
+        ShareIssuanceRequest.objects.update(status=RequestStatus.EXECUTED)
+
+        result = allot_batch([third], self.operator_user, service=self._supply(authorized=150, issued=80))
+        self.assertEqual(result, {"allotted": 1, "refusals": []})
+        self.assertEqual(ShareIssuanceRequest.objects.count(), 3)
 
     def test_two_offerings_are_grouped_and_judged_separately(self):
         other = make_tenant("second-issuer")

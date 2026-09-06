@@ -264,7 +264,15 @@ them after `make build` and fails on any drift.
    against `EXECUTABLE_STATUSES`, so the worker's `mark_executing` and the
    refund cannot both win — and a refund, a rejection, a withdrawal or a
    restated payment is refused outright once the request is `executing` or
-   `executed`. Money never goes back while the shares stay out.
+   `executed`. The status alone is not the test, because `EXECUTABLE_STATUSES`
+   includes `failed` and a mint that was broadcast and then lost its receipt
+   fails the request with the shares already out. The discriminator the codebase
+   already carries settles it: `ShareIssuance.mark_reverted` clears `tx_hash`
+   and `mark_failed` keeps it, so a linked issuance with a `tx_hash` means a mint
+   is out and every money move is refused by `ShareTokenService.broadcast_mint`
+   until the executing sweep resolves it — completing it if it was mined, or
+   clearing the hash if it reverted, which reopens the refund. Money never goes
+   back while the shares stay out.
 6. Allotment reuses the issuance machinery unchanged.
    `ShareTokenService.create_issuance_request` then `request.approve(...)` then
    the `OneToOne` link then a task on the untouched `execute_request`. Three
@@ -276,12 +284,21 @@ them after `make build` and fails on any drift.
 7. Bulk allotment groups by offering, takes `select_for_update` on the offering
    row the way `_execute_capital_increase` does on the share class, makes one
    `share_supply()` read for the batch and refuses the **whole** batch when the
-   total exceeds `min(offering headroom, authorized - issued)`. Part-filling
-   first-come would destroy the pro-rata fairness `scale_back` exists to give.
+   total exceeds `min(offering headroom, authorized - issued - unminted)`.
+   `totalSupply()` counts what is on chain, not what has already been promised,
+   so the chain half of that `min()` also subtracts the shares of every request
+   for the token that can still mint — `approved`, `executing`, and `failed`
+   while its issuance still carries a `tx_hash`. Without that subtraction two
+   sequential batches each fit on their own and jointly do not, and the second
+   one ends as a `paid` row whose task refuses forever. Part-filling first-come
+   would destroy the pro-rata fairness `scale_back` exists to give.
 8. `reconcile_subscriptions` runs every five minutes and is the mirror of
    `check_executing_issuance_requests` on the subscription side: the latter
    finishes the request a killed worker left, and without the mirror the
-   subscription sits `paid` forever with the shares already on chain. The daily
+   subscription sits `paid` forever with the shares already on chain. That sweep
+   takes `executing` requests and also `failed` ones whose issuance still carries
+   a `tx_hash`, because the last retry of a lost receipt leaves the request
+   `failed` with the mint out and nothing else looks at it. The daily
    `expire_unpaid_subscriptions` only touches rows with no payment recorded.
 9. Allotment stays an admin action. The API carries create, list, detail, submit
    and withdraw for the investor and no operator write route at all.

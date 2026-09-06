@@ -44,16 +44,17 @@ def check_executing_issuance_requests(timestamp: int = 0):
     service = ShareTokenService()
     cutoff = timezone.now() - STALE_EXECUTION_AGE
     resolvers = (
-        (ShareIssuanceRequest, service.resolve_executing_issuance),
-        (CapitalIncreaseRequest, service.resolve_executing_capital_increase),
+        (ShareIssuanceRequest.objects.unresolved_on_chain(cutoff), service.resolve_executing_issuance),
+        (
+            CapitalIncreaseRequest.objects.filter(status=RequestStatus.EXECUTING, updated_at__lt=cutoff),
+            service.resolve_executing_capital_increase,
+        ),
     )
     checked = 0
     resolved = 0
 
-    for model, resolve in resolvers:
-        stale = model.objects.filter(status=RequestStatus.EXECUTING, updated_at__lt=cutoff).select_related(
-            "token", "token__company"
-        )
+    for queryset, resolve in resolvers:
+        stale = queryset.select_related("token", "token__company")
         for request in stale:
             checked += 1
             try:

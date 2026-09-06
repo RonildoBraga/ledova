@@ -9,6 +9,7 @@ from django.utils import timezone
 from rest_framework.test import APITestCase, APITransactionTestCase
 
 from assets.models import Asset
+from integrations.base_chain.exceptions import BaseChainTransactionError
 from offerings.exceptions import SubscriptionRefusedException
 from offerings.models import (
     Offering,
@@ -41,6 +42,7 @@ from tokens.models import (
     ShareIssuanceRequest,
 )
 from tokens.services.share_token_service import SHARE_ASSET_CHAIN
+from tokens.tasks import check_executing_issuance_requests
 from tokens.tests.test_chain_integration import (
     CAP,
     CHAIN_SETTINGS,
@@ -200,6 +202,62 @@ class SubscriptionAllotmentChainTest(AllotmentChainMixin, APITestCase):
         self.assertIsNone(subscription.refunded_at)
         self.assertEqual(self._contract().functions.balanceOf(self.investor).call(), 20)
 
+    def test_a_refund_is_refused_while_a_lost_receipt_leaves_the_mint_unresolved(self):
+        self._deployed()
+        WhitelistService().add_to_whitelist(self.investor)
+        subscription = self._paid(self._offering(), quantity=20)
+        request = allot(subscription, self.staff)
+
+        with self._lost_receipt():
+            with self.assertRaises(BaseChainTransactionError):
+                self._run_task(subscription)
+
+        request.refresh_from_db()
+        issuance = ShareIssuance.objects.get()
+        self.assertEqual((request.status, issuance.status), (RequestStatus.FAILED, IssuanceStatus.FAILED))
+        self.assertTrue(issuance.tx_hash)
+        self.assertEqual(self._contract().functions.balanceOf(self.investor).call(), 20)
+
+        with self.assertRaises(SubscriptionRefusedException) as raised:
+            record_refund(subscription, amount=Decimal("50.00"), reference="RTGS-LOST")
+        self.assertIn(issuance.tx_hash, str(raised.exception.detail))
+
+        subscription.refresh_from_db()
+        request.refresh_from_db()
+        self.assertEqual(subscription.status, SubscriptionStatus.PAID)
+        self.assertIsNone(subscription.refunded_at)
+        self.assertIsNone(subscription.refund_amount)
+        self.assertEqual(request.status, RequestStatus.FAILED)
+        self.assertEqual(self._contract().functions.balanceOf(self.investor).call(), 20)
+        self.assertEqual(self._contract().functions.totalSupply().call(), 20)
+
+    def test_the_sweep_finishes_a_broadcast_mint_that_lost_its_receipt(self):
+        self._deployed()
+        WhitelistService().add_to_whitelist(self.investor)
+        subscription = self._paid(self._offering(), quantity=20)
+        request = allot(subscription, self.staff)
+
+        with self._lost_receipt():
+            with self.assertRaises(BaseChainTransactionError):
+                self._run_task(subscription)
+
+        ShareIssuanceRequest.objects.filter(pk=request.pk).update(updated_at=timezone.now() - timedelta(minutes=11))
+        nonce_before = self._signer_nonce()
+        self.assertEqual(check_executing_issuance_requests(), {"checked": 1, "resolved": 1})
+        self.assertEqual(self._signer_nonce(), nonce_before)
+
+        request.refresh_from_db()
+        self.assertEqual(request.status, RequestStatus.EXECUTED)
+        self.assertEqual(ShareIssuance.objects.get().status, IssuanceStatus.COMPLETED)
+        self.assertEqual(reconcile_subscriptions(), {"flipped": 1})
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.status, SubscriptionStatus.ALLOTTED)
+
+        with self.assertRaises(SubscriptionRefusedException) as raised:
+            record_refund(subscription, amount=Decimal("50.00"))
+        self.assertIn("already claimed on chain", str(raised.exception.detail))
+        self.assertEqual(self._contract().functions.balanceOf(self.investor).call(), 20)
+
     def test_a_killed_worker_leaves_the_row_paid_until_reconcile_mirrors_the_executed_request(self):
         self._deployed()
         WhitelistService().add_to_whitelist(self.investor)
@@ -235,7 +293,7 @@ class SubscriptionAllotmentChainTest(AllotmentChainMixin, APITestCase):
         result = allot_batch(rows, self.staff)
 
         self.assertEqual(result["allotted"], 0)
-        self.assertIn(f"{CAP} unissued on chain", result["refusals"][0])
+        self.assertIn(f"{CAP} left of the authorized supply", result["refusals"][0])
         self.assertEqual(self.w3.eth.block_number, blocks_before)
         self.assertFalse(ShareIssuanceRequest.objects.exists())
         self.assertEqual(self._contract().functions.totalSupply().call(), 0)

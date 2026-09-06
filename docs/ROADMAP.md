@@ -212,7 +212,34 @@ console that gathers the worklists together.
   or the worker's `mark_executing` won and the refund is refused by name. Once
   the request is `executing` or `executed` — including the reconciler window
   where the shares are minted but the row still reads `paid` — a refund, a
-  rejection, a withdrawal and a restated payment are all refused.
+  rejection, a withdrawal and a restated payment are all refused. The request
+  status alone is not enough: `EXECUTABLE_STATUSES` includes `failed`, and a
+  mint that was broadcast and then lost its receipt to an RPC timeout leaves the
+  request `failed` with the shares already out, so a status-only guard let the
+  money go back while they stood. What settles it is the discriminator the
+  issuance model already carries — `mark_reverted` clears `tx_hash` because a
+  reverted mint is safe to refund, `mark_failed` keeps it because a broadcast
+  mint of unknown fate is not — so every money move is refused while the linked
+  `ShareIssuance` carries a hash, and only the executing sweep releases it, by
+  completing the mint or by clearing the hash on a revert.
+- **A lost receipt is swept, not left for someone to notice.**
+  `check_executing_issuance_requests` takes `executing` requests and also
+  `failed` ones whose issuance still carries a `tx_hash`. The allotment task
+  retries four times on a receipt timeout and then gives up, and before this the
+  row stayed `failed` with a mint out: the reconciler only flips `executed` rows
+  and the sweep only looked at `executing` ones. Both ends now close on their
+  own — the mint completes and the subscription mirrors to `allotted`, or the
+  revert clears the hash and the refund reopens.
+- **Two sequential batches cannot jointly outrun the authorized supply.**
+  `totalSupply()` counts minted shares, not promised ones, so a batch judged
+  only against `authorized - issued` fits while the requests approved by the
+  previous batch are still unexecuted. The chain half of the headroom therefore
+  subtracts every request for the token that can still mint — `approved`,
+  `executing`, and `failed` while its issuance carries a hash. Nothing was
+  over-minted before the fix, because `execute_request` and the contract both
+  refuse, but `mark_refused` leaves the request `approved`, so the second
+  subscription sat `paid` with the money in, no shares, and a task that failed
+  on every retry.
 - **Eligibility is re-checked at acceptance, not only at submission.** A
   certificate can lapse in between and the law cares about status at
   acceptance, so `accept` runs `require_subscription_eligibility(account,

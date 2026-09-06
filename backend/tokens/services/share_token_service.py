@@ -40,6 +40,7 @@ from tokens.models import (
     ShareToken,
     ShareTokenStatus,
 )
+from tokens.querysets.share_issuance import ISSUANCE_KEY_PREFIX
 
 logger = logging.getLogger(__name__)
 
@@ -440,7 +441,11 @@ class ShareTokenService:
 
     @staticmethod
     def issuance_key(request: ShareIssuanceRequest) -> str:
-        return f"issuance-request:{request.uuid}"
+        return f"{ISSUANCE_KEY_PREFIX}{request.uuid}"
+
+    @classmethod
+    def broadcast_mint(cls, request: ShareIssuanceRequest) -> Optional[ShareIssuance]:
+        return ShareIssuance.objects.broadcast().filter(idempotency_key=cls.issuance_key(request)).first()
 
     @staticmethod
     def _start_execution(request) -> None:
@@ -559,12 +564,7 @@ class ShareTokenService:
             logger.error(f"Could not record the {token.symbol} holding of {recipient_address}: {exc}")
 
     def resolve_executing_issuance(self, request: ShareIssuanceRequest) -> Optional[str]:
-        issuance = (
-            ShareIssuance.objects.filter(idempotency_key=self.issuance_key(request))
-            .exclude(tx_hash__isnull=True)
-            .exclude(tx_hash="")
-            .first()
-        )
+        issuance = self.broadcast_mint(request)
         if issuance is None:
             logger.warning(f"Request {request.uuid} is executing with no mint recorded; left for the operator")
             return None
