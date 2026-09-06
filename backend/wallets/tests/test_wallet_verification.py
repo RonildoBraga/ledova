@@ -25,8 +25,8 @@ class WalletVerificationTest(APITestCase):
         self.assertEqual(response.json()["challenge"], self.wallet.verification_challenge)
         self.assertEqual(self.wallet.verification_status, WALLET_VERIFICATION_STATUS_PENDING)
 
-    @patch("wallets.views.wallet.sync_wallet")
-    @patch("wallets.views.wallet.verify_wallet_signature", return_value=True)
+    @patch("wallets.tasks.sync_wallet")
+    @patch("wallets.services.verification.verify_wallet_signature", return_value=True)
     def test_valid_signature_verifies_wallet_and_enqueues_one_sync(self, verify_signature, sync_task):
         Wallet.objects.filter(pk=self.wallet.pk).update(verification_challenge="challenge")
 

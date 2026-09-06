@@ -79,8 +79,6 @@ LEGACY = frozenset(
         "backend/users/views/user_profile.py:select-for-update-in-view",
         "backend/users/views/user_profile.py:transaction-in-view",
         "backend/wallets/models/holding_snapshot.py:query-in-model",
-        "backend/wallets/views/wallet.py:logger-in-view",
-        "backend/wallets/views/wallet.py:raw-orm-in-view",
         "backend/wallets/views/wallet.py:select-for-update-in-view",
         "backend/wallets/views/wallet.py:transaction-in-view",
         "backend/whitelist/views/entry.py:raw-orm-in-view",

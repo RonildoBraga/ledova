@@ -1,35 +1,20 @@
-import logging
-
 from django.db import transaction
-from django.shortcuts import get_object_or_404
-from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from shared.views.base import AuthenticatedModelViewSet
-from wallets.constants import (
-    WALLET_VERIFICATION_STATUS_PENDING,
-    WALLET_VERIFICATION_STATUS_VERIFIED,
-)
-from wallets.exceptions import (
-    InvalidSignatureException,
-    SignatureRequiredException,
-    VerificationChallengeNotFoundException,
-)
+from wallets.constants import WALLET_VERIFICATION_STATUS_PENDING
 from wallets.filters import WalletFilter
 from wallets.models import Wallet
 from wallets.serializers import HoldingSerializer, WalletSerializer
 from wallets.services import (
     BalanceService,
     TransferService,
-    generate_verification_challenge,
-    verify_wallet_signature,
+    complete_wallet_verification,
+    start_wallet_verification,
 )
 from wallets.services.sync import WalletSyncService
-from wallets.tasks import sync_wallet
-
-logger = logging.getLogger(__name__)
 
 
 class WalletViewSet(AuthenticatedModelViewSet):
@@ -49,14 +34,15 @@ class WalletViewSet(AuthenticatedModelViewSet):
     def update(self, request, *args, **kwargs):
         return super().update(request, *args, **kwargs)
 
+    def _with_market_value(self, wallet):
+        return Wallet.objects.visible_to_user(self.request.user).with_market_value().get(pk=wallet.pk)
+
     def perform_update(self, serializer):
-        wallet = serializer.save()
-        serializer.instance = Wallet.objects.with_market_value().get(pk=wallet.pk)
+        serializer.instance = self._with_market_value(serializer.save())
 
     def perform_create(self, serializer):
         wallet = serializer.save(verification_status=WALLET_VERIFICATION_STATUS_PENDING)
-
-        serializer.instance = Wallet.objects.with_market_value().get(pk=wallet.pk)
+        serializer.instance = self._with_market_value(wallet)
 
         preferences = getattr(getattr(self.request.user, "userprofile", None), "preferences", None)
         portfolio = preferences.selected_portfolio if preferences else None
@@ -64,20 +50,12 @@ class WalletViewSet(AuthenticatedModelViewSet):
             portfolio.wallets.add(wallet)
 
     @action(detail=True, methods=["post"], url_path="request-verification", url_name="request-verification")
-    @transaction.atomic
     def request_verification(self, request, uuid=None):
-        wallet = get_object_or_404(
-            Wallet.objects.visible_to_user(request.user).select_for_update(of=("self",)),
-            uuid=uuid,
-        )
-        challenge = generate_verification_challenge(wallet.address)
-
-        wallet.verification_challenge = challenge
-        wallet.save(update_fields=["verification_challenge"])
+        wallet = start_wallet_verification(request.user, uuid)
 
         return Response(
             {
-                "challenge": challenge,
+                "challenge": wallet.verification_challenge,
                 "message": f"Please sign this message with your wallet: {wallet.address}",
                 "walletAddress": wallet.address,
             },
@@ -85,46 +63,18 @@ class WalletViewSet(AuthenticatedModelViewSet):
         )
 
     @action(detail=True, methods=["post"], url_path="verify-signature", url_name="verify-signature")
-    @transaction.atomic
     def verify_signature(self, request, uuid=None):
-        wallet = get_object_or_404(
-            Wallet.objects.visible_to_user(request.user).select_for_update(of=("self",)),
-            uuid=uuid,
+        wallet = complete_wallet_verification(request.user, uuid, request.data.get("signature"))
+
+        return Response(
+            {
+                "success": True,
+                "message": "Wallet verified successfully!",
+                "verificationStatus": wallet.verification_status,
+                "verifiedAt": wallet.verified_at.isoformat(),
+            },
+            status=status.HTTP_200_OK,
         )
-        signature = request.data.get("signature")
-
-        if not signature:
-            raise SignatureRequiredException()
-
-        if not wallet.verification_challenge:
-            raise VerificationChallengeNotFoundException()
-
-        is_valid = verify_wallet_signature(
-            wallet.address, wallet.verification_challenge, signature, wallet.chain.upper()
-        )
-
-        if is_valid:
-            wallet.verification_status = WALLET_VERIFICATION_STATUS_VERIFIED
-            wallet.verification_signature = signature
-            wallet.verified_at = timezone.now()
-            wallet.save(update_fields=["verification_status", "verification_signature", "verified_at"])
-
-            try:
-                sync_wallet.defer(wallet_uuid=str(wallet.uuid))
-            except Exception as e:
-                logger.error(f"Failed to queue sync: {e}")
-
-            return Response(
-                {
-                    "success": True,
-                    "message": "Wallet verified successfully!",
-                    "verificationStatus": WALLET_VERIFICATION_STATUS_VERIFIED,
-                    "verifiedAt": wallet.verified_at.isoformat(),
-                },
-                status=status.HTTP_200_OK,
-            )
-        else:
-            raise InvalidSignatureException()
 
     @action(detail=True, methods=["post"], url_path="sync", url_name="sync")
     def sync(self, request, uuid=None):
