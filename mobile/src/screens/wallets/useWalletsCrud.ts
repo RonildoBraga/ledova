@@ -16,10 +16,10 @@ import { apiClient } from '../../services/apiClient';
 import { invalidateHomeDashboard } from '../../utils/queryInvalidation';
 import { useUserPreferences } from '../../hooks/useUserPreferences';
 import { generateMockWalletsData } from './_mock/mock';
-import { useMockData } from '../../_mock/useMockData';
+import { mockDataEnabled } from '../../_mock/mockDataEnabled';
 
 export function useWalletsCrud() {
-  const USE_MOCK_DATA = useMockData();
+  const USE_MOCK_DATA = mockDataEnabled();
   const queryClient = useQueryClient();
   const { selectedAccount } = useUserPreferences();
   const [syncingWalletId, setSyncingWalletId] = useState<string | undefined>(undefined);

@@ -4,7 +4,7 @@ import { CACHE_TIMING, BLOCKCHAIN, getTransactions, getTransactionsNextPage, get
 import type { TransactionQueryParams, Transaction, PaginatedResponse, Wallet } from '@ledova/shared';
 import { apiClient } from '../../services/apiClient';
 import { generateMockTransactionsData } from './_mock/mock';
-import { useMockData } from '../../_mock/useMockData';
+import { mockDataEnabled } from '../../_mock/mockDataEnabled';
 
 export type { TransactionQueryParams };
 
@@ -13,7 +13,7 @@ interface MockPage {
 }
 
 export function useTransactions() {
-  const USE_MOCK_DATA = useMockData();
+  const USE_MOCK_DATA = mockDataEnabled();
   const [filters, setFilters] = useState<TransactionQueryParams>({});
   const [appliedFilters, setAppliedFilters] = useState<TransactionQueryParams>({});
   const [currentMockPage, setCurrentMockPage] = useState(1);
