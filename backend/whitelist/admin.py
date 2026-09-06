@@ -174,7 +174,7 @@ class WhitelistEntryAdmin(admin.ModelAdmin):
         if outcome is None:
             return "-"
         if outcome.is_eligible:
-            return format_html('<span style="color: #28a745;">Eligible</span>')
+            return mark_safe('<span style="color: #28a745;">Eligible</span>')
         return format_html('<span style="color: #dc3545;">{}</span>', ", ".join(outcome.reasons))
 
     def save_model(self, request, obj, form, change):
