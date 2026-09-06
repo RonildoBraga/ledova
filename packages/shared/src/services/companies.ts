@@ -43,6 +43,11 @@ export const uploadCompanyDocument = (apiClient: AxiosInstance, companyUuid: str
   });
 };
 
+export const getCompanyDocumentFile = (apiClient: AxiosInstance, companyUuid: string, documentUuid: string) =>
+  apiClient.get<ArrayBuffer>(COMPANY_ENDPOINTS.DOCUMENT_FILE(companyUuid, documentUuid), {
+    responseType: 'arraybuffer',
+  });
+
 export const deleteCompanyDocument = (apiClient: AxiosInstance, companyUuid: string, documentUuid: string) =>
   apiClient.delete(COMPANY_ENDPOINTS.DOCUMENT_DETAIL(companyUuid, documentUuid));
 

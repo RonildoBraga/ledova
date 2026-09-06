@@ -15,13 +15,14 @@ import {
 import * as DocumentPicker from 'expo-document-picker';
 import { useQuery } from '@tanstack/react-query';
 import { getOperator, getErrorMessage, CACHE_TIMING } from '@ledova/shared';
-import type { Company, DocumentType } from '@ledova/shared';
+import type { Company, CompanyDocument, DocumentType } from '@ledova/shared';
 import { useAppTheme, useThemedStyles } from '../../contexts';
 import { GradientBackground } from '../../components/GradientBackground';
 import { Panel } from '../../components/panel';
 import { CustomModal } from '../../components/modal';
 import { PrimaryButton, SecondaryButton } from '../../components/buttons';
 import { apiClient } from '../../services/apiClient';
+import { openCompanyDocument } from '../../services/documentViewer';
 import { useCompanyDocuments } from './useCompanyDocuments';
 
 const REQUIRED_DOCUMENTS: { type: DocumentType; label: string }[] = [
@@ -54,6 +55,7 @@ export function ListingScreen() {
   const styles = useStyles();
   const {
     company,
+    companyUuid,
     documents,
     uploadedTypes,
     canEdit,
@@ -70,6 +72,7 @@ export function ListingScreen() {
     isWithdrawing,
   } = useCompanyDocuments();
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [openingUuid, setOpeningUuid] = useState<string | null>(null);
   const [infoResponse, setInfoResponse] = useState('');
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [withdrawReason, setWithdrawReason] = useState('');
@@ -115,6 +118,23 @@ export function ListingScreen() {
 
   const handleDelete = (docUuid: string) => {
     setDeleteTarget(docUuid);
+  };
+
+  const handleView = async (document: CompanyDocument) => {
+    if (!document.hasFile) {
+      if (document.fileUrl) Linking.openURL(document.fileUrl);
+      return;
+    }
+    if (!companyUuid) return;
+
+    setOpeningUuid(document.uuid);
+    try {
+      await openCompanyDocument(companyUuid, document);
+    } catch (error) {
+      Alert.alert('Could Not Open Document', getErrorMessage(error, ACTION_ERROR_FALLBACK) || ACTION_ERROR_FALLBACK);
+    } finally {
+      setOpeningUuid(null);
+    }
   };
 
   const confirmDelete = () => {
@@ -263,8 +283,10 @@ export function ListingScreen() {
                 uploaded={uploaded}
                 onUpload={() => handlePickAndUpload(doc.type)}
                 onDelete={() => handleDelete(uploaded!.uuid)}
+                onView={() => handleView(uploaded!)}
                 isUploading={isUploading}
                 isDeleting={isDeleting}
+                isOpening={openingUuid === uploaded?.uuid}
                 canEdit={canEdit}
                 isLast={index === REQUIRED_DOCUMENTS.length - 1}
                 theme={theme}
@@ -283,8 +305,10 @@ export function ListingScreen() {
                 uploaded={uploaded}
                 onUpload={() => handlePickAndUpload(doc.type)}
                 onDelete={() => handleDelete(uploaded!.uuid)}
+                onView={() => handleView(uploaded!)}
                 isUploading={isUploading}
                 isDeleting={isDeleting}
+                isOpening={openingUuid === uploaded?.uuid}
                 canEdit={canEdit}
                 isLast={index === OPTIONAL_DOCUMENTS.length - 1}
                 theme={theme}
@@ -446,11 +470,13 @@ function ApplicationStatusView({
 
 interface DocumentRowProps {
   label: string;
-  uploaded?: { uuid: string; name?: string; fileUrl?: string } | undefined;
+  uploaded?: CompanyDocument | undefined;
   onUpload: () => void;
   onDelete: () => void;
+  onView: () => void;
   isUploading: boolean;
   isDeleting: boolean;
+  isOpening: boolean;
   canEdit: boolean;
   isLast: boolean;
   theme: ReturnType<typeof useAppTheme>;
@@ -461,19 +487,15 @@ function DocumentRow({
   uploaded,
   onUpload,
   onDelete,
+  onView,
   isUploading,
   isDeleting,
+  isOpening,
   canEdit,
   isLast,
   theme,
 }: DocumentRowProps) {
   const styles = useStyles();
-
-  const handleView = () => {
-    if (uploaded?.fileUrl) {
-      Linking.openURL(uploaded.fileUrl);
-    }
-  };
 
   return (
     <View style={[styles.docRow, !isLast && styles.rowBorder]}>
@@ -498,8 +520,12 @@ function DocumentRow({
         {uploaded ? (
           <>
             {uploaded.fileUrl && (
-              <TouchableOpacity onPress={handleView} hitSlop={8}>
-                <EyeIcon size={18} color={theme.colors.interactive.default} weight="regular" />
+              <TouchableOpacity onPress={onView} disabled={isOpening} hitSlop={8}>
+                {isOpening ? (
+                  <ActivityIndicator size="small" color={theme.colors.interactive.default} />
+                ) : (
+                  <EyeIcon size={18} color={theme.colors.interactive.default} weight="regular" />
+                )}
               </TouchableOpacity>
             )}
             {canEdit && (

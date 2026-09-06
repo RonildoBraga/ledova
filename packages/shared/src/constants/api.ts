@@ -96,6 +96,8 @@ export const COMPANY_ENDPOINTS = {
   DOCUMENTS: (uuid: string) => `/api/v1/companies/${uuid}/documents/` as const,
   DOCUMENT_DETAIL: (companyUuid: string, documentUuid: string) =>
     `/api/v1/companies/${companyUuid}/documents/${documentUuid}/` as const,
+  DOCUMENT_FILE: (companyUuid: string, documentUuid: string) =>
+    `/api/v1/companies/${companyUuid}/documents/${documentUuid}/file/` as const,
   APPLICATION_STATUS: (uuid: string) => `/api/v1/companies/${uuid}/application-status/` as const,
   SUBMIT: (uuid: string) => `/api/v1/companies/${uuid}/submit/` as const,
   RESUBMIT: (uuid: string) => `/api/v1/companies/${uuid}/resubmit/` as const,

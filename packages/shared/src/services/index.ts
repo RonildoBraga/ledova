@@ -68,6 +68,7 @@ export {
   getCompanyStats,
   getCompanyDocuments,
   uploadCompanyDocument,
+  getCompanyDocumentFile,
   deleteCompanyDocument,
   submitApplication,
   resubmitApplication,

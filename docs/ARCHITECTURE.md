@@ -486,6 +486,45 @@ Transaction hashes are stored 0x-prefixed. `is_transferable` and
   verification and resend are throttled per address.
 - The Django admin is the operator's console and uses ordinary Django sessions.
 
+## Uploaded files
+
+Anything a customer uploads that another tenant must not read is written
+through `shared.storage.private_storage` and read back through an authenticated
+route. There is one mechanism, used by `InvestorClassification.evidence_file`
+and `CompanyDocument.file`, and a third such field takes the same one.
+
+- `PrivateMediaStorage` (`backend/shared/storage.py`) is a `FileSystemStorage`
+  rooted at `PRIVATE_MEDIA_ROOT` whose `base_url` is `None`, so `field.url`
+  raises rather than handing out a path. `settings/static.py` wires the
+  `private` alias to it on the local backend and to the default bucket on S3 and
+  GCS; `docker-compose.yml` mounts `private_media_data` on the backend and the
+  worker. Hiding the link would not be enough on its own:
+  `django.conf.urls.static` serves the whole of `MEDIA_ROOT` to anonymous
+  callers whenever `DEBUG` is true, which is what the compose file ships.
+- Reading is a `@action(detail=True)` on the owning viewset that resolves the
+  row through the same `visible_to_user` queryset the rest of the viewset uses
+  and calls `shared.views.stream_stored_file`, so another tenant gets the same
+  404 as a phantom uuid, an anonymous caller gets a 401, and local disk and S3
+  behave identically with no presign. The serializer returns that route, never a
+  media path; a row that carries an issuer-supplied `external_url` instead of a
+  file returns the external link unchanged.
+- The admin reads the same bytes through an admin view registered in
+  `get_urls()`, and the change form shows only that link. The raw `FileField`
+  stays out of `fieldsets`: Django renders it as an `<a href>` on `value.url`,
+  editable or readonly, which raises now that there is no url.
+- Both clients open the route. The dashboard's anchor is a top-level `GET`, so
+  the `Lax` session cookie rides along and CSRF does not apply; mobile
+  authenticates with a bearer header no anchor can send, so it fetches the bytes
+  through its own axios client (`getCompanyDocumentFile`, `responseType:
+  'arraybuffer'`), writes them to the cache directory and hands the file to the
+  system viewer. A token never goes in a query string.
+- Moving an existing field onto private storage is one migration: the
+  `AlterField` plus a reversible `RunPython` that relocates the bytes between
+  the two storage aliases, skips a row already on the target, logs and skips a
+  row whose file is gone from disk, and no-ops when the two aliases resolve to
+  the same backend. `companies/migrations/0006_company_document_private_storage.py`
+  is the worked example.
+
 ## Tenancy model
 
 There is one database and one operator per deployment. Isolation is enforced in

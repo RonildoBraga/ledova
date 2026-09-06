@@ -172,14 +172,24 @@ console are all shipped.
   admin change form shows only that streaming link; the raw `FileField` is not
   in `fieldsets`, and putting it in `readonly_fields` would not do, because
   Django renders a readonly `FileField` as an `<a href>` on `value.url`.
-- `CompanyDocument.get_file_url` still returns a plain `MEDIA_URL` path, so on a
-  deployment running `DEBUG=true` every uploaded ASIC extract and constitution
-  is readable with no session. Lower sensitivity than net-asset evidence and
-  an exposure, not merely a rough edge. It will be closed the same way
-  classification evidence was: a streaming endpoint reading through the storage
-  backend's `open()`, scoped by `visible_to_user`, identical on local disk and
-  S3. Both clients change with it, because the mobile app authenticates with a
-  bearer token an `<img>` cannot send.
+- Company documents are closed the same way, and by the same mechanism.
+  `CompanyDocument.file` writes through `shared.storage.private_storage`, so
+  `document.file.url` raises instead of handing out a `MEDIA_URL` path, and
+  `GET /api/v1/companies/{company}/documents/{document}/file/` streams the bytes
+  through the storage backend's `open()`, scoped by the viewset's
+  `visible_to_user` queryset: the owner reads it, another tenant and a phantom
+  uuid are the same 404 rather than a 403 that would confirm the row, an
+  anonymous caller is a 401, and staff read it through the admin. A document
+  that carries an `external_url` instead of a file keeps returning that link,
+  because it is the issuer's own and not ours to gate. Migration
+  `companies.0006_company_document_private_storage` moves existing bytes out of
+  `MEDIA_ROOT` into `PRIVATE_MEDIA_ROOT`, reversibly, skipping a row already
+  private and logging rather than crashing on a row whose file is gone from
+  disk; on S3 and GCS both aliases are the same backend and it is a no-op. Both
+  clients moved with it: the dashboard's anchor is a top-level `GET`, which the
+  `Lax` session cookie is sent on, and mobile — whose bearer token no anchor can
+  carry — fetches the bytes through its own axios client and hands them to the
+  system viewer.
 - Rejected and expired classifications keep their evidence for a fixed period
   and are then purged automatically, leaving the classification record and its
   outcome behind. The retention period itself is not settled and is the part

@@ -39,6 +39,7 @@ export interface CompanyDocument {
   documentTypeDisplay: string;
   name: string;
   fileUrl: string;
+  hasFile: boolean;
   fileSize: number;
   mimeType: string;
   isVerified: boolean;
