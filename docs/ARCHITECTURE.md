@@ -114,6 +114,26 @@ re-exports four sub-barrels: `constants`, `types`, `services`, `utils`.
   follows the symlink into `../packages`, which stays in `watchFolders`, and
   `tsc --noEmit` resolves it with `preserveSymlinks`.
 
+Mobile resolves from `mobile/node_modules` and `../packages`, and from nothing
+else. `make install` runs the root `npm ci` before mobile's, so the repository
+root holds a `node_modules` that Metro's `watchFolders` deliberately excludes —
+but TypeScript walks up into it when a lookup fails in `mobile/node_modules`. An
+import can therefore type-check against a copy of a package the bundle will never
+contain, and `npm --prefix mobile run type-check` stays green while the app
+breaks. `mobile/scripts/check-resolution.mjs` closes that: it resolves every
+runtime specifier in `mobile/src` the way Node does, honouring each package's
+`exports` map, and fails if the answer came from outside mobile or did not
+resolve at all. `make check` runs it and CI runs it as its own step. A Node
+builtin name that mobile also declares as a dependency (`buffer`, `crypto`,
+`stream`) is checked against `metro.config.js`'s `extraNodeModules` instead,
+because that alias is what makes it work.
+
+The case that produced it: `@noble/hashes` 2 removed the `./sha256`, `./sha512`,
+`./ripemd160` and `./hmac` subpaths that `bip32.ts`, `seedDerivation.ts`,
+`localSigner.ts` and `secureKeyStorage.ts` import. Dependabot proposed it, all
+four checks passed, and only the root's copy of 1.8.0 made the type-check
+succeed. A green type-check is not evidence that mobile resolves.
+
 Every client import is `from '@ledova/shared'`. `packages/shared/src/services`
 holds the API call functions both clients share; each takes the caller's axios
 instance as its first argument, so the dashboard and mobile keep their own

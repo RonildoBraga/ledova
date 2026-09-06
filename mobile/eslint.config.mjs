@@ -56,6 +56,13 @@ export default tseslint.config(
     },
   },
   {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      sourceType: 'module',
+      globals: { console: 'readonly', process: 'readonly' },
+    },
+  },
+  {
     ignores: ['node_modules/', 'dist/', '.expo/', 'ios/', 'android/', 'plugins/'],
   },
 );

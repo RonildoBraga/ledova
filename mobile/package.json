@@ -19,7 +19,8 @@
     "test:watch": "jest --watch",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "check:resolution": "node scripts/check-resolution.mjs"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",
