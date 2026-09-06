@@ -7,6 +7,7 @@ from offerings.models.offering import (
 from offerings.models.subscription import (
     CLOSEABLE_SUBSCRIPTION_STATUSES,
     MAX_REFERENCE_LENGTH,
+    MONEY_ALREADY_IN,
     OPEN_SUBSCRIPTION_STATUSES,
     SettlementRail,
     Subscription,
@@ -16,6 +17,7 @@ from offerings.models.subscription import (
 __all__ = [
     "CLOSEABLE_SUBSCRIPTION_STATUSES",
     "MAX_REFERENCE_LENGTH",
+    "MONEY_ALREADY_IN",
     "LIVE_OFFERING_STATUSES",
     "OPEN_SUBSCRIPTION_STATUSES",
     "Offering",

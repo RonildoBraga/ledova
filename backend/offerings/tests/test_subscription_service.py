@@ -36,6 +36,7 @@ from offerings.tests.factories import (
     configure_operator,
     draft_subscription,
     eligible_subscriber,
+    extra_wallet,
     open_offering,
 )
 from shared.tests.tenants import make_tenant
@@ -566,3 +567,51 @@ class RefundGuardTest(SubscriptionServiceTestCase):
         subscription.refresh_from_db()
         self.assertEqual(subscription.refund_amount, Decimal("5.00"))
         self.assertEqual(subscription.money_held, Decimal("25.00"))
+
+
+class ModelTransitionMoneyGuardTest(SubscriptionServiceTestCase):
+    def _paid_row(self):
+        subscription = self._to_awaiting()
+        confirm_payment(
+            subscription,
+            confirmed_by=self.tenant.user,
+            amount_received=Decimal("25.00"),
+            received_on=timezone.now().date(),
+        )
+        subscription.refresh_from_db()
+        return subscription
+
+    def test_the_model_transitions_refuse_to_close_over_money_so_a_direct_caller_cannot_bypass_the_service(self):
+        subscription = self._paid_row()
+        expected = MONEY_ALREADY_IN.format(amount=Decimal("25.00"), reference=subscription.reference)
+
+        self.assertEqual(self._refusal(subscription.reject, "Closed by hand"), expected)
+        self.assertEqual(self._refusal(subscription.withdraw, "Closed by hand"), expected)
+
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.status, SubscriptionStatus.PAID)
+        self.assertEqual(subscription.money_held, Decimal("25.00"))
+
+    def test_a_part_refunded_row_still_holding_money_cannot_be_closed_by_the_model_either(self):
+        subscription = self._paid_row()
+        record_refund(subscription, amount=Decimal("10.00"), reference="RTGS-PART")
+        subscription.refresh_from_db()
+
+        self.assertEqual(
+            self._refusal(subscription.reject, "Closed by hand"),
+            MONEY_ALREADY_IN.format(amount=Decimal("15.00"), reference=subscription.reference),
+        )
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.status, SubscriptionStatus.REFUNDED)
+        self.assertEqual(subscription.money_held, Decimal("15.00"))
+
+    def test_a_dry_row_still_closes_through_the_model(self):
+        subscription = self._to_awaiting()
+        subscription.reject(notes="Nothing arrived")
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.status, SubscriptionStatus.REJECTED)
+
+        pulled = draft_subscription(self.tenant, wallet=extra_wallet(self.tenant, "1"))
+        pulled.withdraw(notes="Investor pulled out")
+        pulled.refresh_from_db()
+        self.assertEqual(pulled.status, SubscriptionStatus.WITHDRAWN)

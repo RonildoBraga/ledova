@@ -5,7 +5,10 @@ from django.db import models
 from django.db.models.functions import Lower
 from django.utils import timezone
 
-from offerings.exceptions import InvalidSubscriptionTransitionException
+from offerings.exceptions import (
+    InvalidSubscriptionTransitionException,
+    SubscriptionRefusedException,
+)
 from offerings.querysets.subscription import SubscriptionQuerySet
 from operators.models import STABLECOIN_ONLY
 from shared.models import BaseModel
@@ -16,6 +19,10 @@ CENTS = Decimal("0.01")
 RAIL_ASSET_PAIRING_ERROR = "A bank transfer carries no settlement asset, and a stablecoin settlement must name one."
 ALLOTTED_ABOVE_REQUESTED_ERROR = "A subscription cannot be allotted more shares than it asked for."
 QUANTITY_POSITIVE_ERROR = "A subscription must ask for at least one share."
+MONEY_ALREADY_IN = (
+    "{amount} has already been received against {reference}. Record a refund before rejecting or withdrawing it; "
+    "money that arrived cannot be waved away by a status change."
+)
 
 
 class SubscriptionStatus(models.TextChoices):
@@ -272,14 +279,22 @@ class Subscription(BaseModel):
             self.status = SubscriptionStatus.REFUNDED
         self.save(update_fields=REFUND_FIELDS)
 
+    def _require_no_money_in(self):
+        if self.has_money_in:
+            raise SubscriptionRefusedException(
+                MONEY_ALREADY_IN.format(amount=self.money_held, reference=self.reference or self.uuid)
+            )
+
     def reject(self, notes):
         self._require_status(CLOSEABLE_SUBSCRIPTION_STATUSES, SubscriptionStatus.REJECTED)
+        self._require_no_money_in()
         self.status = SubscriptionStatus.REJECTED
         self.payment_notes = notes
         self.save(update_fields=["status", "payment_notes", "updated_at"])
 
     def withdraw(self, notes):
         self._require_status(CLOSEABLE_SUBSCRIPTION_STATUSES, SubscriptionStatus.WITHDRAWN)
+        self._require_no_money_in()
         self.status = SubscriptionStatus.WITHDRAWN
         self.payment_notes = notes
         self.save(update_fields=["status", "payment_notes", "updated_at"])

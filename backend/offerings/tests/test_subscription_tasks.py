@@ -7,6 +7,7 @@ from django.utils import timezone
 from web3 import Web3
 
 from offerings.models import Subscription, SubscriptionStatus
+from offerings.querysets.subscription import SubscriptionQuerySet
 from offerings.services.subscription import allot
 from offerings.tasks import (
     allot_subscription_task,
@@ -40,7 +41,7 @@ MINT = {"tx_hash": "0xmint", "block_number": 7, "gas_used": 21000}
 
 
 @override_settings(BLOCKCHAIN_OPERATOR_KEY="0xkey")
-class SubscriptionTaskTest(TestCase):
+class SubscriptionTaskTestCase(TestCase):
     def setUp(self):
         chain = patch(CHAIN_CLIENT).start().return_value
         chain.is_valid_address.return_value = True
@@ -65,6 +66,8 @@ class SubscriptionTaskTest(TestCase):
         subscription.refresh_from_db()
         return subscription
 
+
+class SubscriptionTaskTest(SubscriptionTaskTestCase):
     def test_the_task_mints_once_and_mirrors_the_subscription_to_allotted(self):
         subscription = self._allotted()
         with patch.object(ShareTokenService, "_mint_to", return_value=MINT) as mint:
@@ -174,7 +177,7 @@ class SubscriptionTaskTest(TestCase):
             status=SubscriptionStatus.AWAITING_PAYMENT, payment_due_at=timezone.now() + timedelta(days=1)
         )
 
-        self.assertEqual(expire_unpaid_subscriptions(), {"expired": 1})
+        self.assertEqual(expire_unpaid_subscriptions(), {"expired": 1, "left_alone": []})
 
         overdue.refresh_from_db()
         part_paid.refresh_from_db()
@@ -187,6 +190,62 @@ class SubscriptionTaskTest(TestCase):
     def test_expiry_leaves_a_paid_row_alone_even_past_its_due_date(self):
         paid = paid_subscription(self.tenant)
         Subscription.objects.filter(pk=paid.pk).update(payment_due_at=timezone.now() - timedelta(days=5))
-        self.assertEqual(expire_unpaid_subscriptions(), {"expired": 0})
+        self.assertEqual(expire_unpaid_subscriptions(), {"expired": 0, "left_alone": []})
         paid.refresh_from_db()
         self.assertEqual(paid.status, SubscriptionStatus.PAID)
+
+
+class ExpirySweepStaleRowTest(SubscriptionTaskTestCase):
+    def _overdue(self, suffix):
+        subscription = draft_subscription(self.tenant, wallet=extra_wallet(self.tenant, suffix))
+        Subscription.objects.filter(pk=subscription.pk).update(
+            status=SubscriptionStatus.AWAITING_PAYMENT,
+            payment_due_at=timezone.now() - timedelta(days=1),
+            reference=f"PAYSWEEP{suffix}",
+        )
+        subscription.refresh_from_db()
+        return subscription
+
+    def test_the_sweep_leaves_alone_a_row_paid_between_the_read_and_the_write(self):
+        lapsed = self._overdue("1")
+        paid_meanwhile = self._overdue("2")
+        read_rows = SubscriptionQuerySet.unpaid_past_due
+
+        def land_a_payment_right_after_the_read(queryset, moment):
+            rows = list(read_rows(queryset, moment))
+            Subscription.objects.filter(pk=paid_meanwhile.pk).update(
+                status=SubscriptionStatus.PAID,
+                amount_received=Decimal("25.00"),
+                payment_received_on=timezone.now().date(),
+            )
+            return rows
+
+        with patch.object(SubscriptionQuerySet, "unpaid_past_due", land_a_payment_right_after_the_read):
+            result = expire_unpaid_subscriptions()
+
+        self.assertEqual(result, {"expired": 1, "left_alone": [paid_meanwhile.reference]})
+        lapsed.refresh_from_db()
+        paid_meanwhile.refresh_from_db()
+        self.assertEqual(lapsed.status, SubscriptionStatus.REJECTED)
+        self.assertEqual(paid_meanwhile.status, SubscriptionStatus.PAID)
+        self.assertEqual(paid_meanwhile.money_held, Decimal("25.00"))
+        self.assertTrue(paid_meanwhile.has_money_in)
+
+    def test_a_row_closed_between_the_read_and_the_write_is_reported_not_closed_twice(self):
+        lapsed = self._overdue("1")
+        closed_meanwhile = self._overdue("2")
+        read_rows = SubscriptionQuerySet.unpaid_past_due
+
+        def close_it_right_after_the_read(queryset, moment):
+            rows = list(read_rows(queryset, moment))
+            Subscription.objects.filter(pk=closed_meanwhile.pk).update(status=SubscriptionStatus.WITHDRAWN)
+            return rows
+
+        with patch.object(SubscriptionQuerySet, "unpaid_past_due", close_it_right_after_the_read):
+            result = expire_unpaid_subscriptions()
+
+        self.assertEqual(result, {"expired": 1, "left_alone": [closed_meanwhile.reference]})
+        lapsed.refresh_from_db()
+        closed_meanwhile.refresh_from_db()
+        self.assertEqual(lapsed.status, SubscriptionStatus.REJECTED)
+        self.assertEqual(closed_meanwhile.status, SubscriptionStatus.WITHDRAWN)

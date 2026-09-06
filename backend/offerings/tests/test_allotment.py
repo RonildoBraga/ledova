@@ -7,6 +7,7 @@ from web3 import Web3
 
 from offerings.exceptions import SubscriptionRefusedException
 from offerings.models import Offering, Subscription, SubscriptionStatus
+from offerings.services import subscription as subscription_service
 from offerings.services.subscription import (
     ALLOTMENT_ABOVE_HEADROOM,
     ALREADY_ALLOTTED,
@@ -573,6 +574,70 @@ class SingleAllotmentHeadroomTest(AllotmentTestCase):
             [ALREADY_ALLOTTED.format(uuid=already.issuance_request_id), NOT_PAID.format(status="draft")],
         )
         self.assertEqual(service.share_supply.call_count, 0)
+
+
+class HeadroomSnapshotConsistencyTest(AllotmentTestCase):
+    def _pending_mint(self, amount):
+        request = _create_request(self.offering.token, "0x" + "a" * 40, amount, self.operator_user)
+        ShareIssuanceRequest.objects.filter(pk=request.pk).update(status=RequestStatus.APPROVED)
+        return request
+
+    def test_a_mint_confirming_after_the_supply_snapshot_cannot_inflate_the_chain_room(self):
+        subscription = paid_subscription(self.tenant, quantity=10)
+        self.supply.return_value = (1000, 0)
+        pending = self._pending_mint(995)
+        read_the_row = subscription_service._locked
+
+        def confirm_the_pending_mint(row):
+            ShareIssuanceRequest.objects.filter(pk=pending.pk).update(status=RequestStatus.EXECUTED)
+            return read_the_row(row)
+
+        with patch.object(subscription_service, "_locked", confirm_the_pending_mint):
+            with self.assertRaises(SubscriptionRefusedException) as raised:
+                allot(subscription, self.operator_user)
+
+        self.assertEqual(
+            str(raised.exception.detail),
+            ALLOTMENT_ABOVE_HEADROOM.format(
+                amount=10, symbol=self.offering.token.symbol, room=5, cap_room=500, chain_room=5
+            ),
+        )
+        subscription.refresh_from_db()
+        self.assertIsNone(subscription.issuance_request_id)
+        self.assertEqual(self.defer.call_count, 0)
+
+    def test_a_request_created_after_the_snapshot_is_still_counted_against_the_chain_room(self):
+        subscription = paid_subscription(self.tenant, quantity=10)
+        self.supply.return_value = (1000, 0)
+        read_the_row = subscription_service._locked
+
+        def create_a_competing_request(row):
+            self._pending_mint(995)
+            return read_the_row(row)
+
+        with patch.object(subscription_service, "_locked", create_a_competing_request):
+            with self.assertRaises(SubscriptionRefusedException) as raised:
+                allot(subscription, self.operator_user)
+
+        self.assertEqual(
+            str(raised.exception.detail),
+            ALLOTMENT_ABOVE_HEADROOM.format(
+                amount=10, symbol=self.offering.token.symbol, room=5, cap_room=500, chain_room=5
+            ),
+        )
+        subscription.refresh_from_db()
+        self.assertIsNone(subscription.issuance_request_id)
+
+    def test_an_undisturbed_allotment_still_reads_the_chain_once_and_goes_through(self):
+        subscription = paid_subscription(self.tenant, quantity=10)
+        self.supply.return_value = (1000, 0)
+        self._pending_mint(985)
+
+        request = allot(subscription, self.operator_user)
+
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.issuance_request_id, request.pk)
+        self.assertEqual(self.supply.call_count, 1)
 
 
 class ScaleBackResidualTest(AllotmentTestCase):

@@ -328,6 +328,9 @@ class SubscriptionAdmin(admin.ModelAdmin):
     def has_add_permission(self, request):
         return False
 
+    def has_delete_permission(self, request, obj=None):
+        return False
+
     def get_search_results(self, request, queryset, search_term):
         results, duplicates = super().get_search_results(request, queryset, search_term)
         normalized = normalize_reference(search_term)

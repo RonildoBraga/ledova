@@ -16,7 +16,11 @@ from offerings.models import (
     Subscription,
     SubscriptionStatus,
 )
-from offerings.services.subscription import BATCH_ABOVE_HEADROOM, REFUND_NOT_POSITIVE
+from offerings.services.subscription import (
+    BATCH_ABOVE_HEADROOM,
+    REFUND_NOT_POSITIVE,
+    TX_HASH_ALREADY_USED,
+)
 from offerings.tests.factories import (
     configure_operator,
     draft_subscription,
@@ -443,6 +447,81 @@ class SubscriptionAdminMoneyTest(SubscriptionAdminTestCase):
         self.assertEqual(self._messages(response)[-1], "Refund recorded.")
         self.assertEqual(subscription.status, SubscriptionStatus.ALLOTTED)
         self.assertEqual(subscription.refund_amount, Decimal("12.50"))
+
+
+class SubscriptionAdminDeletionTest(SubscriptionAdminTestCase):
+    def _changelist(self):
+        return reverse("admin:offerings_subscription_changelist")
+
+    def _confirm_payment(self, subscription, tx_hash):
+        return self.client.post(
+            self._url(subscription, "confirm-payment"),
+            {
+                "amount_received": "25.00",
+                "payment_received_on": timezone.now().date().isoformat(),
+                "payment_tx_hash": tx_hash,
+            },
+            follow=True,
+        )
+
+    def _awaiting_stablecoin(self, suffix):
+        subscription = self._submitted(wallet=extra_wallet(self.tenant, suffix))
+        self.client.post(
+            self._url(subscription, "accept"),
+            {"settlement_rail": SettlementRail.STABLECOIN, "settlement_asset": self.stablecoin.pk},
+            follow=True,
+        )
+        subscription.refresh_from_db()
+        return subscription
+
+    def test_the_changelist_offers_no_delete_action(self):
+        response = self.client.get(self._changelist())
+        offered = [value for value, _ in response.context["action_form"].fields["action"].choices]
+        self.assertNotIn("delete_selected", offered)
+
+    def test_a_bulk_delete_cannot_destroy_a_row_holding_money(self):
+        subscription = paid_subscription(self.tenant)
+        response = self.client.post(
+            self._changelist(),
+            {"action": "delete_selected", "_selected_action": [str(subscription.pk)], "post": "yes"},
+            follow=True,
+        )
+
+        self.assertTrue(Subscription.objects.filter(pk=subscription.pk).exists())
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.status, SubscriptionStatus.PAID)
+        self.assertEqual(subscription.money_held, Decimal("25.00"))
+        self.assertNotIn("Successfully deleted", " ".join(self._messages(response)))
+
+    def test_the_delete_view_and_the_delete_button_are_both_closed(self):
+        subscription = paid_subscription(self.tenant)
+        url = reverse("admin:offerings_subscription_delete", args=[subscription.pk])
+
+        self.assertEqual(self.client.get(url).status_code, 403)
+        self.assertEqual(self.client.post(url, {"post": "yes"}).status_code, 403)
+        self.assertTrue(Subscription.objects.filter(pk=subscription.pk).exists())
+
+    def test_a_deletion_cannot_free_a_transfer_hash_to_fund_a_second_subscription(self):
+        funded = self._awaiting_stablecoin("1")
+        second = self._awaiting_stablecoin("2")
+        tx_hash = "0x" + "ab" * 32
+
+        self._confirm_payment(funded, tx_hash)
+        funded.refresh_from_db()
+        self.assertEqual(funded.status, SubscriptionStatus.PAID)
+
+        self.client.post(
+            self._changelist(),
+            {"action": "delete_selected", "_selected_action": [str(funded.pk)], "post": "yes"},
+            follow=True,
+        )
+        self.assertTrue(Subscription.objects.filter(pk=funded.pk).exists())
+
+        response = self._confirm_payment(second, tx_hash)
+        second.refresh_from_db()
+        self.assertEqual(second.status, SubscriptionStatus.AWAITING_PAYMENT)
+        self.assertIsNone(second.amount_received)
+        self.assertEqual(self._messages(response)[-1], TX_HASH_ALREADY_USED.format(tx_hash=tx_hash))
 
 
 class ZeroTolerantRefundForm(forms.Form):

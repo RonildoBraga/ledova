@@ -6,7 +6,10 @@ from procrastinate import RetryStrategy
 
 from ledova_backend.procrastinate_app import app
 from offerings.models import Subscription
-from offerings.services.subscription import executed_requests_pending_allotment
+from offerings.services.subscription import (
+    executed_requests_pending_allotment,
+    expire_overdue,
+)
 from tokens.exceptions import (
     InvalidRecipientAddressException,
     InvalidTokenStateException,
@@ -18,7 +21,6 @@ logger = logging.getLogger(__name__)
 
 SUBSCRIPTION_NOT_FOUND = "Subscription not found"
 NO_ISSUANCE_REQUEST = "Subscription has no issuance request to execute"
-EXPIRY_NOTE = "Payment was not received by {due}; the subscription lapsed."
 SWEEP_BATCH = 200
 
 
@@ -73,10 +75,6 @@ def reconcile_subscriptions(timestamp: int = 0):
 @app.periodic(cron="0 3 * * *")
 @app.task
 def expire_unpaid_subscriptions(timestamp: int = 0):
-    now = timezone.now()
-    expired = 0
-    for subscription in Subscription.objects.unpaid_past_due(now)[:SWEEP_BATCH]:
-        subscription.reject(notes=EXPIRY_NOTE.format(due=subscription.payment_due_at.isoformat()))
-        expired += 1
-    logger.info(f"Unpaid subscriptions expired: {expired}")
-    return {"expired": expired}
+    result = expire_overdue(timezone.now(), SWEEP_BATCH)
+    logger.info(f"Unpaid subscriptions expired: {result['expired']}, left for an operator: {result['left_alone']}")
+    return result

@@ -5,8 +5,17 @@ from decimal import ROUND_DOWN, Decimal
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from offerings.exceptions import SubscriptionRefusedException
-from offerings.models import Offering, SettlementRail, Subscription, SubscriptionStatus
+from offerings.exceptions import (
+    InvalidSubscriptionTransitionException,
+    SubscriptionRefusedException,
+)
+from offerings.models import (
+    MONEY_ALREADY_IN,
+    Offering,
+    SettlementRail,
+    Subscription,
+    SubscriptionStatus,
+)
 from offerings.services.payments import (
     REFERENCE_ATTEMPTS,
     generate_reference,
@@ -31,9 +40,10 @@ WALLET_NOT_ON_ACCOUNT = "That wallet does not belong to the subscribing account.
 RAIL_NOT_OFFERED = "The {symbol} offering does not settle by {rail}."
 ASSET_NOT_OFFERED = "{symbol} is not a settlement asset of this offering."
 ASSET_REQUIRED = "A stablecoin settlement must name the settlement asset."
-MONEY_ALREADY_IN = (
-    "{amount} has already been received against {reference}. Record a refund before rejecting or withdrawing it; "
-    "money that arrived cannot be waved away by a status change."
+EXPIRY_NOTE = "Payment was not received by {due}; the subscription lapsed."
+EXPIRY_LEFT_ALONE = (
+    "Subscription {reference} is past its payment due date but money has landed against it since the sweep "
+    "read the row; it stays open for an operator instead of being closed over the payment: {detail}"
 )
 TX_HASH_REQUIRED = "A stablecoin payment must carry the transfer hash, so one transfer cannot fund two subscriptions."
 TX_HASH_ALREADY_USED = "{tx_hash} already funds another subscription."
@@ -400,6 +410,21 @@ def withdraw(subscription: Subscription, reason: str = "") -> Subscription:
     return subscription
 
 
+def expire_overdue(moment, limit: int) -> dict:
+    expired = 0
+    left_alone = []
+    for subscription in Subscription.objects.unpaid_past_due(moment)[:limit]:
+        reference = subscription.reference or str(subscription.uuid)
+        try:
+            reject(subscription, EXPIRY_NOTE.format(due=subscription.payment_due_at.isoformat()))
+        except (SubscriptionRefusedException, InvalidSubscriptionTransitionException) as exc:
+            left_alone.append(reference)
+            logger.warning(EXPIRY_LEFT_ALONE.format(reference=reference, detail=exc.detail))
+            continue
+        expired += 1
+    return {"expired": expired, "left_alone": left_alone}
+
+
 def cap_headroom(offering: Offering) -> int:
     committed = Subscription.objects.for_offering(offering).committed_to_shares().share_commitment()
     return offering.cap_shares - committed
@@ -410,9 +435,21 @@ def share_supply_snapshot(offering: Offering, service=None) -> tuple[int, int]:
     return service.share_supply(offering.token.contract_address)
 
 
+def _unminted(offering: Offering) -> int:
+    return ShareIssuanceRequest.objects.unminted(offering.token).share_total()
+
+
+def chain_snapshot(offering: Offering, service=None) -> tuple[int, int, int]:
+    authorized, issued = share_supply_snapshot(offering, service)
+    return authorized, issued, _unminted(offering)
+
+
 def offering_headroom(offering: Offering, service=None, supply=None) -> tuple[int, int]:
-    authorized, issued = supply if supply is not None else share_supply_snapshot(offering, service)
-    unminted = ShareIssuanceRequest.objects.unminted(offering.token).share_total()
+    if supply is None:
+        authorized, issued, unminted = chain_snapshot(offering, service)
+    else:
+        authorized, issued, unminted_when_read = supply
+        unminted = max(unminted_when_read, _unminted(offering))
     return cap_headroom(offering), authorized - issued - unminted
 
 
@@ -458,7 +495,7 @@ def _not_allottable(subscription: Subscription):
 def allot(subscription: Subscription, operator_user, notes: str = "", headroom=None):
     from offerings.tasks import allot_subscription_task
 
-    supply = None if headroom is not None else share_supply_snapshot(subscription.offering)
+    supply = None if headroom is not None else chain_snapshot(subscription.offering)
     offering = Offering.objects.select_for_update().select_related("token").get(pk=subscription.offering_id)
     locked = _locked(subscription)
     refusal = _not_allottable(locked)
