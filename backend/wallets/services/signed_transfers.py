@@ -31,6 +31,7 @@ UNSIGNED_NETWORK = "The signed transaction does not name a chain, so it could be
 CONTRACT_CREATION = "Contract creation cannot be broadcast through a wallet transfer."
 UNSUPPORTED_PAYLOAD = "Only a native transfer or an ERC-20 transfer call can be broadcast through this wallet."
 MALFORMED_RECIPIENT = "The ERC-20 recipient argument is malformed."
+ERC20_CARRIES_VALUE = "An ERC-20 transfer call cannot also send native currency."
 
 
 @dataclass(frozen=True)
@@ -95,6 +96,9 @@ def _evm_plan(wallet, signed_transaction: str) -> SignedTransferPlan:
             amount=Decimal(from_wei(decoded.value, "ether")),
             token_contract=None,
         )
+
+    if decoded.value:
+        raise InvalidTransactionException(ERC20_CARRIES_VALUE)
 
     recipient, raw_amount = _erc20_transfer_arguments(decoded.data)
     asset = TransactionConfirmationService.resolve_transfer_asset(wallet, decoded.to)

@@ -1,8 +1,10 @@
+from decimal import Decimal
+
 from rest_framework import serializers
 
 from wallets.services.signed_transfers import plan_signed_transfer
 
-AMOUNT_DIGITS = {"max_digits": 30, "decimal_places": 18}
+AMOUNT_DIGITS = {"max_digits": 30, "decimal_places": 18, "min_value": Decimal("0")}
 
 
 class BroadcastTransferSerializer(serializers.Serializer):

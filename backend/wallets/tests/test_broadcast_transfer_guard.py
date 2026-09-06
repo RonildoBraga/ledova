@@ -9,12 +9,14 @@ from rest_framework.test import APITestCase
 from web3 import Web3
 
 from assets.models import Asset, AssetChainDeployment
+from assets.services.identity import native_asset_for_chain
 from companies.models import Company, CompanyType
 from tokens.models import ShareToken, ShareTokenStatus
 from users.models import UserAccount, UserProfile
-from wallets.models import Transaction, Wallet
+from wallets.models import Holding, Transaction, Wallet
 from wallets.services.signed_transfers import (
     CONTRACT_CREATION,
+    ERC20_CARRIES_VALUE,
     UNDECODABLE,
     UNSUPPORTED_PAYLOAD,
     WRONG_NETWORK,
@@ -28,6 +30,8 @@ RECIPIENT = Web3.to_checksum_address("0x" + "b" * 40)
 LIAR = Web3.to_checksum_address("0x" + "d" * 40)
 USDC_CONTRACT = Web3.to_checksum_address("0x" + "c" * 40)
 SHARE_CONTRACT = Web3.to_checksum_address("0x" + "5e" * 20)
+BITCOIN_ADDRESS = "tb1qsenderwallet"
+BITCOIN_RECIPIENT = "tb1qrecipient"
 ERC20_TRANSFER_SELECTOR = "a9059cbb"
 
 
@@ -68,8 +72,17 @@ class BroadcastTransferGuardTestCase(APITestCase):
         )
         self.client.force_authenticate(self.user)
 
-    def broadcast(self, **payload):
-        return self.client.post(f"/api/wallets/{self.wallet.uuid}/broadcast-transfer/", payload)
+    def broadcast(self, wallet=None, **payload):
+        wallet = wallet or self.wallet
+        return self.client.post(f"/api/wallets/{wallet.uuid}/broadcast-transfer/", payload)
+
+    def bitcoin_wallet(self):
+        return Wallet.objects.create(
+            user_account=self.account,
+            address=BITCOIN_ADDRESS,
+            chain="bitcoin",
+            verification_status="VERIFIED",
+        )
 
     def usdc(self):
         asset = Asset.objects.create(
@@ -141,6 +154,55 @@ class BroadcastTransferRefusalTest(BroadcastTransferGuardTestCase):
         self.assertEqual(response.json()["detail"], UNSUPPORTED_PAYLOAD)
         get_client.assert_not_called()
 
+    def test_erc20_calldata_carrying_native_value_is_refused(self, get_client, schedule):
+        self.usdc()
+        native = native_asset_for_chain("base")
+        Holding.objects.create(wallet=self.wallet, asset=native, quantity=Decimal("10"))
+
+        response = self.broadcast(
+            signed_transaction=sign(to=USDC_CONTRACT, value=9 * 10**18, data=erc20_transfer_data(RECIPIENT, 1)),
+            to_address=RECIPIENT,
+            amount="0.000001",
+            token_contract=USDC_CONTRACT,
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["detail"], ERC20_CARRIES_VALUE)
+        get_client.assert_not_called()
+        self.assertFalse(Transaction.objects.filter(wallet=self.wallet).exists())
+        self.assertEqual(Holding.objects.get(wallet=self.wallet, asset=native).quantity, Decimal("10"))
+
+    def test_a_negative_transaction_fee_is_refused_before_it_credits_the_holding(self, get_client, schedule):
+        native = native_asset_for_chain("base")
+
+        response = self.broadcast(
+            signed_transaction=sign(to=RECIPIENT, value=1),
+            to_address=RECIPIENT,
+            amount="0.000000000000000001",
+            transaction_fee="-1000000",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("transactionFee", response.json())
+        get_client.assert_not_called()
+        self.assertFalse(Holding.objects.filter(wallet=self.wallet, asset=native).exists())
+
+    def test_a_negative_bitcoin_amount_is_refused_before_it_credits_the_holding(self, get_client, schedule):
+        wallet = self.bitcoin_wallet()
+        native = native_asset_for_chain("bitcoin")
+
+        response = self.broadcast(
+            wallet=wallet,
+            signed_transaction="0200000001deadbeef",
+            to_address=BITCOIN_RECIPIENT,
+            amount="-500000",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("amount", response.json())
+        get_client.assert_not_called()
+        self.assertFalse(Holding.objects.filter(wallet=wallet, asset=native).exists())
+
     def test_an_undecodable_signed_transaction_is_refused(self, get_client, schedule):
         response = self.broadcast(signed_transaction="0x02f8" + "0" * 60)
 
@@ -188,6 +250,25 @@ class BroadcastTransferRecordingTest(BroadcastTransferGuardTestCase):
         self.assertEqual(recorded.to_address, RECIPIENT)
         self.assertEqual(recorded.amount, Decimal("1.5"))
         self.assertEqual(recorded.asset.symbol, "USDC")
+
+    def test_an_ordinary_bitcoin_send_still_broadcasts(self, get_client, schedule):
+        wallet = self.bitcoin_wallet()
+        get_client.return_value.broadcast_transaction.return_value = "btc-hash"
+
+        response = self.broadcast(
+            wallet=wallet,
+            signed_transaction="0200000001deadbeef",
+            to_address=BITCOIN_RECIPIENT,
+            amount="0.001",
+            transaction_fee="0.00001",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["txHash"], "btc-hash")
+
+        recorded = Transaction.objects.get(wallet=wallet)
+        self.assertEqual((recorded.to_address, recorded.amount), (BITCOIN_RECIPIENT, Decimal("0.001")))
+        self.assertEqual(recorded.asset.symbol, "BTC")
 
     def test_the_recorded_row_follows_the_signed_transaction_not_the_body(self, get_client, schedule):
         get_client.return_value.broadcast_transaction.return_value = "0xhonest"

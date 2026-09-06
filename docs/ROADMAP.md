@@ -570,10 +570,13 @@ decision below). Mainnet deployment configuration is deliberately absent.
   refuses a `tokenized_security`, and so does `broadcast-transfer`, which no
   longer depends on the caller naming the token contract: an EVM broadcast is
   decoded before anything reaches the chain, and the decode refuses a share
-  token target, a foreign chain id, contract creation, and any payload that is
-  neither a plain native send nor an ERC-20 `transfer`. The recorded
-  `Transaction` row is written from the decoded transaction, not from the
-  request body. What also holds the line is on chain:
+  token target, a foreign chain id, contract creation, an ERC-20 `transfer`
+  that also carries native value, and any payload that is neither a plain
+  native send nor an ERC-20 `transfer`. The recipient, amount and asset of the
+  recorded `Transaction` row are written from the decoded transaction, not from
+  the request body; `from_address` is still the wallet's own address, because
+  the decode does not yet require the recovered signer to be that address.
+  What also holds the line is on chain:
   `ShareToken._update` reverts unless the recipient is in the whitelist
   registry, so a share can never leave the whitelisted set and the Phase 1
   register — a read-model over `ShareIssuance` reconciled against on-chain
