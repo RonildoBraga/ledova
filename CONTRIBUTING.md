@@ -80,16 +80,18 @@ exceptions are noted below the table.
 | Backend migrations | from `backend/`: `python manage.py makemigrations --check --dry-run` |
 | Contracts | from `contracts/`: `npm run format:check && npm run lint && npx hardhat test` |
 | Real chain | `make chain-test` from the root |
+| Dashboard smoke | `make build`, then `make smoke` from the root |
 
 Local-only: `.github/workflows/ci.yml` has no contracts lint or format step, so
 `npm run format:check` and `npm run lint` from `contracts/` are yours to run.
-CI's `make test` runs `npm test` and `npm --prefix contracts test` only; root
-`npm run lint` is not a gate either.
+Root `npm run lint` is not a gate either.
 
-CI additionally runs the whole Django suite on PostgreSQL, the SQLite migration
-tests, and `make chain-test` twice, the second time on PostgreSQL. The comment
-gate is its own CI job, running `python scripts/check-comments.py` directly, so
-a stray comment fails the pipeline without waiting for anything to be built.
+CI runs `make test` (dashboard, `packages/shared`, mobile and contracts) and
+`make smoke` on every pull request. It additionally runs the whole Django suite
+on PostgreSQL, the SQLite migration tests, and `make chain-test` twice, the
+second time on PostgreSQL. The comment gate is its own CI job, running `python
+scripts/check-comments.py` directly, so a stray comment fails the pipeline
+without waiting for anything to be built.
 
 ## Reporting security issues
 

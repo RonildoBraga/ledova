@@ -54,8 +54,22 @@ jobs:
           npm --prefix contracts audit --omit=dev --audit-level=low
           npm --prefix mobile audit --omit=dev --audit-level=critical
 
-      - name: Workspace and contract tests
+      - name: Workspace, mobile, and contract tests
         run: make test
+
+      - name: Dashboard smoke tests (built bundle, real Chromium)
+        run: make smoke PLAYWRIGHT_BROWSER_DEPS=--with-deps
+
+      - name: Smoke test artefacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-smoke-results
+          path: |
+            dashboard/test-results
+            dashboard/playwright-report
+          retention-days: 7
+          if-no-files-found: ignore
 
   backend:
     name: Django checks & tests
