@@ -361,13 +361,23 @@ console are all shipped.
   zero would be a false record rather than a missing one. The same reasoning
   settles the mixed row, which is ordinary rather than a corner: a founder
   allotted a thousand shares directly who then subscribes for ten more has
-  twenty dollars known and a thousand shares unknown, and printing the twenty
-  beside a holding of one thousand and ten reads as the consideration for the
-  lot — a false record that looks authoritative, which is worse than a blank.
-  The column is blank whenever any share on the row has no subscription behind
-  it. Showing the known part instead would need a column of its own and a
-  sentence saying what it means; neither is worth it in Phase 1. There is no
-  operator override field either.
+  twenty-five dollars known and a thousand shares unknown, and printing the
+  twenty-five beside a holding of one thousand and ten reads as the
+  consideration for the lot — a false record that looks authoritative, which is
+  worse than a blank.
+
+  The column blanks under any of three conditions, all three spelled out in
+  [ARCHITECTURE.md](ARCHITECTURE.md): a share on the row has no subscription
+  behind it; the subscribed count disagrees with the balance the row actually
+  prints, which is what happens whenever the chain and the allotment record
+  diverge; or the money record has not yet caught up with the allotment. The
+  figure printed is the consideration for the shares kept, not the cash
+  received, so a scaled-back subscription awaiting its refund does not overstate
+  what the company is entitled to.
+
+  Showing the known part instead would need a column of its own and a sentence
+  saying what it means; neither is worth it in Phase 1. There is no operator
+  override field either.
 - **The residential address is in the CSV and nowhere else.** The dashboard
   register shows name, holder type and holding. `GET
   /api/v1/tokens/{uuid}/register/export/` writes the s169-shaped CSV. `GET
