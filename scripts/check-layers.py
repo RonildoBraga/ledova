@@ -39,6 +39,8 @@ SCOPING_CALLS = frozenset(
 LOCKING_HOOK = "get_queryset"
 DRF_WRITE_HOOKS = frozenset({"update", "partial_update", "create", "destroy"})
 
+OWN_MANAGER_RECEIVERS = frozenset({"cls", "self"})
+
 VIEW_ORM = "raw-orm-in-view"
 VIEW_TRANSACTION = "transaction-in-view"
 VIEW_LOCK = "select-for-update-in-view"
@@ -51,7 +53,7 @@ RULES = {
     VIEW_TRANSACTION: "a transaction the view opens around its own logic is a workflow; move it to a service",
     VIEW_LOCK: "select_for_update outside get_queryset means the view is orchestrating; move it to a service",
     VIEW_LOGGER: "log in services and tasks, not in views",
-    MODEL_QUERY: "a model transition does not query other models",
+    MODEL_QUERY: "a model queries its own manager only; another model's manager belongs in a queryset or a service",
     TASK_TRANSACTION: "a task loads a row and calls one service; the service owns the transaction",
 }
 
@@ -62,8 +64,6 @@ LEGACY = frozenset(
         "backend/companies/models/company.py:query-in-model",
         "backend/documents/views/document.py:raw-orm-in-view",
         "backend/feature_flags/views/feature_flag.py:raw-orm-in-view",
-        "backend/operators/models.py:query-in-model",
-        "backend/shared/models/country.py:query-in-model",
         "backend/tokens/models/review_request.py:query-in-model",
         "backend/tokens/views/trading_events.py:raw-orm-in-view",
         "backend/users/views/notification.py:raw-orm-in-view",
@@ -152,19 +152,34 @@ def view_findings(tree: ast.AST):
     return sorted(set(found))
 
 
+def model_findings(node: ast.AST, owners: frozenset[str] = OWN_MANAGER_RECEIVERS):
+    found = []
+
+    for child in ast.iter_child_nodes(node):
+        inherited = owners | {child.name} if isinstance(child, ast.ClassDef) else owners
+        found.extend(model_findings(child, inherited))
+
+    if isinstance(node, ast.Attribute):
+        chain = attribute_chain(node)
+        if ".objects." in chain and chain.split(".", 1)[0] not in owners:
+            found.append((node.lineno, MODEL_QUERY))
+
+    return found
+
+
 def findings_for(tree: ast.AST, layer: str):
     found = []
 
     if layer == "views":
         found.extend(view_findings(tree))
 
+    if layer == "models":
+        found.extend(model_findings(tree))
+
     for node in ast.walk(tree):
         if not isinstance(node, ast.Attribute):
             continue
         chain = attribute_chain(node)
-
-        if layer == "models" and ".objects." in chain:
-            found.append((node.lineno, MODEL_QUERY))
 
         if layer == "tasks" and (chain.endswith("transaction.atomic") or chain == "atomic"):
             found.append((node.lineno, TASK_TRANSACTION))
