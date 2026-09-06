@@ -779,6 +779,42 @@ not checked. They carry no comments today; keep it that way.
 
 A green CI run is evidence for the trees in `TREES` and nothing else.
 
+### The layer gate
+
+`scripts/check-layers.py` is the mechanical half of the "Never contains" column
+of the layer table above. `make check-layers` runs it, `make check` includes it,
+and CI runs it in the same job as the comment gate. Like that gate it needs only
+Python 3 and a checkout. `backend/shared/tests/test_layer_gate.py` pins each
+rule against a snippet, so the decisions below are executable rather than prose.
+
+Every offender that existed when the gate landed is listed in `LEGACY`, which is
+the migration backlog made visible. It only shrinks: an entry that no longer
+violates anything is reported as stale and fails the run, so the list cannot
+outlive the problem. `python3 scripts/check-layers.py --show-legacy` prints it
+with line numbers. Move the logic rather than adding an entry.
+
+Two calibrations are worth stating, because both times the gate was wrong and
+both times the tell was the same — one shape appearing in several files at once.
+
+- **`transaction.atomic` in a view.** `@transaction.atomic` decorating `create`,
+  `update`, `partial_update` or `destroy` says *this whole generic operation is
+  atomic*, and the row lock belongs in `get_queryset` where DRF fetches it. That
+  is allowed. `with transaction.atomic():` in a body, or the decorator on a
+  `perform_*` hook, says *I am orchestrating*, and orchestration is the
+  definition of a service. That is flagged. The distinction is syntactic and
+  sharp, and sharpening it caught more real workflows, not fewer.
+- **A query in a model.** The rule is *queries on other models*, so the gate
+  compares the receiver: `cls.objects`, `self.objects` and the model's own class
+  name are its own manager and are allowed, which is what makes a lazy singleton
+  accessor like `Operator.get()` or `Country.get_or_create_for_code()` legal
+  where it stands. Any other model's manager is flagged, whether it sits in a
+  transition, a derived property or a `@classmethod` finder, and belongs in a
+  queryset or a service.
+
+The general form: when a rule flags the reference app, or the same shape in
+several files at once, the rule is wrong and the fix is to sharpen it. Never
+excuse a file into `LEGACY` to make a number go down.
+
 ### Shared TypeScript types
 
 `packages/shared/eslint.config.js` applies `eslint-naming-rules.js` to
