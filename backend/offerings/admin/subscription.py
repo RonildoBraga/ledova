@@ -75,7 +75,10 @@ STATUS_BUTTONS = {
     ],
     SubscriptionStatus.REJECTED: [("Subscription Rejected", None, "#e9ecef", "#6c757d")],
     SubscriptionStatus.WITHDRAWN: [("Subscription Withdrawn", None, "#e9ecef", "#6c757d")],
-    SubscriptionStatus.REFUNDED: [("✗ Reject", "reject", "#dc3545")],
+    SubscriptionStatus.REFUNDED: [
+        ("↩ Record refund", "refund", "#6f42c1"),
+        ("✗ Reject", "reject", "#dc3545"),
+    ],
 }
 
 
@@ -155,9 +158,11 @@ ACTIONS = {
         heading="Refund",
         intro=(
             "Record money that has actually gone back to the investor; it must be above zero and cannot exceed "
-            "what is still held. Before allotment the subscription is unwound with nothing allotted, and only "
-            "then can it be rejected or withdrawn. After allotment only the residual no share paid for can come "
-            "back, because the shares are already out."
+            "what is still held, so money that arrived has to be confirmed against this subscription before it "
+            "can be returned. A part refund leaves the rest held and this button open until it is all back. "
+            "Before allotment the subscription is unwound with nothing allotted, and only then can it be "
+            "rejected or withdrawn. After allotment only the residual no share paid for can come back, because "
+            "the shares are already out."
         ),
         legend="Refund",
         button=("Record Refund", "btn-dark"),

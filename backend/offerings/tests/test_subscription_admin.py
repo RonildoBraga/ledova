@@ -304,6 +304,39 @@ class SubscriptionAdminMoneyTest(SubscriptionAdminTestCase):
     def _warnings(self, response):
         return [str(message) for message in response.wsgi_request._messages if message.level_tag == "warning"]
 
+    def _refund(self, subscription, amount, reference=""):
+        return self.client.post(
+            self._url(subscription, "refund"),
+            {"refund_amount": amount, "refund_reference": reference, "payment_notes": ""},
+            follow=True,
+        )
+
+    def test_a_part_refunded_row_keeps_the_refund_button_until_every_cent_is_back(self):
+        subscription = self._awaiting()
+        self._confirm(subscription, "25.00")
+        self._refund(subscription, "1.00", "RTGS-PART")
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.status, SubscriptionStatus.REFUNDED)
+        self.assertEqual(subscription.money_held, Decimal("24.00"))
+
+        change = self.client.get(self._change_url(subscription)).content.decode()
+        self.assertIn(self._url(subscription, "refund"), change)
+
+        refused = self.client.post(self._url(subscription, "reject"), {"reason": "Close it"}, follow=True)
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.status, SubscriptionStatus.REFUNDED)
+        self.assertIn("Record a refund before rejecting", self._messages(refused)[0])
+
+        response = self._refund(subscription, "24.00", "RTGS-REST")
+        subscription.refresh_from_db()
+        self.assertEqual(self._messages(response)[-1], "Refund recorded.")
+        self.assertEqual(subscription.refund_amount, Decimal("25.00"))
+        self.assertEqual(subscription.money_held, Decimal("0.00"))
+
+        self.client.post(self._url(subscription, "reject"), {"reason": "Unwound"}, follow=True)
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.status, SubscriptionStatus.REJECTED)
+
     def test_the_refund_form_will_not_take_a_zero(self):
         subscription = paid_subscription(self.tenant)
         response = self.client.post(
