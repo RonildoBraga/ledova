@@ -1,9 +1,9 @@
 -r requirements.txt
-pip-audit>=2.9.0
-pre_commit>=4.5.1
-black>=26.3.1
-isort>=8.0.1
+pip-audit>=2.10.1
+pre_commit>=4.6.2
+black>=26.5.1
+isort>=9.0.1
 flake8>=7.3.0
-autoflake>=2.3.3
-debugpy>=1.8.20
-ipython>=9.12.0
+autoflake>=2.4.0
+debugpy>=1.8.21
+ipython>=9.17.1
