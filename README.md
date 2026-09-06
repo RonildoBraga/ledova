@@ -152,8 +152,8 @@ cd contracts && npm ci && npx hardhat test
   `backend/feature_flags/middleware.py` refuses with 403 any request, of any
   method, whose path starts with one of five prefixes:
   `/api/v1/trading/{orders,wallets,transfers,swaps,events}/`. The read-only
-  market routes (`tokens/`, `stablecoins/`) and the whitelist status route sit
-  outside the gate by design. Turning the flag on does not make the trading
+  market route (`tokens/`) and the whitelist status route sit outside the gate
+  by design. Turning the flag on does not make the trading
   implementation safe.
 - Provider credentials, signer keys, deployment addresses and private data are
   not included. Keep filled environment files out of version control.

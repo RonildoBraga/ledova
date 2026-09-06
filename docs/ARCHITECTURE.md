@@ -338,10 +338,11 @@ pipeline means nobody checked.
   line is the signal to rename the thing or add a test, never a licence to
   comment it. `make check-comments` enforces this, and
   [the gate](#the-comment-gate) below is the authority on what it covers. The
-  rule covers `backend/`, `dashboard/src`, `mobile/src` and the `mobile/` root
-  `.ts`/`.js` config files, `packages/shared`, `packages/scripts`,
-  `marketing/src`, `contracts/contracts`, `contracts/scripts` and
-  `contracts/test`, each by the extensions the gate lists. The root `scripts/`
+  rule covers `backend/`, `dashboard/src`, `mobile/src`, `packages/shared`,
+  `packages/scripts`, `marketing/src`, `contracts/contracts`,
+  `contracts/scripts`, `contracts/test`, and the root build config of
+  `dashboard/`, `marketing/`, `mobile/` and `contracts/`, each by the extensions
+  the gate lists. The root `scripts/`
   tree is outside them: both files there carry a module docstring. The only comment
   lines permitted are functional directives the tooling reads: `# noqa`,
   `# type:`, `# pragma`, `# fmt:`, `# isort` and the shebang/coding lines in
@@ -400,16 +401,13 @@ would.
 What it covers, by extension: `.py` and `.css` under `backend/`; `.ts`, `.tsx`,
 `.js`, `.jsx`, `.mjs` and `.cjs` in the client, shared and contract-script
 trees, plus `.css` in `dashboard/src` and `marketing/src`; `.sol` under
-`contracts/contracts`. `TREES` at the top of the script is the machine-readable
-copy of that list — change it and this section together.
+`contracts/contracts`. The build configuration at the root of `dashboard/`,
+`marketing/`, `mobile/` and `contracts/` is covered too, but only at that root,
+not recursively. `TREES` at the top of the script is the machine-readable copy
+of that list — change it and this section together.
 
-Two things sit outside it:
-
-- `dashboard/vite.config.ts` and `contracts/hardhat.config.ts` are one directory
-  above a covered tree and keep explanatory comments. Being outside the gate is
-  not permission to add more.
-- The admin templates under `backend/*/templates/` are not checked. They carry
-  no comments today; keep it that way.
+One thing sits outside it: the admin templates under `backend/*/templates/` are
+not checked. They carry no comments today; keep it that way.
 
 A green CI run is evidence for the trees in `TREES` and nothing else.
 

@@ -7,6 +7,8 @@ import tailwindcss from '@tailwindcss/vite';
 const require = createRequire(import.meta.url);
 const resolvePolyfill = (moduleId: string) => normalizePath(require.resolve(moduleId));
 const resolvePolyfillRoot = (moduleId: string) => normalizePath(dirname(require.resolve(`${moduleId}/package.json`)));
+const TRAILING_SLASH_IMPORT = /\/$/;
+
 const browserPolyfills: Record<string, string> = {
   buffer: resolvePolyfillRoot('buffer'),
   process: resolvePolyfill('process/browser'),
@@ -15,13 +17,6 @@ const browserPolyfills: Record<string, string> = {
   stream: resolvePolyfillRoot('stream-browserify'),
 };
 
-/**
- * Node.js polyfills for Vite 8 (Rolldown). Replaces vite-plugin-node-polyfills
- * which has a Rolldown-incompatible subpath exports bug.
- *
- * Aliases the Node built-ins used by the dashboard to explicit browser
- * polyfills and injects Buffer/process globals via Rolldown's transform.inject.
- */
 function nodePolyfills(modules: string[]): Plugin {
   const alias: Record<string, string> = {};
   for (const mod of modules) {
@@ -41,13 +36,8 @@ function nodePolyfills(modules: string[]): Plugin {
     name: 'node-polyfills',
     enforce: 'pre',
     resolveId(source) {
-      // Some packages import "buffer/" (trailing slash) to force the npm
-      // polyfill. Rolldown treats this as a directory path and fails.
-      if (source.endsWith('/')) {
-        const mod = source.slice(0, -1);
-        if (alias[mod]) return alias[mod];
-      }
-      return null;
+      if (!TRAILING_SLASH_IMPORT.test(source)) return null;
+      return alias[source.replace(TRAILING_SLASH_IMPORT, '')] ?? null;
     },
     config() {
       return {
