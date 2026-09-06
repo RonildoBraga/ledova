@@ -172,14 +172,39 @@ console are all shipped.
   admin change form shows only that streaming link; the raw `FileField` is not
   in `fieldsets`, and putting it in `readonly_fields` would not do, because
   Django renders a readonly `FileField` as an `<a href>` on `value.url`.
-- `CompanyDocument.get_file_url` still returns a plain `MEDIA_URL` path, so on a
-  deployment running `DEBUG=true` every uploaded ASIC extract and constitution
-  is readable with no session. Lower sensitivity than net-asset evidence and
-  an exposure, not merely a rough edge. It will be closed the same way
-  classification evidence was: a streaming endpoint reading through the storage
-  backend's `open()`, scoped by `visible_to_user`, identical on local disk and
-  S3. Both clients change with it, because the mobile app authenticates with a
-  bearer token an `<img>` cannot send.
+- Company documents are closed the same way classification evidence was, and the
+  bytes have left `MEDIA_ROOT`. `CompanyDocument.file` binds
+  `shared.storage.private_storage`, so `file.url` raises rather than handing out
+  a path, and reading goes through
+  `GET /api/v1/companies/<company>/documents/<uuid>/file/`, scoped by
+  `visible_to_user` and identical on local disk and S3.
+  Until this shipped, `get_file_url` returned a plain `MEDIA_URL` path, so on a
+  deployment running `DEBUG=true` — the configuration `docker-compose.yml` and
+  `backend/.env.example` ship — every uploaded ASIC extract and constitution was
+  readable with no session at all. That was an exposure, not a rough edge, and a
+  test now pins it: `test_an_anonymous_caller_cannot_fetch_the_document_from_media_under_debug`
+  reloads the urlconf with `DEBUG=True` and asserts the raw path 404s.
+- Staff read a company document through the admin, never through the API. The
+  API stays owner-only, because `CompanyQuerySet.visible_to_user` is
+  `filter(owner=user)` with no staff exception and
+  `test_querysets_fail_closed_and_follow_company_ownership_for_privileged_users`
+  pins that a superuser sees only their own. The consequence worth stating: the
+  staff-only `POST /api/v1/companies/<uuid>/status/` response nests document
+  payloads whose `fileUrl` a staff caller cannot fetch. That is deliberate —
+  widening the queryset to make it work would undo the tenant scoping.
+- The existing `file` migration changes storage, so it moves bytes as well as
+  schema. `0006_company_document_private_storage` relocates every stored file
+  from `MEDIA_ROOT` to `PRIVATE_MEDIA_ROOT`, guarded on
+  `STORAGE_BACKEND == "local"` because `PRIVATE_MEDIA_ROOT` is not defined on
+  S3 or GCS and the move is a no-op there anyway. An `AlterField` alone would
+  have left the old uploads sitting in the served directory — the exposure
+  surviving the fix for exactly the rows it was meant to protect.
+- Mobile could not keep opening documents with `Linking.openURL`: it
+  authenticates with a bearer token, and the OS browser sends neither that nor a
+  cookie. It now fetches through `apiClient`, writes to the cache directory and
+  hands the file to `expo-sharing`. The dashboard needed no such change — its
+  `<a target="_blank">` is a top-level navigation that carries the `SameSite=Lax`
+  session cookie. Mobile has no test runner, so that half ships unverified.
 - Rejected and expired classifications keep their evidence for a fixed period
   and are then purged automatically, leaving the classification record and its
   outcome behind. The retention period itself is not settled and is the part

@@ -1,4 +1,5 @@
 from rest_framework import status
+from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
@@ -6,7 +7,7 @@ from rest_framework.response import Response
 from companies.filters import CompanyDocumentFilter
 from companies.models import Company, CompanyDocument
 from companies.serializers import CompanyDocumentSerializer
-from shared.views import AuthenticatedModelViewSet
+from shared.views import AuthenticatedModelViewSet, stream_stored_file
 
 
 class DocumentViewSet(AuthenticatedModelViewSet):
@@ -32,7 +33,12 @@ class DocumentViewSet(AuthenticatedModelViewSet):
         scope = (
             CompanyDocument.objects.manageable_by_user if self._writing() else CompanyDocument.objects.visible_to_user
         )
-        return scope(user).filter(company=self._company())
+        return scope(user).filter(company=self._company()).select_related("company")
+
+    @action(detail=True, methods=["get"])
+    def file(self, request, company_uuid=None, uuid=None):
+        document = self.get_object()
+        return stream_stored_file(document.file, document.mime_type)
 
     def create(self, request, *args, **kwargs):
         company = self._company()

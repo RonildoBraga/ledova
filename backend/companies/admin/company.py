@@ -140,8 +140,9 @@ class CompanyDocumentInline(admin.TabularInline):
     readonly_fields = ["file_link", "is_verified", "created_at"]
 
     def file_link(self, obj):
-        if obj.file:
-            return format_html('<a href="{}" target="_blank">View File</a>', obj.file.url)
+        if obj.pk is not None and obj.file:
+            url = reverse("admin:companies_companydocument_file", args=[obj.uuid])
+            return format_html('<a href="{}" target="_blank">View File</a>', url)
         elif obj.external_url:
             return format_html('<a href="{}" target="_blank">External Link</a>', obj.external_url)
         return "-"
