@@ -89,3 +89,6 @@ REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
 
 
 OPERATOR_NAME = os.environ.get("OPERATOR_NAME") or "Ledova operator"
+
+
+CLASSIFICATION_EVIDENCE_RETENTION_DAYS = int(os.environ.get("CLASSIFICATION_EVIDENCE_RETENTION_DAYS", "2557"))

@@ -463,7 +463,7 @@ one.
 | every 10 min | `assets.sync_all_assets`, `assets.sync_exchange_rates` |
 | every 30 min | whitelist `sync_all_entries` |
 | hourly | `sync_all_wallets`, `compliance.tasks.run_batch_monitoring` |
-| daily 03:00 | `cleanup_failed_transactions`, `cleanup_stale_pending_transactions`, `offerings.expire_unpaid_subscriptions` |
+| daily 03:00 | `cleanup_failed_transactions`, `cleanup_stale_pending_transactions`, `offerings.expire_unpaid_subscriptions`, `users.purge_classification_evidence` |
 | daily 04:00 | `compliance.tasks.check_periodic_reviews` |
 
 `reconcile_subscriptions` is the mirror of `check_executing_issuance_requests`
@@ -474,6 +474,30 @@ subscription to allotted when its linked request reached `executed` and touches
 nothing else. `expire_unpaid_subscriptions` only ever touches a subscription
 that is awaiting payment, past its due date, and has no payment recorded
 against it — a part-paid row is left for the operator.
+
+`purge_classification_evidence` deletes the evidence file of an investor
+classification once it is past its retention horizon, leaving the row, its
+status and its review outcome untouched. There is one horizon and two things
+enforce it, deliberately: the four serving paths — the API evidence route, the
+admin evidence view, the admin link and the serializer's `evidenceUrl` — all
+refuse past it, so a claim stops being readable the moment it crosses, without
+waiting up to twenty-four hours for the sweep and without depending on the
+worker being alive; and the sweep then actually deletes the bytes, because
+deletion is a side effect and cannot be derived the way `expires_at` is. No
+status column records the purge: a cleared `evidence_file` is the record, which
+is the same choice `expires_at` makes in not storing an expired status. The
+clock is `reviewed_at` for a rejected or revoked claim and `expires_at` for one
+that expired; a claim with no clock stamped is never swept. `evidence_file_size`
+and `evidence_mime_type` survive, being content-free metadata rather than the
+document. See `CLASSIFICATION_EVIDENCE_RETENTION_DAYS` above; `0` retains
+indefinitely.
+
+Deleting an account does **not** purge evidence early. `delete_account` is a
+tombstone that never touches `InvestorClassification`, and that is now a
+deliberate position rather than an oversight: the point of a fixed retention
+period is that it outlives the subject's wishes, which is usually why the
+record-keeping obligation exists. The period itself is the part that needs
+counsel.
 
 `GET /health/` is answered by middleware before any database access.
 

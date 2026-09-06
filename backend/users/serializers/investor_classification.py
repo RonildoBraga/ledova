@@ -83,7 +83,7 @@ class InvestorClassificationSerializer(serializers.ModelSerializer):
         return fields
 
     def get_evidence_url(self, obj):
-        if not obj.evidence_file:
+        if not obj.evidence_retained:
             return None
         url = reverse("investor-classifications-evidence", args=[obj.uuid])
         request = self.context.get("request")
