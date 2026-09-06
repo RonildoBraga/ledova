@@ -405,9 +405,13 @@ def cap_headroom(offering: Offering) -> int:
     return offering.cap_shares - committed
 
 
-def offering_headroom(offering: Offering, service=None) -> tuple[int, int]:
+def share_supply_snapshot(offering: Offering, service=None) -> tuple[int, int]:
     service = service or ShareTokenService()
-    authorized, issued = service.share_supply(offering.token.contract_address)
+    return service.share_supply(offering.token.contract_address)
+
+
+def offering_headroom(offering: Offering, service=None, supply=None) -> tuple[int, int]:
+    authorized, issued = supply if supply is not None else share_supply_snapshot(offering, service)
     unminted = ShareIssuanceRequest.objects.unminted(offering.token).share_total()
     return cap_headroom(offering), authorized - issued - unminted
 
@@ -454,6 +458,7 @@ def _not_allottable(subscription: Subscription):
 def allot(subscription: Subscription, operator_user, notes: str = "", headroom=None):
     from offerings.tasks import allot_subscription_task
 
+    supply = None if headroom is not None else share_supply_snapshot(subscription.offering)
     offering = Offering.objects.select_for_update().select_related("token").get(pk=subscription.offering_id)
     locked = _locked(subscription)
     refusal = _not_allottable(locked)
@@ -461,7 +466,7 @@ def allot(subscription: Subscription, operator_user, notes: str = "", headroom=N
         raise SubscriptionRefusedException(refusal)
     amount = locked.allotment_quantity
 
-    cap_room, chain_room = headroom if headroom is not None else offering_headroom(offering)
+    cap_room, chain_room = headroom if headroom is not None else offering_headroom(offering, supply=supply)
     room = min(cap_room, chain_room)
     if amount > room:
         raise SubscriptionRefusedException(
