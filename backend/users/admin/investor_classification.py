@@ -1,6 +1,6 @@
 from django import forms
 from django.contrib import admin, messages
-from django.http import HttpResponseRedirect
+from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.urls import path, re_path, reverse
 from django.utils.html import format_html
@@ -194,7 +194,7 @@ class InvestorClassificationAdmin(admin.ModelAdmin):
 
     @admin.display(description="Evidence")
     def evidence_link(self, obj):
-        if obj.pk is None or not obj.evidence_file:
+        if obj.pk is None or not obj.evidence_retained:
             return "-"
         url = reverse("admin:users_investorclassification_evidence", args=[obj.uuid])
         return format_html('<a href="{}" target="_blank">Open evidence</a>', url)
@@ -232,6 +232,8 @@ class InvestorClassificationAdmin(admin.ModelAdmin):
 
     def evidence_view(self, request, uuid):
         classification = get_object_or_404(InvestorClassification, uuid=uuid)
+        if not classification.evidence_retained:
+            raise Http404("No evidence")
         return stream_stored_file(classification.evidence_file, classification.evidence_mime_type)
 
     def _build_form(self, request, classification, spec):

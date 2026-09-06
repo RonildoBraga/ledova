@@ -1,3 +1,4 @@
+from django.http import Http404
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -43,4 +44,6 @@ class InvestorClassificationViewSet(AuthenticatedModelViewSet):
     @action(detail=True, methods=["get"])
     def evidence(self, request, uuid=None):
         classification = self.get_object()
+        if not classification.evidence_retained:
+            raise Http404("No evidence")
         return stream_stored_file(classification.evidence_file, classification.evidence_mime_type)

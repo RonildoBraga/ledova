@@ -205,12 +205,33 @@ console are all shipped.
   hands the file to `expo-sharing`. The dashboard needed no such change — its
   `<a target="_blank">` is a top-level navigation that carries the `SameSite=Lax`
   session cookie. Mobile has no test runner, so that half ships unverified.
-- Rejected and expired classifications keep their evidence for a fixed period
-  and are then purged automatically, leaving the classification record and its
-  outcome behind. The retention period itself is not settled and is the part
-  that needs counsel; Australian financial-record and AML/CTF
-  customer-identification obligations are the constraints to confirm against.
-  Nothing implements this yet, and account deletion behaviour is unchanged.
+- Rejected, revoked and expired classifications keep their evidence for a fixed
+  period and are then purged automatically, leaving the classification record and
+  its outcome behind. Shipped. One horizon, two enforcers: the four serving paths
+  — the API evidence route, the admin evidence view, the admin link and the
+  serializer's `evidenceUrl` — all refuse past it, so a claim stops being
+  readable the moment it crosses rather than up to a day later when the sweep
+  runs, and it stays refused if the worker is dead; `purge_classification_evidence`
+  then deletes the bytes nightly, because deletion is a side effect and cannot be
+  derived the way `expires_at` is. No status column records the purge — a cleared
+  `evidence_file` is the record, matching the choice `expires_at` makes in
+  storing no expired status. The clock is `reviewed_at` for a rejected or revoked
+  claim and `expires_at` for one that expired, so a revoked claim runs from its
+  review and not from the stale expiry `verify` left on it; a claim with no clock
+  stamped is never swept. `evidence_file_size` and `evidence_mime_type` survive,
+  being content-free metadata rather than the document.
+- **The retention period is configuration, and its value is still open.**
+  `CLASSIFICATION_EVIDENCE_RETENTION_DAYS` is a deploy-time setting rather than an
+  admin-editable field, because purging is irreversible and shortening a statutory
+  window should take a deploy and a review rather than one form submit. The
+  shipped default of 2557 days is a placeholder, not advice; Australian
+  financial-record and AML/CTF customer-identification obligations are the
+  constraints to confirm it against. `0` retains indefinitely and purges nothing.
+- **Account deletion does not purge evidence early, deliberately.**
+  `delete_account` is a tombstone that never touches `InvestorClassification`, so
+  evidence already survived deletion; that is now a decision rather than an
+  oversight. A fixed retention period exists precisely to outlive the subject's
+  wishes, which is usually why the obligation to keep the record exists at all.
 - A primary offering: a company publishes an offer, an investor subscribes, the
   operator records the payment (AUD bank transfer against the reference prefix,
   or a supported stablecoin to the receiving wallet) and allots the shares.
@@ -579,8 +600,9 @@ decision below). Mainnet deployment configuration is deliberately absent.
   rules live outside this repository.
 - **One shared package, consumed from source.** `@ledova/shared` has no build
   step, and both clients compile its TypeScript themselves.
-- **Classification evidence is kept for a fixed period, then purged.** The
-  period is open and needs counsel; the shape is not.
+- **Classification evidence is kept for a fixed period, then purged.** Shipped
+  as a derived read-horizon plus a nightly sweep, with the period as a deploy-time
+  setting. The period's value is still open and needs counsel; the shape is not.
 - **No comments and no docstrings in source.** Settled, and now mechanically
   gated by `make check-comments` rather than held by review alone. See the
   coding rules in [ARCHITECTURE.md](ARCHITECTURE.md#coding-rules).

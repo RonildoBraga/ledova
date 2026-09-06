@@ -1,6 +1,6 @@
 import os
 import uuid as uuid_lib
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from decimal import Decimal
 
 from django.conf import settings
@@ -14,6 +14,12 @@ from users.querysets.investor_classification import InvestorClassificationQueryS
 
 PRODUCT_VALUE_THRESHOLD_AUD = Decimal("500000.00")
 CERTIFICATE_VALIDITY_YEARS = 2
+
+RETENTION_CLOCK = {
+    "rejected": "reviewed_at",
+    "revoked": "reviewed_at",
+    "verified": "expires_at",
+}
 
 
 def investor_evidence_path(instance, filename):
@@ -175,6 +181,24 @@ class InvestorClassification(BaseModel):
     @property
     def is_expired(self):
         return self.status == InvestorClassificationStatus.VERIFIED and not self.is_live
+
+    @property
+    def evidence_horizon(self):
+        clock = RETENTION_CLOCK.get(self.status)
+        retention_days = getattr(settings, "CLASSIFICATION_EVIDENCE_RETENTION_DAYS", 0)
+        if clock is None or not retention_days:
+            return None
+        clocked_at = getattr(self, clock)
+        if clocked_at is None:
+            return None
+        return clocked_at + timedelta(days=retention_days)
+
+    @property
+    def evidence_retained(self):
+        if not self.evidence_file:
+            return False
+        horizon = self.evidence_horizon
+        return horizon is None or horizon > timezone.now()
 
     @property
     def default_expiry(self):
