@@ -46,11 +46,11 @@ class ShareTokenViewSet(AuthenticatedModelViewSet):
     def get_queryset(self):
         user = self.request.user
         if self.action in MANAGE_ACTIONS:
-            return ShareToken.objects.manageable_by_user(user).with_company().with_chain()
+            return ShareToken.objects.manageable_by_user(user).with_company()
         queryset = ShareToken.objects.visible_to_user(user).with_company()
         if self.action == "list":
-            return queryset.with_market_summary()
-        return queryset.with_chain()
+            queryset = queryset.with_market_summary()
+        return queryset
 
     def filter_queryset(self, queryset):
         if self.action == "list":
@@ -64,8 +64,7 @@ class ShareTokenViewSet(AuthenticatedModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         token = serializer.save()
-        created = self.get_queryset().get(pk=token.pk)
-        return Response(ShareTokenDetailSerializer(created).data, status=status.HTTP_201_CREATED)
+        return Response(ShareTokenDetailSerializer(token).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"])
     def deploy(self, request, uuid=None):

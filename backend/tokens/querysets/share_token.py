@@ -60,14 +60,6 @@ class ShareTokenQuerySet(QuerySet):
             open_offering_closes_at=Subquery(offering.values("closes_at")[:1]),
         )
 
-    def with_chain(self):
-        from assets.models import AssetChainDeployment
-
-        deployment = AssetChainDeployment.objects.filter(
-            contract_address__iexact=OuterRef("contract_address"), is_active=True
-        ).order_by("created_at")
-        return self.annotate(chain=Subquery(deployment.values("chain")[:1]))
-
     def with_market_summary(self):
         from tokens.models import SwapOrder, TransferOrder
 

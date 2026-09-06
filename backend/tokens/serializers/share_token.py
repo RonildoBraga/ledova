@@ -62,7 +62,6 @@ class ShareTokenDetailSerializer(serializers.ModelSerializer):
     token_type_display = serializers.CharField(source="get_token_type_display", read_only=True)
     company_uuid = serializers.UUIDField(source="company.uuid", read_only=True)
     company_name = serializers.CharField(source="company.name", read_only=True)
-    chain = serializers.CharField(read_only=True)
 
     class Meta:
         model = ShareToken

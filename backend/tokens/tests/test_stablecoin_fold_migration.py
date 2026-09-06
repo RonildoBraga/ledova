@@ -26,6 +26,12 @@ class StablecoinFoldMigrationTest(TransactionTestCase):
         self.asset = self.old_apps.get_model("assets", "Asset")
         self.deployment = self.old_apps.get_model("assets", "AssetChainDeployment")
 
+    @staticmethod
+    def tokens_tip():
+        executor = MigrationExecutor(connection)
+        executor.loader.build_graph()
+        return list(executor.loader.graph.leaf_nodes("tokens"))
+
     def migrate(self, targets):
         executor = MigrationExecutor(connection)
         executor.loader.build_graph()
@@ -36,7 +42,7 @@ class StablecoinFoldMigrationTest(TransactionTestCase):
         for model in ("SwapOrder", "TransferOrder", "MintRequest"):
             self.old_apps.get_model("tokens", model)._base_manager.all().delete()
         self.old_apps.get_model("tokens", "Stablecoin")._base_manager.all().delete()
-        self.migrate(MIGRATE_LATEST)
+        self.migrate(self.tokens_tip())
 
     def fold(self):
         new_apps = self.migrate(MIGRATE_TO)
@@ -227,7 +233,7 @@ class StablecoinFoldMigrationTest(TransactionTestCase):
         from django.utils import timezone
 
         from companies.models import Company, CompanyType
-        from tokens.models import ShareToken, ShareTokenStatus
+        from tokens.models import ShareTokenStatus
         from users.models import UserAccount, UserProfile
         from wallets.models import Wallet
 
@@ -239,8 +245,8 @@ class StablecoinFoldMigrationTest(TransactionTestCase):
         company = Company.objects.create(
             owner=user, name="Fold Pty Ltd", company_type=CompanyType.PROPRIETARY, acn="123456789"
         )
-        token = ShareToken.objects.create(
-            company=company,
+        token = self.old_apps.get_model("tokens", "ShareToken")._base_manager.create(
+            company_id=company.pk,
             name="Fold shares",
             symbol="FLD",
             total_supply="1000",

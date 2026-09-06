@@ -72,6 +72,7 @@ class ShareTokenAdmin(admin.ModelAdmin):
     readonly_fields = [
         "uuid",
         "contract_address",
+        "chain",
         "deployment_tx_hash",
         "deployed_at",
         "created_at",

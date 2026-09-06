@@ -431,15 +431,21 @@ The deployment writes `WHITELIST_CONTRACT_ADDRESS`,
 Hardhat account #0 key as `BLOCKCHAIN_OPERATOR_KEY`.
 
 Share-token explorer links follow the chain the contract is actually on.
-`ShareTokenDetailSerializer` carries a read-only `chain`, annotated by
-`ShareTokenQuerySet.with_chain()` from the `AssetChainDeployment` whose
-`contract_address` is the token's own — the one row that cannot disagree with
-the address the link points at, since asset identity is `(chain,
-contract_address)`. Not `Asset.chain`, which returns the alphabetically first
-deployment, and not the `SHARE_ASSET_CHAIN` constant the bridge writes with,
-which would only move the hardcoding to the server. A token with no deployment
-row, or no contract address at all, reports `chain: null` and both clients then
-render the token with no explorer link.
+`ShareToken.chain` records it, written next to `contract_address` by
+`mark_deployed()` when `ShareTokenService._finish_deployment` confirms the
+factory receipt, so it is the chain the deployer really used and it cannot be
+lost afterwards. `ShareTokenDetailSerializer` carries it read-only; the clients
+render an explorer link only when both `chain` and `contractAddress` are set.
+
+The address alone cannot supply the chain. `AssetChainDeployment` is unique on
+`(chain, contract_address)`, so the same address may legitimately exist on
+several chains — routine for CREATE2 and bridged tokens — and matching an
+`AssetChainDeployment` by address would pick whichever row happened to be
+created first, from any asset. Nor can the asset bridge supply it: every silent
+return in `bridge_share_asset` leaves a confirmed deployment with no
+`AssetChainDeployment` row at all. Migration `tokens.0017_share_token_chain`
+backfills every existing token that has a contract address to `base`, the only
+chain the factory has ever deployed to.
 
 Base Sepolia (chain id 84532) is the supported public testnet:
 `npm --prefix contracts run deploy:testnet`, with `DEPLOYER_PRIVATE_KEY` and

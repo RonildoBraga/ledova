@@ -20,6 +20,7 @@ from companies.models import (
 from documents.models import Document
 from offerings.models import Offering, OfferingExemption, Subscription
 from portfolios.models import Portfolio
+from shared.constants import BLOCKCHAIN_BASE
 from shared.models import Country
 from tokens.models import (
     CapitalIncreaseRequest,
@@ -183,6 +184,7 @@ def make_tenant(label, *, staff=False, superuser=False):
         total_supply="1000",
         status=ShareTokenStatus.DEPLOYED,
         contract_address=_hex40("c", number),
+        chain=BLOCKCHAIN_BASE,
     )
     capital_increase = CapitalIncreaseRequest.objects.create(
         token=deployed_token,
