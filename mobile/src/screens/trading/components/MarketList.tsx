@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import type { ShareToken } from '@ledova/shared';
-import { formatCurrency } from '@ledova/shared';
+import { formatCurrency, DIRECTORY_COPY } from '@ledova/shared';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
 
 interface MarketListProps {
@@ -9,9 +9,10 @@ interface MarketListProps {
   selectedTokenUuid: string | null;
   onSelectToken: (uuid: string) => void;
   isLoading: boolean;
+  isEligible: boolean;
 }
 
-export function MarketList({ tokens, selectedTokenUuid, onSelectToken, isLoading }: MarketListProps) {
+export function MarketList({ tokens, selectedTokenUuid, onSelectToken, isLoading, isEligible }: MarketListProps) {
   const theme = useAppTheme();
   const styles = useThemedStyles((theme) => ({
     container: {
@@ -86,11 +87,20 @@ export function MarketList({ tokens, selectedTokenUuid, onSelectToken, isLoading
       alignItems: 'center' as const,
       paddingVertical: theme.spacing.xl,
     },
+    emptyTitle: {
+      fontSize: theme.fontSize.sm,
+      fontWeight: '600' as const,
+      color: theme.colors.text.primary,
+      textAlign: 'center' as const,
+      paddingTop: theme.spacing.xl,
+      paddingHorizontal: theme.spacing.md,
+    },
     emptyText: {
       fontSize: theme.fontSize.sm,
       color: theme.colors.text.muted,
       textAlign: 'center' as const,
-      paddingVertical: theme.spacing.xl,
+      paddingVertical: theme.spacing.md,
+      paddingHorizontal: theme.spacing.md,
     },
   }));
 
@@ -113,7 +123,12 @@ export function MarketList({ tokens, selectedTokenUuid, onSelectToken, isLoading
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Market</Text>
         </View>
-        <Text style={styles.emptyText}>No tokens available for trading</Text>
+        <Text style={styles.emptyTitle}>
+          {isEligible ? DIRECTORY_COPY.MARKET_EMPTY_TITLE : DIRECTORY_COPY.INELIGIBLE_TITLE}
+        </Text>
+        <Text style={styles.emptyText}>
+          {isEligible ? DIRECTORY_COPY.MARKET_EMPTY_BODY : DIRECTORY_COPY.MARKET_INELIGIBLE_BODY}
+        </Text>
       </View>
     );
   }

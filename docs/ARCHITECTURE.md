@@ -48,6 +48,7 @@ package of per-concern modules re-exported by `settings/__init__.py`.
 | `users` | Profiles, accounts, preferences, financial profiles, device tokens, notifications, favourite assets, `InvestorClassification` and the investor-eligibility predicate |
 | `companies` | `Company`, its application lifecycle, and company `Document` records |
 | `tokens` | `ShareToken`, `ShareIssuanceRequest`, `ShareIssuance`, `CapitalIncreaseRequest`, `MintRequest`, `YieldToken`, and the trading models |
+| `offerings` | `Offering`, its review lifecycle, and the eligibility-gated investor directory at `/api/v1/directory/` |
 | `whitelist` | `WhitelistEntry` and the on-chain allowlist sync |
 | `wallets` | `Wallet`, `Holding`, `HoldingSnapshot`, `Transaction`, balance sync and transfer confirmation |
 | `assets` | `Asset`, `AssetChainDeployment`, `AssetSnapshot`, `ExchangeRate`, price sync, asset identity |
@@ -162,6 +163,64 @@ them after `make build` and fails on any drift.
 9. Pause and unpause read `paused()` first and reconcile the database when the
    chain is already in the target state.
 
+## Data flow of an offering
+
+1. The owner sets `Company.is_open_to_investors` from the dashboard through
+   `CompanyUpdateSerializer`. It defaults to `False`, so the directory is empty
+   until an owner opts in; the operator can force it off in the admin. It is a
+   flag, not a `CompanyStatus`, so a suspension and a reinstatement do not drop
+   the listing.
+2. The issuer creates an `Offering` against one deployed share class at `POST
+   /api/v1/offerings/`, with the price, the bounds in whole shares, the window,
+   the exemption relied on, the payment rails and the `CompanyDocument`s to
+   attach. Every writable FK is scoped in `get_fields()`.
+3. `POST /api/v1/offerings/{uuid}/submit/` calls
+   `offerings.services.offering.submit_offering`, the twin of
+   `submit_application`. It takes a `select_for_update` on the `ShareToken` row
+   first, the way `_execute_capital_increase` does, so the liveness read and the
+   status write are serialised per share class and two simultaneous submissions
+   produce one submission and one 400 rather than the `IntegrityError` the
+   partial unique index turns into a 503. It then refuses unless the token is
+   deployed, the company can issue tokens, the share class has no other live
+   offering, `cap_shares` fits inside `total_supply` less the completed supply
+   less the caps of other live offerings (naming `CapitalIncreaseRequest` in the
+   refusal, because `setAuthorizedShares` cannot go below `totalSupply`), every
+   settlement asset resolves through `operators.settlement`, at least one
+   payment rail is configured, and, for `s708_8_minimum_amount`, the minimum
+   subscription is worth at least AUD 500,000.
+4. `transition_offering` is the single chokepoint for every status change and
+   fires one push to the owner, exactly as `transition_company` does. It is also
+   where `approve` re-runs the headroom check, because an issuance completing
+   between the submission and the approval shrinks the headroom the submission
+   measured; the approval is refused with the same message the submission would
+   have used.
+5. The operator reviews in the Django admin — start review, approve, reject,
+   close. There is no approve, reject or close route on the API at all, so
+   there is no staff API surface to mis-permission. The admin cannot rewrite
+   what the review is about either: `OfferingAdmin.get_readonly_fields` freezes
+   the share class, exemption, price, bounds, payment rails and window on any
+   row past `DRAFT` (`LOCKED_PAST_DRAFT`). Freezing them is the whole guard
+   rather than repeating the submit checks in the form's `clean`, so there is
+   one authority on the economics and no second copy to drift from it.
+6. There is no `OPEN` status and no scheduler. Open-now is derived, by
+   `OfferingQuerySet.open_now()`: approved, `opens_at <= now`, and `closes_at`
+   null or in the future. Nothing can be left in flight, so there is nothing for
+   a sweep to fix. Reaching the cap does not close an offering; closing is a
+   deliberate operator act.
+7. The directory publishes exactly that set and nothing wider.
+   `ShareTokenQuerySet.with_open_offering()` annotates from `open_now()`, so a
+   submitted or under-review offering is invisible to investors and approval is
+   the act that publishes the terms — which is what the admin's approve dialog
+   says it does. The annotation carries no status, because only one status can
+   ever reach it.
+8. `UniqueConstraint(token)` `WHERE status IN (submitted, under_review,
+   approved)` allows one live offering per share class. `submit_offering`
+   refuses the second submission by name before the write, so the ordinary
+   second-tranche path is a 400 that names the offering in flight rather than
+   an `IntegrityError`; the constraint stays as the backstop against a race.
+   Running two tranches at once needs the constraint relaxed, which is a
+   migration.
+
 Transaction hashes are stored 0x-prefixed. `is_transferable` and
 `is_divisible` on `ShareToken` are display-only and have no on-chain effect.
 
@@ -201,17 +260,51 @@ the ORM, not in PostgreSQL: row-level security is not planned.
 - Every customer-facing queryset has `visible_to_user(user)` (and
   `manageable_by_user` for writes) that returns `none()` for an anonymous or
   `None` user, and every viewset calls it from `get_queryset`, with one explicit
-  exception: `TradingTokenViewSet` (`tokens/views/trading_token.py`) returns
-  every deployed share token to any authenticated user. It is the market
-  directory and is deliberately not owner-scoped. Whether that posture is right
-  is an open Phase 1 decision, not a settled one.
+  exception: the two cross-tenant share-class listings,
+  `DirectoryTokenViewSet` (`offerings/views/directory.py`) and
+  `TradingTokenViewSet` (`tokens/views/trading_token.py`). Neither is
+  owner-scoped and neither ever was, but neither is unscoped either. Both are
+  scoped by `users.services.eligibility`, so an ineligible caller gets an empty
+  list and a 404 on every detail that is byte-identical to a phantom uuid.
+  Neither answers 403, which would confirm the row exists. The market asks
+  `investor_eligibility(user)` and returns `ShareToken.objects.none()` when the
+  answer is no. The directory asks `eligible_investor_companies(user)` and
+  filters on it, because one of the four classification categories is scoped to
+  a single issuer: `investor_eligibility(user)` first, and only when that
+  refuses, the companies named by the caller's live `associated_person` claims
+  that `investor_eligibility(user, company=...)` then accepts. A caller whose
+  only live claim is an association with company A therefore sees company A's
+  share classes and nothing else, and every other issuer is the same 404 as a
+  phantom uuid; a caller with an unscoped claim keeps seeing every listed
+  issuer; a caller with neither keeps seeing nothing. The two listings also
+  differ in what an eligible caller sees, and deliberately: the directory is
+  `ShareToken.objects.in_directory()` — deployed with a contract address,
+  company `ACTIVE`, and `is_open_to_investors` set by the owner — because it
+  advertises an offer; the secondary market is
+  `ShareToken.objects.deployed_with_contract()`, because whether an issuer
+  advertises itself has nothing to do with whether its existing holders have a
+  market. An `associated_person` claim does not widen the market for the same
+  reason: s708(12) is about one issuer's offer, not about a market in shares
+  that already exist. `DIRECTORY_ROUTES` and `MARKET_ROUTES` in
+  `backend/shared/tests/test_cross_tenant_routes.py` pin both.
+- `GET /api/operator/` is the one global singleton route an ordinary caller can
+  read, and it is not uniform. Its `payment_instructions` block — bank account
+  name, BSB, account number, reference prefix and receiving wallet — is served
+  only to staff and to callers `eligible_for_any_company(user)` accepts, which
+  is the same predicate the directory is scoped by rather than a second one.
+  Everyone else gets the key with `null` in it, which an unconfigured rail set
+  is indistinguishable from. The rest of the payload is identical for every
+  caller.
 - Owner foreign keys are `NOT NULL`, and writable FKs are scoped in
   `get_fields()`.
 - Global operator routes require `IsAdminUser`.
 - `backend/shared/tests/test_cross_tenant_routes.py` pins the matrix: `ROUTES`
   for detail routes and actions, `OPERATOR_ROUTES` for the admin-only routes,
-  `LIST_ROUTES` for collections. A new detail route or action gets a row there
-  or a cross-tenant test in its own app.
+  `LIST_ROUTES` for collections, and `DIRECTORY_ROUTES` plus `MARKET_ROUTES`
+  for the two eligibility-gated listings, which are the one group where a
+  foreign row is a 200 for an eligible caller and a 404 for everyone else. A new
+  detail route or action gets a row there or a cross-tenant test in its own
+  app.
 - `deployment_mode` on the operator row (`single_issuer` or `registry`) records
   which shape a deployment is; it does not change the isolation rules.
 

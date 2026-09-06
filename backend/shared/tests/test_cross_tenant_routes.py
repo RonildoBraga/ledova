@@ -11,7 +11,15 @@ from companies.models import (
     CompanyStatus,
 )
 from feature_flags.models import FeatureFlag
-from shared.tests.tenants import make_tenant, phantom_context, route_context, snapshot
+from operators.models import Operator
+from shared.tests.tenants import (
+    make_eligible,
+    make_tenant,
+    open_to_investors,
+    phantom_context,
+    route_context,
+    snapshot,
+)
 from tokens.models import ShareIssuanceRequest, ShareToken, ShareTokenStatus, SwapOrder
 
 SIGNATURE = "0x" + "ab" * 65
@@ -63,6 +71,17 @@ def _create_issuance_request(token, recipient, amount, user, reason="", issuance
 
 Route = namedtuple("Route", "method path payload foreign prepare", defaults=(None, 404, None))
 
+OFFERING = {
+    "exemption": "s708_11_professional",
+    "pricePerShare": "2.50",
+    "minimumShares": 10,
+    "targetShares": 50,
+    "capShares": 100,
+    "opensAt": "2027-01-01T00:00:00Z",
+    "closesAt": "2027-02-01T00:00:00Z",
+    "summary": "New tranche",
+    "useOfProceeds": "Working capital",
+}
 CAPITAL_INCREASE = {
     "additionalShares": 100,
     "newAuthorizedTotal": 1100,
@@ -180,6 +199,13 @@ ROUTES = (
     Route("delete", "/api/v1/tokens/capital-increases/{capital_increase}/"),
     Route("post", "/api/v1/tokens/capital-increases/{capital_increase}/submit/", {}),
     Route("post", "/api/v1/tokens/capital-increases/", {"token": "{deployed_token}", **CAPITAL_INCREASE}),
+    Route("get", "/api/v1/offerings/{offering}/"),
+    Route("put", "/api/v1/offerings/{offering}/", {"token": "{deployed_token}", **OFFERING}),
+    Route("patch", "/api/v1/offerings/{offering}/", {"summary": "Changed"}),
+    Route("delete", "/api/v1/offerings/{offering}/"),
+    Route("post", "/api/v1/offerings/{offering}/submit/", {}, prepare=_activate_company),
+    Route("post", "/api/v1/offerings/{offering}/withdraw/", {}),
+    Route("post", "/api/v1/offerings/", {"token": "{deployed_token}", **OFFERING}, foreign=400),
     Route("get", "/api/v1/trading/orders/{order}/"),
     Route("post", "/api/v1/trading/orders/{order}/cancel/", {"message": "cancel", "signature": SIGNATURE}),
     Route("get", "/api/v1/trading/orders/{order}/cancel/message/"),
@@ -228,6 +254,7 @@ LIST_ROUTES = (
     ("/api/v1/companies/{company}/documents/", ("company_document",)),
     ("/api/v1/tokens/", ("token", "deployed_token")),
     ("/api/v1/tokens/capital-increases/", ("capital_increase",)),
+    ("/api/v1/offerings/", ("offering",)),
     ("/api/v1/trading/orders/", ("order", "counter_order")),
     ("/api/v1/documents/", ("document",)),
 )
@@ -236,7 +263,16 @@ SINGLETON_ROUTES = (
     ("/api/notification-preferences/", "notification_preferences"),
 )
 
+DIRECTORY_ROUTES = (Route("get", "/api/v1/directory/tokens/{deployed_token}/"),)
+
+MARKET_ROUTES = (
+    Route("get", "/api/v1/trading/tokens/{deployed_token}/"),
+    Route("get", "/api/v1/trading/tokens/{deployed_token}/market-data/"),
+    Route("get", "/api/v1/trading/tokens/{deployed_token}/order-book/"),
+)
+
 GLOBAL_ROUTES = ("/api/operator/",)
+RAILS = {"bankBsb": "062000"}
 
 
 def _body(response):
@@ -265,6 +301,7 @@ class CrossTenantRouteMatrixTest(APITestCase):
         self._service("wallets.views.wallet.sync_wallet").defer.return_value = "job"
         self._service("wallets.views.fiat_purchase.generate_transak_widget_url", return_value="https://widget.test")
         self._service("companies.services.company.send_push_notification")
+        self._service("offerings.services.offering.send_push_notification")
         self._service("tokens.tasks.deploy_share_token_task")
         share_tokens = self._service("tokens.views.share_token.ShareTokenService").return_value
         share_tokens.create_issuance_request.side_effect = _create_issuance_request
@@ -368,6 +405,51 @@ class CrossTenantRouteMatrixTest(APITestCase):
                         self.assertEqual(phantom_response.status_code, 403, phantom_response.content)
                         self.assertEqual(self.masked(foreign_response, foreign), self.masked(phantom_response, phantom))
 
+    def test_directory_and_market_routes_reach_every_tenant_and_hide_phantom_rows(self):
+        foreign = route_context(self.other)
+        phantom = phantom_context(self.other)
+        for actor in self.actors:
+            self.client.force_authenticate(actor.user)
+            for route in DIRECTORY_ROUTES + MARKET_ROUTES:
+                with self.subTest(actor=actor.label, route=f"{route.method} {route.path}"):
+                    with transaction.atomic():
+                        make_eligible(actor)
+                        open_to_investors(self.other)
+                        foreign_response = self.send(route, actor, foreign)
+                        phantom_response = self.send(route, actor, phantom)
+                        transaction.set_rollback(True)
+                    self.assertEqual(foreign_response.status_code, 200, foreign_response.content)
+                    self.assertEqual(phantom_response.status_code, 404, phantom_response.content)
+
+    def test_the_market_answers_without_the_issuers_directory_opt_in(self):
+        foreign = route_context(self.other)
+        for actor in self.actors:
+            self.client.force_authenticate(actor.user)
+            for route in MARKET_ROUTES + DIRECTORY_ROUTES:
+                with self.subTest(actor=actor.label, route=f"{route.method} {route.path}"):
+                    with transaction.atomic():
+                        make_eligible(actor)
+                        foreign_response = self.send(route, actor, foreign)
+                        transaction.set_rollback(True)
+                    expected = 200 if route in MARKET_ROUTES else 404
+                    self.assertEqual(foreign_response.status_code, expected, foreign_response.content)
+
+    def test_directory_and_market_routes_are_empty_and_not_found_without_eligibility(self):
+        foreign = route_context(self.other)
+        phantom = phantom_context(self.other)
+        for actor in self.actors:
+            self.client.force_authenticate(actor.user)
+            for route in DIRECTORY_ROUTES + MARKET_ROUTES:
+                with self.subTest(actor=actor.label, route=f"{route.method} {route.path}"):
+                    with transaction.atomic():
+                        open_to_investors(self.other)
+                        foreign_response = self.send(route, actor, foreign)
+                        phantom_response = self.send(route, actor, phantom)
+                        transaction.set_rollback(True)
+                    self.assertEqual(foreign_response.status_code, 404, foreign_response.content)
+                    self.assertEqual(phantom_response.status_code, 404, phantom_response.content)
+                    self.assertEqual(self.masked(foreign_response, foreign), self.masked(phantom_response, phantom))
+
     def test_collection_routes_return_only_the_actors_rows(self):
         for actor in self.actors:
             self.client.force_authenticate(actor.user)
@@ -384,14 +466,33 @@ class CrossTenantRouteMatrixTest(APITestCase):
                     self.assertEqual(response.json()["uuid"], own[key])
 
     def test_global_singleton_routes_answer_every_actor_and_refuse_anonymous(self):
+        operator = Operator.get()
+        operator.bank_bsb = "062000"
+        operator.save(update_fields=["bank_bsb"])
         for path in GLOBAL_ROUTES:
-            bodies = []
+            bodies = {}
             for actor in self.actors:
                 self.client.force_authenticate(actor.user)
                 response = self.client.get(path)
                 with self.subTest(actor=actor.label, path=path):
                     self.assertEqual(response.status_code, 200, response.content)
-                bodies.append(response.json())
-            self.assertEqual(len({str(body) for body in bodies}), 1)
+                bodies[actor.label] = response.json()
+            rails = {label: body.pop("paymentInstructions") for label, body in bodies.items()}
+            self.assertEqual(rails, {"alice": None, "staff": RAILS, "root": RAILS})
+            self.assertEqual(len({str(body) for body in bodies.values()}), 1)
             self.client.force_authenticate(None)
             self.assertEqual(self.client.get(path).status_code, 401)
+
+    def test_the_operator_rails_follow_the_eligibility_predicate_not_the_session(self):
+        operator = Operator.get()
+        operator.bank_bsb = "062000"
+        operator.save(update_fields=["bank_bsb"])
+        alice = self.actors[0]
+        self.client.force_authenticate(alice.user)
+
+        self.assertIsNone(self.client.get(GLOBAL_ROUTES[0]).json()["paymentInstructions"])
+
+        with transaction.atomic():
+            make_eligible(alice)
+            self.assertEqual(self.client.get(GLOBAL_ROUTES[0]).json()["paymentInstructions"], RAILS)
+            transaction.set_rollback(True)

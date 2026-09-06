@@ -93,6 +93,33 @@ def investor_eligibility(user, company=None) -> InvestorEligibility:
     return outcomes[0]
 
 
+def _associated_company_ids(user):
+    accounts = UserAccount.objects.visible_to_user(user).investing()
+    return (
+        InvestorClassification.objects.filter(user_account__in=accounts)
+        .live()
+        .filter(category=InvestorCategory.ASSOCIATED_PERSON)
+        .values_list("company_id", flat=True)
+    )
+
+
+def eligible_investor_companies(user):
+    from companies.models import Company
+
+    if investor_eligibility(user).is_eligible:
+        return Company.objects.all()
+    reached = [
+        company.pk
+        for company in Company.objects.filter(pk__in=_associated_company_ids(user))
+        if investor_eligibility(user, company=company).is_eligible
+    ]
+    return Company.objects.filter(pk__in=reached)
+
+
+def eligible_for_any_company(user) -> bool:
+    return eligible_investor_companies(user).exists()
+
+
 def _require(outcome) -> InvestorEligibility:
     if not outcome.is_eligible:
         raise InvestorNotEligibleException(outcome.reasons)

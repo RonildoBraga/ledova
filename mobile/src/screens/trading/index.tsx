@@ -4,6 +4,7 @@ import type { ShareToken, TransferOrder, CreateOrderRequest, SwapOrder, Wallet }
 import { GradientBackground } from '../../components/GradientBackground';
 import {
   useShareTokens,
+  useInvestorEligibilityQuery,
   useUserTradingWallets,
   useWalletsWhitelistStatus,
   useAllWalletTokenBalances,
@@ -39,6 +40,8 @@ export function TradingScreen() {
   const [selectedTokenUuid, setSelectedTokenUuid] = useState<string | null>(null);
 
   const { data: tokens, isLoading: isLoadingTokens, refetch: refetchTokens } = useShareTokens();
+  const { data: eligibility } = useInvestorEligibilityQuery();
+  const isEligible = eligibility?.isEligible ?? false;
   const { wallets, walletAddresses } = useUserTradingWallets();
   const whitelistStatus = useWalletsWhitelistStatus(walletAddresses);
   const tokenBalances = useAllWalletTokenBalances(walletAddresses);
@@ -188,6 +191,7 @@ export function TradingScreen() {
               selectedTokenUuid={effectiveTokenUuid}
               onSelectToken={handleSelectToken}
               isLoading={isLoadingTokens}
+              isEligible={isEligible}
             />
 
             {selectedToken && (

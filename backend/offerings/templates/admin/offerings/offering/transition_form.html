@@ -1,0 +1,104 @@
+{% extends "admin/base_custom.html" %}
+{% load i18n admin_urls %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_label|capfirst }}</a>
+    &rsaquo; <a href="{% url 'admin:offerings_offering_changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+    &rsaquo; <a href="{% url 'admin:offerings_offering_change' offering.pk %}">{{ offering.token.symbol }}</a>
+    &rsaquo; {{ transition.title }}
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="admin-custom-form admin-custom-form--wide">
+    <div class="alert alert-{{ transition.alert }}">
+        <strong>&#9888; {{ transition.heading }}:</strong> {{ transition.intro }}
+    </div>
+
+    <div class="admin-card">
+        <div class="admin-card-header">Offering Details</div>
+        <div class="admin-card-body">
+            <table class="admin-table">
+                <tr>
+                    <td class="label-col">Share Class</td>
+                    <td><strong>{{ offering.token.name }} ({{ offering.token.symbol }})</strong></td>
+                </tr>
+                <tr>
+                    <td class="label-col">Company</td>
+                    <td>{{ offering.token.company.name }} (ACN {{ offering.token.company.acn }})</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Status</td>
+                    <td>{{ offering.get_status_display }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Exemption</td>
+                    <td>{{ offering.get_exemption_display }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Price</td>
+                    <td>{{ offering.price_currency }} {{ offering.price_per_share }} per share</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Bounds</td>
+                    <td>
+                        minimum {{ offering.minimum_shares }}, target {{ offering.target_shares }},
+                        cap {{ offering.cap_shares }} shares
+                    </td>
+                </tr>
+                <tr>
+                    <td class="label-col">Window</td>
+                    <td>
+                        {{ offering.opens_at|date:"N j, Y, P" }} to
+                        {{ offering.closes_at|date:"N j, Y, P"|default:"no closing date" }}
+                    </td>
+                </tr>
+                <tr>
+                    <td class="label-col">Unissued Headroom</td>
+                    <td>{{ headroom }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Payment Rails</td>
+                    <td>
+                        {% if offering.accepts_bank_transfer %}Bank transfer{% endif %}
+                        {% for asset in offering.settlement_assets.all %}{{ asset.symbol }} {% endfor %}
+                    </td>
+                </tr>
+                <tr>
+                    <td class="label-col">Submitted By</td>
+                    <td>{{ offering.submitted_by.email|default:"-" }}</td>
+                </tr>
+                <tr>
+                    <td class="label-col">Submitted At</td>
+                    <td>{{ offering.submitted_at|date:"N j, Y, P"|default:"-" }}</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <form method="post" class="admin-form">
+        {% csrf_token %}
+        <fieldset>
+            <legend>{{ transition.legend }}</legend>
+            {% for field in form %}
+            <div class="form-group">
+                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% if field.errors %}
+                <ul class="errorlist">
+                    {% for error in field.errors %}<li>{{ error }}</li>{% endfor %}
+                </ul>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </fieldset>
+
+        <div class="action-row">
+            <button type="submit" class="btn {{ transition.button.1 }}">{{ transition.button.0 }}</button>
+            <a href="{% url 'admin:offerings_offering_change' offering.pk %}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -50,8 +50,15 @@ eight-character code fits the 18-character AU lodgement reference.
 `GET /api/operator/` (authenticated; 401 for anonymous) returns `name`,
 `legalName`, `abn`, `contactEmail`, `website`, `deploymentMode`,
 `supportedSettlementAssets`, `issuedStablecoin`, `investorKycRequired`,
-`issuerKycRequired` and `paymentInstructions`, which carries only the payment
-fields that are set (and the chain only when the wallet address is set).
+`issuerKycRequired` and `paymentInstructions`.
+
+`paymentInstructions` is served only to staff and to a caller the investor
+eligibility predicate accepts for at least one company; every other
+authenticated caller gets `null` there, and the rest of the payload unchanged.
+When it is served it carries only the payment fields that are set (and the
+chain only when the wallet address is set). Turning the bank details on for a
+new deployment is therefore two things: filling them in on the operator row, and
+having verified investor classifications for the people who need to read them.
 
 The two eligibility switches are configuration for a later phase. No gate reads
 them yet, and `deployment_mode` does not change any isolation rule.

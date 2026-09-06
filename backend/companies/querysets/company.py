@@ -18,6 +18,9 @@ class CompanyQuerySet(QuerySet):
 
         return self.filter(status=CompanyStatus.ACTIVE)
 
+    def open_to_investors(self):
+        return self.active().filter(is_open_to_investors=True)
+
     def search(self, query):
         if not query:
             return self

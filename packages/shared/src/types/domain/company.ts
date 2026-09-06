@@ -95,6 +95,7 @@ export interface Company extends BaseEntity {
   isApproved: boolean;
   isPendingReview: boolean;
   canIssueTokens: boolean;
+  isOpenToInvestors: boolean;
   primaryContact: CompanyUserProfile | null;
   documents: CompanyDocument[];
 }
@@ -112,6 +113,8 @@ export interface CompanyUpdate {
   postcode?: string;
   phone?: string;
   description?: string;
+  industry?: string;
+  isOpenToInvestors?: boolean;
 }
 
 export interface CompanyStats {

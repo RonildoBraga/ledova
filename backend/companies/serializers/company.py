@@ -101,6 +101,7 @@ class CompanyDetailSerializer(serializers.ModelSerializer):
             "is_approved",
             "is_pending_review",
             "can_issue_tokens",
+            "is_open_to_investors",
             "primary_contact",
             "documents",
             "created_at",
@@ -190,6 +191,7 @@ class CompanyUpdateSerializer(serializers.ModelSerializer):
             "description",
             "industry",
             "operator_wallet",
+            "is_open_to_investors",
         ]
 
     def get_fields(self):

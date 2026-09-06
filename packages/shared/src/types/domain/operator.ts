@@ -29,5 +29,5 @@ export interface Operator {
   issuedStablecoin: OperatorSettlementAsset | null;
   investorKycRequired: boolean;
   issuerKycRequired: boolean;
-  paymentInstructions: OperatorPaymentInstructions;
+  paymentInstructions: OperatorPaymentInstructions | null;
 }

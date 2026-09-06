@@ -43,18 +43,74 @@ Complete.
 
 ## Phase 1 — Investor directory and primary offering
 
-Under way. The investor classification and the one eligibility predicate are
-shipped. No investor directory and no primary offering exist in the code yet;
-the only directory that does exist is the market one, `GET
-/api/v1/trading/tokens/`, which lists deployed tokens.
+Under way. The investor classification, the one eligibility predicate, the
+eligibility-gated directory and the `Offering` are shipped. Subscriptions,
+payment confirmation and allotment are not.
 
-- An investor directory: who the operator and issuers can see, and on what
-  terms. Scoped by the wholesale/sophisticated decision below — the directory
-  holds only investors who qualify under Corporations Act s708 and s761G, and
-  the operator and issuers see only that population. What the directory is
-  today, `GET /api/v1/trading/tokens/`, is a market directory of deployed
-  tokens, not of investors; whether it stays unscoped is an open Phase 1
-  decision (see [docs/ARCHITECTURE.md](ARCHITECTURE.md#tenancy-model)).
+- The directory is `GET /api/v1/directory/tokens/`, a new route beside the
+  secondary market at `GET /api/v1/trading/tokens/`, which stays where it is.
+  The two answer different questions and are scoped separately on purpose. The
+  directory advertises an offer, so it lists only a share class whose issuer has
+  opted in (`Company.is_open_to_investors`). The market prices shares that
+  already exist, so it lists every deployed share class and does not wait on the
+  issuer's listing switch — otherwise the flag defaulting to `False` would empty
+  every holder's market on the day this deploys, and an existing shareholder
+  would be unable to see, price or place an order on a share class only because
+  its issuer had not chosen to advertise. `MARKET_ROUTES` in
+  `backend/shared/tests/test_cross_tenant_routes.py` and
+  `backend/tokens/tests/test_trading_tokens.py` pin that separation.
+- Both listings are scoped by the wholesale/sophisticated decision below: an
+  ineligible caller gets `ShareToken.objects.none()`, so the list is empty and
+  every detail is a 404 byte-identical to a phantom uuid — never a 403, which
+  would confirm the row exists. Two consequences worth stating plainly. An
+  ineligible user's trading market overview is now empty where it previously
+  listed every deployed token; that is the fix, not a regression, and both
+  clients say why the list is empty rather than looking broken. And a holder who
+  is not a verified wholesale investor cannot see the market for shares they
+  already own, so they cannot offer them for sale here — which is the safe way
+  round for s707(3) on-sale, costs nothing while the `trading_enabled` flag is
+  off, and is the first thing to revisit when it is turned on.
+- Only an approved offering that has opened is published to investors.
+  `ShareTokenQuerySet.with_open_offering()` annotates from
+  `OfferingQuerySet.open_now()`, never from `live()`, so a submitted or
+  under-review offering reaches no investor and the operator's approval is what
+  publishes the terms. `submit_offering` refuses a second submission on a share
+  class that already has one in flight, naming it, so the ordinary
+  second-tranche mistake is a 400 and not the `IntegrityError` the partial
+  unique index would otherwise raise.
+- **The directory is empty on day one.** `Company.is_open_to_investors` defaults
+  to `False`, so no company is listed until its owner opts in from
+  `/company/offering`. Nothing is broken when the directory shows nothing; the
+  empty state says so in as many words. The operator can force the flag off but
+  never on.
+- An offering is `offerings.Offering`, in a new `offerings` app mounted twice:
+  `/api/v1/offerings/` for the issuer and `/api/v1/directory/` for the investor.
+  There is no `OPEN` status and no scheduler — open-now is derived from
+  `approved AND opens_at <= now AND (closes_at IS NULL OR closes_at > now)`. One
+  live offering per share class, refused by name in `submit_offering` and
+  backstopped by a partial unique constraint; running two at once needs a
+  migration and a deliberate act.
+- Approve, reject and close exist only in the Django admin. The API carries
+  issuer CRUD plus submit and withdraw and nothing else, so there is no staff
+  API surface to mis-permission. Reaching the cap does not close an offering:
+  closing is a deliberate operator act, and nothing closes an offering on its
+  own. **Planned, not built:** a "cap reached, not closed" row in the operator
+  console. There is no operator console yet; the row arrives with it.
+- The economics of an offering are frozen once it leaves draft. The admin change
+  form keeps the share class, the exemption, the price, the bounds, the payment
+  rails and the window editable only while the row is a draft, because the
+  checks that guard them live in `submit_offering` and re-running them from an
+  admin form's `clean` would be a second copy of the same rules, free to drift.
+  Approving re-runs the headroom check itself, so a `ShareIssuance` that
+  completes between the submission and the operator's approval refuses the
+  approval by name rather than publishing a cap the share class can no longer
+  cover. `submit_offering` takes a `select_for_update` on the share-class row
+  before it reads the live offerings, the way `_execute_capital_increase` does,
+  so two simultaneous submissions on one share class end in one submission and
+  one 400 that names the offering in flight, never the `IntegrityError` the
+  partial unique index would otherwise turn into a 503.
+- The exemption choices deliberately exclude the experienced-investor category
+  (s708(10) / s761GA), for the same reason `InvestorCategory` does.
 - An `InvestorClassification` model: the recorded basis on which an investor
   qualifies as wholesale or sophisticated, its evidence and its expiry. Shipped.
   Four categories only — `product_value` (s708(8)(a)), `accountant_certificate`
@@ -78,6 +134,27 @@ the only directory that does exist is the market one, `GET
   `product_value` claim was recorded more recently, and the AUD 500,000 floor
   still refuses an account whose only live claim is `product_value`. Where no
   amount is in play the newest live claim is the one reported.
+- **An `associated_person` claim reaches less of the directory than the other
+  three categories, and that is deliberate.** Section 708(12) associates a
+  person with one named issuer, so the claim names a `Company` and carries no
+  weight anywhere else. A caller whose only live claim is an association with
+  company A sees exactly company A's share classes in the directory, gets a 200
+  on their detail pages, and gets the same 404 as a phantom uuid on every other
+  issuer. The other three categories are unscoped and reach every listed issuer.
+  A caller holding both kinds of live claim reaches everything, on the strength
+  of the unscoped one. An association also opens the operator's payment rails at
+  `GET /api/operator/`, because an associate can subscribe to the issuer they
+  are associated with and has to be told where the money goes. It does not widen
+  the secondary market at `GET /api/v1/trading/tokens/`, which stays on the
+  unscoped predicate: s708(12) is about an issuer's offer, not about a market in
+  shares that already exist.
+- `GET /api/operator/` withholds `payment_instructions` — the operator's bank
+  account name, BSB, account number, reference prefix and receiving wallet —
+  from a caller who is neither staff nor an eligible investor of some company.
+  It asks the same B3 predicate the directory is scoped by, not a second one.
+  The rest of the operator payload is identical for every caller, and the
+  withheld key is present and `null` rather than absent, so the payload shape
+  does not change with the caller.
 - Classification evidence is not served from `MEDIA_URL`, and the bytes do not
   live under `MEDIA_ROOT` at all. On the local backend they are written to
   `PRIVATE_MEDIA_ROOT` (`backend/private-media`) through
@@ -107,10 +184,12 @@ the only directory that does exist is the market one, `GET
 - A primary offering: a company publishes an offer, an investor subscribes, the
   operator records the payment (AUD bank transfer against the reference prefix,
   or a supported stablecoin to the receiving wallet) and allots the shares.
-- The payment rails on the operator row exist for this. Nothing renders them:
-  `paymentInstructions` appears only as a type
-  (`packages/shared/src/types/domain/operator.ts`), with no reader in
-  `dashboard/src` or `mobile/src`.
+- The payment rails on the operator row exist for this. The directory detail
+  page renders `paymentInstructions` from `GET /api/operator/` rather than
+  duplicating bank details onto the offering, so there is one copy of the
+  operator's BSB and receiving wallet and one place to change it. It asks for
+  them only once the share class itself has resolved, so a caller whose detail
+  request 404s never requests the rails at all.
 - Allotted shares now reach the portfolio. Deploying a share token writes a
   verified `assets.Asset` (`tokenized_security`, `decimals` 0) and an
   `AssetChainDeployment` at the address the factory attests, and completing an
@@ -131,12 +210,21 @@ switch.
   `IdentityVerificationService._process_verified_customer` is the only writer of
   `active` and it runs only on a green KYC result. `issuer_kyc_required` is
   still read by nothing.
-- The eligibility predicate has one production reader so far, the whitelist
-  admin's read-only column and add-form warning. The directory and the
-  subscription flow are the enforcing callers and neither exists yet. When the
-  directory lands, a refusal must narrow the queryset to
-  `ShareToken.objects.none()` and answer 404 — never 403, which would tell an
-  ineligible caller that the offering exists.
+- The eligibility predicate now has enforcing readers.
+  `DirectoryTokenViewSet` narrows its queryset to
+  `eligible_investor_companies(user)`, which is `investor_eligibility(user)`
+  first and, only when that refuses, the companies the caller's live
+  `associated_person` claims name and that `investor_eligibility(user,
+  company=...)` then accepts one by one. An unreachable company is filtered out
+  of the queryset rather than refused, so the answer is 404, never 403.
+  `TradingTokenViewSet` still asks the unscoped `investor_eligibility(user)` and
+  narrows to `ShareToken.objects.none()` on a refusal. Both call the non-raising
+  entry point rather than `require_investor_eligibility`, because the raising
+  one produces the 403 these listings must never emit;
+  `require_investor_eligibility` therefore still has no production caller and
+  the subscription flow is where it belongs. `OperatorSerializer` is the third
+  reader, through `eligible_for_any_company(user)`, and the whitelist admin's
+  read-only column and add-form warning remain the fourth.
 - A share register that is the authoritative record, reconciled against the
   chain rather than derived from it ad hoc.
 - Director authority, ownership immutability, ACN and ABN validation and
@@ -156,17 +244,19 @@ Not started, and gated on the trading work in the
 `feature_flags/middleware.py` refuses with 403 any request, of any method, whose
 path starts with one of five prefixes
 (`/api/v1/trading/{orders,wallets,transfers,swaps,events}/`); the read-only
-market route (`tokens/`) and the whitelist status route are
-outside the gate by design. That default stays until the signed-intent,
-concurrency and idempotency designs are fixed and independently reviewed.
+market route (`tokens/`) and the whitelist status route are outside that gate by
+design, and the market route is gated on investor eligibility instead. That
+default stays until the signed-intent, concurrency and idempotency designs are
+fixed and independently reviewed.
 
 ## Not on the roadmap
 
-There is no off-ramp. There is no investor directory and no primary offering
-yet: no route lists investors, and `GET /api/v1/trading/tokens/` is a directory
-of deployed tokens, not of people. Retail offerings are out of scope for the
-first releases (see the wholesale/sophisticated decision below). Mainnet
-deployment configuration is deliberately absent.
+There is no off-ramp. No route lists investors: `GET /api/v1/directory/tokens/`
+is a directory of deployed share classes open to investors, not of people. There
+is no subscription, no payment confirmation and no allotment from an offering
+yet. Retail offerings are out of scope for the first releases (see the
+wholesale/sophisticated decision below). Mainnet deployment configuration is
+deliberately absent.
 
 ## Decisions taken
 

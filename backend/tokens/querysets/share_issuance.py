@@ -1,7 +1,21 @@
-from django.db.models import BigIntegerField, Max, QuerySet, Sum
-from django.db.models.functions import Cast
+from django.db.models import BigIntegerField, Max, QuerySet, Subquery, Sum, Value
+from django.db.models.functions import Cast, Coalesce
 
 from tokens.models.choices import IssuanceStatus
+
+
+def completed_supply_annotation(token_ref):
+    from tokens.models import ShareIssuance
+
+    totals = (
+        ShareIssuance.objects.completed()
+        .exclude(amount="")
+        .filter(token=token_ref)
+        .values("token")
+        .annotate(total=Sum(Cast("amount", BigIntegerField())))
+        .values("total")
+    )
+    return Coalesce(Subquery(totals, output_field=BigIntegerField()), Value(0), output_field=BigIntegerField())
 
 
 class ShareIssuanceQuerySet(QuerySet):

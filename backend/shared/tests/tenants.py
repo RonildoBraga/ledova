@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from itertools import count
 from types import SimpleNamespace
@@ -10,8 +10,15 @@ from django.db import models
 from django.utils import timezone
 
 from assets.models import Asset, AssetChainDeployment
-from companies.models import Company, CompanyDocument, CompanyType, DocumentType
+from companies.models import (
+    Company,
+    CompanyDocument,
+    CompanyStatus,
+    CompanyType,
+    DocumentType,
+)
 from documents.models import Document
+from offerings.models import Offering, OfferingExemption
 from portfolios.models import Portfolio
 from shared.models import Country
 from tokens.models import (
@@ -22,12 +29,14 @@ from tokens.models import (
     TransferOrder,
 )
 from tokens.models.choices import TransferOrderType
+from users.constants import ACCOUNT_STATUS_ACTIVE
 from users.models import (
     DeviceToken,
     FavouriteAsset,
     FinancialProfile,
     InvestorCategory,
     InvestorClassification,
+    InvestorClassificationStatus,
     Notification,
     NotificationPreferences,
     UserAccount,
@@ -205,6 +214,17 @@ def make_tenant(label, *, staff=False, superuser=False):
         nonce=number,
         order_hash="0x" + f"{number:064x}",
     )
+    offering = Offering.objects.create(
+        token=deployed_token,
+        exemption=OfferingExemption.PROFESSIONAL,
+        price_per_share=Decimal("2.50"),
+        minimum_shares=10,
+        target_shares=50,
+        cap_shares=100,
+        opens_at=timezone.now() + timedelta(days=1),
+        closes_at=timezone.now() + timedelta(days=30),
+        summary=f"{label} offering",
+    )
     document = Document.objects.create(
         uploaded_by=user,
         document_type="payslip",
@@ -236,11 +256,42 @@ def make_tenant(label, *, staff=False, superuser=False):
         token=token,
         deployed_token=deployed_token,
         capital_increase=capital_increase,
+        offering=offering,
         order=order,
         counter_order=counter_order,
         swap=swap,
         document=document,
     )
+
+
+def make_eligible(tenant):
+    UserProfile.objects.filter(pk=tenant.profile.pk).update(is_id_verified=True)
+    UserAccount.objects.filter(pk=tenant.account.pk).update(account_status=ACCOUNT_STATUS_ACTIVE)
+    InvestorClassification.objects.filter(pk=tenant.investor_classification.pk).update(
+        status=InvestorClassificationStatus.VERIFIED, expires_at=timezone.now() + timedelta(days=365)
+    )
+
+
+def make_associated(tenant, company):
+    UserProfile.objects.filter(pk=tenant.profile.pk).update(is_id_verified=True)
+    UserAccount.objects.filter(pk=tenant.account.pk).update(account_status=ACCOUNT_STATUS_ACTIVE)
+    return InvestorClassification.objects.create(
+        user_account=tenant.account,
+        company=company,
+        category=InvestorCategory.ASSOCIATED_PERSON,
+        status=InvestorClassificationStatus.VERIFIED,
+        expires_at=timezone.now() + timedelta(days=365),
+        declaration_accepted=True,
+        declaration_text="Declared",
+        declared_basis=f"{tenant.label} association",
+        evidence_file_size=len(tenant.label),
+        evidence_mime_type="application/pdf",
+        submitted_at=timezone.now(),
+    )
+
+
+def open_to_investors(tenant):
+    Company.objects.filter(pk=tenant.company.pk).update(status=CompanyStatus.ACTIVE, is_open_to_investors=True)
 
 
 def _rows(tenant):
