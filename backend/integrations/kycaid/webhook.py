@@ -14,6 +14,7 @@ from integrations.kyc.constants import (
     STATUS_PENDING,
 )
 from integrations.kycaid.client import KYCAIDService
+from integrations.webhooks import is_stale
 from users.models.user_profile import UserProfile
 from users.services import IdentityVerificationService
 
@@ -38,6 +39,10 @@ class KYCAIDWebhookView(APIView):
             data = request.data
             event_type = data.get("type")
             applicant_id = data.get("applicant_id")
+
+            if is_stale(data):
+                logger.warning("Rejected webhook: timestamp outside the freshness window")
+                return Response({"error": "Stale webhook"}, status=status.HTTP_400_BAD_REQUEST)
 
             if not applicant_id:
                 logger.warning("Rejected webhook: no applicant id")

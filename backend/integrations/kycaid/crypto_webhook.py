@@ -10,6 +10,7 @@ from compliance.models import TransactionScreening
 from compliance.services.crypto_screening import CryptoScreeningService
 from integrations.kyc.constants import PROVIDER_KYCAID
 from integrations.kycaid.client import KYCAIDService
+from integrations.webhooks import is_stale
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,10 @@ class KYCAIDCryptoWebhookView(APIView):
             data = request.data
             request_id = data.get("request_id")
             result = data.get("result", {})
+
+            if is_stale(data):
+                logger.warning("Rejected webhook: timestamp outside the freshness window")
+                return Response({"error": "Stale webhook"}, status=status.HTTP_400_BAD_REQUEST)
 
             try:
                 screening = TransactionScreening.objects.get(

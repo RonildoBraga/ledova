@@ -10,6 +10,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from integrations.webhooks import is_stale
 from wallets.models import Transaction, Wallet
 from wallets.tasks import confirm_pending_transaction
 
@@ -49,6 +50,10 @@ class AlchemyWebhookView(APIView):
             data = request.data
             webhook_type = data.get("type")
             event = data.get("event", {})
+
+            if is_stale(data):
+                logger.warning("Rejected webhook: timestamp outside the freshness window")
+                return Response({"error": "Stale webhook"}, status=status.HTTP_400_BAD_REQUEST)
 
             if webhook_type == "ADDRESS_ACTIVITY":
                 self._handle_address_activity(event)

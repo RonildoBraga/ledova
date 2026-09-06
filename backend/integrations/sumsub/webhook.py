@@ -18,6 +18,7 @@ from integrations.kyc.constants import (
     SUMSUB_EVENT_APPLICANT_REVIEWED,
 )
 from integrations.sumsub import SumSubService
+from integrations.webhooks import is_stale
 from users.models.user_profile import UserProfile
 from users.services import IdentityVerificationService
 
@@ -44,6 +45,10 @@ class SumSubWebhookView(APIView):
             webhook_type = data.get("type")
             applicant_id = data.get("applicantId")
             external_user_id = data.get("externalUserId")
+
+            if is_stale(data):
+                logger.warning("Rejected webhook: timestamp outside the freshness window")
+                return Response({"error": "Stale webhook"}, status=status.HTTP_400_BAD_REQUEST)
 
             if not external_user_id:
                 logger.warning("Rejected webhook: no externalUserId")
