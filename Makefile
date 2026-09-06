@@ -72,6 +72,7 @@ check: check-comments check-layers install-backend
 	$(NPM) run typecheck
 	$(NPM) --prefix marketing run type-check
 	$(NPM) --prefix mobile run type-check
+	$(NPM) --prefix mobile run check:resolution
 	cd backend && SECRET_KEY="$$( $(PYTHON) -c 'import secrets; print(secrets.token_urlsafe(32))')" STORAGE_BACKEND=local $(PYTHON) manage.py check
 
 check-comments:
