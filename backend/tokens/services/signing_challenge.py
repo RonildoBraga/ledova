@@ -139,7 +139,12 @@ def spend(challenge, signature: str) -> None:
     logger.info(f"Consumed {challenge.purpose} challenge for {challenge.wallet_address}")
 
 
+def challenge_retention_seconds() -> int:
+    return getattr(settings, "SIGNING_CHALLENGE_RETENTION_SECONDS", 86400)
+
+
 @transaction.atomic
-def purge_expired_challenges(cutoff=None) -> int:
-    removed, _ = SigningChallenge.objects.expired_and_unspent(cutoff).delete()
+def purge_expired_challenges(now=None, batch: int = 500) -> int:
+    cutoff = (now or timezone.now()) - timezone.timedelta(seconds=challenge_retention_seconds())
+    removed, _ = SigningChallenge.objects.purgeable(cutoff, batch).delete()
     return removed
