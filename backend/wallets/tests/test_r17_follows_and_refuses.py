@@ -15,12 +15,23 @@ from wallets.serializers.wallet import WalletSerializer
 POSTGRES = connection.vendor == "postgresql"
 REASON = "the trigger is PostgreSQL only, and on SQLite none of these writes reaches a refusal"
 FUNCTION = "transactions_user_account_is_derived"
+UNIQUE_TX_PER_WALLET = "transactions_tx_hash_wallet_id_f1ecff24_uniq"
 
 
 def _definition():
     with connection.cursor() as cursor:
         cursor.execute("SELECT pg_get_functiondef(%s::regproc)", [FUNCTION])
         return cursor.fetchone()[0]
+
+
+def _unique_indexes_touching(table, column):
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT indexname FROM pg_indexes WHERE tablename = %s AND indexdef ILIKE '%%UNIQUE%%' "
+            "AND indexdef LIKE %s",
+            [table, f"%{column}%"],
+        )
+        return {name for (name,) in cursor.fetchall()}
 
 
 @skipUnless(POSTGRES, REASON)
@@ -45,6 +56,14 @@ class ATransactionFollowsItsWalletAndWillNotChangeHandsTest(TestCase):
 
         self.transaction.refresh_from_db()
         self.assertEqual(self.transaction.user_account_id, self.other.account.uuid)
+
+    def test_nothing_but_the_trigger_can_refuse_these_moves(self):
+        for wallet in (self.sibling, self.other.wallet):
+            with self.subTest(wallet=wallet.address):
+                clash = Transaction.objects.filter(wallet=wallet, tx_hash=self.transaction.tx_hash)
+                self.assertFalse(clash.exists())
+
+        self.assertEqual(_unique_indexes_touching("transactions", "wallet_id"), {UNIQUE_TX_PER_WALLET})
 
     def test_moving_a_transaction_to_another_wallet_of_the_same_account_is_allowed(self):
         Transaction.objects.filter(pk=self.transaction.pk).update(wallet=self.sibling)

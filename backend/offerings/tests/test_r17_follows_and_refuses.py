@@ -15,6 +15,17 @@ from tokens.models import ShareToken, ShareTokenStatus
 POSTGRES = connection.vendor == "postgresql"
 REASON = "the trigger is PostgreSQL only, and on SQLite none of these writes reaches a refusal"
 SIBLING_SYMBOL = "SIB"
+ONE_LIVE_PER_TOKEN = "offering_one_live_per_token"
+
+
+def _unique_indexes_touching(table, column):
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT indexname FROM pg_indexes WHERE tablename = %s AND indexdef ILIKE '%%UNIQUE%%' "
+            "AND indexdef LIKE %s",
+            [table, f"%{column}%"],
+        )
+        return {name for (name,) in cursor.fetchall()}
 
 
 def _acn(number):
@@ -63,6 +74,9 @@ class AnOfferingFollowsItsTokenAndWillNotChangeCompanyTest(TestCase):
             with self.subTest(token=token.symbol):
                 live = Offering.objects.filter(token=token, status__in=LIVE_OFFERING_STATUSES)
                 self.assertFalse(live.exists())
+
+        self.assertEqual(_unique_indexes_touching("offerings_offering", "token_id"), {ONE_LIVE_PER_TOKEN})
+        self.assertEqual(_unique_indexes_touching("offerings_subscription", "offering_id"), set())
 
     def test_moving_an_offering_to_another_token_of_the_same_company_is_allowed(self):
         Offering.objects.filter(pk=self.offering.pk).update(token=self.sibling)
