@@ -68,10 +68,13 @@ class SessionService:
         if lookup.state is EmailLookupState.AMBIGUOUS:
             raise serializers.ValidationError({"email": ["Email already registered"]})
         existing_user = lookup.user
+        if existing_user:
+            set_principal(existing_user.pk)
         if existing_user and hasattr(existing_user, "userprofile") and existing_user.userprofile.is_signup_completed:
             raise serializers.ValidationError({"email": ["Email already registered"]})
 
         user = existing_user or _create_signup_user(email, password)
+        set_principal(user.pk)
 
         from users.services.setup import ensure_defaults
 
