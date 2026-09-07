@@ -282,7 +282,7 @@ class TheReceiptMustNameThisOrderTest(TestCase):
             self.swap.order_hash.removeprefix("0x"),
         )
 
-    def test_an_order_hash_that_begins_with_a_zero_is_matched_rather_than_mangled(self, _publish):
+    def test_a_hash_that_begins_with_a_zero_survives_being_built_into_an_event(self, _publish):
         service = self.service([swap_executed(LEADING_ZERO_HASH)])
         service.executed_order_hash = Mock(return_value=LEADING_ZERO_HASH)
 
