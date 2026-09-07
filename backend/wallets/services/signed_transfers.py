@@ -22,6 +22,7 @@ DEFAULT_TOKEN_DECIMALS = 18
 AMOUNT_MAX_DIGITS = 30
 AMOUNT_DECIMAL_PLACES = 18
 AMOUNT_LIMIT = Decimal(10) ** (AMOUNT_MAX_DIGITS - AMOUNT_DECIMAL_PLACES)
+AMOUNT_QUANTUM = Decimal(1).scaleb(-AMOUNT_DECIMAL_PLACES)
 
 CHAIN_ID_SETTING = {
     BLOCKCHAIN_ETHEREUM: "ETHEREUM_CHAIN_ID",
@@ -38,6 +39,7 @@ ERC20_CARRIES_VALUE = "An ERC-20 transfer call cannot also send native currency.
 UNSUPPORTED_ENVELOPE = "Only legacy, type 1 and type 2 transactions can be broadcast through this wallet."
 SIGNER_MISMATCH = "The signed transaction was signed by {signer}, not by this wallet."
 AMOUNT_OUT_OF_RANGE = "The transfer amount is larger than this asset can record."
+AMOUNT_TOO_PRECISE = "The transfer amount is finer than this asset can record."
 
 
 @dataclass(frozen=True)
@@ -151,6 +153,12 @@ def _decimals_for(asset, wallet, contract_address: str) -> int:
 def _recordable(amount: Decimal) -> Decimal:
     if amount >= AMOUNT_LIMIT:
         raise InvalidTransactionException(AMOUNT_OUT_OF_RANGE)
+
+    with localcontext() as context:
+        context.prec = AMOUNT_MAX_DIGITS + 1
+        if amount != amount.quantize(AMOUNT_QUANTUM):
+            raise InvalidTransactionException(AMOUNT_TOO_PRECISE)
+
     return amount
 
 

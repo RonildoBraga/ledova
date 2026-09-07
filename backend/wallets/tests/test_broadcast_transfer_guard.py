@@ -16,6 +16,7 @@ from users.models import UserAccount, UserProfile
 from wallets.models import Holding, Transaction, Wallet
 from wallets.services.signed_transfers import (
     AMOUNT_OUT_OF_RANGE,
+    AMOUNT_TOO_PRECISE,
     CONTRACT_CREATION,
     ERC20_CARRIES_VALUE,
     SIGNER_MISMATCH,
@@ -114,6 +115,13 @@ class BroadcastTransferGuardTestCase(APITestCase):
         AssetChainDeployment.objects.create(asset=asset, chain="base", contract_address=USDC_CONTRACT, decimals=6)
         return asset
 
+    def wide_decimal_asset(self):
+        asset = Asset.objects.create(
+            symbol="WIDE", name="Wide Decimals", asset_type="erc20_token", decimals=30, is_verified=True
+        )
+        AssetChainDeployment.objects.create(asset=asset, chain="base", contract_address=USDC_CONTRACT, decimals=30)
+        return asset
+
     def usdc_with_disagreeing_decimals(self):
         asset = Asset.objects.create(
             symbol="USDT", name="Tether", asset_type="erc20_token", decimals=18, is_verified=True
@@ -180,6 +188,22 @@ class BroadcastTransferRefusalTest(BroadcastTransferGuardTestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["detail"], SIGNER_MISMATCH.format(signer=stranger.address))
+        get_client.assert_not_called()
+        schedule.assert_not_called()
+        self.assertFalse(Transaction.objects.filter(wallet=self.wallet).exists())
+
+    def test_an_erc20_amount_finer_than_the_column_is_refused_rather_than_recorded_as_zero(self, get_client, schedule):
+        self.wide_decimal_asset()
+
+        response = self.broadcast(
+            signed_transaction=sign(to=USDC_CONTRACT, data=erc20_transfer_data(RECIPIENT, 2_500_000)),
+            to_address=RECIPIENT,
+            amount="1",
+            token_contract=USDC_CONTRACT,
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["detail"], AMOUNT_TOO_PRECISE)
         get_client.assert_not_called()
         schedule.assert_not_called()
         self.assertFalse(Transaction.objects.filter(wallet=self.wallet).exists())
