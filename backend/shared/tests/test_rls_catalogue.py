@@ -4,7 +4,14 @@ from django.apps import apps
 from django.db import connection
 from django.test import TransactionTestCase
 
-from shared.db.policies import AWAITING_R0, HELPERS, LEAF_TABLES, POLICIES, UNSCOPED
+from shared.db.policies import (
+    AWAITING_R0,
+    DERIVED_FROM_A_MUTABLE_ATTRIBUTE,
+    HELPERS,
+    LEAF_TABLES,
+    POLICIES,
+    UNSCOPED,
+)
 
 POSTGRES = connection.vendor == "postgresql"
 REASON = "row-level security exists only in PostgreSQL, and on SQLite these would pass without a policy"
@@ -100,6 +107,13 @@ class EveryTenantTableIsScopedByAPolicyTest(TransactionTestCase):
             with self.subTest(table=table):
                 self.assertGreater(len(reason), 80)
                 self.assertEqual(self._ask(SCOPED, table), [(False, False)])
+
+    def test_every_column_derived_from_a_mutable_attribute_names_what_goes_stale(self):
+        for column, reason in DERIVED_FROM_A_MUTABLE_ATTRIBUTE.items():
+            with self.subTest(column=column):
+                table, _, _ = column.partition(".")
+                self.assertIn(table, set(POLICIES) | set(AWAITING_R0))
+                self.assertGreater(len(reason), 150, f"{column} needs the staleness named, not flagged")
 
     def test_every_unscoped_table_states_a_reason_rather_than_a_label(self):
         for table, reason in UNSCOPED.items():

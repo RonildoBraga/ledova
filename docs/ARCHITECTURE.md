@@ -1931,6 +1931,16 @@ reading:
   trusting a local measurement enough to file it, and **re-run a measurement
   before repeating someone else's**: a relayed measurement is not a
   measurement.
+- **Two branches verified against one scratch database read as a code finding
+  too, and the count is what gives it away.** Two Django test runners racing to
+  build `test_ledova` collide on `duplicate key value violates unique constraint
+  "pg_type_typname_nsp_index"`, and the second one to arrive reports the damage —
+  127 errors across three apps in one observed case, while the same command's
+  SQLite half, sharing nothing, was green. **A failure count far larger than the
+  change could plausibly cause is the signal**, and the check is one command:
+  `docker ps` for another `ledova-backend` container. The fix is a PostgreSQL
+  container per worktree rather than a shared one, which costs nothing and
+  removes the class.
 - **Images rebuilt at different times read as a code finding too, and only
   their ages show it.** A QA session rebuilt `backend` and `dashboard` from
   `main` and not `worker`, and two subscriptions wedged at paid with no shares:
