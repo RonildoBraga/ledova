@@ -136,7 +136,7 @@ class AlchemyWebhookView(RunsOnTheOperatorConnection, APIView):
             tx = Transaction.objects.filter(tx_hash=tx_hash, wallet=wallet).first()
 
             if tx and tx.status == "pending":
-                confirm_pending_transaction.defer(tx_hash=tx_hash, wallet_uuid=str(wallet.uuid))
+                confirm_pending_transaction.defer(tx_hash=tx_hash, wallet_uuid=str(wallet.uuid), principal_id=None)
             elif not tx:
                 from wallets.tasks import sync_wallet
 

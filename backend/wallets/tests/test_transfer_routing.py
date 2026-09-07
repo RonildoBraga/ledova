@@ -56,7 +56,7 @@ class TransferRoutingTest(SimpleTestCase):
     def test_base_broadcast_uses_the_base_client(self, _schedule, get_client, _balance):
         get_client.return_value.broadcast_transaction.return_value = "0xhash"
 
-        result = TransferService.broadcast_transfer(_wallet("BASE"), SIGNED)
+        result = TransferService.broadcast_transfer(_wallet("BASE"), SIGNED, principal_id=None)
 
         get_client.assert_called_once_with("base")
         self.assertEqual(result["txHash"], "0xhash")
@@ -89,7 +89,12 @@ class TransferRoutingTest(SimpleTestCase):
                 get_asset.return_value = asset
                 with self.assertRaises(InvalidTransactionException):
                     TransferService.broadcast_transfer(
-                        _wallet("ethereum"), SIGNED, to_address=TO, amount="1", token_contract=QUARANTINED
+                        _wallet("ethereum"),
+                        SIGNED,
+                        to_address=TO,
+                        amount="1",
+                        token_contract=QUARANTINED,
+                        principal_id=None,
                     )
 
         broadcast.assert_not_called()
@@ -103,7 +108,7 @@ class TransferRoutingTest(SimpleTestCase):
         wallet = _wallet("bitcoin")
 
         self.assertEqual(TransferService.prepare_transfer(wallet, to_address=TO, amount_btc="0.1"), {"network": "BTC"})
-        self.assertEqual(TransferService.broadcast_transfer(wallet, SIGNED)["txHash"], "btc-hash")
+        self.assertEqual(TransferService.broadcast_transfer(wallet, SIGNED, principal_id=None)["txHash"], "btc-hash")
 
         prepare.assert_called_once()
         broadcast.assert_called_once_with(SIGNED)
@@ -112,7 +117,7 @@ class TransferRoutingTest(SimpleTestCase):
     def test_unsupported_chain_is_rejected_by_name(self, get_client, _balance):
         for call in (
             lambda: TransferService.prepare_transfer(_wallet("solana"), to_address=TO, amount_eth="1"),
-            lambda: TransferService.broadcast_transfer(_wallet("solana"), SIGNED),
+            lambda: TransferService.broadcast_transfer(_wallet("solana"), SIGNED, principal_id=None),
         ):
             with self.assertRaises(UnsupportedChainException) as ctx:
                 call()

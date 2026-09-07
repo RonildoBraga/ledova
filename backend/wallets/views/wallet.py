@@ -124,7 +124,9 @@ class WalletViewSet(AuthenticatedModelViewSet):
         serializer = BroadcastTransferSerializer(data=request.data, context={"wallet": wallet})
         serializer.is_valid(raise_exception=True)
 
-        result = TransferService.broadcast_transfer(wallet=wallet, **serializer.validated_data)
+        result = TransferService.broadcast_transfer(
+            wallet=wallet, principal_id=request.user.pk, **serializer.validated_data
+        )
 
         return Response(result, status=status.HTTP_200_OK)
 

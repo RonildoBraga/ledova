@@ -10,6 +10,7 @@ from assets.services.identity import native_asset_for_chain
 from compliance.services.transaction_monitoring import TransactionMonitoringService
 from shared.constants import normalize_chain
 from shared.db import atomic
+from users.services.accounts import account_members
 from users.tasks.notifications import send_transaction_notification
 from wallets.constants import (
     SNAPSHOT_REASON_TRANSACTION,
@@ -165,8 +166,7 @@ class TransactionConfirmationService:
 
     @staticmethod
     def _notify_wallet_users(tx: Transaction, event: str) -> None:
-        recipients = get_user_model().objects.filter(userprofile__user_accounts__wallets=tx.wallet).distinct()
-        for user in recipients:
+        for user in account_members(tx.wallet.user_account):
             send_transaction_notification.defer(user_id=str(user.pk), transaction_id=str(tx.uuid), event_type=event)
 
     @staticmethod

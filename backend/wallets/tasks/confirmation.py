@@ -10,6 +10,7 @@ from procrastinate import RetryStrategy
 from integrations.blockchain import get_blockchain_client
 from ledova_backend.procrastinate_app import app
 from shared.constants import BLOCKCHAIN_BITCOIN, EVM_BLOCKCHAINS
+from shared.db import acting_for
 from wallets.constants import TRANSACTION_STATUS_PENDING
 from wallets.models import Transaction, Wallet
 from wallets.services.transaction_confirmation import TransactionConfirmationService
@@ -115,7 +116,12 @@ def get_receipt_reader(chain: str) -> _ReceiptReader:
 
 
 @app.task(retry=RetryStrategy(max_attempts=6, wait=30))
-def confirm_pending_transaction(tx_hash: str, wallet_uuid: str) -> Dict[str, Any]:
+def confirm_pending_transaction(tx_hash: str, wallet_uuid: str, principal_id) -> Dict[str, Any]:
+    with acting_for(principal_id):
+        return _confirm_pending_transaction(tx_hash, wallet_uuid)
+
+
+def _confirm_pending_transaction(tx_hash: str, wallet_uuid: str) -> Dict[str, Any]:
     try:
         wallet = Wallet.objects.get(uuid=wallet_uuid)
     except Wallet.DoesNotExist:
@@ -174,7 +180,7 @@ def check_all_pending_transactions(timestamp: int) -> Dict[str, Any]:
 
     for tx in pending_txs:
         try:
-            confirm_pending_transaction.defer(tx_hash=tx.tx_hash, wallet_uuid=str(tx.wallet.uuid))
+            confirm_pending_transaction.defer(tx_hash=tx.tx_hash, wallet_uuid=str(tx.wallet.uuid), principal_id=None)
             queued += 1
         except Exception as e:
             logger.error(f"Queue confirmation failed {tx.tx_hash}: {e}")
