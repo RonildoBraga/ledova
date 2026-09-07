@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Panel } from '@components/Panel';
 import { OFFERING_EXEMPTION_LABELS } from '@ledova/shared';
-import type { CompanyShareToken, OfferingExemption, OfferingInput } from '@ledova/shared';
+import type { CompanyShareToken, OfferingExemption, OfferingInput, OperatorSettlementAsset } from '@ledova/shared';
 
 const EXEMPTIONS = Object.entries(OFFERING_EXEMPTION_LABELS) as [OfferingExemption, string][];
 
@@ -12,6 +12,7 @@ const FIELD_CLASS =
 interface OfferingFormProps {
   tokens: CompanyShareToken[];
   busy: boolean;
+  settlementAssets: OperatorSettlementAsset[];
   onCreate: (input: OfferingInput) => void;
 }
 
@@ -24,7 +25,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-export function OfferingForm({ tokens, busy, onCreate }: OfferingFormProps) {
+export function OfferingForm({ tokens, busy, settlementAssets, onCreate }: OfferingFormProps) {
   const [token, setToken] = useState('');
   const [exemption, setExemption] = useState<OfferingExemption>('s708_11_professional');
   const [pricePerShare, setPricePerShare] = useState('');
@@ -36,9 +37,16 @@ export function OfferingForm({ tokens, busy, onCreate }: OfferingFormProps) {
   const [summary, setSummary] = useState('');
   const [useOfProceeds, setUseOfProceeds] = useState('');
   const [acceptsBankTransfer, setAcceptsBankTransfer] = useState(true);
+  const [chosenAssets, setChosenAssets] = useState<string[]>([]);
 
   const chosenToken = token || tokens[0]?.uuid || '';
-  const isComplete = Boolean(chosenToken && pricePerShare && minimumShares && targetShares && capShares && opensAt);
+  const hasARail = acceptsBankTransfer || chosenAssets.length > 0;
+  const isComplete = Boolean(
+    chosenToken && pricePerShare && minimumShares && targetShares && capShares && opensAt && hasARail,
+  );
+
+  const toggleAsset = (uuid: string) =>
+    setChosenAssets((chosen) => (chosen.includes(uuid) ? chosen.filter((each) => each !== uuid) : [...chosen, uuid]));
 
   const handleCreate = () => {
     onCreate({
@@ -46,6 +54,7 @@ export function OfferingForm({ tokens, busy, onCreate }: OfferingFormProps) {
       exemption,
       pricePerShare,
       acceptsBankTransfer,
+      settlementAssets: chosenAssets,
       minimumShares: Number(minimumShares),
       targetShares: Number(targetShares),
       capShares: Number(capShares),
@@ -176,15 +185,43 @@ export function OfferingForm({ tokens, busy, onCreate }: OfferingFormProps) {
           </Field>
         </div>
 
-        <label className="sm:col-span-2 flex items-center gap-3">
-          <input
-            type="checkbox"
-            checked={acceptsBankTransfer}
-            onChange={(e) => setAcceptsBankTransfer(e.target.checked)}
-            className="h-4 w-4 rounded border-border"
-          />
-          <span className="text-sm text-text-primary">Accept bank transfer</span>
-        </label>
+        <div className="sm:col-span-2 space-y-2">
+          <span className="text-sm font-medium text-text-primary">How investors may pay</span>
+
+          <label className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              checked={acceptsBankTransfer}
+              onChange={(e) => setAcceptsBankTransfer(e.target.checked)}
+              className="h-4 w-4 rounded border-border"
+            />
+            <span className="text-sm text-text-primary">Accept bank transfer</span>
+          </label>
+
+          {settlementAssets.length === 0 ? (
+            <p className="text-sm text-text-muted">
+              The operator has not configured a settlement asset, so this offering can take bank transfer only.
+            </p>
+          ) : (
+            settlementAssets.map((asset) => (
+              <label key={asset.uuid} className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={chosenAssets.includes(asset.uuid)}
+                  onChange={() => toggleAsset(asset.uuid)}
+                  className="h-4 w-4 rounded border-border"
+                />
+                <span className="text-sm text-text-primary">{asset.symbol}</span>
+              </label>
+            ))
+          )}
+
+          {!hasARail && (
+            <p className="text-sm text-status-danger">
+              Choose at least one way to be paid. An offering nobody can pay for cannot be submitted.
+            </p>
+          )}
+        </div>
 
         <div className="sm:col-span-2 flex justify-end">
           <button
