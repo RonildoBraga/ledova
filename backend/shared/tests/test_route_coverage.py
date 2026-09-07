@@ -26,7 +26,23 @@ ELIGIBILITY_SCOPED = (
     "Cross-tenant listing scoped by users.services.eligibility rather than by owner, "
     "and the documented exception in ARCHITECTURE.md. Pinned by MARKET_ROUTES and DIRECTORY_ROUTES."
 )
-TRADING_FLAGGED = "Trading write surface, refused with 403 by feature_flags.middleware while trading_enabled is off."
+SIGNED_RELAY = (
+    "Relays an already-signed transaction and takes no tenant identifier at all. BroadcastTransferSerializer "
+    "(tokens/serializers/transfer_order.py) refuses a foreign chain id, a contract creation and any target "
+    "outside known_contract_addresses(), and there is nothing further to scope: the caller cannot produce a "
+    "signature it does not hold, and every transaction it can broadcast is one the signer already authorised."
+)
+MARKET_WIDE_STREAM = (
+    "Scoped by tokens.services.trading_events.resolve_deployed_token_uuid, which admits any share class with "
+    "a contract address and applies no owner and no eligibility test. Deliberately market-wide, but broader "
+    "than the market listing beside it: see issue #180."
+)
+BROKEN_BEFORE_IT_SCOPES = (
+    "Answers 500 to every caller before it reaches any tenancy decision: TradingOrderViewSet.get_serializer_class "
+    "does not map the create_message action, so validated_data lacks the fields the action reads and it raises "
+    "KeyError('wallet_address') at trading_order.py:109. It moves into ROUTES with a foreign walletUuid the "
+    "moment it works: see issue #179."
+)
 STAFF_UNSCOPED = (
     "Staff-only and deliberately unscoped: CompanyViewSet.get_queryset returns Company.objects.all() "
     "for its administrative actions, so an operator reaches every company by design."
@@ -57,13 +73,9 @@ EXEMPT = {
     ("get", "/api/feature-flags/{}/"): GLOBAL_CATALOGUE,
     ("post", "/api/device-tokens/"): CREATES_OWN_ROW,
     ("post", "/api/device-tokens/register/"): CREATES_OWN_ROW,
-    ("post", "/api/favourite-assets/"): CREATES_OWN_ROW_SCOPED_FK,
     ("post", "/api/financial-profiles/"): CREATES_OWN_ROW,
-    ("post", "/api/investor-classifications/"): CREATES_OWN_ROW_SCOPED_FK,
     ("post", "/api/notification-preferences/"): CREATES_OWN_ROW,
-    ("post", "/api/portfolios/"): CREATES_OWN_ROW_SCOPED_FK,
     ("post", "/api/user-accounts/"): CREATES_OWN_ROW,
-    ("post", "/api/user-preferences/"): CREATES_OWN_ROW_SCOPED_FK,
     ("post", "/api/user-profiles/"): CREATES_OWN_ROW_SCOPED_FK,
     ("post", "/api/v1/companies/"): CREATES_OWN_ROW_SCOPED_FK,
     ("post", "/api/v1/documents/"): CREATES_OWN_ROW,
@@ -76,13 +88,9 @@ EXEMPT = {
     ("post", "/api/users/identity-verification/token/"): SELF_SCOPED,
     ("get", "/api/v1/directory/tokens/"): ELIGIBILITY_SCOPED,
     ("get", "/api/v1/trading/tokens/"): ELIGIBILITY_SCOPED,
-    ("get", "/api/v1/trading/events/stream/"): TRADING_FLAGGED,
-    ("get", "/api/v1/trading/swaps/"): TRADING_FLAGGED,
-    ("get", "/api/v1/trading/wallets/balances/"): TRADING_FLAGGED,
-    ("post", "/api/v1/trading/orders/create/"): TRADING_FLAGGED,
-    ("post", "/api/v1/trading/orders/create/message/"): TRADING_FLAGGED,
-    ("post", "/api/v1/trading/transfers/broadcast/"): TRADING_FLAGGED,
-    ("post", "/api/v1/trading/transfers/prepare/"): TRADING_FLAGGED,
+    ("get", "/api/v1/trading/events/stream/"): MARKET_WIDE_STREAM,
+    ("post", "/api/v1/trading/orders/create/message/"): BROKEN_BEFORE_IT_SCOPES,
+    ("post", "/api/v1/trading/transfers/broadcast/"): SIGNED_RELAY,
     ("get", "/api/v1/companies/{}/api-key/"): STAFF_UNSCOPED,
     ("post", "/api/v1/companies/{}/api-key/"): STAFF_UNSCOPED,
     ("post", "/api/v1/companies/{}/status/"): STAFF_UNSCOPED,

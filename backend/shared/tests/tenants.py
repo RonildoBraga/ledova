@@ -52,7 +52,8 @@ from wallets.models import Holding, HoldingSnapshot, Transaction, Wallet
 
 User = get_user_model()
 PASSWORD = "pw-12345678"
-SHARED_KEYS = ("asset", "spare_asset", "country")
+SHARED_KEYS = ("asset", "spare_asset", "stablecoin", "country")
+PHANTOM_WALLET_ADDRESS = "0x" + "d" * 40
 _sequence = count(1)
 
 
@@ -345,13 +346,16 @@ def route_context(tenant):
         acn=tenant.company.acn,
         asset=str(tenant.refs.asset.uuid),
         spare_asset=str(tenant.refs.spare_asset.uuid),
+        stablecoin=str(tenant.refs.stablecoin.uuid),
         country=str(tenant.refs.country.uuid),
     )
     return context
 
 
 def phantom_context(tenant):
-    return {key: value if key in SHARED_KEYS else str(uuid4()) for key, value in route_context(tenant).items()}
+    context = {key: value if key in SHARED_KEYS else str(uuid4()) for key, value in route_context(tenant).items()}
+    context["wallet_address"] = PHANTOM_WALLET_ADDRESS
+    return context
 
 
 def snapshot(tenant):

@@ -2,6 +2,7 @@ from collections import namedtuple
 from datetime import timedelta
 from unittest.mock import patch
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import transaction
 from django.utils import timezone
 from rest_framework.test import APITestCase
@@ -32,6 +33,23 @@ from tokens.models import (
     SwapOrder,
     TransferOrder,
 )
+from users.models.investor_classification import InvestorClassification
+
+
+def _classification_payload():
+
+    return {
+        "user_account": "{account}",
+        "category": "product_value",
+        "declaration_accepted": True,
+        "declared_basis": "Holdings above the threshold.",
+        "evidence_file": SimpleUploadedFile("evidence.pdf", b"%PDF-1.4 minimal", content_type="application/pdf"),
+    }
+
+
+def _clear_open_classifications(tenant):
+    InvestorClassification.objects.filter(user_account=tenant.account).delete()
+
 
 SIGNATURE = "0x" + "ab" * 65
 RECIPIENT = "0x" + "9" * 40
@@ -102,7 +120,11 @@ def _create_issuance_request(token, recipient, amount, user, reason="", issuance
     )
 
 
-Route = namedtuple("Route", "method path payload foreign prepare", defaults=(None, 404, None))
+Route = namedtuple(
+    "Route",
+    "method path payload foreign prepare rejects content_type",
+    defaults=(None, 404, None, None, "json"),
+)
 
 OFFERING = {
     "exemption": "s708_11_professional",
@@ -258,6 +280,70 @@ ROUTES = (
         foreign=400,
         prepare=_open_the_offering_to_the_actor,
     ),
+    Route(
+        "post",
+        "/api/portfolios/",
+        {"name": "A portfolio", "userAccount": "{account}"},
+        foreign=400,
+        rejects="userAccount",
+    ),
+    Route(
+        "post",
+        "/api/favourite-assets/",
+        {"userAccount": "{account}", "asset": "{stablecoin}"},
+        foreign=400,
+        rejects="userAccount",
+    ),
+    Route(
+        "post",
+        "/api/user-preferences/",
+        {"selectedAccount": "{account}"},
+        foreign=400,
+        rejects="selectedAccount",
+    ),
+    Route(
+        "post",
+        "/api/investor-classifications/",
+        _classification_payload,
+        foreign=400,
+        rejects="userAccount",
+        content_type="multipart",
+        prepare=_clear_open_classifications,
+    ),
+    Route(
+        "get",
+        "/api/v1/trading/swaps/?wallet_address={wallet_address}",
+    ),
+    Route(
+        "get",
+        "/api/v1/trading/wallets/balances/?wallet_address={wallet_address}",
+    ),
+    Route(
+        "post",
+        "/api/v1/trading/transfers/prepare/",
+        {
+            "token": "{own_deployed_token}",
+            "fromAddress": "{wallet_address}",
+            "toAddress": RECIPIENT,
+            "amount": 1,
+        },
+    ),
+    Route(
+        "post",
+        "/api/v1/trading/orders/create/",
+        {
+            "token": "{own_deployed_token}",
+            "orderType": "sell",
+            "walletUuid": "{wallet}",
+            "walletAddress": "{own_wallet_address}",
+            "quantity": 1,
+            "pricePerShare": "2.50",
+            "message": "order",
+            "signature": SIGNATURE,
+        },
+        foreign=400,
+        rejects="walletUuid",
+    ),
     Route("get", "/api/v1/trading/orders/{order}/"),
     Route("post", "/api/v1/trading/orders/{order}/cancel/", {"message": "cancel", "signature": SIGNATURE}),
     Route("get", "/api/v1/trading/orders/{order}/cancel/message/"),
@@ -334,6 +420,8 @@ def _body(response):
 
 
 def _fill(value, context):
+    if callable(value):
+        return _fill(value(), context)
     if isinstance(value, str):
         return value.format_map(context)
     if isinstance(value, dict):
@@ -362,6 +450,14 @@ class CrossTenantRouteMatrixTest(APITestCase):
         trading_orders = self._service("tokens.views.trading_order.TradingOrderService")
         trading_orders.cancel_order.side_effect = lambda order: order
         trading_orders.get_order_cancel_message.return_value = {}
+        trading_orders.get_order_create_message.return_value = {}
+        trading_orders.verify_order_create_signature.return_value = None
+        trading_transfers = self._service("tokens.views.trading_transfer.TokenTransferService")
+        trading_transfers.contract_address.return_value = "0x" + "6" * 40
+        trading_transfers.return_value.prepare_transfer.return_value = {}
+        order_transfers = self._service("tokens.views.trading_order.TokenTransferService")
+        order_transfers.return_value.create_order_and_match.return_value = (None, None)
+        trading_orders.build_order_response.return_value = {}
         modifications = self._service("tokens.views.trading_order.OrderModificationService").return_value
         modifications.generate_modification_message.return_value = {}
         modifications.apply_modification.side_effect = lambda order, **kwargs: (order, {})
@@ -390,7 +486,17 @@ class CrossTenantRouteMatrixTest(APITestCase):
     def send(self, route, actor, context):
         context = {**context, **{f"own_{key}": value for key, value in route_context(actor).items()}}
         request = getattr(self.client, route.method)
-        return request(route.path.format_map(context), _fill(route.payload, context), format="json")
+        return request(route.path.format_map(context), _fill(route.payload, context), format=route.content_type)
+
+    def assert_rejected_for_the_right_reason(self, route, response, label):
+        if not route.rejects:
+            return
+        body = response.json()
+        self.assertIn(
+            route.rejects,
+            body,
+            f"{label} answered {response.status_code} without naming {route.rejects}: {body}",
+        )
 
     @staticmethod
     def rows(response):
@@ -418,6 +524,8 @@ class CrossTenantRouteMatrixTest(APITestCase):
                     self.assertEqual(foreign_response.status_code, route.foreign, foreign_response.content)
                     self.assertEqual(phantom_response.status_code, route.foreign, phantom_response.content)
                     self.assertEqual(self.masked(foreign_response, foreign), self.masked(phantom_response, phantom))
+                    self.assert_rejected_for_the_right_reason(route, foreign_response, "foreign")
+                    self.assert_rejected_for_the_right_reason(route, phantom_response, "phantom")
 
         self.assertEqual(snapshot(self.other), before)
         for service in self.services:
