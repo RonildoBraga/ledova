@@ -60,8 +60,6 @@ RULES = {
 LEGACY = frozenset(
     {
         "backend/authentication/views/user.py:raw-orm-in-view",
-        "backend/whitelist/views/entry.py:raw-orm-in-view",
-        "backend/whitelist/views/status.py:logger-in-view",
     }
 )
 

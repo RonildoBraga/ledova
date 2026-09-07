@@ -259,33 +259,37 @@ class TradingReadIsolationTest(APITestCase):
             amount=1,
         )
 
+    @staticmethod
+    def _whitelist_status_of(service, address):
+        service.investor_status.return_value = {
+            "address": address,
+            "is_whitelisted": True,
+            "can_receive": True,
+            "status": "whitelisted",
+        }
+
     @patch("whitelist.views.status.WhitelistService")
     def test_whitelist_status_allows_bounded_recipient_eligibility_check(self, service_class):
         service = service_class.return_value
-        service.get_investor_info.return_value = {"whitelisted": True}
-        service.can_receive.return_value = True
-        service.chain_client.to_checksum_address.return_value = Web3.to_checksum_address(self.alice_wallet.address)
+        self._whitelist_status_of(service, Web3.to_checksum_address(self.alice_wallet.address))
         self.client.force_authenticate(self.bob)
         response = self.client.get(f"/api/v1/trading/whitelist/{self.alice_wallet.address}/status/")
 
         self.assertEqual(response.status_code, 200)
-        service.get_investor_info.assert_called_once_with(self.alice_wallet.address)
-        service.can_receive.assert_called_once_with(self.alice_wallet.address)
+        self.assertTrue(response.json()["isWhitelisted"])
+        service.investor_status.assert_called_once_with(self.alice_wallet.address)
 
     @patch("whitelist.views.status.WhitelistService")
     def test_whitelist_status_uses_canonical_owned_address(self, service_class):
-        canonical = Web3.to_checksum_address(self.bob_wallet.address)
         service = service_class.return_value
-        service.get_investor_info.return_value = {"whitelisted": True}
-        service.can_receive.return_value = True
-        service.chain_client.to_checksum_address.return_value = canonical
+        self._whitelist_status_of(service, Web3.to_checksum_address(self.bob_wallet.address))
         self.client.force_authenticate(self.bob)
 
         response = self.client.get(f"/api/v1/trading/whitelist/{self.bob_case_variant}/status/")
 
         self.assertEqual(response.status_code, 200)
-        service.get_investor_info.assert_called_once_with(self.bob_case_variant)
-        service.can_receive.assert_called_once_with(self.bob_case_variant)
+        self.assertEqual(response.json()["address"], Web3.to_checksum_address(self.bob_wallet.address))
+        service.investor_status.assert_called_once_with(self.bob_case_variant)
 
     @patch("tokens.views.trading_order.AtomicSwapService")
     def test_order_swap_role_is_derived_from_exact_transfer_order(self, service_class):
