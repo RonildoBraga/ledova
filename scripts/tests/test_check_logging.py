@@ -296,3 +296,23 @@ class LoggerAliasRule(unittest.TestCase):
             gate.python_findings(source),
             [(2, gate.LOG_ALIAS, "audit = logging.getLogger(...)")],
         )
+
+    def test_an_attribute_binding_is_refused_too(self):
+        self.assertEqual(self.rules('self.audit = logging.getLogger("audit")'), [gate.LOG_ALIAS])
+
+    def test_the_finding_names_the_whole_dotted_binding(self):
+        source = "import logging\nself.audit = logging.getLogger('audit')\n"
+        self.assertEqual(
+            gate.python_findings(source),
+            [(2, gate.LOG_ALIAS, "self.audit = logging.getLogger(...)")],
+        )
+
+    def test_an_attribute_ending_in_a_scanned_name_is_allowed(self):
+        self.assertEqual(self.rules("self.logger = logging.getLogger(__name__)"), [])
+
+    def test_the_allowance_is_not_a_hole_because_the_call_is_scanned(self):
+        self.assertEqual(self.rules('self.logger.info(f"{response}")'), [gate.LOG_BODY])
+
+    def test_a_shouted_binding_is_allowed_because_its_calls_are_scanned(self):
+        self.assertEqual(self.rules("LOGGER = logging.getLogger(__name__)"), [])
+        self.assertEqual(self.rules('LOGGER.info(f"{response}")'), [gate.LOG_BODY])
