@@ -1062,8 +1062,8 @@ the rest converts when it is next edited for another reason.
   a user takes their `Document` rows, and an explicit call in each delete path
   would leave both sets of files behind. The file delete is scheduled with
   `transaction.on_commit`, so a rolled-back delete does not destroy the file.
-  `check-layers.py` flags a `django.db.models.signals` import anywhere else in
-  `backend/`, and `shared/apps.py` is an `ALLOWED` entry with a count, so
+  `check-layers.py` flags an import of any Django signal module anywhere else
+  in `backend/`, and `shared/apps.py` is an `ALLOWED` entry with a count, so
   removing the receiver fails the gate as a stale pin rather than passing
   quietly.
 - No new `managers/` packages. The only `Manager` is `CustomUserManager` in
@@ -1375,9 +1375,19 @@ and `from django.db.models import signals`, aliased or not.
 skips, and the difference matters in the direction people forget: an `ALLOWED`
 entry carries a count, so **deleting the receiver fails the gate as a stale
 pin**. A skipped path would have gone quiet instead, and the rule exists to keep
-the one receiver visible as much as to keep others out. Like `bare-admin-view`
-it reads syntax, so `importlib.import_module("django.db.models.signals")` goes
-past it.
+the one receiver visible as much as to keep others out.
+
+**Its scope is every Django signal family, not just the model one**, which is
+the second boundary this rule needs stated. It first shipped matching
+`django.db.models.signals` alone, and `from django.dispatch import Signal` --
+the purest instance of what the rule forbids, since that is how a *custom*
+signal is defined -- passed, as did `django.contrib.auth.signals`, the family
+most likely to appear under `authentication/`. It now matches `django.dispatch`
+and anything beneath it, and any `django.*` module with a `signals` segment, in
+all of the `from X import y`, `import X` and `from X import signals` forms,
+aliased or not. A `signals` module outside `django` is somebody else's and is
+not this rule's business. Like `bare-admin-view` it reads syntax, so
+`importlib.import_module("django.dispatch")` goes past it.
 
 ### The seed-era service classes
 

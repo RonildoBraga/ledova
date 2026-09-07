@@ -107,17 +107,27 @@ def layer_of(path: Path) -> str | None:
     return None
 
 
+SIGNAL_ROOT = "django.dispatch"
+
+
+def is_signal_module(module: str) -> bool:
+    if module == SIGNAL_ROOT or module.startswith(SIGNAL_ROOT + "."):
+        return True
+    parts = module.split(".")
+    return parts[0] == "django" and "signals" in parts[1:]
+
+
 def signal_findings(tree: ast.AST):
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
-            if module == "django.db.models.signals" or module.startswith("django.db.models.signals."):
+            if is_signal_module(module):
                 yield node.lineno, SIGNAL_IMPORT
-            elif module == "django.db.models" and any(alias.name == "signals" for alias in node.names):
+            elif module.startswith("django.") and any(alias.name == "signals" for alias in node.names):
                 yield node.lineno, SIGNAL_IMPORT
         elif isinstance(node, ast.Import):
             for alias in node.names:
-                if alias.name == "django.db.models.signals" or alias.name.startswith("django.db.models.signals."):
+                if is_signal_module(alias.name):
                     yield node.lineno, SIGNAL_IMPORT
 
 
