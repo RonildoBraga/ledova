@@ -28,6 +28,25 @@ class Transaction(DerivesAccountFromWallet, BaseModel):
     )
     block_timestamp = models.DateTimeField(db_index=True, null=True, blank=True)
     block_number = models.BigIntegerField(null=True, blank=True)
+    block_hash = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        help_text="Hash of the block this landed in, so a reorganisation that replaced it can be seen",
+    )
+    nonce = models.BigIntegerField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Sender's nonce for this broadcast, which is what ties a replacement to what it replaced",
+    )
+    replaced_by_tx_hash = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="The hash that landed instead of this one, for a speed-up or a cancellation",
+    )
     status = models.CharField(max_length=20, choices=TRANSACTION_STATUS_CHOICES, default=TRANSACTION_STATUS_PENDING)
     transaction_fee_estimated = models.DecimalField(max_digits=30, decimal_places=18, null=True, blank=True)
     transaction_fee = models.DecimalField(max_digits=30, decimal_places=18, null=True, blank=True)
