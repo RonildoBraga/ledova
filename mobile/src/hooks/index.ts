@@ -2,7 +2,6 @@ export { useAuth } from './useAuth';
 export { useChartPointer } from './useChartPointer';
 export { useCurrency } from './useCurrency';
 export { useFetchBalances } from './useFetchBalances';
-export { useFinancialProfile } from './useFinancialProfile';
 export { useIdentityVerification } from './useIdentityVerification';
 export { useUserPreferences } from './useUserPreferences';
 export { useFeatureFlags } from './useFeatureFlags';

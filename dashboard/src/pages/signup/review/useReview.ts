@@ -5,10 +5,10 @@ import {
   getUserProfiles,
   updateUserProfileCompletion,
   getCompanies,
+  useFinancialProfile,
   CACHE_TIMING,
   describeFailure,
 } from '@ledova/shared';
-import { useFinancialProfile } from '@hooks/useFinancialProfile';
 import { useAccountRole } from '@hooks/useAccountRole';
 import apiClient from '@services/apiClient';
 
