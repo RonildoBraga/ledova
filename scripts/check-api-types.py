@@ -128,7 +128,7 @@ TYPE_DEBT: dict[str, tuple[int, str]] = {
         "extends BaseEntity, which declares both required.",
     ),
     "Offering:OfferingList": (
-        15,
+        12,
         "GET /api/v1/offerings/ serves OfferingListSerializer while the service is typed "
         "apiClient.get<PaginatedResponse<Offering>>. canBeEdited is among the absent fields, and "
         "the dashboard gates its Submit button on it, so no issuer could submit an offering for "
