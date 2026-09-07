@@ -59,7 +59,6 @@ RULES = {
 
 LEGACY = frozenset(
     {
-        "backend/authentication/views/user.py:raw-orm-in-view",
     }
 )
 
