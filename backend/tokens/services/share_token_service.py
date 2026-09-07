@@ -939,7 +939,7 @@ class ShareTokenService:
                 logger.error(f"Failed to get balance for {token.symbol}: {e}")
                 raise WalletBalancesUnavailableException(
                     f"{WalletBalancesUnavailableException.default_detail} The balance of {token.symbol} could "
-                    f"not be read: {e}"
+                    f"not be read."
                 ) from e
 
         for deployment in settlement_deployments():
@@ -962,7 +962,7 @@ class ShareTokenService:
                 logger.error(f"Failed to get settlement asset balance for {asset.symbol}: {e}")
                 raise WalletBalancesUnavailableException(
                     f"{WalletBalancesUnavailableException.default_detail} The balance of {asset.symbol} could "
-                    f"not be read: {e}"
+                    f"not be read."
                 ) from e
 
         return {"walletAddress": wallet_checksum, "balances": balances}

@@ -81,7 +81,18 @@ class TheServiceRefusesAPartialAnswerTest(TestCase):
             self.service.get_wallet_token_balances(self.tenant.wallet.address)
 
         self.assertIn("could not be read", str(raised.exception.detail))
-        self.assertIn("node said no", str(raised.exception.detail))
+        self.assertNotIn("node said no", str(raised.exception.detail))
+
+    def test_the_operator_still_gets_what_the_caller_no_longer_does(self):
+        with (
+            patch.object(ShareTokenService, "_validate_address", side_effect=lambda address: address),
+            patch.object(ShareTokenService, "get_token_balance", side_effect=RuntimeError("node said no")),
+            self.assertLogs("tokens.services.share_token_service", level="ERROR") as logged,
+            self.assertRaises(WalletBalancesUnavailableException),
+        ):
+            self.service.get_wallet_token_balances(self.tenant.wallet.address)
+
+        self.assertIn("node said no", " ".join(logged.output))
 
     def test_an_unreadable_settlement_asset_refuses_too(self):
         self._stablecoin()
