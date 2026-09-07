@@ -34,11 +34,16 @@ from __future__ import annotations
 
 import argparse
 import ast
+import re
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 BACKEND = ROOT / "backend"
+
+# ast.AsyncFunctionDef is not a subclass of ast.FunctionDef, so walking only the
+# latter makes every async view method invisible to every rule below.
+DEFINITIONS = (ast.FunctionDef, ast.AsyncFunctionDef)
 
 HAND_BUILT = "hand-built-response"
 UNDECLARED = "undeclared-action"
@@ -61,8 +66,6 @@ RULES = {
     ),
 }
 
-ALLOWED: dict[str, tuple[int, str]] = {}
-
 # Each entry is one category with a fix, not a count with a history: these actions
 # build their body with a ** spread, so which fields cross the layer is not
 # decidable from the source. Lowering an entry means giving that action a written
@@ -80,7 +83,7 @@ LEGACY: dict[str, int] = {
 }
 
 
-def decorator_names(node: ast.FunctionDef) -> list[str]:
+def decorator_names(node: ast.AST) -> list[str]:
     names = []
     for decorator in node.decorator_list:
         target = decorator.func if isinstance(decorator, ast.Call) else decorator
@@ -88,11 +91,20 @@ def decorator_names(node: ast.FunctionDef) -> list[str]:
     return names
 
 
-def declares_schema(node: ast.FunctionDef) -> bool:
-    return any("extend_schema" in name for name in decorator_names(node))
+def declares_schema(node: ast.AST) -> bool:
+    """An @extend_schema that names neither responses nor exclude says nothing about the body."""
+    for decorator in node.decorator_list:
+        if not isinstance(decorator, ast.Call):
+            continue
+        target = ast.unparse(decorator.func)
+        if "extend_schema" not in target:
+            continue
+        if any(keyword.arg in ("responses", "exclude") for keyword in decorator.keywords):
+            return True
+    return False
 
 
-def declaration_is_inert(node: ast.FunctionDef) -> bool:
+def declaration_is_inert(node: ast.AST) -> bool:
     """@extend_schema below @action is applied first and then wrapped away.
 
     Decorators apply bottom-up, and drf-spectacular reads the annotation off the
@@ -107,11 +119,11 @@ def declaration_is_inert(node: ast.FunctionDef) -> bool:
     return schema is not None and action is not None and action < schema
 
 
-def is_action(node: ast.FunctionDef) -> bool:
+def is_action(node: ast.AST) -> bool:
     return any(name.endswith("action") for name in decorator_names(node))
 
 
-def _locals_holding_serializers(node: ast.FunctionDef) -> dict[str, str]:
+def _locals_holding_serializers(node: ast.AST) -> dict[str, str]:
     """Local names assigned a serializer instance, so `x = S(...)` then `Response(x.data)` is seen."""
     held: dict[str, str] = {}
     for statement in ast.walk(node):
@@ -126,7 +138,7 @@ def _locals_holding_serializers(node: ast.FunctionDef) -> dict[str, str]:
     return held
 
 
-def serializers_returned(node: ast.FunctionDef) -> set[str]:
+def serializers_returned(node: ast.AST) -> set[str]:
     """Serializer classes a Response(...) in this method renders.
 
     Both spellings count: instantiated inside the call, and instantiated into a
@@ -159,15 +171,18 @@ def _successful(call: ast.Call) -> bool:
         if keyword.arg != "status":
             continue
         source = ast.unparse(keyword.value)
-        if "HTTP_2" in source:
-            return True
+        named = re.search(r"HTTP_(\d)", source)
+        if named:
+            return named.group(1) == "2"
         if source.isdigit():
             return source.startswith("2")
-        return "HTTP_2" in source
+        # A status the gate cannot read is not evidence the path is an error path,
+        # so it counts as the contract and is reported rather than skipped.
+        return True
     return True
 
 
-def builds_a_dict(node: ast.FunctionDef) -> bool:
+def builds_a_dict(node: ast.AST) -> bool:
     """Returns a literal dict the generator cannot infer from a serializer."""
     for statement in ast.walk(node):
         if not isinstance(statement, ast.Call):
@@ -181,7 +196,7 @@ def builds_a_dict(node: ast.FunctionDef) -> bool:
     return False
 
 
-def helpers_called(node: ast.FunctionDef) -> set[str]:
+def helpers_called(node: ast.AST) -> set[str]:
     """Names of self._helper() calls made by this method."""
     called = set()
     for inner in ast.walk(node):
@@ -211,7 +226,7 @@ def scan() -> tuple[list[str], int]:
         tree = ast.parse(path.read_text())
         relative = path.relative_to(ROOT)
 
-        methods = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)]
+        methods = [n for n in ast.walk(tree) if isinstance(n, DEFINITIONS)]
         by_name = {n.name: n for n in methods}
 
         for node in methods:
@@ -265,8 +280,7 @@ def main() -> int:
         key = finding.split(" ")[0].rsplit(":", 1)[0] + ":" + finding.rsplit(": ", 1)[1]
         counts[key] = counts.get(key, 0) + 1
 
-    allowed_counts = {key: entry[0] for key, entry in ALLOWED.items()}
-    allowed_counts.update(LEGACY)
+    allowed_counts = dict(LEGACY)
     new = {key: count for key, count in counts.items() if count > allowed_counts.get(key, 0)}
     stale = sorted(key for key, pinned in allowed_counts.items() if counts.get(key, 0) < pinned)
 

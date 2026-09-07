@@ -14,8 +14,8 @@ gate = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(gate)
 
 
-def method(source: str) -> ast.FunctionDef:
-    return next(n for n in ast.walk(ast.parse(source)) if isinstance(n, ast.FunctionDef))
+def method(source: str):
+    return next(n for n in ast.walk(ast.parse(source)) if isinstance(n, gate.DEFINITIONS))
 
 
 class AHandBuiltSerializerIsAFinding(unittest.TestCase):
@@ -110,6 +110,56 @@ class ADeclarationBelowAnActionIsInert(unittest.TestCase):
         )
 
         self.assertFalse(gate.declaration_is_inert(node))
+
+
+class AnAsyncViewIsStillAView(unittest.TestCase):
+
+    def test_an_async_method_is_walked(self):
+        node = method("async def stream(self, request):\n    return Response(DetailSerializer(x).data)\n")
+
+        self.assertEqual(gate.serializers_returned(node), {"DetailSerializer"})
+
+    def test_an_async_action_can_be_inert_too(self):
+        node = method(
+            "@action(detail=False, methods=['get'])\n"
+            "@extend_schema(responses=DetailSerializer)\n"
+            "async def stream(self, request):\n    return Response(DetailSerializer(x).data)\n"
+        )
+
+        self.assertTrue(gate.declaration_is_inert(node))
+
+
+class ADeclarationMustSaySomethingAboutTheBody(unittest.TestCase):
+
+    def test_responses_counts(self):
+        self.assertTrue(gate.declares_schema(method(
+            "@extend_schema(responses=DetailSerializer)\ndef create(self, request):\n    pass\n")))
+
+    def test_exclude_counts(self):
+        self.assertTrue(gate.declares_schema(method(
+            "@extend_schema(exclude=True)\ndef post(self, request):\n    pass\n")))
+
+    def test_tags_alone_says_nothing(self):
+        self.assertFalse(gate.declares_schema(method(
+            "@extend_schema(tags=['trading'])\ndef create(self, request):\n    pass\n")))
+
+
+class TheStatusClassDecidesWhetherItIsTheContract(unittest.TestCase):
+    def successful(self, source):
+        node = method(f"def act(self, request):\n    return Response({{'a': 1}}, {source})\n")
+        return gate.builds_a_dict(node)
+
+    def test_a_named_2xx_is_the_contract(self):
+        self.assertTrue(self.successful("status=status.HTTP_200_OK"))
+
+    def test_a_named_4xx_is_not(self):
+        self.assertFalse(self.successful("status=status.HTTP_404_NOT_FOUND"))
+
+    def test_a_named_5xx_is_not(self):
+        self.assertFalse(self.successful("status=status.HTTP_500_INTERNAL_SERVER_ERROR"))
+
+    def test_a_status_the_gate_cannot_read_is_reported_rather_than_skipped(self):
+        self.assertTrue(self.successful("status=chosen_status"))
 
 
 class APrivateHelperIsAttributedToItsCallers(unittest.TestCase):
