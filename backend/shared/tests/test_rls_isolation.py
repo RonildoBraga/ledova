@@ -110,3 +110,47 @@ class ThePolicyScopesWhatTheQuerysetScopedTest(TestCase):
             str(caught.exception),
             r'unrecognized configuration parameter "app\.user_id"|invalid input syntax for type bigint',
         )
+
+
+@skipUnless(POSTGRES, REASON)
+class APublicRowCanBeLockedAndStillNotWrittenTest(TestCase):
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.one = make_tenant("lockone")
+        cls.two = make_tenant("locktwo")
+
+    def as_the_app_role_for(self, user):
+        self.addCleanup(self.back_to_the_owner)
+        with connection.cursor() as cursor:
+            cursor.execute(f"SET ROLE {settings.RLS_ROLES['app']}")
+            cursor.execute("SELECT set_config(%s, %s, false)", [PRINCIPAL_SETTING, str(user.pk)])
+
+    def back_to_the_owner(self):
+        with connection.cursor() as cursor:
+            cursor.execute("RESET ROLE")
+            cursor.execute(f"RESET {PRINCIPAL_SETTING}")
+
+    def test_a_row_the_read_policy_admits_can_also_be_locked(self):
+        self.as_the_app_role_for(self.one.user)
+
+        plain = Company.objects.filter(pk=self.two.company.pk).count()
+        locked = Company.objects.select_for_update().filter(pk=self.two.company.pk).count()
+
+        self.assertEqual(plain, 1)
+        self.assertEqual(locked, plain)
+
+    def test_locking_it_still_does_not_let_the_principal_write_it(self):
+        self.as_the_app_role_for(self.one.user)
+
+        with self.assertRaises(ProgrammingError) as caught, transaction.atomic():
+            Company.objects.select_for_update().filter(pk=self.two.company.pk).update(trading_name="taken")
+
+        self.assertIn("row-level security policy", str(caught.exception))
+
+    def test_the_principal_can_still_write_its_own(self):
+        self.as_the_app_role_for(self.one.user)
+
+        self.assertEqual(
+            Company.objects.select_for_update().filter(pk=self.one.company.pk).update(trading_name="mine"), 1
+        )

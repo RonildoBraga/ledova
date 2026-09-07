@@ -834,7 +834,15 @@ runs. Both mechanisms hold at once on purpose:
   NULL owner and hides the row, which is the fail-closed behaviour a nullable
   owner column relies on; `NOT IN` and `<>` invert under NULL and make a legacy
   row visible to everyone. A test reads `pg_policies` and refuses a negation.
-- **Policies are written per command, never one `FOR ALL`.** `SELECT` carries
+- **Policies are written per command, never one `FOR ALL`** — and the `UPDATE`
+  policy's `USING` is the **read** scope, not the write one. PostgreSQL applies
+  it to `SELECT … FOR UPDATE`, so a row the read policy admits and the update
+  policy does not can be read and never locked, and `select_for_update().get()`
+  turns that into `DoesNotExist` rather than a refusal. `USING` governs who may
+  lock, `WITH CHECK` governs who may write, so all the narrowing lives in
+  `WITH CHECK`; `INSERT`'s `WITH CHECK` and `DELETE`'s `USING` stay owner-only.
+  A test reads `pg_policies` and requires the two `USING` expressions to be
+  textually equal. `SELECT` carries
   the read scope and `INSERT`, `UPDATE` and `DELETE` carry the write scope, as
   separate statements. `companies_company` is read at two scopes on purpose —
   `visible_to_user` for issuer surfaces and `all()` for the market — and one

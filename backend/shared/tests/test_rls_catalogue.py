@@ -59,6 +59,27 @@ class EveryTenantTableIsScopedByAPolicyTest(TransactionTestCase):
 
         self.assertEqual(sorted(model_tables() - classified), ["wallets"])
 
+    def test_a_row_that_can_be_read_can_be_locked(self):
+        for table in sorted(POLICIES):
+            with self.subTest(table=table):
+                policies = {name: qual for name, qual, _ in self._ask(POLICY_EXPRESSIONS, table)}
+
+                self.assertEqual(
+                    policies[f"{table}_update"],
+                    policies[f"{table}_read"],
+                    "PostgreSQL applies the UPDATE policy's USING to SELECT ... FOR UPDATE, so a row the "
+                    "read policy admits and the update policy does not can be read and never locked - and "
+                    "select_for_update().get() turns that into DoesNotExist. USING is the read scope; the "
+                    "narrowing belongs in WITH CHECK.",
+                )
+
+    def test_the_update_policy_still_narrows_what_may_be_written(self):
+        for table in sorted(POLICIES):
+            with self.subTest(table=table):
+                policies = {name: check for name, _, check in self._ask(POLICY_EXPRESSIONS, table)}
+
+                self.assertEqual(policies[f"{table}_update"], policies[f"{table}_insert"])
+
     def test_the_membership_tables_carry_leaf_policies(self):
         for table in LEAF_TABLES:
             with self.subTest(table=table):

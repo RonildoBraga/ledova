@@ -19,7 +19,7 @@ def _install(apps, schema_editor):
             cursor.execute(f"CREATE POLICY {table}_read ON {table} FOR SELECT USING ({readable})")
             cursor.execute(f"CREATE POLICY {table}_insert ON {table} FOR INSERT WITH CHECK ({writable})")
             cursor.execute(
-                f"CREATE POLICY {table}_update ON {table} FOR UPDATE USING ({writable}) WITH CHECK ({writable})"
+                f"CREATE POLICY {table}_update ON {table} FOR UPDATE USING ({readable}) WITH CHECK ({writable})"
             )
             cursor.execute(f"CREATE POLICY {table}_delete ON {table} FOR DELETE USING ({writable})")
 

@@ -27,7 +27,23 @@ NO_PRINCIPAL_NEEDED = {
 
 ROUTED_ONLY_IN_DEBUG = {"django.views.static.serve"}
 
-STAFF_ACTIONS_ON_THE_SCOPED_CONNECTION = {}
+STAFF_PERMISSIONS = frozenset({"IsAdminUser"})
+
+STAFF_ACTIONS_ON_THE_SCOPED_CONNECTION = {
+    "whitelist.views.entry.WhitelistEntryViewSet": (
+        "Staff-only for every action through IsAdminUser at class level, and it stays on the scoped "
+        "connection because the table it reads carries no policy: the whitelist is an authorisation surface "
+        "rather than a tenancy one, and WhitelistEntry.visible_to_user returns self for staff. Putting it on "
+        "the operator connection would hand BYPASSRLS to a staff API surface that does not need it. The day "
+        "the table gains a policy this must move, and the test below is what says so.",
+        ("whitelist_whitelistentry",),
+    ),
+}
+
+
+def staff_only_everywhere(target):
+    named = {klass.__name__ for klass in getattr(target, "permission_classes", None) or ()}
+    return bool(named & STAFF_PERMISSIONS)
 
 
 def walk(patterns, prefix="", app=None):
@@ -101,11 +117,14 @@ class AStaffOnlyActionSaysWhichConnectionItRunsOnTest(SimpleTestCase):
     def test_every_administrative_action_runs_on_the_operator_connection(self):
         borrowing = []
         for name, (target, _, _) in sorted(routed_views().items()):
-            administrative = frozenset(getattr(target, "administrative_actions", ()))
-            if not administrative:
+            if name in STAFF_ACTIONS_ON_THE_SCOPED_CONNECTION:
                 continue
-            unrouted = administrative - frozenset(getattr(target, "operator_actions", ()))
-            if unrouted and name not in STAFF_ACTIONS_ON_THE_SCOPED_CONNECTION:
+            operator = frozenset(getattr(target, "operator_actions", ()))
+            if staff_only_everywhere(target) and not operator:
+                borrowing.append(f"{name}: staff-only for every action")
+                continue
+            unrouted = frozenset(getattr(target, "administrative_actions", ())) - operator
+            if unrouted:
                 borrowing.append(f"{name}: {sorted(unrouted)}")
 
         self.assertEqual(
@@ -126,6 +145,21 @@ class AStaffOnlyActionSaysWhichConnectionItRunsOnTest(SimpleTestCase):
         self.assertNotEqual(found, [])
 
     def test_every_exemption_states_a_reason_rather_than_a_label(self):
-        for name, reason in STAFF_ACTIONS_ON_THE_SCOPED_CONNECTION.items():
+        for name, (reason, _) in STAFF_ACTIONS_ON_THE_SCOPED_CONNECTION.items():
             with self.subTest(view=name):
                 self.assertGreater(len(reason), 60, f"{name} needs a reason, not a label")
+
+    def test_every_exemption_rests_on_a_table_that_really_carries_no_policy(self):
+        from shared.db.policies import POLICIES
+
+        for name, (_, unpoliced) in STAFF_ACTIONS_ON_THE_SCOPED_CONNECTION.items():
+            with self.subTest(view=name):
+                self.assertNotEqual(unpoliced, ())
+                self.assertEqual(sorted(set(unpoliced) & set(POLICIES)), [])
+
+    def test_the_only_staff_implying_permission_classes_are_the_known_ones(self):
+        seen = set()
+        for _, (target, _, _) in routed_views().items():
+            seen |= {klass.__name__ for klass in getattr(target, "permission_classes", None) or ()}
+
+        self.assertEqual(sorted(seen - {"IsAuthenticated"} - STAFF_PERMISSIONS), [])

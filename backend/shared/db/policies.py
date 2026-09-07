@@ -93,6 +93,23 @@ POLICIES = {
     ),
 }
 
+LOCKING_IS_READING = (
+    "PostgreSQL applies the UPDATE policy's USING to SELECT ... FOR UPDATE, so a row the read policy admits "
+    "and the update policy does not can be read and never locked - and select_for_update().get() turns that "
+    "into DoesNotExist rather than a refusal. So the UPDATE policy's USING is exactly the read scope and all "
+    "the narrowing lives in its WITH CHECK, while INSERT's WITH CHECK and DELETE's USING stay owner-only. "
+    "Measured by Omarch 5 on a scratch table: it is the only arrangement that both locks the row and refuses "
+    "the write. Without it an investor gets DoesNotExist at allotment on the offering they just chose - "
+    "offerings/services/subscription.py locks it at 463, 499 and 566."
+)
+
+R13_WATCHES_BOTH_ENDS = (
+    "R13's set is computed rather than maintained: links_between_policy_tables() walks Django's metadata for "
+    "every non-nullable foreign key whose both ends carry policies, with a non-empty control behind it. The "
+    "one direction it cannot watch is a platform-owned table classified out of POLICIES entirely, where "
+    "nothing stands behind the classification but the reason written beside it."
+)
+
 PUBLIC_TERM = {
     "customer_accounts_account": "R14, one link along from wallets: the account that holds a company's "
     "operator wallet is the platform's account. R13 found it the moment the wallet became visible - the "
@@ -122,7 +139,9 @@ AWAITING_R0 = {
     "to be a leaf, because companies_company's own market term is an EXISTS over this table: a policy here "
     "that called app_visible_company_ids() would read companies_company, whose policy would read back, and "
     "the pair would recurse. With owner_id the policy is owner_id = principal OR the market predicate, which "
-    "reads nothing else. Until then the table carries no policy and the market keeps working.",
+    "reads nothing else. Until then the table carries no policy and the market keeps working. When it "
+    "lands it must carry LOCKING_IS_READING with it: offerings/services/offering.py:135 locks a "
+    "ShareToken, and that line is safe today only because this table has no policy at all.",
     "tokens_capitalincreaserequest": (
         "Reaches its company through token -> company and has no company_id yet. The tokens R0 lane "
         "adds the column; until it lands there is nothing for a policy to compare."
