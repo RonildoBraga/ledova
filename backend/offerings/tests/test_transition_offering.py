@@ -18,6 +18,7 @@ from tokens.models.choices import IssuanceStatus
 
 LEGAL = [
     (OfferingStatus.DRAFT, "submit", OfferingStatus.SUBMITTED),
+    (OfferingStatus.REJECTED, "submit", OfferingStatus.SUBMITTED),
     (OfferingStatus.SUBMITTED, "start_review", OfferingStatus.UNDER_REVIEW),
     (OfferingStatus.SUBMITTED, "approve", OfferingStatus.APPROVED),
     (OfferingStatus.UNDER_REVIEW, "approve", OfferingStatus.APPROVED),
@@ -30,7 +31,7 @@ LEGAL = [
 ]
 
 METHOD_SOURCES = {
-    "submit": {OfferingStatus.DRAFT},
+    "submit": {OfferingStatus.DRAFT, OfferingStatus.REJECTED},
     "start_review": {OfferingStatus.SUBMITTED},
     "approve": {OfferingStatus.SUBMITTED, OfferingStatus.UNDER_REVIEW},
     "reject": {OfferingStatus.SUBMITTED, OfferingStatus.UNDER_REVIEW},

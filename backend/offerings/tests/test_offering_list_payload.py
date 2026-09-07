@@ -9,6 +9,7 @@ from shared.tests.tenants import make_tenant
 BASE = "/api/v1/offerings/"
 
 READ_BY_THE_ISSUER_PAGE = {
+    "canBeDeleted",
     "canBeEdited",
     "capShares",
     "closeReason",
@@ -60,8 +61,28 @@ class TheListSendsWhatTheIssuerPageReadsTest(APITestCase):
         )
 
         row = self._row()
-        self.assertIs(row["canBeEdited"], False)
         self.assertEqual(row["rejectionReason"], "The exemption does not apply.")
+
+    def test_a_rejected_offering_is_editable_again_but_still_not_deletable(self):
+        Offering.objects.filter(pk=self.tenant.offering.pk).update(status=OfferingStatus.REJECTED)
+
+        row = self._row()
+        self.assertIs(row["canBeEdited"], True)
+        self.assertIs(row["canBeDeleted"], False)
+
+    def test_a_draft_is_the_one_state_that_is_both_editable_and_deletable(self):
+        Offering.objects.filter(pk=self.tenant.offering.pk).update(status=OfferingStatus.DRAFT)
+
+        row = self._row()
+        self.assertIs(row["canBeEdited"], True)
+        self.assertIs(row["canBeDeleted"], True)
+
+    def test_an_approved_offering_is_neither(self):
+        Offering.objects.filter(pk=self.tenant.offering.pk).update(status=OfferingStatus.APPROVED)
+
+        row = self._row()
+        self.assertIs(row["canBeEdited"], False)
+        self.assertIs(row["canBeDeleted"], False)
 
     def test_a_closed_offering_carries_the_close_reason(self):
         Offering.objects.filter(pk=self.tenant.offering.pk).update(

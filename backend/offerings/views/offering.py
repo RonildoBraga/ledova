@@ -38,7 +38,7 @@ class OfferingViewSet(AuthenticatedModelViewSet):
         return queryset.visible_to_user(self.request.user)
 
     def perform_destroy(self, instance):
-        if not instance.can_be_edited:
+        if not instance.can_be_deleted:
             raise OfferingRefusedException(NOT_DELETABLE)
         instance.delete()
 
