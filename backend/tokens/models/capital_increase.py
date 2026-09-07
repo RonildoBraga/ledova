@@ -4,7 +4,7 @@ from django.utils import timezone
 from tokens.exceptions import InvalidTokenStateException
 from tokens.querysets import CapitalIncreaseRequestQuerySet
 
-from .choices import RequestStatus
+from .choices import IN_FLIGHT_STATUSES, RequestStatus
 from .owner_column import DerivesCompanyFromToken
 from .review_request import ReviewableRequest
 
@@ -48,6 +48,13 @@ class CapitalIncreaseRequest(DerivesCompanyFromToken, ReviewableRequest):
     class Meta(ReviewableRequest.Meta):
         verbose_name = "Capital Increase Request"
         verbose_name_plural = "Capital Increase Requests"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["token"],
+                condition=models.Q(status__in=IN_FLIGHT_STATUSES),
+                name="one_capital_increase_in_flight_per_token",
+            )
+        ]
 
     def __str__(self):
         return f"{self.token.symbol}: +{self.additional_shares} shares ({self.get_status_display()})"
