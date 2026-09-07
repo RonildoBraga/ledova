@@ -1,4 +1,5 @@
 import tempfile
+from datetime import timedelta
 from pathlib import Path
 
 from django.contrib.admin.sites import AdminSite
@@ -13,10 +14,12 @@ from users.admin.investor_classification import InvestorClassificationAdmin
 from users.exceptions import InvalidClassificationTransitionException
 from users.models import UserAccount, UserProfile
 from users.models.investor_classification import (
+    RETENTION_CLOCK,
     InvestorClassification,
     InvestorClassificationStatus,
 )
 from users.services import lifecycle
+from users.services.investor_classification import purge_expired_evidence
 
 User = get_user_model()
 
@@ -124,6 +127,44 @@ class TheMemberWithdrawsRatherThanDeletesTest(_EvidenceCase, APITestCase):
 
         self.assertEqual(replacement.status_code, 201, replacement.content)
         self.assertEqual(InvestorClassification.objects.count(), 2)
+
+
+class WithdrawnEvidenceStillHasARetentionClockTest(_EvidenceCase, TestCase):
+    def test_every_terminal_status_carries_a_retention_clock(self):
+        terminal = {
+            InvestorClassificationStatus.VERIFIED,
+            InvestorClassificationStatus.REJECTED,
+            InvestorClassificationStatus.REVOKED,
+            InvestorClassificationStatus.WITHDRAWN,
+        }
+
+        self.assertEqual(terminal - set(RETENTION_CLOCK), set())
+
+    @override_settings(CLASSIFICATION_EVIDENCE_RETENTION_DAYS=30)
+    def test_a_withdrawn_claim_is_purgeable_once_its_horizon_passes(self):
+        claim = self.a_claim()
+        claim.withdraw()
+
+        self.assertIsNotNone(claim.evidence_horizon)
+        self.assertTrue(claim.evidence_retained)
+        self.assertNotIn(claim, InvestorClassification.objects.evidence_purgeable(timezone.now()))
+
+        past_horizon = timezone.now() + timedelta(days=31)
+
+        self.assertIn(claim, InvestorClassification.objects.evidence_purgeable(past_horizon))
+
+    @override_settings(CLASSIFICATION_EVIDENCE_RETENTION_DAYS=30)
+    def test_the_purge_removes_a_withdrawn_claims_evidence_and_keeps_the_row(self):
+        claim = self.a_claim()
+        claim.withdraw()
+
+        result = purge_expired_evidence(timezone.now() + timedelta(days=31), 10)
+
+        claim.refresh_from_db()
+        self.assertEqual((result["purged"], result["failed"]), (1, 0))
+        self.assertFalse(claim.evidence_file)
+        self.assertEqual(self.stored_files(), [])
+        self.assertEqual(InvestorClassification.objects.filter(pk=claim.pk).count(), 1)
 
 
 class NoOperatorPathHardDeletesTest(_EvidenceCase, TestCase):

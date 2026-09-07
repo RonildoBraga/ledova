@@ -19,6 +19,7 @@ RETENTION_CLOCK = {
     "rejected": "reviewed_at",
     "revoked": "reviewed_at",
     "verified": "expires_at",
+    "withdrawn": "reviewed_at",
 }
 
 
