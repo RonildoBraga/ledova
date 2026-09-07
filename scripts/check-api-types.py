@@ -147,6 +147,12 @@ TYPE_DEBT: dict[str, tuple[int, str]] = {
         "get_serializer_class names it for the create action - while the service is typed "
         "apiClient.post<SubscriptionDetail>.",
     ),
+    "TransferOrder:TransferOrderCreate": (
+        6,
+        "TradingOrderViewSet.get_serializer_class names TransferOrderCreateSerializer for the "
+        "create_order action, so POST /api/v1/trading/orders/create/ answers with the write shape "
+        "while the service is typed as the full TransferOrder.",
+    ),
     "DeviceToken:DeviceToken": (
         1,
         "DeviceTokenSerializer lists created_at but not updated_at, while the interface extends "
@@ -162,6 +168,34 @@ SCHEMA_DEBT: dict[str, tuple[int, str]] = {
         "check-schema-responses.py does not see: it looks for Response(...) and this is a third "
         "spelling. The generator falls back to OfferingDetailSerializer. The interface is correct; "
         "tracked as a follow-up to #211.",
+    ),
+    "CreateOrderMessageResponse:TransferOrderCreate": (
+        9,
+        "tokens/views/trading_order.py create_message builds a signing challenge body while "
+        "get_serializer_class names TransferOrderCreateSerializer, so the generator documents the "
+        "request shape as the response. The interface is correct. Tracked as a follow-up to #211.",
+    ),
+    "CancelOrderMessageResponse:TransferOrderList": (9, "tokens/views/trading_order.py builds this body itself while get_serializer_class names a TransferOrder serializer, so the generator documents the wrong shape. The interface is correct. In check-schema-responses.py's LEGACY; tracked by #211."),
+    "ApprovalStatusResponse:TransferOrderList": (7, "tokens/views/trading_order.py builds this body itself while get_serializer_class names a TransferOrder serializer, so the generator documents the wrong shape. The interface is correct. In check-schema-responses.py's LEGACY; tracked by #211."),
+    "ApprovalDataResponse:TransferOrderList": (1, "tokens/views/trading_order.py builds this body itself while get_serializer_class names a TransferOrder serializer, so the generator documents the wrong shape. The interface is correct. In check-schema-responses.py's LEGACY; tracked by #211."),
+    "MarketData:ShareTokenList": (
+        7,
+        "tokens/views/trading_token.py market_data returns Response(market_data), a body built "
+        "into a local, so the generator falls back to the viewset's serializer. The interface is "
+        "correct. check-schema-responses.py does not see this spelling either - it looks for a "
+        "dict literal, and this is a name. Tracked as a follow-up to #211.",
+    ),
+    "OrderBook:ShareTokenList": (
+        3,
+        "tokens/views/trading_token.py order_book returns Response(order_book), the same shape as "
+        "market_data above and invisible to check-schema-responses.py for the same reason. The "
+        "interface is correct. Tracked as a follow-up to #211.",
+    ),
+    "OrderModificationMessageResponse:TransferOrderList": (
+        6,
+        "tokens/views/trading_order.py create_message builds its own body while "
+        "get_serializer_class names TransferOrderCreateSerializer, and the generator documents "
+        "neither. The interface is correct. Tracked as a follow-up to #211.",
     ),
     "AccountExportData:UserProfile": (
         33,
@@ -210,14 +244,14 @@ SCHEMA_DEBT: dict[str, tuple[int, str]] = {
     ),
 }
 
-ENDPOINT_BLOCK = re.compile(r"export const (\w+)\s*=\s*\{(.*?)^\}", re.S | re.M)
+ENDPOINT_OPENS = re.compile(r"export const (\w+)\s*=\s*\{")
 ENDPOINT_ENTRY = re.compile(r"^\s*(\w+):\s*(?:\([^)]*\)\s*=>\s*)?[`']([^`'\n]+)[`']", re.M)
 # Any receiver, not only one spelled "apiClient": the shape is already specific
 # enough without it -- a verb, a type argument, and an endpoint constant - and
 # pinning the receiver's name means renaming a parameter silently stops the gate
 # checking those calls.
 CALL = re.compile(
-    r"\b\w+\.(get|post|put|patch|delete)(?:<([^>]*(?:<[^>]*>)?[^>]*)>)?\s*\(\s*([A-Z_]+\.\w+)",
+    r"\b\w+\.(get|post|put|patch|delete)(?:<([^>]*(?:<[^>]*>)?[^>]*)>)?\s*\(\s*([A-Z_]+(?:\.\w+)+)",
     re.S,
 )
 INTERFACE = re.compile(r"^export interface (\w+)([^{]*)\{(.*?)^\}", re.S | re.M)
@@ -237,24 +271,54 @@ def url_shape(template: str) -> str:
     return without_parameters.rstrip("/") + "/"
 
 
-def declared_endpoints() -> dict[str, str]:
-    """Every endpoint group under constants/, not only the one in api.ts.
+def _balanced_body(text: str, brace: int) -> str:
+    """The text between a `{` and its matching `}`.
 
-    OFFERING_ENDPOINTS, TRADING_ENDPOINTS, SUBSCRIPTION_ENDPOINTS and
-    DIRECTORY_ENDPOINTS live in constants/business/. Reading api.ts alone left
-    every service call through them unmatched, which is most of the product -
-    and it is why this gate did not catch #248, an instance of exactly the drift
-    it exists to find. A gate that reads one file where the repository has five
-    reports a smaller number and passes.
+    A regex ending at the first line-starting `}` merges a single-line group into
+    the next one: USER_PREFERENCES_ENDPOINTS = { BASE: ... } as const; closes
+    mid-line, so IDENTITY_VERIFICATION_ENDPOINTS was swallowed whole and its two
+    endpoints went unresolvable.
     """
-    text = "\n".join(path.read_text() for path in sorted((SHARED / "constants").rglob("*.ts")))
+    depth = 0
+    for index in range(brace, len(text)):
+        if text[index] == "{":
+            depth += 1
+        elif text[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return text[brace + 1 : index]
+    return ""
+
+
+def declared_endpoints() -> dict[str, str]:
+    """Every endpoint group under constants/, nested groups included.
+
+    OFFERING, TRADING, SUBSCRIPTION and DIRECTORY live in constants/business/.
+    Reading api.ts alone left every service call through them unmatched, which
+    is most of the product - and it is why this gate did not catch #248, an
+    instance of exactly the drift it exists to find.
+
+    Groups nest: TRADING_ENDPOINTS.WHITELIST.STATUS is a function two levels
+    down, so the key is the dotted path a caller actually writes.
+    """
     out: dict[str, str] = {}
-    for block in ENDPOINT_BLOCK.finditer(text):
-        constant, body = block.group(1), block.group(2)
-        for entry in ENDPOINT_ENTRY.finditer(body):
-            key, template = entry.group(1), entry.group(2).strip()
-            if template.startswith("/"):
-                out[f"{constant}.{key}"] = url_shape(template)
+
+    for path in sorted((SHARED / "constants").rglob("*.ts")):
+        text = path.read_text()
+        for opening in ENDPOINT_OPENS.finditer(text):
+            trail = [opening.group(1)]
+            body = re.sub(r"=>\s*\n\s*", "=> ", _balanced_body(text, opening.end() - 1))
+            for line in body.splitlines():
+                stripped = line.strip()
+                entry = ENDPOINT_ENTRY.match(line)
+                if entry and entry.group(2).strip().startswith("/"):
+                    out[".".join(trail + [entry.group(1)])] = url_shape(entry.group(2).strip())
+                    continue
+                opening = re.match(r"(\w+)\s*:\s*\{\s*$", stripped)
+                if opening:
+                    trail.append(opening.group(1))
+                elif stripped.startswith("}") and len(trail) > 1:
+                    trail.pop()
     return out
 
 
