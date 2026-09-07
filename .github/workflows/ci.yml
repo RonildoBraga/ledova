@@ -131,6 +131,16 @@ jobs:
         run: python manage.py makemigrations --check --dry-run
       - name: Unit tests (credential-free settings)
         run: python manage.py test --settings=ledova_backend.settings.test
+      - name: API type drift gate
+        env:
+          POSTGRES_HOST: 127.0.0.1
+          POSTGRES_PORT: '5432'
+          POSTGRES_DB: ledova
+          POSTGRES_USER: ledova
+        run: >-
+          python manage.py spectacular
+          --settings=ledova_backend.settings.test_postgres --file /tmp/schema.yml
+          && python ../scripts/check-api-types.py --schema /tmp/schema.yml
       - name: SQLite migration tests
         run: >-
           python manage.py test authentication.tests.test_email_migration

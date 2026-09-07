@@ -4,8 +4,13 @@
 NPM ?= npm
 PYTHON ?= python3
 
+# The API type drift gate reads a generated OpenAPI schema rather than generating one,
+# so it needs no Django on the host. CI generates it in the Django job, where the
+# database schema generation touches already exists; SCHEMA points at the result.
+SCHEMA ?= /tmp/ledova-schema.yml
+
 .PHONY: help install install-backend install-node-if-missing init-local check-local-env build generate-tokens check check-comments check-layers \
-	check-logging check-schema-responses check-test-shadowing test-gates audit test \
+	check-logging check-schema-responses check-test-shadowing check-api-types test-gates audit test \
 	dev-up dev-down dev-logs contracts-compile contracts-test contracts-deploy-local \
 	contracts-deploy-testnet chain-test smoke lint check-type-check
 
@@ -42,6 +47,7 @@ help:
 	@echo "  make check-schema-responses   Fail on a view whose response the schema does not know"
 	@echo "  make check-test-shadowing     Fail on a test helper that shadows a TestCase method"
 	@echo "  make check-connection-binding  Fail on a transaction or cursor bound to the default connection"
+	@echo "  make check-api-types          Fail on a shared type that requires a field the API never sends"
 	@echo "  make check-error-bodies       Fail on an API error body built from an exception's text"
 	@echo "  make test-gates               Run the unit tests of the gate scripts"
 	@echo "  make audit                    Fail on a new production dependency advisory"
@@ -115,6 +121,13 @@ check-error-bodies:
 
 check-test-shadowing:
 	$(PYTHON) scripts/check-test-shadowing.py
+check-api-types:
+	@test -f $(SCHEMA) || { \
+	  echo "No schema at $(SCHEMA). Generate one first:"; \
+	  echo "  cd backend && python manage.py spectacular --file $(SCHEMA)"; \
+	  echo "or pass SCHEMA=<path>. CI generates it in the Django job."; \
+	  exit 1; }
+	$(PYTHON) scripts/check-api-types.py --schema $(SCHEMA)
 
 check-logging:
 	$(PYTHON) scripts/check-logging.py

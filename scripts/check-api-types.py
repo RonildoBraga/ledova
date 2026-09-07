@@ -27,10 +27,21 @@ wire is camelCase (djangorestframework-camel-case renders it) while a schema
 component may carry either form depending on the camelize hook. "address_line_1"
 and "addressLine1" are the same field and must not read as two.
 
-LEGACY carries the findings that predate the gate, keyed by
-"<TS type>:<component>" and valued by a count. The count may only shrink: a
-number higher than what is there fails as loudly as a number lower, so the list
-cannot quietly outlive the problem it records.
+Two lists carry what predates the gate, both keyed by "<TS type>:<component>"
+and both valued by a count with a reason. The counts may only shrink: a number
+higher than what is there fails as loudly as a number lower, so neither list can
+quietly outlive the problem it records.
+
+They are separate because they are different problems and the distinction is
+load-bearing. TYPE_DEBT is a type that promises what the API does not send --
+the thing this gate exists to catch. SCHEMA_DEBT is the reverse: the TypeScript
+is correct and the *schema* is wrong, because a view builds its own Response
+with a serializer other than the one get_serializer_class names, and the
+generator documents the latter. Recording those as type debt would assert
+something false about correct code, and an allowlist that asserts something
+false is worse than no allowlist, because the next reader trusts it. #211
+empties SCHEMA_DEBT; when it does, the counts here fail as too high, which is
+the intended way to find out.
 """
 
 from __future__ import annotations
@@ -46,17 +57,67 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 SHARED = ROOT / "packages/shared/src"
 
-LEGACY: dict[str, int] = {
-    "DeviceToken:DeviceToken": 1,
-    "FeatureFlag:FeatureFlag": 2,
-    "FinancialProfile:FinancialProfile": 2,
-    "UserPreferences:UserPreferences": 2,
+TYPE_DEBT: dict[str, tuple[int, str]] = {
+    "FinancialProfile:FinancialProfile": (
+        4,
+        "FinancialProfileSerializer carries exclude = ('created_at', 'updated_at') while the "
+        "interface extends BaseEntity, which declares createdAt and updatedAt required. Two "
+        "fields on each of POST and PATCH. Fix by narrowing the interface, not by widening the "
+        "serializer: nothing reads them.",
+    ),
+    "DeviceToken:DeviceToken": (
+        1,
+        "DeviceTokenSerializer lists created_at but not updated_at, while the interface extends "
+        "BaseEntity, which declares both required.",
+    ),
+    "UserPreferences:UserPreferences": (
+        2,
+        "UserPreferencesSerializer carries exclude = ('created_at', 'updated_at') while the "
+        "interface extends BaseEntity, which declares both required.",
+    ),
+    "Company:CompanyUpdate": (
+        27,
+        "CompanyViewSet declares no update or partial_update, so DRF answers PATCH with "
+        "CompanyUpdateSerializer - fifteen write fields - while the service is typed "
+        "apiClient.patch<Company>. All three call sites invalidate rather than read the "
+        "response, so nothing is broken today.",
+    ),
+}
+
+SCHEMA_DEBT: dict[str, tuple[int, str]] = {
+    "AccountExportData:UserProfile": (
+        33,
+        "users/views/user_profile.py:39 returns lifecycle.export_account_data(request.user), a "
+        "plain dict, so the generator falls back to the viewset's serializer. The interface is "
+        "correct. Tracked by #211.",
+    ),
+    "TokenHoldersResponse:ShareTokenDetail": (
+        3,
+        "tokens/views/share_token.py:125 builds its own response and the generator falls back to "
+        "the viewset's serializer. The interface is correct. Tracked by #211.",
+    ),
+    "CompanyShareToken:ShareTokenCreate": (
+        8,
+        "tokens/views/share_token.py:71 returns Response(ShareTokenDetailSerializer(token).data) "
+        "while get_serializer_class names ShareTokenCreateSerializer for the create action. The "
+        "interface is correct. Tracked by #211.",
+    ),
+    "CapitalIncreaseRequest:CapitalIncreaseCreate": (
+        11,
+        "tokens/views/capital_increase.py:56 returns Response(CapitalIncreaseDetailSerializer("
+        "capital_increase).data) while get_serializer_class names the create serializer. The "
+        "interface is correct. Tracked by #211.",
+    ),
 }
 
 ENDPOINT_BLOCK = re.compile(r"export const (\w+)\s*=\s*\{(.*?)^\}", re.S | re.M)
 ENDPOINT_ENTRY = re.compile(r"^\s*(\w+):\s*(?:\([^)]*\)\s*=>\s*)?[`']([^`'\n]+)[`']", re.M)
+# Any receiver, not only one spelled "apiClient": the shape is already specific
+# enough without it -- a verb, a type argument, and an endpoint constant - and
+# pinning the receiver's name means renaming a parameter silently stops the gate
+# checking those calls.
 CALL = re.compile(
-    r"apiClient\.(get|post|put|patch|delete)(?:<([^>]*(?:<[^>]*>)?[^>]*)>)?\s*\(\s*([A-Z_]+\.\w+)",
+    r"\b\w+\.(get|post|put|patch|delete)(?:<([^>]*(?:<[^>]*>)?[^>]*)>)?\s*\(\s*([A-Z_]+\.\w+)",
     re.S,
 )
 INTERFACE = re.compile(r"^export interface (\w+)([^{]*)\{(.*?)^\}", re.S | re.M)
@@ -177,16 +238,22 @@ def scan(schema_path: Path):
             fields = declared.get(name)
             if not fields:
                 continue
-            best, overlap = None, 0
-            for component in sorted(referenced):
-                shape = components.get(component)
-                if not shape:
-                    continue
-                shared_fields = len(set(fields) & set(shape))
-                if shared_fields > overlap:
-                    best, overlap = component, shared_fields
-            if not best:
+            candidates = [c for c in sorted(referenced) if c in components]
+            if not candidates:
                 continue
+            if len(candidates) == 1:
+                # One candidate is no choice at all, so compare it however little
+                # it overlaps. Requiring overlap here would silently skip a type
+                # that is entirely wrong, which is the case most worth reporting.
+                best = candidates[0]
+            else:
+                best, overlap = None, 0
+                for component in candidates:
+                    shared_fields = len(set(fields) & set(components[component]))
+                    if shared_fields > overlap:
+                        best, overlap = component, shared_fields
+                if not best:
+                    continue
             absent = sorted(
                 field
                 for field, optional in fields.items()
@@ -213,8 +280,9 @@ def main() -> int:
     for _endpoint, name, component, absent in findings:
         counts[f"{name}:{component}"] = counts.get(f"{name}:{component}", 0) + len(absent)
 
-    new = {key: count for key, count in counts.items() if count > LEGACY.get(key, 0)}
-    stale = sorted(key for key, pinned in LEGACY.items() if counts.get(key, 0) < pinned)
+    pinned_counts = {key: entry[0] for key, entry in {**TYPE_DEBT, **SCHEMA_DEBT}.items()}
+    new = {key: count for key, count in counts.items() if count > pinned_counts.get(key, 0)}
+    stale = sorted(key for key, pinned in pinned_counts.items() if counts.get(key, 0) < pinned)
 
     if new:
         print(
@@ -237,13 +305,17 @@ def main() -> int:
     if stale:
         print(f"These pinned counts are higher than what is there ({len(stale)}):\n", file=sys.stderr)
         for key in stale:
-            print(f"  {key}: pinned {LEGACY[key]}, found {counts.get(key, 0)}", file=sys.stderr)
-        print("\nLower the count in LEGACY in this script; it may only shrink.", file=sys.stderr)
+            print(f"  {key}: pinned {pinned_counts[key]}, found {counts.get(key, 0)}", file=sys.stderr)
+        print(
+            "\nLower the count in TYPE_DEBT or SCHEMA_DEBT in this script; they may only shrink.",
+            file=sys.stderr,
+        )
         return 1
 
     print(
         f"No shared type requires an absent field across {matched} matched endpoints "
-        f"({sum(LEGACY.values())} known findings still in LEGACY)."
+        f"({sum(pinned_counts[k] for k in TYPE_DEBT)} known type findings, "
+        f"{sum(pinned_counts[k] for k in SCHEMA_DEBT)} awaiting the schema fixes in #211)."
     )
     return 0
 
