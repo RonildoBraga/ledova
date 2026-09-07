@@ -76,7 +76,7 @@ exceptions are noted below the table.
 | Backend layers | `make check-layers` from the root (no dependencies needed) |
 | Logging privacy | `make check-logging` and `make test-gates` from the root (no dependencies needed) |
 | Dependency advisories | `make audit` from the root |
-| Everything JavaScript | `make build`, `make check`, `make test` from the root |
+| Everything JavaScript | `make build`, `make check`, `make test` from the root. `make check` installs any workspace whose `node_modules` is missing before it runs |
 | Design tokens | `make generate-tokens`, then confirm `dashboard/src/styles/tokens.css` and `marketing/src/tokens.css` are unchanged |
 | Backend | from `backend/`: `make lint` (black, isort, flake8), `make check`, `make test` |
 | Backend migrations | from `backend/`: `python manage.py makemigrations --check --dry-run` |
@@ -84,6 +84,15 @@ exceptions are noted below the table.
 | Lint | `make lint` from the root (ESLint across the workspaces, solhint for the contracts) |
 | Real chain | `make chain-test` from the root |
 | Dashboard smoke | `make build`, then `make smoke` from the root |
+
+Each workspace resolves from its own `node_modules`, so running a workspace's
+check by hand needs that workspace installed. `npm --prefix mobile run type-check`
+is the one that catches people out: without `npm ci` inside `mobile/` it fails on
+`expo/tsconfig.base` before reading a line of project code, which reads as a type
+error in the project and is not. `make check` now installs what it needs, so reach
+for that if a bare workspace command fails on something you did not write. That
+check earns its place — it has caught a narrowing the dashboard's own type-check
+compiled happily.
 
 Local-only: `.github/workflows/ci.yml` has no format step for any workspace, so
 `npm run format:check` is yours to run. Linting is no longer in that list — CI
