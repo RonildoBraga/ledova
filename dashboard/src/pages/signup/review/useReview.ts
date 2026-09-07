@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 
+import { useFinancialProfile } from '@ledova/shared';
 import {
   getUserProfiles,
   updateUserProfileCompletion,
@@ -8,7 +9,6 @@ import {
   CACHE_TIMING,
   describeFailure,
 } from '@ledova/shared';
-import { useFinancialProfile } from '@hooks/useFinancialProfile';
 import { useAccountRole } from '@hooks/useAccountRole';
 import apiClient from '@services/apiClient';
 
