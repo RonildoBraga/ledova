@@ -132,6 +132,30 @@ class MatchingGoesThroughPaths(_Repository):
         self.assertEqual(self.findings(document), [("Thing", "Thing", ["missing"])])
 
 
+class AnUnreachableEndpointIsAFailure(_Repository):
+
+    def test_a_constant_the_gate_cannot_find_is_reported(self):
+        self.endpoints("  THING: '/api/things/' as const,")
+        self.service("export const get = (c) => c.get<Thing>(ELSEWHERE.THING);")
+        self.types("export interface Thing {\n  uuid: string;\n}\n")
+
+        with self.assertRaises(gate.Unresolvable) as caught:
+            gate.service_calls()
+
+        self.assertIn("ELSEWHERE.THING", str(caught.exception))
+
+    def test_a_group_in_a_nested_constants_file_is_found(self):
+        (self.shared / "constants/business").mkdir()
+        (self.shared / "constants/business/offers.ts").write_text(
+            "export const OFFER_ENDPOINTS = {\n  BASE: '/api/offers/' as const,\n}\n"
+        )
+        self.endpoints("  THING: '/api/things/' as const,")
+        self.service("export const get = (c) => c.get<Offer>(OFFER_ENDPOINTS.BASE);")
+        self.types("export interface Offer {\n  uuid: string;\n}\n")
+
+        self.assertIn(("get", "/api/offers/"), gate.service_calls())
+
+
 class OnlyTheDirectionThatBreaksAtRuntime(_Repository):
     def setUp(self):
         super().setUp()

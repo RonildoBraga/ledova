@@ -258,17 +258,32 @@ def declared_endpoints() -> dict[str, str]:
     return out
 
 
+class Unresolvable(Exception):
+    """A service call naming an endpoint constant this gate cannot find."""
+
+
 def service_calls() -> dict[tuple[str, str], set[str]]:
     endpoints = declared_endpoints()
     calls: dict[tuple[str, str], set[str]] = {}
+    unresolved: list[str] = []
     for path in sorted((SHARED / "services").glob("*.ts")):
         for verb, generic, constant in CALL.findall(path.read_text()):
             url = endpoints.get(constant)
             if not url:
+                # Skipping here is how 53 of 114 call sites went unchecked while the
+                # success line reported a match count nobody diffs. A constant this
+                # gate cannot resolve is a hole in its coverage, not a call to ignore.
+                unresolved.append(f"{path.name}: {constant}")
                 continue
             named = set(re.findall(r"\b([A-Z]\w+)", generic or "")) - GENERIC_NOISE
             if named:
                 calls.setdefault((verb, url), set()).update(named)
+
+    if unresolved:
+        raise Unresolvable(
+            "These service calls name an endpoint constant this gate cannot find, so the "
+            "endpoints they reach are unchecked:\n  " + "\n  ".join(sorted(set(unresolved)))
+        )
     return calls
 
 
@@ -400,7 +415,15 @@ def main() -> int:
         print(__doc__)
         return 0
 
-    findings, matched = scan(arguments.schema)
+    try:
+        findings, matched = scan(arguments.schema)
+    except Unresolvable as error:
+        print(f"{error}\n", file=sys.stderr)
+        print(
+            "Add the constant's file to constants/, or the call to the gate's reach.",
+            file=sys.stderr,
+        )
+        return 1
 
     counts: dict[str, int] = {}
     for _endpoint, name, component, absent in findings:
