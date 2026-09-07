@@ -647,6 +647,20 @@ each lane does not re-derive it:
   Django's own foreign-key index. `related_name` is `"+"`, because the column
   exists for a policy to read rather than for anyone to traverse: no reverse
   accessor appears and no queryset changes shape.
+- **`on_delete` mirrors the strictest `on_delete` on the path it derives from.**
+  A shortcut to an owner must not make that owner deletable when the path it
+  replaces refuses. `Subscription.company` and `Offering.company` are `PROTECT`,
+  because `Offering.token` and `ShareToken.company` are; the users columns and
+  `Transaction.user_account` are `CASCADE`, because their whole path cascades.
+  Django enforces `on_delete` in the collector rather than in DDL, so this is
+  ORM consistency rather than a schema difference — which is exactly why it has
+  to be chosen deliberately: nothing in the database will contradict a wrong
+  choice.
+- **A child whose parent already carries the owner column derives from the
+  parent**, not by re-walking to the root, so every trigger stays a single join.
+  That makes the backfill order load-bearing when a lane has both, and it is the
+  one place where the backfill's own "no owner" guard is reachable rather than
+  defensive.
 - The **trigger is installed last**, so the column is already constrained before
   the trigger exists. It is `BEFORE INSERT OR UPDATE`, PostgreSQL only — SQLite
   has no plpgsql and nothing there for it to protect — and it derives a missing
