@@ -22,8 +22,8 @@ class DeviceTokenViewSet(AuthenticatedModelViewSet):
     def get_queryset(self):
         return DeviceToken.objects.visible_to_user(self.request.user).filter(is_active=True)
 
-    @action(detail=False, methods=["post"], url_path="register")
     @extend_schema(responses=DeviceTokenSerializer)
+    @action(detail=False, methods=["post"], url_path="register")
     def register_token(self, request):
         serializer = RegisterDeviceTokenSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

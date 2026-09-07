@@ -13,7 +13,6 @@ from users.services import IdentityVerificationService
 class IdentityVerificationViewSet(ViewSet):
     permission_classes = [IsAuthenticated]
 
-    @action(detail=False, methods=["post"], url_path="token")
     @extend_schema(
         responses=inline_serializer(
             name="IdentityVerificationSession",
@@ -25,6 +24,7 @@ class IdentityVerificationViewSet(ViewSet):
             },
         )
     )
+    @action(detail=False, methods=["post"], url_path="token")
     def token(self, request):
         user_profile = get_object_or_404(UserProfile, user=request.user)
         session = IdentityVerificationService.get_verification_session(user_profile)
@@ -38,7 +38,6 @@ class IdentityVerificationViewSet(ViewSet):
             status=status.HTTP_200_OK,
         )
 
-    @action(detail=False, methods=["get"], url_path="status")
     @extend_schema(
         responses=inline_serializer(
             name="IdentityVerificationStatus",
@@ -56,6 +55,7 @@ class IdentityVerificationViewSet(ViewSet):
             },
         )
     )
+    @action(detail=False, methods=["get"], url_path="status")
     def verification_status(self, request):
         user_profile = get_object_or_404(UserProfile, user=request.user)
         return Response(

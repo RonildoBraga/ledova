@@ -95,8 +95,8 @@ class WalletViewSet(AuthenticatedModelViewSet):
             status=status.HTTP_200_OK,
         )
 
-    @action(detail=True, methods=["get"], url_path="holdings", url_name="holdings")
     @extend_schema(responses=HoldingSerializer(many=True))
+    @action(detail=True, methods=["get"], url_path="holdings", url_name="holdings")
     def holdings(self, request, uuid=None):
         wallet = self.get_object()
         holdings = wallet.holdings.filter(asset__is_active=True, asset__is_verified=True).select_related("asset")

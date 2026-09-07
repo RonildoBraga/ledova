@@ -83,6 +83,35 @@ class ALiteralBodyIsAFinding(unittest.TestCase):
         self.assertFalse(gate.builds_a_dict(node))
 
 
+class ADeclarationBelowAnActionIsInert(unittest.TestCase):
+
+    def test_extend_schema_under_action_is_a_finding(self):
+        node = method(
+            "@action(detail=True, methods=['post'])\n"
+            "@extend_schema(responses=DetailSerializer)\n"
+            "def pause(self, request):\n    return Response(DetailSerializer(x).data)\n"
+        )
+
+        self.assertTrue(gate.declaration_is_inert(node))
+
+    def test_extend_schema_above_action_is_effective(self):
+        node = method(
+            "@extend_schema(responses=DetailSerializer)\n"
+            "@action(detail=True, methods=['post'])\n"
+            "def pause(self, request):\n    return Response(DetailSerializer(x).data)\n"
+        )
+
+        self.assertFalse(gate.declaration_is_inert(node))
+
+    def test_a_plain_method_has_no_ordering_to_get_wrong(self):
+        node = method(
+            "@extend_schema(responses=DetailSerializer)\n"
+            "def create(self, request):\n    return Response(DetailSerializer(x).data)\n"
+        )
+
+        self.assertFalse(gate.declaration_is_inert(node))
+
+
 class APrivateHelperIsAttributedToItsCallers(unittest.TestCase):
 
     def test_the_helper_a_method_calls_is_found(self):

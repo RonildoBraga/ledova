@@ -42,6 +42,7 @@ BACKEND = ROOT / "backend"
 
 HAND_BUILT = "hand-built-response"
 UNDECLARED = "undeclared-action"
+INERT = "inert-declaration"
 
 RULES = {
     HAND_BUILT: (
@@ -52,6 +53,11 @@ RULES = {
         "is an action the generator cannot find a serializer for, so it is missing from the "
         "schema entirely. Add @extend_schema(responses=...), or exclude=True if it is "
         "deliberately absent."
+    ),
+    INERT: (
+        "carries @extend_schema below @action, where it has no effect. Decorators apply "
+        "bottom-up and drf-spectacular reads the outermost, so @extend_schema must sit "
+        "above @action."
     ),
 }
 
@@ -80,6 +86,21 @@ def decorator_names(node: ast.FunctionDef) -> list[str]:
 
 def declares_schema(node: ast.FunctionDef) -> bool:
     return any("extend_schema" in name for name in decorator_names(node))
+
+
+def declaration_is_inert(node: ast.FunctionDef) -> bool:
+    """@extend_schema below @action is applied first and then wrapped away.
+
+    Decorators apply bottom-up, and drf-spectacular reads the annotation off the
+    outermost object. An @extend_schema under an @action is therefore silently
+    ignored: the schema keeps whatever get_serializer_class would have given it,
+    which is exactly the wrong shape this gate exists to refuse. It reads as a
+    declaration and is not one, so it is worse than no declaration at all.
+    """
+    names = decorator_names(node)
+    schema = next((i for i, name in enumerate(names) if "extend_schema" in name), None)
+    action = next((i for i, name in enumerate(names) if name.endswith("action")), None)
+    return schema is not None and action is not None and action < schema
 
 
 def is_action(node: ast.FunctionDef) -> bool:
@@ -166,6 +187,9 @@ def scan() -> tuple[list[str], int]:
         by_name = {n.name: n for n in methods}
 
         for node in methods:
+            if declaration_is_inert(node):
+                findings.append(f"{relative}:{node.lineno} {node.name}: {INERT}")
+                continue
             if node.name.startswith("_"):
                 # A private helper serves no route. What it returns is attributed
                 # to the routable methods that call it, which are what the schema

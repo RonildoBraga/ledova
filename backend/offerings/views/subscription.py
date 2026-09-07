@@ -38,13 +38,13 @@ class SubscriptionViewSet(
     def _detail(self, subscription):
         return Response(SubscriptionDetailSerializer(subscription, context=self.get_serializer_context()).data)
 
-    @action(detail=True, methods=["post"])
     @extend_schema(responses=SubscriptionDetailSerializer)
+    @action(detail=True, methods=["post"])
     def submit(self, request, uuid=None):
         return self._detail(submit_subscription(self.get_object(), submitted_by=request.user))
 
-    @action(detail=True, methods=["post"])
     @extend_schema(responses=SubscriptionDetailSerializer)
+    @action(detail=True, methods=["post"])
     def withdraw(self, request, uuid=None):
         serializer = SubscriptionWithdrawSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

@@ -16,7 +16,6 @@ class FiatPurchaseViewSet(viewsets.ViewSet):
 
     permission_classes = [IsAuthenticated]
 
-    @action(detail=False, methods=["post"], url_path="transak-widget-url")
     @extend_schema(
         responses=inline_serializer(
             name="FiatPurchaseWidget",
@@ -28,6 +27,7 @@ class FiatPurchaseViewSet(viewsets.ViewSet):
             },
         )
     )
+    @action(detail=False, methods=["post"], url_path="transak-widget-url")
     def transak_widget_url(self, request):
         wallet_uuid = request.data.get("wallet_uuid")
         if not wallet_uuid:

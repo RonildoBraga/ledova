@@ -51,8 +51,8 @@ class WhitelistEntryViewSet(
         serializer = self.get_serializer(entries[0])
         return Response(serializer.data)
 
-    @action(detail=False, methods=["post"])
     @extend_schema(responses=WhitelistAddResponseSerializer)
+    @action(detail=False, methods=["post"])
     def add(self, request):
         serializer = WhitelistAddSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -77,8 +77,8 @@ class WhitelistEntryViewSet(
             status=status.HTTP_201_CREATED,
         )
 
-    @action(detail=False, methods=["post"])
     @extend_schema(responses=WhitelistRemoveResponseSerializer)
+    @action(detail=False, methods=["post"])
     def remove(self, request):
         serializer = WhitelistRemoveSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -103,8 +103,8 @@ class WhitelistEntryViewSet(
             status=status.HTTP_200_OK,
         )
 
-    @action(detail=False, methods=["post"], url_path="sync/(?P<address>[^/.]+)")
     @extend_schema(responses=WhitelistSyncResponseSerializer)
+    @action(detail=False, methods=["post"], url_path="sync/(?P<address>[^/.]+)")
     def sync(self, request, address=None):
         wallet_uuid = unique_wallet_uuid_for(address)
 
