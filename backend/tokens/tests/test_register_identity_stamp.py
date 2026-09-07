@@ -160,9 +160,13 @@ class TheIssuancePathStampsWhatItAllotsTest(TestCase):
 
         self.service = ShareTokenService()
 
-    def _execute(self, recipient=HOLDER):
+    def _execute(self, recipient=HOLDER, label=""):
         request = ShareIssuanceRequest.objects.create(
-            token=self.token, recipient_address=recipient, amount=5, submitted_by=self.tenant.user
+            token=self.token,
+            recipient_address=recipient,
+            recipient_name=label,
+            amount=5,
+            submitted_by=self.tenant.user,
         )
         ShareIssuanceRequest.objects.filter(pk=request.pk).update(status=RequestStatus.APPROVED)
         request.refresh_from_db()
@@ -184,6 +188,20 @@ class TheIssuancePathStampsWhatItAllotsTest(TestCase):
         self.assertEqual(issuance.recipient_name, "Grace Hopper")
         self.assertEqual(issuance.recipient_residential_address, "3 Compiler Court")
         self.assertIsNotNone(issuance.identity_stamped_at)
+
+    def test_a_resolved_profile_beats_an_operators_label_for_the_name_it_stamps(self):
+        issuance = self._execute(label="Payroll wallet")
+
+        self.assertEqual(issuance.recipient_name, "Grace Hopper")
+        self.assertEqual(issuance.recipient_residential_address, "3 Compiler Court")
+        self.assertIsNotNone(issuance.identity_stamped_at)
+
+    def test_a_label_on_an_address_nobody_resolved_stamps_nothing(self):
+        issuance = self._execute(recipient="0x" + "cd" * 20, label="Payroll wallet")
+
+        self.assertEqual(issuance.recipient_name, "Payroll wallet")
+        self.assertEqual(issuance.recipient_residential_address, "")
+        self.assertIsNone(issuance.identity_stamped_at)
 
     def test_an_address_belonging_to_nobody_is_recorded_as_unstamped(self):
         issuance = self._execute(recipient="0x" + "cd" * 20)

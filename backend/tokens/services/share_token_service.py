@@ -491,9 +491,9 @@ class ShareTokenService:
             issuance = ShareIssuance.objects.create(
                 token=token,
                 recipient_address=recipient,
-                recipient_name=request.recipient_name or stamped.name,
+                recipient_name=stamped.name or request.recipient_name,
                 recipient_residential_address=stamped.residential_address,
-                identity_stamped_at=timezone.now() if stamped else None,
+                identity_stamped_at=timezone.now() if stamped.name else None,
                 amount=str(request.amount),
                 issuance_type=request.issuance_type,
                 reason=f"Issuance request: {request.reason}",
