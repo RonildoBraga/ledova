@@ -56,6 +56,11 @@ def decode_signed_transaction(raw_transaction: bytes) -> DecodedSignedTransactio
     )
 
 
+def signer_of(signed_transaction: str) -> str:
+    hexadecimal = signed_transaction[2:] if signed_transaction.startswith("0x") else signed_transaction
+    return decode_signed_transaction(bytes.fromhex(hexadecimal)).sender
+
+
 def _legacy_chain_id(v: int) -> Optional[int]:
     if v in (27, 28):
         return None
