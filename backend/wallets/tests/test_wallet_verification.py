@@ -7,6 +7,7 @@ from wallets.constants import (
     WALLET_VERIFICATION_STATUS_PENDING,
     WALLET_VERIFICATION_STATUS_VERIFIED,
 )
+from wallets.exceptions import VerificationChallengeNotFoundException
 from wallets.models import Wallet
 
 
@@ -42,3 +43,23 @@ class WalletVerificationTest(APITestCase):
         self.assertIsNotNone(self.wallet.verified_at)
         verify_signature.assert_called_once_with(self.wallet.address, "challenge", "0x01", "ETHEREUM")
         sync_task.defer.assert_called_once_with(wallet_uuid=str(self.wallet.uuid))
+
+    @patch("wallets.tasks.sync_wallet")
+    @patch("wallets.services.verification.verify_wallet_signature", return_value=True)
+    def test_the_same_challenge_and_signature_cannot_be_replayed(self, verify_signature, sync_task):
+        Wallet.objects.filter(pk=self.wallet.pk).update(verification_challenge="challenge")
+        first = self.client.post(
+            f"/api/wallets/{self.wallet.uuid}/verify-signature/", {"signature": "0x01"}, format="json"
+        )
+        self.assertEqual(first.status_code, 200)
+
+        replay = self.client.post(
+            f"/api/wallets/{self.wallet.uuid}/verify-signature/", {"signature": "0x01"}, format="json"
+        )
+
+        self.assertEqual(replay.status_code, 400)
+        self.assertEqual(replay.json()["detail"], VerificationChallengeNotFoundException.default_detail)
+        self.wallet.refresh_from_db()
+        self.assertIsNone(self.wallet.verification_challenge)
+        self.assertEqual(verify_signature.call_count, 1)
+        self.assertEqual(sync_task.defer.call_count, 1)
