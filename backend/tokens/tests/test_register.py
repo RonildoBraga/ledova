@@ -269,7 +269,8 @@ class RegisterExportTest(RegisterTestBase):
         self.assertEqual(response["Content-Type"], "text/csv")
         rows = list(csv.reader(io.StringIO(response.content.decode())))
         self.assertEqual(rows[0], REGISTER_HEADERS)
-        body = {row[0]: dict(zip(REGISTER_HEADERS, row)) for row in rows[1:]}
+        holders = rows[1 : rows.index([])]
+        body = {row[0]: dict(zip(REGISTER_HEADERS, row)) for row in holders}
         member = body["Mary Member"]
         self.assertEqual(member["Residential address"], RESIDENCE)
         self.assertEqual(
@@ -279,6 +280,11 @@ class RegisterExportTest(RegisterTestBase):
         self.assertEqual(member["Identity source"], IDENTITY_LABELS[IDENTITY_LIVE])
         self.assertEqual([member["Whitelist status"], member["Amount paid"]], ["Active", "250.00"])
         self.assertEqual(body["Company treasury"]["Residential address"], "")
+        self.assertEqual(member["Percentage of issued supply"], "66.67%")
+        self.assertEqual(
+            rows[rows.index([]) + 1 :],
+            [["Issued supply", "150"], ["Held by listed holders", "150"]],
+        )
         self.assertEqual(body["Company treasury"]["Identity source"], IDENTITY_LABELS[IDENTITY_TREASURY_LABEL])
         self.assertEqual(body["Company treasury"]["Amount paid"], "")
 

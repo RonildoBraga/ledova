@@ -52,6 +52,10 @@ def identity_source_label(source, stamped_at) -> str:
     return f"Stamped at allotment on {stamped_at.date().isoformat()}"
 
 
+ISSUED_SUPPLY_ROW = "Issued supply"
+LISTED_TOTAL_ROW = "Held by listed holders"
+DISCREPANCY_ROW = "Not held by any listed holder"
+
 REGISTER_HEADERS = [
     "Name",
     "Residential address",
@@ -59,6 +63,7 @@ REGISTER_HEADERS = [
     "Holder type",
     "Class",
     "Shares held",
+    "Percentage of issued supply",
     "Balance source",
     "Identity source",
     "Date entered",
@@ -271,6 +276,17 @@ def api_holders(rows) -> list[dict]:
     return [{field: row[field] for field in API_FIELDS} for row in rows]
 
 
+def _summary_rows(rows, discrepancy) -> list[list]:
+    listed = sum(int(row["balance"]) for row in rows)
+    summary = [
+        [ISSUED_SUPPLY_ROW, str(listed + discrepancy)],
+        [LISTED_TOTAL_ROW, str(listed)],
+    ]
+    if discrepancy:
+        summary.append([DISCREPANCY_ROW, str(discrepancy)])
+    return summary
+
+
 def export_rows(token, requested_by) -> list[list]:
     rows, discrepancy = token_register(token)
     logger.info(
@@ -282,7 +298,7 @@ def export_rows(token, requested_by) -> list[list]:
             f"Register export of {token.symbol} for company {token.company_id} does not account for the whole "
             f"issued supply: {discrepancy} shares are held by nobody the register lists"
         )
-    return [_csv_row(row) for row in rows]
+    return [_csv_row(row) for row in rows] + [[]] + _summary_rows(rows, discrepancy)
 
 
 def _csv_row(row) -> list:
@@ -296,6 +312,7 @@ def _csv_row(row) -> list:
             row["holder_type_display"],
             row["share_class"],
             row["balance"],
+            f"{row['percentage']}%",
             SOURCE_LABELS[row["source"]],
             row["identity_source"],
             entered_on.date().isoformat() if entered_on else "",

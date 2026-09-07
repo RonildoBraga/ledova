@@ -74,7 +74,6 @@ RULES = {
 LEGACY: dict[str, int] = {
     "backend/assets/views/asset.py:undeclared-action": 1,
     "backend/portfolios/views/portfolio.py:undeclared-action": 2,
-    "backend/tokens/views/share_token.py:undeclared-action": 1,
     "backend/tokens/views/trading_order.py:undeclared-action": 2,
     "backend/tokens/views/trading_transfer.py:undeclared-action": 2,
     "backend/users/views/notification.py:undeclared-action": 2,
