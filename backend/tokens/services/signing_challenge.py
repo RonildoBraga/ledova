@@ -44,7 +44,7 @@ def issue_challenge(purpose, wallet_address: str, fields: dict, verifying_contra
     nonce = secrets.randbits(63)
     expires_at = timezone.now() + timezone.timedelta(seconds=challenge_lifetime_seconds())
 
-    message = {**fields, "wallet": wallet, "nonce": nonce, "deadline": int(expires_at.timestamp())}
+    message = {**fields, "wallet": wallet, "nonce": str(nonce), "deadline": str(int(expires_at.timestamp()))}
     domain = build_domain(settings.BLOCKCHAIN_CHAIN_ID, verifying_contract)
 
     return SigningChallenge.objects.create(

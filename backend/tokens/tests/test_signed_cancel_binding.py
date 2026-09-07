@@ -9,7 +9,7 @@ from rest_framework.test import APITestCase
 
 from feature_flags.models import FeatureFlag
 from shared.tests.tenants import make_tenant
-from shared.utils.typed_data import signable_message
+from shared.utils.typed_data import signable_message, typed_data_digest
 from tokens.exceptions import ChallengeAlreadyUsedException, ChallengeMismatchException
 from tokens.models import SigningChallenge, SigningChallengePurpose, TransferOrder
 from tokens.models.choices import TransferOrderStatus, TransferOrderType
@@ -152,6 +152,36 @@ class SignedCancelBindingTest(APITestCase):
         self.assertEqual(issued["message"]["orderUuid"], str(self.order.uuid))
         self.assertEqual(issued["message"]["wallet"], OWNER.address)
         self.assertIn("OrderCancel", issued["types"])
+
+    def test_no_number_on_the_wire_can_be_rounded_by_a_javascript_client(self):
+        issued = self.request_challenge()
+
+        def numbers(value):
+            if isinstance(value, bool):
+                return []
+            if isinstance(value, int) or isinstance(value, float):
+                return [value]
+            if isinstance(value, dict):
+                return [n for item in value.values() for n in numbers(item)]
+            if isinstance(value, list):
+                return [n for item in value for n in numbers(item)]
+            return []
+
+        oversized = [n for n in numbers(issued) if abs(n) > 2**53 - 1]
+
+        self.assertEqual(oversized, [])
+        self.assertIsInstance(issued["message"]["nonce"], str)
+        self.assertIsInstance(issued["message"]["deadline"], str)
+
+    def test_a_signature_over_the_wire_form_matches_the_stored_digest(self):
+        issued = self.request_challenge()
+        stored = SigningChallenge.objects.get(digest=issued["digest"])
+
+        self.assertEqual(issued["message"], stored.payload["message"])
+        self.assertEqual(
+            issued["digest"],
+            typed_data_digest(issued["domain"], issued["types"], issued["message"]),
+        )
 
     def test_two_challenges_for_one_order_carry_different_nonces(self):
         first = self.request_challenge()
