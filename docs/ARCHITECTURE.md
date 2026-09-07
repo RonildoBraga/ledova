@@ -1478,7 +1478,7 @@ CI runs it in the source-gates job. Like the other two it needs no dependencies:
 Python 3 and a checkout are enough. `make test-gates` runs its unit tests in
 `scripts/tests/`, which is the evidence that it fires rather than merely runs.
 
-It enforces four rules, each chosen because it is decidable from the syntax
+It enforces five rules, each chosen because it is decidable from the syntax
 alone. A gate that has to guess what a value holds at run time is a gate that
 gets allowlisted into meaninglessness.
 
@@ -1517,9 +1517,48 @@ name from the gate's `BODY_NAMES` (`response`, `payload`, `body`, `data`,
 rest), a `.text`, `.content`, `.data`, `.details` or `.body` attribute, a
 `.json()` call, or a constant subscript or `.get()` of one of those keys --
 reached directly or through `str()`, `repr()`, `json.dumps()` or `.format()`.
+A provider also puts whole sub-documents under its own keys, and those are
+bodies too: `SUB_BODY_KEYS` carries `info`, `review`, `reviewResult`,
+`applicant`, `applicantData`, `fixedInfo`, `idDocs` and `addresses`, which is
+where SumSub keeps `firstName`, `lastName`, `dob`, `idDocs` and `addresses`.
+`response['info']` is refused for the same reason `response['data']` is.
+
 The rule looks only at the value handed to the formatter, so
 `f"{response.status_code}"` and `f"{ticket.get('id')}"` are fine and
-`f"{response}"` is not. `SumSubService.get_applicant_data` and
+`f"{response}"` is not. A body-shaped key is refused **whatever the receiver**,
+so `unrelated['data']` is a finding: a false positive here is loud and costs a
+rename, while requiring the receiver to be a known body name would make the
+rule silent on every dictionary the gate has not been told about. A dossier key
+is the other way round -- `response.info` is refused and `unrelated.info` is
+not -- because `.info` is too common an attribute to refuse on its own.
+
+Both backend rules follow **one assignment**. A value bound once in the
+enclosing scope and then logged is the value it was bound to, so
+
+```python
+line = f"[SUMSUB_CLIENT] Applicant data for {applicant_id}: {response}"
+logger.info(line)
+```
+
+is refused exactly as the one-line form is, and `addr = user.email` followed by
+`f"{addr}"` is refused as `f"{user.email}"` is. Three limits keep that
+decidable: a name assigned more than once in the scope is not followed at all,
+the substitution is one hop from a logged position rather than a chase through
+a chain, and only the structure of the bound expression is descended --
+f-strings, `%` operands and container literals -- never the arguments of a call
+it makes. So `u = build(user)` then `f"{u.pk}"` is not a finding, and neither is
+a field read of a field read.
+
+Container literals are walked wherever they appear, including `extra=`, so
+`logger.info("x", extra={"r": response})` is refused.
+
+Backend, third rule -- a logger must be bound to `logger`, `log` or `logging`.
+The gate only recognises calls on those three names, so a module binding its
+logger to anything else is not scanned at all, and nothing would say so. That
+is the failure this document argues against under "Clients and the shared
+package": *for a gate, prefer the failure that shouts.* Binding
+`audit = logging.getLogger("audit")` is now a finding naming the binding, and
+the fix is a rename. `SumSubService.get_applicant_data` and
 `get_applicant_status` log the applicant id and the review answer, which is
 what `IdentityVerificationService.get_verification_status` polls them for;
 `ExpoPushClient` logs the Expo error code rather than the ticket, whose
@@ -1553,6 +1592,16 @@ literal-only rule certifies a template whatever it interpolates:
 logs the `message` of a WebView `postMessage`. Both are provider- or
 SDK-authored strings today; if one ever carries user input, the gate will not
 say so.
+
+Two further backend gaps are known and deliberate. A value assigned **twice**
+in a scope is not followed, so a body reached through a reassigned name passes;
+following it would mean tracking which branch ran, which is not decidable from
+syntax. And a body reached through a **call** the gate does not recognise --
+`logger.info(f"{summarise(response)}")` -- passes, because `summarise` may
+return an id as easily as a dossier; only `str`, `repr`, `json.dumps`,
+`pprint`, `pformat` and `.format` are followed through. Both are false
+negatives that a reviewer has to catch, and both are stated here rather than
+left for the next person to rediscover.
 
 ### Test traps
 

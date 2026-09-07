@@ -199,3 +199,100 @@ class ClientBodyRule(unittest.TestCase):
 
     def test_a_plain_literal_is_allowed(self):
         self.assertEqual(gate.script_findings("console.error('plain message');"), [])
+
+
+class ProviderSubDocumentRule(unittest.TestCase):
+    def rules(self, source):
+        return [rule for _, rule, _ in gate.python_findings(source)]
+
+    def test_the_key_a_kyc_provider_puts_the_dossier_under_is_a_body(self):
+        self.assertEqual(self.rules("logger.info(f\"{response['info']}\")"), [gate.LOG_BODY])
+        self.assertEqual(self.rules('logger.info(f"{response.info}")'), [gate.LOG_BODY])
+        self.assertEqual(self.rules("logger.info(f\"{response.get('info')}\")"), [gate.LOG_BODY])
+
+    def test_a_nested_provider_document_is_a_body_at_either_level(self):
+        self.assertEqual(self.rules("logger.info(f\"{response['review']['reviewResult']}\")"), [gate.LOG_BODY])
+
+    def test_a_named_scalar_field_of_a_body_is_still_allowed(self):
+        self.assertEqual(self.rules("logger.info(f\"{response['status_code']}\")"), [])
+        self.assertEqual(self.rules('logger.info(f"{response.status_code}")'), [])
+        self.assertEqual(self.rules("logger.info(f\"{result['tx_hash']}\")"), [])
+
+    def test_a_dossier_attribute_needs_a_body_receiver(self):
+        self.assertEqual(self.rules('logger.info(f"{unrelated.info}")'), [])
+
+    def test_a_body_shaped_key_is_refused_on_any_receiver(self):
+        self.assertEqual(self.rules("logger.info(f\"{unrelated['data']}\")"), [gate.LOG_BODY])
+
+
+class BindingRule(unittest.TestCase):
+    def rules(self, *lines):
+        source = "import logging\nlogger = logging.getLogger(__name__)\ndef f(response, user, make):\n"
+        source += "".join(f"    {line}\n" for line in lines)
+        return [rule for _, rule, _ in gate.python_findings(source)]
+
+    def test_a_body_reached_through_one_assignment_is_refused(self):
+        self.assertEqual(
+            self.rules('line = f"[SUMSUB_CLIENT] Applicant data: {response}"', "logger.info(line)"),
+            [gate.LOG_BODY],
+        )
+
+    def test_a_private_value_reached_through_one_assignment_is_refused(self):
+        self.assertEqual(self.rules("addr = user.email", 'logger.info(f"{addr}")'), [gate.LOG_PRIVATE])
+
+    def test_a_name_assigned_twice_is_not_followed(self):
+        self.assertEqual(self.rules("x = response", "x = 'safe'", 'logger.info(f"{x}")'), [])
+
+    def test_a_field_read_of_a_field_read_is_not_a_body(self):
+        self.assertEqual(
+            self.rules("details = response.get('details', {})", "kind = details.get('error')", 'logger.info(f"{kind}")'),
+            [],
+        )
+
+    def test_an_object_built_from_private_arguments_is_not_itself_private(self):
+        self.assertEqual(self.rules("u = make(user)", 'logger.info(f"{u.pk}")'), [])
+
+    def test_a_binding_in_another_function_is_not_in_scope(self):
+        source = (
+            "import logging\n"
+            "logger = logging.getLogger(__name__)\n"
+            "def one(response):\n"
+            "    line = response\n"
+            "def two():\n"
+            '    logger.info(f"{line}")\n'
+        )
+        self.assertEqual([rule for _, rule, _ in gate.python_findings(source)], [])
+
+
+class ContainerArguments(unittest.TestCase):
+    def rules(self, source):
+        return [rule for _, rule, _ in gate.python_findings(source)]
+
+    def test_a_body_inside_extra_is_walked(self):
+        self.assertEqual(self.rules('logger.info("x", extra={"r": response})'), [gate.LOG_BODY])
+
+    def test_a_body_inside_a_list_argument_is_walked(self):
+        self.assertEqual(self.rules('logger.info("x %s", [response])'), [gate.LOG_BODY])
+
+    def test_a_body_inside_a_dict_argument_is_walked(self):
+        self.assertEqual(self.rules('logger.info("x %s", {"r": response})'), [gate.LOG_BODY])
+
+
+class LoggerAliasRule(unittest.TestCase):
+    def rules(self, source):
+        return [rule for _, rule, _ in gate.python_findings(source)]
+
+    def test_a_logger_bound_to_an_unscanned_name_is_refused(self):
+        self.assertEqual(self.rules("root_logger = logging.getLogger()"), [gate.LOG_ALIAS])
+
+    def test_the_three_scanned_names_are_allowed(self):
+        for name in sorted(gate.LOG_OBJECTS):
+            with self.subTest(name=name):
+                self.assertEqual(self.rules(f"{name} = logging.getLogger(__name__)"), [])
+
+    def test_the_finding_names_the_binding(self):
+        source = "import logging\naudit = logging.getLogger('audit')\n"
+        self.assertEqual(
+            gate.python_findings(source),
+            [(2, gate.LOG_ALIAS, "audit = logging.getLogger(...)")],
+        )

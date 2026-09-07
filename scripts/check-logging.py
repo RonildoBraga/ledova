@@ -53,6 +53,7 @@ CONSOLE_STRINGIFY = "console-argument-stringifies-an-object"
 CONSOLE_BODY = "console-argument-interpolates-a-request-or-response-body"
 LOG_PRIVATE = "private-value-in-a-log-line"
 LOG_BODY = "provider-body-in-a-log-line"
+LOG_ALIAS = "logger-bound-to-a-name-the-gate-does-not-scan"
 
 RULES = {
     CONSOLE_ARGUMENT: "a console argument must be a string literal or a template literal, never an object",
@@ -60,6 +61,7 @@ RULES = {
     CONSOLE_BODY: "a template literal that interpolates a request or response body prints what the literal was meant to keep out",
     LOG_PRIVATE: "log an identifier an operator can resolve, never an email address, a password or a push token",
     LOG_BODY: "log the fields an operator needs, never a whole provider response body",
+    LOG_ALIAS: "bind a logger to logger, log or logging; any other name is not scanned by this gate",
 }
 
 CONSOLE_METHODS = frozenset({"assert", "debug", "dir", "error", "info", "log", "table", "trace", "warn"})
@@ -88,6 +90,23 @@ BODY_NAMES = frozenset(
 )
 BODY_ATTRIBUTES = frozenset({"body", "content", "data", "details", "text"})
 BODY_KEYS = frozenset({"body", "content", "data", "details", "payload", "raw", "response", "result"})
+SUB_BODY_KEYS = frozenset(
+    {
+        "applicant",
+        "applicantData",
+        "applicant_data",
+        "addresses",
+        "fixedInfo",
+        "fixed_info",
+        "idDocs",
+        "id_docs",
+        "info",
+        "review",
+        "reviewResult",
+        "review_result",
+    }
+)
+DOCUMENT_KEYS = BODY_KEYS | SUB_BODY_KEYS
 STRINGIFIERS = frozenset({"dumps", "format", "pformat", "pprint", "repr", "str"})
 
 IDENT_CHARS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_$")
@@ -345,14 +364,20 @@ def private_reference(node: ast.expr) -> str | None:
 
 
 def body_reference(node: ast.expr, depth: int = 0) -> str | None:
-    if depth > 3:
+    if depth > 6:
         return None
     if isinstance(node, ast.Name) and node.id in BODY_NAMES:
         return node.id
-    if isinstance(node, ast.Attribute) and node.attr in BODY_ATTRIBUTES:
-        return f".{node.attr}"
-    if isinstance(node, ast.Subscript) and isinstance(node.slice, ast.Constant) and node.slice.value in BODY_KEYS:
-        return f"[{node.slice.value!r}]"
+    if isinstance(node, ast.Attribute):
+        if node.attr in BODY_ATTRIBUTES or (node.attr in SUB_BODY_KEYS and body_reference(node.value, depth + 1)):
+            return f".{node.attr}"
+        return None
+    if isinstance(node, ast.Subscript):
+        key = node.slice.value if isinstance(node.slice, ast.Constant) else None
+        if key in DOCUMENT_KEYS:
+            return f"[{key!r}]"
+        receiver = body_reference(node.value, depth + 1)
+        return f"{receiver}[...]" if receiver and key is None else None
     if not isinstance(node, ast.Call):
         return None
     if isinstance(node.func, ast.Attribute):
@@ -360,7 +385,7 @@ def body_reference(node: ast.expr, depth: int = 0) -> str | None:
             return ".json()"
         if node.func.attr == "get" and node.args:
             first = node.args[0]
-            if isinstance(first, ast.Constant) and first.value in BODY_KEYS:
+            if isinstance(first, ast.Constant) and first.value in DOCUMENT_KEYS:
                 return f".get({first.value!r})"
         if node.func.attr in STRINGIFIERS and node.args:
             return body_reference(node.args[0], depth + 1)
@@ -369,17 +394,80 @@ def body_reference(node: ast.expr, depth: int = 0) -> str | None:
     return None
 
 
-def logged_values(node: ast.Call) -> list[ast.expr]:
-    values: list[ast.expr] = []
-    for argument in list(node.args) + [keyword.value for keyword in node.keywords]:
-        values.append(argument)
-        for inner in ast.walk(argument):
-            if isinstance(inner, ast.FormattedValue):
-                values.append(inner.value)
-            elif isinstance(inner, ast.BinOp) and isinstance(inner.op, ast.Mod):
-                right = inner.right
-                values.extend(right.elts if isinstance(right, ast.Tuple) else [right])
+def structural_values(expression: ast.expr) -> list[ast.expr]:
+    values = [expression]
+    for inner in ast.walk(expression):
+        if isinstance(inner, ast.FormattedValue):
+            values.append(inner.value)
+        elif isinstance(inner, ast.BinOp) and isinstance(inner.op, ast.Mod):
+            right = inner.right
+            values.extend(right.elts if isinstance(right, ast.Tuple) else [right])
+        elif isinstance(inner, (ast.List, ast.Set, ast.Tuple)):
+            values.extend(inner.elts)
+        elif isinstance(inner, ast.Dict):
+            values.extend(value for value in inner.values if value is not None)
     return values
+
+
+def logged_values(node: ast.Call, bindings: dict[str, ast.expr] | None = None) -> list[ast.expr]:
+    bindings = bindings or {}
+    direct: list[ast.expr] = []
+    for argument in list(node.args) + [keyword.value for keyword in node.keywords]:
+        direct.extend(structural_values(argument))
+
+    values = list(direct)
+    for value in direct:
+        if isinstance(value, ast.Name) and value.id in bindings:
+            values.extend(structural_values(bindings[value.id]))
+    return values
+
+
+def body_of(scope: ast.AST):
+    nested = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
+    pending = list(ast.iter_child_nodes(scope))
+    while pending:
+        node = pending.pop()
+        yield node
+        if not isinstance(node, nested):
+            pending.extend(ast.iter_child_nodes(node))
+
+
+def single_bindings(scope: ast.AST) -> dict[str, ast.expr]:
+    assigned: dict[str, list[ast.expr]] = {}
+
+    for node in body_of(scope):
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    assigned.setdefault(target.id, []).append(node.value)
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.value is not None:
+            assigned.setdefault(node.target.id, []).append(node.value)
+        elif isinstance(node, (ast.For, ast.AsyncFor)) and isinstance(node.target, ast.Name):
+            assigned.setdefault(node.target.id, []).append(node.iter)
+        elif isinstance(node, ast.withitem) and isinstance(node.optional_vars, ast.Name):
+            assigned.setdefault(node.optional_vars.id, []).append(node.context_expr)
+
+    return {name: values[0] for name, values in assigned.items() if len(values) == 1}
+
+
+def scopes_of(tree: ast.AST):
+    yield tree
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            yield node
+
+
+def alias_findings(tree: ast.AST) -> list[tuple[int, str, str]]:
+    findings: list[tuple[int, str, str]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Call):
+            continue
+        if dotted_name(node.value.func) != "logging.getLogger":
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name) and target.id not in LOG_OBJECTS:
+                findings.append((node.lineno, LOG_ALIAS, f"{target.id} = logging.getLogger(...)"))
+    return findings
 
 
 def python_findings(text: str) -> list[tuple[int, str, str]]:
@@ -388,22 +476,27 @@ def python_findings(text: str) -> list[tuple[int, str, str]]:
     except SyntaxError as error:
         return [(0, LOG_PRIVATE, f"could not parse: {error}")]
 
-    findings: list[tuple[int, str, str]] = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call) or not is_logging_call(node):
-            continue
-        call = dotted_name(node.func) or "logger"
-        for argument in list(node.args) + [keyword.value for keyword in node.keywords]:
-            for inner in ast.walk(argument):
-                if not isinstance(inner, ast.expr):
-                    continue
-                reference = private_reference(inner)
+    findings: list[tuple[int, str, str]] = alias_findings(tree)
+
+    for scope in scopes_of(tree):
+        bindings = single_bindings(scope)
+        for node in body_of(scope):
+            if not isinstance(node, ast.Call) or not is_logging_call(node):
+                continue
+            call = dotted_name(node.func) or "logger"
+            for value in logged_values(node, bindings):
+                for inner in ast.walk(value):
+                    if not isinstance(inner, ast.expr):
+                        continue
+                    reference = private_reference(inner)
+                    if reference:
+                        line = getattr(inner, "lineno", node.lineno)
+                        findings.append((line, LOG_PRIVATE, f"{call}(... {reference} ...)"))
+                reference = body_reference(value)
                 if reference:
-                    findings.append((getattr(inner, "lineno", node.lineno), LOG_PRIVATE, f"{call}(... {reference} ...)"))
-        for value in logged_values(node):
-            reference = body_reference(value)
-            if reference:
-                findings.append((getattr(value, "lineno", node.lineno), LOG_BODY, f"{call}(... {reference} ...)"))
+                    line = getattr(value, "lineno", node.lineno)
+                    findings.append((line, LOG_BODY, f"{call}(... {reference} ...)"))
+
     return sorted(set(findings))
 
 
