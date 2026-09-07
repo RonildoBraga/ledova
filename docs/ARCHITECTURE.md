@@ -988,6 +988,76 @@ not checked. They carry no comments today; keep it that way.
 
 A green CI run is evidence for the trees in `TREES` and nothing else.
 
+### The type-check gate
+
+`scripts/check-type-check.py` answers one question: would a workspace's
+`type-check` script examine any files at all? `make check-type-check` runs it and
+CI runs it beside the other source gates.
+
+The dashboard and marketing both use a solution-style `tsconfig.json` — `"files":
+[]` plus `references` — and both ran `tsc --noEmit`, which **does not follow
+project references**. Against that config it type-checks nothing and exits 0. A
+deliberate `const x: number = "not a number"` passed `npm run type-check -w
+dashboard` and passed the root `npm run typecheck`, which is what CI's
+*Type-check workspaces* step runs. Both now use `tsc -b --noEmit`, which does
+follow them.
+
+Type errors were still being caught, by `make build`'s `tsc -b` earlier in the
+same job — so this was not errors reaching `main`, it was a check that had
+stopped being one while reading as green. That is the more dangerous state,
+because the safety depended on an unrelated step running first: reorder the job,
+split the type-check out, or drop the build and the errors ship.
+
+The gate is static and cheap: a workspace whose tsconfig examines no files of
+its own must type-check in build mode. It does not run `tsc`.
+
+What counts as examining no files is decided by TypeScript, not by the presence
+of one key, so the rule was calibrated against the compiler rather than against
+the documentation. Each shape below was measured by type-checking a file with a
+known error under it:
+
+| tsconfig | `tsc --noEmit` |
+| --- | --- |
+| `{"files": []}` | examines nothing |
+| `{"files": [], "include": []}` | examines nothing |
+| `{"include": []}` | examines nothing |
+| `{"references": [...]}` | examines everything |
+| `{"files": [], "include": ["**/*"]}` | examines everything |
+| `{"extends": <base with "files": []>}` | examines nothing |
+
+The last row is why `extends` is resolved rather than read past. `tsc
+--showConfig` does not print the inherited `files`, but the inheritance is real:
+a workspace whose base carries the empty `files` is exactly as unchecked as one
+carrying it directly. The chain is consulted only when the local config does not
+already settle the question, which is why `mobile` — whose base is `expo/tsconfig.base`
+— needs no install to be judged: its own non-empty `include` is enough.
+
+`files` and `include` resolve **independently** down the chain, each taken from
+the last config that declares it. A config extending `["<include: src>",
+"<files: []>"]` type-checks `src` in either order, so the two cannot be carried
+as a pair.
+
+What the gate is for is narrower than "examines no files": it is *examines no
+files **and reports success***. A config whose `exclude` cancels its `include`
+examines nothing too, but tsc refuses it loudly — `error TS18003: No inputs were
+found` — and exits 2, so CI already catches it. The shape worth a gate is the one
+that exits 0 while checking nothing. Measured:
+
+    {"include": ["src"], "exclude": ["src"]}   exit 2
+    {"files": [], "references": [...]}         exit 0
+
+Two things the gate refuses to do quietly. An `extends` it cannot follow is
+reported, not skipped — a gate answering "nothing found" because it could not
+read the file is the failure this rule exists to prevent, one level up. And
+`tsconfig.json` is JSONC, so block comments and trailing commas are stripped
+before parsing; a file it still cannot parse is named in a message rather than
+raised as a stack trace, because "the gate crashed" and "the gate found
+something" must not look the same in CI.
+
+A tsconfig that examines nothing and references no project is reported too, with
+different advice: build mode would not help it, so it is told to state a file
+set.
+
 ### The layer gate
 
 `scripts/check-layers.py` is the mechanical half of the "Never contains" column
