@@ -44,4 +44,13 @@ PRINCIPAL_BEARING = {
     "users.tasks.notifications.send_transaction_notification": "Sends to one user about one transaction.",
 }
 
+READS_MUST_SURVIVE_THE_POLICIES = {
+    "wallets.tasks.sync.sync_wallet": "Omarch 2's #319 gives this one a trap worth stating before anyone "
+    "converts it. _share_balance reads tokens_sharetoken through the ORM, and under a company-owner policy "
+    "an investor owns no issuer company, so a scoped sync_wallet would find no share class and stop syncing "
+    "share holdings silently - the failure path returns None and logs. Nothing breaks today only because "
+    "every task runs on the operator alias. It resolves when tokens/0024's leaf policy carries the market "
+    "term, since a deployed token is then visible to an investor principal.",
+}
+
 CLASSIFIED = {**SYSTEM_WIDE, **PRINCIPAL_BEARING}

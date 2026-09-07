@@ -6,7 +6,12 @@ from django.conf import settings
 from django.test import SimpleTestCase
 
 from ledova_backend.procrastinate_app import app
-from shared.tasks.catalogue import CLASSIFIED, PRINCIPAL_BEARING, SYSTEM_WIDE
+from shared.tasks.catalogue import (
+    CLASSIFIED,
+    PRINCIPAL_BEARING,
+    READS_MUST_SURVIVE_THE_POLICIES,
+    SYSTEM_WIDE,
+)
 
 WHAT_IS_DECLARED = """
 import django, json, os
@@ -57,3 +62,14 @@ class EveryTaskSaysWhoItActsForTest(SimpleTestCase):
     def test_the_subprocess_answered_with_a_registry_rather_than_with_nothing(self):
         self.assertGreater(len(self.declared), 20)
         self.assertLessEqual(self.declared, set(app.tasks))
+
+
+class AConversionMustProveItsReadsSurviveTheSelectPoliciesTest(SimpleTestCase):
+
+    def test_every_noted_trap_names_a_task_that_is_principal_bearing(self):
+        self.assertEqual(sorted(set(READS_MUST_SURVIVE_THE_POLICIES) - set(PRINCIPAL_BEARING)), [])
+
+    def test_every_noted_trap_states_what_would_go_quiet(self):
+        for name, reason in READS_MUST_SURVIVE_THE_POLICIES.items():
+            with self.subTest(task=name):
+                self.assertGreater(len(reason), 120, f"{name} needs the failure named, not the risk labelled")
