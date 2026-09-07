@@ -4,6 +4,18 @@ from django.db.models import OuterRef, Subquery
 
 TABLES = ("NotificationPreferences", "UserPreferences", "FinancialProfile")
 
+REVERSE_ORDER = (
+    "Operations reverse back to front, so drop_triggers runs before unfill sets every user_id to NULL. "
+    "An operation appended after install_triggers would move that boundary, and unfill would then hit the "
+    "trigger's own cannot-change guard and the reverse would be impossible."
+)
+
+UNREACHABLE_TODAY = (
+    "UserProfile.user is a non-nullable OneToOneField and all three user_profile links are non-nullable, "
+    "so neither this guard nor the trigger's matching RAISE can fire under the current schema. Both are "
+    "here for the R0 lanes whose parent link is nullable, where the same shape does fire."
+)
+
 SKIPPED_ON_SQLITE = (
     "The derive-and-refuse trigger is PostgreSQL only. SQLite has no plpgsql, "
     "and the column exists for a PostgreSQL row-level security policy, so a "
@@ -44,10 +56,9 @@ BEFORE INSERT OR UPDATE ON {table}
 FOR EACH ROW EXECUTE FUNCTION {function}();
 """
 
-DROP = """
-DROP TRIGGER IF EXISTS {trigger} ON {table};
-DROP FUNCTION IF EXISTS {function}();
-"""
+DROP_TRIGGER = "DROP TRIGGER IF EXISTS {trigger} ON {table};"
+
+DROP_FUNCTION = "DROP FUNCTION IF EXISTS {function}();"
 
 
 def _names(apps, name):
@@ -77,13 +88,22 @@ def backfill(apps, schema_editor):
         remaining = rows.filter(user_id__isnull=True).count()
         print(f"  {model._meta.db_table}: {filled} row(s) backfilled, {remaining} without an owner")
         if remaining:
-            raise RuntimeError(f"{model._meta.db_table} has {remaining} row(s) whose user_profile has no user")
+            raise RuntimeError(
+                f"{model._meta.db_table} has {remaining} row(s) whose user_profile has no user. {UNREACHABLE_TODAY}"
+            )
 
 
 def unfill(apps, schema_editor):
+    connection = schema_editor.connection
     for name in TABLES:
         model = apps.get_model("users", name)
-        model._base_manager.using(schema_editor.connection.alias).update(user_id=None)
+        if connection.vendor == "postgresql":
+            names = _names(apps, name)
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT to_regclass(%s) IS NOT NULL", [names["trigger"]])
+                if cursor.fetchone()[0]:
+                    raise RuntimeError(f"{names['trigger']} is still installed. {REVERSE_ORDER}")
+        model._base_manager.using(connection.alias).update(user_id=None)
 
 
 def install_triggers(apps, schema_editor):
@@ -93,7 +113,7 @@ def install_triggers(apps, schema_editor):
         for name in TABLES:
             names = _names(apps, name)
             cursor.execute(FUNCTION.format(**names))
-            cursor.execute(DROP.format(**names).split(";")[0] + ";")
+            cursor.execute(DROP_TRIGGER.format(**names))
             cursor.execute(TRIGGER.format(**names))
 
 
@@ -102,7 +122,9 @@ def drop_triggers(apps, schema_editor):
         return
     with schema_editor.connection.cursor() as cursor:
         for name in TABLES:
-            cursor.execute(DROP.format(**_names(apps, name)))
+            names = _names(apps, name)
+            cursor.execute(DROP_TRIGGER.format(**names))
+            cursor.execute(DROP_FUNCTION.format(**names))
 
 
 class Migration(migrations.Migration):

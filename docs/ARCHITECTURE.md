@@ -1421,9 +1421,13 @@ what `IdentityVerificationService.get_verification_status` polls them for;
 `message` and `details` both echo the push token.
 
 What it does not cover, deliberately. `print` and a management command's
-`self.stdout.write` are ungated: the only `print` calls in `backend/` are the
-progress counters in `assets/migrations/0009_...`, and no command writes an
-address. An object whose `__str__` returns an email -- `CustomUser.__str__`
+`self.stdout.write` are ungated: every `print` in `backend/` is a data
+migration reporting what it moved -- the progress counters in
+`assets/migrations/0009_...` and the backfill counts in the RLS stage R0
+migrations -- and no command writes an address. That is a convention held by
+review rather than by a check, and it is the kind of sentence that goes stale
+between the day it is written and the next migration; if a `print` ever carries
+a row's contents rather than a count of rows, nothing here will say so. An object whose `__str__` returns an email -- `CustomUser.__str__`
 does -- is ungated too: `f"{user}"` in a log line is a leak the syntax cannot
 tell apart from `f"{token}"`, and no site does it today. `contracts/`,
 `packages/scripts/` and the root build config of each client are outside the

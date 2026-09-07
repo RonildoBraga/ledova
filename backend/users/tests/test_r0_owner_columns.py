@@ -125,6 +125,35 @@ class OwnerColumnTriggerTest(TestCase):
                 self.assertIn("does not match user_profile.user_id", str(raised.exception))
                 row.delete()
 
+    def test_changing_the_profile_and_the_owner_together_is_still_refused(self):
+        for model, extra in ROWS:
+            with self.subTest(model=model.__name__):
+                row = model.objects.create(user_profile=self.profile, **extra)
+                table = model._meta.db_table
+
+                with self.assertRaises((IntegrityError, ProgrammingError)) as raised:
+                    with transaction.atomic(), connection.cursor() as cursor:
+                        cursor.execute(
+                            f'UPDATE "{table}" SET user_profile_id = %s, user_id = %s WHERE uuid = %s',
+                            [self.stranger_profile.pk, self.stranger.pk, row.pk],
+                        )
+
+                self.assertIn("user_id cannot change", str(raised.exception))
+                row.delete()
+
+    def test_nulling_the_owner_is_repaired_rather_than_refused(self):
+        for model, extra in ROWS:
+            with self.subTest(model=model.__name__):
+                row = model.objects.create(user_profile=self.profile, **extra)
+                table = model._meta.db_table
+
+                with connection.cursor() as cursor:
+                    cursor.execute(f'UPDATE "{table}" SET user_id = NULL WHERE uuid = %s', [row.pk])
+
+                row.refresh_from_db()
+                self.assertEqual(row.user_id, self.user.pk)
+                row.delete()
+
     def test_an_ordinary_update_still_works(self):
         row = UserPreferences.objects.create(user_profile=self.profile)
 
