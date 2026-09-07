@@ -17,6 +17,7 @@ from tokens.models import (
     ShareIssuanceRequest,
     ShareToken,
     ShareTokenStatus,
+    SwapOrder,
     TransferOrder,
 )
 from tokens.models.choices import TransferOrderType
@@ -132,6 +133,44 @@ class RegisterSpineProtectionTest(TestCase):
         self._protected(self.token)
 
         self.assertTrue(TransferOrder.objects.filter(pk=order.pk).exists())
+
+    def test_a_share_class_cannot_take_its_settled_swaps_with_it(self):
+        other = ShareToken.objects.create(
+            company=self.company,
+            name="Other ordinary shares",
+            symbol="OTH",
+            total_supply="10000",
+            status=ShareTokenStatus.DRAFT,
+        )
+        sell = self._transfer_order()
+        buy = TransferOrder.objects.create(
+            token=self.token,
+            payment_asset=sell.payment_asset,
+            wallet=sell.wallet,
+            owner_account=sell.owner_account,
+            wallet_address=sell.wallet_address,
+            order_type=TransferOrderType.BUY,
+            quantity=10,
+            price_per_share=Decimal("1.50"),
+        )
+        TransferOrder.objects.filter(pk__in=[sell.pk, buy.pk]).update(token=other)
+        swap = SwapOrder.objects.create(
+            sell_order=sell,
+            buy_order=buy,
+            share_token=self.token,
+            payment_asset=sell.payment_asset,
+            seller_address=HOLDER,
+            buyer_address=HOLDER,
+            share_amount=10,
+            payment_amount=15,
+            nonce=1,
+            order_hash="0x" + "11" * 32,
+            expires_at=timezone.now() + timedelta(days=1),
+        )
+
+        self._protected(self.token)
+
+        self.assertTrue(SwapOrder.objects.filter(pk=swap.pk).exists())
 
     def test_a_share_class_with_nothing_behind_it_is_still_deletable(self):
         self.token.delete()

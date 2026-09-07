@@ -47,4 +47,11 @@ class Migration(migrations.Migration):
                 on_delete=django.db.models.deletion.PROTECT, related_name="transfer_orders", to="tokens.sharetoken"
             ),
         ),
+        migrations.AlterField(
+            model_name="swaporder",
+            name="share_token",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.PROTECT, related_name="swap_orders", to="tokens.sharetoken"
+            ),
+        ),
     ]

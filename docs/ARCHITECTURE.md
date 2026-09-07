@@ -497,14 +497,23 @@ company could take the whole s169 register and the issuance trail with it.
 settled order is a share movement with an on-chain hash, and the same argument
 that keeps an allotment keeps it.
 
+`SwapOrder.share_token` is `PROTECT` too, and the argument for leaving it
+`CASCADE` is recorded here because it was made and it was wrong. It said a
+`PROTECT` there would be refused by `TransferOrder.token` first and add nothing,
+since a swap's `sell_order` and `buy_order` are both non-nullable. That holds
+only while those orders point at the same share class as the swap does, and
+nothing enforces that they do. Repoint them and the swap contributes no
+protection of its own, so a class whose sole dependent was a settlement record
+would delete and take it. A swap is the row that says shares actually changed
+hands; it protects the class itself rather than inheriting protection from its
+two orders.
+
 Two edges below the company are deliberately left `CASCADE`.
 `CompanyDocument.company` carries listing evidence the issuer already creates
 and deletes through `DELETE /api/v1/companies/{uuid}/documents/{uuid}/`, so it
 is not a register row. `OrderModificationLog.order` and
 `SwapOrder.sell_order`/`.buy_order` are subordinate to an order that can now
-only be deleted deliberately, never by deleting the share class above it; a
-`PROTECT` on `SwapOrder.share_token` as well would be refused by
-`TransferOrder.token` first and add nothing.
+only be deleted deliberately, never by deleting the share class above it.
 
 `CompanyViewSet.perform_destroy` calls `companies.services.company.delete_company`
 and `ShareTokenViewSet.perform_destroy` calls
