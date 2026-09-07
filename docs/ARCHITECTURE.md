@@ -1008,8 +1008,46 @@ stopped being one while reading as green. That is the more dangerous state,
 because the safety depended on an unrelated step running first: reorder the job,
 split the type-check out, or drop the build and the errors ship.
 
-The gate is static and cheap: a workspace whose tsconfig delegates to references
-must type-check in build mode. It does not run `tsc`.
+The gate is static and cheap: a workspace whose tsconfig examines no files of
+its own must type-check in build mode. It does not run `tsc`.
+
+What counts as examining no files is decided by TypeScript, not by the presence
+of one key, so the rule was calibrated against the compiler rather than against
+the documentation. Each shape below was measured by type-checking a file with a
+known error under it:
+
+| tsconfig | `tsc --noEmit` |
+| --- | --- |
+| `{"files": []}` | examines nothing |
+| `{"files": [], "include": []}` | examines nothing |
+| `{"include": []}` | examines nothing |
+| `{"references": [...]}` | examines everything |
+| `{"files": [], "include": ["**/*"]}` | examines everything |
+| `{"extends": <base with "files": []>}` | examines nothing |
+
+The last row is why `extends` is resolved rather than read past. `tsc
+--showConfig` does not print the inherited `files`, but the inheritance is real:
+a workspace whose base carries the empty `files` is exactly as unchecked as one
+carrying it directly. The chain is consulted only when the local config does not
+already settle the question, which is why `mobile` — whose base is `expo/tsconfig.base`
+— needs no install to be judged: its own non-empty `include` is enough.
+
+`files` and `include` resolve **independently** down the chain, each taken from
+the last config that declares it. A config extending `["<include: src>",
+"<files: []>"]` type-checks `src` in either order, so the two cannot be carried
+as a pair.
+
+Two things the gate refuses to do quietly. An `extends` it cannot follow is
+reported, not skipped — a gate answering "nothing found" because it could not
+read the file is the failure this rule exists to prevent, one level up. And
+`tsconfig.json` is JSONC, so block comments and trailing commas are stripped
+before parsing; a file it still cannot parse is named in a message rather than
+raised as a stack trace, because "the gate crashed" and "the gate found
+something" must not look the same in CI.
+
+A tsconfig that examines nothing and references no project is reported too, with
+different advice: build mode would not help it, so it is told to state a file
+set.
 
 ### The layer gate
 
