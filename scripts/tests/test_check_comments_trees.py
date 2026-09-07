@@ -51,3 +51,28 @@ class DocumentedTreesMatchTheGate(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class EverySourceFileIsReachedByATree(unittest.TestCase):
+
+    def test_nothing_is_outside_the_trees_without_a_stated_reason(self):
+        scanned = {
+            path.resolve() for tree, extensions, recurse in gate.TREES for path in gate.files_in(tree, extensions, recurse)
+        }
+
+        self.assertEqual(gate.unscanned_source_files(scanned), [])
+
+    def test_every_exemption_states_a_reason(self):
+        for path, reason in gate.NOT_SCANNED.items():
+            with self.subTest(path=path):
+                self.assertGreater(len(reason), 40, f"{path} needs a reason, not a label")
+
+    def test_dropping_a_tree_leaves_its_files_unreached(self):
+        without_backend = {
+            path.resolve()
+            for tree, extensions, recurse in gate.TREES
+            if tree != "backend"
+            for path in gate.files_in(tree, extensions, recurse)
+        }
+
+        self.assertGreater(len(gate.unscanned_source_files(without_backend)), 500)

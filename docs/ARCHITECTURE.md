@@ -1203,6 +1203,21 @@ not checked. They carry no comments today; keep it that way.
 
 A green CI run is evidence for the trees in `TREES` and nothing else.
 
+Both of this repository's hand-maintained gate lists are now checked in **both**
+directions. A list that only refuses removals still lets a new thing go ungated,
+and the symptom is the same in both cases: a green line reporting a number that
+looks like coverage and is a numerator.
+
+`check-comments.py` states what is deliberately **not** scanned in `NOT_SCANNED`,
+each entry with a reason, and fails on any source file no tree reaches. Without
+it the extension tuples and the recurse flags were prose — flipping `backend` to
+`False` drops 838 files and the gate still passes.
+
+`check-type-check.py` discovers any directory carrying both a `package.json` and a
+`tsconfig.json` and fails if it is neither in `WORKSPACES` nor in `NOT_A_WORKSPACE`
+with a reason. A fifth workspace nobody added is now a failure rather than a
+silence.
+
 ### The type-check gate
 
 `scripts/check-type-check.py` answers one question: would a workspace's

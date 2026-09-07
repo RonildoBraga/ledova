@@ -61,6 +61,39 @@ SKIP_AT_TOP = frozenset(
     }
 )
 
+# The trees above say what is scanned. This says what is deliberately not, so that a
+# file appearing outside every tree is a failure rather than a silence. Without it the
+# extension tuples and the recurse flags are prose: flipping "backend" to False drops
+# 838 files and the gate still reports a green line with a smaller number in it.
+NOT_SCANNED = {
+    "scripts": "The gate scripts state their own rules in module docstrings, which is what they are for.",
+    "dashboard/scripts": "check-react-singleton.mjs is a gate too, and states its rule in a docstring.",
+    "dashboard/tests/smoke": "Playwright smoke specs, which describe steps rather than implement behaviour.",
+}
+
+SKIPPED_DIRECTORIES = frozenset(
+    {"node_modules", ".git", "dist", "build", ".next", "coverage", "__pycache__", ".venv", "venv", "staticfiles"}
+)
+
+
+def unscanned_source_files(scanned: set) -> list[str]:
+    known = set(PY + TS + CSS + SOL)
+    stated = tuple(NOT_SCANNED)
+    missing = []
+
+    for path in sorted(ROOT.rglob("*")):
+        if not path.is_file() or path.suffix not in known:
+            continue
+        if any(part in SKIPPED_DIRECTORIES for part in path.parts):
+            continue
+        if path.resolve() in scanned:
+            continue
+        relative = path.relative_to(ROOT).as_posix()
+        if not relative.startswith(stated):
+            missing.append(relative)
+    return missing
+
+
 PY_DIRECTIVE = re.compile(r"^(?:noqa|pragma|isort)\b|^(?:type|fmt)\s*:")
 PY_CODING = re.compile(r"^#\s*(?:-\*-\s*)?coding[:=]\s*[-\w.]+\s*(?:-\*-)?\s*$")
 
@@ -408,8 +441,10 @@ def main() -> int:
     allowed: list[str] = []
     checked = 0
 
+    scanned: set = set()
     for tree, extensions, recurse in TREES:
         for path in files_in(tree, extensions, recurse):
+            scanned.add(path.resolve())
             checked += 1
             relative = path.relative_to(ROOT)
             text = path.read_text(encoding="utf-8-sig", errors="replace")
@@ -438,7 +473,20 @@ def main() -> int:
         )
         return 1
 
-    print(f"No comments or docstrings in {checked} source files.")
+    missing = unscanned_source_files(scanned)
+    if missing:
+        print(f"Source files no tree reaches ({len(missing)}):\n", file=sys.stderr)
+        for relative in missing:
+            print(f"  {relative}", file=sys.stderr)
+        print(
+            "\nAdd the tree to TREES, or the path to NOT_SCANNED with the reason it is exempt."
+            "\nThe extension tuples and the recurse flags mean nothing without this check:"
+            "\nflipping one drops files and leaves a green line saying a smaller number.",
+            file=sys.stderr,
+        )
+        return 1
+
+    print(f"No comments or docstrings in {checked} source files, and none outside the trees.")
     return 0
 
 
