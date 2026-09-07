@@ -88,13 +88,16 @@ export function AssetAllocationCard({
     );
   }
 
+  const drawn = assetAllocation.filter((item) => item.percentage > 0);
+  const unpricedCount = assetAllocation.filter((item) => item.basis === 'unpriced').length;
+
   const data = {
-    labels: assetAllocation.map((item) => item.symbol),
+    labels: drawn.map((item) => item.symbol),
     datasets: [
       {
-        data: assetAllocation.map((item) => item.totalValue),
-        backgroundColor: assetAllocation.map((item) => item.color),
-        borderColor: assetAllocation.map((item) => item.color),
+        data: drawn.map((item) => item.percentage),
+        backgroundColor: drawn.map((item) => item.color),
+        borderColor: drawn.map((item) => item.color),
         borderWidth: 1,
       },
     ],
@@ -115,10 +118,12 @@ export function AssetAllocationCard({
         borderWidth: 1,
         padding: 10,
         callbacks: {
-          label: (context: { label: string; parsed: number }) => {
-            const value = context.parsed;
-            const percentage = ((value / totalValue) * 100).toFixed(1);
-            return `${context.label}: ${formatDisplayCurrency(value)} (${percentage}%)`;
+          label: (context: { dataIndex: number }) => {
+            const item = drawn[context.dataIndex];
+            const share = formatPercentage(item.percentage, 1);
+            return item.basis === 'value'
+              ? `${item.symbol}: ${formatDisplayCurrency(item.totalValue)} (${share})`
+              : `${item.symbol}: unpriced (${share} by quantity)`;
           },
         },
       },
@@ -135,6 +140,11 @@ export function AssetAllocationCard({
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
               <span className="text-base font-bold text-text-primary">{formatDisplayCurrency(totalValue)}</span>
               <span className="text-sm text-text-muted">Total</span>
+              {unpricedCount > 0 && (
+                <span className="text-xs text-text-subtle text-center px-4">
+                  excludes {unpricedCount} unpriced holding{unpricedCount === 1 ? '' : 's'}
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -164,9 +174,11 @@ export function AssetAllocationCard({
 
                 <div className="flex-1 flex items-baseline justify-end gap-2">
                   {showQuantity && <span className="text-xs text-text-muted">{formatQuantity(quantity)}</span>}
-                  <span className="text-xs text-text-muted">{formatDisplayCurrency(item.totalValue)}</span>
+                  <span className="text-xs text-text-muted">
+                    {item.basis === 'value' ? formatDisplayCurrency(item.totalValue) : 'unpriced'}
+                  </span>
                   <span className="text-sm font-semibold text-text-primary min-w-[36px] text-right">
-                    {formatPercentage(item.percentage, 1)}
+                    {item.basis === 'unpriced' ? '—' : formatPercentage(item.percentage, 1)}
                   </span>
                 </div>
               </button>

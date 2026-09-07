@@ -10,7 +10,7 @@ export interface WalletHolding extends BaseEntity {
   assetSymbol: string;
   assetName: string;
   quantity: string;
-  marketValue: string;
+  marketValue: string | null;
   lastSyncedAt: string;
 }
 
@@ -46,12 +46,15 @@ export interface HoldingsSummary {
   byAssetType: AssetTypeSummary[];
 }
 
+export type AllocationBasis = 'value' | 'quantity' | 'unpriced';
+
 export interface AssetAllocationItem {
   assetUuid: string;
   symbol: string;
   name: string;
   totalValue: number;
   percentage: number;
+  basis: AllocationBasis;
   color: string;
   navPerToken?: string | null;
   isYieldToken?: boolean;

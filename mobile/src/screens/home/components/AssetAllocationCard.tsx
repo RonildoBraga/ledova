@@ -168,8 +168,12 @@ export function AssetAllocationCard({
               </View>
               <View style={styles.rightGroup}>
                 {showQuantity && <Text style={styles.quantityText}>{formatQuantity(quantity)}</Text>}
-                <Text style={styles.holdingValue}>{formatDisplayCurrency(item.totalValue)}</Text>
-                <Text style={styles.percentageText}>{formatPercentage(item.percentage, 1)}</Text>
+                <Text style={styles.holdingValue}>
+                  {item.basis === 'value' ? formatDisplayCurrency(item.totalValue) : 'unpriced'}
+                </Text>
+                <Text style={styles.percentageText}>
+                  {item.basis === 'unpriced' ? '—' : formatPercentage(item.percentage, 1)}
+                </Text>
               </View>
             </TouchableOpacity>
           );
