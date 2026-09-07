@@ -151,6 +151,36 @@ class TsconfigIsJsonc(_Workspace):
         self.assertFalse(gate.examines_nothing(config))
 
 
+class AWorkspaceFallingOutOfCoverageIsAFailure(_Workspace):
+
+    def setUp(self):
+        super().setUp()
+        declared = gate.WORKSPACES
+        self.addCleanup(setattr, gate, "WORKSPACES", declared)
+
+    def _workspace(self, scripts, tsconfig=None):
+        (self.root / "shared").mkdir(exist_ok=True)
+        (self.root / "shared/package.json").write_text(json.dumps({"scripts": scripts}))
+        if tsconfig is not None:
+            (self.root / "shared/tsconfig.json").write_text(json.dumps(tsconfig))
+        gate.WORKSPACES = ("shared",)
+
+    def test_a_listed_workspace_with_no_type_check_script_fails(self):
+        self._workspace({"typecheck": "tsc --noEmit"}, {"include": ["src"]})
+
+        self.assertEqual(gate.main(), 1)
+
+    def test_a_listed_workspace_with_no_tsconfig_fails(self):
+        self._workspace({"type-check": "tsc --noEmit"})
+
+        self.assertEqual(gate.main(), 1)
+
+    def test_a_workspace_that_declares_one_passes(self):
+        self._workspace({"type-check": "tsc --noEmit"}, {"include": ["src"]})
+
+        self.assertEqual(gate.main(), 0)
+
+
 class BuildModeDetection(unittest.TestCase):
     def matches(self, script):
         return bool(gate.BUILD_MODE.search(script))
