@@ -18,8 +18,5 @@ class NotificationQuerySet(QuerySet):
     def mark_all_read(self):
         return self.unread().update(is_read=True, read_at=timezone.now())
 
-    def unread_count(self, user):
-        return self.visible_to_user(user).not_archived().unread().count()
-
     def with_optimized_data(self):
         return self.select_related("user")

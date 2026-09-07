@@ -57,7 +57,7 @@ class NotificationScopingTest(APITestCase):
         self.assertEqual(marked.status_code, 200)
         self.assertEqual(marked.json(), {"marked": 1})
         self.assertEqual(self.client.get(f"{NOTIFICATIONS}unread-count/").json(), {"unreadCount": 0})
-        self.assertEqual(Notification.objects.unread_count(self.bob), 1)
+        self.assertEqual(Notification.objects.visible_to_user(self.bob).not_archived().unread().count(), 1)
 
         own.refresh_from_db()
         self.assertTrue(own.is_read)

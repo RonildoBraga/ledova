@@ -34,10 +34,10 @@ class NotificationViewSet(AuthenticatedReadOnlyViewSet):
 
     @action(detail=False, methods=["get"], url_path="unread-count")
     def unread_count(self, request):
-        count = Notification.objects.unread_count(request.user)
+        count = self.get_queryset().unread().count()
         return Response({"unreadCount": count})
 
     @action(detail=False, methods=["post"], url_path="mark-all-read")
     def mark_all_read(self, request):
-        updated = Notification.objects.visible_to_user(request.user).not_archived().mark_all_read()
+        updated = self.get_queryset().mark_all_read()
         return Response({"marked": updated}, status=status.HTTP_200_OK)
