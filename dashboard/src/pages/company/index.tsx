@@ -138,7 +138,7 @@ function formatAddress(company: Company): string {
 }
 
 export default function CompanyPage() {
-  const { company, companyUuid, stats, isLoading, error, refetch } = useCompany();
+  const { company, companyUuid, isLoading, error, refetch } = useCompany();
   const tokensList = useTokensList();
   const queryClient = useQueryClient();
 
@@ -301,7 +301,10 @@ export default function CompanyPage() {
           </div>
         </Panel>
 
-        <Panel title={`Share Tokens${stats ? ` (${stats.totalTokens})` : ''}`} icon={<CoinIcon size={ICON_MD} />}>
+        <Panel
+          title={`Share Tokens${tokensList.isLoading ? '' : ` (${tokensList.totalCount})`}`}
+          icon={<CoinIcon size={ICON_MD} />}
+        >
           {tokensList.isLoading ? (
             <div className="flex items-center justify-center py-12">
               <div className="h-8 w-8 border-4 border-brand-subtle border-t-brand rounded-full animate-spin" />
