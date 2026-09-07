@@ -57,10 +57,27 @@ RULES = {
     TASK_TRANSACTION: "a task loads a row and calls one service; the service owns the transaction",
 }
 
-LEGACY = frozenset(
-    {
-    }
-)
+# A stated exception, not backlog: it is correct and it never goes away. It still
+# carries a count, because an exception that excused a whole file would reintroduce
+# exactly the hole this gate was hardened to close.
+ALLOWED: dict[str, tuple[int, str]] = {
+    "backend/companies/views/company.py:raw-orm-in-view": (
+        1,
+        "CompanyViewSet.get_queryset returns Company.objects.all() for the administrative actions, so "
+        "an operator reaches every company. Stated in docs/ARCHITECTURE.md and pinned by STAFF_UNSCOPED "
+        "in backend/shared/tests/test_route_coverage.py.",
+    ),
+}
+
+LEGACY: dict[str, int] = {
+    "backend/assets/views/asset.py:raw-orm-in-view": 1,
+    "backend/offerings/views/offering.py:raw-orm-in-view": 1,
+    "backend/tokens/views/share_token.py:raw-orm-in-view": 1,
+    "backend/tokens/views/trading_order.py:raw-orm-in-view": 1,
+    "backend/tokens/views/trading_token.py:raw-orm-in-view": 1,
+    "backend/users/views/notification_preferences.py:transaction-in-view": 1,
+    "backend/users/views/user_preferences.py:transaction-in-view": 1,
+}
 
 
 def layer_of(path: Path) -> str | None:
@@ -92,20 +109,118 @@ def attribute_chain(node: ast.AST) -> str:
     return ".".join(reversed(parts))
 
 
+def parents_of(tree: ast.AST) -> dict:
+    parents = {}
+    for node in ast.walk(tree):
+        for child in ast.iter_child_nodes(node):
+            parents[id(child)] = node
+    return parents
+
+
+def manager_accesses(tree: ast.AST):
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and node.attr == "objects":
+            yield node
+
+
+def receiver_of(node: ast.Attribute) -> str | None:
+    value = node.value
+    if isinstance(value, ast.Name):
+        return value.id
+    if isinstance(value, ast.Call):
+        func = value.func
+        # `type(self).objects` is the model reaching its own manager.
+        if isinstance(func, ast.Name) and func.id == "type" and len(value.args) == 1:
+            argument = value.args[0]
+            return argument.id if isinstance(argument, ast.Name) else None
+        if isinstance(func, ast.Name):
+            return func.id
+        if isinstance(func, ast.Attribute):
+            return func.attr
+    return None
+
+
+def names_scoped_in(scope: ast.AST, parents: dict) -> set[str]:
+    # `queryset = Thing.objects.with_relations()` then `queryset.visible_to_user(...)`
+    # scopes on the variable rather than in the chain. Collect the names that carry it.
+    return {
+        node.id
+        for node in ast.walk(scope)
+        if isinstance(node, ast.Name) and chain_is_scoped(node, parents)
+    }
+
+
+def assigned_name(node: ast.AST, parents: dict) -> str | None:
+    current = node
+    while True:
+        parent = parents.get(id(current))
+        if isinstance(parent, (ast.Attribute, ast.Call)):
+            current = parent
+            continue
+        if isinstance(parent, ast.Assign) and len(parent.targets) == 1:
+            target = parent.targets[0]
+            return target.id if isinstance(target, ast.Name) else None
+        return None
+
+
+def chain_is_scoped(node: ast.AST, parents: dict) -> bool:
+    current = node
+    while True:
+        parent = parents.get(id(current))
+        if isinstance(parent, ast.Attribute):
+            if parent.attr in SCOPING_CALLS:
+                return True
+            current = parent
+        elif isinstance(parent, ast.Call) and parent.func is current:
+            current = parent
+        else:
+            # A scoping call can also arrive as an argument, as in
+            # `.filter(company__in=eligible_investor_companies(user))`. It is part of
+            # this expression, so it scopes it - unlike a mention elsewhere in the
+            # function, which is what the per-function check used to accept.
+            return bool(names_in(current) & SCOPING_CALLS)
+
+
+def guarded_by_action(node: ast.AST, parents: dict) -> bool:
+    current = node
+    while True:
+        parent = parents.get(id(current))
+        if parent is None:
+            return False
+        if isinstance(parent, ast.If) and current in parent.body and mentions_action(parent.test):
+            return True
+        current = parent
+
+
+def mentions_action(test: ast.AST) -> bool:
+    # `self.action` reads as an attribute; `getattr(self, "action", None)` as a string.
+    if "action" in names_in(test):
+        return True
+    return any(
+        isinstance(inner, ast.Constant) and inner.value == "action" for inner in ast.walk(test)
+    )
+
+
 def names_in(node: ast.AST) -> set[str]:
     return {inner.attr for inner in ast.walk(node) if isinstance(inner, ast.Attribute)} | {
         inner.id for inner in ast.walk(node) if isinstance(inner, ast.Name)
     }
 
 
-def unscoped_orm_lines(scope: ast.AST) -> list[int]:
-    if names_in(scope) & SCOPING_CALLS:
-        return []
-    return [
-        node.lineno
-        for node in ast.walk(scope)
-        if isinstance(node, ast.Attribute) and node.attr == "objects" and isinstance(node.value, ast.Name)
-    ]
+def delegates_to_super(scope: ast.AST) -> bool:
+    if len(scope.body) != 1:
+        return False
+    statement = scope.body[0]
+    if not isinstance(statement, ast.Return) or not isinstance(statement.value, ast.Call):
+        return False
+    called = statement.value.func
+    return (
+        isinstance(called, ast.Attribute)
+        and called.attr == scope.name
+        and isinstance(called.value, ast.Call)
+        and isinstance(called.value.func, ast.Name)
+        and called.value.func.id == "super"
+    )
 
 
 def is_atomic(node: ast.AST) -> bool:
@@ -116,19 +231,31 @@ def is_atomic(node: ast.AST) -> bool:
 def view_findings(tree: ast.AST):
     found = []
     decorating = set()
+    parents = parents_of(tree)
+
+    scopes = [tree] + [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
+    carried = {id(scope): names_scoped_in(scope, parents) for scope in scopes}
+
+    for scope in scopes:
+        for node in manager_accesses(scope):
+            if chain_is_scoped(node, parents):
+                continue
+            if assigned_name(node, parents) in carried[id(scope)]:
+                continue
+            found.append((node.lineno, VIEW_ORM))
 
     for scope in ast.walk(tree):
         if not isinstance(scope, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
 
-        found.extend((line, VIEW_ORM) for line in unscoped_orm_lines(scope))
-
         for decorator in scope.decorator_list:
-            if is_atomic(decorator) and scope.name in DRF_WRITE_HOOKS:
+            if is_atomic(decorator) and scope.name in DRF_WRITE_HOOKS and delegates_to_super(scope):
                 decorating.add(decorator.lineno)
 
         for node in ast.walk(scope):
-            if isinstance(node, ast.Attribute) and node.attr == "select_for_update" and scope.name != LOCKING_HOOK:
+            if not isinstance(node, ast.Attribute) or node.attr != "select_for_update":
+                continue
+            if scope.name != LOCKING_HOOK or not guarded_by_action(node, parents):
                 found.append((node.lineno, VIEW_LOCK))
 
     for node in ast.walk(tree):
@@ -148,9 +275,9 @@ def model_findings(node: ast.AST, owners: frozenset[str] = OWN_MANAGER_RECEIVERS
         inherited = owners | {child.name} if isinstance(child, ast.ClassDef) else owners
         found.extend(model_findings(child, inherited))
 
-    if isinstance(node, ast.Attribute):
-        chain = attribute_chain(node)
-        if ".objects." in chain and chain.split(".", 1)[0] not in owners:
+    if isinstance(node, ast.Attribute) and node.attr == "objects":
+        receiver = receiver_of(node)
+        if receiver is None or receiver not in owners:
             found.append((node.lineno, MODEL_QUERY))
 
     return found
@@ -181,9 +308,8 @@ def main() -> int:
     parser.add_argument("--show-legacy", action="store_true")
     arguments = parser.parse_args()
 
-    violations: list[str] = []
-    excused: list[str] = []
-    seen_keys: set[str] = set()
+    counts: dict[str, int] = {}
+    lines: dict[str, list[str]] = {}
     checked = 0
 
     for path, layer in python_files():
@@ -197,37 +323,51 @@ def main() -> int:
 
         for line, rule in findings_for(tree, layer):
             key = f"{relative}:{rule}"
-            seen_keys.add(key)
-            entry = f"{relative}:{line}: {RULES[rule]}"
-            (excused if key in LEGACY else violations).append(entry)
+            counts[key] = counts.get(key, 0) + 1
+            lines.setdefault(key, []).append(f"{relative}:{line}: {RULES[rule]}")
 
-    stale = sorted(LEGACY - seen_keys)
+    def budget(key: str) -> int:
+        return ALLOWED[key][0] if key in ALLOWED else LEGACY.get(key, 0)
+
+    grown = sorted(key for key, seen in counts.items() if seen > budget(key))
+    stale = sorted(key for key, pinned in LEGACY.items() if counts.get(key, 0) < pinned)
+    stale += sorted(key for key in ALLOWED if counts.get(key, 0) < ALLOWED[key][0])
+    excused = sum(min(seen, LEGACY.get(key, 0)) for key, seen in counts.items())
 
     if arguments.show_legacy:
-        for entry in sorted(excused):
-            print(entry)
-        print(f"\n{len(excused)} excused finding(s) across {len(LEGACY)} legacy entries.\n")
+        for key in sorted(LEGACY):
+            for entry in lines.get(key, []):
+                print(entry)
+        print(f"\n{excused} excused finding(s) across {len(LEGACY)} legacy entries.\n")
 
     if stale:
-        print(f"These LEGACY entries no longer violate anything ({len(stale)}):\n", file=sys.stderr)
+        print(f"These pinned counts are higher than what is there ({len(stale)}):\n", file=sys.stderr)
         for key in stale:
-            print(f"  {key}", file=sys.stderr)
-        print("\nDelete them from LEGACY in scripts/check-layers.py.", file=sys.stderr)
+            pinned = ALLOWED[key][0] if key in ALLOWED else LEGACY[key]
+            where = "ALLOWED" if key in ALLOWED else "LEGACY"
+            print(f"  {key}: {where} pins {pinned}, found {counts.get(key, 0)}", file=sys.stderr)
+        print("\nLower the count, or delete the entry when it reaches zero.", file=sys.stderr)
         return 1
 
-    if violations:
-        print(f"Backend layer violations ({len(violations)}):\n", file=sys.stderr)
-        for entry in violations:
-            print(f"  {entry}", file=sys.stderr)
+    if grown:
+        print(f"Backend layer violations ({len(grown)} file/rule pairs):\n", file=sys.stderr)
+        for key in grown:
+            where = "ALLOWED" if key in ALLOWED else "LEGACY"
+            print(f"  {key}: {where} pins {budget(key)}, found {counts[key]}", file=sys.stderr)
+            for entry in lines[key]:
+                print(f"    {entry}", file=sys.stderr)
         print(
             "\nThe layer that owns this is named in docs/ARCHITECTURE.md, "
-            '"Backend layers".\nMove the logic rather than adding to LEGACY: '
-            "that list only shrinks.",
+            '"Backend layers".\nMove the logic rather than raising a LEGACY count: '
+            "those only fall.",
             file=sys.stderr,
         )
         return 1
 
-    print(f"Backend layers clean in {checked} files ({len(excused)} known findings still in LEGACY).")
+    print(
+        f"Backend layers clean in {checked} files "
+        f"({excused} known findings still in LEGACY, {len(ALLOWED)} stated exception(s))."
+    )
     return 0
 
 

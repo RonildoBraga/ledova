@@ -961,11 +961,25 @@ and CI runs it in the same job as the comment gate. Like that gate it needs only
 Python 3 and a checkout. `backend/shared/tests/test_layer_gate.py` pins each
 rule against a snippet, so the decisions below are executable rather than prose.
 
-Every offender that existed when the gate landed is listed in `LEGACY`, which is
-the migration backlog made visible. It only shrinks: an entry that no longer
-violates anything is reported as stale and fails the run, so the list cannot
-outlive the problem. `python3 scripts/check-layers.py --show-legacy` prints it
-with line numbers. Move the logic rather than adding an entry.
+`LEGACY` maps `file:rule` to a **count**, not to a bare key, and that difference
+is the gate. `ALLOWED` sits beside it for the opposite kind of entry: a finding
+that is correct and permanent rather than owed. It carries a reason and a count —
+a reason so nobody has to rediscover why, and a count because an exception that
+excused a whole file would reopen the hole `LEGACY`'s counts close. Today it holds
+one: `CompanyViewSet.get_queryset` returning `Company.objects.all()` for the
+administrative actions, which #119 already pins from the route side. Keeping it out
+of `LEGACY` is what lets `LEGACY` reach zero and mean it. Keyed per file, an already-excused file could gain any number of new
+violations while only an informational total moved; the run stayed green. Now a
+count that rises fails, a count that falls fails as stale, and the message names
+both numbers. `python3 scripts/check-layers.py --show-legacy` prints the entries
+with line numbers. Move the logic rather than raising a count: they only fall.
+
+The rules judge each `.objects` expression rather than the function around it. A
+scoping call counts when it is *in that expression* — in the chain, in its
+arguments, carried on a local that the expression filters by, or carried on the
+queryset the expression is built from. A scoping call mentioned elsewhere in the
+same function does not, because that is how `if staff: return Thing.objects.all()`
+sat unseen beside a scoped branch, which is the shape #127 had to fix by hand.
 
 Two calibrations are worth stating, because both times the gate was wrong and
 both times the tell was the same — one shape appearing in several files at once.
@@ -988,6 +1002,34 @@ both times the tell was the same — one shape appearing in several files at onc
 The general form: when a rule flags the reference app, or the same shape in
 several files at once, the rule is wrong and the fix is to sharpen it. Never
 excuse a file into `LEGACY` to make a number go down.
+
+The heuristic has a boundary, found by trying to apply it a third time and being
+argued out of it. Sharpening the rules surfaced eight findings, four of them one
+shape in four files — `thing = self.get_object()` and then
+`SecondModel.objects.for_thing(thing)`. I read four files agreeing as the rule
+being wrong and loosened it to follow the row. That was a misreading: **the
+heuristic is about false positives, and four files agreeing means the shape is
+common, not that it is safe.**
+
+Whether a row the caller can see implies its children are visible is a property of
+each relation, and no rule over the syntax can know it. This product has a
+relation where it is meant not to hold — `offerings/views/offering.py`'s
+`subscriptions` action is outside `MANAGE_ACTIONS`, so it reads through
+`visible_to_user`, and `Subscription.objects.for_issuer(offering)` would return
+every investor's subscriptions. It is correct today only because
+`Company.visible_to_user` and `Company.manageable_by_user` have identical bodies,
+and the tenancy section below describes deliberate pressure to widen the first.
+Loosening the rule would have removed the standing warning from the one line that
+says so. Those four are pinned with counts instead.
+
+### The seed-era service classes
+
+The 27 `XService` classes from the initial seed commit are the accepted exception
+to "a service is a module of plain functions". They are not backlog and not a
+LEGACY entry: no gate flags them, converting them in a batch would conflict with
+everything in flight, and every service written since is already plain functions.
+They convert when one is next edited for another reason. Recorded here so the
+absence of a gate for them reads as a decision rather than an oversight.
 
 ### The logging privacy gate
 
