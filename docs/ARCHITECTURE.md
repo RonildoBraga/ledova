@@ -1037,6 +1037,15 @@ the last config that declares it. A config extending `["<include: src>",
 "<files: []>"]` type-checks `src` in either order, so the two cannot be carried
 as a pair.
 
+What the gate is for is narrower than "examines no files": it is *examines no
+files **and reports success***. A config whose `exclude` cancels its `include`
+examines nothing too, but tsc refuses it loudly — `error TS18003: No inputs were
+found` — and exits 2, so CI already catches it. The shape worth a gate is the one
+that exits 0 while checking nothing. Measured:
+
+    {"include": ["src"], "exclude": ["src"]}   exit 2
+    {"files": [], "references": [...]}         exit 0
+
 Two things the gate refuses to do quietly. An `extends` it cannot follow is
 reported, not skipped — a gate answering "nothing found" because it could not
 read the file is the failure this rule exists to prevent, one level up. And
