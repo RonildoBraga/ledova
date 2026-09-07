@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { calculateAssetAllocation } from '@ledova/shared';
 import type { HoldingWithWallet, HoldingsSummary } from '@ledova/shared';
+
+const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
 const drawn: { data: { datasets: { data: number[] }[]; labels: string[] }; options: TooltipOptions }[] = [];
 
@@ -41,7 +43,7 @@ function draw(holdings: HoldingWithWallet[], totalValue: number) {
     byAssetType: [],
   } satisfies HoldingsSummary;
   const view = render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <QueryClientProvider client={client}>
       <AssetAllocationCard
         assetAllocation={calculateAssetAllocation(holdings, totalValue)}
         totalValue={totalValue}
@@ -60,8 +62,12 @@ const UNPRICED = [holding('AAA', '30', null), holding('BBB', '10', null)];
 const MIXED = [holding('SHARES', '10000', null), holding('USDC', '12', '12')];
 
 beforeEach(() => {
-  cleanup();
   drawn.length = 0;
+});
+
+afterEach(() => {
+  cleanup();
+  client.clear();
 });
 
 describe('what the dashboard ring is handed, not what the function returns', () => {
