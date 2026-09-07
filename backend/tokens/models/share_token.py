@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 class ShareToken(BaseModel):
     company = models.ForeignKey(
         "companies.Company",
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="tokens",
     )
 

@@ -27,6 +27,7 @@ from tokens.services.register import (
     export_rows,
     token_register,
 )
+from tokens.services.share_token_service import delete_share_token
 
 MANAGE_ACTIONS = ("create", "update", "partial_update", "destroy", "deploy", "pause", "unpause", "issue")
 
@@ -51,6 +52,9 @@ class ShareTokenViewSet(AuthenticatedModelViewSet):
         if self.action == "list":
             queryset = queryset.with_market_summary()
         return queryset
+
+    def perform_destroy(self, instance):
+        delete_share_token(instance)
 
     def filter_queryset(self, queryset):
         if self.action == "list":

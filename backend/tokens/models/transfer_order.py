@@ -12,7 +12,7 @@ class TransferOrder(BaseModel):
 
     token = models.ForeignKey(
         "tokens.ShareToken",
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="transfer_orders",
     )
     payment_asset = models.ForeignKey(

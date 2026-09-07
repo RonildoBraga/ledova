@@ -37,7 +37,7 @@ class Offering(BaseModel):
 
     objects = OfferingQuerySet.as_manager()
 
-    token = models.ForeignKey("tokens.ShareToken", on_delete=models.CASCADE, related_name="offerings")
+    token = models.ForeignKey("tokens.ShareToken", on_delete=models.PROTECT, related_name="offerings")
 
     status = models.CharField(max_length=20, choices=OfferingStatus.choices, default=OfferingStatus.DRAFT)
     exemption = models.CharField(max_length=30, choices=OfferingExemption.choices)

@@ -22,3 +22,18 @@ class InvalidStatusTransitionException(APIException):
     def __init__(self, from_status: str, to_status: str):
         detail = f"Cannot transition from '{from_status}' to '{to_status}'."
         super().__init__(detail=detail)
+
+
+class CompanyHoldsARegisterException(APIException):
+
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "This company holds a register of members and cannot be deleted."
+    default_code = "company_holds_a_register"
+
+    def __init__(self, share_classes: int):
+        detail = (
+            f"{share_classes} deployed share class(es) carry this company's register of members and the issuance "
+            "trail behind it, so the company cannot be deleted. Delist it instead, which keeps the record and "
+            "closes the company to investors."
+        )
+        super().__init__(detail=detail)

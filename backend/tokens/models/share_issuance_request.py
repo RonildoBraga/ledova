@@ -12,7 +12,7 @@ class ShareIssuanceRequest(ReviewableRequest):
 
     token = models.ForeignKey(
         "tokens.ShareToken",
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="issuance_requests",
     )
 

@@ -484,6 +484,63 @@ transferee becomes invisible, at which point the register is wrong and the
 Phase 2 log indexer is owed. [ROADMAP.md](ROADMAP.md#phase-2--eligibility-and-the-register)
 carries that as the trigger condition.
 
+### The register cannot be deleted through the API
+
+The spine that carries the register is `Company -> ShareToken -> {ShareIssuance,
+ShareIssuanceRequest, CapitalIncreaseRequest, Offering, TransferOrder}`, and
+every one of those relations is `PROTECT`, for the reason
+`Subscription.offering` already was: a statutory record must not be destroyed as
+a side effect of deleting its parent. Before this, nine `CASCADE` edges were
+reachable from one company row, and an issuer with delete permission on its own
+company could take the whole s169 register and the issuance trail with it.
+`TransferOrder.token` is on that list although the original audit missed it: a
+settled order is a share movement with an on-chain hash, and the same argument
+that keeps an allotment keeps it.
+
+Two edges below the company are deliberately left `CASCADE`.
+`CompanyDocument.company` carries listing evidence the issuer already creates
+and deletes through `DELETE /api/v1/companies/{uuid}/documents/{uuid}/`, so it
+is not a register row. `OrderModificationLog.order` and
+`SwapOrder.sell_order`/`.buy_order` are subordinate to an order that can now
+only be deleted deliberately, never by deleting the share class above it; a
+`PROTECT` on `SwapOrder.share_token` as well would be refused by
+`TransferOrder.token` first and add nothing.
+
+`CompanyViewSet.perform_destroy` calls `companies.services.company.delete_company`,
+which refuses a company holding any **deployed** share class with **409
+Conflict** and names delisting as what to do instead. 409 rather than 403 or
+400: the caller is authorised and the request is well-formed, and it is the
+state of the resource that conflicts — the same reading, and the same status,
+that `shared/api/exceptions.py` already gives a raw `ProtectedError`. A company
+whose only share class is a draft falls through to that generic 409, because
+`ShareToken.company` protects a draft too; a company with no share classes at
+all is still deletable. Delisting is the operator's archive path and it already
+exists; test data is removed through the Django admin, share class first. No new
+archive model was built for this.
+
+`WhitelistEntry.wallet` is still `CASCADE`, deliberately and for now. Deleting a
+wallet deletes the whitelist entry, and since point 3 resolves holder identity
+through that entry, a named member on the register silently becomes
+`unidentified`. That is a real defect and it is not fixed here.
+
+Two attempts at it failed review, and the reason is worth recording so the third
+does not repeat them. `SET_NULL` alone is worse than the `CASCADE`: an entry with
+no wallet is the treasury shape, so the member is relabelled the company's own
+treasury. Carrying the identity on the entry instead — a stamped address and a
+holder reference — moves the failure rather than removing it: re-registering the
+same address makes a second entry, and two entries at one address render as
+`ambiguous`, so the name is still lost; and editing an unverified wallet's
+address leaves the entry stamped with the dead one, so the row disappears from
+the register entirely. Both are reachable by an ordinary member with two API
+calls.
+
+What that says is that the identity of a holder does not belong on the whitelist
+entry at all, because the entry is a chain allowlist record with its own
+lifecycle. Preserving identity across a wallet deletion needs the ownership
+ledger this is all heading towards, where a holder is named by the event that
+gave them shares rather than by whatever allowlist row happens to survive.
+Tracked as issue 158, with both failed designs and the probes that broke them.
+
 Transaction hashes are stored 0x-prefixed. `is_transferable` and
 `is_divisible` on `ShareToken` are display-only and have no on-chain effect.
 

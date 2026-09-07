@@ -238,3 +238,17 @@ class InvalidSignatureException(APIException):
     status_code = status.HTTP_403_FORBIDDEN
     default_detail = "Invalid signature - does not match the expected wallet address."
     default_code = "invalid_signature"
+
+
+class DeployedShareClassException(APIException):
+
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "A deployed share class is a register of members and cannot be deleted."
+    default_code = "deployed_share_class"
+
+    def __init__(self, symbol: str):
+        detail = (
+            f"{symbol} is deployed on chain and is the register of members for its holders, so it cannot be "
+            "deleted. Pause it instead, which stops transfers and keeps the record."
+        )
+        super().__init__(detail=detail)

@@ -21,6 +21,7 @@ from shared.constants import BLOCKCHAIN_BASE
 from tokens.exceptions import (
     CompanyNotReadyException,
     ContractLoadException,
+    DeployedShareClassException,
     InvalidHolderAddressException,
     InvalidRecipientAddressException,
     InvalidTokenAddressException,
@@ -870,3 +871,12 @@ class ShareTokenService:
                 logger.warning(f"Failed to get settlement asset balance for {asset.symbol}: {e}")
 
         return {"walletAddress": wallet_checksum, "balances": balances}
+
+
+def delete_share_token(token) -> None:
+    if token.is_deployed:
+        logger.warning(f"Refused to delete {token.symbol}: deployed at {token.contract_address}")
+        raise DeployedShareClassException(token.symbol)
+
+    logger.info(f"Deleting share class {token.symbol} for company {token.company_id}")
+    token.delete()

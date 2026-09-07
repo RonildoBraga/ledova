@@ -14,7 +14,7 @@ class CapitalIncreaseRequest(ReviewableRequest):
 
     token = models.ForeignKey(
         "tokens.ShareToken",
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="capital_increase_requests",
     )
 

@@ -2,7 +2,10 @@ import logging
 
 from django.db import transaction
 
-from companies.exceptions import MissingRequiredDocumentsException
+from companies.exceptions import (
+    CompanyHoldsARegisterException,
+    MissingRequiredDocumentsException,
+)
 from companies.models import LISTING_REQUIRED_DOCUMENTS, Company, DocumentType
 from users.models import UserProfile
 from users.tasks.notifications import send_push_notification
@@ -67,3 +70,13 @@ def submit_application(company: Company, submitted_by) -> Company:
     transition_company(company, "submit", submitted_by=submitted_by)
     logger.info(f"Application submitted: {company.uuid} ({company.name}) by user {submitted_by.pk}")
     return company
+
+
+def delete_company(company: Company) -> None:
+    share_classes = company.tokens.deployed().count()
+    if share_classes:
+        logger.warning(f"Refused to delete {company.name}: {share_classes} deployed share class(es) hold its register")
+        raise CompanyHoldsARegisterException(share_classes)
+
+    logger.info(f"Deleting company: {company.name} (ACN: {company.acn})")
+    company.delete()
