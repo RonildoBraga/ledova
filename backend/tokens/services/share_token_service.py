@@ -32,6 +32,7 @@ from tokens.exceptions import (
     TokenDeploymentFailedException,
     TokenFactoryNotConfiguredException,
     TokenPauseFailedException,
+    WalletBalancesUnavailableException,
 )
 from tokens.models import (
     CapitalIncreaseRequest,
@@ -874,7 +875,11 @@ class ShareTokenService:
                         }
                     )
             except Exception as e:
-                logger.warning(f"Failed to get balance for {token.symbol}: {e}")
+                logger.error(f"Failed to get balance for {token.symbol}: {e}")
+                raise WalletBalancesUnavailableException(
+                    f"{WalletBalancesUnavailableException.default_detail} The balance of {token.symbol} could "
+                    f"not be read: {e}"
+                ) from e
 
         for deployment in settlement_deployments():
             asset = deployment.asset
@@ -893,7 +898,11 @@ class ShareTokenService:
                         }
                     )
             except Exception as e:
-                logger.warning(f"Failed to get settlement asset balance for {asset.symbol}: {e}")
+                logger.error(f"Failed to get settlement asset balance for {asset.symbol}: {e}")
+                raise WalletBalancesUnavailableException(
+                    f"{WalletBalancesUnavailableException.default_detail} The balance of {asset.symbol} could "
+                    f"not be read: {e}"
+                ) from e
 
         return {"walletAddress": wallet_checksum, "balances": balances}
 
