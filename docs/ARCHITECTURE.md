@@ -939,6 +939,20 @@ runs. Both mechanisms hold at once on purpose:
   reason for carrying none, or a named R0 column it is still waiting for. The
   test compares it against `django.apps` in both directions, so a new model with
   no entry fails and an entry naming a dropped table fails.
+- **The migration reads the catalogue rather than carrying frozen SQL, so a
+  change to the catalogue needs its own migration.** `shared/0004` imports
+  `HELPERS` and `POLICIES` from `shared/db/policies.py`, which is why a fresh
+  database always gets whatever the module says today and re-running the
+  installer there is a no-op. The consequence is the part to remember: every
+  change to `policies.py` silently changes what `0004` installs on a **fresh**
+  database while every **existing** database keeps what it was given, so each
+  such change needs a migration re-running the installer or the two diverge.
+  `shared/0005` is the first instance, and its reverse is `noop` rather than
+  `remove` — it replaced policies rather than installing them, and a
+  replacement that cannot be undone should say so rather than do forward work
+  under a reverse. Reversing it with `remove` took a database from 80 policies,
+  20 forced tables and 4 helpers to none of each, while `django_migrations`
+  still said `0004` was applied.
 
 **How R1 is proven, and where the proof deliberately diverges from
 production.** Three aliases are three *connections*, and Django's `TestCase`
