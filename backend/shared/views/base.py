@@ -1,8 +1,10 @@
 from rest_framework import mixins, viewsets
 from rest_framework.permissions import IsAuthenticated
 
+from shared.views.principal import SetsThePrincipalOnTheConnection
 
-class AuthenticatedGenericViewSet(viewsets.GenericViewSet):
+
+class AuthenticatedGenericViewSet(SetsThePrincipalOnTheConnection, viewsets.GenericViewSet):
     permission_classes = [IsAuthenticated]
 
 
@@ -10,11 +12,11 @@ class AuthenticatedListViewSet(mixins.ListModelMixin, AuthenticatedGenericViewSe
     pass
 
 
-class AuthenticatedModelViewSet(viewsets.ModelViewSet):
+class AuthenticatedModelViewSet(SetsThePrincipalOnTheConnection, viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     lookup_field = "uuid"
 
 
-class AuthenticatedReadOnlyViewSet(viewsets.ReadOnlyModelViewSet):
+class AuthenticatedReadOnlyViewSet(SetsThePrincipalOnTheConnection, viewsets.ReadOnlyModelViewSet):
     permission_classes = [IsAuthenticated]
     lookup_field = "uuid"

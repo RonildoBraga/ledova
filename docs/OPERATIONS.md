@@ -616,6 +616,50 @@ Delivery to a phone additionally needs `extra.eas.projectId` in
 repository, and Expo Go cannot receive remote push on SDK 54. The inbox works
 without it.
 
+## Row-level security roles
+
+`shared/0003_rls_roles_and_grants` creates `ledova_app` and `ledova_operator`,
+grants them what they need, and `shared/0004_rls_policies` installs the helpers
+and a policy on every tenant table. Four things about running that deployment:
+
+- **Provision the roles and their credentials out of band**, and point the
+  aliases at them with `RLS_APP_DB_USER`, `RLS_APP_DB_PASSWORD`,
+  `RLS_OPERATOR_DB_USER` and `RLS_OPERATOR_DB_PASSWORD`. The migration creates
+  the two roles if they are absent, so that development and CI have real ones
+  rather than a mechanism that is inert exactly where it is tested — but it
+  creates them **with no password**, and it never sets one. A credential does
+  not belong in a migration: the statement carrying it reaches the server log on
+  any instance with `log_statement = all`, and the migration is replayed on every
+  database the schema is applied to. Local work uses
+  `POSTGRES_HOST_AUTH_METHOD=trust`, as CI does.
+- **`ALTER ROLE … BYPASSRLS` requires superuser.** Whoever applies
+  `shared/0003` must be able to grant it, or the roles come out without the
+  attributes the policies assume — which `check_rls_roles` then refuses.
+- **Transaction-level connection pooling is incompatible, not discouraged.** The
+  principal is a session-level `SET`, and a pgbouncer transaction-pooled handover
+  does not carry it. The symptom is not an error: it is one request reading
+  another user's principal. Session pooling or none.
+- **`manage.py --settings=x runserver` refuses to boot**, and the message names the
+  variable rather than the argument order. The runserver exemption is keyed on
+  `sys.argv[1:2]`, so a global option before the subcommand makes `manage.py`
+  set the operator ambient alias and the server's own guard then refuses to
+  serve requests unscoped. That is the right side to fail on — it will not start
+  rather than start wrong — but the error says `RLS_AMBIENT_ALIAS is
+  'operator'`, which reads like a configuration problem. Put the subcommand
+  first: `manage.py runserver --settings=x`.
+- **`manage.py check_rls_roles` runs in CI's PostgreSQL step and at startup.** It
+  connects on each alias and asserts what no test can see — the app role lacks
+  `BYPASSRLS` and owns no table, the operator role has it, the migrate role owns
+  the tables, and a fresh app connection carries no principal. A misconfigured
+  `DATABASES["app"]` — the right role name against the wrong `USER` — passes the
+  whole test suite and fails here, which is the only place the answer means
+  anything.
+- **CI's schema-generation step runs as the migrate role.** Generating the
+  OpenAPI schema evaluates the views' querysets against the real `ledova`
+  database, so the step that migrates and the step that generates must both hold
+  a role that can read the schema. A step on the app role fails in a way that
+  reads like a schema bug rather than a permissions one.
+
 ## Migration notes
 
 - Every migration named below is reversible with `migrate`.

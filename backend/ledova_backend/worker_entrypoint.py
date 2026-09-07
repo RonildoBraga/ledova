@@ -26,6 +26,7 @@ def main() -> int:
     result = subprocess.run(
         [sys.executable, "manage.py", "procrastinate", "worker", "--queues=default,builtin"],
         check=False,
+        env={**os.environ, "RLS_AMBIENT_ALIAS": "operator"},
     )
     return result.returncode
 

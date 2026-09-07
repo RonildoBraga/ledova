@@ -508,6 +508,9 @@ class CrossTenantRouteMatrixTest(APITestCase):
 
     def send(self, route, actor, context):
         context = {**context, **{f"own_{key}": value for key, value in route_context(actor).items()}}
+        return self.perform(route, context)
+
+    def perform(self, route, context):
         request = getattr(self.client, route.method)
         return request(route.path.format_map(context), _fill(route.payload, context), format=route.content_type)
 

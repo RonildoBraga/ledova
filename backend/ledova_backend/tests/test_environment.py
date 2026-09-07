@@ -10,6 +10,7 @@ from django.test import SimpleTestCase
 from ledova_backend.chain_safety import parse_bitcoin_network, parse_evm_chain_id
 from ledova_backend.environment import (
     assert_media_storage_is_servable,
+    assert_requests_are_served_on_the_scoped_connection,
     read_bool,
     read_choice,
     resolve_storage_backend,
@@ -104,3 +105,21 @@ class LoggingTests(SimpleTestCase):
         self.assertNotIn("ledova_backend", settings.LOGGING["loggers"])
         self.assertIn("{name}", settings.LOGGING["formatters"]["verbose"]["format"])
         self.assertIsNone(find_spec("shared.utils.logging_utils"))
+
+
+class ARequestServingProcessRefusesTheUnscopedConnectionTest(SimpleTestCase):
+
+    def test_the_scoped_alias_is_accepted(self):
+        assert_requests_are_served_on_the_scoped_connection(ambient_alias="app", scoped_alias="app")
+
+    def test_an_operator_environment_inherited_by_a_server_is_refused(self):
+        with self.assertRaises(ImproperlyConfigured) as caught:
+            assert_requests_are_served_on_the_scoped_connection(ambient_alias="operator", scoped_alias="app")
+
+        self.assertIn("row-level security bypassed", str(caught.exception))
+
+    def test_both_entrypoints_run_the_guard(self):
+        for module in ("asgi.py", "wsgi.py"):
+            with self.subTest(entrypoint=module):
+                source = (settings.BASE_DIR / "ledova_backend" / module).read_text()
+                self.assertIn("assert_requests_are_served_on_the_scoped_connection(", source)

@@ -25,6 +25,7 @@ from authentication.services.email_lookup import find_unique_user
 from authentication.services.sessions import SessionService
 from authentication.services.tokens import TokenService
 from authentication.throttles import EmailRateThrottle
+from shared.views.principal import SetsThePrincipalOnTheConnection
 
 TRANSPORT_HEADER = "X-Auth-Transport"
 
@@ -79,7 +80,7 @@ class TokenCookieMixin:
         return cookie_token
 
 
-class AuthViewSet(TokenCookieMixin, ViewSet):
+class AuthViewSet(SetsThePrincipalOnTheConnection, TokenCookieMixin, ViewSet):
     throttle_scope = "auth"
     email_throttled_actions = ("signin", "signup", "email_verification", "resend_verification")
 

@@ -7,12 +7,13 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from shared.constants import get_native_asset_symbol
+from shared.views.principal import SetsThePrincipalOnTheConnection
 from wallets.exceptions import WalletUuidRequiredException
 from wallets.models import Wallet
 from wallets.services.fiat_onramp import generate_transak_widget_url
 
 
-class FiatPurchaseViewSet(viewsets.ViewSet):
+class FiatPurchaseViewSet(SetsThePrincipalOnTheConnection, viewsets.ViewSet):
 
     permission_classes = [IsAuthenticated]
 

@@ -842,6 +842,134 @@ each lane does not re-derive it:
   nothing but the suite says so. An explicit `fields` tuple is unaffected.
 
 
+**Stage R1 — the mechanism, beside the querysets.** Roles, aliases, the
+principal, and a policy on every tenant table, while `visible_to_user` still
+runs. Both mechanisms hold at once on purpose:
+
+- **Three roles on one database, and the third is what makes the second
+  possible.** `ledova_app` connects for the API: not an owner, no `BYPASSRLS`.
+  `ledova_operator` has `BYPASSRLS` and serves the admin, the operator console,
+  the workers and the management commands. `ledova_migrate` owns the tables and
+  runs the migrations. Folding migration into the operator role would make the
+  operator the table owner, and `FORCE ROW LEVEL SECURITY` would then scope the
+  one role whose purpose is being unscoped.
+- **The principal is set where DRF resolves the user, not in middleware.**
+  `HybridJWTAuthentication` runs in `APIView.initial()`, after every Django
+  middleware, and a bearer request carries no session — so in middleware
+  `request.user` is anonymous for the whole API. `SetsThePrincipalOnTheConnection`
+  overrides `initial()` on the four shared bases, and
+  `shared/tests/test_principal_coverage.py` fails if a routed view neither
+  carries it, runs on the operator connection, nor states a reason.
+- **A request with no acting user runs on the operator connection.** The four
+  webhooks are that case: an external system tells us about a subject we did not
+  authenticate, so there is no principal to set and every tenant read would fail
+  closed. They carry `RunsOnTheOperatorConnection`, and the admin is recognised
+  from the URLconf's `app_name` rather than from the path, because a path prefix
+  grants the privileged connection *before* resolution.
+- **`SET` at session level, `CONN_MAX_AGE = 0` on the app alias.**
+  `ATOMIC_REQUESTS` is refused by Django with async views — and this codebase has
+  three places that deliberately commit and then raise, which `ATOMIC_REQUESTS`
+  would silently undo, turning a spent challenge back into a replayable one. With
+  no connection reuse there is no stale principal to leak, so the `RESET` in the
+  middleware's `finally` is hygiene rather than the load-bearing part.
+- **The strict read is deliberate.** Policies call
+  `current_setting('app.user_id')::bigint` with no `missing_ok`, so an unset
+  connection raises `unrecognized configuration parameter` and a cleared one
+  raises `invalid input syntax for type bigint: ""`. Both are loud. The
+  alternative fails closed *and silent*, and an empty result set is
+  indistinguishable from "you own nothing", which is exactly the ambiguity this
+  mechanism exists to remove.
+- **Two helpers where one would do, today.** `app_visible_company_ids()` and
+  `app_manageable_company_ids()` have identical bodies and are called by `USING`
+  and `WITH CHECK` respectively. Five of the seven company-derived tables are
+  equal only *transitively* through `Company`, and there is standing pressure to
+  widen `Company.visible_to_user`; one helper would destroy the distinction at
+  the moment it starts mattering.
+- **Neither helper is `SECURITY DEFINER`.** Running as the caller means
+  `users_userprofile`'s own policy applies inside the function, so the helper's
+  `WHERE` is a second opinion rather than the only guard. The cost is a rule:
+  `companies_company`, `users_userprofile` and the membership table carry **leaf
+  policies** — direct comparisons against `current_setting`, never a helper call
+  — or a policy calls a function that queries the table the policy is on, and
+  PostgreSQL's error for that is stack-depth exhaustion.
+- **Tenancy predicates are positive.** `owner_id IN (SELECT …)` is NULL for a
+  NULL owner and hides the row, which is the fail-closed behaviour a nullable
+  owner column relies on; `NOT IN` and `<>` invert under NULL and make a legacy
+  row visible to everyone. A test reads `pg_policies` and refuses a negation.
+- **Policies are written per command, never one `FOR ALL`** — and the `UPDATE`
+  policy's `USING` is the **read** scope, not the write one. PostgreSQL applies
+  it to `SELECT … FOR UPDATE`, so a row the read policy admits and the update
+  policy does not can be read and never locked, and `select_for_update().get()`
+  turns that into `DoesNotExist` rather than a refusal. `USING` governs who may
+  lock, `WITH CHECK` governs who may write, so all the narrowing lives in
+  `WITH CHECK`; `INSERT`'s `WITH CHECK` and `DELETE`'s `USING` stay owner-only.
+  A test reads `pg_policies` and requires the two `USING` expressions to be
+  textually equal. `SELECT` carries
+  the read scope and `INSERT`, `UPDATE` and `DELETE` carry the write scope, as
+  separate statements. `companies_company` is read at two scopes on purpose —
+  `visible_to_user` for issuer surfaces and `all()` for the market — and one
+  `FOR ALL` policy under `FORCE` can only encode the stricter of the two.
+- **A table reached past a company carries the public-visibility term its own
+  querysets already use.** `app_visible_company_ids()` is the set a principal
+  *owns*, not the set they may *see*: the directory reads companies through
+  `open_to_investors()` and the market reads tokens through
+  `deployed_with_contract()`, neither of which was ever owner-scoped. An
+  owner-only policy empties the browse surface every investor starts on and
+  turns the subscribe path's `select_for_update().get()` into `DoesNotExist`.
+  Eligibility stays in code; **RLS decides visibility, not eligibility**.
+- **A visible row's parent is visible.** For every non-nullable foreign key
+  between policy tables, a row admitted by the child's `SELECT` policy must have
+  its parent admitted by the parent's, or `select_related` deletes the child:
+  the join is `INNER`, and Django strips an unused `select_related` join for
+  `count()`, so **the count disagrees with the page**. Measured on the market
+  before it was fixed — `count 1`, `rows 0`, same transaction. An invariant test
+  enumerates the foreign-key graph and asserts closure per principal, rather
+  than the rule being remembered per view.
+- **Rows the platform owns are readable by every principal.** A wallet named as
+  a company's `operator_wallet` is not a tenant's row; hiding it from someone
+  who may see the company is the same defect one column along, and the account
+  that holds such a wallet follows immediately, because a wallet's
+  `user_account` is not nullable. Writes on those rows stay on the operator
+  connection. The wrong fix is to narrow the company's public term to companies
+  whose operator wallet happens to be visible — that makes a company's public
+  visibility depend on a wallet's ownership, which nobody would find by reading.
+- **Every table is classified, and the classification is enumerated rather than
+  described.** `shared/db/policies.py` is the catalogue: a policy, a stated
+  reason for carrying none, or a named R0 column it is still waiting for. The
+  test compares it against `django.apps` in both directions, so a new model with
+  no entry fails and an entry naming a dropped table fails.
+
+**How R1 is proven, and where the proof deliberately diverges from
+production.** Three aliases are three *connections*, and Django's `TestCase`
+opens a separate transaction per connection — so fixtures written on one alias
+are invisible on another for the whole test. Converting the suite to
+`TransactionTestCase` to work around that would mean truncating tables for 246
+test classes. So the proof is split, and each part proves something the others
+cannot:
+
+- The **tenancy proof** takes the app role on the test connection with `SET ROLE`
+  and sets the principal there. `SET ROLE` changes `current_user`, superuser-ness
+  is not inherited through it, and `FORCE ROW LEVEL SECURITY` binds the owner
+  too — so the policies evaluate exactly the predicates the production role
+  meets, while the fixtures stay visible because it is one connection. In
+  production the app connection logs in as the app role and never `SET ROLE`s;
+  in tests a privileged connection becomes it. **That is the divergence, and it
+  is bounded to which role the connection arrived as.**
+- The **role plumbing** is asserted by `manage.py check_rls_roles`, not by a
+  test, because it is the half no test can see: the app role lacks `BYPASSRLS`
+  and owns no table, the operator role has it, the migrate role owns the tables,
+  and a fresh connection carries no principal. It runs in CI and at startup.
+- The **router and the principal** have unit tests of their own, since neither
+  is exercised by the two above.
+
+**Why R1 and R2 are separate releases.** With policies on and querysets still
+in, a green matrix says the policy is *sufficient*. With the querysets removed,
+a green matrix says they were not doing anything the policy misses. Both
+directions are needed and only this ordering gives you both — the interval of
+double enforcement is not a cost to be minimised, it is the only window in which
+the migration is checkable.
+
+
 
 - Every customer-facing queryset has `visible_to_user(user)` (and
   `manageable_by_user` for writes) that returns `none()` for an anonymous or
@@ -1865,6 +1993,16 @@ reading:
   trusting a local measurement enough to file it, and **re-run a measurement
   before repeating someone else's**: a relayed measurement is not a
   measurement.
+- **Two branches verified against one scratch database read as a code finding
+  too, and the count is what gives it away.** Two Django test runners racing to
+  build `test_ledova` collide on `duplicate key value violates unique constraint
+  "pg_type_typname_nsp_index"`, and the second one to arrive reports the damage —
+  127 errors across three apps in one observed case, while the same command's
+  SQLite half, sharing nothing, was green. **A failure count far larger than the
+  change could plausibly cause is the signal**, and the check is one command:
+  `docker ps` for another `ledova-backend` container. The fix is a PostgreSQL
+  container per worktree rather than a shared one, which costs nothing and
+  removes the class.
 - **Images rebuilt at different times read as a code finding too, and only
   their ages show it.** A QA session rebuilt `backend` and `dashboard` from
   `main` and not `worker`, and two subscriptions wedged at paid with no shares:

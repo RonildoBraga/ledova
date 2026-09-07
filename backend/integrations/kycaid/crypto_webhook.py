@@ -12,12 +12,13 @@ from compliance.services.crypto_screening import CryptoScreeningService
 from integrations.kyc.constants import PROVIDER_KYCAID
 from integrations.kycaid.client import KYCAIDService
 from integrations.webhooks import is_stale
+from shared.db.middleware import RunsOnTheOperatorConnection
 
 logger = logging.getLogger(__name__)
 
 
 @method_decorator(csrf_exempt, name="dispatch")
-class KYCAIDCryptoWebhookView(APIView):
+class KYCAIDCryptoWebhookView(RunsOnTheOperatorConnection, APIView):
 
     authentication_classes = []
     permission_classes = []

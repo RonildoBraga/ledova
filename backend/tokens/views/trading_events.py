@@ -7,6 +7,7 @@ from django.conf import settings
 from django.http import HttpResponse, StreamingHttpResponse
 
 from authentication.classes import HybridJWTAuthentication
+from shared.views.principal import set_principal_for_async_view, sets_the_principal
 from tokens.events import TRADING_EVENT_TYPES, TRADING_EVENTS_CHANNEL
 from tokens.services.trading_events import resolve_streamable_token_uuid
 
@@ -96,10 +97,13 @@ async def _event_stream(token_uuid: str):
                 await client.aclose()
 
 
+@sets_the_principal
 async def trading_events_stream(request):
     user = await _authenticate(request)
     if user is None:
         return HttpResponse("Unauthorized", status=401, content_type="text/plain")
+
+    await set_principal_for_async_view(user)
 
     token_uuid = await resolve_streamable_token_uuid(user, request.GET.get("token"))
     if token_uuid is None:
