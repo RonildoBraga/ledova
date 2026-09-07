@@ -1732,6 +1732,25 @@ reading:
   trusting a local measurement enough to file it, and **re-run a measurement
   before repeating someone else's**: a relayed measurement is not a
   measurement.
+- **Images rebuilt at different times read as a code finding too, and only
+  their ages show it.** A QA session rebuilt `backend` and `dashboard` from
+  `main` and not `worker`, and two subscriptions wedged at paid with no shares:
+  a stale worker claimed each issuance request and died before broadcasting.
+  It reproduced on a second subscription with a clean history, which is what
+  made it convincing. That session's own rule, worth taking verbatim: *"after
+  any rebuild, `docker images | grep ledova` and check the ages match before
+  believing a failure. A partial `docker compose up --build <service>` is the
+  shape that produces it."*
+  ([the pass-2 record](https://github.com/RonildoBraga/ledova/issues/115#issuecomment-5570522363))
+  This is a different cause from the bullet above: there every image agreed
+  with every other and the whole environment was simply old, so a version check
+  inside one of them catches it; here each image is internally correct and they
+  disagree with each other, so nothing you can read inside any single container
+  is wrong and only the relative ages are evidence. What survived that
+  correction is [#280](https://github.com/RonildoBraga/ledova/issues/280): a
+  worker dying between claiming and broadcasting is an ordinary production
+  event however it was provoked, and the recovery gap it exposed does not
+  belong to whoever provoked it.
 
 **Running a new test against the unfixed code is only half the check. Run it
 against a broken expectation too.** The first asks whether the test notices when
