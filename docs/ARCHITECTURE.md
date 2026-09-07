@@ -666,6 +666,21 @@ each lane does not re-derive it:
   Django's own foreign-key index. `related_name` is `"+"`, because the column
   exists for a policy to read rather than for anyone to traverse: no reverse
   accessor appears and no queryset changes shape.
+- **One `UPDATE` per table is a correctness rule, not a style one.** On a
+  populated PostgreSQL a second write to a row inside the migration's
+  transaction queues a referential-integrity event for every deferred foreign
+  key on that table — the ones that were already there included, and even when
+  the second write touches no key column, because PostgreSQL will not take its
+  "keys unchanged, skip the check" shortcut on a row version its own
+  transaction wrote. The next `ALTER TABLE` that needs a validating scan then
+  fails with `cannot ALTER TABLE ... because it has pending trigger events`. A
+  table that takes two owner columns therefore fills both in a single `UPDATE`,
+  or the lane settles the constraints with `SET CONSTRAINTS ALL IMMEDIATE` —
+  after the backfill going forward, before the nulling coming back, because
+  those two placements work for different reasons and are not interchangeable.
+  Naming only the new constraints does not settle it; the queued events belong
+  to the table's older foreign keys. Nothing catches this on SQLite or on an
+  empty database.
 - **`on_delete` mirrors the strictest `on_delete` on the path it derives from.**
   A shortcut to an owner must not make that owner deletable when the path it
   replaces refuses. `Subscription.company` and `Offering.company` are `PROTECT`,
