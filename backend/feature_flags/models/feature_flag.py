@@ -1,5 +1,6 @@
 from django.db import models
 
+from feature_flags.querysets import FeatureFlagQuerySet
 from shared.models import BaseModel
 
 
@@ -27,6 +28,8 @@ class FeatureFlag(BaseModel):
         blank=True,
         help_text="Minimum app version required (e.g. '1.2.0'). Leave blank to apply to all versions.",
     )
+
+    objects = FeatureFlagQuerySet.as_manager()
 
     class Meta:
         db_table = "feature_flags"
