@@ -127,6 +127,26 @@ TYPE_DEBT: dict[str, tuple[int, str]] = {
         "FeatureFlagSerializer carries exclude = ('created_at', 'updated_at') while the interface "
         "extends BaseEntity, which declares both required.",
     ),
+    "Offering:OfferingList": (
+        15,
+        "GET /api/v1/offerings/ serves OfferingListSerializer while the service is typed "
+        "apiClient.get<PaginatedResponse<Offering>>. canBeEdited is among the absent fields, and "
+        "the dashboard gates its Submit button on it, so no issuer could submit an offering for "
+        "review - #248, found in a browser rather than by a type-check. #248 sends the three "
+        "fields the page reads; the remaining twelve want a narrower OfferingListItem type.",
+    ),
+    "Offering:OfferingWrite": (
+        38,
+        "POST and PATCH /api/v1/offerings/ answer with OfferingWriteSerializer while both services "
+        "are typed apiClient.<verb><Offering>. The write shape is deliberately smaller; the type "
+        "claims the detail shape.",
+    ),
+    "SubscriptionDetail:SubscriptionCreate": (
+        30,
+        "POST /api/v1/subscriptions/ answers with SubscriptionCreateSerializer - "
+        "get_serializer_class names it for the create action - while the service is typed "
+        "apiClient.post<SubscriptionDetail>.",
+    ),
     "DeviceToken:DeviceToken": (
         1,
         "DeviceTokenSerializer lists created_at but not updated_at, while the interface extends "
@@ -135,6 +155,14 @@ TYPE_DEBT: dict[str, tuple[int, str]] = {
 }
 
 SCHEMA_DEBT: dict[str, tuple[int, str]] = {
+    "IssuerSubscription:OfferingDetail": (
+        11,
+        "offerings/views/offering.py subscriptions returns "
+        "self.get_paginated_response(IssuerSubscriptionSerializer(page, many=True).data), which "
+        "check-schema-responses.py does not see: it looks for Response(...) and this is a third "
+        "spelling. The generator falls back to OfferingDetailSerializer. The interface is correct; "
+        "tracked as a follow-up to #211.",
+    ),
     "AccountExportData:UserProfile": (
         33,
         "users/views/user_profile.py export-data returns lifecycle.export_account_data(user), a "
@@ -210,7 +238,16 @@ def url_shape(template: str) -> str:
 
 
 def declared_endpoints() -> dict[str, str]:
-    text = (SHARED / "constants/api.ts").read_text()
+    """Every endpoint group under constants/, not only the one in api.ts.
+
+    OFFERING_ENDPOINTS, TRADING_ENDPOINTS, SUBSCRIPTION_ENDPOINTS and
+    DIRECTORY_ENDPOINTS live in constants/business/. Reading api.ts alone left
+    every service call through them unmatched, which is most of the product -
+    and it is why this gate did not catch #248, an instance of exactly the drift
+    it exists to find. A gate that reads one file where the repository has five
+    reports a smaller number and passes.
+    """
+    text = "\n".join(path.read_text() for path in sorted((SHARED / "constants").rglob("*.ts")))
     out: dict[str, str] = {}
     for block in ENDPOINT_BLOCK.finditer(text):
         constant, body = block.group(1), block.group(2)
