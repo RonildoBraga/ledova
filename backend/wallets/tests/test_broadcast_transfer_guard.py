@@ -15,9 +15,12 @@ from tokens.models import ShareToken, ShareTokenStatus
 from users.models import UserAccount, UserProfile
 from wallets.models import Holding, Transaction, Wallet
 from wallets.services.signed_transfers import (
+    AMOUNT_OUT_OF_RANGE,
     CONTRACT_CREATION,
     ERC20_CARRIES_VALUE,
+    SIGNER_MISMATCH,
     UNDECODABLE,
+    UNSUPPORTED_ENVELOPE,
     UNSUPPORTED_PAYLOAD,
     WRONG_NETWORK,
 )
@@ -25,7 +28,7 @@ from wallets.services.transaction_confirmation import NOT_TRANSFERABLE
 from wallets.services.transfers import TransferService
 
 SIGNER = Account.from_key("0x" + "42" * 32)
-WALLET_ADDRESS = Web3.to_checksum_address("0x" + "a" * 40)
+WALLET_ADDRESS = SIGNER.address
 RECIPIENT = Web3.to_checksum_address("0x" + "b" * 40)
 LIAR = Web3.to_checksum_address("0x" + "d" * 40)
 USDC_CONTRACT = Web3.to_checksum_address("0x" + "c" * 40)
@@ -46,6 +49,26 @@ def sign(to=None, value=0, data=b"", chain_id=None, nonce=0):
     }
     if to is not None:
         fields["to"] = to
+    return SIGNER.sign_transaction(fields).raw_transaction.to_0x_hex()
+
+
+def sign_set_code(to=None, nonce=0):
+    authorization = SIGNER.sign_authorization(
+        {"chainId": settings.BLOCKCHAIN_CHAIN_ID, "address": SIGNER.address, "nonce": nonce + 1}
+    )
+    fields = {
+        "nonce": nonce,
+        "value": 0,
+        "gas": 200000,
+        "maxFeePerGas": 10**9,
+        "maxPriorityFeePerGas": 10**9,
+        "chainId": settings.BLOCKCHAIN_CHAIN_ID,
+        "data": b"",
+        "type": 4,
+        "accessList": [],
+        "authorizationList": [authorization],
+        "to": SIGNER.address if to is None else to,
+    }
     return SIGNER.sign_transaction(fields).raw_transaction.to_0x_hex()
 
 
@@ -91,6 +114,13 @@ class BroadcastTransferGuardTestCase(APITestCase):
         AssetChainDeployment.objects.create(asset=asset, chain="base", contract_address=USDC_CONTRACT, decimals=6)
         return asset
 
+    def usdc_with_disagreeing_decimals(self):
+        asset = Asset.objects.create(
+            symbol="USDT", name="Tether", asset_type="erc20_token", decimals=18, is_verified=True
+        )
+        AssetChainDeployment.objects.create(asset=asset, chain="base", contract_address=USDC_CONTRACT, decimals=6)
+        return asset
+
     def share_token(self):
         company = Company.objects.create(
             owner=self.user, name="Acme Pty Ltd", company_type=CompanyType.PROPRIETARY, acn="000000123"
@@ -120,6 +150,51 @@ class BroadcastTransferRefusalTest(BroadcastTransferGuardTestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["detail"], NOT_TRANSFERABLE.format(symbol=token.symbol))
+        get_client.assert_not_called()
+        schedule.assert_not_called()
+        self.assertFalse(Transaction.objects.filter(wallet=self.wallet).exists())
+
+    def test_a_set_code_transaction_is_refused_rather_than_read_as_a_zero_value_send(self, get_client, schedule):
+        response = self.broadcast(signed_transaction=sign_set_code(), to_address=SIGNER.address, amount="0")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["detail"], UNSUPPORTED_ENVELOPE)
+        get_client.assert_not_called()
+        schedule.assert_not_called()
+        self.assertFalse(Transaction.objects.filter(wallet=self.wallet).exists())
+
+    def test_a_transaction_signed_by_another_key_is_refused(self, get_client, schedule):
+        stranger = Account.from_key("0x" + "11" * 32)
+        fields = {
+            "nonce": 0,
+            "value": 10**17,
+            "gas": 90000,
+            "gasPrice": 10**9,
+            "chainId": settings.BLOCKCHAIN_CHAIN_ID,
+            "data": b"",
+            "to": RECIPIENT,
+        }
+        signed = stranger.sign_transaction(fields).raw_transaction.to_0x_hex()
+
+        response = self.broadcast(signed_transaction=signed, to_address=RECIPIENT, amount="0.1")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["detail"], SIGNER_MISMATCH.format(signer=stranger.address))
+        get_client.assert_not_called()
+        schedule.assert_not_called()
+        self.assertFalse(Transaction.objects.filter(wallet=self.wallet).exists())
+
+    def test_an_erc20_amount_too_large_to_record_is_refused_before_the_broadcast(self, get_client, schedule):
+        self.usdc()
+
+        response = self.broadcast(
+            signed_transaction=sign(to=USDC_CONTRACT, data=erc20_transfer_data(RECIPIENT, 2**256 - 1)),
+            to_address=RECIPIENT,
+            amount="1",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["detail"], AMOUNT_OUT_OF_RANGE)
         get_client.assert_not_called()
         schedule.assert_not_called()
         self.assertFalse(Transaction.objects.filter(wallet=self.wallet).exists())
@@ -231,6 +306,21 @@ class BroadcastTransferRecordingTest(BroadcastTransferGuardTestCase):
         self.assertEqual(recorded.to_address, RECIPIENT)
         self.assertEqual(recorded.amount, Decimal("0.25"))
         self.assertEqual(recorded.asset.symbol, "ETH")
+
+    def test_an_erc20_amount_is_scaled_by_the_deployment_not_the_asset(self, get_client, schedule):
+        self.usdc_with_disagreeing_decimals()
+        get_client.return_value.broadcast_transaction.return_value = "0xdecimals"
+
+        response = self.broadcast(
+            signed_transaction=sign(to=USDC_CONTRACT, data=erc20_transfer_data(RECIPIENT, 2_500_000)),
+            to_address=RECIPIENT,
+            amount="1",
+            token_contract=USDC_CONTRACT,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        recorded = Transaction.objects.get(wallet=self.wallet)
+        self.assertEqual(recorded.amount, Decimal("2.5"))
 
     def test_an_ordinary_erc20_send_still_broadcasts(self, get_client, schedule):
         self.usdc()

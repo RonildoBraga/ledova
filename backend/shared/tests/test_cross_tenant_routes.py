@@ -2,12 +2,9 @@ from collections import namedtuple
 from datetime import timedelta
 from unittest.mock import patch
 
-from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
-from eth_account import Account
 from rest_framework.test import APITestCase
-from web3 import Web3
 
 from companies.models import (
     LISTING_REQUIRED_DOCUMENTS,
@@ -30,20 +27,6 @@ from tokens.models import ShareIssuanceRequest, ShareToken, ShareTokenStatus, Sw
 
 SIGNATURE = "0x" + "ab" * 65
 RECIPIENT = "0x" + "9" * 40
-SIGNED_TRANSFER = (
-    Account.from_key("0x" + "11" * 32)
-    .sign_transaction(
-        {
-            "nonce": 0,
-            "to": Web3.to_checksum_address(RECIPIENT),
-            "value": 1,
-            "gas": 21000,
-            "gasPrice": 10**9,
-            "chainId": settings.BLOCKCHAIN_CHAIN_ID,
-        }
-    )
-    .raw_transaction.to_0x_hex()
-)
 NEW_WALLET_ADDRESS = "0x" + "e" * 40
 ALLOWANCE = {
     "token": "0x" + "7" * 40,
@@ -162,7 +145,7 @@ ROUTES = (
     Route("post", "/api/wallets/{wallet}/sync/", {}),
     Route("get", "/api/wallets/{wallet}/holdings/"),
     Route("post", "/api/wallets/{wallet}/prepare-transfer/", {"toAddress": "0x" + "c" * 40, "amountEth": "0.1"}),
-    Route("post", "/api/wallets/{wallet}/broadcast-transfer/", {"signedTransaction": SIGNED_TRANSFER}),
+    Route("post", "/api/wallets/{wallet}/broadcast-transfer/", {"signedTransaction": "{signed_transfer}"}),
     Route(
         "post",
         "/api/wallets/",

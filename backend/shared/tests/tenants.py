@@ -4,10 +4,13 @@ from itertools import count
 from types import SimpleNamespace
 from uuid import uuid4
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.db import models
 from django.utils import timezone
+from eth_account import Account
+from eth_utils import to_checksum_address
 
 from assets.models import Asset, AssetChainDeployment
 from companies.models import (
@@ -55,6 +58,23 @@ _sequence = count(1)
 
 def _hex40(prefix, number):
     return "0x" + prefix + f"{number:039x}"
+
+
+def _wallet_key(number):
+    return Account.from_key("0x" + f"{number:064x}")
+
+
+def _signed_native_transfer(key, recipient):
+    return key.sign_transaction(
+        {
+            "nonce": 0,
+            "to": recipient,
+            "value": 1,
+            "gas": 21000,
+            "gasPrice": 10**9,
+            "chainId": settings.BLOCKCHAIN_CHAIN_ID,
+        }
+    ).raw_transaction.to_0x_hex()
 
 
 def reference_data():
@@ -111,9 +131,10 @@ def make_tenant(label, *, staff=False, superuser=False):
     account = UserAccount.objects.create(account_number=f"ACCT-{label.upper()}"[:20], director=profile)
     account.user_profiles.add(profile)
 
+    wallet_key = _wallet_key(number)
     wallet = Wallet.objects.create(
         user_account=account,
-        address=_hex40("a", number),
+        address=wallet_key.address,
         chain="base",
         verification_status=WALLET_VERIFICATION_STATUS_VERIFIED,
         verification_challenge=f"challenge-{label}",
@@ -254,6 +275,7 @@ def make_tenant(label, *, staff=False, superuser=False):
         financial_profile=financial_profile,
         account=account,
         wallet=wallet,
+        signed_transfer=_signed_native_transfer(wallet_key, to_checksum_address(_hex40("9", number))),
         spare_wallet=spare_wallet,
         holding=holding,
         transaction=transaction,
@@ -318,6 +340,7 @@ def route_context(tenant):
     context.update(
         series_point=f"{tenant.portfolio.uuid}:{tenant.holding_snapshot.snapshot_date.isoformat()}",
         wallet_address=tenant.wallet.address,
+        signed_transfer=tenant.signed_transfer,
         push_token=tenant.device_token.push_token,
         acn=tenant.company.acn,
         asset=str(tenant.refs.asset.uuid),
