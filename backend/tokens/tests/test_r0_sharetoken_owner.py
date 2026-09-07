@@ -1,3 +1,4 @@
+from importlib import import_module
 from unittest import skipUnless
 
 from django.contrib.admin.sites import site
@@ -17,6 +18,8 @@ from tokens.serializers.share_token import (
 
 POSTGRES_ONLY = "The trigger is PostgreSQL; SQLite has no derive-and-refuse"
 BEFORE_THE_OWNER_COLUMN = [("tokens", "0023_r0_owner_columns")]
+BEFORE_THE_REPARENT_REFUSAL = [("tokens", "0024_r0_sharetoken_owner")]
+WITH_THE_REPARENT_REFUSAL = [("tokens", "0025_a_token_cannot_change_company")]
 
 
 class EveryTokenCarriesItsOwnerTest(TestCase):
@@ -122,6 +125,66 @@ class TheTriggerRefusesAnOwnerTheCompanyDoesNotNameTest(TransactionTestCase):
 
         self.assertEqual(ShareToken.objects.get(pk=token.pk).owner_id, new_owner)
 
+    def test_a_token_cannot_be_moved_to_another_company(self):
+        token = self.a_token(symbol="MOVE")
+        token.save()
+
+        with self.assertRaises(Exception) as refusal:
+            with transaction.atomic():
+                ShareToken.objects.filter(pk=token.pk).update(company=self.stranger.company)
+
+        self.assertIn("cannot move this row to another owner", str(refusal.exception))
+        self.assertEqual(ShareToken.objects.get(pk=token.pk).owner_id, self.tenant.company.owner_id)
+
+    def test_a_token_may_move_between_two_companies_of_the_same_owner(self):
+        token = self.a_token(symbol="MOVE")
+        token.save()
+        sibling = self.sibling_company()
+
+        ShareToken.objects.filter(pk=token.pk).update(company=sibling)
+
+        refreshed = ShareToken.objects.get(pk=token.pk)
+        self.assertEqual(refreshed.company_id, sibling.pk)
+        self.assertEqual(refreshed.owner_id, self.tenant.company.owner_id)
+
+    def sibling_company(self):
+        return Company.objects.create(
+            owner=self.tenant.company.owner,
+            name="Second company of the same owner",
+            acn="000000489",
+            status=self.tenant.company.status,
+        )
+
+    def test_neither_move_is_decided_by_the_unique_company_symbol(self):
+        token = self.a_token(symbol="MOVE")
+        token.save()
+
+        for company in (self.stranger.company, self.sibling_company()):
+            with self.subTest(company=company.name):
+                taken = set(ShareToken.objects.filter(company=company).values_list("symbol", flat=True))
+                self.assertNotIn(token.symbol, taken)
+
+    def test_the_only_unique_index_touching_the_link_is_the_one_the_tests_control_for(self):
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT indexname FROM pg_indexes WHERE tablename = %s "
+                "AND indexdef LIKE '%%UNIQUE%%' AND indexdef LIKE %s",
+                ["tokens_sharetoken", "%company_id%"],
+            )
+            touching = {name for (name,) in cursor.fetchall()}
+
+        self.assertEqual(touching, {"unique_company_symbol"})
+
+    def test_a_token_stays_with_its_company_when_something_else_changes(self):
+        token = self.a_token()
+        token.save()
+
+        ShareToken.objects.filter(pk=token.pk).update(name="Renamed")
+
+        refreshed = ShareToken.objects.get(pk=token.pk)
+        self.assertEqual(refreshed.company_id, self.tenant.company.pk)
+        self.assertEqual(refreshed.owner_id, self.tenant.company.owner_id)
+
     def test_moving_the_row_to_someone_the_company_does_not_name_is_refused(self):
         token = self.a_token()
         token.save()
@@ -170,3 +233,58 @@ class TheCompanyOwnerIsNotEditableOnAnExistingCompanyTest(TestCase):
 
     def test_the_add_form_still_asks_for_one(self):
         self.assertNotIn("owner", self.admin.get_readonly_fields(self.request, obj=None))
+
+
+class TheReverseRestoresTheFunctionItReplacedTest(TestCase):
+
+    @staticmethod
+    def _body(module_name, constant):
+        module = import_module(f"tokens.migrations.{module_name}")
+        return getattr(module, constant)
+
+    def test_the_reverse_body_is_the_one_0024_installed(self):
+        installed = self._body("0024_r0_sharetoken_owner", "DERIVE_FUNCTION")
+        restored = self._body("0025_a_token_cannot_change_company", "WITH_REPARENTING")
+
+        self.assertEqual(restored, installed)
+
+    def test_the_forward_body_differs_only_by_the_link_guard(self):
+        without = self._body("0025_a_token_cannot_change_company", "WITHOUT_REPARENTING")
+        with_it = self._body("0025_a_token_cannot_change_company", "WITH_REPARENTING")
+        guard = (
+            "        IF NEW.{parent_fk} IS DISTINCT FROM OLD.{parent_fk}\n"
+            "           AND parent_owner_id IS DISTINCT FROM OLD.{column} THEN\n"
+            "            RAISE EXCEPTION '{table} cannot move this row to another owner, from % to %',\n"
+            "                OLD.{column}, parent_owner_id;\n"
+            "        END IF;\n\n"
+        )
+
+        self.assertEqual(without.replace(guard, ""), with_it)
+
+
+@skipUnless(connection.vendor == "postgresql", POSTGRES_ONLY)
+class TheHoleIsBackAfterTheReverseAndGoneAfterTheForwardTest(TransactionTestCase):
+
+    def tearDown(self):
+        restore_every_migration()
+        super().tearDown()
+
+    def test_the_reverse_restores_the_behaviour_and_not_only_the_text(self):
+        tenant = make_tenant("roundtrip-hole")
+        stranger = make_tenant("roundtrip-stranger")
+        token = tenant.deployed_token
+        ShareToken.objects.filter(pk=token.pk).update(symbol="RTRP")
+
+        migrate_to(BEFORE_THE_REPARENT_REFUSAL)
+        ShareToken.objects.filter(pk=token.pk).update(company=stranger.company)
+        self.assertEqual(ShareToken.objects.get(pk=token.pk).owner_id, stranger.company.owner_id)
+
+        ShareToken.objects.filter(pk=token.pk).update(company=tenant.company)
+        migrate_to(WITH_THE_REPARENT_REFUSAL)
+
+        with self.assertRaises(Exception) as refusal:
+            with transaction.atomic():
+                ShareToken.objects.filter(pk=token.pk).update(company=stranger.company)
+
+        self.assertIn("cannot move this row to another owner", str(refusal.exception))
+        self.assertEqual(ShareToken.objects.get(pk=token.pk).owner_id, tenant.company.owner_id)
