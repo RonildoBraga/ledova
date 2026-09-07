@@ -645,7 +645,27 @@ and a policy on every tenant table. Four things about running that deployment:
   not belong in a migration: the statement carrying it reaches the server log on
   any instance with `log_statement = all`, and the migration is replayed on every
   database the schema is applied to. Local work uses
-  `POSTGRES_HOST_AUTH_METHOD=trust`, as CI does.
+  `POSTGRES_HOST_AUTH_METHOD=trust`, which `docker-compose.yml` sets on the
+  `postgres` service, as CI does on its service container.
+- **`POSTGRES_HOST_AUTH_METHOD` is read by `initdb`, on the first start only.**
+  Setting it against a database that already exists does nothing: `pg_hba.conf`
+  was written when the volume was created. A cluster initialised without it
+  authenticates `scram-sha-256` for anything but loopback — and the compose
+  bridge is not loopback, so the two passwordless roles are refused there while
+  `psql` from inside the container succeeds on the `127.0.0.1/32 trust` line
+  and proves nothing. On an existing volume, give the roles the password the
+  settings already expect rather than recreating the database:
+
+  ```sql
+  ALTER ROLE ledova_app      LOGIN PASSWORD '<the POSTGRES_PASSWORD in backend/.env>';
+  ALTER ROLE ledova_operator LOGIN PASSWORD '<the POSTGRES_PASSWORD in backend/.env>';
+  ```
+
+  `DATABASES["app"]["PASSWORD"]` falls back to `POSTGRES_PASSWORD` when
+  `RLS_APP_DB_PASSWORD` is unset, so that is the value the connection sends.
+  `manage.py check_rls_roles` says all of this when a connection is refused,
+  rather than letting the failure surface as an authentication error inside
+  whichever command happens to touch the ORM first.
 - **`ALTER ROLE … BYPASSRLS` requires superuser.** Whoever applies
   `shared/0003` must be able to grant it, or the roles come out without the
   attributes the policies assume — which `check_rls_roles` then refuses.
@@ -661,7 +681,12 @@ and a policy on every tenant table. Four things about running that deployment:
   rather than start wrong — but the error says `RLS_AMBIENT_ALIAS is
   'operator'`, which reads like a configuration problem. Put the subcommand
   first: `manage.py runserver --settings=x`.
-- **`manage.py check_rls_roles` runs in CI's PostgreSQL step and at startup.** It
+- **`manage.py check_rls_roles` runs in CI's PostgreSQL step and in the compose
+  `migrate` service, immediately after `migrate` and before the first command
+  that touches the ORM.** That order is deliberate: a role the policies assume
+  but the server will not admit is a role problem, and it should be reported
+  by the command whose subject is the roles, not by `sync_monitoring_rules`.
+  It
   connects on each alias and asserts what no test can see — the app role lacks
   `BYPASSRLS` and owns no table, the operator role has it, the migrate role owns
   the tables, and a fresh app connection carries no principal. A misconfigured

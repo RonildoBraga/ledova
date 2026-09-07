@@ -16,6 +16,15 @@ services:
     env_file:
       - path: ./backend/.env
         required: false
+    environment:
+      # shared/0003 creates ledova_app and ledova_operator with LOGIN and no password,
+      # deliberately: a credential does not belong in a migration. Without this the
+      # image initdb's with scram-sha-256, the two roles can never authenticate over
+      # the compose bridge, and the stack dies at the first post-migrate ORM call.
+      # docs/OPERATIONS.md says local work uses trust as CI does; this is where it is
+      # applied. initdb reads it on FIRST start only - an existing volume needs the
+      # ALTER ROLE recipe in that section instead.
+      POSTGRES_HOST_AUTH_METHOD: trust
     ports:
       - "127.0.0.1:5432:5432"
     volumes:
@@ -45,7 +54,7 @@ services:
       - path: ./backend/.env
         required: false
     environment: *backend-environment
-    command: sh -c "python manage.py migrate --noinput && python manage.py sync_monitoring_rules && python manage.py sync_procedure_templates && python manage.py asset_sync --seed-only"
+    command: sh -c "python manage.py migrate --noinput && python manage.py check_rls_roles && python manage.py sync_monitoring_rules && python manage.py sync_procedure_templates && python manage.py asset_sync --seed-only"
     volumes:
       - media_data:/usr/src/app/media
       - private_media_data:/usr/src/app/private-media

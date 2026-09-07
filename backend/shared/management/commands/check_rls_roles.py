@@ -1,6 +1,6 @@
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
-from django.db import connections
+from django.db import OperationalError, connections
 
 from shared.db import APP_ALIAS, MIGRATE_ALIAS, OPERATOR_ALIAS, PRINCIPAL_SETTING
 
@@ -9,12 +9,36 @@ OWNED = "SELECT count(*) FROM pg_tables WHERE schemaname = 'public' AND tableown
 UNSET = f"SELECT current_setting('{PRINCIPAL_SETTING}', true) IS NULL"
 
 
+CANNOT_AUTHENTICATE = (
+    "{alias} cannot connect as {user}: {error}"
+    "\n    shared/0003 creates that role with LOGIN and no password, on purpose - a credential does "
+    "not belong in a migration - so the server has to be one that admits it."
+    "\n    A cluster initialised without POSTGRES_HOST_AUTH_METHOD=trust uses scram-sha-256 over "
+    "anything but loopback, and refuses every passwordless role."
+    "\n    On a new database: set POSTGRES_HOST_AUTH_METHOD=trust, which docker-compose.yml now does."
+    "\n    On one that already exists initdb has already written pg_hba.conf, so give the role the "
+    "password the settings expect instead:"
+    "\n      ALTER ROLE {user} LOGIN PASSWORD '<the POSTGRES_PASSWORD in backend/.env>';"
+    "\n    Or set {prefix}_PASSWORD to whatever the role's password already is."
+)
+
+
 def _ask(alias, statement):
     connection = connections[alias]
     connection.close()
-    with connection.cursor() as cursor:
-        cursor.execute(statement)
-        return cursor.fetchone()[0]
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(statement)
+            return cursor.fetchone()[0]
+    except OperationalError as error:
+        raise CommandError(
+            CANNOT_AUTHENTICATE.format(
+                alias=alias,
+                user=settings.DATABASES[alias]["USER"],
+                error=str(error).strip().splitlines()[-1],
+                prefix="RLS_APP_DB" if alias == APP_ALIAS else "RLS_OPERATOR_DB",
+            )
+        ) from error
 
 
 class Command(BaseCommand):
