@@ -2166,6 +2166,27 @@ expected string, ask what the assertion is *for*: if the answer is the
 behaviour that just changed, the test is **retiring**, not failing, and the
 replacement should assert the new property rather than the new wording.
 
+**A green suite can exit non-zero, and the failure text names a file that
+passed.** `AssetAllocationCard.test.tsx` reported 11 files and 48 tests with no
+assertion failure, and the job still failed: `ReferenceError: window is not
+defined`, raised by React's scheduler committing a re-render **after** vitest
+had torn the jsdom environment down. `beforeEach(cleanup)` unmounts the
+*previous* test and never the **last** one, so the final render was still
+mounted, with a live `useAuth` query underneath it, when the environment went
+away. **Read the exit code and the test count as two separate facts**: a
+suite whose assertions all pass has said nothing about what its teardown left
+running.
+Put `cleanup()` in `afterEach`, not `beforeEach`, and hoist any `QueryClient`
+out of the render call so it can be cleared.
+
+It is a **race**, so it is worse than a constant failure: it surfaces on
+whichever commit happens to be passing through, and it resisted 49 local runs
+including CPU-contended and interleaved ones. The habit that identified it in
+under a minute was **comparing the trees before attributing the failure** —
+`git rev-parse <sha>:dashboard` against the previous commit's, across each
+affected path, turned *"probably the backend commit sitting on it"* into
+*"cannot be that commit, no JS path differs"*. Do that before reading the log.
+
 **The worst version pins an outage, and the name reads like a specification.**
 `test_a_query_with_no_principal_raises_rather_than_returning_nothing` was
 written during R1 and asserted that a policied query on a connection with no
