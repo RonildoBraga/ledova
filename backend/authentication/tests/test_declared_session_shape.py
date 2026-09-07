@@ -21,7 +21,9 @@ class TheSessionBodyMatchesWhatAuthViewsDeclareTest(TestCase):
         self.assertEqual(set(UserSigninSerializer(instance=self.user).data), NAMED_BY_AUTH_IDENTITY_AND_AUTH_SESSION)
 
     def test_email_verification_returns_the_keys_the_view_declares(self):
-        self.assertEqual(set(EmailVerificationSerializer(instance=self.user).data), NAMED_BY_AUTH_IDENTITY_AND_AUTH_SESSION)
+        self.assertEqual(
+            set(EmailVerificationSerializer(instance=self.user).data), NAMED_BY_AUTH_IDENTITY_AND_AUTH_SESSION
+        )
 
     def test_signup_returns_the_keys_the_view_declares(self):
         self.assertEqual(set(UserSignupSerializer(instance=self.user).data), NAMED_BY_AUTH_IDENTITY_AND_AUTH_SESSION)
