@@ -57,8 +57,19 @@ RULES = {
     TASK_TRANSACTION: "a task loads a row and calls one service; the service owns the transaction",
 }
 
+# A stated exception, not backlog: it is correct and it never goes away. It still
+# carries a count, because an exception that excused a whole file would reintroduce
+# exactly the hole this gate was hardened to close.
+ALLOWED: dict[str, tuple[int, str]] = {
+    "backend/companies/views/company.py:raw-orm-in-view": (
+        1,
+        "CompanyViewSet.get_queryset returns Company.objects.all() for the administrative actions, so "
+        "an operator reaches every company. Stated in docs/ARCHITECTURE.md and pinned by STAFF_UNSCOPED "
+        "in backend/shared/tests/test_route_coverage.py.",
+    ),
+}
+
 LEGACY: dict[str, int] = {
-    "backend/companies/views/company.py:raw-orm-in-view": 1,
     "backend/tokens/views/trading_token.py:raw-orm-in-view": 1,
     "backend/users/views/notification_preferences.py:transaction-in-view": 1,
     "backend/users/views/user_preferences.py:transaction-in-view": 1,
@@ -336,8 +347,12 @@ def main() -> int:
             counts[key] = counts.get(key, 0) + 1
             lines.setdefault(key, []).append(f"{relative}:{line}: {RULES[rule]}")
 
-    grown = sorted(key for key, seen in counts.items() if seen > LEGACY.get(key, 0))
+    def budget(key: str) -> int:
+        return ALLOWED[key][0] if key in ALLOWED else LEGACY.get(key, 0)
+
+    grown = sorted(key for key, seen in counts.items() if seen > budget(key))
     stale = sorted(key for key, pinned in LEGACY.items() if counts.get(key, 0) < pinned)
+    stale += sorted(key for key in ALLOWED if counts.get(key, 0) < ALLOWED[key][0])
     excused = sum(min(seen, LEGACY.get(key, 0)) for key, seen in counts.items())
 
     if arguments.show_legacy:
@@ -347,17 +362,19 @@ def main() -> int:
         print(f"\n{excused} excused finding(s) across {len(LEGACY)} legacy entries.\n")
 
     if stale:
-        print(f"These LEGACY counts are higher than what is there ({len(stale)}):\n", file=sys.stderr)
+        print(f"These pinned counts are higher than what is there ({len(stale)}):\n", file=sys.stderr)
         for key in stale:
-            print(f"  {key}: pinned {LEGACY[key]}, found {counts.get(key, 0)}", file=sys.stderr)
-        print("\nLower the count in LEGACY, or delete the entry when it reaches zero.", file=sys.stderr)
+            pinned = ALLOWED[key][0] if key in ALLOWED else LEGACY[key]
+            where = "ALLOWED" if key in ALLOWED else "LEGACY"
+            print(f"  {key}: {where} pins {pinned}, found {counts.get(key, 0)}", file=sys.stderr)
+        print("\nLower the count, or delete the entry when it reaches zero.", file=sys.stderr)
         return 1
 
     if grown:
         print(f"Backend layer violations ({len(grown)} file/rule pairs):\n", file=sys.stderr)
         for key in grown:
-            pinned = LEGACY.get(key, 0)
-            print(f"  {key}: pinned {pinned}, found {counts[key]}", file=sys.stderr)
+            where = "ALLOWED" if key in ALLOWED else "LEGACY"
+            print(f"  {key}: {where} pins {budget(key)}, found {counts[key]}", file=sys.stderr)
             for entry in lines[key]:
                 print(f"    {entry}", file=sys.stderr)
         print(
@@ -368,7 +385,10 @@ def main() -> int:
         )
         return 1
 
-    print(f"Backend layers clean in {checked} files ({excused} known findings still in LEGACY).")
+    print(
+        f"Backend layers clean in {checked} files "
+        f"({excused} known findings still in LEGACY, {len(ALLOWED)} stated exception(s))."
+    )
     return 0
 
 

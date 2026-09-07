@@ -953,7 +953,13 @@ Python 3 and a checkout. `backend/shared/tests/test_layer_gate.py` pins each
 rule against a snippet, so the decisions below are executable rather than prose.
 
 `LEGACY` maps `file:rule` to a **count**, not to a bare key, and that difference
-is the gate. Keyed per file, an already-excused file could gain any number of new
+is the gate. `ALLOWED` sits beside it for the opposite kind of entry: a finding
+that is correct and permanent rather than owed. It carries a reason and a count —
+a reason so nobody has to rediscover why, and a count because an exception that
+excused a whole file would reopen the hole `LEGACY`'s counts close. Today it holds
+one: `CompanyViewSet.get_queryset` returning `Company.objects.all()` for the
+administrative actions, which #119 already pins from the route side. Keeping it out
+of `LEGACY` is what lets `LEGACY` reach zero and mean it. Keyed per file, an already-excused file could gain any number of new
 violations while only an informational total moved; the run stayed green. Now a
 count that rises fails, a count that falls fails as stale, and the message names
 both numbers. `python3 scripts/check-layers.py --show-legacy` prints the entries

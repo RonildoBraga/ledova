@@ -282,6 +282,22 @@ class Thing:
         self.assertEqual(rules_for(source, "models"), [])
 
 
+class PinnedCountsTest(SimpleTestCase):
+
+    def test_every_allowed_entry_carries_a_count_and_a_reason(self):
+        for key, value in gate.ALLOWED.items():
+            count, reason = value
+            self.assertGreater(count, 0, key)
+            self.assertGreater(len(reason), 60, key)
+
+    def test_no_key_is_both_a_stated_exception_and_backlog(self):
+        self.assertEqual(set(gate.ALLOWED) & set(gate.LEGACY), set())
+
+    def test_every_pinned_rule_is_a_rule_the_gate_has(self):
+        for key in list(gate.ALLOWED) + list(gate.LEGACY):
+            self.assertIn(key.rsplit(":", 1)[1], gate.RULES, key)
+
+
 class TaskLayerRuleTest(SimpleTestCase):
 
     def test_a_task_opening_its_own_transaction_is_flagged(self):
