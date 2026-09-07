@@ -36,6 +36,13 @@ function onChain(chain: string, quantity: string, marketValue: string | null, ov
   } as HoldingWithWallet;
 }
 
+function onlyLine(allocation: ReturnType<typeof calculateAssetAllocation>) {
+  expect(allocation).toHaveLength(1);
+  const line = allocation[0];
+  if (!line) throw new Error('the allocation was empty');
+  return line;
+}
+
 describe('one coin held on two chains', () => {
   const held = [onChain('ethereum', '300', '300'), onChain('base', '100', '100')];
 
@@ -43,20 +50,20 @@ describe('one coin held on two chains', () => {
     const allocation = calculateAssetAllocation(held, 400);
 
     expect(allocation.map((item) => item.symbol)).toEqual(['USDC']);
-    expect(allocation[0].percentage).toBe(100);
+    expect(onlyLine(allocation).percentage).toBe(100);
   });
 
   it('carries the summed quantity on the line, so nothing has to sum it again', () => {
     const allocation = calculateAssetAllocation(held, 400);
 
-    expect(allocation[0].totalQuantity).toBe(400);
-    expect(allocation[0].totalValue).toBe(400);
+    expect(onlyLine(allocation).totalQuantity).toBe(400);
+    expect(onlyLine(allocation).totalValue).toBe(400);
   });
 
   it('carries the split the line is a sum of, largest chain first', () => {
     const allocation = calculateAssetAllocation(held, 400);
 
-    expect(allocation[0].perChain).toEqual([
+    expect(onlyLine(allocation).perChain).toEqual([
       { chain: 'ethereum', quantity: 300, totalValue: 300, priced: true },
       { chain: 'base', quantity: 100, totalValue: 100, priced: true },
     ]);
@@ -67,7 +74,7 @@ describe('one coin held on two chains', () => {
 
     const allocation = calculateAssetAllocation(twoOnBase, 125);
 
-    expect(allocation[0].perChain).toEqual([{ chain: 'base', quantity: 125, totalValue: 125, priced: true }]);
+    expect(onlyLine(allocation).perChain).toEqual([{ chain: 'base', quantity: 125, totalValue: 125, priced: true }]);
   });
 });
 
@@ -75,8 +82,8 @@ describe('a coin held on one chain only', () => {
   it('carries one slice, which is what tells a client not to offer an expansion', () => {
     const allocation = calculateAssetAllocation([onChain('base', '100', '100')], 100);
 
-    expect(allocation[0].perChain).toHaveLength(1);
-    expect(allocation[0].perChain[0].chain).toBe('base');
+    expect(onlyLine(allocation).perChain).toHaveLength(1);
+    expect(onlyLine(allocation).perChain).toEqual([{ chain: 'base', quantity: 100, totalValue: 100, priced: true }]);
   });
 });
 
@@ -86,8 +93,8 @@ describe('a line summed across a priced chain and an unpriced one', () => {
   it('says which chain is unpriced, while the line keeps the basis it had', () => {
     const allocation = calculateAssetAllocation(mixed, 300);
 
-    expect(allocation[0].basis).toBe('unpriced');
-    expect(allocation[0].perChain).toEqual([
+    expect(onlyLine(allocation).basis).toBe('unpriced');
+    expect(onlyLine(allocation).perChain).toEqual([
       { chain: 'ethereum', quantity: 300, totalValue: 300, priced: true },
       { chain: 'base', quantity: 100, totalValue: 0, priced: false },
     ]);
@@ -96,8 +103,8 @@ describe('a line summed across a priced chain and an unpriced one', () => {
   it('still contributes what it could price rather than dropping the line', () => {
     const allocation = calculateAssetAllocation(mixed, 300);
 
-    expect(allocation[0].totalValue).toBe(300);
-    expect(allocation[0].totalQuantity).toBe(400);
+    expect(onlyLine(allocation).totalValue).toBe(300);
+    expect(onlyLine(allocation).totalQuantity).toBe(400);
   });
 });
 
@@ -106,6 +113,6 @@ describe('a holding whose chain the serializer did not send', () => {
     const noChain = onChain('base', '100', '100');
     const allocation = calculateAssetAllocation([{ ...noChain, chain: '' } as HoldingWithWallet], 100);
 
-    expect(allocation[0].perChain).toEqual([{ chain: 'base', quantity: 100, totalValue: 100, priced: true }]);
+    expect(onlyLine(allocation).perChain).toEqual([{ chain: 'base', quantity: 100, totalValue: 100, priced: true }]);
   });
 });
