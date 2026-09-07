@@ -9,7 +9,7 @@ const useOfferings = vi.fn();
 const useOfferingActions = vi.fn();
 const useOfferingSubscriptions = vi.fn();
 const useOfferingUnderEdit = vi.fn();
-const update = vi.fn(() => Promise.resolve());
+const update = vi.fn((variables: { uuid: string; data: OfferingInput }) => Promise.resolve(variables));
 
 vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));
 vi.mock('@tanstack/react-query', () => ({
@@ -199,7 +199,7 @@ describe('what the edit form is seeded with, and what Save sends', () => {
     fireEvent.click(screen.getByText('Save changes'));
 
     expect(update).toHaveBeenCalledTimes(1);
-    const sent = update.mock.calls[0][0] as { uuid: string; data: OfferingInput };
+    const sent = update.mock.calls[0][0];
     expect(sent.uuid).toBe('offering-1');
     expect(sent.data.summary).toBe('Corrected after the review');
     expect(sent.data.pricePerShare).toBe('3.25');
