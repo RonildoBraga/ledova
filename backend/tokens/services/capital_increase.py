@@ -4,7 +4,7 @@ from tokens.services.dilution import dilution_for
 
 ALREADY_IN_FLIGHT = (
     "{symbol} already has a capital increase in flight ({status}, requested {requested}). "
-    "One share class raises its cap once at a time, so wait for that one to finish or withdraw it first."
+    "One share class raises its cap once at a time, so wait for that one to finish, or ask the operator to reject it."
 )
 
 
