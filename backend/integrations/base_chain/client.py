@@ -25,6 +25,9 @@ from integrations.base_chain.exceptions import (
 logger = logging.getLogger(__name__)
 
 LOG_PREFIX = "[BASE_CHAIN]"
+
+HTTP_TIMEOUT_SECONDS = 30
+BROADCAST_ROUND_TRIPS = 4
 GAS_HEADROOM = 1.2
 
 
@@ -46,7 +49,7 @@ class BaseChainClient:
         rpc_url = getattr(settings, "BLOCKCHAIN_RPC_URL", "http://localhost:8545")
 
         try:
-            self._web3 = Web3(Web3.HTTPProvider(rpc_url))
+            self._web3 = Web3(Web3.HTTPProvider(rpc_url, request_kwargs={"timeout": HTTP_TIMEOUT_SECONDS}))
             self._web3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
 
             chain_id = self._web3.eth.chain_id

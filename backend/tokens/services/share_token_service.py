@@ -16,6 +16,7 @@ from blockchain.models import BlockchainTransaction, TransactionStatus, Transact
 from companies.models import CompanyStatus
 from companies.services.company import primary_wallet_for
 from integrations.base_chain import get_base_chain_client
+from integrations.base_chain.client import BROADCAST_ROUND_TRIPS, HTTP_TIMEOUT_SECONDS
 from integrations.base_chain.exceptions import BaseChainContractError
 from operators.settlement import settlement_deployments
 from shared.constants import BLOCKCHAIN_BASE
@@ -58,7 +59,7 @@ EXCEEDS_AUTHORIZED = "Amount exceeds authorized shares. Submit a capital increas
 RELEASED_BY_OPERATOR = (
     "An operator checked the chain, found no mint for this request, and released the claim. " "Retrying issues afresh."
 )
-UNNAMED_MINT_GRACE = timedelta(minutes=10)
+UNNAMED_MINT_GRACE = 2 * BROADCAST_ROUND_TRIPS * timedelta(seconds=HTTP_TIMEOUT_SECONDS)
 CLAIMED_BEFORE_RECORDED = (
     "The worker claimed this request and stopped before recording a mint, so nothing was sent. "
     "Retrying issues afresh."

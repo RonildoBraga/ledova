@@ -1,9 +1,10 @@
 import importlib
 from datetime import timedelta
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from uuid import uuid4
 
 from django.apps import apps
+from django.conf import settings
 from django.db import connection
 from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
@@ -11,6 +12,11 @@ from django.utils import timezone
 from web3 import Web3
 
 from blockchain.models import BlockchainTransaction, TransactionStatus, TransactionType
+from integrations.base_chain.client import (
+    BROADCAST_ROUND_TRIPS,
+    HTTP_TIMEOUT_SECONDS,
+    BaseChainClient,
+)
 from shared.tests.tenants import make_tenant
 from tokens.exceptions import (
     InvalidRecipientAddressException,
@@ -36,8 +42,10 @@ from tokens.services.share_token_service import (
     EXCEEDS_AUTHORIZED,
     NOT_WHITELISTED,
     TOKEN_PAUSED,
+    UNNAMED_MINT_GRACE,
 )
 from tokens.tasks import check_executing_issuance_requests, execute_review_request_task
+from tokens.tasks.review_request import STALE_EXECUTION_AGE
 
 RECIPIENT = "0x" + "a" * 40
 SIGNER = "0x" + "e" * 40
@@ -1016,6 +1024,29 @@ class ExecuteReviewRequestTaskTest(TestCase):
         self.assertEqual(result, {"success": False, "error": str(InvalidRecipientAddressException().detail)})
         request.refresh_from_db()
         self.assertEqual(request.status, RequestStatus.APPROVED)
+
+
+class TheGraceIsJustifiedByTheWindowItCoversTest(TestCase):
+
+    def test_it_covers_the_longest_a_broadcast_can_take_without_naming_its_mint(self):
+        longest_broadcast = BROADCAST_ROUND_TRIPS * timedelta(seconds=HTTP_TIMEOUT_SECONDS)
+
+        self.assertGreaterEqual(UNNAMED_MINT_GRACE, longest_broadcast)
+
+    def test_the_timeout_the_grace_is_derived_from_is_the_one_the_client_uses(self):
+        with patch("integrations.base_chain.client.Web3") as web3:
+            web3.HTTPProvider.return_value = Mock()
+            web3.return_value.eth.chain_id = settings.BLOCKCHAIN_CHAIN_ID
+            BaseChainClient._web3 = None
+            try:
+                BaseChainClient()
+            finally:
+                BaseChainClient._web3 = None
+
+        self.assertEqual(web3.HTTPProvider.call_args.kwargs["request_kwargs"], {"timeout": HTTP_TIMEOUT_SECONDS})
+
+    def test_the_operator_control_opens_before_the_sweep_can_act(self):
+        self.assertLess(UNNAMED_MINT_GRACE, STALE_EXECUTION_AGE)
 
 
 class AnUnnamedMintReachesAnOperatorTest(TestCase):
