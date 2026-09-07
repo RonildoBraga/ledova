@@ -1839,9 +1839,23 @@ The subclass set is collected from the source, following `APIException` through
 subclassing, so a new exception module is covered without an edit. It is 70
 classes today.
 
-`LEGACY` carries the five sites in `wallets/services/transfers.py` — the native
-and ERC-20 send paths — which move in their own PR because that file is on the
-owner-merge list. The count only falls.
+`LEGACY` is empty, and the way it emptied is the point of it being there. It
+held the five sites in `wallets/services/transfers.py` — the native and ERC-20
+send paths — which moved in their own PR because that file is on the
+owner-merge list, and [#274](https://github.com/RonildoBraga/ledova/pull/274)
+fixed them the same way as the eighteen here. **The list is shrink-only in both
+directions**: a pinned count that is higher than what is there fails as loudly
+as one that is lower, so on the first run after rebasing onto a `main` that
+contained #274 the gate refused itself —
+
+```
+These pinned counts are higher than what is there (1):
+  backend/wallets/services/transfers.py: pinned 5, found 0
+```
+
+— rather than carrying a satisfied pin until somebody wondered what it was
+guarding. A list that only watches for growth cannot tell a paid debt from an
+unmeasured one.
 
 ### The logging privacy gate
 
