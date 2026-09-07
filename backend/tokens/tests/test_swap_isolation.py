@@ -120,6 +120,23 @@ class SwapQuerysetIsScopedToTheCallerTest(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual([row["uuid"] for row in response.data["results"]], [str(self.owner_swap.uuid)])
 
+    def test_a_second_owned_wallet_does_not_widen_the_listing_for_the_first(self):
+        second_wallet = Wallet.objects.create(
+            user_account=self.owner_wallet.user_account,
+            address="0x" + "4" * 40,
+            chain="ethereum",
+            verification_status="VERIFIED",
+        )
+        second_swap = self._swap(second_wallet, self.counterparty_wallet, "c")
+        self.client.force_authenticate(self.owner)
+
+        visible = SwapOrder.objects.visible_to_user(self.owner).values_list("uuid", flat=True)
+        self.assertIn(second_swap.uuid, visible)
+
+        response = self.client.get("/api/v1/trading/swaps/", {"wallet_address": self.owner_wallet.address})
+
+        self.assertEqual([row["uuid"] for row in response.data["results"]], [str(self.owner_swap.uuid)])
+
     def test_the_listing_refuses_a_wallet_the_caller_does_not_own(self):
         self.client.force_authenticate(self.owner)
 
