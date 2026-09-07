@@ -28,6 +28,7 @@ from tokens.models import (
 from tokens.services.register import (
     IDENTITY_LABELS,
     IDENTITY_LIVE,
+    IDENTITY_TREASURY_LABEL,
     REGISTER_HEADERS,
     SOURCE_ALLOTMENTS,
     SOURCE_CHAIN,
@@ -265,7 +266,7 @@ class RegisterExportTest(RegisterTestBase):
         self.assertEqual(member["Identity source"], IDENTITY_LABELS[IDENTITY_LIVE])
         self.assertEqual([member["Whitelist status"], member["Amount paid"]], ["Active", "250.00"])
         self.assertEqual(body["Company treasury"]["Residential address"], "")
-        self.assertEqual(body["Company treasury"]["Identity source"], IDENTITY_LABELS[IDENTITY_LIVE])
+        self.assertEqual(body["Company treasury"]["Identity source"], IDENTITY_LABELS[IDENTITY_TREASURY_LABEL])
         self.assertEqual(body["Company treasury"]["Amount paid"], "")
 
     def test_the_residential_address_never_reaches_the_api(self):

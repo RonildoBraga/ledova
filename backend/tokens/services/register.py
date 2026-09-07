@@ -23,12 +23,23 @@ SOURCE_LABELS = {
 IDENTITY_LIVE = "profile"
 IDENTITY_STAMPED = "stamped"
 IDENTITY_RECORDED = "recorded"
+IDENTITY_TREASURY_LABEL = "treasury_label"
+IDENTITY_UNRESOLVABLE = "unresolvable"
 IDENTITY_NONE = "none"
 
 IDENTITY_LABELS = {
     IDENTITY_LIVE: "Current profile",
     IDENTITY_RECORDED: "Name recorded at allotment, identity never resolved",
+    IDENTITY_TREASURY_LABEL: "Whitelist entry label, no profile exists",
+    IDENTITY_UNRESOLVABLE: "Not resolvable, two wallets share this address",
     IDENTITY_NONE: "Not identified",
+}
+
+IDENTITY_BY_HOLDER_TYPE = {
+    HolderType.MEMBER.value: IDENTITY_LIVE,
+    HolderType.TREASURY.value: IDENTITY_TREASURY_LABEL,
+    HolderType.AMBIGUOUS.value: IDENTITY_UNRESOLVABLE,
+    HolderType.UNIDENTIFIED.value: IDENTITY_NONE,
 }
 
 
@@ -173,7 +184,8 @@ def _register(token, reader) -> list[dict]:
             name = identity.name
             residential_address = identity.residential_address
             holder_type = identity.holder_type
-            identity_source, stamped_at = IDENTITY_LIVE, None
+            identity_source = IDENTITY_BY_HOLDER_TYPE[holder_type]
+            stamped_at = None
         rows.append(
             {
                 "address": address,

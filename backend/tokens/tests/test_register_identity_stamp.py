@@ -11,6 +11,7 @@ from tokens.models import RequestStatus, ShareIssuance, ShareIssuanceRequest
 from tokens.services import ShareTokenService
 from tokens.services.holder_identity import identity_at_allotment
 from tokens.services.register import (
+    IDENTITY_BY_HOLDER_TYPE,
     IDENTITY_LABELS,
     IDENTITY_LIVE,
     IDENTITY_NONE,
@@ -21,13 +22,28 @@ from tokens.services.register import (
 )
 from users.models import UserAccount
 from wallets.models import Wallet
-from whitelist.models import WhitelistEntry
+from whitelist.models import HolderType, WhitelistEntry
 
 HOLDER = "0x" + "ab" * 20
 CHAIN_CLIENT = "tokens.services.share_token_service.get_base_chain_client"
 WHITELISTED = "tokens.services.share_token_service.ShareTokenService.is_recipient_whitelisted"
 SUPPLY = "tokens.services.share_token_service.ShareTokenService.share_supply"
 IDENTITY_COLUMN = REGISTER_HEADERS.index("Identity source")
+
+
+class EveryHolderTypeStatesItsOwnIdentitySourceTest(TestCase):
+    def test_no_holder_type_can_exist_without_an_identity_source(self):
+        self.assertEqual(set(HolderType.values) - set(IDENTITY_BY_HOLDER_TYPE), set())
+
+    def test_every_mapped_source_has_a_label(self):
+        self.assertEqual(set(IDENTITY_BY_HOLDER_TYPE.values()) - set(IDENTITY_LABELS), set())
+
+    def test_only_a_member_may_claim_a_current_profile(self):
+        claiming_live = [
+            holder_type for holder_type, source in IDENTITY_BY_HOLDER_TYPE.items() if source == IDENTITY_LIVE
+        ]
+
+        self.assertEqual(claiming_live, [HolderType.MEMBER.value])
 
 
 class IdentitySurvivesAWalletDeletionTest(TestCase):
