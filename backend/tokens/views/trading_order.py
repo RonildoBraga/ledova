@@ -100,6 +100,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
             wallet_address=data["wallet_address"],
             order_type=data["order_type"],
             quantity=data["quantity"],
+            min_quantity=data.get("min_quantity", 0),
             price_per_share=data["price_per_share"],
         )
 

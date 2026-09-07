@@ -11,6 +11,7 @@ def verify_and_spend_create(data, digest, signature) -> None:
         token_uuid=str(data["token"].uuid),
         order_type=data["order_type"],
         quantity=data["quantity"],
+        min_quantity=data.get("min_quantity", 0),
         price_per_share=data["price_per_share"],
         digest=digest,
         signature=signature,

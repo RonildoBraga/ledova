@@ -125,6 +125,23 @@ class SignedCreateBindingTest(APITestCase):
         transfers.return_value.create_order_and_match.assert_not_called()
 
     @patch("tokens.views.trading_order.TokenTransferService")
+    def test_a_signature_for_a_partial_fill_cannot_place_an_all_or_nothing_order(self, transfers):
+        transfers.return_value.create_order_and_match.return_value = (self.tenant.order, None)
+        issued = self.request_challenge(min_quantity=0)
+
+        response = self.post_create(issued, self.sign(issued), min_quantity=5)
+
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertEqual(response.json()["code"], "challenge_mismatch")
+        transfers.return_value.create_order_and_match.assert_not_called()
+
+    def test_the_challenge_binds_how_the_order_may_be_filled(self):
+        issued = self.request_challenge(min_quantity=3)
+
+        self.assertEqual(issued["message"]["minQuantity"], "3")
+        self.assertIn("minQuantity", [field["name"] for field in issued["types"]["OrderCreate"]])
+
+    @patch("tokens.views.trading_order.TokenTransferService")
     def test_a_signature_from_another_key_is_refused(self, transfers):
         issued = self.request_challenge()
 

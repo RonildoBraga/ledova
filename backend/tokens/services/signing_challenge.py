@@ -36,6 +36,7 @@ CHALLENGE_TYPES = {
             {"name": "tokenUuid", "type": "string"},
             {"name": "orderType", "type": "string"},
             {"name": "quantity", "type": "uint256"},
+            {"name": "minQuantity", "type": "uint256"},
             {"name": "pricePerShare", "type": "string"},
             {"name": "wallet", "type": "address"},
             {"name": "nonce", "type": "uint256"},

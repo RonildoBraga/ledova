@@ -28,6 +28,7 @@ class TradingOrderService:
         token_uuid: str,
         order_type: str,
         quantity: int,
+        min_quantity: int,
         price_per_share: Decimal,
         digest: Optional[str],
         signature: Optional[str],
@@ -47,6 +48,7 @@ class TradingOrderService:
                 "tokenUuid": token_uuid,
                 "orderType": order_type,
                 "quantity": quantity,
+                "minQuantity": min_quantity,
                 "pricePerShare": price_per_share,
             },
         )
@@ -84,7 +86,7 @@ class TradingOrderService:
         return order
 
     @staticmethod
-    def get_order_create_message(token, wallet_address, order_type, quantity, price_per_share) -> dict:
+    def get_order_create_message(token, wallet_address, order_type, quantity, min_quantity, price_per_share) -> dict:
         challenge = issue_challenge(
             SigningChallengePurpose.ORDER_CREATE,
             wallet_address,
@@ -92,6 +94,7 @@ class TradingOrderService:
                 "tokenUuid": str(token.uuid),
                 "orderType": order_type,
                 "quantity": str(quantity),
+                "minQuantity": str(min_quantity),
                 "pricePerShare": str(price_per_share),
             },
             verifying_contract=token.contract_address,
