@@ -416,7 +416,7 @@ class ExecuteRequestServiceTest(TestCase):
         request = self._approved(self.tenant.capital_increase)
         self._set_authorized_contract()
         self.chain.wait_for_receipt.side_effect = RuntimeError("rpc timed out after the call mined")
-        with self.assertRaisesMessage(TokenDeploymentFailedException, "rpc timed out after the call mined"):
+        with self.assertRaisesMessage(TokenDeploymentFailedException, "The capital increase is unconfirmed."):
             self.service.execute_request(request)
 
         self.chain.send_transaction.assert_called_once()
@@ -477,7 +477,7 @@ class ExecuteRequestServiceTest(TestCase):
         self._set_authorized_contract()
 
         self.chain.wait_for_receipt.side_effect = RuntimeError("still pending")
-        with self.assertRaisesMessage(TokenDeploymentFailedException, "still pending"):
+        with self.assertRaisesMessage(TokenDeploymentFailedException, "The capital increase is unconfirmed."):
             self.service.execute_request(request)
         request.refresh_from_db()
         old.refresh_from_db()

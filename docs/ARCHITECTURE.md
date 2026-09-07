@@ -1786,6 +1786,63 @@ overridden. Everything else on `TestCase` is refused, and the reserved set is
 **derived from `dir(unittest.TestCase)` rather than listed**, so a name the
 standard library adds later is covered on the day it is added.
 
+### The error body gate
+
+`scripts/check-error-bodies.py` fails when an API error response would carry a
+caught exception's own text. CI runs it beside the other source gates; it is
+static and needs no database.
+
+An `APIException` subclass raised with an argument is served to the caller as the
+response body by `shared/api/exceptions.py`. When that argument is built from a
+caught exception, the body is whatever the underlying library chose to say — and
+for a `requests` failure that is the request URL, which in this deployment
+carries the node provider's API key as a path segment. Measured on `main` in
+#243, through the real handler:
+
+```
+STATUS 500
+BODY   {'detail': 'Transfer preparation failed: Max retries exceeded with url:
+        https://base-sepolia.g.alchemy.com/v2/<the key>'}
+```
+
+The rule is the one the logging gate already applies, one layer out. That gate
+refuses handing a whole provider response body to a **log** formatter, because a
+whole body is whatever the provider chose to send. A response body reaches a
+caller rather than an operator, so the same reasoning applies with more force.
+
+Inside an `except ... as name:` handler, an `APIException` subclass may not be
+constructed from `name` — not the bare name, not `str(name)`, not an f-string
+interpolating it, not through a local assigned from any of those, and not as a
+keyword argument. Every subclass carries a `default_detail`, and the fix is a
+fixed message plus a logged diagnostic:
+
+```python
+        except Exception as e:
+            logger.error(f"Preparation failed: {e}")
+            raise TransferPreparationException("Transfer preparation failed.") from e
+```
+
+Nothing a caller can act on is lost. The reasons that matter to a caller are
+separate exceptions raised **above** the generic branch — `NotWhitelistedException`,
+`InsufficientBalanceException`, `TokenPausedException` — and they keep their
+messages. What is lost is the part that was never for the caller.
+
+Two things are deliberately not findings. A message built from the repository's
+own state — `f"Cannot execute request with status '{request.get_status_display()}'"`
+— names a condition rather than repeating a library, so it stays. And
+`shared/utils/blockchain.decode_exception_to_message` is a **sanitiser**: it
+extracts a hex blob, decodes a known revert reason and returns that or a stated
+default, never the exception's text. It is named in `SANITISERS`, and adding a
+name there is a claim about that function which has to be true.
+
+The subclass set is collected from the source, following `APIException` through
+subclassing, so a new exception module is covered without an edit. It is 70
+classes today.
+
+`LEGACY` carries the five sites in `wallets/services/transfers.py` — the native
+and ERC-20 send paths — which move in their own PR because that file is on the
+owner-merge list. The count only falls.
+
 ### The logging privacy gate
 
 `scripts/check-logging.py` is the mechanical half of "never log an email
