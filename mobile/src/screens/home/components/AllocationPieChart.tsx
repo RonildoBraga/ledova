@@ -38,6 +38,11 @@ export function AllocationPieChart({ data, totalValue, isLoading }: AllocationPi
       fontSize: theme.fontSize.sm,
       color: theme.colors.text.muted,
     },
+    unpricedNote: {
+      fontSize: theme.fontSize.xs,
+      color: theme.colors.text.subtle,
+      textAlign: 'center',
+    },
     emptyContainer: {
       minHeight: 250,
       justifyContent: 'center',
@@ -64,6 +69,8 @@ export function AllocationPieChart({ data, totalValue, isLoading }: AllocationPi
     );
   }
 
+  const unpricedCount = data.filter((item) => !item.priced).length;
+
   const chartData = data
     .filter((item) => item.percentage != null && item.color && item.percentage > 0)
     .map((item) => ({
@@ -85,6 +92,7 @@ export function AllocationPieChart({ data, totalValue, isLoading }: AllocationPi
             <View style={styles.centerLabel}>
               <Text style={styles.totalValue}>{formatDisplayCurrency(totalValue)}</Text>
               <Text style={styles.totalLabel}>Total</Text>
+              {unpricedCount > 0 && <Text style={styles.unpricedNote}>excludes {unpricedCount} unpriced</Text>}
             </View>
           )}
         />
