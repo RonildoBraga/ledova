@@ -1,11 +1,11 @@
 from django import forms
 from django.contrib import admin, messages
-from django.core.exceptions import PermissionDenied
 from django.http import Http404, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
-from django.urls import re_path, reverse
+from django.urls import reverse
 from django.utils.html import format_html
 
+from shared.utils.admin_actions import admin_action_re_path
 from shared.utils.admin_display import action_buttons
 from shared.utils.admin_files import admin_file_path
 from tokens.admin._helpers import status_badge
@@ -224,10 +224,11 @@ class InvestorClassificationAdmin(admin.ModelAdmin):
                 "users_investorclassification_evidence",
                 self._resolve_evidence,
             ),
-            re_path(
+            admin_action_re_path(
+                self,
                 rf"^(?P<uuid>[0-9a-f-]+)/(?P<action>{'|'.join(TRANSITIONS)})/$",
-                self.admin_site.admin_view(self.transition_view),
-                name="users_investorclassification_transition",
+                "users_investorclassification_transition",
+                self.transition_view,
             ),
         ]
         return custom_urls + super().get_urls()
@@ -243,12 +244,7 @@ class InvestorClassificationAdmin(admin.ModelAdmin):
             return VerifyForm(request.POST or None, initial={"expires_at": classification.default_expiry})
         return ReasonForm(request.POST or None, label=spec["label"], help_text=spec["help"])
 
-    def transition_view(self, request, uuid, action):
-        if not self.has_change_permission(request):
-            raise PermissionDenied
-        classification = get_object_or_404(InvestorClassification, uuid=uuid)
-        if not self.has_change_permission(request, classification):
-            raise PermissionDenied
+    def transition_view(self, request, classification, action):
         spec = TRANSITIONS[action]
         change_url = reverse("admin:users_investorclassification_change", args=[classification.pk])
         form = self._build_form(request, classification, spec)

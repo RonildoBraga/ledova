@@ -47,6 +47,7 @@ VIEW_LOCK = "select-for-update-in-view"
 VIEW_LOGGER = "logger-in-view"
 MODEL_QUERY = "query-in-model"
 TASK_TRANSACTION = "transaction-in-task"
+ADMIN_BARE_VIEW = "bare-admin-view"
 
 RULES = {
     VIEW_ORM: "views reach the ORM only through visible_to_user or manageable_by_user",
@@ -55,6 +56,7 @@ RULES = {
     VIEW_LOGGER: "log in services and tasks, not in views",
     MODEL_QUERY: "a model queries its own manager only; another model's manager belongs in a queryset or a service",
     TASK_TRANSACTION: "a task loads a row and calls one service; the service owns the transaction",
+    ADMIN_BARE_VIEW: "admin_view admits any active staff account; a row action goes through shared.utils.admin_actions",
 }
 
 # A stated exception, not backlog: it is correct and it never goes away. It still
@@ -81,9 +83,9 @@ LEGACY: dict[str, int] = {
 def layer_of(path: Path) -> str | None:
     parts = path.relative_to(BACKEND).parts
     for index, part in enumerate(parts):
-        if part in ("views", "models", "tasks"):
+        if part in ("views", "models", "tasks", "admin"):
             return part
-        if index == 1 and part in ("views.py", "models.py", "tasks.py"):
+        if index == 1 and part in ("views.py", "models.py", "tasks.py", "admin.py"):
             return part[:-3]
     return None
 
@@ -281,6 +283,14 @@ def model_findings(node: ast.AST, owners: frozenset[str] = OWN_MANAGER_RECEIVERS
     return found
 
 
+def admin_findings(tree: ast.AST):
+    return [
+        (node.lineno, ADMIN_BARE_VIEW)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Attribute) and node.attr == "admin_view"
+    ]
+
+
 def findings_for(tree: ast.AST, layer: str):
     found = []
 
@@ -289,6 +299,9 @@ def findings_for(tree: ast.AST, layer: str):
 
     if layer == "models":
         found.extend(model_findings(tree))
+
+    if layer == "admin":
+        found.extend(admin_findings(tree))
 
     for node in ast.walk(tree):
         if not isinstance(node, ast.Attribute):
