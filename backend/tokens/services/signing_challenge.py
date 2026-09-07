@@ -31,6 +31,17 @@ CHALLENGE_TYPES = {
             {"name": "deadline", "type": "uint256"},
         ]
     },
+    SigningChallengePurpose.ORDER_MODIFY: {
+        "OrderModify": [
+            {"name": "orderUuid", "type": "string"},
+            {"name": "newQuantity", "type": "uint256"},
+            {"name": "newMinQuantity", "type": "uint256"},
+            {"name": "newPricePerShare", "type": "string"},
+            {"name": "wallet", "type": "address"},
+            {"name": "nonce", "type": "uint256"},
+            {"name": "deadline", "type": "uint256"},
+        ]
+    },
     SigningChallengePurpose.ORDER_CREATE: {
         "OrderCreate": [
             {"name": "tokenUuid", "type": "string"},
@@ -85,6 +96,7 @@ def issue_challenge(purpose, wallet_address: str, fields: dict, verifying_contra
 
 def challenge_response(challenge) -> dict:
     return {
+        "purpose": challenge.purpose,
         "digest": challenge.digest,
         "domain": challenge.payload["domain"],
         "types": challenge.payload["types"],

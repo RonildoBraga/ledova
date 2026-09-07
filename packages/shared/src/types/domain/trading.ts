@@ -190,6 +190,8 @@ export interface GetSwapDataParams {
   walletAddress: string;
 }
 
+export type SigningChallengePurpose = 'order_cancel' | 'order_create' | 'order_modify';
+
 export interface SigningChallengeTypedData {
   domain: {
     name: string;
@@ -202,6 +204,7 @@ export interface SigningChallengeTypedData {
 }
 
 export interface CancelOrderMessageResponse extends SigningChallengeTypedData {
+  purpose: 'order_cancel';
   orderUuid: string;
   walletAddress: string;
   digest: string;
@@ -209,6 +212,7 @@ export interface CancelOrderMessageResponse extends SigningChallengeTypedData {
 }
 
 export interface CreateOrderMessageResponse extends SigningChallengeTypedData {
+  purpose: 'order_create';
   tokenUuid: string;
   walletAddress: string;
   digest: string;
@@ -245,17 +249,17 @@ export interface OrderModificationNewValues {
   pricePerShare: string;
 }
 
-export interface OrderModificationMessageResponse {
-  message: string;
-  messageHash: string;
+export interface OrderModificationMessageResponse extends SigningChallengeTypedData {
+  purpose: 'order_modify';
   orderUuid: string;
-  nonce: number;
+  digest: string;
+  expiresAt: string;
   currentValues: OrderModificationCurrentValues;
   newValues: OrderModificationNewValues;
 }
 
 export interface SignedOrderModificationRequest {
-  message: string;
+  digest: string;
   signature: string;
 }
 

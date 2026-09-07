@@ -285,12 +285,12 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
         serializer = OrderModificationExecuteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        message = serializer.validated_data["message"]
+        digest = serializer.validated_data["digest"]
         signature = serializer.validated_data["signature"]
 
         modified_order, changes = OrderModificationService().apply_modification(
             order=order,
-            message=message,
+            digest=digest,
             signature=signature,
             ip_address=get_client_ip(request),
             user_agent=request.META.get("HTTP_USER_AGENT", ""),

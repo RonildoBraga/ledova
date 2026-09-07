@@ -1,16 +1,19 @@
 from decimal import Decimal
 from unittest.mock import patch
 
+from eth_account import Account
 from rest_framework.test import APITestCase
 
 from feature_flags.models import FeatureFlag
 from shared.tests.tenants import make_tenant
-from shared.utils.signature import generate_order_modify_message
-from tokens.exceptions import OrderModificationException
+from shared.utils.typed_data import signable_message
+from tokens.exceptions import ChallengeAlreadyUsedException
 from tokens.models import OrderModificationLog, TransferOrder
 from tokens.models.choices import TransferOrderStatus, TransferOrderType
 from tokens.services import OrderModificationService
+from wallets.models import Wallet
 
+OWNER = Account.from_key("0x" + "63" * 32)
 SIGNATURE = "0x" + "ab" * 65
 
 
@@ -18,38 +21,43 @@ class OrderModificationTest(APITestCase):
     def setUp(self):
         FeatureFlag.objects.update_or_create(name="trading_enabled", defaults={"enabled": True})
         self.tenant = make_tenant("alice")
+        self.signing_wallet = Wallet.objects.create(
+            user_account=self.tenant.account,
+            address=OWNER.address,
+            chain="base",
+            verification_status="VERIFIED",
+        )
         self.order = TransferOrder.objects.create(
             order_type=TransferOrderType.BUY,
             token=self.tenant.deployed_token,
             payment_asset=self.tenant.refs.stablecoin,
-            wallet=self.tenant.wallet,
+            wallet=self.signing_wallet,
             owner_account=self.tenant.account,
-            wallet_address=self.tenant.wallet.address,
+            wallet_address=OWNER.address,
             quantity=10,
             price_per_share=Decimal("1.50"),
         )
 
-    def _message(self, price="2.00"):
-        return generate_order_modify_message(
-            order_uuid=str(self.order.uuid),
-            token_symbol=self.order.token.symbol,
-            order_type="BUY",
-            new_quantity=12,
-            new_min_quantity=0,
-            new_price_per_share=price,
-            wallet_address=self.order.wallet_address,
-            nonce=1,
+    def _challenge(self, price="2.00", quantity=12):
+        return OrderModificationService().generate_modification_message(
+            order=self.order, new_quantity=quantity, new_min_quantity=0, new_price=Decimal(price)
         )
 
+    @staticmethod
+    def _sign(issued):
+        return OWNER.sign_message(
+            signable_message(issued["domain"], issued["types"], issued["message"])
+        ).signature.hex()
+
     @patch("tokens.events.publish_trading_event")
-    @patch("tokens.services.order_modification_service.recover_address_from_signature")
-    def test_apply_modification_bulk_writes_one_log_row_per_changed_field(self, recover, publish):
-        recover.return_value = self.order.wallet_address
+    def test_apply_modification_bulk_writes_one_log_row_per_changed_field(self, publish):
+        issued = self._challenge()
+        signature = self._sign(issued)
 
         order, changes = OrderModificationService().apply_modification(
             order=self.order,
-            message=self._message(),
-            signature=SIGNATURE,
+            digest=issued["digest"],
+            signature=signature,
             ip_address="1.2.3.4",
             user_agent="agent " * 200,
         )
@@ -65,24 +73,34 @@ class OrderModificationTest(APITestCase):
         logs = {log.field_name: log for log in OrderModificationLog.objects.filter(order=order)}
         self.assertEqual(set(logs), {"quantity", "price_per_share"})
         for log in logs.values():
-            self.assertEqual(
-                (log.signer_address, log.ip_address, log.signature), (order.wallet_address, "1.2.3.4", SIGNATURE)
-            )
-            self.assertEqual(log.modification_message, self._message())
+            self.assertEqual((log.signer_address, log.ip_address), (order.wallet_address, "1.2.3.4"))
+            self.assertEqual(log.challenge.digest, issued["digest"])
             self.assertEqual(len(log.user_agent), 500)
         self.assertEqual((logs["quantity"].old_value, logs["quantity"].new_value), ("10", "12"))
         publish.assert_called_once_with("order_modified", str(order.token.uuid))
 
-    @patch("tokens.services.order_modification_service.recover_address_from_signature")
-    def test_malformed_price_is_a_modification_error(self, recover):
-        recover.return_value = self.order.wallet_address
+    def test_a_modify_signature_cannot_be_replayed(self):
+        issued = self._challenge()
+        signature = self._sign(issued)
+        OrderModificationService().apply_modification(order=self.order, digest=issued["digest"], signature=signature)
 
-        with self.assertRaises(OrderModificationException) as ctx:
+        with self.assertRaises(ChallengeAlreadyUsedException):
             OrderModificationService().apply_modification(
-                order=self.order, message=self._message(price="two"), signature=SIGNATURE
+                order=self.order, digest=issued["digest"], signature=signature
             )
-        self.assertTrue(str(ctx.exception.detail).startswith("Invalid message format"))
-        self.assertFalse(OrderModificationLog.objects.exists())
+
+        self.assertEqual(OrderModificationLog.objects.filter(field_name="quantity").count(), 1)
+
+    def test_the_service_reads_the_new_values_from_the_payload_it_stored(self):
+        issued = self._challenge(price="2.00", quantity=12)
+
+        order, _ = OrderModificationService().apply_modification(
+            order=self.order, digest=issued["digest"], signature=self._sign(issued)
+        )
+
+        self.assertEqual((order.quantity, order.price_per_share), (12, Decimal("2.00")))
+        self.assertEqual(issued["message"]["newQuantity"], "12")
+        self.assertEqual(issued["message"]["newPricePerShare"], "2.00")
 
     @patch("rest_framework.throttling.SimpleRateThrottle.allow_request", return_value=True)
     def test_service_errors_reach_the_client_unwrapped(self, _throttle):

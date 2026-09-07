@@ -1,28 +1,28 @@
 import logging
-import time
 from decimal import Decimal
 from typing import Optional
 
 from django.db import transaction
 from django.utils import timezone
-from web3 import Web3
 
-from shared.utils.signature import (
-    generate_order_modify_message,
-    parse_order_modify_message,
-    recover_address_from_signature,
-)
 from tokens.exceptions import (
     OrderModificationConflictException,
     OrderModificationException,
 )
 from tokens.models import (
     OrderModificationLog,
+    SigningChallengePurpose,
     TransferOrder,
     TransferOrderStatus,
     TransferOrderType,
 )
 from tokens.services.share_token_service import ShareTokenService
+from tokens.services.signing_challenge import (
+    challenge_response,
+    consume_challenge,
+    issue_challenge,
+    spend,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -91,26 +91,22 @@ class OrderModificationService:
         if errors:
             raise OrderModificationException("; ".join(errors))
 
-        nonce = int(time.time() * 1000)
-
-        message = generate_order_modify_message(
-            order_uuid=str(order.uuid),
-            token_symbol=order.token.symbol,
-            order_type=order.order_type.upper(),
-            new_quantity=effective_quantity,
-            new_min_quantity=effective_min_qty,
-            new_price_per_share=str(effective_price),
-            wallet_address=order.wallet_address,
-            nonce=nonce,
+        challenge = issue_challenge(
+            SigningChallengePurpose.ORDER_MODIFY,
+            order.wallet_address,
+            {
+                "orderUuid": str(order.uuid),
+                "newQuantity": str(effective_quantity),
+                "newMinQuantity": str(effective_min_qty),
+                "newPricePerShare": str(effective_price),
+            },
+            verifying_contract=order.token.contract_address,
+            order=order,
         )
 
-        message_hash = Web3.keccak(text=message).hex()
-
         return {
-            "message": message,
-            "message_hash": message_hash,
             "order_uuid": str(order.uuid),
-            "nonce": nonce,
+            **challenge_response(challenge),
             "current_values": {
                 "quantity": order.quantity,
                 "min_quantity": order.min_quantity,
@@ -125,42 +121,33 @@ class OrderModificationService:
             },
         }
 
-    def verify_signature(self, message: str, signature: str, expected_address: str) -> str:
-        signer = recover_address_from_signature(message, signature)
-        if not signer:
-            raise OrderModificationException("Invalid signature - could not recover signer address")
-
-        if signer.lower() != expected_address.lower():
-            raise OrderModificationException("Signature must be from order owner")
-
-        return signer
-
     @transaction.atomic
     def apply_modification(
         self,
         order: TransferOrder,
-        message: str,
+        digest: str,
         signature: str,
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
     ) -> tuple[TransferOrder, list[dict]]:
         order = TransferOrder.objects.select_for_update().get(uuid=order.uuid)
 
+        challenge = consume_challenge(
+            digest,
+            SigningChallengePurpose.ORDER_MODIFY,
+            order.wallet_address,
+            signature,
+            order=order,
+        )
+        spend(challenge, signature)
+        signer = challenge.wallet_address
+
         self.validate_can_modify(order)
 
-        signer = self.verify_signature(message, signature, order.wallet_address)
-
-        try:
-            modifications = parse_order_modify_message(message)
-            new_price = Decimal(modifications.get("new_price_per_share", str(order.price_per_share)))
-        except Exception as e:
-            raise OrderModificationException(f"Invalid message format: {str(e)}")
-
-        if modifications.get("order_uuid") != str(order.uuid):
-            raise OrderModificationException("Message is for a different order")
-
-        new_quantity = modifications.get("new_quantity", order.quantity)
-        new_min_quantity = modifications.get("new_min_quantity", order.min_quantity)
+        intent = challenge.payload["message"]
+        new_quantity = int(intent["newQuantity"])
+        new_min_quantity = int(intent["newMinQuantity"])
+        new_price = Decimal(intent["newPricePerShare"])
 
         errors = self.validate_modifications(order, new_quantity, new_min_quantity, new_price)
         if errors:
@@ -211,7 +198,7 @@ class OrderModificationService:
                 field_name=change["field"],
                 old_value=change["old"],
                 new_value=change["new"],
-                modification_message=message,
+                challenge=challenge,
                 signature=signature,
                 signer_address=signer,
                 ip_address=ip_address,
