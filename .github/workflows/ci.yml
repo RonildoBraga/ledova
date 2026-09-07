@@ -17,6 +17,8 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
+      - name: Dependencies the gate scripts import
+        run: pip install pyyaml
       - name: Comment and docstring gate
         run: python scripts/check-comments.py
       - name: Backend layer gate
@@ -137,10 +139,11 @@ jobs:
           POSTGRES_PORT: '5432'
           POSTGRES_DB: ledova
           POSTGRES_USER: ledova
-        run: >-
-          python manage.py spectacular
-          --settings=ledova_backend.settings.test_postgres --file /tmp/schema.yml
-          && python ../scripts/check-api-types.py --schema /tmp/schema.yml
+        run: |
+          python manage.py migrate --settings=ledova_backend.settings.test_postgres --noinput
+          python manage.py spectacular \
+            --settings=ledova_backend.settings.test_postgres --file /tmp/schema.yml
+          python ../scripts/check-api-types.py --schema /tmp/schema.yml
       - name: SQLite migration tests
         run: >-
           python manage.py test authentication.tests.test_email_migration
