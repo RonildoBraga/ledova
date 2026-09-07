@@ -16,9 +16,10 @@ PROVIDER_WEBHOOK = "Provider webhook: no session, authenticated by signature, an
 GLOBAL_CATALOGUE = "Global catalogue shared by every tenant and deliberately not owner-scoped."
 CREATES_OWN_ROW = "Creation route: writes a row owned by the caller and accepts no writable relation."
 CREATES_OWN_ROW_SCOPED_FK = (
-    "Creation route owned by the caller. Every writable relation it accepts is re-scoped in the "
-    "serializer's get_fields(), either through visible_to_user or to a global catalogue queryset, "
-    "so a foreign identifier in the body cannot reach a row the caller cannot already see."
+    "Creation route owned by the caller. Every writable relation it accepts is scoped before the body "
+    "can reach it: either declared against an already-filtered catalogue queryset, or declared as "
+    "objects.none() and re-scoped in the serializer's get_fields(). Either way a foreign identifier in "
+    "the body cannot name a row the caller cannot already see."
 )
 SELF_SCOPED = "Acts only on the caller's own rows and takes no identifier."
 ELIGIBILITY_SCOPED = (
