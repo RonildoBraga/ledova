@@ -632,7 +632,57 @@ Transaction hashes are stored 0x-prefixed. `is_transferable` and
 ## Tenancy model
 
 There is one database and one operator per deployment. Isolation is enforced in
-the ORM, not in PostgreSQL: row-level security is not planned.
+the ORM today, and PostgreSQL row-level security is being added underneath it in
+stages, tracked on [issue #115](https://github.com/RonildoBraga/ledova/issues/115).
+The ORM rules below are the live mechanism and stay the live mechanism; RLS is a
+second floor under them, not a replacement.
+
+**Stage R0 — the owner column.** A table whose owner is reachable only through a
+parent cannot be read by a policy without a join, so each such table gains a
+direct owner column. The shape is the same every time and is stated here once so
+each lane does not re-derive it:
+
+- The column is added **nullable**, backfilled from the parent link in one
+  `UPDATE` per table on both vendors, altered to **`NOT NULL`**, and indexed by
+  Django's own foreign-key index. `related_name` is `"+"`, because the column
+  exists for a policy to read rather than for anyone to traverse: no reverse
+  accessor appears and no queryset changes shape.
+- **`on_delete` mirrors the strictest `on_delete` on the path it derives from.**
+  A shortcut to an owner must not make that owner deletable when the path it
+  replaces refuses. `Subscription.company` and `Offering.company` are `PROTECT`,
+  because `Offering.token` and `ShareToken.company` are; the users columns and
+  `Transaction.user_account` are `CASCADE`, because their whole path cascades.
+  Django enforces `on_delete` in the collector rather than in DDL, so this is
+  ORM consistency rather than a schema difference — which is exactly why it has
+  to be chosen deliberately: nothing in the database will contradict a wrong
+  choice.
+- **A child whose parent already carries the owner column derives from the
+  parent**, not by re-walking to the root, so every trigger stays a single join.
+  That makes the backfill order load-bearing when a lane has both, and it is the
+  one place where the backfill's own "no owner" guard is reachable rather than
+  defensive.
+- The **trigger is installed last**, so the column is already constrained before
+  the trigger exists. It is `BEFORE INSERT OR UPDATE`, PostgreSQL only — SQLite
+  has no plpgsql and nothing there for it to protect — and it derives a missing
+  owner from the parent, refuses a value that does not match the parent, and
+  refuses an update that changes one already set. Filling a NULL is the change
+  it exists to make, so the immutability guard reads `OLD IS NOT NULL AND OLD <>
+  NEW`; `IS DISTINCT FROM` makes the two branches contradict each other.
+- Python supplies as well as the database enforcing: a small model mixin fills
+  the column in `save()`, because the trigger is PostgreSQL-only and `make test`
+  runs on SQLite. `bulk_create` bypasses `save()`, which is how a test reaches
+  the trigger at all.
+- The **reverse** drops the trigger, relaxes the column, nulls it and removes
+  it. The nulling step is redundant — `RemoveField` follows it, and while the
+  trigger stands a `SET NULL` is repaired rather than refused — so **there is no
+  guard on it**. The evidence that the migration reverses is the round trip with
+  real rows, not a test asserting a non-behaviour.
+- **Audit the app's serializers for `exclude`-style field sets before adding the
+  column.** A `ModelSerializer` with `exclude = (...)` turns a new model field
+  into a *required writable API field*; two in `users` did exactly that, and
+  nothing but the suite says so. An explicit `fields` tuple is unaffected.
+
+
 
 - Every customer-facing queryset has `visible_to_user(user)` (and
   `manageable_by_user` for writes) that returns `none()` for an anonymous or
@@ -1421,9 +1471,13 @@ what `IdentityVerificationService.get_verification_status` polls them for;
 `message` and `details` both echo the push token.
 
 What it does not cover, deliberately. `print` and a management command's
-`self.stdout.write` are ungated: the only `print` calls in `backend/` are the
-progress counters in `assets/migrations/0009_...`, and no command writes an
-address. An object whose `__str__` returns an email -- `CustomUser.__str__`
+`self.stdout.write` are ungated: every `print` in `backend/` is a data
+migration reporting what it moved -- the progress counters in
+`assets/migrations/0009_...` and the backfill counts in the RLS stage R0
+migrations -- and no command writes an address. That is a convention held by
+review rather than by a check, and it is the kind of sentence that goes stale
+between the day it is written and the next migration; if a `print` ever carries
+a row's contents rather than a count of rows, nothing here will say so. An object whose `__str__` returns an email -- `CustomUser.__str__`
 does -- is ungated too: `f"{user}"` in a log line is a leak the syntax cannot
 tell apart from `f"{token}"`, and no site does it today. `contracts/`,
 `packages/scripts/` and the root build config of each client are outside the

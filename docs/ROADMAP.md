@@ -590,9 +590,11 @@ decision below). Mainnet deployment configuration is deliberately absent.
   configuration on the operator row
   ([docs/OPERATIONS.md](OPERATIONS.md#operator-configuration)); it does not
   change tenancy or isolation.
-- **Tenant isolation stays in the ORM.** Fail-closed `visible_to_user` and
-  `manageable_by_user` querysets with a pinned route matrix. PostgreSQL
-  row-level security is not planned.
+- **Tenant isolation stays in the ORM, with PostgreSQL row-level security being
+  added underneath it.** Fail-closed `visible_to_user` and
+  `manageable_by_user` querysets with a pinned route matrix remain the live
+  mechanism; RLS is a second floor under them, added in stages. See
+  "Tenancy model" in `docs/ARCHITECTURE.md`.
 - **One authentication path.** The hardened `AuthViewSet` with simplejwt
   sessions and two transports. A v2 session protocol was designed and withdrawn
   unused in `0727cc2` and `33995c6`. Its ADRs,

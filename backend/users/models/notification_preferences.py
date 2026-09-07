@@ -1,11 +1,21 @@
+from django.conf import settings
 from django.db import models
 
 from shared.models import BaseModel
+from users.models.owner_column import DerivesOwnerFromProfile
 from users.querysets.notification_preferences import NotificationPreferencesQuerySet
 
 
-class NotificationPreferences(BaseModel):
+class NotificationPreferences(DerivesOwnerFromProfile, BaseModel):
     objects = NotificationPreferencesQuerySet.as_manager()
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="+",
+        db_index=True,
+        help_text="Owner, derived from user_profile.user and held directly so a row-level security policy can read it",
+    )
 
     user_profile = models.OneToOneField(
         "users.UserProfile",
