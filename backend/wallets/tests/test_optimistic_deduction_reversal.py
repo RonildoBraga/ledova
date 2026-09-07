@@ -51,7 +51,7 @@ class ReversingOnlyWhatWasDeductedTest(BroadcastTransferGuardTestCase):
             transaction_fee=fee,
         )
 
-    def fail(self, tx_hash):
+    def fail_transfer(self, tx_hash):
         with patch.object(TransactionConfirmationService, "_notify_wallet_users"):
             return TransactionConfirmationService.fail_transaction(tx_hash, reason="reverted")
 
@@ -60,7 +60,7 @@ class ReversingOnlyWhatWasDeductedTest(BroadcastTransferGuardTestCase):
 
         self.assertEqual(self.send_token(get_client, "0xnonative").status_code, 200)
         self.assertEqual(self.quantity(self.native), Decimal("0"))
-        self.fail("0xnonative")
+        self.fail_transfer("0xnonative")
 
         self.assertEqual(self.quantity(self.native), Decimal("0"))
         self.assertEqual(self.quantity(self.token), Decimal("100"))
@@ -71,7 +71,7 @@ class ReversingOnlyWhatWasDeductedTest(BroadcastTransferGuardTestCase):
 
         self.assertEqual(self.send_token(get_client, "0xshorttoken").status_code, 200)
         self.assertEqual(self.quantity(self.token), Decimal("0"))
-        self.fail("0xshorttoken")
+        self.fail_transfer("0xshorttoken")
 
         self.assertEqual(self.quantity(self.token), Decimal("1"))
         self.assertEqual(self.quantity(self.native), Decimal("5"))
@@ -82,7 +82,7 @@ class ReversingOnlyWhatWasDeductedTest(BroadcastTransferGuardTestCase):
 
         self.assertEqual(self.send_token(get_client, "0xbigfee", fee="500").status_code, 200)
         self.assertEqual(self.quantity(self.native), Decimal("0"))
-        self.fail("0xbigfee")
+        self.fail_transfer("0xbigfee")
 
         self.assertEqual(self.quantity(self.native), Decimal("5"))
         self.assertEqual(self.quantity(self.token), Decimal("100"))
@@ -92,7 +92,7 @@ class ReversingOnlyWhatWasDeductedTest(BroadcastTransferGuardTestCase):
 
         self.assertEqual(self.send_native(get_client, "0xshortnative").status_code, 200)
         self.assertEqual(self.quantity(self.native), Decimal("0"))
-        self.fail("0xshortnative")
+        self.fail_transfer("0xshortnative")
 
         self.assertEqual(self.quantity(self.native), Decimal("0.1"))
 
@@ -102,7 +102,7 @@ class ReversingOnlyWhatWasDeductedTest(BroadcastTransferGuardTestCase):
 
         self.assertEqual(self.send_token(get_client, "0xordinary").status_code, 200)
         self.assertEqual((self.quantity(self.token), self.quantity(self.native)), (Decimal("98.5"), Decimal("4.998")))
-        self.fail("0xordinary")
+        self.fail_transfer("0xordinary")
 
         self.assertEqual((self.quantity(self.token), self.quantity(self.native)), (Decimal("100"), Decimal("5")))
 
@@ -132,6 +132,6 @@ class ReversingOnlyWhatWasDeductedTest(BroadcastTransferGuardTestCase):
         self.send_token(get_client, "0xlegacy")
         Transaction.objects.filter(tx_hash="0xlegacy").update(deducted_amount=None, deducted_fee=None)
 
-        self.fail("0xlegacy")
+        self.fail_transfer("0xlegacy")
 
         self.assertEqual((self.quantity(self.token), self.quantity(self.native)), (Decimal("100"), Decimal("5")))

@@ -5,7 +5,7 @@ NPM ?= npm
 PYTHON ?= python3
 
 .PHONY: help install install-backend install-node-if-missing init-local check-local-env build generate-tokens check check-comments check-layers \
-	check-logging check-schema-responses test-gates audit test \
+	check-logging check-schema-responses check-test-shadowing test-gates audit test \
 	dev-up dev-down dev-logs contracts-compile contracts-test contracts-deploy-local \
 	contracts-deploy-testnet chain-test smoke lint check-type-check
 
@@ -40,6 +40,7 @@ help:
 	@echo "  make check-type-check         Fail when a type-check script would examine no files"
 	@echo "  make check-logging            Fail on a log line that can carry a credential or an email"
 	@echo "  make check-schema-responses   Fail on a view whose response the schema does not know"
+	@echo "  make check-test-shadowing     Fail on a test helper that shadows a TestCase method"
 	@echo "  make test-gates               Run the unit tests of the gate scripts"
 	@echo "  make audit                    Fail on a new production dependency advisory"
 	@echo "  make test                     Run workspace, mobile, and contract tests"
@@ -82,7 +83,7 @@ build:
 generate-tokens:
 	$(NPM) exec -- tsx packages/scripts/generate-css-tokens.mjs
 
-check: check-comments check-layers check-logging check-type-check check-schema-responses install-backend install-node-if-missing
+check: check-comments check-layers check-logging check-type-check check-schema-responses check-test-shadowing install-backend install-node-if-missing
 	$(NPM) run typecheck
 	$(NPM) --prefix marketing run type-check
 	$(NPM) --prefix mobile run type-check
@@ -106,6 +107,9 @@ check-layers:
 
 check-schema-responses:
 	$(PYTHON) scripts/check-schema-responses.py
+
+check-test-shadowing:
+	$(PYTHON) scripts/check-test-shadowing.py
 
 check-logging:
 	$(PYTHON) scripts/check-logging.py

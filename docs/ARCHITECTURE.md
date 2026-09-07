@@ -1327,6 +1327,33 @@ routable methods that call it. `SubscriptionViewSet._detail` is why: it returns
 `LEGACY` carries the literal-body actions that predate the gate, keyed by
 `file:rule` and valued by a count that may only shrink.
 
+### The test shadowing gate
+
+`scripts/check-test-shadowing.py` fails when a test class defines a method whose
+name is a `unittest.TestCase` attribute. `make check-test-shadowing` runs it and
+CI runs it beside the other source gates. It is static and needs no database.
+
+**Why it is worth a gate rather than a convention.** `assertEqual` on a tuple,
+list, dict or string does not raise directly. It dispatches to
+`assertTupleEqual` and its siblings, which build the difference message and then
+call `self.fail`. A test class that defines `def fail(self, tx_hash)` as a
+helper **replaces the method every one of those assertions raises through**, so
+they build their message, call the helper, and pass. `assertTrue` and
+`assertIsNone` raise directly and keep working, which is what makes the failure
+invisible: the suite behaves, and one family of assertions silently stops
+checking.
+
+That is not hypothetical. `ReversingOnlyWhatWasDeductedTest` shipped with a
+`fail(tx_hash)` helper, and six tuple assertions across that file were inert
+from the day they merged. They were found only because a deliberately reverted
+fix did not turn them red - see **Test traps**, "run it red first".
+
+The rule exempts the documented override hooks - `setUp`, `tearDown`, their
+class forms, `setUpTestData` and the runner protocol - because those exist to be
+overridden. Everything else on `TestCase` is refused, and the reserved set is
+**derived from `dir(unittest.TestCase)` rather than listed**, so a name the
+standard library adds later is covered on the day it is added.
+
 ### The logging privacy gate
 
 `scripts/check-logging.py` is the mechanical half of "never log an email
