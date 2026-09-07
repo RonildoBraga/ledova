@@ -95,10 +95,13 @@ effect.
   documents say which is which.
 
 Whatever the answer, one gap is already recorded as owed rather than answered:
-each register export writes a single application log line naming the requesting
-user and the row count, and nothing more. There is no export audit model,
-nothing queryable, and no retention beyond whatever the deployment keeps its
-logs for. Every download is a full sheet of members' residential addresses.
+each register export writes an application log line naming the requesting
+user's **primary key** and the row count — not the user — and, where the
+register does not account for the whole issued supply, a second line naming the
+token and the company. That is the whole of the trail. There is no export audit
+model, nothing queryable, and no retention beyond whatever the deployment keeps
+its logs for. Every download is a full sheet of members' residential
+addresses.
 
 ## 3. The evidence-retention period
 
