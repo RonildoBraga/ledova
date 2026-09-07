@@ -668,11 +668,17 @@ parent cannot be read by a policy without a join, so each such table gains a
 direct owner column. The shape is the same every time and is stated here once so
 each lane does not re-derive it:
 
-- The column is added **nullable**, backfilled from the parent link in one
-  `UPDATE` per table on both vendors, altered to **`NOT NULL`**, and indexed by
-  Django's own foreign-key index. `related_name` is `"+"`, because the column
-  exists for a policy to read rather than for anyone to traverse: no reverse
-  accessor appears and no queryset changes shape.
+- The column is added **nullable**, backfilled from the parent link, altered to
+  **`NOT NULL`**, and indexed by Django's own foreign-key index. `related_name`
+  is `"+"`, because the column exists for a policy to read rather than for
+  anyone to traverse: no reverse accessor appears and no queryset changes
+  shape. **How many times the backfill writes each row is the thing to know
+  about it**, and it is not the same question as how many statements it runs.
+  One `UPDATE` per table is the usual shape and writes each row once;
+  `tokens/0023` fills `signing_challenges` with a bulk `UPDATE` and then a loop
+  over the rows it left, several statements over disjoint rows and still one
+  write each; and it writes `tokens_swaporder` twice, once per owner column,
+  which is the case the settle bullet exists for.
 - **`on_delete` mirrors the strictest `on_delete` on the path it derives from.**
   A shortcut to an owner must not make that owner deletable when the path it
   replaces refuses. `Subscription.company` and `Offering.company` are `PROTECT`,
@@ -728,6 +734,29 @@ each lane does not re-derive it:
   that re-derives its children. Until one exists, the editable path is closed:
   `Company.owner` is read-only on an existing company in the admin, and
   writable only on the add form.
+- **The branch decides re-parenting explicitly rather than inheriting whichever
+  way the condition falls.** The rule above separates a caller moving the row
+  from a stale row whose parent moved, and there is a third case it does not
+  reach: the row is given a **different parent**. `NEW.{column} IS NOT DISTINCT
+  FROM OLD.{column}` is true there too, so a trigger that only re-derives in
+  that case hands the row to whoever owns its new parent, silently — and the
+  first R0 shape refused it. The link tells the two apart, so its test goes
+  first:
+
+  ```sql
+  IF NEW.{parent_fk} IS DISTINCT FROM OLD.{parent_fk} THEN
+      RAISE EXCEPTION '{table}.{parent_fk} cannot change, from % to %',
+          OLD.{parent_fk}, NEW.{parent_fk};
+  END IF;
+  ```
+
+  **For all five lanes the decision is refuse**: no product path moves a
+  profile, a token, a wallet or an offering between owners. It is written as a
+  decision rather than a rule because a lane whose rows are legitimately
+  re-parented would answer the other way, and would then have to say so.
+  Nothing on either side of it is visible to the SQLite suite, which is how it
+  reached `tokens/0024` and was found by the full PostgreSQL suite three
+  lanes later.
 - **The trigger's local variable takes its type from the column it reads**,
   `parent.{column}%TYPE`, rather than naming a type. Four R0 parents are
   `uuid` and the user is a `BigAutoField`, because `CustomUser` extends
@@ -773,7 +802,13 @@ each lane does not re-derive it:
   applied migration cannot be added later — that is #262's ruling — so the
   choice is to carry it from the start or to accept that the next lane pays
   for it. A lane whose settle is inert says so in its body, so nobody reads a
-  green round trip as evidence the guard works.
+  green round trip as evidence the guard works. **One call before the first
+  write in each direction is the whole of it**, and `tokens/0023` carries a
+  third in `drop_triggers`: on the reverse path either that call or `unfill`'s
+  carries it alone, measured by disabling each in turn, so the pair is
+  redundant rather than layered. `tokens/0024` copied all three before dropping
+  the extra, which is why the count is written down here rather than left to be
+  inferred from the lane a reader happens to open.
 - **Audit the app's serializers for `exclude`-style field sets before adding the
   column.** A `ModelSerializer` with `exclude = (...)` turns a new model field
   into a *required writable API field*; two in `users` did exactly that, and
