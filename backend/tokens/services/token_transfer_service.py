@@ -113,18 +113,14 @@ class TokenTransferService:
                 "gasPrice": gas_price,
             }
 
-            try:
-                estimated_gas = self.chain_client.w3.eth.estimate_gas(
-                    {
-                        "from": from_checksum,
-                        "to": contract_address,
-                        "data": tx_data["data"],
-                        "value": 0,
-                    }
-                )
-                tx_data["gas"] = int(estimated_gas * 1.2)
-            except Exception:
-                tx_data["gas"] = 100000
+            tx_data["gas"] = self.chain_client.estimate_gas(
+                {
+                    "from": from_checksum,
+                    "to": contract_address,
+                    "data": tx_data["data"],
+                    "value": 0,
+                }
+            )
 
             logger.info(f"Prepared transfer: {amount} {token.symbol} from {from_checksum} to {to_checksum}")
 
@@ -134,7 +130,7 @@ class TokenTransferService:
             raise
         except Exception as e:
             logger.error(f"Preparation failed: {e}")
-            raise TransferPreparationException(f"Transfer preparation failed: {e}") from e
+            raise TransferPreparationException("Transfer preparation failed.") from e
 
     def broadcast_transfer(self, signed_tx: str) -> tuple[str, dict]:
         try:

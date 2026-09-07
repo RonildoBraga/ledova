@@ -4,6 +4,7 @@ from django.db import transaction
 from django.test import TransactionTestCase, override_settings
 
 from blockchain.models import BlockchainTransaction, TransactionStatus
+from integrations.base_chain.exceptions import GasEstimationError
 from shared.tests.tenants import make_tenant
 from tokens.exceptions import SwapExecutionException
 from tokens.models import SwapOrder
@@ -173,6 +174,20 @@ class SwapExecutionRecordsItsOutcomeTest(TransactionTestCase):
         self.swap.refresh_from_db()
         self.assertEqual(self.swap.error_message, "Account is not whitelisted")
         self.assertNotIn("pR3t3nd1ngT0B3aReAlK3y", self.swap.error_message)
+
+    @patch.object(AtomicSwapService, "validate_swap_balances")
+    @patch.object(AtomicSwapService, "_execute_swap_call")
+    def test_a_swap_the_node_says_will_revert_is_never_sent(self, _call, _balances):
+        client = self.chain_client()
+        client.build_transaction.side_effect = GasEstimationError("execution reverted: 0xdf17e316")
+
+        with self.assertRaises(SwapExecutionException):
+            self.service(client).execute_swap(self.swap)
+
+        self.assertEqual(self.status(), SwapOrderStatus.FAILED)
+        client.send_raw_transaction.assert_not_called()
+        record = BlockchainTransaction.objects.get(related_uuid=self.swap.uuid)
+        self.assertEqual((record.status, record.tx_hash), (TransactionStatus.FAILED, None))
 
     @patch.object(AtomicSwapService, "validate_swap_balances")
     @patch.object(AtomicSwapService, "_execute_swap_call")
