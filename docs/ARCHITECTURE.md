@@ -756,17 +756,13 @@ this codebase, and `MEDIA_ROOT` holds nothing an authenticated route serves.
   named staff member who reached the route from the admin, the sibling change
   page already answers 403 for the same row, and hiding a permission gap as a
   missing object would only mislead the operator who has to fix it. Existence
-  is not the secret here; the bytes are. Any other custom admin view that acts
-  on a row checks the matching permission itself —
-  `InvestorClassificationAdmin.transition_view` checks
-  `has_change_permission`, because verifying or revoking a wholesale-investor
-  claim is a compliance control, not a read. **This is an operational change,
-  not only a code one**: a staff account that carried nothing but `is_staff`
-  could previously open every one of these routes. Before deploying, grant
-  `documents.view_document`, `companies.view_companydocument`,
-  `users.view_investorclassification` and `users.change_investorclassification`
-  to the operators who need them — the last of those is what verify, reject and
-  revoke now require.
+  is not the secret here; the bytes are. An admin route that *acts* on a row
+  rather than reading its bytes takes the sibling helper described under
+  [Admin row actions](#admin-row-actions). **This is an operational change, not
+  only a code one**: a staff account that carried nothing but `is_staff` could
+  previously open every one of these routes. Before deploying, grant
+  `documents.view_document`, `companies.view_companydocument` and
+  `users.view_investorclassification` to the operators who need them.
 - **Uploads are allowlisted at the serializer, not at the reader.**
   `shared.uploads.validate_upload` caps the size and admits only
   `application/pdf`, `image/png` and `image/jpeg` by both content type and
@@ -814,6 +810,54 @@ this codebase, and `MEDIA_ROOT` holds nothing an authenticated route serves.
   migrations with real bytes, a row whose file is missing, and a key generated
   after the widening, and drives a reverse that fails partway through the byte
   move in both the recoverable and the unrecoverable shape.
+
+## Admin row actions
+
+**A custom admin route that acts on a row is registered with
+`shared.utils.admin_actions.admin_action_path` (or `admin_action_re_path`),
+never with a bare `self.admin_site.admin_view(...)`.** The reasoning is the one
+`admin_file_path` is built on, applied to writes: `admin_view` checks only that
+the caller is active and staff, which is weaker than the change page beside it.
+Fifteen wrappers guarding twenty-three URL patterns admitted any `is_staff`
+account to deploying, pausing and unpausing a share token, executing or
+rejecting a mint, updating a NAV, every company and offering transition, the
+subscription actions, executing a share issuance or capital increase, and
+adding or removing a whitelist entry on chain. Those are chain-side and
+compliance operations, and each of them was refused the change page for the
+same row.
+
+The helper **owns the row lookup**, which is what makes the guarantee
+structural rather than remembered: it checks `has_change_permission(request)`,
+resolves the row through `model_admin.get_queryset(request)` — the same rows
+the change page resolves, so an admin that narrows its queryset narrows its
+actions with it — checks `has_change_permission(request, instance)`, and only
+then calls the view with the instance rather than the uuid. A view therefore
+*loses* its `get_object_or_404` line when it converts; it cannot forget the
+check without abandoning the helper and taking a gate failure. Pass `queryset`
+only to widen the fetch, as `SubscriptionAdmin` does with
+`Subscription.objects.with_relations()`.
+
+It answers **403, not 404**, for the reason given for the streaming routes
+above: the caller is a named staff member who reached the route from the admin,
+and the sibling change page already answers 403 for the same row.
+
+`has_change_permission` is the check for all of them, because every one of these
+routes mutates the row or acts on chain on its behalf; a route that only reads
+is a file route and belongs to `admin_file_path`. Reference:
+`backend/shared/utils/admin_actions.py`. Gate: the `bare-admin-view` rule in
+`scripts/check-layers.py`. Test:
+`backend/shared/tests/test_admin_row_actions.py`, which derives the route list
+from the resolved URLconf rather than naming routes, so a new row action is
+covered the day it is registered.
+
+**Operationally**: grant `change_` on the eleven models these routes act on —
+`assets.asset`, `companies.company`, `offerings.offering`,
+`offerings.subscription`, `tokens.mintrequest`, `tokens.yieldtoken`,
+`tokens.sharetoken`, `tokens.shareissuancerequest`,
+`tokens.capitalincreaserequest`, `users.investorclassification`,
+`whitelist.whitelistentry` — to the operators who need them. An operator who
+previously worked through these buttons on `is_staff` alone stops being able to,
+which is the point.
 
 ## Coding rules
 
@@ -1126,6 +1170,27 @@ every investor's subscriptions. It is correct today only because
 and the tenancy section below describes deliberate pressure to widen the first.
 Loosening the rule would have removed the standing warning from the one line that
 says so. Those four are pinned with counts instead.
+
+The `bare-admin-view` rule is the one rule outside the layer table's "Never
+contains" column, and it needed the walker widened before it could exist:
+`layer_of` recognised `views`, `models` and `tasks`, so **no admin module was
+parsed at all** — 136 files scanned became 190. Adding the layer on its own
+found nothing, because no other rule applies to `admin`, which is what let the
+rule land with an empty `LEGACY`.
+
+It flags any `admin_view` attribute in the `admin` layer. The two helpers are
+excluded structurally rather than by name: `shared/utils/` is not a layer, so
+`layer_of` returns `None` for it and the walker never opens it. That is a load-
+bearing coincidence, so `test_layer_gate.py` asserts it rather than trusting it.
+A genuinely row-less admin page — an operator dashboard, say — is a legitimate
+bare `admin_view` and takes an `ALLOWED` entry with its reason, not a `LEGACY`
+one: it is correct and permanent rather than owed. There are none today.
+
+The rule reads syntax, so `getattr(self.admin_site, "admin_view")` goes past it.
+That is the same necessary-not-sufficient boundary stated above, and
+`test_admin_row_actions.py` closes it from the other side: it walks the live
+URLconf and fails when any custom admin route is served by a callback from
+outside the two `shared.utils` helpers, whatever syntax registered it.
 
 ### The seed-era service classes
 

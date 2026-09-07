@@ -316,3 +316,51 @@ def sync(uuid):
     return sync_wallet(uuid)
 """
         self.assertEqual(rules_for(source, "tasks"), [])
+
+
+class AdminLayerRuleTest(SimpleTestCase):
+
+    def test_a_bare_admin_view_is_flagged(self):
+        source = """
+class ThingAdmin:
+    def get_urls(self):
+        return [path("<uuid:uuid>/act/", self.admin_site.admin_view(self.act_view), name="act")]
+"""
+        self.assertEqual(rules_for(source, "admin"), [gate.ADMIN_BARE_VIEW])
+
+    def test_a_row_action_through_the_helper_is_allowed(self):
+        source = """
+class ThingAdmin:
+    def get_urls(self):
+        return [admin_action_path(self, "<uuid:uuid>/act/", "act", self.act_view)]
+"""
+        self.assertEqual(rules_for(source, "admin"), [])
+
+    def test_the_wrapper_is_flagged_however_the_route_is_built(self):
+        source = """
+class ThingAdmin:
+    def get_urls(self):
+        wrap = self.admin_site.admin_view
+        return [path("<uuid:uuid>/act/", wrap(self.act_view), name="act")]
+"""
+        self.assertEqual(rules_for(source, "admin"), [gate.ADMIN_BARE_VIEW])
+
+
+class LayerDiscoveryTest(SimpleTestCase):
+
+    def layer_of(self, relative):
+        return gate.layer_of(gate.BACKEND / relative)
+
+    def test_an_admin_package_and_an_admin_module_are_both_the_admin_layer(self):
+        self.assertEqual(self.layer_of("tokens/admin/share_token.py"), "admin")
+        self.assertEqual(self.layer_of("whitelist/admin.py"), "admin")
+
+    def test_the_shared_helpers_are_in_no_layer_at_all(self):
+        self.assertIsNone(self.layer_of("shared/utils/admin_actions.py"))
+        self.assertIsNone(self.layer_of("shared/utils/admin_files.py"))
+
+    def test_the_helpers_own_admin_view_call_is_the_reason_that_matters(self):
+        source = (gate.BACKEND / "shared/utils/admin_actions.py").read_text()
+
+        self.assertIn("admin_view", source)
+        self.assertEqual(rules_for(source, "admin"), [gate.ADMIN_BARE_VIEW])
