@@ -47,6 +47,27 @@ class TheGateSeesEachBinding(unittest.TestCase):
         self.assertEqual(findings("with connections[current_alias()].cursor() as c:\n    pass\n"), [])
 
 
+class TheImportIsRefusedBecauseTheCallSiteCanBeSpeltThreeWays(unittest.TestCase):
+
+    def test_importing_atomic_directly_would_shadow_the_helpers_own_name(self):
+        self.assertEqual(findings("from django.db.transaction import atomic\n"), ["django.db.transaction"])
+
+    def test_importing_the_module_reaches_it_through_a_dotted_path(self):
+        self.assertEqual(findings("import django.db.transaction\n"), ["django.db.transaction"])
+
+    def test_importing_transaction_from_django_db_is_the_ordinary_spelling(self):
+        self.assertEqual(findings("from django.db import transaction\n"), ["django.db.transaction"])
+
+    def test_importing_the_default_connection_proxy_is_refused_too(self):
+        self.assertEqual(findings("from django.db import connection\n"), ["django.db.connection"])
+
+    def test_the_aliased_connections_registry_is_not_refused(self):
+        self.assertEqual(findings("from django.db import connections\n"), [])
+
+    def test_nothing_else_from_django_db_is_refused(self):
+        self.assertEqual(findings("from django.db import IntegrityError, models\n"), [])
+
+
 class TheRepositoryStaysClean(unittest.TestCase):
 
     def test_the_gate_reads_a_real_number_of_files_so_a_pass_means_something(self):

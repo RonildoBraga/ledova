@@ -23,6 +23,16 @@ ROOT = Path(__file__).resolve().parent.parent
 BACKEND = ROOT / "backend"
 SKIP_ANYWHERE = frozenset({"__pycache__", "migrations", "tests", ".git", "node_modules"})
 
+# Matching call sites alone leaves three evasions, all of which shadow the helper's own
+# name: `from django.db.transaction import atomic` then `atomic()`, `import django.db` then
+# `django.db.transaction.atomic()`, and an alias. Refusing the import closes all three, and
+# it is cheaper than matching every spelling. It is only cheap because the conversion is
+# complete: one allowlisted file imports either name today.
+IMPORTS_THE_DEFAULT = {
+    "transaction": "shared.db.atomic and shared.db.on_commit",
+    "connection": "connections[current_alias()]",
+}
+
 BOUND_TO_DEFAULT = {
     "transaction.atomic": "shared.db.atomic",
     "transaction.on_commit": "shared.db.on_commit",
@@ -46,8 +56,22 @@ def dotted(node: ast.AST) -> str:
     return ""
 
 
+def imported_names(node: ast.AST) -> list[str]:
+    if isinstance(node, ast.ImportFrom):
+        if node.module == "django.db":
+            return [alias.name for alias in node.names if alias.name in IMPORTS_THE_DEFAULT]
+        if node.module == "django.db.transaction":
+            return ["transaction"]
+    if isinstance(node, ast.Import):
+        return ["transaction" for alias in node.names if alias.name.startswith("django.db.transaction")]
+    return []
+
+
 def findings_for(tree: ast.AST) -> list[tuple[int, str]]:
     found = []
+    for node in ast.walk(tree):
+        for name in imported_names(node):
+            found.append((node.lineno, f"django.db.{name}"))
     for node in ast.walk(tree):
         called = None
         if isinstance(node, ast.Call):
@@ -76,7 +100,8 @@ def main() -> int:
             continue
         checked += 1
         for line, called in findings_for(ast.parse(path.read_text())):
-            findings.append(f"{relative}:{line}: {called} binds to the default connection, not {BOUND_TO_DEFAULT[called]}")
+            instead = BOUND_TO_DEFAULT.get(called) or IMPORTS_THE_DEFAULT[called.rsplit(".", 1)[1]]
+            findings.append(f"{relative}:{line}: {called} binds to the default connection, not {instead}")
 
     stale = sorted(name for name in ALLOWED if not (ROOT / name).is_file())
     if stale:
