@@ -33,7 +33,6 @@ export interface TokenCreate {
   symbol: string;
   tokenType: TokenType;
   totalSupply: string;
-  decimals?: number;
   isTransferable?: boolean;
   isDivisible?: boolean;
 }
