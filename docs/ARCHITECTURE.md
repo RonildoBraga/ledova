@@ -2137,6 +2137,34 @@ one from the other.**
 Not a test but the same family: a reading that looks like a finding and is
 actually about the observer.
 
+**A green suite on both backends does not cover a status constraint.**
+`tokens.tests.test_chain_integration` is gated on `CHAIN_TEST_RPC_URL` and skips
+silently without it, and its concurrency cases are additionally
+`skipUnless(POSTGRES)`. So the full SQLite suite, the full PostgreSQL suite, and
+even `make chain-test` on its default settings all pass while the one suite that
+drives two workers against a real chain is not running: the default reports
+`20 OK (skipped=3)`, and the three it skips are the three that matter. A partial
+unique index over statuses landed on that basis and CI found it —
+`duplicate key value violates unique constraint` inside a background worker.
+
+The invocation that covers it is the one CI uses:
+
+```
+POSTGRES_HOST=… POSTGRES_PORT=… POSTGRES_DB=… POSTGRES_USER=… POSTGRES_PASSWORD=… \
+  make chain-test CHAIN_TEST_PORT=<free port> \
+  CHAIN_TEST_SETTINGS=ledova_backend.settings.test_postgres
+```
+
+**And the reason the constraint was wrong is worth more than the invocation.** The
+claim was *submit is the only entry into the in-flight set, because approval and
+execution move the same row*. A partial index over statuses is entered by **every
+write that moves a row into its condition**, not only by the writes that create
+one — `mark_executing` moves a `FAILED` request to `EXECUTING`, which is outside
+the set and then inside it. Enumerating the paths that *create* a row will not
+find that; neither will pinning the state partition, which is the stronger test
+and still describes rows rather than transitions. Ask instead which writes cross
+the condition's boundary in either direction.
+
 **A browser network capture includes your own probes.** `read_network_requests`
 records the tab, not the application, so a `fetch` issued from `javascript_tool`
 to check an endpoint is indistinguishable in that log from a request the page
