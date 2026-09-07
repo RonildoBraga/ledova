@@ -119,6 +119,10 @@ class BlockchainTransaction(BaseModel):
             ]
         )
 
+    def mark_outcome_unknown(self, error_message: str) -> None:
+        self.error_message = error_message
+        self.save(update_fields=["error_message", "updated_at"])
+
     def mark_failed(self, error_message: str) -> None:
         self.status = TransactionStatus.FAILED
         self.error_message = error_message

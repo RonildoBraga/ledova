@@ -155,10 +155,12 @@ class SwapOrder(BaseModel):
             self.status = SwapOrderStatus.BUYER_SIGNED
         self.save(update_fields=["buyer_signature", "status", "updated_at"])
 
-    def mark_executing(self, tx_hash: str, transaction: "BlockchainTransaction" = None):
-        self.tx_hash = tx_hash
+    def mark_executing(self, tx_hash: str = "", transaction: "BlockchainTransaction" = None):
         self.status = SwapOrderStatus.EXECUTING
-        update_fields = ["tx_hash", "status", "updated_at"]
+        update_fields = ["status", "updated_at"]
+        if tx_hash:
+            self.tx_hash = tx_hash
+            update_fields.append("tx_hash")
         if transaction:
             self.transaction = transaction
             update_fields.append("transaction")

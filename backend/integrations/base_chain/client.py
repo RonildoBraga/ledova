@@ -212,21 +212,21 @@ class BaseChainClient:
         tx_hash = self.w3.eth.send_raw_transaction(signed_tx)
         return Web3.to_hex(tx_hash)
 
-    def wait_for_receipt(self, tx_hash: str, timeout: int = 120) -> TxReceipt:
+    def receipt_even_if_reverted(self, tx_hash: str, timeout: int = 120) -> TxReceipt:
         try:
-            receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=timeout)
-
-            if receipt["status"] != 1:
-                raise BaseChainTransactionError(f"Transaction failed: {tx_hash} (status={receipt['status']})")
-
-            return receipt
-
+            return self.w3.eth.wait_for_transaction_receipt(tx_hash, timeout=timeout)
         except TransactionNotFound:
             raise BaseChainTransactionError(f"Transaction not found: {tx_hash}")
-        except BaseChainTransactionError:
-            raise
         except Exception as e:
             raise BaseChainTransactionError(f"Error waiting for receipt: {e}") from e
+
+    def wait_for_receipt(self, tx_hash: str, timeout: int = 120) -> TxReceipt:
+        receipt = self.receipt_even_if_reverted(tx_hash, timeout)
+
+        if receipt["status"] != 1:
+            raise BaseChainTransactionError(f"Transaction failed: {tx_hash} (status={receipt['status']})")
+
+        return receipt
 
     def send_transaction(
         self,

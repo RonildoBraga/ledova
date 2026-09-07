@@ -25,6 +25,7 @@ from tokens.services import (
     TokenTransferService,
     TradingOrderService,
 )
+from tokens.services.atomic_swap_service import sign_and_execute_swap
 from tokens.services.trading_order_cancel import cancel_signed_order
 from tokens.services.trading_order_create import verify_and_spend_create
 from tokens.trading_wallet_access import resolve_verified_evm_wallets
@@ -140,7 +141,8 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
         signature = serializer.validated_data["signature"]
         signer_address = serializer.validated_data["signer_address"]
 
-        updated_order = atomic_swap_service.submit_signature(
+        updated_order = sign_and_execute_swap(
+            atomic_swap_service,
             swap_order=swap_order,
             signature=signature,
             signer_address=signer_address,

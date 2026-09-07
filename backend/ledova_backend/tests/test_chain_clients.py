@@ -4,7 +4,10 @@ from unittest.mock import Mock
 from django.test import SimpleTestCase, override_settings
 
 from integrations.base_chain.client import BaseChainClient
-from integrations.base_chain.exceptions import BaseChainConnectionError
+from integrations.base_chain.exceptions import (
+    BaseChainConnectionError,
+    BaseChainTransactionError,
+)
 from integrations.blockchain.bitcoin import BitcoinClient, is_bitcoin_address_valid
 from integrations.blockchain.ethereum import EthereumClient
 
@@ -22,6 +25,17 @@ class RuntimeChainBoundaryTests(SimpleTestCase):
 
         with self.assertRaisesRegex(BaseChainConnectionError, "expected chain 84532"):
             client.assert_expected_chain()
+
+    def test_a_reverted_receipt_reaches_the_caller_that_asks_for_it(self):
+        reverted = {"status": 0, "blockNumber": 8, "gasUsed": 500000}
+        client = BaseChainClient.__new__(BaseChainClient)
+        client._web3 = SimpleNamespace(eth=SimpleNamespace(wait_for_transaction_receipt=Mock(return_value=reverted)))
+        self.addCleanup(setattr, client, "_web3", None)
+
+        self.assertEqual(client.receipt_even_if_reverted("0xreverted"), reverted)
+
+        with self.assertRaisesRegex(BaseChainTransactionError, "status=0"):
+            client.wait_for_receipt("0xreverted")
 
     def test_ethereum_client_rejects_an_endpoint_on_the_wrong_chain(self):
         client = EthereumClient.__new__(EthereumClient)
