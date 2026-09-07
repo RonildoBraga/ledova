@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { createRequire, isBuiltin } from 'node:module';
 import path from 'node:path';
@@ -145,10 +146,13 @@ for (const [specifier, site] of [...workspaceSites].sort()) {
   const name = packageOf(specifier);
   if (isBuiltin(specifier) || aliases[name] !== undefined) {
     const target = aliases[name];
-    if (target !== undefined && !path.resolve(target).startsWith(path.join(MOBILE, 'node_modules') + path.sep)) {
-      failures.push(
-        `${site}: '${name}' is aliased to ${path.relative(REPO, path.resolve(target))}, outside mobile/node_modules`,
-      );
+    if (target !== undefined) {
+      const resolved = path.resolve(target);
+      if (!resolved.startsWith(path.join(MOBILE, 'node_modules') + path.sep)) {
+        failures.push(`${site}: '${name}' is aliased to ${path.relative(REPO, resolved)}, outside mobile/node_modules`);
+      } else if (!existsSync(resolved)) {
+        failures.push(`${site}: '${name}' is aliased to ${path.relative(REPO, resolved)}, which does not exist`);
+      }
     }
     continue;
   }
