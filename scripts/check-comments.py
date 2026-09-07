@@ -12,8 +12,10 @@ import argparse
 import ast
 import io
 import re
+import subprocess
 import sys
 import tokenize
+from functools import lru_cache
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -41,26 +43,6 @@ TREES = (
     ("contracts/test", TS, True),
 )
 
-SKIP_ANYWHERE = frozenset({".git", ".mypy_cache", ".pytest_cache", ".ruff_cache", "__pycache__", "node_modules"})
-
-SKIP_AT_TOP = frozenset(
-    {
-        ".expo",
-        ".next",
-        ".venv",
-        "artifacts",
-        "build",
-        "cache",
-        "coverage",
-        "dist",
-        "htmlcov",
-        "media",
-        "staticfiles",
-        "typechain-types",
-        "venv",
-    }
-)
-
 # The trees above say what is scanned. This says what is deliberately not, so that a
 # file appearing outside every tree is a failure rather than a silence. Without it the
 # extension tuples and the recurse flags are prose: flipping "backend" to False drops
@@ -71,25 +53,35 @@ NOT_SCANNED = {
     "dashboard/tests/smoke": "Playwright smoke specs, which describe steps rather than implement behaviour.",
 }
 
-SKIPPED_DIRECTORIES = frozenset(
-    {"node_modules", ".git", "dist", "build", ".next", "coverage", "__pycache__", ".venv", "venv", "staticfiles"}
-)
+
+class NotAWorkingTree(Exception):
+    pass
+
+
+@lru_cache(maxsize=1)
+def tracked_files() -> tuple[Path, ...]:
+    result = subprocess.run(
+        ["git", "-C", str(ROOT), "ls-files", "-z", "--cached", "--others", "--exclude-standard"], capture_output=True, text=True, check=False
+    )
+    if result.returncode != 0:
+        raise NotAWorkingTree(result.stderr.strip() or "git ls-files failed")
+    return tuple(sorted(ROOT / name for name in result.stdout.split("\0") if name))
+
+
+def _exempt(relative: str) -> bool:
+    segments = relative.split("/")
+    return any(segments[: len(stated.split("/"))] == stated.split("/") for stated in NOT_SCANNED)
 
 
 def unscanned_source_files(scanned: set) -> list[str]:
     known = set(PY + TS + CSS + SOL)
-    stated = tuple(NOT_SCANNED)
     missing = []
 
-    for path in sorted(ROOT.rglob("*")):
-        if not path.is_file() or path.suffix not in known:
-            continue
-        if any(part in SKIPPED_DIRECTORIES for part in path.parts):
-            continue
-        if path.resolve() in scanned:
+    for path in tracked_files():
+        if path.suffix not in known or path.resolve() in scanned:
             continue
         relative = path.relative_to(ROOT).as_posix()
-        if not relative.startswith(stated):
+        if not _exempt(relative):
             missing.append(relative)
     return missing
 
@@ -416,14 +408,10 @@ def files_in(tree: str, extensions: tuple[str, ...], recurse: bool):
     base = ROOT / tree
     if not base.is_dir():
         return
-    candidates = base.rglob("*") if recurse else base.iterdir()
-    for path in sorted(candidates):
-        if path.suffix not in extensions or not path.is_file():
+    for path in tracked_files():
+        if path.suffix not in extensions or not path.is_relative_to(base):
             continue
-        parts = path.relative_to(base).parts
-        if any(part in SKIP_ANYWHERE for part in parts):
-            continue
-        if parts[:1] and parts[0] in SKIP_AT_TOP:
+        if not recurse and path.parent != base:
             continue
         yield path
 
@@ -436,6 +424,17 @@ def main() -> int:
         help="also list the permitted functional directives that were found",
     )
     arguments = parser.parse_args()
+
+    try:
+        tracked_files()
+    except NotAWorkingTree as error:
+        print(
+            f"check-comments needs the tracked file list and git would not give it: {error}\n"
+            "The gate reads `git ls-files` so that generated and ignored output is invisible\n"
+            "by construction rather than by a third hand-maintained skip list.",
+            file=sys.stderr,
+        )
+        return 1
 
     violations: list[str] = []
     allowed: list[str] = []
