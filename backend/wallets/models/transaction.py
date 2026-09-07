@@ -3,11 +3,12 @@ from django.db import models
 from assets.models import Asset
 from shared.models import BaseModel
 from wallets.constants import TRANSACTION_STATUS_CHOICES, TRANSACTION_STATUS_PENDING
+from wallets.models.owner_column import DerivesAccountFromWallet
 from wallets.models.wallet import Blockchain, Wallet
 from wallets.querysets.transaction import TransactionQuerySet
 
 
-class Transaction(BaseModel):
+class Transaction(DerivesAccountFromWallet, BaseModel):
     tx_hash = models.CharField(max_length=255, db_index=True)
     chain = models.CharField(
         max_length=20,
@@ -52,6 +53,15 @@ class Transaction(BaseModel):
         ),
     )
     wallet = models.ForeignKey(Wallet, on_delete=models.CASCADE, related_name="transactions")
+
+    user_account = models.ForeignKey(
+        "users.UserAccount",
+        on_delete=models.CASCADE,
+        related_name="+",
+        help_text=(
+            "Owner, derived from wallet.user_account and held directly so a " "row-level security policy can read it"
+        ),
+    )
 
     objects = TransactionQuerySet.as_manager()
 
