@@ -15,6 +15,7 @@ from django.test import TransactionTestCase
 from companies.models import Company, CompanyDocument, CompanyType
 from companies.models import DocumentType as CompanyDocumentType
 from documents.models import Document, DocumentType
+from shared.tests.schema import restore_every_migration
 from shared.utils.migrations import UploadRelocationError
 
 User = get_user_model()
@@ -73,7 +74,7 @@ class PrivateStorageMigrationRoundTripTest(TransactionTestCase):
     def restore_latest(self):
         CompanyDocument.objects.all().delete()
         Document.objects.all().delete()
-        migrate([COMPANIES_AFTER, DOCUMENTS_AFTER])
+        restore_every_migration()
 
     @staticmethod
     def private_path(key):
@@ -194,7 +195,7 @@ class ReverseMigrationLeaksNothingTest(TransactionTestCase):
 
     def restore_latest(self):
         Document.objects.all().delete()
-        migrate([DOCUMENTS_AFTER])
+        restore_every_migration()
         call_command("reconcile_private_media", verbosity=0)
 
     @staticmethod
