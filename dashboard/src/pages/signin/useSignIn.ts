@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { signin, FormErrors, SigninRequest } from '@ledova/shared';
+import { readSignInError, signin, FormErrors, SigninRequest } from '@ledova/shared';
 import apiClient, { UserFriendlyError } from '@services/apiClient';
 import { AUTH_QUERY_KEY } from '@hooks/useAuth';
 
@@ -70,51 +70,12 @@ export const useSignIn = () => {
         return;
       }
 
-      const hasResponse = (error: unknown): error is { response: { data: unknown } } => {
-        return (
-          typeof error === 'object' &&
-          error !== null &&
-          'response' in error &&
-          typeof error.response === 'object' &&
-          error.response !== null &&
-          'data' in error.response
-        );
-      };
-
-      if (hasResponse(err)) {
-        const responseData = err.response.data;
-
-        if (Array.isArray(responseData)) {
-          setGeneralError(responseData.join(' '));
-          return;
-        }
-
-        if (typeof responseData === 'string') {
-          setGeneralError(responseData);
-          return;
-        }
-
-        if (responseData && typeof responseData === 'object' && 'error' in responseData) {
-          const errorObj = responseData as { error: string };
-          setGeneralError(errorObj.error);
-          return;
-        }
-
-        if (typeof responseData === 'object' && responseData !== null) {
-          const hasFieldErrors = Object.keys(responseData).some((key) =>
-            Array.isArray((responseData as Record<string, unknown>)[key]),
-          );
-
-          if (hasFieldErrors) {
-            setErrors(responseData as FormErrors);
-          } else {
-            setGeneralError('Invalid email or password. Please check your credentials and try again.');
-          }
-          return;
-        }
+      const reading = readSignInError(err);
+      if (reading.fieldErrors) {
+        setErrors(reading.fieldErrors as FormErrors);
+        return;
       }
-
-      setGeneralError('Unable to sign in at the moment. Please try again later.');
+      setGeneralError(reading.generalError ?? null);
     } finally {
       setIsLoading(false);
     }

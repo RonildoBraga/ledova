@@ -75,3 +75,60 @@ export function describeFailure(error: unknown): string {
 
   return local.length > 0 ? local.join(': ') : 'unknown failure';
 }
+
+export interface SignInErrorReading {
+  generalError?: string;
+  fieldErrors?: Record<string, string[]>;
+}
+
+const THROTTLED_WITHOUT_A_WINDOW = 'Too many sign-in attempts. Please wait before trying again.';
+const UNRECOGNISED = 'Unable to sign in at the moment. Please try again later.';
+
+function throttleMessage(retryAfterSeconds: number | null): string {
+  if (retryAfterSeconds === null || !Number.isFinite(retryAfterSeconds) || retryAfterSeconds <= 0) {
+    return THROTTLED_WITHOUT_A_WINDOW;
+  }
+  const minutes = Math.ceil(retryAfterSeconds / 60);
+  if (minutes < 60) {
+    return `Too many sign-in attempts. Please try again in about ${minutes} minute${minutes === 1 ? '' : 's'}.`;
+  }
+  const hours = Math.ceil(minutes / 60);
+  return `Too many sign-in attempts. Please try again in about ${hours} hour${hours === 1 ? '' : 's'}.`;
+}
+
+function retryAfterOf(response: { headers?: unknown; data?: unknown }): number | null {
+  const headers = response.headers;
+  if (headers && typeof headers === 'object') {
+    const raw =
+      (headers as Record<string, unknown>)['retry-after'] ?? (headers as Record<string, unknown>)['Retry-After'];
+    const seconds = Number(raw);
+    if (Number.isFinite(seconds) && seconds > 0) return seconds;
+  }
+  const detail = (response.data as { detail?: unknown } | undefined)?.detail;
+  if (typeof detail === 'string') {
+    const found = detail.match(/(\d+)\s*seconds?/);
+    if (found) return Number(found[1]);
+  }
+  return null;
+}
+
+export function readSignInError(error: unknown): SignInErrorReading {
+  const response = (error as { response?: { status?: number; headers?: unknown; data?: unknown } })?.response;
+  if (!response || !('data' in response)) return { generalError: UNRECOGNISED };
+
+  if (response.status === 429) return { generalError: throttleMessage(retryAfterOf(response)) };
+
+  const data = response.data;
+  if (Array.isArray(data)) return { generalError: data.join(' ') };
+  if (typeof data === 'string') return { generalError: data };
+  if (!data || typeof data !== 'object') return { generalError: UNRECOGNISED };
+
+  const body = data as Record<string, unknown>;
+  if (typeof body.detail === 'string' && body.detail.trim()) return { generalError: body.detail };
+  if (typeof body.error === 'string' && body.error.trim()) return { generalError: body.error };
+
+  const fieldErrors = Object.keys(body).some((key) => Array.isArray(body[key]));
+  if (fieldErrors) return { fieldErrors: body as Record<string, string[]> };
+
+  return { generalError: UNRECOGNISED };
+}
