@@ -26,7 +26,7 @@ class ApplicationLifecycleTest(APITestCase):
         self.owner = User.objects.create_user(email="owner@example.test", password="pw-12345678")
         self.other = User.objects.create_user(email="other@example.test", password="pw-12345678")
         self.staff = User.objects.create_user(email="staff@example.test", password="pw-12345678", is_staff=True)
-        self.company = Company.objects.create(owner=self.owner, name="Draft Pty Ltd", acn="123456789")
+        self.company = Company.objects.create(owner=self.owner, name="Draft Pty Ltd", acn="123456780")
         self.url = f"/api/v1/companies/{self.company.uuid}/"
 
     def upload_required_documents(self, company=None):
@@ -55,7 +55,7 @@ class ApplicationLifecycleTest(APITestCase):
         self.client.force_authenticate(self.other)
         payload = {
             "name": "New Co Pty Ltd",
-            "acn": "987 654 321",
+            "acn": "987 654 320",
             "companyType": "pty",
             "primaryContact": {"firstName": "Ada", "lastName": "Lovelace", "phone": "+61 0400000000"},
         }
@@ -63,7 +63,7 @@ class ApplicationLifecycleTest(APITestCase):
 
         self.assertEqual(response.status_code, 201, response.data)
         self.assertIn("message", response.data)
-        company = Company.objects.get(acn="987654321")
+        company = Company.objects.get(acn="987654320")
         self.assertEqual(response.data["company"]["uuid"], str(company.uuid))
         self.assertEqual(company.status, CompanyStatus.DRAFT)
         self.assertEqual(company.owner, self.other)
@@ -216,7 +216,7 @@ class ApplicationLifecycleTest(APITestCase):
         self.assertEqual(self.company.status, CompanyStatus.WITHDRAWN)
         self.assertEqual(self.company.withdrawal_reason, "")
 
-        submitted = Company.objects.create(owner=self.owner, name="Second", acn="222222222", status="submitted")
+        submitted = Company.objects.create(owner=self.owner, name="Second", acn="222222228", status="submitted")
         response = self.client.post(
             f"/api/v1/companies/{submitted.uuid}/withdraw/", {"reason": "Changed plans"}, format="json"
         )
@@ -279,7 +279,7 @@ class ApplicationLifecycleTest(APITestCase):
     def test_admin_bulk_actions_call_the_model_transitions(self):
         self.company.status = CompanyStatus.REVIEW
         self.company.save(update_fields=["status"])
-        draft = Company.objects.create(owner=self.owner, name="Still draft", acn="333333333")
+        draft = Company.objects.create(owner=self.owner, name="Still draft", acn="333333332")
         admin = CompanyAdmin(Company, AdminSite())
         admin.message_user = lambda *args, **kwargs: None
         request = SimpleNamespace(user=self.staff)

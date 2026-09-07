@@ -16,16 +16,26 @@ ADMIN_STORAGES = {
 }
 
 
-def a_different_value(company, name):
+ACN = "100000682"
+ABN = "10100000682"
+OTHER_ACN = "100001492"
+OTHER_ABN = "10100001492"
+SECOND_ABN_FOR_ACN = "99100000682"
+
+
+def a_changed_payload(company, name):
+    if name == "acn":
+        return {"acn": OTHER_ACN, "abn": OTHER_ABN}
+    if name == "abn":
+        return {"abn": SECOND_ABN_FOR_ACN}
+
     field = Company._meta.get_field(name)
     current = getattr(company, name)
     if field.choices:
-        return next(value for value, _ in field.choices if value != current)
-    if not isinstance(current, str):
+        return {name: next(value for value, _ in field.choices if value != current)}
+    if not isinstance(current, str) or not current:
         return None
-    if current.isdigit():
-        return "".join("9" if digit != "9" else "8" for digit in current)
-    return f"{current}-changed"
+    return {name: f"{current}-changed"}
 
 
 class TheAdminIsNotMorePermissiveThanTheApiTest(TestCase):
@@ -37,8 +47,8 @@ class TheAdminIsNotMorePermissiveThanTheApiTest(TestCase):
             owner=self.owner,
             name="Immutable Pty Ltd",
             company_type=CompanyType.PROPRIETARY,
-            acn="123456789",
-            abn="12123456789",
+            acn=ACN,
+            abn=ABN,
             status=CompanyStatus.ACTIVE,
         )
         self.model_admin = admin.site._registry[Company]
@@ -48,16 +58,16 @@ class TheAdminIsNotMorePermissiveThanTheApiTest(TestCase):
         request.user = self.superuser
         return set(self.model_admin.get_form(request, obj=company)().fields)
 
-    def refused_at(self, company, status):
+    def refused_at(self, company, status, build=a_changed_payload):
         standing = company.status
         company.status = status
         try:
             refused = set()
             for name in CompanyUpdateSerializer(instance=company).fields:
-                replacement = a_different_value(company, name) if hasattr(company, name) else None
-                if replacement is None:
+                payload = build(company, name) if hasattr(company, name) else None
+                if payload is None:
                     continue
-                serializer = CompanyUpdateSerializer(instance=company, data={name: replacement}, partial=True)
+                serializer = CompanyUpdateSerializer(instance=company, data=payload, partial=True)
                 try:
                     serializer.is_valid(raise_exception=True)
                 except ValidationError as error:
@@ -73,11 +83,15 @@ class TheAdminIsNotMorePermissiveThanTheApiTest(TestCase):
     def test_the_probe_finds_the_fields_the_api_locks_and_nothing_else(self):
         self.assertEqual(self.immutable_after_draft(self.company), {"company_type", "acn", "abn"})
 
-    def test_the_probe_does_not_mistake_an_invalid_value_for_an_immutable_field(self):
-        self.company.abn = ""
+    def test_a_value_the_api_rejects_at_every_status_is_not_read_as_immutable(self):
+        def always_invalid(company, name):
+            return {"acn": "000000001"} if name == "acn" else None
 
-        self.assertIn("abn", self.refused_at(self.company, CompanyStatus.DRAFT))
-        self.assertNotIn("abn", self.immutable_after_draft(self.company))
+        at_draft = self.refused_at(self.company, CompanyStatus.DRAFT, always_invalid)
+        past_draft = self.refused_at(self.company, CompanyStatus.ACTIVE, always_invalid)
+
+        self.assertEqual(at_draft, {"acn"})
+        self.assertEqual(past_draft - at_draft, set())
 
     def test_no_field_the_api_refuses_to_change_is_editable_in_the_admin(self):
         immutable = self.immutable_after_draft(self.company)
@@ -90,8 +104,8 @@ class TheAdminIsNotMorePermissiveThanTheApiTest(TestCase):
             owner=self.owner,
             name="Draft Pty Ltd",
             company_type=CompanyType.PROPRIETARY,
-            acn="987654321",
-            abn="98987654321",
+            acn=OTHER_ACN,
+            abn=OTHER_ABN,
             status=CompanyStatus.DRAFT,
         )
 
@@ -106,7 +120,7 @@ class TheAdminIsNotMorePermissiveThanTheApiTest(TestCase):
                     owner=self.owner,
                     name="Draft Owner Pty Ltd",
                     company_type=CompanyType.PROPRIETARY,
-                    acn="555666777",
+                    acn="555666772",
                     status=CompanyStatus.DRAFT,
                 )
             ),
@@ -129,8 +143,8 @@ class TheChangePageRefusesTheLockedFieldsTest(TestCase):
             owner=self.owner,
             name="Posted Pty Ltd",
             company_type=CompanyType.PROPRIETARY,
-            acn="123456789",
-            abn="12123456789",
+            acn=ACN,
+            abn=ABN,
             status=CompanyStatus.ACTIVE,
         )
         self.client.force_login(User.objects.create_superuser(email="post-admin@example.test", password=PASSWORD))
@@ -154,8 +168,8 @@ class TheChangePageRefusesTheLockedFieldsTest(TestCase):
     def test_a_change_post_carrying_a_new_owner_and_acn_saves_but_moves_neither(self):
         response = self.change_post(
             owner=self.other.pk,
-            acn="999888777",
-            abn="99998888777",
+            acn=OTHER_ACN,
+            abn=OTHER_ABN,
             company_type=CompanyType.PUBLIC,
             trading_name="Renamed Trading",
         )
@@ -164,6 +178,6 @@ class TheChangePageRefusesTheLockedFieldsTest(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(self.company.trading_name, "Renamed Trading")
         self.assertEqual(self.company.owner_id, self.owner.pk)
-        self.assertEqual(self.company.acn, "123456789")
-        self.assertEqual(self.company.abn, "12123456789")
+        self.assertEqual(self.company.acn, ACN)
+        self.assertEqual(self.company.abn, ABN)
         self.assertEqual(self.company.company_type, CompanyType.PROPRIETARY)

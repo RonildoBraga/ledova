@@ -3,6 +3,7 @@ from rest_framework import serializers
 from companies.models import Company, CompanyStatus
 from companies.serializers.document import CompanyDocumentSerializer
 from companies.services.company import register_company
+from companies.validators import checked_abn, checked_acn, with_matching_identifiers
 from wallets.models import Wallet
 
 
@@ -148,18 +149,13 @@ class CompanyRegistrationSerializer(serializers.ModelSerializer):
         ]
 
     def validate_acn(self, value):
-        acn = value.replace(" ", "").replace("-", "")
-        if not acn.isdigit() or len(acn) != 9:
-            raise serializers.ValidationError("ACN must be exactly 9 digits.")
-        return acn
+        return checked_acn(value)
 
     def validate_abn(self, value):
-        if not value:
-            return value
-        abn = value.replace(" ", "").replace("-", "")
-        if not abn.isdigit() or len(abn) != 11:
-            raise serializers.ValidationError("ABN must be exactly 11 digits.")
-        return abn
+        return checked_abn(value)
+
+    def validate(self, data):
+        return with_matching_identifiers(self, data)
 
     def create(self, validated_data):
         contact_data = validated_data.pop("primary_contact")
@@ -207,22 +203,14 @@ class CompanyUpdateSerializer(serializers.ModelSerializer):
         if instance and instance.status != CompanyStatus.DRAFT:
             if value != instance.acn:
                 raise serializers.ValidationError("ACN cannot be changed after registration is submitted.")
-        acn = value.replace(" ", "").replace("-", "")
-        if not acn.isdigit() or len(acn) != 9:
-            raise serializers.ValidationError("ACN must be exactly 9 digits.")
-        return acn
+        return checked_acn(value)
 
     def validate_abn(self, value):
         instance = self.instance
         if instance and instance.status != CompanyStatus.DRAFT:
             if value != instance.abn:
                 raise serializers.ValidationError("ABN cannot be changed after registration is submitted.")
-        if not value:
-            return value
-        abn = value.replace(" ", "").replace("-", "")
-        if not abn.isdigit() or len(abn) != 11:
-            raise serializers.ValidationError("ABN must be exactly 11 digits.")
-        return abn
+        return checked_abn(value)
 
     def validate_company_type(self, value):
         instance = self.instance
@@ -230,6 +218,9 @@ class CompanyUpdateSerializer(serializers.ModelSerializer):
             if value != instance.company_type:
                 raise serializers.ValidationError("Company type cannot be changed after registration is submitted.")
         return value
+
+    def validate(self, data):
+        return with_matching_identifiers(self, data)
 
 
 class CompanyAPIKeySerializer(serializers.Serializer):
