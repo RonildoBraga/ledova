@@ -5,10 +5,11 @@ from tokens.exceptions import InvalidTokenStateException
 from tokens.querysets import CapitalIncreaseRequestQuerySet
 
 from .choices import RequestStatus
+from .owner_column import DerivesCompanyFromToken
 from .review_request import ReviewableRequest
 
 
-class CapitalIncreaseRequest(ReviewableRequest):
+class CapitalIncreaseRequest(DerivesCompanyFromToken, ReviewableRequest):
 
     objects = CapitalIncreaseRequestQuerySet.as_manager()
 
@@ -16,6 +17,13 @@ class CapitalIncreaseRequest(ReviewableRequest):
         "tokens.ShareToken",
         on_delete=models.PROTECT,
         related_name="capital_increase_requests",
+    )
+
+    company = models.ForeignKey(
+        "companies.Company",
+        on_delete=models.CASCADE,
+        related_name="+",
+        help_text=("Owner, derived from token.company and held directly so a " "row-level security policy can read it"),
     )
 
     additional_shares = models.PositiveIntegerField(

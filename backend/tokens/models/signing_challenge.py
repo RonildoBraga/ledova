@@ -3,6 +3,7 @@ from django.utils import timezone
 
 from shared.models import BaseModel
 from tokens.exceptions import ChallengeAlreadyUsedException
+from tokens.models.owner_column import DerivesWalletFromOrder
 from tokens.querysets.signing_challenge import SigningChallengeQuerySet
 
 
@@ -12,7 +13,7 @@ class SigningChallengePurpose(models.TextChoices):
     ORDER_MODIFY = "order_modify", "Order modify"
 
 
-class SigningChallenge(BaseModel):
+class SigningChallenge(DerivesWalletFromOrder, BaseModel):
     objects = SigningChallengeQuerySet.as_manager()
 
     purpose = models.CharField(max_length=20, choices=SigningChallengePurpose.choices, db_index=True)
@@ -25,6 +26,18 @@ class SigningChallenge(BaseModel):
         related_name="signing_challenges",
         null=True,
         blank=True,
+    )
+
+    wallet = models.ForeignKey(
+        "wallets.Wallet",
+        on_delete=models.CASCADE,
+        related_name="+",
+        null=True,
+        blank=True,
+        help_text=(
+            "Owner. Supplied by the service, which holds the authenticated caller's wallet; "
+            "null only for rows written before this column, whose address named no wallet or more than one"
+        ),
     )
 
     payload = models.JSONField()

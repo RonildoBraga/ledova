@@ -67,15 +67,15 @@ def challenge_lifetime_seconds() -> int:
     return settings.SIGNING_CHALLENGE_TTL_SECONDS
 
 
-def issue_challenge(purpose, wallet_address: str, fields: dict, verifying_contract=None, order=None):
+def issue_challenge(purpose, wallet_address: str, fields: dict, verifying_contract=None, order=None, wallet=None):
     types = CHALLENGE_TYPES[purpose]
-    wallet = to_checksum_address(wallet_address)
+    wallet_of_record = to_checksum_address(wallet_address)
     nonce = secrets.randbits(63)
     expires_at = timezone.now() + timezone.timedelta(seconds=challenge_lifetime_seconds())
 
     message = {
         **{name: _on_the_wire(value) for name, value in fields.items()},
-        "wallet": wallet,
+        "wallet": wallet_of_record,
         "nonce": str(nonce),
         "deadline": str(int(expires_at.timestamp())),
     }
@@ -83,7 +83,8 @@ def issue_challenge(purpose, wallet_address: str, fields: dict, verifying_contra
 
     return SigningChallenge.objects.create(
         purpose=purpose,
-        wallet_address=wallet,
+        wallet=wallet or (order.wallet if order is not None else None),
+        wallet_address=wallet_of_record,
         chain_id=domain["chainId"],
         verifying_contract=domain["verifyingContract"],
         order=order,

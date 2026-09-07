@@ -8,6 +8,7 @@ from django.db import models
 from django.utils import timezone
 
 from shared.models import BaseModel
+from tokens.models.owner_column import DerivesWalletsFromOrders
 from tokens.querysets import SwapOrderQuerySet
 
 from .choices import SwapOrderStatus
@@ -16,7 +17,7 @@ if TYPE_CHECKING:
     from blockchain.models import BlockchainTransaction
 
 
-class SwapOrder(BaseModel):
+class SwapOrder(DerivesWalletsFromOrders, BaseModel):
     objects = SwapOrderQuerySet.as_manager()
 
     sell_order = models.ForeignKey(
@@ -28,6 +29,23 @@ class SwapOrder(BaseModel):
         "tokens.TransferOrder",
         on_delete=models.CASCADE,
         related_name="swap_as_buy",
+    )
+
+    seller_wallet = models.ForeignKey(
+        "wallets.Wallet",
+        on_delete=models.CASCADE,
+        related_name="+",
+        help_text=(
+            "Seller, derived from sell_order.wallet and held directly so a " "row-level security policy can read it"
+        ),
+    )
+    buyer_wallet = models.ForeignKey(
+        "wallets.Wallet",
+        on_delete=models.CASCADE,
+        related_name="+",
+        help_text=(
+            "Buyer, derived from buy_order.wallet and held directly so a " "row-level security policy can read it"
+        ),
     )
 
     share_token = models.ForeignKey(

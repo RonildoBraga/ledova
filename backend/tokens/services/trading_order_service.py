@@ -73,7 +73,9 @@ class TradingOrderService:
         )
 
     @staticmethod
-    def get_order_create_message(token, wallet_address, order_type, quantity, min_quantity, price_per_share) -> dict:
+    def get_order_create_message(
+        token, wallet_address, order_type, quantity, min_quantity, price_per_share, wallet=None
+    ) -> dict:
         challenge = issue_challenge(
             SigningChallengePurpose.ORDER_CREATE,
             wallet_address,
@@ -85,6 +87,7 @@ class TradingOrderService:
                 "pricePerShare": str(price_per_share),
             },
             verifying_contract=token.contract_address,
+            wallet=wallet,
         )
 
         return {

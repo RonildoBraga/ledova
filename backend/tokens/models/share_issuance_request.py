@@ -3,10 +3,11 @@ from django.db import models
 from tokens.querysets import ShareIssuanceRequestQuerySet
 
 from .choices import IssuanceType, RequestStatus
+from .owner_column import DerivesCompanyFromToken
 from .review_request import ReviewableRequest
 
 
-class ShareIssuanceRequest(ReviewableRequest):
+class ShareIssuanceRequest(DerivesCompanyFromToken, ReviewableRequest):
 
     objects = ShareIssuanceRequestQuerySet.as_manager()
 
@@ -14,6 +15,13 @@ class ShareIssuanceRequest(ReviewableRequest):
         "tokens.ShareToken",
         on_delete=models.PROTECT,
         related_name="issuance_requests",
+    )
+
+    company = models.ForeignKey(
+        "companies.Company",
+        on_delete=models.CASCADE,
+        related_name="+",
+        help_text=("Owner, derived from token.company and held directly so a " "row-level security policy can read it"),
     )
 
     recipient_address = models.CharField(
