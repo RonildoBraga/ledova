@@ -1028,10 +1028,11 @@ class ExecuteReviewRequestTaskTest(TestCase):
 
 class TheGraceIsJustifiedByTheWindowItCoversTest(TestCase):
 
-    def test_it_covers_the_longest_a_broadcast_can_take_without_naming_its_mint(self):
+    def test_the_grace_brackets_the_broadcast_below_and_the_sweep_above(self):
         longest_broadcast = BROADCAST_ROUND_TRIPS * timedelta(seconds=HTTP_TIMEOUT_SECONDS)
 
         self.assertGreaterEqual(UNNAMED_MINT_GRACE, longest_broadcast)
+        self.assertLess(UNNAMED_MINT_GRACE, STALE_EXECUTION_AGE)
 
     def test_the_timeout_the_grace_is_derived_from_is_the_one_the_client_uses(self):
         with patch("integrations.base_chain.client.Web3") as web3:

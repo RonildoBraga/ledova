@@ -72,7 +72,7 @@ class ABroadcastCostsTheRoundTripsTheGraceIsDerivedFromTest(SimpleTestCase):
 
         self.assertEqual(len(calls), BROADCAST_ROUND_TRIPS, calls)
 
-    def test_the_chain_is_asked_once_rather_than_before_every_step(self):
+    def test_the_client_asks_the_chain_once_and_the_rest_are_web3s_own(self):
         calls = self.send_and_count()
 
         self.assertEqual(calls.count("eth_chainId"), 3, calls)
