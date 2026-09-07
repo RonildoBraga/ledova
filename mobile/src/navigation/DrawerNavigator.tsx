@@ -25,7 +25,7 @@ import { notificationsService } from '../services/notificationsService';
 import { clearTokens } from '../services/tokenStorage';
 import { useAppTheme, useThemedStyles } from '../contexts';
 import { NotificationsModal } from '../components/notifications';
-import { useNotifications } from '../hooks/useNotifications';
+import { useNotifications } from '@ledova/shared';
 import type { RootStackParamList } from './AppNavigator';
 import { BottomTabNavigator } from './BottomTabNavigator';
 import { MainHeader, getMainHeaderStyle } from './headers';

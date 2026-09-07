@@ -1,15 +1,16 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { CACHE_TIMING } from '../constants/api';
 import {
+  archiveNotification,
   getNotifications,
   getUnreadNotificationCount,
-  markNotificationRead,
-  archiveNotification,
   markAllNotificationsRead,
-  CACHE_TIMING,
-} from '@ledova/shared';
-import apiClient from '@services/apiClient';
+  markNotificationRead,
+} from '../services/notifications';
+import { useApiClient } from './useApiClient';
 
 export function useNotifications() {
+  const apiClient = useApiClient();
   const queryClient = useQueryClient();
 
   const unreadCountQuery = useQuery({

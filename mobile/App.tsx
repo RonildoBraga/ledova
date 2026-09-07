@@ -6,7 +6,8 @@ import { AppLockProvider, ThemeProvider } from './src/contexts';
 import { AppLockScreen } from './src/components/app-lock';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
 
-import './src/services/apiClient';
+import { ApiClientProvider } from '@ledova/shared';
+import { apiClient } from './src/services/apiClient';
 import { notificationsService } from './src/services/notificationsService';
 
 notificationsService.configure();
@@ -25,13 +26,15 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
-          <ThemeProvider>
-            <AppLockProvider>
-              <AppNavigator />
-              <AppLockScreen />
-              <StatusBar style="auto" />
-            </AppLockProvider>
-          </ThemeProvider>
+          <ApiClientProvider client={apiClient}>
+            <ThemeProvider>
+              <AppLockProvider>
+                <AppNavigator />
+                <AppLockScreen />
+                <StatusBar style="auto" />
+              </AppLockProvider>
+            </ThemeProvider>
+          </ApiClientProvider>
         </QueryClientProvider>
       </ErrorBoundary>
     </GestureHandlerRootView>
