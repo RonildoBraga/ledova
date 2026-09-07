@@ -121,12 +121,26 @@ but TypeScript walks up into it when a lookup fails in `mobile/node_modules`. An
 import can therefore type-check against a copy of a package the bundle will never
 contain, and `npm --prefix mobile run type-check` stays green while the app
 breaks. `mobile/scripts/check-resolution.mjs` closes that: it resolves every
-runtime specifier in `mobile/src` the way Node does, honouring each package's
-`exports` map, and fails if the answer came from outside mobile or did not
-resolve at all. `make check` runs it and CI runs it as its own step. A Node
-builtin name that mobile also declares as a dependency (`buffer`, `crypto`,
-`stream`) is checked against `metro.config.js`'s `extraNodeModules` instead,
-because that alias is what makes it work.
+specifier the way Node does, honouring each package's `exports` map, and fails if
+the answer came from outside mobile or did not resolve at all. `make check` runs
+it and CI runs it as its own step.
+
+It scans what Metro bundles, which is `mobile/src` recursively **and the entry
+chain at the mobile root** — `index.ts`, `App.tsx`, `crypto-polyfill.js`. A root
+file named `*.config.*` runs in Node rather than in the bundle and is skipped.
+The entry chain is not an afterthought: eight declared dependencies, all of them
+polyfills and shims that Dependabot bumps as majors, are imported only there.
+
+A specifier whose package is not in `dependencies` **fails**, rather than being
+skipped. Skipping it was the second hole: a package that exists only in the
+repository root resolves for TypeScript through the walk-up above and does not
+exist for Metro, which is the exact case this gate is for. The one exemption is a
+`devDependencies` package imported from a test file, as `jest.config.js`
+`testMatch` defines test files — and the same import from bundled code fails.
+
+A Node builtin name that mobile also declares as a dependency (`buffer`,
+`crypto`, `stream`) is checked against `metro.config.js`'s `extraNodeModules`
+instead, because that alias is what makes it work.
 
 The case that produced it: `@noble/hashes` 2 removed the `./sha256`, `./sha512`,
 `./ripemd160` and `./hmac` subpaths that `bip32.ts`, `seedDerivation.ts`,

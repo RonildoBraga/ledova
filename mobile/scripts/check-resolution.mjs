@@ -9,6 +9,16 @@
 // This resolves each specifier the way Node does - honouring the package's own
 // `exports` map - and then asserts the answer came from inside mobile. Nothing here
 // replaces a real bundle; it catches the resolution half of that cheaply.
+//
+// It scans everything Metro bundles: `src` recursively, plus the entry chain at the
+// mobile root. A root file named `*.config.*` is tooling that runs in Node and is
+// skipped; anything else there - index.ts, App.tsx, crypto-polyfill.js - is bundled
+// and is exactly where the polyfill and shim packages are imported.
+//
+// A specifier is checked unless it is a devDependency imported from a test file, as
+// jest.config.js defines test files. Anything undeclared fails: a package that lives
+// only in the repository root resolves for TypeScript and not for Metro, which is the
+// whole point of this gate.
 
 import { readdir, readFile } from 'node:fs/promises';
 import { createRequire, isBuiltin } from 'node:module';
@@ -19,18 +29,45 @@ const MOBILE = path.resolve(import.meta.dirname, '..');
 const REPO = path.resolve(MOBILE, '..');
 const resolver = createRequire(path.join(MOBILE, 'index.ts'));
 
-// `from '...'`, bare `import '...'`, and `require('...')`.
-const SPECIFIER = /(?:from|import|require)\s*\(?\s*['"]([^'"]+)['"]/g;
+// `from '...'`, bare `import '...'`, `import('...')` and `require('...')`. The
+// lookbehind and the newline exclusion matter: without them a string literal such as
+// `mode === 'import'` matches, and the capture then runs to the next quote in the file.
+const SPECIFIER =
+  /(?<!['"`\w$])(?:from|import)\s+['"]([^'"\n]+)['"]|(?<!['"`\w$])(?:import|require)\s*\(\s*['"]([^'"\n]+)['"]/g;
 
 const manifest = JSON.parse(await readFile(path.join(MOBILE, 'package.json'), 'utf8'));
 const runtime = new Set(Object.keys(manifest.dependencies ?? {}));
+const development = new Set(Object.keys(manifest.devDependencies ?? {}));
 const metroConfig = await readFile(path.join(MOBILE, 'metro.config.js'), 'utf8');
+
+const { default: jestConfig } = await import(path.join(MOBILE, 'jest.config.js'));
+const TEST_FILE = new RegExp(
+  (jestConfig.testMatch ?? [])
+    .map((pattern) =>
+      pattern
+        .replace('<rootDir>/', '')
+        .replace(/[.+^${}()|[\]\\]/g, String.raw`\$&`)
+        .replace(/\*\*\//g, '(?:.*/)?')
+        .replace(/\*/g, '[^/]*'),
+    )
+    .map((pattern) => `^${pattern}$`)
+    .join('|'),
+);
 
 async function* sourceFiles(dir) {
   for (const entry of await readdir(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) yield* sourceFiles(full);
-    else if (/\.tsx?$/.test(entry.name)) yield full;
+    else if (/\.(tsx?|js)$/.test(entry.name)) yield full;
+  }
+}
+
+async function* bundledFiles() {
+  yield* sourceFiles(path.join(MOBILE, 'src'));
+  for (const entry of await readdir(MOBILE, { withFileTypes: true })) {
+    if (!entry.isFile()) continue;
+    if (/\.config\.[cm]?[jt]s$/.test(entry.name)) continue;
+    if (/\.(tsx?|js)$/.test(entry.name)) yield path.join(MOBILE, entry.name);
   }
 }
 
@@ -45,12 +82,13 @@ function lineOf(text, index) {
 
 const sites = new Map();
 
-for await (const file of sourceFiles(path.join(MOBILE, 'src'))) {
+for await (const file of bundledFiles()) {
   const text = await readFile(file, 'utf8');
+  const isTest = TEST_FILE.test(path.relative(MOBILE, file));
   for (const match of text.matchAll(SPECIFIER)) {
-    const specifier = match[1];
+    const specifier = match[1] ?? match[2];
     if (specifier.startsWith('.') || specifier.startsWith('/')) continue;
-    if (!runtime.has(packageOf(specifier))) continue;
+    if (isTest && development.has(packageOf(specifier))) continue;
     if (!sites.has(specifier)) {
       sites.set(specifier, `${path.relative(REPO, file)}:${lineOf(text, match.index)}`);
     }
@@ -66,6 +104,15 @@ for (const [specifier, site] of [...sites].sort()) {
     if (!new RegExp(`^\\s*${specifier}\\s*:`, 'm').test(metroConfig)) {
       failures.push(`${site}: '${specifier}' shadows a Node builtin with no extraNodeModules alias in metro.config.js`);
     }
+    continue;
+  }
+
+  const name = packageOf(specifier);
+  if (!runtime.has(name)) {
+    const reason = development.has(name)
+      ? `'${name}' is a devDependency, so Metro will not have it`
+      : `'${name}' is not declared in mobile/package.json`;
+    failures.push(`${site}: ${reason}`);
     continue;
   }
 
