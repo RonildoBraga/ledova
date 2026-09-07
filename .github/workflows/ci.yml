@@ -27,6 +27,8 @@ jobs:
         run: python scripts/check-logging.py
       - name: Schema response gate
         run: python scripts/check-schema-responses.py
+      - name: Test shadowing gate
+        run: python scripts/check-test-shadowing.py
       - name: Gate script tests
         run: make test-gates PYTHON=python
 
