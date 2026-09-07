@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from shared.views import AuthenticatedGenericViewSet
 from tokens.serializers import BroadcastTransferSerializer, PrepareTransferSerializer
 from tokens.services import TokenTransferService
+from tokens.services.signed_transactions import decode_signed_transaction
 from tokens.trading_wallet_access import resolve_verified_evm_wallets
 
 
@@ -49,9 +50,11 @@ class TradingTransferViewSet(AuthenticatedGenericViewSet):
         serializer.is_valid(raise_exception=True)
 
         data = serializer.validated_data
-        transfer_service = TokenTransferService()
+        signed_transaction = data["signed_transaction"]
+        resolve_verified_evm_wallets(request.user, [_signer_of(signed_transaction)])
 
-        tx_hash, receipt = transfer_service.broadcast_transfer(data["signed_transaction"])
+        transfer_service = TokenTransferService()
+        tx_hash, receipt = transfer_service.broadcast_transfer(signed_transaction)
 
         return Response(
             {
@@ -60,3 +63,8 @@ class TradingTransferViewSet(AuthenticatedGenericViewSet):
                 "gas_used": receipt.get("gasUsed"),
             }
         )
+
+
+def _signer_of(signed_transaction: str) -> str:
+    raw = signed_transaction[2:] if signed_transaction.startswith("0x") else signed_transaction
+    return decode_signed_transaction(bytes.fromhex(raw)).sender
