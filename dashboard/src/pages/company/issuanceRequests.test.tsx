@@ -46,9 +46,9 @@ const REQUEST = {
   createdAt: '2026-09-07T00:00:00Z',
 };
 
-function aTokenWhose(issuanceRequests: unknown[]) {
+function aTokenWhose(issuanceRequests: unknown[], status = 'deployed') {
   useTokenDetail.mockReturnValue({
-    token: TOKEN,
+    token: { ...TOKEN, status },
     isLoading: false,
     holders: [],
     totalHolders: 0,
@@ -92,6 +92,35 @@ describe('the token modal Issuance Requests section', () => {
     expect(screen.getByText('(1)')).toBeDefined();
     expect(screen.getByText(/10,000 QAT to/)).toBeDefined();
     expect(screen.getByText('Submitted')).toBeDefined();
+  });
+
+  it('is not offered on a draft token, which can have no issuance requests to show', () => {
+    aTokenWhose([], 'draft');
+
+    render(<TokenDetailModal uuid="token-1" companyStatus="active" onClose={vi.fn()} />);
+
+    expect(screen.queryByText('Issuance Requests')).toBeNull();
+    expect(screen.queryByText('No issuance requests yet.')).toBeNull();
+  });
+
+  it('is offered on a token that is no longer deployed but has requests behind it', () => {
+    aTokenWhose([REQUEST], 'draft');
+
+    render(<TokenDetailModal uuid="token-1" companyStatus="active" onClose={vi.fn()} />);
+
+    expect(screen.getByText('Issuance Requests')).toBeDefined();
+    expect(screen.getByText(/10,000 QAT to/)).toBeDefined();
+  });
+
+  it('colours the status chip rather than rendering every outcome the same grey', () => {
+    aTokenWhose([
+      { ...REQUEST, status: 'approved', statusDisplay: 'Approved' },
+      { ...REQUEST, uuid: 'request-2', status: 'rejected', statusDisplay: 'Rejected' },
+    ]);
+
+    render(<TokenDetailModal uuid="token-1" companyStatus="active" onClose={vi.fn()} />);
+
+    expect(screen.getByText('Approved').className).not.toEqual(screen.getByText('Rejected').className);
   });
 
   it('says none when the issuer has made none', () => {

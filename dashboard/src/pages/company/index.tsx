@@ -116,7 +116,7 @@ const TOKEN_TYPE_LABELS: Record<TokenType, string> = {
   redeemable: 'Redeemable',
 };
 
-const CAPITAL_INCREASE_STATUS_COLORS: Record<CapitalIncreaseStatus, string> = {
+const REQUEST_STATUS_COLORS: Record<CapitalIncreaseStatus, string> = {
   draft: 'bg-surface-tertiary text-text-muted',
   submitted: 'bg-info-light/20 text-info-light',
   under_review: 'bg-info-light/20 text-info-light',
@@ -1085,7 +1085,7 @@ export function TokenDetailModal({
                       </button>
                     )}
                     <span
-                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${CAPITAL_INCREASE_STATUS_COLORS[request.status] || CAPITAL_INCREASE_STATUS_COLORS.draft}`}
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${REQUEST_STATUS_COLORS[request.status] || REQUEST_STATUS_COLORS.draft}`}
                     >
                       {request.statusDisplay}
                     </span>
@@ -1100,46 +1100,50 @@ export function TokenDetailModal({
           </div>
         )}
 
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-semibold text-text-primary flex items-center gap-1.5">
-              <CoinIcon size={ICON_SM} className="text-text-muted" />
-              Issuance Requests
-              <span className="text-text-muted font-normal">({issuanceRequestCount})</span>
-            </h3>
-          </div>
-          {isLoadingIssuanceRequests ? (
-            <div className="py-4 text-center">
-              <div className="h-5 w-5 border-2 border-brand-subtle border-t-brand rounded-full animate-spin mx-auto" />
+        {(isDeployed || isPaused || issuanceRequestCount > 0) && (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-semibold text-text-primary flex items-center gap-1.5">
+                <CoinIcon size={ICON_SM} className="text-text-muted" />
+                Issuance Requests
+                <span className="text-text-muted font-normal">({issuanceRequestCount})</span>
+              </h3>
             </div>
-          ) : issuanceRequests.length > 0 ? (
-            <div className="bg-surface-tertiary/50 rounded-lg border border-border divide-y divide-border-subtle">
-              {issuanceRequests.slice(0, 5).map((request: ShareIssuanceRequest) => (
-                <div key={request.uuid} className="flex items-center gap-3 px-3 py-2.5">
-                  <span className="text-xs text-text-muted w-20 flex-shrink-0">
-                    {new Date(request.createdAt).toLocaleDateString()}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm text-text-primary truncate">
-                      {request.amount.toLocaleString()} {request.tokenSymbol} to {request.recipientAddress}
-                    </p>
-                    <p className="text-xs text-text-muted">
-                      {request.reason || request.issuanceTypeDisplay}
-                      {request.rejectionReason ? ` · ${request.rejectionReason}` : ''}
-                    </p>
+            {isLoadingIssuanceRequests ? (
+              <div className="py-4 text-center">
+                <div className="h-5 w-5 border-2 border-brand-subtle border-t-brand rounded-full animate-spin mx-auto" />
+              </div>
+            ) : issuanceRequests.length > 0 ? (
+              <div className="bg-surface-tertiary/50 rounded-lg border border-border divide-y divide-border-subtle">
+                {issuanceRequests.slice(0, 5).map((request: ShareIssuanceRequest) => (
+                  <div key={request.uuid} className="flex items-center gap-3 px-3 py-2.5">
+                    <span className="text-xs text-text-muted w-20 flex-shrink-0">
+                      {new Date(request.createdAt).toLocaleDateString()}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-text-primary truncate">
+                        {request.amount.toLocaleString()} {request.tokenSymbol} to {request.recipientAddress}
+                      </p>
+                      <p className="text-xs text-text-muted">
+                        {request.reason || request.issuanceTypeDisplay}
+                        {request.rejectionReason ? ` · ${request.rejectionReason}` : ''}
+                      </p>
+                    </div>
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${REQUEST_STATUS_COLORS[request.status] || REQUEST_STATUS_COLORS.draft}`}
+                    >
+                      {request.statusDisplay}
+                    </span>
                   </div>
-                  <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-surface-tertiary text-text-secondary">
-                    {request.statusDisplay}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="bg-surface-tertiary/30 rounded-lg border border-border-subtle py-4 text-center">
-              <p className="text-sm text-text-muted">No issuance requests yet.</p>
-            </div>
-          )}
-        </div>
+                ))}
+              </div>
+            ) : (
+              <div className="bg-surface-tertiary/30 rounded-lg border border-border-subtle py-4 text-center">
+                <p className="text-sm text-text-muted">No issuance requests yet.</p>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-3 pt-1">
           {isDraft && (

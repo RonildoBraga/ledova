@@ -147,7 +147,7 @@ export interface ShareIssuanceRequest {
   issuanceType: string;
   issuanceTypeDisplay: string;
   reason: string;
-  status: string;
+  status: CapitalIncreaseStatus;
   statusDisplay: string;
   dilutionPercentage: number | null;
   submittedBy: string | null;
