@@ -1,5 +1,5 @@
-import { HOLDING_ASSET_TYPE, getChartColor, getHoldingAssetTypeLabel, type TimeRange } from '@ledova/shared';
-import type { HoldingWithWallet, HoldingsSummary, AssetAllocationItem } from '@ledova/shared';
+import { HOLDING_ASSET_TYPE, calculateAssetAllocation, calculateHoldingsSummary, type TimeRange } from '@ledova/shared';
+import type { HoldingWithWallet } from '@ledova/shared';
 import { MOCK_ASSETS, MOCK_ASSET_VALUES, MOCK_WALLETS } from '../../../_mock/mockConfig';
 
 interface MockPortfolioSnapshot {
@@ -9,77 +9,6 @@ interface MockPortfolioSnapshot {
   assetValues: Record<string, number>;
   assetQuantities: Record<string, number>;
   assetSymbols: string[];
-}
-
-function calculateSummary(holdings: HoldingWithWallet[], walletsCount: number): HoldingsSummary {
-  const assetTypeMap = new Map<string, { totalValue: number; holdingsCount: number }>();
-  let totalValue = 0;
-
-  for (const holding of holdings) {
-    const value = parseFloat(holding.marketValue) || 0;
-    const assetType = holding.asset?.assetType || HOLDING_ASSET_TYPE.ERC20_TOKEN;
-
-    totalValue += value;
-
-    const existing = assetTypeMap.get(assetType) || { totalValue: 0, holdingsCount: 0 };
-    assetTypeMap.set(assetType, {
-      totalValue: existing.totalValue + value,
-      holdingsCount: existing.holdingsCount + 1,
-    });
-  }
-
-  const byAssetType = Array.from(assetTypeMap.entries())
-    .map(([assetType, data]) => ({
-      assetType,
-      label: getHoldingAssetTypeLabel(assetType),
-      totalValue: data.totalValue,
-      holdingsCount: data.holdingsCount,
-    }))
-    .sort((a, b) => b.totalValue - a.totalValue);
-
-  return {
-    totalValue,
-    holdingsCount: holdings.length,
-    walletsCount,
-    byAssetType,
-  };
-}
-
-function calculateAssetAllocation(holdings: HoldingWithWallet[], totalValue: number): AssetAllocationItem[] {
-  if (totalValue === 0) return [];
-
-  const assetMap = new Map<string, { symbol: string; name: string; totalValue: number }>();
-
-  for (const holding of holdings) {
-    const assetUuid = holding.asset?.uuid || holding.assetSymbol;
-    const value = parseFloat(holding.marketValue) || 0;
-
-    const existing = assetMap.get(assetUuid);
-    if (existing) {
-      existing.totalValue += value;
-    } else {
-      assetMap.set(assetUuid, {
-        symbol: holding.assetSymbol || holding.asset?.symbol || 'Unknown',
-        name: holding.assetName || holding.asset?.name || 'Unknown Asset',
-        totalValue: value,
-      });
-    }
-  }
-
-  return Array.from(assetMap.entries())
-    .map(([assetUuid, data], index) => ({
-      assetUuid,
-      symbol: data.symbol,
-      name: data.name,
-      totalValue: data.totalValue,
-      percentage: (data.totalValue / totalValue) * 100,
-      color: getChartColor(index),
-    }))
-    .sort((a, b) => b.totalValue - a.totalValue)
-    .map((item, index) => ({
-      ...item,
-      color: getChartColor(index),
-    }));
 }
 
 export const generateMockHoldingsData = () => {
@@ -132,7 +61,7 @@ export const generateMockHoldingsData = () => {
     }));
   });
 
-  const summary = calculateSummary(holdings, mockWallets.length);
+  const summary = calculateHoldingsSummary(holdings, mockWallets.length);
   const assetAllocation = calculateAssetAllocation(holdings, summary.totalValue);
 
   return {
