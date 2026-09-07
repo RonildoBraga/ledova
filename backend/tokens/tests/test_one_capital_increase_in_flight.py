@@ -6,9 +6,10 @@ from django.db import IntegrityError, connection, transaction
 from django.test import TestCase, TransactionTestCase
 
 from shared.tests.tenants import make_tenant
-from tokens.exceptions import InvalidTokenStateException
+from tokens.exceptions import InvalidTokenStateException, IssuanceRefusedException
 from tokens.models import CapitalIncreaseRequest, RequestStatus, ShareToken
 from tokens.services.capital_increase import submit_capital_increase
+from tokens.services.share_token_service import ShareTokenService
 
 CONSTRAINT_NAME = "one_capital_increase_in_flight_per_token"
 GUARD = import_module("tokens.migrations.0026_one_capital_increase_in_flight").refuse_a_token_that_already_has_two
@@ -122,6 +123,50 @@ class TheDatabaseRefusesASecondInFlightRowTest(TransactionTestCase):
             with self.subTest(status=status):
                 row = self.a_row(status)
                 self.assertEqual(CapitalIncreaseRequest.objects.get(pk=row.pk).status, status)
+
+
+class ResumingAFailedRaiseWaitsForTheOneInFlightTest(TestCase):
+
+    def setUp(self):
+        self.tenant = make_tenant("resume")
+        self.token = self.tenant.deployed_token
+        CapitalIncreaseRequest.objects.all().delete()
+        self.stalled = self.a_request(RequestStatus.FAILED, 100)
+        self.waiting = self.a_request(RequestStatus.APPROVED, 50)
+        self.service = ShareTokenService.__new__(ShareTokenService)
+
+    def a_request(self, status, additional):
+        return CapitalIncreaseRequest.objects.create(
+            token=self.token,
+            additional_shares=additional,
+            new_authorized_total=int(self.token.total_supply) + additional,
+            purpose="Raise",
+            board_resolution_reference=f"BOARD-{additional}",
+            status=status,
+        )
+
+    def test_a_failed_raise_is_refused_with_a_reason_rather_than_an_integrity_error(self):
+        with self.assertRaises(IssuanceRefusedException) as refusal:
+            self.service._execute_capital_increase(self.stalled)
+
+        self.stalled.refresh_from_db()
+        self.assertIn("has another capital increase in flight", str(refusal.exception))
+        self.assertIn(self.token.symbol, str(refusal.exception))
+        self.assertEqual(self.stalled.status, RequestStatus.FAILED)
+
+    def test_the_reason_survives_the_refusal_rather_than_rolling_back_with_it(self):
+        with self.assertRaises(IssuanceRefusedException):
+            self.service._execute_capital_increase(self.stalled)
+
+        self.stalled.refresh_from_db()
+        self.assertIn("has another capital increase in flight", self.stalled.review_notes)
+
+    def test_the_one_in_flight_is_not_the_one_refused(self):
+        with self.assertRaises(IssuanceRefusedException):
+            self.service._execute_capital_increase(self.stalled)
+
+        self.waiting.refresh_from_db()
+        self.assertEqual((self.waiting.status, self.waiting.review_notes), (RequestStatus.APPROVED, ""))
 
 
 class TheMigrationGuardRefusesRatherThanChoosingTest(TransactionTestCase):
