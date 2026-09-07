@@ -131,6 +131,25 @@ file named `*.config.*` runs in Node rather than in the bundle and is skipped.
 The entry chain is not an afterthought: eight declared dependencies, all of them
 polyfills and shims that Dependabot bumps as majors, are imported only there.
 
+Naming the skip by convention rather than following the import graph from
+`package.json` `main` is deliberate, and the reason is which way each fails. A
+root file that Metro does not bundle and is not called `*.config.*` gets scanned
+and may fail on a Node-only import — a false positive, loud and fixed by renaming
+the file. A graph walk fails the other way: a bundled file the traversal never
+reaches is silently unscanned, which is the single thing this gate exists to
+prevent, and `crypto-polyfill.js` is exactly that shape — pulled in for its side
+effects rather than imported from the entry. For a gate, prefer the failure that
+shouts. The same rule decides everything else here: an empty `testMatch` makes
+the script refuse to run rather than treat every file as a test.
+
+Its extension list matches the one `scripts/check-comments.py` uses for the
+client trees, so the two gates agree on what counts as mobile source. And because
+an unrecognised specifier now fails rather than being skipped, the precision of
+the specifier pattern became a correctness property: a false positive used to be
+swallowed, and now stops the build. It still has some — a package name quoted
+inside a string after the word `from` reads as an import — so widen that pattern
+with care.
+
 A specifier whose package is not in `dependencies` **fails**, rather than being
 skipped. Skipping it was the second hole: a package that exists only in the
 repository root resolves for TypeScript through the walk-up above and does not

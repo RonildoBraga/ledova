@@ -32,6 +32,10 @@ const resolver = createRequire(path.join(MOBILE, 'index.ts'));
 // `from '...'`, bare `import '...'`, `import('...')` and `require('...')`. The
 // lookbehind and the newline exclusion matter: without them a string literal such as
 // `mode === 'import'` matches, and the capture then runs to the next quote in the file.
+// The same extensions scripts/check-comments.py calls source in the client trees, so
+// the two gates agree about what mobile source is.
+const SOURCE_FILE = /\.(tsx?|jsx?|mjs|cjs)$/;
+
 const SPECIFIER =
   /(?<!['"`\w$])(?:from|import)\s+['"]([^'"\n]+)['"]|(?<!['"`\w$])(?:import|require)\s*\(\s*['"]([^'"\n]+)['"]/g;
 
@@ -41,8 +45,18 @@ const development = new Set(Object.keys(manifest.devDependencies ?? {}));
 const metroConfig = await readFile(path.join(MOBILE, 'metro.config.js'), 'utf8');
 
 const { default: jestConfig } = await import(path.join(MOBILE, 'jest.config.js'));
+
+// Refuse rather than guess. An empty list would compile to `new RegExp('')`, which
+// matches every path, so every file would count as a test file and every
+// devDependency import would be exempted from the check below - silently, and green.
+// A gate that cannot tell a test file from bundled code has no business passing.
+if (!Array.isArray(jestConfig.testMatch) || jestConfig.testMatch.length === 0) {
+  console.error('jest.config.js declares no testMatch, so a test file cannot be told from bundled code.');
+  process.exit(1);
+}
+
 const TEST_FILE = new RegExp(
-  (jestConfig.testMatch ?? [])
+  jestConfig.testMatch
     .map((pattern) =>
       pattern
         .replace('<rootDir>/', '')
@@ -58,7 +72,7 @@ async function* sourceFiles(dir) {
   for (const entry of await readdir(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) yield* sourceFiles(full);
-    else if (/\.(tsx?|js)$/.test(entry.name)) yield full;
+    else if (SOURCE_FILE.test(entry.name)) yield full;
   }
 }
 
@@ -67,7 +81,7 @@ async function* bundledFiles() {
   for (const entry of await readdir(MOBILE, { withFileTypes: true })) {
     if (!entry.isFile()) continue;
     if (/\.config\.[cm]?[jt]s$/.test(entry.name)) continue;
-    if (/\.(tsx?|js)$/.test(entry.name)) yield path.join(MOBILE, entry.name);
+    if (SOURCE_FILE.test(entry.name)) yield path.join(MOBILE, entry.name);
   }
 }
 
