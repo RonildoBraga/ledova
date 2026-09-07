@@ -681,7 +681,23 @@ each lane does not re-derive it:
   Django enforces `on_delete` in the collector rather than in DDL, so this is
   ORM consistency rather than a schema difference — which is exactly why it has
   to be chosen deliberately: nothing in the database will contradict a wrong
-  choice.
+  choice. **A path of more than one hop takes the strictest `on_delete` of
+  every hop, not of the last one.** `SwapOrder.seller_wallet` derives through
+  `sell_order` (`CASCADE`) and then `TransferOrder.wallet` (`PROTECT`), so the
+  column is `PROTECT`: the shortcut must refuse whatever any hop of the path it
+  replaces would refuse. Copying a neighbouring lane's `on_delete` without
+  walking the path is how all four `tokens` columns were `CASCADE` in their
+  first revision.
+- **A parent reachable only by value keeps the column nullable for the rows
+  that cannot be resolved.** `SigningChallenge.order` is legitimately null — an
+  `ORDER_CREATE` challenge is issued before the order exists — so those rows
+  reach their wallet only through `wallet_address`, and `Wallet.address` is
+  unique per `(user_account, address)` rather than globally. An address held by
+  two accounts is **ambiguous**, not a coin toss: it stays `NULL` and is
+  counted separately from orphans in the migration's output. The column is
+  nullable for the rows already written; the trigger refuses a `NULL` on
+  insert, so nothing new arrives without one. A table can be mixed, and each
+  row derives through whichever link it has.
 - **A child whose parent already carries the owner column derives from the
   parent**, not by re-walking to the root, so every trigger stays a single join.
   That makes the backfill order load-bearing when a lane has both, and it is the
@@ -703,6 +719,22 @@ each lane does not re-derive it:
   trigger stands a `SET NULL` is repaired rather than refused — so **there is no
   guard on it**. The evidence that the migration reverses is the round trip with
   real rows, not a test asserting a non-behaviour.
+- **Settle deferred constraints before the backfill writes, in both
+  directions.** `SET CONSTRAINTS ALL IMMEDIATE` at the top of `backfill` and of
+  `unfill`, guarded on `vendor == "postgresql"`. Without it a migration that
+  gives **one table two owner columns** fails on populated data, forward and
+  reverse, with `cannot ALTER TABLE ... because it has pending trigger events`.
+  The cause is not that the backfill re-arms the new column's constraint —
+  `AddField` emits `SET CONSTRAINTS <that one> IMMEDIATE` inline and it holds.
+  It is that **a row this transaction has already written queues a deferred
+  FK-check event on its next `UPDATE`, whatever columns that `UPDATE` touches**,
+  because PostgreSQL's keys-unchanged skip cannot apply to a row version the
+  current transaction produced; and `ALTER TABLE` refuses while *any* event is
+  pending on the relation, not only the constraint being dropped. One table
+  written once never sees it, which is why `users/0020`, `wallets/0008` and
+  `offerings/0005` are clean and `tokens/0023` was not. Settling *before* the
+  writes rather than after also moves a failing backfill's error to the
+  `UPDATE` that caused it.
 - **Audit the app's serializers for `exclude`-style field sets before adding the
   column.** A `ModelSerializer` with `exclude = (...)` turns a new model field
   into a *required writable API field*; two in `users` did exactly that, and
