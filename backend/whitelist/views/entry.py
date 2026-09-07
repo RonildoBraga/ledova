@@ -6,7 +6,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 
-from wallets.models import Wallet
+from shared.utils import csv_cell
 from whitelist.exceptions import (
     BatchEntriesRequiredException,
     BatchSizeLimitExceededException,
@@ -21,7 +21,7 @@ from whitelist.serializers import (
     WhitelistRemoveSerializer,
     WhitelistSyncResponseSerializer,
 )
-from whitelist.services import WhitelistService
+from whitelist.services import WhitelistService, unique_wallet_uuid_for
 
 
 class WhitelistEntryViewSet(
@@ -102,13 +102,11 @@ class WhitelistEntryViewSet(
 
     @action(detail=False, methods=["post"], url_path="sync/(?P<address>[^/.]+)")
     def sync(self, request, address=None):
-        wallet_ids = list(Wallet.objects.filter_by_address(address).order_by("uuid").values_list("uuid", flat=True)[:2])
-        if len(wallet_ids) != 1:
-            raise Http404(f"No unique wallet found for {address}")
+        wallet_uuid = unique_wallet_uuid_for(address)
 
         service = WhitelistService()
 
-        entry = service.sync_entry(address, wallet_uuid=wallet_ids[0])
+        entry = service.sync_entry(address, wallet_uuid=wallet_uuid)
 
         response_data = {
             "success": True,
@@ -142,11 +140,11 @@ class WhitelistEntryViewSet(
         for entry in queryset:
             writer.writerow(
                 [
-                    entry.wallet_address,
-                    entry.get_status_display(),
+                    csv_cell(entry.wallet_address),
+                    csv_cell(entry.get_status_display()),
                     "Yes" if entry.is_whitelisted else "No",
-                    entry.created_at.isoformat() if entry.created_at else "",
-                    entry.updated_at.isoformat() if entry.updated_at else "",
+                    csv_cell(entry.created_at.isoformat() if entry.created_at else ""),
+                    csv_cell(entry.updated_at.isoformat() if entry.updated_at else ""),
                 ]
             )
 

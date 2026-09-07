@@ -14,6 +14,11 @@ from integrations.base_chain.exceptions import (
     BaseChainTransactionError,
 )
 from wallets.models import Wallet
+from whitelist.constants import (
+    WHITELIST_STATUS_NOT_WHITELISTED,
+    WHITELIST_STATUS_UNKNOWN,
+    WHITELIST_STATUS_WHITELISTED,
+)
 from whitelist.exceptions import (
     AddressAlreadyWhitelistedException,
     AddressNotWhitelistedException,
@@ -24,6 +29,14 @@ from whitelist.exceptions import (
 from whitelist.models import WhitelistEntry, WhitelistStatus
 
 logger = logging.getLogger(__name__)
+
+
+def unique_wallet_uuid_for(address: str):
+    wallet_ids = list(Wallet.objects.filter_by_address(address).order_by("uuid").values_list("uuid", flat=True)[:2])
+    if len(wallet_ids) != 1:
+        raise WalletNotRegisteredException()
+
+    return wallet_ids[0]
 
 
 class WhitelistService:
@@ -163,6 +176,24 @@ class WhitelistService:
         if receipt and entry:
             entry.mark_removed(tx_hash)
         return tx_hash, entry
+
+    def investor_status(self, address: str) -> dict:
+        try:
+            info = self.get_investor_info(address)
+            return {
+                "address": self.chain_client.to_checksum_address(address),
+                "is_whitelisted": info["whitelisted"],
+                "can_receive": self.can_receive(address),
+                "status": (WHITELIST_STATUS_WHITELISTED if info["whitelisted"] else WHITELIST_STATUS_NOT_WHITELISTED),
+            }
+        except Exception as e:
+            logger.warning(f"Failed to fetch whitelist status: {e}")
+            return {
+                "address": address,
+                "is_whitelisted": False,
+                "can_receive": False,
+                "status": WHITELIST_STATUS_UNKNOWN,
+            }
 
     def sync_entry(self, address: str, wallet_uuid=None) -> WhitelistEntry:
         checksum_address = self.chain_client.to_checksum_address(address)
