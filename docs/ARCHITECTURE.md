@@ -1796,6 +1796,20 @@ absurd; if the test still passes, the assertion is not running. Between one
 afternoon's PRs that produced five tests passing on both sides of a fix, not one
 would have survived that edit.
 
+**A test can pin a defect as an expectation, and a log-line assertion is the
+easiest place for that to hide.** When the behaviour is corrected the test
+fails, and the cheapest reading of that failure is *the message changed, update
+the string* — a cosmetic edit that quietly retires the only record that the old
+behaviour was wrong. Two in one day.
+`test_pending_fresh_hashless_and_unreadable_rows_are_left_executing` asserted
+the conflated message, so it recorded the conflation as the expectation.
+`test_an_export_that_is_not_chain_confirmed_is_logged_as_a_warning` asserted
+*"is not confirmed on chain"* and pinned an allotment fallback its own PR
+deleted as wrong; it was replaced rather than reworded. Before editing an
+expected string, ask what the assertion is *for*: if the answer is the
+behaviour that just changed, the test is **retiring**, not failing, and the
+replacement should assert the new property rather than the new wording.
+
 **Two independently reasonable constants, and nobody compared them.** Neither
 number is wrong where it is written, and the pair is the defect. `order_write`
 throttles at 30/min, which is 1,800 signing challenges an hour from one user;
@@ -1823,6 +1837,34 @@ question first: to learn what the API returns, probe and do not cite the log; to
 learn what the application requests, clear the capture, touch only the UI, and
 read it before probing anything. An absence is the strong result here — a probe
 can manufacture a request in the log but cannot manufacture zero.
+
+**`makemigrations --check` under the test settings cannot fail.**
+`ledova_backend/settings/test.py` ends with a `MIGRATION_MODULES` mapping that
+claims every app and returns `None` for each, so every app is declared
+unmigrated and `makemigrations` skips all of them. The command prints **No
+changes detected** whatever the models say. Measured side by side on a branch
+whose model and migration genuinely disagreed:
+
+```
+default settings  ->  Migrations for 'tokens': ~ Alter field wallet
+settings.test     ->  No changes detected
+```
+
+CI runs it with the **default** settings and `SECRET_KEY` and
+`STORAGE_BACKEND` from the environment, which is the only form that checks
+anything:
+
+```
+SECRET_KEY=x STORAGE_BACKEND=local \
+  python manage.py makemigrations --check --dry-run
+```
+
+The trap is not that the test settings give a weaker answer. They give **no
+answer, phrased as a passing one**, which is the same shape as a test whose
+truth is guaranteed by something other than the code under test — and it is
+harder to notice, because the reassuring line is what a working check also
+prints. One session quoted the vacuous form in four PR bodies in one evening
+before CI disagreed with it.
 
 ### Shared TypeScript types
 
