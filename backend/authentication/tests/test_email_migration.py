@@ -67,14 +67,14 @@ class EmailMigrationTest(TransactionTestCase):
         stderr = StringIO()
         logs = StringIO()
         handler = logging.StreamHandler(logs)
-        root_logger = logging.getLogger()
-        root_logger.addHandler(handler)
+        logger = logging.getLogger()
+        logger.addHandler(handler)
         try:
             with redirect_stdout(stdout), redirect_stderr(stderr):
                 with self.assertRaises(RuntimeError) as raised:
                     self.migrate(MIGRATE_TO)
         finally:
-            root_logger.removeHandler(handler)
+            logger.removeHandler(handler)
         self.assertEqual(str(raised.exception), PREFLIGHT_ERROR)
         self.assertEqual(repr(raised.exception), f"RuntimeError('{PREFLIGHT_ERROR}')")
         self.assertIsNone(raised.exception.__cause__)
