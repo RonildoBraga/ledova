@@ -58,6 +58,16 @@ ROOT = Path(__file__).resolve().parent.parent
 SHARED = ROOT / "packages/shared/src"
 
 TYPE_DEBT: dict[str, tuple[int, str]] = {
+    "TokenHoldersResponse:ShareRegister": (
+        4,
+        "GET /api/v1/tokens/*/holders/ answers ShareRegister, which carries no nested token object, "
+        "while TokenHoldersResponse declares name, symbol, status and totalSupply as required. Nothing "
+        "reads them - the two callers use holders and totalHolders only - so no screen is broken today. "
+        "Whether the type over-declares or #301 dropped context the endpoint should still carry is a "
+        "decision for the tokens lane; tracked in #330. It replaces the ShareTokenDetail entry that "
+        "stood here: #301 gave the endpoint a component of its own, so the old pairing stopped "
+        "occurring and the gate reported it as pinned too high, which is how the succession was found.",
+    ),
     "Company:CompanyList": (
         27,
         "GET /api/v1/companies/ serves CompanyListSerializer while the service is typed "
@@ -207,11 +217,6 @@ SCHEMA_DEBT: dict[str, tuple[int, str]] = {
         5,
         "tokens/views/share_token.py issuances returns a literal paginated body and the generator "
         "falls back to the viewset's serializer. The interface is correct. Tracked by #211.",
-    ),
-    "TokenHoldersResponse:ShareTokenDetail": (
-        3,
-        "tokens/views/share_token.py holders returns a literal body and the generator falls back "
-        "to the viewset's serializer. The interface is correct. Tracked by #211.",
     ),
     "CompanyStats:CompanyDetail": (
         3,
