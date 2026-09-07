@@ -1,3 +1,4 @@
+import inspect
 from datetime import timedelta
 from unittest.mock import Mock, patch
 
@@ -272,3 +273,27 @@ class TheReceiptMustNameThisOrderTest(TestCase):
         service = self.hashing_service()
 
         self.assertNotEqual(service.executed_order_hash(self.swap).lstrip("0x"), self.swap.order_hash.lstrip("0x"))
+
+
+class TheNonceGeneratorDoesNotRelyOnTheConstraintTest(TestCase):
+
+    @staticmethod
+    def service():
+        with patch("tokens.services.atomic_swap_service.get_base_chain_client"), patch(
+            "tokens.services.atomic_swap_service.WhitelistService"
+        ):
+            return AtomicSwapService()
+
+    def test_nonces_drawn_together_are_not_neighbours_around_a_shared_clock(self):
+        service = self.service()
+
+        drawn = [service._generate_nonce() for _ in range(200)]
+
+        self.assertEqual(len(set(drawn)), len(drawn))
+        self.assertGreater(max(drawn) - min(drawn), 2**40)
+
+    def test_the_generator_reads_no_clock(self):
+        source = inspect.getsource(AtomicSwapService._generate_nonce)
+
+        self.assertNotIn("time", source)
+        self.assertIn("randbits", source)

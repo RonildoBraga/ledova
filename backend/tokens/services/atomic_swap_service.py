@@ -1,6 +1,5 @@
 import logging
 import secrets
-import time
 from datetime import timedelta
 from typing import Optional
 
@@ -112,7 +111,7 @@ class AtomicSwapService:
         }
 
     def _generate_nonce(self) -> int:
-        return int(time.time() * 1000000) + secrets.randbelow(1000000)
+        return secrets.randbits(63)
 
     def _compute_order_hash(self, swap_order: SwapOrder) -> str:
         typed_data = self.get_typed_data(swap_order)
