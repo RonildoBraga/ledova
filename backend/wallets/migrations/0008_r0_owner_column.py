@@ -3,21 +3,10 @@ from django.db.models import OuterRef, Subquery
 
 TABLE = "Transaction"
 
-REVERSE_ORDER = (
-    "Operations reverse back to front, so drop_trigger runs before unfill sets every user_account_id to "
-    "NULL. An operation appended after install_trigger would move that boundary, and unfill would then hit "
-    "the trigger's own cannot-change guard and the reverse would be impossible."
-)
-
 UNREACHABLE_TODAY = (
     "Wallet.user_account and Transaction.wallet are both non-nullable, so neither this guard nor the "
     "trigger's matching RAISE can fire under the current schema. Both are here for the R0 lanes whose "
     "parent link is nullable, where the same shape does fire."
-)
-
-SKIPPED_ON_SQLITE = (
-    "The derive-and-refuse trigger is PostgreSQL only. SQLite has no plpgsql, and the column exists "
-    "for a PostgreSQL row-level security policy, so a SQLite deployment has nothing for it to protect."
 )
 
 FUNCTION = """
@@ -92,15 +81,8 @@ def backfill(apps, schema_editor):
 
 
 def unfill(apps, schema_editor):
-    connection = schema_editor.connection
     model = apps.get_model("wallets", TABLE)
-    if connection.vendor == "postgresql":
-        names = _names(apps)
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT to_regclass(%s) IS NOT NULL", [names["trigger"]])
-            if cursor.fetchone()[0]:
-                raise RuntimeError(f"{names['trigger']} is still installed. {REVERSE_ORDER}")
-    model._base_manager.using(connection.alias).update(user_account_id=None)
+    model._base_manager.using(schema_editor.connection.alias).update(user_account_id=None)
 
 
 def install_trigger(apps, schema_editor):
