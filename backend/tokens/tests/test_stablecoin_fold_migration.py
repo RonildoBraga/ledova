@@ -5,6 +5,8 @@ from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
 from django.test import TransactionTestCase
 
+from shared.tests.schema import restore_every_migration
+
 MIGRATE_BEFORE = [("tokens", "0013_remove_transferorder_signature_request")]
 MIGRATE_FROM = [("tokens", "0014_settlement_asset_columns")]
 MIGRATE_TO = [("tokens", "0015_fold_stablecoin_into_asset")]
@@ -26,12 +28,6 @@ class StablecoinFoldMigrationTest(TransactionTestCase):
         self.asset = self.old_apps.get_model("assets", "Asset")
         self.deployment = self.old_apps.get_model("assets", "AssetChainDeployment")
 
-    @staticmethod
-    def tokens_tip():
-        executor = MigrationExecutor(connection)
-        executor.loader.build_graph()
-        return list(executor.loader.graph.leaf_nodes("tokens"))
-
     def migrate(self, targets):
         executor = MigrationExecutor(connection)
         executor.loader.build_graph()
@@ -42,7 +38,7 @@ class StablecoinFoldMigrationTest(TransactionTestCase):
         for model in ("SwapOrder", "TransferOrder", "MintRequest"):
             self.old_apps.get_model("tokens", model)._base_manager.all().delete()
         self.old_apps.get_model("tokens", "Stablecoin")._base_manager.all().delete()
-        self.migrate(self.tokens_tip())
+        restore_every_migration()
 
     def fold(self):
         new_apps = self.migrate(MIGRATE_TO)

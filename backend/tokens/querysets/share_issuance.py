@@ -1,6 +1,5 @@
 from django.db.models import (
     BigIntegerField,
-    Max,
     QuerySet,
     Subquery,
     Sum,
@@ -76,16 +75,17 @@ class ShareIssuanceQuerySet(QuerySet):
     def with_subscription(self):
         return self.select_related("shareissuancerequest__subscription")
 
-    def unique_holders_with_names(self):
-        latest_per_address = self.completed().values("recipient_address").annotate(latest_created=Max("created_at"))
-        address_names = {}
-        addresses_with_latest = {item["recipient_address"]: item["latest_created"] for item in latest_per_address}
-
-        for issuance in (
-            self.completed().filter(recipient_address__in=addresses_with_latest.keys()).order_by("-created_at")
-        ):
-            addr = issuance.recipient_address
-            if addr not in address_names:
-                address_names[addr] = issuance.recipient_name
-
-        return address_names
+    def latest_identity_stamps(self):
+        stamps = {}
+        for issuance in self.completed().order_by("-created_at"):
+            key = (issuance.recipient_address or "").lower()
+            if not key or key in stamps:
+                continue
+            if not (issuance.recipient_name or issuance.recipient_residential_address):
+                continue
+            stamps[key] = {
+                "name": issuance.recipient_name,
+                "residential_address": issuance.recipient_residential_address,
+                "stamped_at": issuance.identity_stamped_at,
+            }
+        return stamps

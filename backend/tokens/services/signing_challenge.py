@@ -53,7 +53,7 @@ def _on_the_wire(value):
 
 
 def challenge_lifetime_seconds() -> int:
-    return getattr(settings, "SIGNING_CHALLENGE_TTL_SECONDS", 300)
+    return settings.SIGNING_CHALLENGE_TTL_SECONDS
 
 
 def issue_challenge(purpose, wallet_address: str, fields: dict, verifying_contract=None, order=None):
@@ -139,7 +139,12 @@ def spend(challenge, signature: str) -> None:
     logger.info(f"Consumed {challenge.purpose} challenge for {challenge.wallet_address}")
 
 
+def challenge_retention_seconds() -> int:
+    return settings.SIGNING_CHALLENGE_RETENTION_SECONDS
+
+
 @transaction.atomic
-def purge_expired_challenges(cutoff=None) -> int:
-    removed, _ = SigningChallenge.objects.expired_and_unspent(cutoff).delete()
+def purge_expired_challenges(now=None, batch: int = 500) -> int:
+    cutoff = (now or timezone.now()) - timezone.timedelta(seconds=challenge_retention_seconds())
+    removed, _ = SigningChallenge.objects.purgeable(cutoff, batch).delete()
     return removed

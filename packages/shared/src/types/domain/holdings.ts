@@ -5,6 +5,7 @@ import type { Asset } from './asset';
 export interface WalletHolding extends BaseEntity {
   wallet: string;
   walletAddress: string;
+  chain: string;
   asset: Asset;
   assetSymbol: string;
   assetName: string;

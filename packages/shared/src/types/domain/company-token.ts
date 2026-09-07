@@ -47,6 +47,7 @@ export interface TokenHolder {
   holderType: HolderType;
   enteredOn: string | null;
   shareClass: string;
+  identitySource: string;
 }
 
 export interface TokenHoldersResponse {

@@ -27,6 +27,7 @@ function holding(overrides: Partial<HoldingWithWallet> = {}): HoldingWithWallet 
     updatedAt: '2026-09-01T00:00:00Z',
     wallet: 'wallet-uuid',
     walletAddress: `0x${'a'.repeat(40)}`,
+    chain: 'base',
     asset: asset({}),
     assetSymbol: 'ORD',
     assetName: 'Acme Ordinary',

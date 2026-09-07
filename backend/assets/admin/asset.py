@@ -5,14 +5,15 @@ from django import forms
 from django.contrib import admin, messages
 from django.db.models import Exists, OuterRef
 from django.http import HttpResponseRedirect
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import render
 from django.template.response import TemplateResponse
-from django.urls import path, reverse
+from django.urls import reverse
 
 from assets.models import Asset, AssetChainDeployment, AssetType
 from assets.services import AssetSyncService
 from operators.models import Operator
 from operators.settlement import deployment_for, live_deployments
+from shared.utils.admin_actions import admin_action_path
 from shared.utils.admin_display import action_buttons, format_units
 
 logger = logging.getLogger(__name__)
@@ -66,11 +67,7 @@ class AssetAdmin(admin.ModelAdmin):
     actions = ["update_prices", "mark_as_active", "mark_as_inactive", "mark_as_verified"]
 
     def get_urls(self):
-        mint = path(
-            "<uuid:uuid>/mint/",
-            self.admin_site.admin_view(self.mint_view),
-            name="assets_asset_mint",
-        )
+        mint = admin_action_path(self, "<uuid:uuid>/mint/", "assets_asset_mint", self.mint_view)
         return [mint] + super().get_urls()
 
     def get_queryset(self, request):
@@ -84,12 +81,11 @@ class AssetAdmin(admin.ModelAdmin):
             return "-"
         return action_buttons([("+ Mint", reverse("admin:assets_asset_mint", args=[obj.uuid]), "#28a745")])
 
-    def mint_view(self, request, uuid):
+    def mint_view(self, request, asset):
         from tokens.admin._helpers import MintForm
         from tokens.models import MintRequest
         from tokens.services import mint_service
 
-        asset = get_object_or_404(Asset, uuid=uuid)
         change_url = reverse("admin:assets_asset_change", args=[asset.pk])
 
         deployment = mintable_deployment(asset)

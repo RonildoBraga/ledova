@@ -27,6 +27,7 @@ HOLDERS = [
         "holder_type_display": "Member",
         "entered_on": None,
         "share_class": "DEP",
+        "identity_source": "Current profile",
         "whitelist_status": "Active",
         "residential_address": "1 Register Street",
         "amount_paid": None,
@@ -179,6 +180,7 @@ class ShareTokenActionTest(APITestCase):
                     "holderType": "member",
                     "enteredOn": None,
                     "shareClass": "DEP",
+                    "identitySource": "Current profile",
                 }
             ],
         )

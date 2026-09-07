@@ -91,7 +91,7 @@ class MintServiceTest(TestCase):
             asset=ethereum_only, chain="ethereum", contract_address="0x" + "7" * 40, decimals=6
         )
 
-        self.assertEqual(ethereum_only.contract_address, "0x" + "7" * 40)
+        self.assertEqual(ethereum_only.chain_deployments.first().contract_address, "0x" + "7" * 40)
         with self.assertRaises(SettlementAssetNotDeployedException):
             mint_service.token_service(self._request(settlement_asset=ethereum_only))
 

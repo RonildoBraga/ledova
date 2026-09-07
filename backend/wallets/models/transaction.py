@@ -30,6 +30,27 @@ class Transaction(BaseModel):
     status = models.CharField(max_length=20, choices=TRANSACTION_STATUS_CHOICES, default=TRANSACTION_STATUS_PENDING)
     transaction_fee_estimated = models.DecimalField(max_digits=30, decimal_places=18, null=True, blank=True)
     transaction_fee = models.DecimalField(max_digits=30, decimal_places=18, null=True, blank=True)
+    deducted_amount = models.DecimalField(
+        max_digits=30,
+        decimal_places=18,
+        null=True,
+        blank=True,
+        help_text=(
+            "What the optimistic deduction actually took from the asset's holding, after the floor at zero. "
+            "Carries the fee as well when the asset is the chain's native coin. Null for rows written before "
+            "the deduction was recorded."
+        ),
+    )
+    deducted_fee = models.DecimalField(
+        max_digits=30,
+        decimal_places=18,
+        null=True,
+        blank=True,
+        help_text=(
+            "What the optimistic deduction actually took from the native holding, after the floor at zero. "
+            "Null when the asset is itself native, and for rows written before the deduction was recorded."
+        ),
+    )
     wallet = models.ForeignKey(Wallet, on_delete=models.CASCADE, related_name="transactions")
 
     objects = TransactionQuerySet.as_manager()

@@ -756,17 +756,13 @@ this codebase, and `MEDIA_ROOT` holds nothing an authenticated route serves.
   named staff member who reached the route from the admin, the sibling change
   page already answers 403 for the same row, and hiding a permission gap as a
   missing object would only mislead the operator who has to fix it. Existence
-  is not the secret here; the bytes are. Any other custom admin view that acts
-  on a row checks the matching permission itself —
-  `InvestorClassificationAdmin.transition_view` checks
-  `has_change_permission`, because verifying or revoking a wholesale-investor
-  claim is a compliance control, not a read. **This is an operational change,
-  not only a code one**: a staff account that carried nothing but `is_staff`
-  could previously open every one of these routes. Before deploying, grant
-  `documents.view_document`, `companies.view_companydocument`,
-  `users.view_investorclassification` and `users.change_investorclassification`
-  to the operators who need them — the last of those is what verify, reject and
-  revoke now require.
+  is not the secret here; the bytes are. An admin route that *acts* on a row
+  rather than reading its bytes takes the sibling helper described under
+  [Admin row actions](#admin-row-actions). **This is an operational change, not
+  only a code one**: a staff account that carried nothing but `is_staff` could
+  previously open every one of these routes. Before deploying, grant
+  `documents.view_document`, `companies.view_companydocument` and
+  `users.view_investorclassification` to the operators who need them.
 - **Uploads are allowlisted at the serializer, not at the reader.**
   `shared.uploads.validate_upload` caps the size and admits only
   `application/pdf`, `image/png` and `image/jpeg` by both content type and
@@ -814,6 +810,72 @@ this codebase, and `MEDIA_ROOT` holds nothing an authenticated route serves.
   migrations with real bytes, a row whose file is missing, and a key generated
   after the widening, and drives a reverse that fails partway through the byte
   move in both the recoverable and the unrecoverable shape.
+
+## Admin row actions
+
+**A custom admin route that acts on a row is registered with
+`shared.utils.admin_actions.admin_action_path` (or `admin_action_re_path`),
+never with a bare `self.admin_site.admin_view(...)`.** The reasoning is the one
+`admin_file_path` is built on, applied to writes: `admin_view` checks only that
+the caller is active and staff, which is weaker than the change page beside it.
+Fifteen wrappers guarding twenty-three URL patterns admitted any `is_staff`
+account to deploying, pausing and unpausing a share token, executing or
+rejecting a mint, updating a NAV, every company and offering transition, the
+subscription actions, executing a share issuance or capital increase, and
+adding or removing a whitelist entry on chain. Those are chain-side and
+compliance operations, and each of them was refused the change page for the
+same row.
+
+The helper **owns the row lookup**, which is what makes the guarantee
+structural rather than remembered: it checks `has_change_permission(request)`,
+resolves the row through `model_admin.get_queryset(request)` — the same rows
+the change page resolves, so an admin that narrows its queryset narrows its
+actions with it — checks `has_change_permission(request, instance)`, and only
+then calls the view with the instance rather than the uuid. A view therefore
+*loses* its `get_object_or_404` line when it converts; it cannot forget the
+check without abandoning the helper and taking a gate failure. Pass `queryset`
+only to widen the fetch, as `SubscriptionAdmin` does with
+`Subscription.objects.with_relations()`. It is a **callable taking the
+request**, named `rows` rather than `queryset` for a reason: written as
+`rows or model_admin.get_queryset`, a caller who passed a queryset instead of a
+callable would have had an *empty* one silently replaced by the unrestricted
+default, so the narrowing would vanish exactly when it mattered. It is
+`rows is None` instead, and a non-callable now fails loudly.
+
+The helper takes the row's uuid from a capture named `uuid`, which every route
+uses today. A future route capturing `pk` or `object_id` fails with a
+`TypeError` rather than a clear message; that is a constraint the helper imposes
+rather than a rule the product needs.
+
+It answers **403, not 404**, for the reason given for the streaming routes
+above: the caller is a named staff member who reached the route from the admin,
+and the sibling change page already answers 403 for the same row.
+
+`has_change_permission` is the check for all of them, because every one of these
+routes mutates the row or acts on chain on its behalf; a route that only reads
+is a file route and belongs to `admin_file_path`. The two mint routes insert a
+`MintRequest` rather than change the row they hang off, and they still check
+`change` on that row rather than `add_mintrequest`, because
+`MintRequestAdmin.has_add_permission` returns `False` unconditionally — gating
+them on `add` would gate a working operator action behind a permission the
+product never grants to anyone, superuser included. Reference:
+`backend/shared/utils/admin_actions.py`. Gate: the `bare-admin-view` rule in
+`scripts/check-layers.py`, whose `RULE_HELPERS` excludes `shared/utils/` by name — the
+helper a rule points at is not subject to it, and saying so beats relying on
+`layer_of` returning `None` for a directory that happens not to be named after
+a layer. Test:
+`backend/shared/tests/test_admin_row_actions.py`, which derives the route list
+from the resolved URLconf rather than naming routes, so a new row action is
+covered the day it is registered.
+
+**Operationally**: grant `change_` on the eleven models these routes act on —
+`assets.asset`, `companies.company`, `offerings.offering`,
+`offerings.subscription`, `tokens.mintrequest`, `tokens.yieldtoken`,
+`tokens.sharetoken`, `tokens.shareissuancerequest`,
+`tokens.capitalincreaserequest`, `users.investorclassification`,
+`whitelist.whitelistentry` — to the operators who need them. An operator who
+previously worked through these buttons on `is_staff` alone stops being able to,
+which is the point.
 
 ## Coding rules
 
@@ -1127,6 +1189,27 @@ and the tenancy section below describes deliberate pressure to widen the first.
 Loosening the rule would have removed the standing warning from the one line that
 says so. Those four are pinned with counts instead.
 
+The `bare-admin-view` rule is the one rule outside the layer table's "Never
+contains" column, and it needed the walker widened before it could exist:
+`layer_of` recognised `views`, `models` and `tasks`, so **no admin module was
+parsed at all** — 136 files scanned became 190. Adding the layer on its own
+found nothing, because no other rule applies to `admin`, which is what let the
+rule land with an empty `LEGACY`.
+
+It flags any `admin_view` attribute in the `admin` layer. The two helpers are
+excluded structurally rather than by name: `shared/utils/` is not a layer, so
+`layer_of` returns `None` for it and the walker never opens it. That is a load-
+bearing coincidence, so `test_layer_gate.py` asserts it rather than trusting it.
+A genuinely row-less admin page — an operator dashboard, say — is a legitimate
+bare `admin_view` and takes an `ALLOWED` entry with its reason, not a `LEGACY`
+one: it is correct and permanent rather than owed. There are none today.
+
+The rule reads syntax, so `getattr(self.admin_site, "admin_view")` goes past it.
+That is the same necessary-not-sufficient boundary stated above, and
+`test_admin_row_actions.py` closes it from the other side: it walks the live
+URLconf and fails when any custom admin route is served by a callback from
+outside the two `shared.utils` helpers, whatever syntax registered it.
+
 ### The seed-era service classes
 
 The 27 `XService` classes from the initial seed commit are the accepted exception
@@ -1261,6 +1344,63 @@ literal-only rule certifies a template whatever it interpolates:
 logs the `message` of a WebView `postMessage`. Both are provider- or
 SDK-authored strings today; if one ever carries user input, the gate will not
 say so.
+
+### Test traps
+
+Four ways a test here has passed while proving nothing, or failed while meaning
+nothing. Each was paid for once; none is obvious from reading the test.
+
+**A `Mock` that reaches a renderer never returns.** Patch a whole service class
+with a bare `Mock`, let a view return its result, and DRF's JSON encoder
+reaches `elif hasattr(obj, 'tolist'): return obj.tolist()` — the branch meant
+for numpy arrays. Every `Mock` answers that `hasattr`, `tolist()` returns
+another `Mock`, and the encoder recurses forever. The test does not fail; **it
+hangs**, which in CI is a job timeout naming no test at all. Caught with
+`python -X faulthandler`, whose dump ends in `mock.py` `_increment_mock_call`
+under `rest_framework/utils/encoders.py`. It bites when a refactor changes
+which method a view calls: the mock stops matching, starts returning `Mock`
+where a dict was, and nothing says so. Give a patched service a real return
+value for anything a view renders.
+
+**`APITestCase` wraps every test in a transaction, which hides exactly the bugs
+about transactions.** An orphaned row is rolled back by the harness rather than
+by the code, so the test passes on the unfixed tree and proves nothing. Use
+`APITransactionTestCase` for anything asserting what survives a failure. And
+`shared/api/exceptions.py` turns an unhandled exception into a 500 `Response`
+rather than re-raising, so `assertRaises` never fires — assert the status code
+and the row count instead.
+
+**`SimpleTestCase` forbids a database connection, and `transaction.on_commit`
+wants one even when it runs its callback immediately.** `on_commit` reaches
+`get_autocommit()` and so `ensure_connection()`, which `SimpleTestCase` refuses
+with `DatabaseOperationForbidden` — **on SQLite locally, not only in CI**. This
+is a `SimpleTestCase` restriction rather than an environment difference; a test
+that schedules an `on_commit` needs `TestCase` or `TransactionTestCase`.
+
+**A green local run is evidence only for the tests that ran, and the set that
+ran is not the set CI runs.** Two mechanisms have produced a wrong local
+reading:
+
+- `tokens.tests.test_chain_integration` needs a Hardhat node and is **skipped
+  without one**. It asserts on shapes other suites share, so a change that
+  passes everything locally can still break it: adding a column to the register
+  export shifted every positional assertion after it, and `rows[1][8:]` in that
+  suite was the one nothing local could reach. Read the register CSV by header
+  name rather than by column index — `dict(zip(REGISTER_HEADERS, row))` — so a
+  future column cannot break it at all.
+- **A stale local environment reads as a code finding.** A `ledova-backend`
+  image pinned at Django 5.2 against a `requirements.txt` asking for 6.1
+  produced a wrong correction on one PR and an issue its author filed and then
+  closed. Neither was advice to stop using `--parallel` — that was **a fourth
+  session relaying the family into a handover**, where it told everyone reading
+  it to run serially. `django/test/runner.py` on
+  5.2 rejects any start method outside `{fork, spawn}` while 6.1 admits
+  `forkserver`, which is Python 3.14's default on Linux — so the whole family
+  of "parallel is broken here" findings is 5.2 behaviour that the pin already
+  fixes. Check `django.get_version()` against `backend/requirements.txt` before
+  trusting a local measurement enough to file it, and **re-run a measurement
+  before repeating someone else's**: a relayed measurement is not a
+  measurement.
 
 ### Shared TypeScript types
 

@@ -1,9 +1,10 @@
 from django import forms
 from django.contrib import admin, messages
 from django.http import HttpResponseRedirect
-from django.shortcuts import get_object_or_404, render
-from django.urls import path, reverse
+from django.shortcuts import render
+from django.urls import reverse
 
+from shared.utils.admin_actions import admin_action_path
 from shared.utils.admin_display import action_buttons
 from tokens.models import RequestStatus
 from tokens.tasks import execute_review_request_task
@@ -83,7 +84,7 @@ class ReviewWorkflowAdmin(admin.ModelAdmin):
             ("execute", "execute", self.execute_view),
         ]
         custom = [
-            path(f"<uuid:uuid>/{slug}/", self.admin_site.admin_view(view), name=self._url_name(action))
+            admin_action_path(self, f"<uuid:uuid>/{slug}/", self._url_name(action), view)
             for slug, action, view in views
         ]
         return custom + super().get_urls()
@@ -141,16 +142,14 @@ class ReviewWorkflowAdmin(admin.ModelAdmin):
         }
         return render(request, "admin/tokens/review_request/action_form.html", context)
 
-    def start_review_view(self, request, uuid):
-        obj = get_object_or_404(self.model, uuid=uuid)
+    def start_review_view(self, request, obj):
         if obj.status != RequestStatus.SUBMITTED:
             return self._refuse(request, obj, "start review")
         obj.start_review(request.user)
         messages.info(request, f"Review started for {obj.token.symbol} {self.label.lower()} request.")
         return HttpResponseRedirect(self._change_url(obj))
 
-    def approve_view(self, request, uuid):
-        obj = get_object_or_404(self.model, uuid=uuid)
+    def approve_view(self, request, obj):
         if not obj.can_be_approved:
             return self._refuse(request, obj, "approve")
         form = ApproveForm(request.POST or None)
@@ -162,8 +161,7 @@ class ReviewWorkflowAdmin(admin.ModelAdmin):
             return HttpResponseRedirect(self._change_url(obj))
         return self._render(request, obj, "approve", form)
 
-    def reject_view(self, request, uuid):
-        obj = get_object_or_404(self.model, uuid=uuid)
+    def reject_view(self, request, obj):
         if not obj.can_be_approved:
             return self._refuse(request, obj, "reject")
         form = RejectForm(request.POST or None)
@@ -173,8 +171,7 @@ class ReviewWorkflowAdmin(admin.ModelAdmin):
             return HttpResponseRedirect(self._change_url(obj))
         return self._render(request, obj, "reject", form)
 
-    def execute_view(self, request, uuid):
-        obj = get_object_or_404(self.model, uuid=uuid)
+    def execute_view(self, request, obj):
         if not obj.can_be_executed:
             return self._refuse(request, obj, "execute")
         if request.method == "POST":

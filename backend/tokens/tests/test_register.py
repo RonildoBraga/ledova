@@ -26,6 +26,9 @@ from tokens.models import (
     ShareTokenStatus,
 )
 from tokens.services.register import (
+    IDENTITY_LABELS,
+    IDENTITY_LIVE,
+    IDENTITY_TREASURY_LABEL,
     REGISTER_HEADERS,
     SOURCE_ALLOTMENTS,
     SOURCE_CHAIN,
@@ -221,7 +224,17 @@ class HolderTypeTest(RegisterTestBase):
 
         self.assertEqual(
             set(holders[0]),
-            {"address", "name", "balance", "percentage", "source", "holderType", "enteredOn", "shareClass"},
+            {
+                "address",
+                "name",
+                "balance",
+                "percentage",
+                "source",
+                "holderType",
+                "enteredOn",
+                "shareClass",
+                "identitySource",
+            },
         )
         self.assertEqual(holders[0]["shareClass"], "REG")
         self.assertIsNotNone(holders[0]["enteredOn"])
@@ -243,12 +256,18 @@ class RegisterExportTest(RegisterTestBase):
         self.assertEqual(response["Content-Type"], "text/csv")
         rows = list(csv.reader(io.StringIO(response.content.decode())))
         self.assertEqual(rows[0], REGISTER_HEADERS)
-        body = {row[0]: row for row in rows[1:]}
-        self.assertEqual(body["Mary Member"][1], RESIDENCE)
-        self.assertEqual(body["Mary Member"][3:7], ["Member", "REG", "100", SOURCE_LABELS[SOURCE_CHAIN]])
-        self.assertEqual(body["Mary Member"][8:], ["Active", "250.00"])
-        self.assertEqual(body["Company treasury"][1], "")
-        self.assertEqual(body["Company treasury"][9], "")
+        body = {row[0]: dict(zip(REGISTER_HEADERS, row)) for row in rows[1:]}
+        member = body["Mary Member"]
+        self.assertEqual(member["Residential address"], RESIDENCE)
+        self.assertEqual(
+            [member[header] for header in ("Holder type", "Class", "Shares held", "Balance source")],
+            ["Member", "REG", "100", SOURCE_LABELS[SOURCE_CHAIN]],
+        )
+        self.assertEqual(member["Identity source"], IDENTITY_LABELS[IDENTITY_LIVE])
+        self.assertEqual([member["Whitelist status"], member["Amount paid"]], ["Active", "250.00"])
+        self.assertEqual(body["Company treasury"]["Residential address"], "")
+        self.assertEqual(body["Company treasury"]["Identity source"], IDENTITY_LABELS[IDENTITY_TREASURY_LABEL])
+        self.assertEqual(body["Company treasury"]["Amount paid"], "")
 
     def test_the_residential_address_never_reaches_the_api(self):
         member_account = _account("member@example.test", "Mary Member", RESIDENCE)
@@ -303,8 +322,8 @@ class RegisterTruthTest(RegisterTestBase):
 
         row = list(csv.reader(io.StringIO(response.content.decode())))[1]
         self.assertEqual(row[0], "Mia Mixed")
-        self.assertEqual(row[5], "1010")
-        self.assertEqual(row[9], "")
+        self.assertEqual(dict(zip(REGISTER_HEADERS, row))["Shares held"], "1010")
+        self.assertEqual(dict(zip(REGISTER_HEADERS, row))["Amount paid"], "")
 
     def test_a_chain_balance_below_the_allotment_prints_no_amount_paid(self):
         account = _account("cut@example.test", "Cut Down", RESIDENCE)
@@ -316,9 +335,9 @@ class RegisterTruthTest(RegisterTestBase):
         response = self.client.get(f"/api/v1/tokens/{self.token.uuid}/register/export/")
 
         row = list(csv.reader(io.StringIO(response.content.decode())))[1]
-        self.assertEqual(row[5], "42")
-        self.assertEqual(row[6], SOURCE_LABELS[SOURCE_CHAIN])
-        self.assertEqual(row[9], "")
+        self.assertEqual(dict(zip(REGISTER_HEADERS, row))["Shares held"], "42")
+        self.assertEqual(dict(zip(REGISTER_HEADERS, row))["Balance source"], SOURCE_LABELS[SOURCE_CHAIN])
+        self.assertEqual(dict(zip(REGISTER_HEADERS, row))["Amount paid"], "")
 
     def test_a_scaled_back_subscription_prints_the_money_backing_the_shares_not_the_money_received(self):
         account = _account("sca@example.test", "Sam Scaled", RESIDENCE)
@@ -338,8 +357,8 @@ class RegisterTruthTest(RegisterTestBase):
         response = self.client.get(f"/api/v1/tokens/{self.token.uuid}/register/export/")
 
         row = list(csv.reader(io.StringIO(response.content.decode())))[1]
-        self.assertEqual(row[5], "40")
-        self.assertEqual(row[9], "100.00")
+        self.assertEqual(dict(zip(REGISTER_HEADERS, row))["Shares held"], "40")
+        self.assertEqual(dict(zip(REGISTER_HEADERS, row))["Amount paid"], "100.00")
 
     def test_an_allotment_the_money_record_has_not_caught_up_with_prints_no_amount_paid(self):
         account = _account("lag@example.test", "Lagging Mirror", RESIDENCE)
@@ -353,8 +372,8 @@ class RegisterTruthTest(RegisterTestBase):
         response = self.client.get(f"/api/v1/tokens/{self.token.uuid}/register/export/")
 
         row = list(csv.reader(io.StringIO(response.content.decode())))[1]
-        self.assertEqual(row[5], "40")
-        self.assertEqual(row[9], "")
+        self.assertEqual(dict(zip(REGISTER_HEADERS, row))["Shares held"], "40")
+        self.assertEqual(dict(zip(REGISTER_HEADERS, row))["Amount paid"], "")
 
     def test_a_holding_every_share_of_which_was_subscribed_prints_the_total_paid(self):
         account = _account("sue@example.test", "Sue Subscribed", RESIDENCE)
@@ -367,8 +386,8 @@ class RegisterTruthTest(RegisterTestBase):
         response = self.client.get(f"/api/v1/tokens/{self.token.uuid}/register/export/")
 
         row = list(csv.reader(io.StringIO(response.content.decode())))[1]
-        self.assertEqual(row[5], "50")
-        self.assertEqual(row[9], "125.00")
+        self.assertEqual(dict(zip(REGISTER_HEADERS, row))["Shares held"], "50")
+        self.assertEqual(dict(zip(REGISTER_HEADERS, row))["Amount paid"], "125.00")
 
     def test_a_register_that_is_not_chain_confirmed_says_so_on_every_csv_row(self):
         self._allot(MEMBER, 100)
@@ -378,8 +397,11 @@ class RegisterTruthTest(RegisterTestBase):
         response = self.client.get(f"/api/v1/tokens/{self.token.uuid}/register/export/")
 
         rows = list(csv.reader(io.StringIO(response.content.decode())))
-        self.assertEqual(rows[0][6], "Balance source")
-        self.assertEqual([row[6] for row in rows[1:]], [SOURCE_LABELS[SOURCE_ALLOTMENTS]] * 2)
+        self.assertIn("Balance source", rows[0])
+        self.assertEqual(
+            [dict(zip(REGISTER_HEADERS, row))["Balance source"] for row in rows[1:]],
+            [SOURCE_LABELS[SOURCE_ALLOTMENTS]] * 2,
+        )
 
     @patch("tokens.services.register.logger")
     def test_an_export_that_is_not_chain_confirmed_is_logged_as_a_warning(self, log):

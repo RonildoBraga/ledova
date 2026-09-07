@@ -3,9 +3,10 @@ import logging
 from django import forms
 from django.contrib import admin, messages
 from django.http import HttpResponseRedirect
-from django.shortcuts import get_object_or_404, render
-from django.urls import path, reverse
+from django.shortcuts import render
+from django.urls import reverse
 
+from shared.utils.admin_actions import admin_action_path
 from shared.utils.admin_display import action_buttons, format_units
 from tokens.models import MintRequest, NAVUpdate, YieldToken
 from tokens.services import YieldTokenService, mint_service
@@ -89,24 +90,15 @@ class YieldTokenAdmin(admin.ModelAdmin):
 
     def get_urls(self):
         custom = [
-            path(
-                "<uuid:uuid>/update-nav/",
-                self.admin_site.admin_view(self.update_nav_view),
-                name="tokens_yieldtoken_update_nav",
-            ),
-            path(
-                "<uuid:uuid>/mint/",
-                self.admin_site.admin_view(self.mint_view),
-                name="tokens_yieldtoken_mint",
-            ),
+            admin_action_path(self, "<uuid:uuid>/update-nav/", "tokens_yieldtoken_update_nav", self.update_nav_view),
+            admin_action_path(self, "<uuid:uuid>/mint/", "tokens_yieldtoken_mint", self.mint_view),
         ]
         return custom + super().get_urls()
 
     def mint_url(self, obj):
         return reverse("admin:tokens_yieldtoken_mint", args=[obj.uuid])
 
-    def mint_view(self, request, uuid):
-        yield_token = get_object_or_404(YieldToken, uuid=uuid)
+    def mint_view(self, request, yield_token):
         change_url = reverse("admin:tokens_yieldtoken_change", args=[yield_token.pk])
 
         if not yield_token.is_active:
@@ -175,8 +167,7 @@ class YieldTokenAdmin(admin.ModelAdmin):
         nav_url = reverse("admin:tokens_yieldtoken_update_nav", args=[obj.uuid])
         return action_buttons([("Update NAV", nav_url, "#007bff"), ("+ Mint", self.mint_url(obj), "#28a745")])
 
-    def update_nav_view(self, request, uuid):
-        yield_token = get_object_or_404(YieldToken, uuid=uuid)
+    def update_nav_view(self, request, yield_token):
 
         if not yield_token.is_active:
             messages.error(request, f"Cannot update NAV: {yield_token.symbol} is not active")

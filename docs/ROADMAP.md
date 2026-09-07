@@ -6,7 +6,10 @@ the [`deferred-hardening`](https://github.com/RonildoBraga/ledova/issues?q=is%3A
 
 ## Direction
 
-Ledova is infrastructure for tokenized company equity.
+Ledova is a platform for creating and operating digital private equity markets.
+[README.md](../README.md) carries the product definition in the owner's words —
+the problem, the solution and the twelve core features — and this document defers
+to it wherever the two differ.
 
 - An **operator** hosts a deployment, runs the Django admin, holds the deployer
   key, and receives investor payments either in AUD by bank transfer or in a
@@ -17,7 +20,7 @@ Ledova is infrastructure for tokenized company equity.
   verified EVM wallet.
 
 The crypto features are rails: EVM wallets, ERC-20 transfers, a stablecoin and
-an on-ramp. Bitcoin and the portfolio views are retained but secondary.
+an on-ramp.
 
 ## Phase 0 — Issuance works on chain
 

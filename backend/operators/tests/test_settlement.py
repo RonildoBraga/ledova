@@ -64,7 +64,7 @@ class RequireDeploymentTest(TestCase):
         self.operator.receiving_wallet_chain = ReceivingChain.ETHEREUM
         self.operator.save(update_fields=["receiving_wallet_chain"])
 
-        self.assertEqual(self.asset.contract_address, BASE_ADDRESS)
+        self.assertEqual(self.asset.chain_deployments.first().contract_address, BASE_ADDRESS)
         self.assertEqual(require_deployment(self.asset).contract_address, ETHEREUM_ADDRESS)
         self.assertEqual(deployment_for(self.asset).chain, "ethereum")
 

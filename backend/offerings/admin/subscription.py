@@ -3,8 +3,8 @@ from decimal import Decimal
 from django import forms
 from django.contrib import admin, messages
 from django.http import HttpResponseRedirect
-from django.shortcuts import get_object_or_404, render
-from django.urls import re_path, reverse
+from django.shortcuts import render
+from django.urls import reverse
 
 from offerings.exceptions import (
     InvalidSubscriptionTransitionException,
@@ -24,6 +24,7 @@ from offerings.services.subscription import (
     scale_back,
 )
 from operators.exceptions import SettlementAssetNotDeployedException
+from shared.utils.admin_actions import admin_action_re_path
 from shared.utils.admin_display import action_buttons
 from tokens.admin._helpers import short_hex, status_badge
 from users.exceptions import InvestorNotEligibleException
@@ -372,16 +373,17 @@ class SubscriptionAdmin(admin.ModelAdmin):
 
     def get_urls(self):
         custom_urls = [
-            re_path(
+            admin_action_re_path(
+                self,
                 rf"^(?P<uuid>[0-9a-f-]+)/(?P<action>{'|'.join(ACTIONS)})/$",
-                self.admin_site.admin_view(self.action_view),
-                name="offerings_subscription_action",
+                "offerings_subscription_action",
+                self.action_view,
+                rows=lambda request: Subscription.objects.with_relations(),
             ),
         ]
         return custom_urls + super().get_urls()
 
-    def action_view(self, request, uuid, action):
-        subscription = get_object_or_404(Subscription.objects.with_relations(), uuid=uuid)
+    def action_view(self, request, subscription, action):
         spec = ACTIONS[action]
         change_url = reverse("admin:offerings_subscription_change", args=[subscription.pk])
         form = self._build_form(request, spec, subscription)

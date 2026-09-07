@@ -1,10 +1,11 @@
 from django import forms
 from django.contrib import admin, messages
 from django.http import HttpResponseRedirect
-from django.shortcuts import get_object_or_404, render
-from django.urls import path, reverse
+from django.shortcuts import render
+from django.urls import reverse
 from django.utils.html import format_html
 
+from shared.utils.admin_actions import admin_action_path
 from shared.utils.admin_display import action_buttons
 from tokens.models import MintRequest, MintRequestStatus
 from tokens.services import mint_service
@@ -89,16 +90,8 @@ class MintRequestAdmin(admin.ModelAdmin):
 
     def get_urls(self):
         custom_urls = [
-            path(
-                "<uuid:uuid>/execute/",
-                self.admin_site.admin_view(self.execute_view),
-                name="tokens_mintrequest_execute",
-            ),
-            path(
-                "<uuid:uuid>/reject/",
-                self.admin_site.admin_view(self.reject_view),
-                name="tokens_mintrequest_reject",
-            ),
+            admin_action_path(self, "<uuid:uuid>/execute/", "tokens_mintrequest_execute", self.execute_view),
+            admin_action_path(self, "<uuid:uuid>/reject/", "tokens_mintrequest_reject", self.reject_view),
         ]
         return custom_urls + super().get_urls()
 
@@ -148,8 +141,7 @@ class MintRequestAdmin(admin.ModelAdmin):
         }
         return render(request, f"admin/tokens/mintrequest/{action.lower()}_form.html", context)
 
-    def execute_view(self, request, uuid):
-        mint_request = get_object_or_404(MintRequest, uuid=uuid)
+    def execute_view(self, request, mint_request):
         if not mint_request.can_be_executed:
             return self._refuse(request, mint_request, "execute")
 
@@ -167,8 +159,7 @@ class MintRequestAdmin(admin.ModelAdmin):
             return HttpResponseRedirect(reverse("admin:tokens_mintrequest_change", args=[mint_request.pk]))
         return self._render(request, mint_request, "Execute", form)
 
-    def reject_view(self, request, uuid):
-        mint_request = get_object_or_404(MintRequest, uuid=uuid)
+    def reject_view(self, request, mint_request):
         if not mint_request.can_be_rejected:
             return self._refuse(request, mint_request, "reject")
 
