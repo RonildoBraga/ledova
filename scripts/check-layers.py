@@ -54,6 +54,7 @@ VIEW_LOGGER = "logger-in-view"
 MODEL_QUERY = "query-in-model"
 TASK_TRANSACTION = "transaction-in-task"
 ADMIN_BARE_VIEW = "bare-admin-view"
+SIGNAL_IMPORT = "django-signals"
 
 RULES = {
     VIEW_ORM: "views reach the ORM only through visible_to_user or manageable_by_user",
@@ -63,12 +64,20 @@ RULES = {
     MODEL_QUERY: "a model queries its own manager only; another model's manager belongs in a queryset or a service",
     TASK_TRANSACTION: "a task loads a row and calls one service; the service owns the transaction",
     ADMIN_BARE_VIEW: "admin_view admits any active staff account; a row action goes through shared.utils.admin_actions",
+    SIGNAL_IMPORT: "a side effect is an explicit call in the service; the one sanctioned receiver is in shared/apps.py",
 }
 
 # A stated exception, not backlog: it is correct and it never goes away. It still
 # carries a count, because an exception that excused a whole file would reintroduce
 # exactly the hole this gate was hardened to close.
 ALLOWED: dict[str, tuple[int, str]] = {
+    "backend/shared/apps.py:django-signals": (
+        1,
+        "The post_delete receiver that deletes a private file when its row is gone. A cascade delete "
+        "never reaches a service, so an explicit call in each delete path cannot cover it: deleting a "
+        "Company takes its CompanyDocument rows and deleting a user takes their Document rows, and the "
+        "files would outlive both. Stated in docs/ARCHITECTURE.md; the receiver is shared/storage.py.",
+    ),
     "backend/companies/views/company.py:raw-orm-in-view": (
         1,
         "CompanyViewSet.get_queryset returns Company.objects.all() for the administrative actions, so "
@@ -96,6 +105,27 @@ def layer_of(path: Path) -> str | None:
         if index == 1 and part in ("views.py", "models.py", "tasks.py", "admin.py"):
             return part[:-3]
     return None
+
+
+def signal_findings(tree: ast.AST):
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            if module == "django.db.models.signals" or module.startswith("django.db.models.signals."):
+                yield node.lineno, SIGNAL_IMPORT
+            elif module == "django.db.models" and any(alias.name == "signals" for alias in node.names):
+                yield node.lineno, SIGNAL_IMPORT
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "django.db.models.signals" or alias.name.startswith("django.db.models.signals."):
+                    yield node.lineno, SIGNAL_IMPORT
+
+
+def backend_files():
+    for path in sorted(BACKEND.rglob("*.py")):
+        if any(part in SKIP_ANYWHERE for part in path.relative_to(BACKEND).parts):
+            continue
+        yield path
 
 
 def python_files():
@@ -330,6 +360,7 @@ def main() -> int:
     counts: dict[str, int] = {}
     lines: dict[str, list[str]] = {}
     checked = 0
+    scanned = 0
 
     for path, layer in python_files():
         checked += 1
@@ -341,6 +372,20 @@ def main() -> int:
             return 1
 
         for line, rule in findings_for(tree, layer):
+            key = f"{relative}:{rule}"
+            counts[key] = counts.get(key, 0) + 1
+            lines.setdefault(key, []).append(f"{relative}:{line}: {RULES[rule]}")
+
+    for path in backend_files():
+        scanned += 1
+        relative = path.relative_to(ROOT)
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8-sig", errors="replace"))
+        except SyntaxError as error:
+            print(f"{relative}: could not parse: {error}", file=sys.stderr)
+            return 1
+
+        for line, rule in signal_findings(tree):
             key = f"{relative}:{rule}"
             counts[key] = counts.get(key, 0) + 1
             lines.setdefault(key, []).append(f"{relative}:{line}: {RULES[rule]}")
@@ -384,7 +429,7 @@ def main() -> int:
         return 1
 
     print(
-        f"Backend layers clean in {checked} files "
+        f"Backend layers clean in {checked} files, signals clean in {scanned} "
         f"({excused} known findings still in LEGACY, {len(ALLOWED)} stated exception(s))."
     )
     return 0

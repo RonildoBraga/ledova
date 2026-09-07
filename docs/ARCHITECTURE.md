@@ -918,8 +918,19 @@ everything in flight and buy nothing the rule below does not. New and touched
 service modules are plain functions; the stateful chain clients stay classes;
 the rest converts when it is next edited for another reason.
 
-- No Django signals. A side effect is an explicit call in the service (or in
-  `perform_create`) that creates the row.
+- No Django signals, with **one sanctioned receiver**. A side effect is an
+  explicit call in the service (or in `perform_create`) that creates the row.
+  The exception is `shared/apps.py`, which connects the `post_delete` receiver
+  in `shared/storage.py` that deletes a private file once its row is gone. It is
+  a receiver rather than a call because **a cascade delete never reaches a
+  service**: deleting a `Company` takes its `CompanyDocument` rows and deleting
+  a user takes their `Document` rows, and an explicit call in each delete path
+  would leave both sets of files behind. The file delete is scheduled with
+  `transaction.on_commit`, so a rolled-back delete does not destroy the file.
+  `check-layers.py` flags a `django.db.models.signals` import anywhere else in
+  `backend/`, and `shared/apps.py` is an `ALLOWED` entry with a count, so
+  removing the receiver fails the gate as a stale pin rather than passing
+  quietly.
 - No new `managers/` packages. The only `Manager` is `CustomUserManager` in
   `authentication/managers/`; everything else is a queryset wired with
   `as_manager()`.
@@ -1209,6 +1220,22 @@ That is the same necessary-not-sufficient boundary stated above, and
 `test_admin_row_actions.py` closes it from the other side: it walks the live
 URLconf and fails when any custom admin route is served by a callback from
 outside the two `shared.utils` helpers, whatever syntax registered it.
+
+The `django-signals` rule is the second rule outside that column, and it needed
+a second walk rather than a wider one. The four-layer walker opens 191 files;
+signals can be connected from any of them and from `apps.py`, which is in no
+layer at all, so the rule walks every `backend/**/*.py` outside `migrations/`
+and `tests/` — 522 files. It flags all three import shapes,
+`from django.db.models.signals import ...`, `import django.db.models.signals`
+and `from django.db.models import signals`, aliased or not.
+
+`backend/shared/apps.py` is an `ALLOWED` entry rather than a name the walker
+skips, and the difference matters in the direction people forget: an `ALLOWED`
+entry carries a count, so **deleting the receiver fails the gate as a stale
+pin**. A skipped path would have gone quiet instead, and the rule exists to keep
+the one receiver visible as much as to keep others out. Like `bare-admin-view`
+it reads syntax, so `importlib.import_module("django.db.models.signals")` goes
+past it.
 
 ### The seed-era service classes
 
