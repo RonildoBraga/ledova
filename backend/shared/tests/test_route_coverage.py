@@ -51,12 +51,6 @@ ELIGIBILITY_SCOPED_ASYNC = (
     "the same 404 as a phantom uuid, without a token lookup, so the two are indistinguishable by timing "
     "as well as by body. Pinned by tokens/tests/test_trading_events_authorization.py. "
 ) + NOT_MATRIX_AUTHENTICABLE
-BROKEN_BEFORE_IT_SCOPES = (
-    "Answers 500 to every caller before it reaches any tenancy decision: TradingOrderViewSet.get_serializer_class "
-    "does not map the create_message action, so validated_data lacks the fields the action reads and it raises "
-    "KeyError('wallet_address') at trading_order.py:109. It moves into ROUTES with a foreign walletUuid the "
-    "moment it works: see issue #179."
-)
 STAFF_UNSCOPED = (
     "Staff-only and deliberately unscoped: CompanyViewSet.get_queryset returns Company.objects.all() "
     "for its administrative actions, so an operator reaches every company by design."
@@ -103,7 +97,6 @@ EXEMPT = {
     ("get", "/api/v1/directory/tokens/"): ELIGIBILITY_SCOPED,
     ("get", "/api/v1/trading/tokens/"): ELIGIBILITY_SCOPED,
     ("get", "/api/v1/trading/events/stream/"): ELIGIBILITY_SCOPED_ASYNC,
-    ("post", "/api/v1/trading/orders/create/message/"): BROKEN_BEFORE_IT_SCOPES,
     ("post", "/api/v1/trading/transfers/broadcast/"): SIGNED_RELAY,
     ("get", "/api/v1/companies/{}/api-key/"): STAFF_UNSCOPED,
     ("post", "/api/v1/companies/{}/api-key/"): STAFF_UNSCOPED,
