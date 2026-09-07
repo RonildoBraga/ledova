@@ -988,6 +988,29 @@ not checked. They carry no comments today; keep it that way.
 
 A green CI run is evidence for the trees in `TREES` and nothing else.
 
+### The type-check gate
+
+`scripts/check-type-check.py` answers one question: would a workspace's
+`type-check` script examine any files at all? `make check-type-check` runs it and
+CI runs it beside the other source gates.
+
+The dashboard and marketing both use a solution-style `tsconfig.json` — `"files":
+[]` plus `references` — and both ran `tsc --noEmit`, which **does not follow
+project references**. Against that config it type-checks nothing and exits 0. A
+deliberate `const x: number = "not a number"` passed `npm run type-check -w
+dashboard` and passed the root `npm run typecheck`, which is what CI's
+*Type-check workspaces* step runs. Both now use `tsc -b --noEmit`, which does
+follow them.
+
+Type errors were still being caught, by `make build`'s `tsc -b` earlier in the
+same job — so this was not errors reaching `main`, it was a check that had
+stopped being one while reading as green. That is the more dangerous state,
+because the safety depended on an unrelated step running first: reorder the job,
+split the type-check out, or drop the build and the errors ship.
+
+The gate is static and cheap: a workspace whose tsconfig delegates to references
+must type-check in build mode. It does not run `tsc`.
+
 ### The layer gate
 
 `scripts/check-layers.py` is the mechanical half of the "Never contains" column

@@ -7,7 +7,7 @@ PYTHON ?= python3
 .PHONY: help install install-backend install-node-if-missing init-local check-local-env build generate-tokens check check-comments check-layers \
 	check-logging test-gates audit test \
 	dev-up dev-down dev-logs contracts-compile contracts-test contracts-deploy-local \
-	contracts-deploy-testnet chain-test smoke lint
+	contracts-deploy-testnet chain-test smoke lint check-type-check
 
 # CHAIN_TEST_PORT is the single knob for the local chain: it moves the Hardhat node, the backend's
 # BLOCKCHAIN_RPC_URL and, through LOCALHOST_RPC_URL, the `localhost` network in contracts/hardhat.config.ts
@@ -37,6 +37,7 @@ help:
 	@echo "  make lint                     Run ESLint and solhint across every workspace"
 	@echo "  make check-comments           Fail on any comment or docstring in source"
 	@echo "  make check-layers             Fail on a new backend layer violation"
+	@echo "  make check-type-check         Fail when a type-check script would examine no files"
 	@echo "  make check-logging            Fail on a log line that can carry a credential or an email"
 	@echo "  make test-gates               Run the unit tests of the gate scripts"
 	@echo "  make audit                    Fail on a new production dependency advisory"
@@ -80,7 +81,7 @@ build:
 generate-tokens:
 	$(NPM) exec -- tsx packages/scripts/generate-css-tokens.mjs
 
-check: check-comments check-layers check-logging install-backend install-node-if-missing
+check: check-comments check-layers check-logging check-type-check install-backend install-node-if-missing
 	$(NPM) run typecheck
 	$(NPM) --prefix marketing run type-check
 	$(NPM) --prefix mobile run type-check
@@ -95,6 +96,9 @@ lint:
 
 check-comments:
 	$(PYTHON) scripts/check-comments.py
+
+check-type-check:
+	$(PYTHON) scripts/check-type-check.py
 
 check-layers:
 	$(PYTHON) scripts/check-layers.py

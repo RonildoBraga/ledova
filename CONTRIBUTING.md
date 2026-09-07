@@ -73,6 +73,7 @@ exceptions are noted below the table.
 | Area | Command |
 | --- | --- |
 | Comments and docstrings | `make check-comments` from the root (no dependencies needed) |
+| Type-check scripts | `make check-type-check` from the root (no dependencies needed) |
 | Backend layers | `make check-layers` from the root (no dependencies needed) |
 | Logging privacy | `make check-logging` and `make test-gates` from the root (no dependencies needed) |
 | Dependency advisories | `make audit` from the root |
