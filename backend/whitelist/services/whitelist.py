@@ -29,6 +29,8 @@ logger = logging.getLogger(__name__)
 
 GETH_TXPOOL_LIFETIME = timedelta(hours=3)
 
+WHITELIST_ENTRY_LABEL = "whitelist.WhitelistEntry"
+
 
 RECORD_A_REVERTED_WRITE = {
     TransactionType.WHITELIST_ADD: WhitelistEntry.mark_add_failed,
@@ -122,7 +124,7 @@ class WhitelistService:
             to_address=contract_address,
             function_name=function_name,
             function_args={"investor": checksum_address},
-            related_model="whitelist.WhitelistEntry" if entry else None,
+            related_model=WHITELIST_ENTRY_LABEL if entry else None,
             related_uuid=entry.uuid if entry else None,
         )
 
@@ -271,9 +273,19 @@ class WhitelistService:
         logger.info(f"Synced {result['synced']} entries")
         return result["synced"]
 
+    @staticmethod
+    def _the_write_that_failed_was_an_add(entry) -> bool:
+        latest = (
+            BlockchainTransaction.objects.filter(related_model=WHITELIST_ENTRY_LABEL, related_uuid=entry.uuid)
+            .order_by("-created_at")
+            .values_list("tx_type", flat=True)
+            .first()
+        )
+        return latest == TransactionType.WHITELIST_ADD
+
     def reconcile_failed_adds(self, now=None) -> dict:
         cutoff = (now or timezone.now()) - GETH_TXPOOL_LIFETIME
-        result = {"checked": 0, "activated": 0, "left_failed": 0, "errors": []}
+        result = {"checked": 0, "activated": 0, "left_failed": 0, "removals_the_chain_kept": 0, "errors": []}
 
         for entry in WhitelistEntry.objects.failed_with_a_sent_add(cutoff):
             result["checked"] += 1
@@ -284,6 +296,16 @@ class WhitelistService:
             except Exception as exc:
                 result["errors"].append(f"Could not read {entry.wallet_address}: {exc}")
                 logger.error(f"Whitelist reconciliation could not read {entry.wallet_address}: {exc}")
+                continue
+
+            if not self._the_write_that_failed_was_an_add(entry):
+                entry.record_the_chain_still_lists_it()
+                result["removals_the_chain_kept"] += 1
+                result["left_failed"] += 1
+                logger.warning(
+                    f"{entry.wallet_address} is still whitelisted on chain and the write that failed was a "
+                    f"removal, so it stays failed for an operator to retry"
+                )
                 continue
 
             entry.mark_active(entry.add_tx_hash)

@@ -158,6 +158,20 @@ class WhitelistServiceTransactionTest(TransactionTestCase):
         self.assertEqual(self.entry.add_tx_hash, ADD_HASH)
         self.assertEqual(self.entry.remove_tx_hash, REMOVE_HASH)
 
+    def test_a_removal_can_be_retried_on_an_entry_the_sweeper_left_failed(self):
+        service = self._service(on_chain=True)
+        WhitelistEntry.objects.filter(pk=self.entry.pk).update(
+            status=WhitelistStatus.FAILED, is_whitelisted=True, add_tx_hash=ADD_HASH, remove_tx_hash=REMOVE_HASH
+        )
+        service.chain_client.send_raw_transaction.return_value = "0xsecondtry"
+
+        tx_hash, entry = service.remove_from_whitelist(self.wallet.address)
+
+        self.assertEqual(tx_hash, "0xsecondtry")
+        self.entry.refresh_from_db()
+        self.assertEqual(self.entry.status, WhitelistStatus.REMOVED)
+        self.assertEqual((self.entry.add_tx_hash, self.entry.remove_tx_hash), (ADD_HASH, "0xsecondtry"))
+
     def test_a_caller_that_wraps_the_add_in_a_transaction_is_refused(self):
         service = self._service()
 

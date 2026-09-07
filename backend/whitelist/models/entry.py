@@ -91,6 +91,10 @@ class WhitelistEntry(BaseModel):
             ]
         )
 
+    def record_the_chain_still_lists_it(self) -> None:
+        self.is_whitelisted = True
+        self.save(update_fields=["is_whitelisted", "updated_at"])
+
     def mark_failed(self, error: str = "") -> None:
         self._record_failure(error, [])
 
