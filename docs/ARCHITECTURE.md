@@ -1299,6 +1299,63 @@ logs the `message` of a WebView `postMessage`. Both are provider- or
 SDK-authored strings today; if one ever carries user input, the gate will not
 say so.
 
+### Test traps
+
+Four ways a test here has passed while proving nothing, or failed while meaning
+nothing. Each was paid for once; none is obvious from reading the test.
+
+**A `Mock` that reaches a renderer never returns.** Patch a whole service class
+with a bare `Mock`, let a view return its result, and DRF's JSON encoder
+reaches `elif hasattr(obj, 'tolist'): return obj.tolist()` — the branch meant
+for numpy arrays. Every `Mock` answers that `hasattr`, `tolist()` returns
+another `Mock`, and the encoder recurses forever. The test does not fail; **it
+hangs**, which in CI is a job timeout naming no test at all. Caught with
+`python -X faulthandler`, whose dump ends in `mock.py` `_increment_mock_call`
+under `rest_framework/utils/encoders.py`. It bites when a refactor changes
+which method a view calls: the mock stops matching, starts returning `Mock`
+where a dict was, and nothing says so. Give a patched service a real return
+value for anything a view renders.
+
+**`APITestCase` wraps every test in a transaction, which hides exactly the bugs
+about transactions.** An orphaned row is rolled back by the harness rather than
+by the code, so the test passes on the unfixed tree and proves nothing. Use
+`APITransactionTestCase` for anything asserting what survives a failure. And
+`shared/api/exceptions.py` turns an unhandled exception into a 500 `Response`
+rather than re-raising, so `assertRaises` never fires — assert the status code
+and the row count instead.
+
+**`SimpleTestCase` forbids a database connection, and `transaction.on_commit`
+wants one even when it runs its callback immediately.** `on_commit` reaches
+`get_autocommit()` and so `ensure_connection()`, which `SimpleTestCase` refuses
+with `DatabaseOperationForbidden` — **on SQLite locally, not only in CI**. This
+is a `SimpleTestCase` restriction rather than an environment difference; a test
+that schedules an `on_commit` needs `TestCase` or `TransactionTestCase`.
+
+**A green local run is evidence only for the tests that ran, and the set that
+ran is not the set CI runs.** Two mechanisms have produced a wrong local
+reading:
+
+- `tokens.tests.test_chain_integration` needs a Hardhat node and is **skipped
+  without one**. It asserts on shapes other suites share, so a change that
+  passes everything locally can still break it: adding a column to the register
+  export shifted every positional assertion after it, and `rows[1][8:]` in that
+  suite was the one nothing local could reach. Read the register CSV by header
+  name rather than by column index — `dict(zip(REGISTER_HEADERS, row))` — so a
+  future column cannot break it at all.
+- **A stale local environment reads as a code finding.** A `ledova-backend`
+  image pinned at Django 5.2 against a `requirements.txt` asking for 6.1
+  produced a wrong correction on one PR and an issue its author filed and then
+  closed. Neither was advice to stop using `--parallel` — that was **a fourth
+  session relaying the family into a handover**, where it told everyone reading
+  it to run serially. `django/test/runner.py` on
+  5.2 rejects any start method outside `{fork, spawn}` while 6.1 admits
+  `forkserver`, which is Python 3.14's default on Linux — so the whole family
+  of "parallel is broken here" findings is 5.2 behaviour that the pin already
+  fixes. Check `django.get_version()` against `backend/requirements.txt` before
+  trusting a local measurement enough to file it, and **re-run a measurement
+  before repeating someone else's**: a relayed measurement is not a
+  measurement.
+
 ### Shared TypeScript types
 
 `packages/shared/eslint.config.js` applies `eslint-naming-rules.js` to
