@@ -462,8 +462,8 @@ class CrossTenantRouteMatrixTest(APITestCase):
         self._service("tokens.tasks.deploy_share_token_task")
         share_tokens = self._service("tokens.views.share_token.ShareTokenService").return_value
         share_tokens.create_issuance_request.side_effect = _create_issuance_request
-        trading_wallets = self._service("tokens.views.trading_wallet.ShareTokenService").return_value
-        trading_wallets.get_wallet_token_balances.return_value = {"balances": []}
+        balances_need_a_readable_chain = self._service("tokens.views.trading_wallet.ShareTokenService").return_value
+        balances_need_a_readable_chain.get_wallet_token_balances.return_value = {"balances": []}
         register_chain = self._service("tokens.services.register.ShareTokenService").return_value
         register_chain.deployment_block.return_value = 1
         register_chain.transfer_participants.return_value = set()

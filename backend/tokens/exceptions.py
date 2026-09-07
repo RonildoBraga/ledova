@@ -292,3 +292,11 @@ class RegisterUnavailableException(APIException):
         "allotment record, because a register that may be missing members cannot say so about itself. The "
         "allotments themselves are on the subscriptions and allotments listing."
     )
+
+
+class WalletBalancesUnavailableException(APIException):
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    default_detail = (
+        "The wallet's balances cannot be read because the chain could not be reached. An empty list is not "
+        "returned instead, because it would say the wallet holds nothing."
+    )
