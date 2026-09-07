@@ -259,6 +259,15 @@ CALL = re.compile(
     r"\b\w+\.(get|post|put|patch|delete)(?:<([^>]*(?:<[^>]*>)?[^>]*)>)?\s*\(\s*([A-Z][A-Z0-9_]*(?:\.\w+)+)",
     re.S,
 )
+# CALL requires an endpoint constant, so a call passing a URL literal is not a call
+# this gate declines to check - it is a call this gate cannot see, and it is absent
+# from the numerator and the denominator alike. LITERAL_CALL counts them so the
+# success line states the population it actually checked rather than the population
+# it matched. Nine service files still pass literals; #349 moves them onto constants.
+LITERAL_CALL = re.compile(
+    r"\b\w+\.(get|post|put|patch|delete)(?:<([^>]*(?:<[^>]*>)?[^>]*)>)?\s*\(\s*[`'\"]",
+    re.S,
+)
 INTERFACE = re.compile(r"^export interface (\w+)([^{]*)\{(.*?)^\}", re.S | re.M)
 FIELD = re.compile(r"^\s*(\w+)(\??):\s*([^;]+);", re.M)
 PICK = re.compile(r"Pick<\s*(\w+)\s*,\s*([^>]+)>")
@@ -329,6 +338,20 @@ def declared_endpoints() -> dict[str, str]:
 
 class Unresolvable(Exception):
     """A service call naming an endpoint constant this gate cannot find."""
+
+
+def calls_the_gate_cannot_see() -> tuple[int, list[str]]:
+    sites = 0
+    reached: set[str] = set()
+    seen_by_constant: set[str] = set()
+    for path in sorted((SHARED / "services").glob("*.ts")):
+        source = path.read_text()
+        for _, generic in LITERAL_CALL.findall(source):
+            sites += 1
+            reached |= set(re.findall(r"\b([A-Z]\w+)", generic or "")) - GENERIC_NOISE
+        for _, generic, _ in CALL.findall(source):
+            seen_by_constant |= set(re.findall(r"\b([A-Z]\w+)", generic or "")) - GENERIC_NOISE
+    return sites, sorted(reached - seen_by_constant)
 
 
 def service_calls() -> dict[tuple[str, str], set[str]]:
@@ -535,13 +558,23 @@ def main() -> int:
         )
         return 1
 
+    unseen_sites, unseen_types = calls_the_gate_cannot_see()
     print(
         f"No shared type requires an absent field across {matched} of "
-        f"{matched + len(unmatched)} service calls "
+        f"{matched + len(unmatched)} endpoints reached by a resolvable call "
         f"({sum(pinned_counts[k] for k in TYPE_DEBT)} known type findings, "
         f"{sum(pinned_counts[k] for k in SCHEMA_DEBT)} awaiting the schema fixes in #211; "
         f"{len(unmatched)} reaching no operation the schema declares)."
     )
+    print(
+        f"{unseen_sites} further call sites pass a URL literal, which this gate cannot resolve to "
+        f"an endpoint, so they are outside both numbers above."
+    )
+    if unseen_types:
+        print(
+            f"{len(unseen_types)} shared types are reached only by those sites and are unchecked "
+            f"entirely: {', '.join(unseen_types)}. #349 moves the nine files onto constants."
+        )
     return 0
 
 

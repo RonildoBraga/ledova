@@ -18,7 +18,8 @@ from pathlib import Path
 
 import yaml
 
-SCRIPT = Path(__file__).resolve().parent.parent / "check-api-types.py"
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+SCRIPT = REPO_ROOT / "scripts" / "check-api-types.py"
 _spec = importlib.util.spec_from_file_location("check_api_types", SCRIPT)
 gate = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(gate)
@@ -240,3 +241,44 @@ class TheTwoListsStaySeparate(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TheGateCountsWhatItCannotSee(_Repository):
+
+    def test_a_call_passing_a_url_literal_is_counted_rather_than_silently_skipped(self):
+        self.endpoints("  WALLETS: { LIST: '/api/wallets/' },")
+        self.service(
+            """
+            import type { Wallet } from '../types/thing';
+            export const listWallets = (c) => c.get<Wallet[]>('/api/wallets/');
+            """
+        )
+
+        sites, types = gate.calls_the_gate_cannot_see()
+
+        self.assertEqual(sites, 1)
+        self.assertEqual(types, ["Wallet"])
+
+    def test_a_type_a_constant_call_also_reaches_is_not_reported_as_unchecked(self):
+        self.endpoints("  WALLETS: { LIST: '/api/wallets/' },")
+        self.service(
+            """
+            import type { Wallet } from '../types/thing';
+            export const listWallets = (c) => c.get<Wallet[]>(ENDPOINTS.WALLETS.LIST);
+            export const createWallet = (c) => c.post<Wallet>('/api/wallets/');
+            """
+        )
+
+        sites, types = gate.calls_the_gate_cannot_see()
+
+        self.assertEqual(sites, 1)
+        self.assertEqual(types, [])
+
+    def test_the_repository_has_the_sixteen_the_success_line_reports(self):
+        gate.ROOT = REPO_ROOT
+        gate.SHARED = REPO_ROOT / "packages/shared/src"
+
+        sites, types = gate.calls_the_gate_cannot_see()
+
+        self.assertGreater(sites, 0, "if this is zero the pattern stopped matching, not the debt")
+        self.assertIn("Wallet", types)
