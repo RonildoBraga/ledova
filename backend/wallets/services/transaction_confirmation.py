@@ -75,11 +75,15 @@ class TransactionConfirmationService:
             native = native_asset_for_chain(wallet.chain)
 
             if asset == native:
-                holding = TransactionConfirmationService._move_holding(tx, asset, -(amount + fee))
+                holding, taken = TransactionConfirmationService._move_holding(tx, asset, -(amount + fee))
+                tx.deducted_amount = -taken
             else:
-                holding = TransactionConfirmationService._move_holding(tx, asset, -amount)
+                holding, taken = TransactionConfirmationService._move_holding(tx, asset, -amount)
+                tx.deducted_amount = -taken
                 if fee:
-                    TransactionConfirmationService._move_holding(tx, native, -fee)
+                    _, taken_fee = TransactionConfirmationService._move_holding(tx, native, -fee)
+                    tx.deducted_fee = -taken_fee
+            tx.save(update_fields=["deducted_amount", "deducted_fee"])
 
             logger.info(
                 "Created pending transaction: "
@@ -166,14 +170,15 @@ class TransactionConfirmationService:
             send_transaction_notification.defer(user_id=str(user.pk), transaction_id=str(tx.uuid), event_type=event)
 
     @staticmethod
-    def _move_holding(tx: Transaction, asset: Asset, delta: Decimal) -> Holding:
+    def _move_holding(tx: Transaction, asset: Asset, delta: Decimal) -> tuple[Holding, Decimal]:
         holding, _ = Holding.objects.get_or_create(
             wallet=tx.wallet,
             asset=asset,
             defaults={"quantity": Decimal("0")},
         )
 
-        holding.quantity = max(Decimal("0"), holding.quantity + delta)
+        before = holding.quantity
+        holding.quantity = max(Decimal("0"), before + delta)
         holding.last_synced_at = timezone.now()
         holding.save(update_fields=["quantity", "last_synced_at"])
 
@@ -186,7 +191,7 @@ class TransactionConfirmationService:
                 "caused_by_transaction": tx,
             },
         )
-        return holding
+        return holding, holding.quantity - before
 
     @staticmethod
     def _verify_holding_balance(wallet: Wallet, asset: Asset) -> None:
@@ -219,17 +224,24 @@ class TransactionConfirmationService:
 
     @staticmethod
     def _revert_optimistic_holding(tx: Transaction) -> None:
-        fee = tx.transaction_fee_estimated or Decimal("0")
         native = native_asset_for_chain(tx.wallet.chain)
+        amount, fee = TransactionConfirmationService._deductions_to_reverse(tx, native)
 
-        if tx.asset == native:
-            holding = TransactionConfirmationService._move_holding(tx, tx.asset, tx.amount + fee)
-        else:
-            holding = TransactionConfirmationService._move_holding(tx, tx.asset, tx.amount)
-            if fee:
-                TransactionConfirmationService._move_holding(tx, native, fee)
+        holding, _ = TransactionConfirmationService._move_holding(tx, tx.asset, amount)
+        if fee:
+            TransactionConfirmationService._move_holding(tx, native, fee)
 
         logger.info(
-            f"Reverted optimistic holding: +{tx.amount} {tx.asset.symbol} and +{fee} {native.symbol}, "
+            f"Reverted optimistic holding: +{amount} {tx.asset.symbol} and +{fee} {native.symbol}, "
             f"new_balance={holding.quantity}"
         )
+
+    @staticmethod
+    def _deductions_to_reverse(tx: Transaction, native: Asset) -> tuple[Decimal, Decimal]:
+        if tx.deducted_amount is not None:
+            return tx.deducted_amount, tx.deducted_fee or Decimal("0")
+
+        fee = tx.transaction_fee_estimated or Decimal("0")
+        if tx.asset == native:
+            return tx.amount + fee, Decimal("0")
+        return tx.amount, fee
