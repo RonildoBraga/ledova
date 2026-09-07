@@ -1,4 +1,4 @@
-PRINCIPAL = "current_setting('app.user_id')::bigint"
+PRINCIPAL = "NULLIF(current_setting('app.user_id', true), '')::bigint"
 
 MEMBER_ACCOUNTS = "app_member_account_ids"
 VISIBLE_COMPANIES = "app_visible_company_ids"

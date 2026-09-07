@@ -2,7 +2,7 @@ from unittest import skipUnless
 
 from django.conf import settings
 from django.db import connection, transaction
-from django.db.utils import Error, ProgrammingError
+from django.db.utils import ProgrammingError
 from django.test import TestCase
 
 from companies.models import Company
@@ -98,18 +98,17 @@ class ThePolicyScopesWhatTheQuerysetScopedTest(TestCase):
 
         self.assertIn("row-level security policy", str(caught.exception))
 
-    def test_a_query_with_no_principal_raises_rather_than_returning_nothing(self):
+    def test_a_query_with_no_principal_returns_nothing_rather_than_raising(self):
         with connection.cursor() as cursor:
             cursor.execute(f"SET ROLE {settings.RLS_ROLES['app']}")
         self.addCleanup(self.back_to_the_owner)
 
-        with self.assertRaises(Error) as caught, transaction.atomic():
-            list(Company.objects.all())
+        self.assertEqual(list(UserPreferences.objects.all()), [])
 
-        self.assertRegex(
-            str(caught.exception),
-            r'unrecognized configuration parameter "app\.user_id"|invalid input syntax for type bigint',
-        )
+    def test_the_rows_it_cannot_see_are_there_for_a_principal_that_has_one(self):
+        self.as_the_app_role_for(self.one.user)
+
+        self.assertNotEqual(list(UserPreferences.objects.all()), [])
 
 
 @skipUnless(POSTGRES, REASON)
