@@ -5,7 +5,7 @@ import { formatDateTime } from '@ledova/shared';
 import type { Notification } from '@ledova/shared';
 import { useAppTheme, useThemedStyles } from '../../contexts';
 import { CustomModal } from '../modal';
-import { useNotifications } from '../../hooks/useNotifications';
+import { useNotifications } from '@ledova/shared';
 
 interface NotificationsModalProps {
   visible: boolean;

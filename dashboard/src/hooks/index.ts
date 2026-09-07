@@ -1,6 +1,5 @@
 export { useAuth } from './useAuth';
 export { useCurrency } from './useCurrency';
-export { useNotifications } from './useNotifications';
 export { useSelectedPortfolio } from './useSelectedPortfolio';
 export { useFinancialProfile } from './useFinancialProfile';
 export { useIdentityVerification } from './useIdentityVerification';
