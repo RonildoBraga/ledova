@@ -23,9 +23,9 @@ import type {
   TransferOrder,
   Wallet,
 } from '@ledova/shared';
-import { encodeEthereumMessage, encodeEthereumTypedData } from '@utils/keystone/urEncoder';
+import { encodeEthereumTypedData } from '@utils/keystone/urEncoder';
 import { decodeKeystoneMessageSignature } from '@utils/keystone/urDecoder';
-import { signEthereumMessage, signEthereumTypedData, deriveAddress } from '@utils/softwareWallet/localSigner';
+import { signEthereumTypedData, deriveAddress } from '@utils/softwareWallet/localSigner';
 import { useOrderCreateMessage, useOrderCancelMessage, useCreateOrder, useCancelOrder } from '../useTrading';
 
 type SigningMode = 'create' | 'cancel';
@@ -115,22 +115,13 @@ export function OrderSigningFlow({
       return;
     }
 
-    const encoded =
-      'digest' in messageData
-        ? encodeEthereumTypedData(
-            wallet.address,
-            { domain: messageData.domain, types: messageData.types, message: messageData.message },
-            wallet.derivationPath || undefined,
-            wallet.masterFingerprint || undefined,
-            getWalletVerificationEvmChainId(wallet.chain) ?? undefined,
-          )
-        : encodeEthereumMessage(
-            wallet.address,
-            messageData.message,
-            wallet.derivationPath || undefined,
-            wallet.masterFingerprint || undefined,
-            getWalletVerificationEvmChainId(wallet.chain) ?? undefined,
-          );
+    const encoded = encodeEthereumTypedData(
+      wallet.address,
+      { domain: messageData.domain, types: messageData.types, message: messageData.message },
+      wallet.derivationPath || undefined,
+      wallet.masterFingerprint || undefined,
+      getWalletVerificationEvmChainId(wallet.chain) ?? undefined,
+    );
 
     if (!encoded) {
       setError('Failed to encode message for signing');
@@ -156,11 +147,11 @@ export function OrderSigningFlow({
 
       setSigningStep('submitting');
 
-      if (isCreating && orderData && !('digest' in messageData)) {
+      if (isCreating && orderData) {
         createOrderMutation.mutate(
           {
             ...orderData,
-            message: messageData.message,
+            digest: messageData.digest,
             signature,
           },
           {
@@ -174,7 +165,7 @@ export function OrderSigningFlow({
             },
           },
         );
-      } else if (isCancelling && orderUuid && 'digest' in messageData) {
+      } else if (isCancelling && orderUuid) {
         cancelOrderMutation.mutate(
           {
             uuid: orderUuid,
@@ -208,16 +199,13 @@ export function OrderSigningFlow({
       }
 
       setSigningStep('submitting');
-      const signature =
-        'digest' in messageData
-          ? await signEthereumTypedData(
-              seedPhrase.trim(),
-              wallet.derivationPath,
-              messageData.domain,
-              messageData.types,
-              messageData.message,
-            )
-          : await signEthereumMessage(seedPhrase.trim(), wallet.derivationPath, messageData.message);
+      const signature = await signEthereumTypedData(
+        seedPhrase.trim(),
+        wallet.derivationPath,
+        messageData.domain,
+        messageData.types,
+        messageData.message,
+      );
       setSeedPhrase('');
       handleSignatureScanned(signature);
     } catch (err) {
@@ -291,14 +279,14 @@ export function OrderSigningFlow({
                     <>
                       <div className="text-text-muted">Type</div>
                       <div
-                        className={`font-medium ${messageData.orderType === 'buy' ? 'text-success-light' : 'text-error-light'}`}
+                        className={`font-medium ${messageData.message.orderType === 'buy' ? 'text-success-light' : 'text-error-light'}`}
                       >
-                        {messageData.orderType.toUpperCase()}
+                        {String(messageData.message.orderType).toUpperCase()}
                       </div>
                       <div className="text-text-muted">Quantity</div>
-                      <div className="text-text-primary">{messageData.quantity} shares</div>
+                      <div className="text-text-primary">{messageData.message.quantity} shares</div>
                       <div className="text-text-muted">Price</div>
-                      <div className="text-text-primary">${messageData.pricePerShare}</div>
+                      <div className="text-text-primary">${messageData.message.pricePerShare}</div>
                     </>
                   )}
                   {isCancelling && 'orderUuid' in messageData && (

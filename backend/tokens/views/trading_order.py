@@ -26,6 +26,7 @@ from tokens.services import (
     TradingOrderService,
 )
 from tokens.services.trading_order_cancel import cancel_signed_order
+from tokens.services.trading_order_create import verify_and_spend_create
 from tokens.trading_wallet_access import resolve_verified_evm_wallets
 
 
@@ -41,7 +42,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
         return TransferOrder.objects.with_relations().visible_to_user(self.request.user)
 
     def get_serializer_class(self):
-        if self.action == "create_order":
+        if self.action in ["create_order", "create_message"]:
             return TransferOrderCreateSerializer
         if self.action in ["retrieve", "cancel"]:
             return TransferOrderDetailSerializer
@@ -53,15 +54,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
 
-        TradingOrderService.verify_order_create_signature(
-            wallet_address=data["wallet_address"],
-            token_uuid=str(data["token"].uuid),
-            order_type=data["order_type"],
-            quantity=data["quantity"],
-            price_per_share=data["price_per_share"],
-            message=request.data.get("message"),
-            signature=request.data.get("signature"),
-        )
+        verify_and_spend_create(data, request.data.get("digest"), request.data.get("signature"))
 
         transfer_service = TokenTransferService()
         order, match_result = transfer_service.create_order_and_match(
@@ -103,8 +96,8 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
         data = serializer.validated_data
 
         message_data = TradingOrderService.get_order_create_message(
+            token=data["token"],
             wallet_address=data["wallet_address"],
-            token_uuid=str(data["token"].uuid),
             order_type=data["order_type"],
             quantity=data["quantity"],
             price_per_share=data["price_per_share"],

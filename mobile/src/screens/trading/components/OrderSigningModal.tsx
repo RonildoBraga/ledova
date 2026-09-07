@@ -192,15 +192,17 @@ export function OrderSigningModal({
                   <>
                     <View style={styles.summaryRow}>
                       <Text style={styles.summaryLabel}>Type</Text>
-                      <Text style={styles.summaryValue}>{signing.messageData.orderType.toUpperCase()}</Text>
+                      <Text style={styles.summaryValue}>
+                        {String(signing.messageData.message.orderType).toUpperCase()}
+                      </Text>
                     </View>
                     <View style={styles.summaryRow}>
                       <Text style={styles.summaryLabel}>Quantity</Text>
-                      <Text style={styles.summaryValue}>{signing.messageData.quantity} shares</Text>
+                      <Text style={styles.summaryValue}>{signing.messageData.message.quantity} shares</Text>
                     </View>
                     <View style={styles.summaryRow}>
                       <Text style={styles.summaryLabel}>Price</Text>
-                      <Text style={styles.summaryValue}>${signing.messageData.pricePerShare}</Text>
+                      <Text style={styles.summaryValue}>${signing.messageData.message.pricePerShare}</Text>
                     </View>
                   </>
                 )}

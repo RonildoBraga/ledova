@@ -190,16 +190,6 @@ export interface GetSwapDataParams {
   walletAddress: string;
 }
 
-export interface CreateOrderMessageResponse {
-  walletAddress: string;
-  tokenUuid: string;
-  orderType: string;
-  quantity: number;
-  pricePerShare: string;
-  message: string;
-  instructions: string;
-}
-
 export interface SigningChallengeTypedData {
   domain: {
     name: string;
@@ -218,8 +208,15 @@ export interface CancelOrderMessageResponse extends SigningChallengeTypedData {
   expiresAt: string;
 }
 
+export interface CreateOrderMessageResponse extends SigningChallengeTypedData {
+  tokenUuid: string;
+  walletAddress: string;
+  digest: string;
+  expiresAt: string;
+}
+
 export interface SignedCreateOrderRequest extends CreateOrderRequest {
-  message: string;
+  digest: string;
   signature: string;
 }
 
