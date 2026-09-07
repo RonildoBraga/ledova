@@ -50,7 +50,10 @@ def complete_wallet_verification(user, uuid, signature):
     wallet.verification_status = WALLET_VERIFICATION_STATUS_VERIFIED
     wallet.verification_signature = signature
     wallet.verified_at = timezone.now()
-    wallet.save(update_fields=["verification_status", "verification_signature", "verified_at"])
+    wallet.verification_challenge = None
+    wallet.save(
+        update_fields=["verification_status", "verification_signature", "verified_at", "verification_challenge"]
+    )
 
     _queue_sync(wallet)
     return wallet
