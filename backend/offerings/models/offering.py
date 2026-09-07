@@ -148,7 +148,8 @@ class Offering(DerivesCompanyFromToken, BaseModel):
         self.status = OfferingStatus.SUBMITTED
         self.submitted_at = timezone.now()
         self.submitted_by = submitted_by
-        self.save(update_fields=["status", "submitted_at", "submitted_by", "updated_at"])
+        self.rejection_reason = ""
+        self.save(update_fields=["status", "submitted_at", "submitted_by", "rejection_reason", "updated_at"])
 
     def start_review(self, reviewed_by=None):
         self._require_status([OfferingStatus.SUBMITTED], OfferingStatus.UNDER_REVIEW)

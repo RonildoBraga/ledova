@@ -119,6 +119,33 @@ class ARejectedOfferingIsResubmittedNotRecreatedTest(APITestCase):
         self.assertNotEqual(self.offering.status, OfferingStatus.DRAFT)
         self.assertEqual(self.offering.status, OfferingStatus.SUBMITTED)
 
+    def test_the_reason_is_still_there_while_it_sits_rejected_and_editable(self):
+        self._reject()
+
+        self.assertEqual(self.offering.rejection_reason, REASON)
+
+        self.client.patch(self.detail, {"summary": "Corrected"}, format="json")
+
+        self.offering.refresh_from_db()
+        self.assertEqual(self.offering.rejection_reason, REASON)
+
+    def test_resubmitting_clears_the_reason_so_an_approval_does_not_carry_it(self):
+        self._reject()
+
+        self.client.post(f"{self.detail}submit/")
+
+        self.offering.refresh_from_db()
+        self.assertEqual((self.offering.status, self.offering.rejection_reason), (OfferingStatus.SUBMITTED, ""))
+
+    def test_an_offering_approved_after_a_rejection_carries_no_rejection_reason(self):
+        self._reject()
+        self.client.post(f"{self.detail}submit/")
+        self.offering.refresh_from_db()
+        self.offering.approve(notes="Fixed on resubmission")
+
+        self.offering.refresh_from_db()
+        self.assertEqual((self.offering.status, self.offering.rejection_reason), (OfferingStatus.APPROVED, ""))
+
     def test_resubmitting_while_another_offering_is_live_is_refused_rather_than_a_constraint_error(self):
         rival = Offering.objects.get(pk=self.offering.pk)
         rival.pk = None
