@@ -103,14 +103,20 @@ class EveryTenantTableIsScopedByAPolicyTest(TransactionTestCase):
 
                 self.assertEqual(policies[f"{table}_update"], policies[f"{table}_insert"])
 
-    def test_an_insert_only_override_moves_insert_alone_and_leaves_the_others_on_writable(self):
-        for table in sorted(INSERTABLE):
+    def test_what_may_be_updated_is_what_may_be_deleted_because_both_are_the_writable_term(self):
+        for table in sorted(POLICIES):
             with self.subTest(table=table):
                 checks = {name: check for name, _, check in self._ask(POLICY_EXPRESSIONS, table)}
                 quals = {name: qual for name, qual, _ in self._ask(POLICY_EXPRESSIONS, table)}
 
-                self.assertNotEqual(checks[f"{table}_insert"], checks[f"{table}_update"])
                 self.assertEqual(checks[f"{table}_update"], quals[f"{table}_delete"])
+
+    def test_an_insert_only_override_moves_insert_alone(self):
+        for table in sorted(INSERTABLE):
+            with self.subTest(table=table):
+                checks = {name: check for name, _, check in self._ask(POLICY_EXPRESSIONS, table)}
+
+                self.assertNotEqual(checks[f"{table}_insert"], checks[f"{table}_update"])
 
     def test_the_membership_tables_carry_leaf_policies(self):
         for table in LEAF_TABLES:

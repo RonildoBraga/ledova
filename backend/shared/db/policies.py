@@ -255,7 +255,10 @@ INSERT_ONLY_REASONS = {
         "the membership on the next line, so the member term is false for the statement that creates it "
         "and true for every statement after. The director is known at insert, so INSERT WITH CHECK admits "
         "it and UPDATE WITH CHECK and DELETE USING do not - widening deletion to a director is a separate "
-        "decision nobody has taken (R19)."
+        "decision nobody has taken (R19). The read term is not widened either, so between the insert and "
+        "the membership a director holds a row it can neither see nor delete: ensure_defaults carries "
+        "@atomic() from shared.db, which opens on the alias its queries go to and wraps the create and "
+        "the membership together, so there is no state where one exists without the other."
     ),
 }
 

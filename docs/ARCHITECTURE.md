@@ -903,11 +903,31 @@ runs. Both mechanisms hold at once on purpose:
   policy does not can be read and never locked, and `select_for_update().get()`
   turns that into `DoesNotExist` rather than a refusal. `USING` governs who may
   lock, `WITH CHECK` governs who may write, so all the narrowing lives in
-  `WITH CHECK`; `INSERT`'s `WITH CHECK` and `DELETE`'s `USING` stay owner-only.
-  A test reads `pg_policies` and requires the two `USING` expressions to be
-  textually equal. `SELECT` carries
-  the read scope and `INSERT`, `UPDATE` and `DELETE` carry the write scope, as
-  separate statements. `companies_company` is read at two scopes on purpose —
+  `WITH CHECK`; `DELETE`'s `USING` carries the same write scope, and a test reads
+  `pg_policies` and requires `UPDATE`'s `WITH CHECK` and `DELETE`'s `USING` to be
+  textually equal for **every** policied table, because both install from the
+  same term.
+- **`INSERT`'s `WITH CHECK` is the one command that may differ, and only where
+  the catalogue says so.** `INSERTABLE` names the tables where creating a row
+  and writing to an existing one are not the same permission, and the installer
+  applies it to `INSERT` alone. There is one today: a new user's first
+  `customer_accounts_account` cannot satisfy the member term at insert, because
+  `ensure_defaults` creates the row and adds the membership on the next line, so
+  the term is false for the statement that creates it and true for every
+  statement after. The director is known at insert, so `INSERT` admits it —
+  *you may create an account you direct, and write to accounts you are a member
+  of* — while `UPDATE` and `DELETE` do not, since widening deletion to a
+  director is a separate decision nobody has taken (R19). `INSERT_ONLY_REASONS`
+  carries that sentence beside the term and a test refuses a reason shorter than
+  200 characters. **The read term is not widened either**, so between the insert
+  and the membership the director holds a row it can neither see nor delete;
+  `ensure_defaults` carries `@atomic()` from `shared.db`, which opens on the
+  alias its queries go to and wraps the create and the membership together, so
+  there is no state where one exists without the other. R23 is why that
+  decorator is enough: a bare `@transaction.atomic` would have opened on
+  `default` while the router sent these writes elsewhere.
+- `SELECT` carries the read scope and `INSERT`, `UPDATE` and `DELETE` carry the
+  write scope, as separate statements. `companies_company` is read at two scopes on purpose —
   `visible_to_user` for issuer surfaces and `all()` for the market — and one
   `FOR ALL` policy under `FORCE` can only encode the stricter of the two.
 - **A table reached past a company carries the public-visibility term its own
