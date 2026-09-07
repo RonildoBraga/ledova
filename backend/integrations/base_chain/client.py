@@ -27,7 +27,8 @@ logger = logging.getLogger(__name__)
 LOG_PREFIX = "[BASE_CHAIN]"
 
 HTTP_TIMEOUT_SECONDS = 30
-BROADCAST_ROUND_TRIPS = 4
+UNESTIMATED_GAS = 1
+BROADCAST_ROUND_TRIPS = 7
 GAS_HEADROOM = 1.2
 
 
@@ -35,6 +36,7 @@ class BaseChainClient:
 
     _instance: Optional["BaseChainClient"] = None
     _web3: Optional[Web3] = None
+    _verified_chain_id: Optional[int] = None
 
     def __new__(cls) -> "BaseChainClient":
         if cls._instance is None:
@@ -49,6 +51,7 @@ class BaseChainClient:
         rpc_url = getattr(settings, "BLOCKCHAIN_RPC_URL", "http://localhost:8545")
 
         try:
+            type(self)._verified_chain_id = None
             self._web3 = Web3(Web3.HTTPProvider(rpc_url, request_kwargs={"timeout": HTTP_TIMEOUT_SECONDS}))
             self._web3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
 
@@ -69,12 +72,15 @@ class BaseChainClient:
             raise BaseChainConnectionError("Failed to connect to configured EVM endpoint") from e
 
     def assert_expected_chain(self) -> int:
+        if type(self)._verified_chain_id is not None:
+            return type(self)._verified_chain_id
         actual_chain_id = self.w3.eth.chain_id
         expected_chain_id = settings.BLOCKCHAIN_CHAIN_ID
         if actual_chain_id != expected_chain_id:
             raise BaseChainConnectionError(
                 f"Refusing EVM endpoint on chain {actual_chain_id}; expected chain {expected_chain_id}"
             )
+        type(self)._verified_chain_id = actual_chain_id
         return actual_chain_id
 
     @property
@@ -191,9 +197,9 @@ class BaseChainClient:
         else:
             tx["gasPrice"] = gas_price
 
+        tx["gas"] = gas if gas is not None else UNESTIMATED_GAS
         tx = contract_function.build_transaction(tx)
-
-        tx["gas"] = self.estimate_gas(tx) if gas is None else gas
+        tx["gas"] = gas if gas is not None else self.estimate_gas(tx)
 
         return tx
 
