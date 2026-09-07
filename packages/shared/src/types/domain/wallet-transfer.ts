@@ -79,7 +79,7 @@ export interface BroadcastTransferRequest {
 export interface BroadcastTransferResponse {
   success: boolean;
   txHash: string;
-  status: 'pending' | 'confirmed' | 'failed';
+  status: 'pending' | 'confirmed' | 'failed' | 'reorged' | 'replaced';
   message: string;
   pendingTransaction?: {
     uuid: string;

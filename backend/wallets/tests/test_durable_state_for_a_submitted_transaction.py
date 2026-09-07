@@ -11,6 +11,7 @@ from wallets.constants import (
     TRANSACTION_STATUS_PENDING,
     TRANSACTION_STATUS_REORGED,
     TRANSACTION_STATUS_REPLACED,
+    TRANSACTION_STATUSES_THAT_RETURN_THE_OPTIMISTIC_DEBIT,
 )
 from wallets.models import Holding, Transaction, Wallet
 from wallets.services.transaction_confirmation import TransactionConfirmationService
@@ -128,3 +129,69 @@ class AReplacedTransactionKeepsTheHoldingItSpentTest(TestCase):
 
         self.assertEqual(row.nonce, 41)
         self.assertEqual(Transaction.objects.filter(from_address=self.wallet.address, nonce=41).count(), 1)
+
+
+class TheTupleIsTheOnlyPlaceTheRuleIsWrittenTest(TestCase):
+
+    def setUp(self):
+        patch(TASK).start()
+        patch.object(TransactionConfirmationService, "_verify_holding_balance").start()
+        patch.object(TransactionConfirmationService, "_update_snapshot_on_confirmation").start()
+        self.addCleanup(patch.stopall)
+        self.tenant = make_tenant("ledger")
+        self.wallet = self.tenant.wallet
+        self.asset = native_asset_for_chain(self.wallet.chain)
+
+    def a_pending_row(self, tx_hash):
+        Holding.objects.update_or_create(wallet=self.wallet, asset=self.asset, defaults={"quantity": HELD})
+        return Transaction.objects.create(
+            tx_hash=tx_hash,
+            chain=self.wallet.chain,
+            from_address=self.wallet.address,
+            to_address="0x" + "cc" * 20,
+            asset=self.asset,
+            amount=SENT,
+            status=TRANSACTION_STATUS_PENDING,
+            deducted_amount=SENT,
+            wallet=self.wallet,
+        )
+
+    def held(self):
+        return Holding.objects.get(wallet=self.wallet, asset=self.asset).quantity
+
+    def returned_the_debit(self, tx_hash, act, confirmed_first=False):
+        row = self.a_pending_row(tx_hash)
+        if confirmed_first:
+            Transaction.objects.filter(pk=row.pk).update(status=TRANSACTION_STATUS_CONFIRMED)
+        act(tx_hash)
+        return self.held() > HELD
+
+    def test_the_statuses_that_return_the_debit_are_exactly_the_ones_the_tuple_names(self):
+        returned = set()
+        outcomes = (
+            (TRANSACTION_STATUS_FAILED, "0xf", lambda h: TransactionConfirmationService.fail_transaction(h), False),
+            (
+                TRANSACTION_STATUS_REORGED,
+                "0xr",
+                lambda h: TransactionConfirmationService.mark_reorged(h, self.wallet),
+                True,
+            ),
+            (
+                TRANSACTION_STATUS_REPLACED,
+                "0xp",
+                lambda h: TransactionConfirmationService.mark_replaced(h, self.wallet, REPLACEMENT),
+                False,
+            ),
+            (
+                TRANSACTION_STATUS_CONFIRMED,
+                "0xc",
+                lambda h: TransactionConfirmationService.confirm_transaction(h, block_number=7),
+                False,
+            ),
+        )
+        for status, tx_hash, act, confirmed_first in outcomes:
+            with self.subTest(status=status):
+                if self.returned_the_debit(tx_hash, act, confirmed_first):
+                    returned.add(status)
+
+        self.assertEqual(returned, set(TRANSACTION_STATUSES_THAT_RETURN_THE_OPTIMISTIC_DEBIT))
