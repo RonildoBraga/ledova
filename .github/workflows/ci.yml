@@ -25,6 +25,8 @@ jobs:
         run: python scripts/check-type-check.py
       - name: Logging privacy gate
         run: python scripts/check-logging.py
+      - name: Connection binding
+        run: python scripts/check-connection-binding.py
       - name: Schema response gate
         run: python scripts/check-schema-responses.py
       - name: Test shadowing gate
@@ -140,6 +142,17 @@ jobs:
           POSTGRES_DB: ledova
           POSTGRES_USER: ledova
         run: python manage.py test --settings=ledova_backend.settings.test_postgres --noinput
+      - name: Request path on the scoped connection (the half the ordinary settings cannot see)
+        env:
+          POSTGRES_HOST: 127.0.0.1
+          POSTGRES_PORT: '5432'
+          POSTGRES_DB: ledova
+          POSTGRES_USER: ledova
+        run: |
+          python manage.py test shared.tests.test_scoped_harness \
+            --settings=ledova_backend.settings.test_scoped --noinput
+          python manage.py test users.tests.test_account_type_under_the_app_role \
+            --settings=ledova_backend.settings.test_scoped --noinput
       - name: Row-level-security roles (the half no test can see)
         env:
           POSTGRES_HOST: 127.0.0.1

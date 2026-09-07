@@ -4,11 +4,11 @@ import secrets
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
-from django.db import transaction
 from django.utils import timezone
 
 from companies.models import Company, CompanyStatus, CompanyType
 from operators.models import Operator
+from shared.db import atomic
 from shared.seeds.demo import (
     DEMO_ACN,
     DEMO_ADMIN_EMAIL,
@@ -69,7 +69,7 @@ class Command(BaseCommand):
             help="Seed even when DEBUG is off. This creates accounts with a known password.",
         )
 
-    @transaction.atomic
+    @atomic()
     def handle(self, *args, **options):
         if not settings.DEBUG and not options["force"]:
             raise CommandError(

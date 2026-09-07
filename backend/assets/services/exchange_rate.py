@@ -2,10 +2,9 @@ import logging
 from decimal import Decimal
 from typing import Optional
 
-from django.db import transaction
-
 from assets.models import ExchangeRate
 from integrations.coingecko import CoinGeckoClient
+from shared.db import atomic
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +24,7 @@ class ExchangeRateService:
                 logger.warning(f"Could not fetch exchange rate for USD→{currency}")
                 continue
 
-            with transaction.atomic():
+            with atomic():
                 ExchangeRate.objects.update_or_create(
                     base_currency="USD",
                     target_currency=currency,

@@ -2,9 +2,10 @@ import logging
 from datetime import timedelta
 from typing import Any
 
-from django.db import transaction
 from django.utils import timezone
 from web3 import Web3
+
+from shared.db import atomic
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +49,7 @@ class TransactionMonitorService:
         return {"checked": checked, "confirmed": confirmed, "failed": failed}
 
     @staticmethod
-    @transaction.atomic
+    @atomic()
     def cleanup_stale_transactions(hours: int = 24) -> dict[str, Any]:
         from blockchain.models import BlockchainTransaction
 

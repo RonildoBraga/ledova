@@ -2,9 +2,9 @@ import logging
 from decimal import Decimal
 from typing import Optional
 
-from django.db import transaction
 from django.utils import timezone
 
+from shared.db import atomic
 from tokens.exceptions import (
     OrderModificationConflictException,
     OrderModificationException,
@@ -121,7 +121,7 @@ class OrderModificationService:
             },
         }
 
-    @transaction.atomic
+    @atomic()
     def apply_modification(
         self,
         order: TransferOrder,

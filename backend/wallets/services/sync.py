@@ -3,7 +3,6 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
-from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
@@ -12,6 +11,7 @@ from assets.services.identity import native_asset_for_chain, quarantine_unknown_
 from compliance.services.transaction_monitoring import TransactionMonitoringService
 from integrations.blockchain import get_blockchain_client
 from shared.constants import normalize_chain
+from shared.db import atomic
 from wallets.constants import SNAPSHOT_REASON_TRANSACTION
 from wallets.models import Holding, HoldingSnapshot, Transaction, Wallet
 from wallets.services.holdings import sync_holding
@@ -59,7 +59,7 @@ class WalletSyncService:
         transactions_created = 0
         snapshots_created = 0
 
-        with transaction.atomic():
+        with atomic():
             for tx_data in transactions_data:
                 try:
                     result = WalletSyncService._process_single_transaction(wallet, tx_data)

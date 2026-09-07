@@ -1,7 +1,6 @@
 from typing import Optional
 
 from django.conf import settings
-from django.db import transaction
 from web3 import Web3
 
 from blockchain.models import BlockchainTransaction, TransactionStatus
@@ -10,6 +9,7 @@ from integrations.base_chain.exceptions import (
     BaseChainContractError,
     BaseChainTransactionError,
 )
+from shared.db import atomic
 from tokens.exceptions import (
     InvalidRecipientAddressException,
     NotAuthorizedMinterException,
@@ -64,7 +64,7 @@ class BaseTokenService:
     def get_decimals(self) -> int:
         return self.contract.functions.decimals().call()
 
-    @transaction.atomic
+    @atomic()
     def mint(
         self,
         to_address: str,

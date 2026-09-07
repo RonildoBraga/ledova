@@ -1,11 +1,10 @@
 import logging
 from decimal import Decimal
 
-from django.db import transaction
-
 from offerings.exceptions import OfferingRefusedException
 from offerings.models import Offering
 from operators.settlement import require_deployment
+from shared.db import atomic
 from tokens.models import ShareIssuance, ShareToken
 from users.models.investor_classification import PRODUCT_VALUE_THRESHOLD_AUD
 from users.tasks.notifications import send_push_notification
@@ -68,7 +67,7 @@ def _check_bounds(offering: Offering) -> None:
         )
 
 
-@transaction.atomic
+@atomic()
 def transition_offering(offering: Offering, method: str, **kwargs) -> Offering:
     if method == "approve":
         _check_bounds(offering)
@@ -130,7 +129,7 @@ def _check_exemption(offering: Offering) -> None:
         )
 
 
-@transaction.atomic
+@atomic()
 def submit_offering(offering: Offering, submitted_by) -> Offering:
     token = ShareToken.objects.select_for_update().get(pk=offering.token_id)
     offering.token = token

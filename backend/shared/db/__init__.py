@@ -11,15 +11,18 @@ from .aliases import (
     use_operator,
 )
 from .principal import PRINCIPAL_SETTING, principal_of, reset_principal, set_principal
+from .transactions import atomic, on_commit
 
 __all__ = [
     "APP_ALIAS",
+    "atomic",
     "MIGRATE_ALIAS",
     "OPERATOR_ALIAS",
     "PRINCIPAL_SETTING",
     "clear_alias",
     "configured",
     "current_alias",
+    "on_commit",
     "select_operator",
     "principal_of",
     "reset_principal",

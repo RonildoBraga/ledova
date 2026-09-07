@@ -2,10 +2,10 @@ import logging
 import secrets
 
 from django.conf import settings
-from django.db import transaction
 from django.utils import timezone
 from eth_utils import to_checksum_address
 
+from shared.db import atomic
 from shared.utils.typed_data import (
     build_domain,
     recover_typed_data_signer,
@@ -179,7 +179,7 @@ def purge_expired_challenges(now=None, batch: int = 500, passes: int = 20) -> in
     return removed
 
 
-@transaction.atomic
+@atomic()
 def _purge_one_batch(cutoff, batch: int) -> int:
     _, by_model = SigningChallenge.objects.purgeable(cutoff, batch).delete()
     return by_model.get(SigningChallenge._meta.label, 0)

@@ -4,7 +4,6 @@ from datetime import timedelta
 from typing import Optional
 
 from django.conf import settings
-from django.db import transaction
 from django.utils import timezone
 from eth_account import Account
 from eth_account.messages import _hash_eip191_message, encode_typed_data
@@ -12,6 +11,7 @@ from eth_account.messages import _hash_eip191_message, encode_typed_data
 from blockchain.models import BlockchainTransaction, TransactionStatus, TransactionType
 from integrations.base_chain import get_base_chain_client
 from operators.settlement import require_deployment
+from shared.db import atomic
 from shared.utils.blockchain import decode_exception_to_message
 from tokens.events import publish_trading_event
 from tokens.exceptions import (
@@ -241,7 +241,7 @@ class AtomicSwapService:
             "unlimited": unlimited,
         }
 
-    @transaction.atomic
+    @atomic()
     def create_swap_order(
         self,
         sell_order: TransferOrder,
@@ -312,7 +312,7 @@ class AtomicSwapService:
             logger.warning(f"Signature verification failed: {e}", exc_info=True)
             return False
 
-    @transaction.atomic
+    @atomic()
     def submit_signature(
         self,
         swap_order: SwapOrder,
@@ -421,13 +421,13 @@ class AtomicSwapService:
             related_uuid=swap_order.uuid,
         )
 
-    @transaction.atomic(durable=True)
+    @atomic(durable=True)
     def _record_intent(self, swap_order: SwapOrder, relayer_address: str, arguments: dict):
         tx_record = self._new_transaction_record(swap_order, relayer_address, arguments)
         swap_order.mark_executing(transaction=tx_record)
         return tx_record
 
-    @transaction.atomic(durable=True)
+    @atomic(durable=True)
     def _record_never_sent(
         self,
         swap_order: SwapOrder,
@@ -442,7 +442,7 @@ class AtomicSwapService:
         logger.error(f"Swap {swap_order.uuid} was never sent: {raw_error}")
         publish_trading_event("swap_failed", str(swap_order.share_token.uuid))
 
-    @transaction.atomic
+    @atomic()
     def _record_unknown_fate(self, swap_order: SwapOrder, tx_record, raw_error: str) -> None:
         tx_record.mark_outcome_unknown(raw_error)
         logger.error(f"Swap {swap_order.uuid} may or may not have been broadcast: {raw_error}")
@@ -459,12 +459,12 @@ class AtomicSwapService:
         self._record_receipt(swap_order, tx_record, tx_hash, receipt)
         return tx_hash
 
-    @transaction.atomic
+    @atomic()
     def _record_sent(self, swap_order: SwapOrder, tx_record, tx_hash: str) -> None:
         tx_record.mark_submitted(tx_hash)
         swap_order.mark_executing(tx_hash, transaction=tx_record)
 
-    @transaction.atomic
+    @atomic()
     def _record_receipt(self, swap_order: SwapOrder, tx_record, tx_hash: str, receipt) -> None:
         if receipt and receipt.get("status") == 1:
             block_hash = receipt.get("blockHash", "")
@@ -532,7 +532,7 @@ class AtomicSwapService:
 
         return self._abandon_unsettled(swap_order)
 
-    @transaction.atomic
+    @atomic()
     def _settle_from_chain(self, swap_order: SwapOrder) -> Optional[str]:
         swap = self._locked_with_its_orders(swap_order)
         if swap.status != SwapOrderStatus.EXECUTING:
@@ -543,7 +543,7 @@ class AtomicSwapService:
         publish_trading_event("swap_completed", str(swap.share_token.uuid))
         return "executed"
 
-    @transaction.atomic
+    @atomic()
     def _abandon_unsettled(self, swap_order: SwapOrder) -> Optional[str]:
         swap = self._locked_with_its_orders(swap_order)
         if swap.status != SwapOrderStatus.EXECUTING:

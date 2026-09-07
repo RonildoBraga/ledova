@@ -1,7 +1,7 @@
-from django.db import transaction
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from shared.db import atomic
 from shared.views.base import AuthenticatedModelViewSet
 from users.models.user_profile import UserProfile
 from users.serializers import UserProfileSerializer
@@ -26,7 +26,7 @@ class UserProfileViewSet(AuthenticatedModelViewSet):
     def perform_update(self, serializer):
         serializer.save()
 
-    @transaction.atomic
+    @atomic()
     def update(self, request, *args, **kwargs):
         return super().update(request, *args, **kwargs)
 

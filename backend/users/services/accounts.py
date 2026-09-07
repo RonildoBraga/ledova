@@ -1,11 +1,10 @@
-from django.db import transaction
-
 from compliance.services.risk_assessment import RiskAssessmentService
+from shared.db import atomic
 from users.constants import USER_ACCOUNT_TYPE_INDIVIDUAL
 from users.models import NotificationPreferences
 
 
-@transaction.atomic
+@atomic()
 def register_account(account, profile):
     account.user_profiles.add(profile)
     if account.account_type == USER_ACCOUNT_TYPE_INDIVIDUAL:

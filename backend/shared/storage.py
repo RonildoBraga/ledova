@@ -3,7 +3,9 @@ import os
 from django.apps import apps
 from django.conf import settings
 from django.core.files.storage import FileSystemStorage, storages
-from django.db import models, transaction
+from django.db import models
+
+from shared.db import on_commit
 
 PRIVATE_STORAGE_ALIAS = "private"
 
@@ -58,7 +60,7 @@ def _delete_stored_file(storage, name):
     def delete():
         storage.delete(name)
 
-    transaction.on_commit(delete)
+    on_commit(delete)
 
 
 def delete_file_when_the_row_is_gone(field_name):

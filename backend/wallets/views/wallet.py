@@ -1,9 +1,9 @@
-from django.db import transaction
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from shared.db import atomic
 from shared.views.base import AuthenticatedModelViewSet
 from wallets.constants import WALLET_VERIFICATION_STATUS_PENDING
 from wallets.filters import WalletFilter
@@ -39,7 +39,7 @@ class WalletViewSet(AuthenticatedModelViewSet):
             return queryset.select_for_update(of=("self",))
         return queryset.with_market_value()
 
-    @transaction.atomic
+    @atomic()
     def update(self, request, *args, **kwargs):
         return super().update(request, *args, **kwargs)
 

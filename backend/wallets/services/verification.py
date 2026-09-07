@@ -1,9 +1,9 @@
 import logging
 
-from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
+from shared.db import atomic
 from wallets.constants import WALLET_VERIFICATION_STATUS_VERIFIED
 from wallets.exceptions import (
     InvalidSignatureException,
@@ -26,7 +26,7 @@ def _locked_wallet(user, uuid):
     )
 
 
-@transaction.atomic
+@atomic()
 def start_wallet_verification(user, uuid):
     wallet = _locked_wallet(user, uuid)
     wallet.verification_challenge = generate_verification_challenge(wallet.address)
@@ -34,7 +34,7 @@ def start_wallet_verification(user, uuid):
     return wallet
 
 
-@transaction.atomic
+@atomic()
 def complete_wallet_verification(user, uuid, signature):
     wallet = _locked_wallet(user, uuid)
 

@@ -1,13 +1,14 @@
 import logging
 
 from django.contrib.auth import authenticate, get_user_model
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError
 from django.utils import timezone
 from rest_framework import serializers
 
 from authentication.email import EmailError, normalize_email
 from authentication.managers.user import EmailLookupState
 from authentication.services.tokens import TokenService
+from shared.db import atomic
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -23,7 +24,7 @@ def _resolve_signup_email(email):
 
 def _create_signup_user(email, password):
     try:
-        with transaction.atomic():
+        with atomic():
             return User.objects.create_user(email=email, password=password, is_active=True)
     except (IntegrityError, ValueError):
         raise serializers.ValidationError({"email": ["Email already registered"]}) from None
@@ -52,7 +53,7 @@ class SessionService:
         return user
 
     @staticmethod
-    @transaction.atomic
+    @atomic()
     def signup(email, password, password_confirmation):
         if not email or not password:
             raise serializers.ValidationError({"error": ["Email and password are required."]})

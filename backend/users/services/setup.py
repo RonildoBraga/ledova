@@ -1,15 +1,14 @@
 import logging
 
-from django.db import transaction
-
 from compliance.services.risk_assessment import RiskAssessmentService
 from portfolios.models import Portfolio
+from shared.db import atomic
 from users.models import UserAccount, UserPreferences, UserProfile
 
 logger = logging.getLogger(__name__)
 
 
-@transaction.atomic
+@atomic()
 def ensure_defaults(user):
     profile, _ = UserProfile.objects.get_or_create(user=user)
 

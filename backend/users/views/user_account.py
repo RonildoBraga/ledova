@@ -1,5 +1,4 @@
-from django.db import transaction
-
+from shared.db import atomic
 from shared.views.base import AuthenticatedModelViewSet
 from users.models import UserAccount
 from users.serializers.user_account import UserAccountSerializer
@@ -25,10 +24,10 @@ class UserAccountViewSet(AuthenticatedModelViewSet):
     def perform_update(self, serializer):
         return serializer.save()
 
-    @transaction.atomic
+    @atomic()
     def create(self, request, *args, **kwargs):
         return super().create(request, *args, **kwargs)
 
-    @transaction.atomic
+    @atomic()
     def update(self, request, *args, **kwargs):
         return super().update(request, *args, **kwargs)

@@ -2,9 +2,9 @@ import logging
 from decimal import Decimal
 from typing import Optional
 
-from django.db import transaction
 from django.utils import timezone
 
+from shared.db import atomic
 from wallets.constants import SNAPSHOT_REASON_DAILY
 from wallets.models import Holding, HoldingSnapshot
 from wallets.services.chain import fetch_chain_balance
@@ -18,7 +18,7 @@ def sync_holding(wallet, asset) -> Optional[Holding]:
         logger.info(f"No chain balance for {asset.symbol} on {wallet.chain}; holding left untouched")
         return None
 
-    with transaction.atomic():
+    with atomic():
         holding, _ = Holding.objects.get_or_create(wallet=wallet, asset=asset, defaults={"quantity": Decimal("0")})
         if holding.quantity != balance:
             logger.info(

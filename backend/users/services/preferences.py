@@ -1,14 +1,13 @@
-from django.db import transaction
-
+from shared.db import atomic
 from users.models import NotificationPreferences, UserPreferences, UserProfile
 
 
-@transaction.atomic
+@atomic()
 def upsert_user_preferences(user, fields):
     return _upsert(UserPreferences, user, fields)
 
 
-@transaction.atomic
+@atomic()
 def upsert_notification_preferences(user, fields):
     return _upsert(NotificationPreferences, user, fields)
 

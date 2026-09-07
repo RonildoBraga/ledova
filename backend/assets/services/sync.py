@@ -5,11 +5,11 @@ from decimal import Decimal
 from typing import Any, Dict, Optional, Tuple
 
 from django.conf import settings
-from django.db import transaction
 from django.utils import timezone
 
 from assets.models import Asset, AssetChainDeployment, AssetSnapshot, AssetType
 from integrations.coingecko import SYMBOL_TO_COINGECKO_ID, CoinGeckoClient
+from shared.db import atomic
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +125,7 @@ class AssetSyncService:
         if price <= 0:
             raise ValueError(f"Price must be positive, got {price}")
 
-        with transaction.atomic():
+        with atomic():
             asset.current_price = price
             asset.price_currency = currency
             asset.save(update_fields=["current_price", "price_currency", "updated_at"])

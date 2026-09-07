@@ -1,11 +1,10 @@
 import logging
 from typing import Optional
 
-from django.db import transaction
-
 from assets.models import Asset, AssetChainDeployment, AssetType
 from assets.services.sync import SUPPORTED_ASSETS
 from shared.constants import CHAIN_TO_NATIVE_ASSET, get_native_asset_symbol
+from shared.db import atomic
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +41,7 @@ def quarantine_unknown_token(
 
     decimals = decimals or 18
     declared = ((symbol or "").strip() or "UNKNOWN")[:SYMBOL_MAX_LENGTH]
-    with transaction.atomic():
+    with atomic():
         unique_symbol = free_symbol(declared, contract_address)
         asset = Asset.objects.create(
             symbol=unique_symbol,
@@ -84,7 +83,7 @@ def verified_contract_asset(
     if deployment is not None:
         return _adopt_deployment(deployment, name, decimals, asset_type)
 
-    with transaction.atomic():
+    with atomic():
         asset = Asset.objects.create(
             symbol=free_symbol(symbol[:SYMBOL_MAX_LENGTH], contract_address),
             name=name,

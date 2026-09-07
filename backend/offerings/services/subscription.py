@@ -2,7 +2,7 @@ import logging
 from datetime import timedelta
 from decimal import ROUND_DOWN, Decimal
 
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError
 from django.utils import timezone
 
 from offerings.exceptions import (
@@ -23,6 +23,7 @@ from offerings.services.payments import (
     raw_settlement_amount,
 )
 from operators.models import Operator
+from shared.db import atomic
 from tokens.models import IssuanceType, RequestStatus, ShareIssuanceRequest
 from tokens.services import ShareTokenService
 from users.services.eligibility import require_subscription_eligibility
@@ -142,7 +143,7 @@ def _require_eligible(subscription: Subscription):
     )
 
 
-@transaction.atomic
+@atomic()
 def submit(subscription: Subscription, submitted_by=None) -> Subscription:
     _require_open(subscription.offering)
     _check_bounds(subscription.offering, subscription.quantity)
@@ -152,7 +153,7 @@ def submit(subscription: Subscription, submitted_by=None) -> Subscription:
     return subscription
 
 
-@transaction.atomic
+@atomic()
 def accept(subscription: Subscription) -> Subscription:
     _require_eligible(subscription)
     subscription.accept()
@@ -189,7 +190,7 @@ def issue_instruction(subscription: Subscription, rail: str, settlement_asset=No
 
     for attempt in range(REFERENCE_ATTEMPTS):
         try:
-            with transaction.atomic():
+            with atomic():
                 subscription.mark_awaiting_payment(
                     rail=rail,
                     settlement_asset=asset,
@@ -213,7 +214,7 @@ def _locked(subscription: Subscription) -> Subscription:
     return Subscription.objects.select_for_update().get(pk=subscription.pk)
 
 
-@transaction.atomic
+@atomic()
 def confirm_payment(
     subscription: Subscription,
     confirmed_by,
@@ -237,7 +238,7 @@ def confirm_payment(
 
     allotted, refund, status = _payment_outcome(locked, received, accept_as_final)
     try:
-        with transaction.atomic():
+        with atomic():
             locked.record_payment(
                 status=status,
                 allotted_quantity=allotted,
@@ -356,7 +357,7 @@ def _refuse_the_issuance(subscription: Subscription, verb: str) -> None:
     raise _already_claimed(request, verb)
 
 
-@transaction.atomic
+@atomic()
 def record_refund(subscription: Subscription, amount: Decimal, reference: str = "", notes: str = "") -> Subscription:
     locked = _locked(subscription)
     value = _quantize(amount)
@@ -390,7 +391,7 @@ def _refuse_if_money_in(subscription: Subscription) -> None:
         )
 
 
-@transaction.atomic
+@atomic()
 def reject(subscription: Subscription, reason: str) -> Subscription:
     locked = _locked(subscription)
     _refuse_if_issuance_claimed(locked, "Rejecting it")
@@ -400,7 +401,7 @@ def reject(subscription: Subscription, reason: str) -> Subscription:
     return subscription
 
 
-@transaction.atomic
+@atomic()
 def withdraw(subscription: Subscription, reason: str = "") -> Subscription:
     locked = _locked(subscription)
     _refuse_if_issuance_claimed(locked, "Withdrawing it")
@@ -458,7 +459,7 @@ def _residual_owed(subscription: Subscription, allotted: int):
     return residual if residual > 0 else None
 
 
-@transaction.atomic
+@atomic()
 def scale_back(offering: Offering) -> dict:
     locked = Offering.objects.select_for_update().get(pk=offering.pk)
     pending = list(Subscription.objects.for_offering(locked).awaiting_allotment().order_by("created_at"))
@@ -491,7 +492,7 @@ def _not_allottable(subscription: Subscription):
     return None
 
 
-@transaction.atomic
+@atomic()
 def allot(subscription: Subscription, operator_user, notes: str = "", headroom=None):
     from offerings.tasks import allot_subscription_task
 
@@ -562,7 +563,7 @@ def _allot_group(offering_id, group, operator_user, notes, service) -> tuple[int
 
 
 def _allot_ready(offering_id, ready, operator_user, notes, service) -> int:
-    with transaction.atomic():
+    with atomic():
         offering = Offering.objects.select_for_update().select_related("token").get(pk=offering_id)
         cap_room, chain_room = offering_headroom(offering, service)
         room = min(cap_room, chain_room)
