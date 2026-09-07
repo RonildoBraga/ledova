@@ -194,9 +194,24 @@ def interfaces() -> dict[str, dict[str, bool]]:
     return {name: resolve(name) for name in declared}
 
 
+def _unwrapped(name: str, raw: dict) -> str:
+    """A paginated wrapper describes the page, not the row the type models.
+
+    `PaginatedAssetList` carries count/next/previous/results, so comparing an
+    `Asset` interface against it reports every field of Asset as absent. The
+    shape the caller's type argument describes is the one inside `results`.
+    """
+    body = raw.get(name) or {}
+    results = (body.get("properties") or {}).get("results") or {}
+    reference = (results.get("items") or {}).get("$ref", "")
+    inner = reference.rsplit("/", 1)[-1]
+    return inner if inner in raw else name
+
+
 def schema_parts(document: dict) -> tuple[dict[str, dict[str, bool]], dict[tuple[str, str], set[str]]]:
+    raw = document.get("components", {}).get("schemas") or {}
     components: dict[str, dict[str, bool]] = {}
-    for name, body in (document.get("components", {}).get("schemas") or {}).items():
+    for name, body in raw.items():
         properties = body.get("properties") or {}
         if properties:
             components[name] = {
@@ -216,7 +231,9 @@ def schema_parts(document: dict) -> tuple[dict[str, dict[str, bool]], dict[tuple
                         re.findall(r"#/components/schemas/(\w+)", json.dumps(response))
                     )
             if referenced:
-                responses.setdefault((verb, shape), set()).update(referenced)
+                responses.setdefault((verb, shape), set()).update(
+                    _unwrapped(name, raw) for name in referenced
+                )
     return components, responses
 
 
