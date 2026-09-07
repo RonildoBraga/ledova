@@ -10,12 +10,13 @@ from django.test import TestCase
 from django.utils import timezone
 
 from integrations.alchemy.webhook import AlchemyWebhookView
-from shared.db import OPERATOR_ALIAS, configured, current_alias
+from shared.db import current_alias
 from shared.db.principal import PRINCIPAL_SETTING, principal_of
 from shared.tests.tenants import make_tenant
 from wallets.constants import TRANSACTION_STATUS_PENDING
 from wallets.models import Transaction
 from wallets.tasks.confirmation import (
+    _confirm_pending_transaction,
     check_all_pending_transactions,
     confirm_pending_transaction,
 )
@@ -30,7 +31,7 @@ class ThePrincipalIsRequiredRatherThanDefaultedTest(TestCase):
         parameter = inspect.signature(confirm_pending_transaction.func).parameters["principal_id"]
 
         self.assertIs(parameter.default, inspect.Parameter.empty)
-        self.assertIs(parameter.kind, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+        self.assertIs(parameter.kind, inspect.Parameter.KEYWORD_ONLY)
 
     def test_the_transfer_service_takes_it_keyword_only_with_no_default(self):
         from wallets.services.transfers import TransferService
@@ -67,27 +68,51 @@ class TheTaskRunsAsWhoeverCausedItTest(TestCase):
 
         self.assertEqual(seen["principal"], str(self.tenant.user.pk))
 
-    def test_a_run_nobody_caused_takes_the_operator_connection_and_no_principal(self):
-        seen = self._run_and_report(None)
+    def test_a_run_nobody_caused_chooses_the_operator_connection_and_no_principal(self):
+        import shared.db.tasks as task_context
 
-        self.assertEqual(seen["alias"], configured(OPERATOR_ALIAS))
+        with (
+            patch.object(task_context, "use_operator", wraps=task_context.use_operator) as operator,
+            patch.object(task_context, "use_app", wraps=task_context.use_app) as scoped,
+        ):
+            seen = self._run_and_report(None)
+
+        self.assertEqual(operator.call_count, 1)
+        self.assertEqual(scoped.call_count, 0)
         self.assertIn(seen["principal"], (None, ""))
+
+    def test_a_user_caused_run_chooses_the_scoped_connection(self):
+        import shared.db.tasks as task_context
+
+        with (
+            patch.object(task_context, "use_operator", wraps=task_context.use_operator) as operator,
+            patch.object(task_context, "use_app", wraps=task_context.use_app) as scoped,
+        ):
+            self._run_and_report(self.tenant.user.pk)
+
+        self.assertEqual(scoped.call_count, 1)
+        self.assertEqual(operator.call_count, 0)
 
     def test_the_principal_does_not_survive_the_task(self):
         self._run_and_report(self.tenant.user.pk)
 
         self.assertIn(principal_of(), (None, ""))
 
-    def test_the_reads_the_task_makes_survive_the_policies_as_that_principal(self):
+    def test_the_task_itself_completes_under_the_policies_as_that_principal(self):
+        transaction = Transaction.objects.filter(wallet=self.tenant.wallet).first()
+        Transaction.objects.filter(pk=transaction.pk).update(status=TRANSACTION_STATUS_PENDING)
+
         with connection.cursor() as cursor:
             cursor.execute(f"SET ROLE {settings.RLS_ROLES['app']}")
             cursor.execute("SELECT set_config(%s, %s, false)", [PRINCIPAL_SETTING, str(self.tenant.user.pk)])
         self.addCleanup(self._back_to_the_owner)
 
-        from wallets.models import Transaction, Wallet
+        with patch("wallets.tasks.confirmation.get_blockchain_client") as client:
+            client.return_value.get_transaction_receipt.return_value = {"status": 1, "blockNumber": 12}
+            client.return_value.get_block.return_value = {"timestamp": 1700000000}
+            result = _confirm_pending_transaction(transaction.tx_hash, str(self.tenant.wallet.uuid))
 
-        self.assertEqual(Wallet.objects.filter(uuid=self.tenant.wallet.uuid).count(), 1)
-        self.assertEqual(Transaction.objects.filter(wallet=self.tenant.wallet).count(), 1)
+        self.assertEqual(result["status"], "confirmed")
 
     def _back_to_the_owner(self):
         with connection.cursor() as cursor:

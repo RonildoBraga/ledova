@@ -116,7 +116,7 @@ def get_receipt_reader(chain: str) -> _ReceiptReader:
 
 
 @app.task(retry=RetryStrategy(max_attempts=6, wait=30))
-def confirm_pending_transaction(tx_hash: str, wallet_uuid: str, principal_id) -> Dict[str, Any]:
+def confirm_pending_transaction(tx_hash: str, wallet_uuid: str, *, principal_id) -> Dict[str, Any]:
     with acting_for(principal_id):
         return _confirm_pending_transaction(tx_hash, wallet_uuid)
 

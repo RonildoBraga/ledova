@@ -2,7 +2,6 @@ import logging
 from decimal import Decimal
 from typing import Any, Dict, Optional
 
-from django.contrib.auth import get_user_model
 from django.utils import timezone
 
 from assets.models import Asset, AssetType
