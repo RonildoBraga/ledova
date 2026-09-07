@@ -2166,6 +2166,20 @@ expected string, ask what the assertion is *for*: if the answer is the
 behaviour that just changed, the test is **retiring**, not failing, and the
 replacement should assert the new property rather than the new wording.
 
+**The worst version pins an outage, and the name reads like a specification.**
+`test_a_query_with_no_principal_raises_rather_than_returning_nothing` was
+written during R1 and asserted that a policied query on a connection with no
+principal **raises**, with a regex naming both of the two ways it can. That is
+the sign-in outage, recorded as the intended behaviour, in the suite whose job
+was to prove the policies. Nobody reviewing the file would have called it a
+defect: it looks like a deliberate fail-closed choice, and *raises* and
+*returns nothing* are both plausible readings of "fails closed" until you ask
+which one an unauthenticated request needs. **A policy that denies the table is
+not stricter than one that grants no rows; it is broken.** When a test's name
+states an outcome, check that the outcome is the one the product wants, not
+merely the one the code produces — the test was written by observing the code,
+which is exactly how it came to certify the defect.
+
 **Two independently reasonable constants, and nobody compared them.** Neither
 number is wrong where it is written, and the pair is the defect. `order_write`
 throttles at 30/min, which is 1,800 signing challenges an hour from one user;

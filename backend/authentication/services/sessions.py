@@ -9,6 +9,7 @@ from authentication.email import EmailError, normalize_email
 from authentication.managers.user import EmailLookupState
 from authentication.services.tokens import TokenService
 from shared.db import atomic
+from shared.db.principal import set_principal
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -39,6 +40,8 @@ class SessionService:
         user = authenticate(username=email, password=password)
         if not user:
             raise serializers.ValidationError({"error": ["Invalid email or password."]})
+
+        set_principal(user.pk)
 
         if not user.is_active:
             raise serializers.ValidationError({"error": ["User account is disabled."]})
