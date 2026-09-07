@@ -704,7 +704,7 @@ class ExecuteRequestServiceTest(TestCase):
         self.assertEqual(undeployed.review_notes, "Execution failed: Token is not deployed on blockchain")
 
         no_wallet = self._approved(self.tenant.capital_increase)
-        with patch("companies.models.Company.get_primary_wallet", return_value=None):
+        with patch("tokens.services.share_token_service.primary_wallet_for", return_value=None):
             with patch.object(ShareTokenService, "increase_authorized_shares", side_effect=RuntimeError("revert")):
                 with self.assertRaisesMessage(RuntimeError, "revert"):
                     self.service.execute_request(no_wallet)

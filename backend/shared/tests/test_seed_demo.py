@@ -8,6 +8,7 @@ from django.test import override_settings
 from rest_framework.test import APITestCase
 
 from companies.models import Company, CompanyStatus, CompanyType
+from companies.services.company import primary_wallet_for
 from operators.models import Operator
 from shared.seeds.demo import (
     DEMO_ACN,
@@ -69,7 +70,7 @@ class SeedDemoCommandTest(APITestCase):
 
         self.assertEqual(company.status, CompanyStatus.ACTIVE)
         self.assertIsNotNone(company.operator_wallet)
-        self.assertEqual(company.get_primary_wallet(), company.operator_wallet)
+        self.assertEqual(primary_wallet_for(company), company.operator_wallet)
         self.assertEqual(company.operator_wallet.address, DEMO_ISSUER_ADDRESS)
         self.assertEqual(company.operator_wallet.verification_status, WALLET_VERIFICATION_STATUS_VERIFIED)
 

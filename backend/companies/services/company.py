@@ -6,6 +6,8 @@ from companies.exceptions import MissingRequiredDocumentsException
 from companies.models import LISTING_REQUIRED_DOCUMENTS, Company, DocumentType
 from users.models import UserProfile
 from users.tasks.notifications import send_push_notification
+from wallets.models import Wallet
+from wallets.models.wallet import Blockchain
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +22,13 @@ APPLICANT_NOTIFICATIONS = {
     "activate": ("Company activated", "{name} is now active."),
     "withdraw": ("Application withdrawn", "{name} was withdrawn."),
 }
+
+
+def primary_wallet_for(company: Company, chain: str | None = None):
+    if company.operator_wallet:
+        return company.operator_wallet
+
+    return Wallet.objects.visible_to_user(company.owner).for_chain_with_l2_fallback(chain or Blockchain.BASE.value)
 
 
 def register_company(owner, name: str, acn: str, primary_contact_data: dict, **kwargs) -> Company:

@@ -13,6 +13,7 @@ from assets.models import Asset, AssetType
 from assets.services.identity import free_symbol, verified_contract_asset
 from blockchain.models import BlockchainTransaction, TransactionStatus, TransactionType
 from companies.models import CompanyStatus
+from companies.services.company import primary_wallet_for
 from integrations.base_chain import get_base_chain_client
 from integrations.base_chain.exceptions import BaseChainContractError
 from operators.settlement import settlement_deployments
@@ -103,7 +104,7 @@ class ShareTokenService:
             )
         if token.company.status != CompanyStatus.ACTIVE:
             raise CompanyNotReadyException("Company must be active before deploying tokens.")
-        primary_wallet = token.company.get_primary_wallet()
+        primary_wallet = primary_wallet_for(token.company)
         if primary_wallet is None:
             raise CompanyNotReadyException(
                 "Company must have an operator wallet or verified ETH wallet before deploying tokens."
@@ -275,7 +276,7 @@ class ShareTokenService:
         return contract_address
 
     def _create_share_token(self, token: ShareToken, identifier: str) -> str:
-        issuer_wallet = token.company.get_primary_wallet()
+        issuer_wallet = primary_wallet_for(token.company)
         if issuer_wallet is None:
             self._abandon_unless_sent(token)
             raise CompanyNotReadyException("Company has no operator wallet or verified ETH wallet")
