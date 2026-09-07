@@ -105,6 +105,9 @@ class WhichAssertionsStopChecking(unittest.TestCase):
         run()
 
     def test_the_assertions_that_go_through_fail_stop_checking(self):
+        self.silent(lambda: self.shadowed.assertIsNotNone(None))
+        self.silent(lambda: self.shadowed.assertIs(1, 2))
+        self.silent(lambda: self.shadowed.assertLess(2, 1))
         self.silent(lambda: self.shadowed.assertEqual((1, 2), (3, 4)))
         self.silent(lambda: self.shadowed.assertEqual([1], [2]))
         self.silent(lambda: self.shadowed.assertEqual({"a": 1}, {"a": 2}))
@@ -122,6 +125,8 @@ class WhichAssertionsStopChecking(unittest.TestCase):
             lambda: self.shadowed.assertEqual(1, 2),
             lambda: self.shadowed.assertEqual(Decimal("1"), Decimal("2")),
             lambda: self.shadowed.assertTrue(False),
+            lambda: self.shadowed.assertFalse(True),
+            lambda: self.shadowed.assertNotEqual(1, 1),
             lambda: self.shadowed.assertRegex("a", "b"),
         ):
             with self.assertRaises(AssertionError):

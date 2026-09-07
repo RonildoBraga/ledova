@@ -1341,12 +1341,16 @@ and `assertRegex`. A test class that defines `def fail(self, tx_hash)` as a
 helper **replaces the method everything else raises through**, so those
 assertions build their difference message, call the helper, and pass.
 
-Measured rather than assumed. **Silent** under a shadowed `fail`: `assertEqual`
-on a tuple, list, dict, set or string; `assertIn`; `assertNotIn`; `assertIsNone`;
-`assertIsInstance`; `assertGreater`; `assertCountEqual`. **Still raising**:
-`assertEqual` on a scalar, `assertTrue`, `assertRegex`. That mixture is what
-makes the failure invisible - the suite keeps failing where you are looking and
-stops checking where you are not.
+**The enumeration is deliberately not written here.** Three sessions measured
+which assertions go silent and produced three different lists, each describing
+the methods that session happened to try. The list is a snapshot of one CPython
+release and of one person's sample; the rule is not. `scripts/tests/` pins the
+behaviour instead, because a test goes red when it rots and a paragraph does
+not - which is the failure this whole section is about.
+
+What is stable is the shape: a mixture, and that is what makes the shadowing
+invisible. The suite keeps failing where you are looking and stops checking
+where you are not.
 
 That is not hypothetical. `ReversingOnlyWhatWasDeductedTest` shipped with a
 `fail(tx_hash)` helper, and six tuple assertions across that file were inert

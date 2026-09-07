@@ -12,11 +12,12 @@ why assertEqual on a scalar is always real, plus assertTrue and assertRegex.
 Everything else builds its message and calls self.fail - so with fail shadowed
 the message is built, the helper is called, and the assertion passes.
 
-Measured, not assumed. Silent under a shadowed fail: assertEqual on a tuple,
-list, dict, set or string; assertIn; assertNotIn; assertIsNone; assertIsInstance;
-assertGreater; assertCountEqual. Still raising: assertEqual on a scalar,
-assertTrue, assertRegex. That mixture is why the shadowing is invisible - the
-suite keeps failing where you look and stops checking where you do not.
+The exact split belongs in a test rather than in this docstring. Three sessions
+enumerated it and produced three different lists, each describing its own
+sample; scripts/tests/test_check_test_shadowing.py pins it, so it goes red when
+a CPython release moves an assertion rather than going quietly stale here. What
+is stable is that the split exists - the suite keeps failing where you look and
+stops checking where you do not.
 
 That happened here. `ReversingOnlyWhatWasDeductedTest.fail(tx_hash)` made six
 tuple assertions inert across the file, and they were found only because a
