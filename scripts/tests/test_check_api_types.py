@@ -274,13 +274,14 @@ class TheGateCountsWhatItCannotSee(_Repository):
         self.assertEqual(sites, 1)
         self.assertEqual(types, [])
 
-    def test_the_repository_has_the_sixteen_the_success_line_reports(self):
+    def test_the_repository_carries_exactly_the_literal_url_counts_that_are_pinned(self):
         gate.ROOT = REPO_ROOT
         gate.SHARED = REPO_ROOT / "packages/shared/src"
 
         sites, types = gate.calls_the_gate_cannot_see()
 
-        self.assertGreater(sites, 0, "if this is zero the pattern stopped matching, not the debt")
+        self.assertEqual(sites, gate.UNCHECKED["literal-url-sites"][0])
+        self.assertEqual(len(types), gate.UNCHECKED["literal-url-types"][0])
         self.assertIn("Wallet", types)
 
 
@@ -328,11 +329,22 @@ class AHelperThatTakesTheUrlIsCountedToo(_Repository):
         self.assertEqual(sorted(before), ["PrepareTransferResponse"])
         self.assertEqual(sorted(after), ["BroadcastTransferResponse", "PrepareTransferResponse"])
 
-    def test_the_repository_has_the_three_the_success_line_reports(self):
+    def test_the_repository_carries_exactly_the_helper_only_count_that_is_pinned(self):
         gate.ROOT = REPO_ROOT
         gate.SHARED = REPO_ROOT / "packages/shared/src"
 
         through = gate.types_reached_only_through_a_local_helper()
 
-        self.assertGreater(len(through), 0, "if this is zero the pattern stopped matching, not the debt")
+        self.assertEqual(len(through), gate.UNCHECKED["helper-only-types"][0])
         self.assertIn("PrepareTransferResponse", through)
+
+
+class TheBlindnessIsPinnedLikeTheDebt(unittest.TestCase):
+
+    def test_every_unchecked_population_states_why_it_is_there(self):
+        for key, (_, reason) in gate.UNCHECKED.items():
+            with self.subTest(population=key):
+                self.assertGreater(len(reason), 80)
+
+    def test_no_key_is_carried_by_both_the_debt_lists_and_the_blindness_list(self):
+        self.assertEqual(sorted(set(gate.UNCHECKED) & (set(gate.TYPE_DEBT) | set(gate.SCHEMA_DEBT))), [])

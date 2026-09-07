@@ -57,6 +57,28 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 SHARED = ROOT / "packages/shared/src"
 
+# The three populations this gate cannot check. They are printed below, and printing
+# alone ratchets the debt while leaving the blindness free to grow: a fourth helper-only
+# type moved no number and the gate still exited 0. These are pinned two-sided like
+# TYPE_DEBT and SCHEMA_DEBT, so growth fails and a pin left above what is there fails too.
+UNCHECKED: dict[str, tuple[int, str]] = {
+    "literal-url-sites": (
+        16,
+        "Service calls passing a URL literal, which CALL cannot resolve to an endpoint. "
+        "#349 moves the nine files onto constants; the count only falls.",
+    ),
+    "literal-url-types": (
+        10,
+        "Shared types reached only by those sites, so nothing about them is checked at all. "
+        "Falls as #349 converts each file.",
+    ),
+    "helper-only-types": (
+        3,
+        "Shared types reached only inside a local helper that takes the URL as a parameter, "
+        "so neither pattern sees them. wallet-transfers.ts is the only one today.",
+    ),
+}
+
 TYPE_DEBT: dict[str, tuple[int, str]] = {
     "TokenHoldersResponse:ShareRegister": (
         4,
@@ -581,6 +603,28 @@ def main() -> int:
         return 1
 
     unseen_sites, unseen_types = calls_the_gate_cannot_see()
+    through_a_helper = types_reached_only_through_a_local_helper()
+    blind = {
+        "literal-url-sites": unseen_sites,
+        "literal-url-types": len(unseen_types),
+        "helper-only-types": len(through_a_helper),
+    }
+    pinned_blind = {key: entry[0] for key, entry in UNCHECKED.items()}
+    grew = sorted(key for key, found in blind.items() if found > pinned_blind[key])
+    shrank = sorted(key for key, found in blind.items() if found < pinned_blind[key])
+    if grew or shrank:
+        for key in grew:
+            print(
+                f"{key}: pinned {pinned_blind[key]}, found {blind[key]} - the gate is blinder than it was",
+                file=sys.stderr,
+            )
+        for key in shrank:
+            print(
+                f"{key}: pinned {pinned_blind[key]}, found {blind[key]} - lower the pin in UNCHECKED",
+                file=sys.stderr,
+            )
+        return 1
+
     print(
         f"No shared type requires an absent field across {matched} of "
         f"{matched + len(unmatched)} endpoints reached by a resolvable call "
@@ -597,7 +641,6 @@ def main() -> int:
             f"{len(unseen_types)} shared types are reached only by those sites and are unchecked "
             f"entirely: {', '.join(unseen_types)}. #349 moves the nine files onto constants."
         )
-    through_a_helper = types_reached_only_through_a_local_helper()
     if through_a_helper:
         named = ", ".join(f"{name} ({', '.join(where)})" for name, where in sorted(through_a_helper.items()))
         print(
