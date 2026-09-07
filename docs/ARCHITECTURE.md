@@ -1866,6 +1866,20 @@ harder to notice, because the reassuring line is what a working check also
 prints. One session quoted the vacuous form in four PR bodies in one evening
 before CI disagreed with it.
 
+**A PostgreSQL-only trigger or policy is certified by the full PostgreSQL
+suite or it is not certified**, and the lane's own PostgreSQL tests are not
+that. `tokens/0023` added a `BEFORE INSERT OR UPDATE` trigger requiring an
+owner column; its own eleven tests passed on PostgreSQL and the whole suite
+passed on SQLite, and CI then found **fifteen errors in other apps' tests** —
+fixtures written before the constraint existed, inserting rows the trigger now
+refuses. Three of those were a real defect the SQLite suite is structurally
+unable to see: a service helper accepted a call with no owner, stored `NULL`,
+and left a `plpgsql` `RAISE` as the only refusal, which on SQLite is no
+refusal at all. **The lane's own tests answer whether the constraint works;
+only the full suite answers whose inserts it just broke.** Where a constraint
+exists in the database, the Python that writes through it refuses first, so
+both vendors fail the same way.
+
 ### Shared TypeScript types
 
 `packages/shared/eslint.config.js` applies `eslint-naming-rules.js` to
