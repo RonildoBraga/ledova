@@ -266,7 +266,7 @@ def prepare_ethereum_transaction(
         raise
     except Exception as e:
         logger.error(f"Error preparing transaction: {str(e)}", exc_info=True)
-        raise BlockchainAPIError(f"Failed to prepare transaction: {str(e)}")
+        raise BlockchainAPIError("Failed to prepare the transaction.") from e
 
 
 def prepare_bitcoin_transaction(
@@ -324,7 +324,7 @@ def prepare_bitcoin_transaction(
         raise
     except Exception as e:
         logger.error(f"Error preparing Bitcoin transaction: {str(e)}", exc_info=True)
-        raise BlockchainAPIError(f"Failed to prepare Bitcoin transaction: {str(e)}")
+        raise BlockchainAPIError("Failed to prepare the Bitcoin transaction.") from e
 
 
 def broadcast_ethereum_transaction(chain: str, signed_tx_hex: str) -> str:
@@ -339,7 +339,7 @@ def broadcast_ethereum_transaction(chain: str, signed_tx_hex: str) -> str:
 
     except Exception as e:
         logger.error(f"Failed to broadcast Ethereum transaction: {str(e)}")
-        raise BlockchainAPIError(f"Failed to broadcast transaction: {str(e)}")
+        raise BlockchainAPIError("Failed to broadcast the Ethereum transaction.") from e
 
 
 def broadcast_bitcoin_transaction(signed_tx_hex: str) -> str:
@@ -354,7 +354,7 @@ def broadcast_bitcoin_transaction(signed_tx_hex: str) -> str:
 
     except Exception as e:
         logger.error(f"Failed to broadcast Bitcoin transaction: {str(e)}")
-        raise BlockchainAPIError(f"Failed to broadcast transaction: {str(e)}")
+        raise BlockchainAPIError("Failed to broadcast the Bitcoin transaction.") from e
 
 
 def prepare_erc20_transaction(
@@ -454,4 +454,4 @@ def prepare_erc20_transaction(
         raise
     except Exception as e:
         logger.error(f"Error preparing ERC-20 transaction: {str(e)}", exc_info=True)
-        raise BlockchainAPIError(f"Failed to prepare ERC-20 transaction: {str(e)}")
+        raise BlockchainAPIError("Failed to prepare the ERC-20 transaction.") from e
