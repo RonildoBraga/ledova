@@ -1409,8 +1409,26 @@ say so.
 
 ### Test traps
 
-Four ways a test here has passed while proving nothing, or failed while meaning
+Five ways a test here has passed while proving nothing, or failed while meaning
 nothing. Each was paid for once; none is obvious from reading the test.
+
+**Run it red first, and if it will not go red, say why in the body.** Every
+trap below is a way a test can agree with broken code, and the cheapest check
+for all of them is to run the new test against the tree without the fix. Four
+tests written in one day passed against the code they were meant to prove
+wrong: the revert probe on #219, because the fake's `wait_for_receipt` was an
+unconfigured `Mock` and a `Mock` is not `1`; the unwind pair on #260, because
+orders filled to exactly `share_amount` make `max(0, ...)` floor the second
+subtraction to the same zero; the concurrency pair on #266, because both
+threads were handed the same Python object and refused each other in memory
+rather than in the database; and the reversal probe on #221, because a chain
+balance equal to the post-deduction value made the sync a no-op. In each the
+**fixture** made the broken and the fixed code agree, which is invisible in the
+assertion and obvious in a red run. Where a test genuinely cannot go red —
+#215's signer probe, where `consume_challenge` makes the two compared values
+equal by construction, so there is no unfixed tree to run against — that is
+worth knowing and worth writing in the PR body, because it means the property
+is held somewhere else and the test is documentation rather than proof.
 
 **A `Mock` that reaches a renderer never returns.** Patch a whole service class
 with a bare `Mock`, let a view return its result, and DRF's JSON encoder
