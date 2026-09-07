@@ -3,6 +3,9 @@ from django.utils import timezone
 
 
 class SigningChallengeQuerySet(models.QuerySet):
+    def consumable(self):
+        return self.filter(wallet__isnull=False)
+
     def expired_and_unspent(self, cutoff=None):
         return self.filter(consumed_at__isnull=True, expires_at__lte=cutoff or timezone.now())
 

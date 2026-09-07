@@ -45,7 +45,13 @@ class EverySignablePayloadSurvivesJsonParseTest(TestCase):
                     for field in struct
                     if field["name"] not in ("wallet", "nonce", "deadline")
                 }
-                challenge = issue_challenge(purpose, SIGNER.address, caller_fields, verifying_contract=CONTRACT)
+                challenge = issue_challenge(
+                    purpose,
+                    self.tenant.wallet.address,
+                    caller_fields,
+                    verifying_contract=CONTRACT,
+                    wallet=self.tenant.wallet,
+                )
 
                 assert_signable(self, challenge_response(challenge))
 

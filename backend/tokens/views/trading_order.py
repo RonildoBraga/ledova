@@ -105,6 +105,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
             quantity=data["quantity"],
             min_quantity=data.get("min_quantity", 0),
             price_per_share=data["price_per_share"],
+            wallet=data.get("wallet"),
         )
 
         return Response(message_data, status=status.HTTP_200_OK)
