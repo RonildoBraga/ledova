@@ -33,7 +33,7 @@ def _profiles(entry: WhitelistEntry) -> list:
     return list(entry.wallet.user_account.user_profiles.all())
 
 
-def _profile_name(profile) -> str:
+def profile_name(profile) -> str:
     return (profile.full_name or "").strip() or profile.user.email
 
 
@@ -43,7 +43,7 @@ def entry_identity(entry: WhitelistEntry) -> HolderIdentity:
             HolderType.TREASURY.value, entry.label or TREASURY_FALLBACK, "", entry.get_status_display()
         )
     profiles = _profiles(entry)
-    names = [_profile_name(profile) for profile in profiles]
+    names = [profile_name(profile) for profile in profiles]
     addresses = [(profile.residential_address or "").strip() for profile in profiles]
     if not any(names):
         return HolderIdentity(HolderType.UNIDENTIFIED.value, "", "", entry.get_status_display())

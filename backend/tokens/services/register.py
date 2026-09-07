@@ -20,6 +20,35 @@ SOURCE_LABELS = {
     SOURCE_ALLOTMENTS: "Allotment record, not confirmed on chain",
 }
 
+IDENTITY_LIVE = "profile"
+IDENTITY_STAMPED = "stamped"
+IDENTITY_RECORDED = "recorded"
+IDENTITY_TREASURY_LABEL = "treasury_label"
+IDENTITY_UNRESOLVABLE = "unresolvable"
+IDENTITY_NONE = "none"
+
+IDENTITY_LABELS = {
+    IDENTITY_LIVE: "Current profile",
+    IDENTITY_RECORDED: "Name recorded at allotment, identity never resolved",
+    IDENTITY_TREASURY_LABEL: "Whitelist entry label, no profile exists",
+    IDENTITY_UNRESOLVABLE: "Not resolvable, two wallets share this address",
+    IDENTITY_NONE: "Not identified",
+}
+
+IDENTITY_BY_HOLDER_TYPE = {
+    HolderType.MEMBER.value: IDENTITY_LIVE,
+    HolderType.TREASURY.value: IDENTITY_TREASURY_LABEL,
+    HolderType.AMBIGUOUS.value: IDENTITY_UNRESOLVABLE,
+    HolderType.UNIDENTIFIED.value: IDENTITY_NONE,
+}
+
+
+def identity_source_label(source, stamped_at) -> str:
+    if source != IDENTITY_STAMPED:
+        return IDENTITY_LABELS[source]
+    return f"Stamped at allotment on {stamped_at.date().isoformat()}"
+
+
 REGISTER_HEADERS = [
     "Name",
     "Residential address",
@@ -28,6 +57,7 @@ REGISTER_HEADERS = [
     "Class",
     "Shares held",
     "Balance source",
+    "Identity source",
     "Date entered",
     "Whitelist status",
     "Amount paid",
@@ -35,7 +65,17 @@ REGISTER_HEADERS = [
 
 NO_WHITELIST_ENTRY = "No whitelist entry"
 
-API_FIELDS = ("address", "name", "balance", "percentage", "source", "holder_type", "entered_on", "share_class")
+API_FIELDS = (
+    "address",
+    "name",
+    "balance",
+    "percentage",
+    "source",
+    "holder_type",
+    "entered_on",
+    "share_class",
+    "identity_source",
+)
 
 
 def chain_service():
@@ -115,7 +155,7 @@ def _register(token, reader) -> list[dict]:
     allotments = _allotments(token)
     if not allotments:
         return []
-    fallback_names = ShareIssuance.objects.filter_by_token(token).unique_holders_with_names()
+    stamps = ShareIssuance.objects.filter_by_token(token).latest_identity_stamps()
     identities = identities_for(list(allotments))
     balances = _chain_balances(token, list(allotments), reader)
     source = SOURCE_ALLOTMENTS if balances is None else SOURCE_CHAIN
@@ -126,18 +166,39 @@ def _register(token, reader) -> list[dict]:
         if not balance or balance <= 0:
             continue
         identity = identities.get(address.lower(), UNIDENTIFIED)
+        stamp = stamps.get(address.lower())
+        unidentified = identity.holder_type == HolderType.UNIDENTIFIED.value
+        resolved_stamp = stamp if stamp and stamp["stamped_at"] else None
+        if unidentified and resolved_stamp:
+            name = resolved_stamp["name"]
+            residential_address = resolved_stamp["residential_address"]
+            holder_type = HolderType.MEMBER.value
+            identity_source, stamped_at = IDENTITY_STAMPED, resolved_stamp["stamped_at"]
+        elif unidentified:
+            name = stamp["name"] if stamp else ""
+            residential_address = ""
+            holder_type = identity.holder_type
+            identity_source = IDENTITY_RECORDED if name else IDENTITY_NONE
+            stamped_at = None
+        else:
+            name = identity.name
+            residential_address = identity.residential_address
+            holder_type = identity.holder_type
+            identity_source = IDENTITY_BY_HOLDER_TYPE[holder_type]
+            stamped_at = None
         rows.append(
             {
                 "address": address,
-                "name": identity.name or fallback_names.get(address) or None,
+                "name": name or None,
                 "balance": str(balance),
                 "source": source,
-                "holder_type": identity.holder_type,
-                "holder_type_display": HolderType(identity.holder_type).label,
+                "holder_type": holder_type,
+                "holder_type_display": HolderType(holder_type).label,
+                "identity_source": identity_source_label(identity_source, stamped_at),
                 "entered_on": allotment["entered_on"],
                 "share_class": token.symbol,
                 "whitelist_status": identity.whitelist_status,
-                "residential_address": identity.residential_address,
+                "residential_address": residential_address,
                 "amount_paid": _amount_paid(allotment, balance),
             }
         )
@@ -183,6 +244,7 @@ def _csv_row(row) -> list:
             row["share_class"],
             row["balance"],
             SOURCE_LABELS[row["source"]],
+            row["identity_source"],
             entered_on.date().isoformat() if entered_on else "",
             row["whitelist_status"] or NO_WHITELIST_ENTRY,
             "" if row["amount_paid"] is None else f"{row['amount_paid']:.2f}",
