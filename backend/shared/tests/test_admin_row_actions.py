@@ -5,8 +5,12 @@ from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.contrib.contenttypes.models import ContentType
-from django.test import TestCase, override_settings
+from django.http import Http404, HttpResponse
+from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
+
+from companies.models import Company, CompanyType
+from shared.utils.admin_actions import admin_action_path
 
 ACTION_HELPER = "shared.utils.admin_actions"
 FILE_HELPER = "shared.utils.admin_files"
@@ -140,3 +144,47 @@ class AdminRowActionAuthorizationTest(TestCase):
 
         self.assertEqual(refused.status_code, 403)
         self.assertEqual(resolved.status_code, 404)
+
+
+@override_settings(STORAGES=ADMIN_STORAGES)
+class NarrowedRowsAreHonouredWhenEmptyTest(TestCase):
+
+    def test_a_row_set_that_matches_nothing_does_not_fall_back_to_the_admins_own_queryset(self):
+        owner = User.objects.create_user(email="rows-owner@example.test", password=PASSWORD)
+        company = Company.objects.create(
+            owner=owner, name="Narrowed Pty Ltd", company_type=CompanyType.PROPRIETARY, acn="444555666"
+        )
+        model_admin = admin.site._registry[Company]
+        asked = []
+        route = admin_action_path(
+            model_admin,
+            "<uuid:uuid>/narrowed-probe/",
+            "narrowed_probe",
+            lambda request, instance: HttpResponse(instance.name),
+            rows=lambda request: asked.append(request) or Company.objects.none(),
+        )
+        request = RequestFactory().get("/")
+        request.user = User.objects.create_superuser(email="rows-super@example.test", password=PASSWORD)
+
+        with self.assertRaises(Http404):
+            route.callback(request, uuid=company.uuid)
+
+        self.assertEqual(len(asked), 1)
+
+    def test_a_row_set_passed_as_a_queryset_rather_than_a_callable_fails_loudly(self):
+        owner = User.objects.create_user(email="rows-loud-owner@example.test", password=PASSWORD)
+        company = Company.objects.create(
+            owner=owner, name="Loud Pty Ltd", company_type=CompanyType.PROPRIETARY, acn="777888999"
+        )
+        route = admin_action_path(
+            admin.site._registry[Company],
+            "<uuid:uuid>/loud-probe/",
+            "loud_probe",
+            lambda request, instance: HttpResponse(instance.name),
+            rows=Company.objects.none(),
+        )
+        request = RequestFactory().get("/")
+        request.user = User.objects.create_superuser(email="rows-loud-super@example.test", password=PASSWORD)
+
+        with self.assertRaises(TypeError):
+            route.callback(request, uuid=company.uuid)

@@ -355,9 +355,11 @@ class LayerDiscoveryTest(SimpleTestCase):
         self.assertEqual(self.layer_of("tokens/admin/share_token.py"), "admin")
         self.assertEqual(self.layer_of("whitelist/admin.py"), "admin")
 
-    def test_the_shared_helpers_are_in_no_layer_at_all(self):
+    def test_the_shared_helpers_are_excluded_by_name_not_by_accident(self):
+        self.assertEqual(gate.RULE_HELPERS, ("shared", "utils"))
         self.assertIsNone(self.layer_of("shared/utils/admin_actions.py"))
         self.assertIsNone(self.layer_of("shared/utils/admin_files.py"))
+        self.assertIsNone(self.layer_of("shared/utils/admin/anything.py"))
 
     def test_the_helpers_own_admin_view_call_is_the_reason_that_matters(self):
         source = (gate.BACKEND / "shared/utils/admin_actions.py").read_text()

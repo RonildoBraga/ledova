@@ -835,7 +835,17 @@ then calls the view with the instance rather than the uuid. A view therefore
 *loses* its `get_object_or_404` line when it converts; it cannot forget the
 check without abandoning the helper and taking a gate failure. Pass `queryset`
 only to widen the fetch, as `SubscriptionAdmin` does with
-`Subscription.objects.with_relations()`.
+`Subscription.objects.with_relations()`. It is a **callable taking the
+request**, named `rows` rather than `queryset` for a reason: written as
+`rows or model_admin.get_queryset`, a caller who passed a queryset instead of a
+callable would have had an *empty* one silently replaced by the unrestricted
+default, so the narrowing would vanish exactly when it mattered. It is
+`rows is None` instead, and a non-callable now fails loudly.
+
+The helper takes the row's uuid from a capture named `uuid`, which every route
+uses today. A future route capturing `pk` or `object_id` fails with a
+`TypeError` rather than a clear message; that is a constraint the helper imposes
+rather than a rule the product needs.
 
 It answers **403, not 404**, for the reason given for the streaming routes
 above: the caller is a named staff member who reached the route from the admin,
@@ -843,9 +853,17 @@ and the sibling change page already answers 403 for the same row.
 
 `has_change_permission` is the check for all of them, because every one of these
 routes mutates the row or acts on chain on its behalf; a route that only reads
-is a file route and belongs to `admin_file_path`. Reference:
+is a file route and belongs to `admin_file_path`. The two mint routes insert a
+`MintRequest` rather than change the row they hang off, and they still check
+`change` on that row rather than `add_mintrequest`, because
+`MintRequestAdmin.has_add_permission` returns `False` unconditionally — gating
+them on `add` would gate a working operator action behind a permission the
+product never grants to anyone, superuser included. Reference:
 `backend/shared/utils/admin_actions.py`. Gate: the `bare-admin-view` rule in
-`scripts/check-layers.py`. Test:
+`scripts/check-layers.py`, whose `RULE_HELPERS` excludes `shared/utils/` by name — the
+helper a rule points at is not subject to it, and saying so beats relying on
+`layer_of` returning `None` for a directory that happens not to be named after
+a layer. Test:
 `backend/shared/tests/test_admin_row_actions.py`, which derives the route list
 from the resolved URLconf rather than naming routes, so a new row action is
 covered the day it is registered.

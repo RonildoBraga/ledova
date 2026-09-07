@@ -24,6 +24,12 @@ BACKEND = ROOT / "backend"
 
 SKIP_ANYWHERE = frozenset({"__pycache__", "migrations", "tests", ".git", "node_modules"})
 
+# The helpers a rule points at are not subject to it: `shared/utils/admin_actions.py`
+# is the only correct place for the `admin_view` call that `bare-admin-view` flags
+# everywhere else. Stating that here rather than leaving it to `layer_of` returning
+# None for a directory that happens not to be named after a layer.
+RULE_HELPERS = ("shared", "utils")
+
 SCOPING_CALLS = frozenset(
     {
         "visible_to_user",
@@ -82,6 +88,8 @@ LEGACY: dict[str, int] = {
 
 def layer_of(path: Path) -> str | None:
     parts = path.relative_to(BACKEND).parts
+    if parts[: len(RULE_HELPERS)] == RULE_HELPERS:
+        return None
     for index, part in enumerate(parts):
         if part in ("views", "models", "tasks", "admin"):
             return part

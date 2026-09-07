@@ -378,7 +378,7 @@ class SubscriptionAdmin(admin.ModelAdmin):
                 rf"^(?P<uuid>[0-9a-f-]+)/(?P<action>{'|'.join(ACTIONS)})/$",
                 "offerings_subscription_action",
                 self.action_view,
-                queryset=lambda request: Subscription.objects.with_relations(),
+                rows=lambda request: Subscription.objects.with_relations(),
             ),
         ]
         return custom_urls + super().get_urls()
