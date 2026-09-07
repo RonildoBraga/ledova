@@ -390,7 +390,7 @@ class ShareTokenChainTest(ChainTestMixin, APITestCase):
         nonce_before = self._signer_nonce()
         self.token.mark_deploying()
         with self._crash_after_send():
-            with self.assertRaisesMessage(TokenDeploymentFailedException, "worker crashed after send"):
+            with self.assertRaisesMessage(TokenDeploymentFailedException, "Token deployment is unconfirmed."):
                 deploy_share_token_task(token_uuid=str(self.token.uuid))
 
         self.token.refresh_from_db()
@@ -503,7 +503,7 @@ class ShareTokenChainTest(ChainTestMixin, APITestCase):
         increase = self._increase(500)
 
         with self._lost_receipt():
-            with self.assertRaisesMessage(TokenDeploymentFailedException, "receipt lost after the transaction mined"):
+            with self.assertRaisesMessage(TokenDeploymentFailedException, "The capital increase is unconfirmed."):
                 self._execute(increase)
 
         increase.refresh_from_db()
