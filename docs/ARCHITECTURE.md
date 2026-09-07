@@ -1482,6 +1482,22 @@ reading:
   before repeating someone else's**: a relayed measurement is not a
   measurement.
 
+### Measurement traps
+
+Not a test but the same family: a reading that looks like a finding and is
+actually about the observer.
+
+**A browser network capture includes your own probes.** `read_network_requests`
+records the tab, not the application, so a `fetch` issued from `javascript_tool`
+to check an endpoint is indistinguishable in that log from a request the page
+made. A QA session confirmed an API's answer by hand, read the log afterwards,
+and reported that the client had called the endpoint; it had not, and the author
+of the fix spent time hunting a request that was never issued. Decide the
+question first: to learn what the API returns, probe and do not cite the log; to
+learn what the application requests, clear the capture, touch only the UI, and
+read it before probing anything. An absence is the strong result here — a probe
+can manufacture a request in the log but cannot manufacture zero.
+
 ### Shared TypeScript types
 
 `packages/shared/eslint.config.js` applies `eslint-naming-rules.js` to
