@@ -32,7 +32,7 @@ class SwapOrder(BaseModel):
 
     share_token = models.ForeignKey(
         "tokens.ShareToken",
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="swap_orders",
     )
     payment_asset = models.ForeignKey(
