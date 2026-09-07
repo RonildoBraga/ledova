@@ -262,3 +262,35 @@ class AChallengeWithNoOwnerIsNotOfferedForConsumptionTest(TransactionTestCase):
 
         self.challenge.refresh_from_db()
         self.assertIsNone(self.challenge.consumed_at)
+
+
+class AChallengeCannotBeIssuedWithoutTheWalletItIsForTest(TestCase):
+
+    def setUp(self):
+        self.tenant = make_tenant("no-wallet")
+
+    def fields(self):
+        return {
+            "tokenUuid": str(self.tenant.deployed_token.uuid),
+            "orderType": "sell",
+            "quantity": 5,
+            "minQuantity": 0,
+            "pricePerShare": "2.50",
+        }
+
+    def test_a_call_with_neither_an_order_nor_a_wallet_is_refused(self):
+        with self.assertRaises(ValueError) as refusal:
+            issue_challenge(SigningChallengePurpose.ORDER_CREATE, self.tenant.wallet.address, self.fields())
+
+        self.assertIn("needs the wallet it is issued to", str(refusal.exception))
+        self.assertFalse(SigningChallenge.objects.exists())
+
+    def test_an_order_supplies_the_wallet_without_one_being_passed(self):
+        challenge = issue_challenge(
+            SigningChallengePurpose.ORDER_CANCEL,
+            self.tenant.order.wallet.address,
+            {"orderUuid": str(self.tenant.order.uuid)},
+            order=self.tenant.order,
+        )
+
+        self.assertEqual(challenge.wallet_id, self.tenant.order.wallet_id)

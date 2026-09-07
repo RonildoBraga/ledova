@@ -34,3 +34,14 @@ class DerivesWalletFromOrder(models.Model):
         if self.wallet_id is None and self.order_id is not None:
             self.wallet_id = self.order.wallet_id
         super().save(*args, **kwargs)
+
+
+class DerivesOwnerFromCompany(models.Model):
+
+    class Meta:
+        abstract = True
+
+    def save(self, *args, **kwargs):
+        if self.owner_id is None and self.company_id is not None:
+            self.owner_id = self.company.owner_id
+        super().save(*args, **kwargs)
