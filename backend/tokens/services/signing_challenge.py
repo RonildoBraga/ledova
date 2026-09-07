@@ -155,8 +155,24 @@ def challenge_retention_seconds() -> int:
     return settings.SIGNING_CHALLENGE_RETENTION_SECONDS
 
 
-@transaction.atomic
-def purge_expired_challenges(now=None, batch: int = 500) -> int:
+def purge_expired_challenges(now=None, batch: int = 500, passes: int = 20) -> int:
     cutoff = (now or timezone.now()) - timezone.timedelta(seconds=challenge_retention_seconds())
-    removed, _ = SigningChallenge.objects.purgeable(cutoff, batch).delete()
+    removed = 0
+
+    for _ in range(passes):
+        deleted = _purge_one_batch(cutoff, batch)
+        removed += deleted
+        if deleted < batch:
+            return removed
+
+    logger.warning(
+        f"Signing challenges are arriving faster than they are swept: {removed} removed in {passes} passes "
+        f"of {batch} and the backlog is not exhausted."
+    )
     return removed
+
+
+@transaction.atomic
+def _purge_one_batch(cutoff, batch: int) -> int:
+    deleted, _ = SigningChallenge.objects.purgeable(cutoff, batch).delete()
+    return deleted
