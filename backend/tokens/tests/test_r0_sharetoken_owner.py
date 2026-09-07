@@ -1,3 +1,4 @@
+from importlib import import_module
 from unittest import skipUnless
 
 from django.contrib.admin.sites import site
@@ -122,6 +123,34 @@ class TheTriggerRefusesAnOwnerTheCompanyDoesNotNameTest(TransactionTestCase):
 
         self.assertEqual(ShareToken.objects.get(pk=token.pk).owner_id, new_owner)
 
+    def test_a_token_cannot_be_moved_to_another_company(self):
+        token = self.a_token(symbol="MOVE")
+        token.save()
+
+        with self.assertRaises(Exception) as refusal:
+            with transaction.atomic():
+                ShareToken.objects.filter(pk=token.pk).update(company=self.stranger.company)
+
+        self.assertIn("cannot change", str(refusal.exception))
+        self.assertEqual(ShareToken.objects.get(pk=token.pk).owner_id, self.tenant.company.owner_id)
+
+    def test_the_move_is_refused_by_the_trigger_and_not_by_the_unique_symbol(self):
+        token = self.a_token(symbol="MOVE")
+        token.save()
+        taken = set(ShareToken.objects.filter(company=self.stranger.company).values_list("symbol", flat=True))
+
+        self.assertNotIn("MOVE", taken)
+
+    def test_a_token_stays_with_its_company_when_something_else_changes(self):
+        token = self.a_token()
+        token.save()
+
+        ShareToken.objects.filter(pk=token.pk).update(name="Renamed")
+
+        refreshed = ShareToken.objects.get(pk=token.pk)
+        self.assertEqual(refreshed.company_id, self.tenant.company.pk)
+        self.assertEqual(refreshed.owner_id, self.tenant.company.owner_id)
+
     def test_moving_the_row_to_someone_the_company_does_not_name_is_refused(self):
         token = self.a_token()
         token.save()
@@ -170,3 +199,29 @@ class TheCompanyOwnerIsNotEditableOnAnExistingCompanyTest(TestCase):
 
     def test_the_add_form_still_asks_for_one(self):
         self.assertNotIn("owner", self.admin.get_readonly_fields(self.request, obj=None))
+
+
+class TheReverseRestoresTheFunctionItReplacedTest(TestCase):
+
+    @staticmethod
+    def _body(module_name, constant):
+        module = import_module(f"tokens.migrations.{module_name}")
+        return getattr(module, constant)
+
+    def test_the_reverse_body_is_the_one_0024_installed(self):
+        installed = self._body("0024_r0_sharetoken_owner", "DERIVE_FUNCTION")
+        restored = self._body("0025_a_token_cannot_change_company", "WITH_REPARENTING")
+
+        self.assertEqual(restored, installed)
+
+    def test_the_forward_body_differs_only_by_the_link_guard(self):
+        without = self._body("0025_a_token_cannot_change_company", "WITHOUT_REPARENTING")
+        with_it = self._body("0025_a_token_cannot_change_company", "WITH_REPARENTING")
+        guard = (
+            "        IF NEW.{parent_fk} IS DISTINCT FROM OLD.{parent_fk} THEN\n"
+            "            RAISE EXCEPTION '{table}.{parent_fk} cannot change, from % to %',"
+            " OLD.{parent_fk}, NEW.{parent_fk};\n"
+            "        END IF;\n\n"
+        )
+
+        self.assertEqual(without.replace(guard, ""), with_it)
