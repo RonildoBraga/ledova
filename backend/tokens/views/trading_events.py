@@ -1,6 +1,5 @@
 import asyncio
 import json
-from uuid import UUID
 
 import redis.asyncio as aioredis
 from asgiref.sync import sync_to_async
@@ -9,7 +8,7 @@ from django.http import HttpResponse, StreamingHttpResponse
 
 from authentication.classes import HybridJWTAuthentication
 from tokens.events import TRADING_EVENT_TYPES, TRADING_EVENTS_CHANNEL
-from tokens.models import ShareToken
+from tokens.services.trading_events import resolve_deployed_token_uuid
 
 HEARTBEAT_INTERVAL = 30
 
@@ -46,18 +45,6 @@ def _format_public_trading_event(event, token_uuid: str):
         return None
 
     return _format_sse(event_type, {})
-
-
-async def _resolve_deployed_token_uuid(raw_token_uuid):
-    try:
-        token_uuid = str(UUID(raw_token_uuid))
-    except (AttributeError, TypeError, ValueError):
-        return None
-
-    if not await ShareToken.objects.deployed().filter(uuid=token_uuid).aexists():
-        return None
-
-    return token_uuid
 
 
 async def _event_stream(token_uuid: str):
@@ -114,7 +101,7 @@ async def trading_events_stream(request):
     if user is None:
         return HttpResponse("Unauthorized", status=401, content_type="text/plain")
 
-    token_uuid = await _resolve_deployed_token_uuid(request.GET.get("token"))
+    token_uuid = await resolve_deployed_token_uuid(request.GET.get("token"))
     if token_uuid is None:
         return HttpResponse("Token not found", status=404, content_type="text/plain")
 

@@ -42,6 +42,7 @@ from tokens.models import (
     ShareTokenStatus,
 )
 from tokens.querysets.share_issuance import ISSUANCE_KEY_PREFIX
+from tokens.services.dilution import dilution_for
 
 logger = logging.getLogger(__name__)
 
@@ -412,7 +413,7 @@ class ShareTokenService:
             submitted_at=timezone.now(),
         )
 
-        issuance_request.dilution_percentage = issuance_request.calculate_dilution()
+        issuance_request.dilution_percentage = dilution_for(issuance_request)
         issuance_request.save(update_fields=["dilution_percentage", "updated_at"])
 
         logger.info(

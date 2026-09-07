@@ -14,6 +14,7 @@ from tokens.serializers import (
     CapitalIncreaseListSerializer,
     CapitalIncreaseUpdateSerializer,
 )
+from tokens.services.capital_increase import submit_capital_increase
 
 MANAGE_ACTIONS = ("create", "update", "partial_update", "destroy", "submit")
 
@@ -62,7 +63,7 @@ class CapitalIncreaseViewSet(AuthenticatedModelViewSet):
     @action(detail=True, methods=["post"])
     def submit(self, request, uuid=None):
         capital_increase = self.get_object()
-        capital_increase.submit(request.user)
+        submit_capital_increase(capital_increase, request.user)
         return Response(
             {
                 "message": "Capital increase request submitted for review.",

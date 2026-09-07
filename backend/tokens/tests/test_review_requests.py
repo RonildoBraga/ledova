@@ -29,6 +29,8 @@ from tokens.models import (
 )
 from tokens.serializers import CapitalIncreaseDetailSerializer
 from tokens.services import ShareTokenService
+from tokens.services.capital_increase import submit_capital_increase
+from tokens.services.dilution import dilution_for
 from tokens.services.share_token_service import (
     CAP_NOT_RAISED,
     EXCEEDS_AUTHORIZED,
@@ -57,13 +59,13 @@ class ReviewableRequestModelTest(TestCase):
         self.token = self.tenant.deployed_token
 
     def test_completed_supply_feeds_dilution_for_both_request_types(self):
-        self.assertEqual(self.tenant.capital_increase.calculate_dilution(), 0.0)
+        self.assertEqual(dilution_for(self.tenant.capital_increase), 0.0)
         ShareIssuance.objects.create(token=self.token, recipient_address=RECIPIENT, amount="900", status="completed")
         ShareIssuance.objects.create(token=self.token, recipient_address=RECIPIENT, amount="500", status="pending")
 
         self.assertEqual(ShareIssuance.objects.completed_supply(self.token), 900)
-        self.assertEqual(self.tenant.capital_increase.calculate_dilution(), 10.0)
-        self.assertEqual(issuance_request(self.token, amount=100).calculate_dilution(), 10.0)
+        self.assertEqual(dilution_for(self.tenant.capital_increase), 10.0)
+        self.assertEqual(dilution_for(issuance_request(self.token, amount=100)), 10.0)
 
     def test_capital_increase_walks_submit_review_approve_execute_fail(self):
         request = self.tenant.capital_increase
@@ -72,7 +74,7 @@ class ReviewableRequestModelTest(TestCase):
         with self.assertRaises(ValueError):
             request.approve(self.tenant.user)
 
-        request.submit(self.tenant.user)
+        submit_capital_increase(request, self.tenant.user)
         self.assertEqual(
             (request.status, request.submitted_by, request.dilution_percentage), ("submitted", self.tenant.user, 0.0)
         )
@@ -128,7 +130,7 @@ class StatusDataMigrationTest(TestCase):
         tenant = make_tenant("owner")
         request = issuance_request(tenant.deployed_token)
         ShareIssuanceRequest.objects.filter(pk=request.pk).update(status="pending_approval")
-        tenant.capital_increase.submit(tenant.user)
+        submit_capital_increase(tenant.capital_increase, tenant.user)
 
         migration.forwards(apps, None)
         request.refresh_from_db()
@@ -916,7 +918,7 @@ class ExecuteReviewRequestTaskTest(TestCase):
         self.assertEqual(result, {"success": False, "error": "Request not found"})
 
     def test_state_guard_answers_with_the_reason(self):
-        self.tenant.capital_increase.submit(self.tenant.user)
+        submit_capital_increase(self.tenant.capital_increase, self.tenant.user)
         result = execute_review_request_task(
             model_label="tokens.CapitalIncreaseRequest", request_uuid=str(self.tenant.capital_increase.uuid)
         )
