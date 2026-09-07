@@ -4,6 +4,10 @@ from users.services.device_tokens import register_device_token, unregister_devic
 from users.services.identity import IdentityVerificationService
 from users.services.investor_classification import transition_classification
 from users.services.notifications import NotificationService
+from users.services.preferences import (
+    upsert_notification_preferences,
+    upsert_user_preferences,
+)
 from users.services.setup import ensure_defaults
 
 __all__ = [
@@ -17,4 +21,6 @@ __all__ = [
     "ensure_defaults",
     "lifecycle",
     "transition_classification",
+    "upsert_notification_preferences",
+    "upsert_user_preferences",
 ]
