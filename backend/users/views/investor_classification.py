@@ -32,8 +32,7 @@ class InvestorClassificationViewSet(AuthenticatedModelViewSet):
         return scope(self.request.user).select_related("user_account", "company")
 
     def destroy(self, request, *args, **kwargs):
-        instance = self.get_object()
-        instance.delete()
+        self.get_object().withdraw()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=False, methods=["get"])

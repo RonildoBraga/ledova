@@ -51,6 +51,7 @@ class InvestorClassificationStatus(models.TextChoices):
     VERIFIED = "verified", "Verified"
     REJECTED = "rejected", "Rejected"
     REVOKED = "revoked", "Revoked"
+    WITHDRAWN = "withdrawn", "Withdrawn"
 
 
 class CertifierBody(models.TextChoices):
@@ -92,7 +93,7 @@ class InvestorClassification(BaseModel):
 
     user_account = models.ForeignKey(
         "users.UserAccount",
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="investor_classifications",
     )
     company = models.ForeignKey(
@@ -226,6 +227,12 @@ class InvestorClassification(BaseModel):
         self.reviewed_at = timezone.now()
         self.rejection_reason = reason
         self.save(update_fields=["status", "reviewed_by", "reviewed_at", "rejection_reason", "updated_at"])
+
+    def withdraw(self):
+        self._require_status([InvestorClassificationStatus.SUBMITTED], InvestorClassificationStatus.WITHDRAWN)
+        self.status = InvestorClassificationStatus.WITHDRAWN
+        self.reviewed_at = timezone.now()
+        self.save(update_fields=["status", "reviewed_at", "updated_at"])
 
     def revoke(self, reviewed_by, reason):
         self._require_status([InvestorClassificationStatus.VERIFIED], InvestorClassificationStatus.REVOKED)
