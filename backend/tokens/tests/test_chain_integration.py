@@ -403,8 +403,13 @@ class ShareTokenChainTest(ChainTestMixin, APITestCase):
         self.assertEqual(self._signer_nonce(), nonce_before + 1)
 
         with patch.object(ShareTokenService, "get_token_by_identifier", side_effect=ConnectionError("rpc down")):
-            with self.assertRaisesMessage(TokenDeploymentFailedException, "rpc down"):
+            with (
+                self.assertLogs("tokens.services.share_token_service", level="ERROR") as logged,
+                self.assertRaises(TokenDeploymentFailedException) as refused,
+            ):
                 deploy_share_token_task(token_uuid=str(self.token.uuid))
+        self.assertNotIn("rpc down", str(refused.exception.detail))
+        self.assertIn("rpc down", " ".join(logged.output))
         self.token.refresh_from_db()
         self.assertEqual(
             (self.token.status, self.token.deployment_tx_hash), (ShareTokenStatus.DEPLOYING, record.tx_hash)
