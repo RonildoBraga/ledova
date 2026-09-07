@@ -74,7 +74,7 @@ class OrderModificationTest(APITestCase):
         self.assertEqual(set(logs), {"quantity", "price_per_share"})
         for log in logs.values():
             self.assertEqual((log.signer_address, log.ip_address), (order.wallet_address, "1.2.3.4"))
-            self.assertEqual(log.modification_message, issued["digest"])
+            self.assertEqual(log.challenge.digest, issued["digest"])
             self.assertEqual(len(log.user_agent), 500)
         self.assertEqual((logs["quantity"].old_value, logs["quantity"].new_value), ("10", "12"))
         publish.assert_called_once_with("order_modified", str(order.token.uuid))

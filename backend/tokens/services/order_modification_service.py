@@ -198,7 +198,7 @@ class OrderModificationService:
                 field_name=change["field"],
                 old_value=change["old"],
                 new_value=change["new"],
-                modification_message=challenge.digest,
+                challenge=challenge,
                 signature=signature,
                 signer_address=signer,
                 ip_address=ip_address,

@@ -25,8 +25,17 @@ class OrderModificationLog(BaseModel):
         help_text="The value after modification.",
     )
 
+    challenge = models.ForeignKey(
+        "tokens.SigningChallenge",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="modification_logs",
+        help_text="The signing challenge that authorized this modification, and the message it carried.",
+    )
     modification_message = models.TextField(
-        help_text="The message that was signed to authorize this modification.",
+        blank=True,
+        help_text="The message that was signed, for rows written before modifications were authorized by a challenge.",
     )
     signature = models.TextField(
         help_text="The cryptographic signature authorizing this modification.",
