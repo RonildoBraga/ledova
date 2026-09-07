@@ -1413,6 +1413,27 @@ returning the wrong shape, and every consumer that trusts the schema inherits th
 error - including the API type drift gate, which cannot tell a schema defect from
 a type defect and would record the former as the latter.
 
+**A routed function view that does not return a DRF `Response` is outside both
+of this gate's rules**, and outside drf-spectacular's generator as well, so it is
+absent from the schema and nothing records that as deliberate. The fix for one is
+to bring it inside, not to note it.
+
+There is one today: `GET /api/v1/trading/events/stream/`, a plain async Django
+view returning `StreamingHttpResponse` over a Redis subscription. `hand-built-
+response` declines it because there is no `Response`, `undeclared-action` because
+there is no `@action`, and the generator declines it because it is not a DRF
+view — `@extend_schema` on it changes nothing, measured. A path missing from the
+schema also cannot be diffed by the API type drift gate, so a shared type
+describing the stream would be invisible to both.
+
+It is documented by a `POSTPROCESSING_HOOKS` entry that injects the path,
+`shared/api/schema_hooks.py`. The event names in it are **derived from
+`tokens.events.TRADING_EVENT_TYPES`** rather than listed, so the documented
+contract cannot drift from what the publisher may send, and
+`shared/tests/test_schema_documents_the_stream.py` fails if the hook is
+unregistered, if the list is hand-written, or if the route is renamed. A second
+such route should take the same shape rather than a second exemption.
+
 `POST /api/v1/tokens/` was the clearest case. `get_serializer_class` returns
 `ShareTokenCreateSerializer` for the `create` action, so the schema said the 201
 body had eight write fields and no `uuid` or `status`, while the view returned
