@@ -9,6 +9,7 @@ from integrations.base_chain.client import (
     GAS_HEADROOM,
     BaseChainClient,
 )
+from integrations.base_chain.exceptions import BaseChainConnectionError
 
 CHAIN_ID = 31337
 OPERATOR_KEY = "0x" + "11" * 32
@@ -58,8 +59,8 @@ class ABroadcastCostsTheRoundTripsTheGraceIsDerivedFromTest(SimpleTestCase):
         mint = contract.functions.mint(Web3.to_checksum_address(RECIPIENT), 5)
 
         client = BaseChainClient.__new__(BaseChainClient)
-        self.addCleanup(setattr, BaseChainClient, "_verified_chain_id", BaseChainClient._verified_chain_id)
-        BaseChainClient._verified_chain_id = None
+        self.addCleanup(setattr, BaseChainClient, "_answered_chain_id", BaseChainClient._answered_chain_id)
+        BaseChainClient._answered_chain_id = None
 
         with patch.object(BaseChainClient, "w3", w3):
             client.send_transaction(mint, OPERATOR_KEY, wait_for_receipt=False)
@@ -114,10 +115,33 @@ class ANodeRefusingToEstimateBelowIntrinsicGasTest(SimpleTestCase):
         mint = contract.functions.mint(Web3.to_checksum_address(RECIPIENT), 5)
 
         client = BaseChainClient.__new__(BaseChainClient)
-        self.addCleanup(setattr, BaseChainClient, "_verified_chain_id", BaseChainClient._verified_chain_id)
-        BaseChainClient._verified_chain_id = None
+        self.addCleanup(setattr, BaseChainClient, "_answered_chain_id", BaseChainClient._answered_chain_id)
+        BaseChainClient._answered_chain_id = None
 
         with patch.object(BaseChainClient, "w3", w3):
             built = client.build_transaction(mint, from_address=RECIPIENT)
 
         self.assertEqual(built["gas"], int(60000 * GAS_HEADROOM))
+
+
+class TheCachedChainIdIsStillComparedTest(SimpleTestCase):
+
+    def a_client(self):
+        provider = CountingProvider()
+        w3 = Web3(provider)
+        client = BaseChainClient.__new__(BaseChainClient)
+        self.addCleanup(setattr, BaseChainClient, "_answered_chain_id", BaseChainClient._answered_chain_id)
+        BaseChainClient._answered_chain_id = None
+        return client, w3, provider
+
+    def test_a_second_call_expecting_another_chain_is_still_refused(self):
+        client, w3, provider = self.a_client()
+
+        with patch.object(BaseChainClient, "w3", w3):
+            with override_settings(BLOCKCHAIN_CHAIN_ID=CHAIN_ID):
+                self.assertEqual(client.assert_expected_chain(), CHAIN_ID)
+            with override_settings(BLOCKCHAIN_CHAIN_ID=1):
+                with self.assertRaises(BaseChainConnectionError):
+                    client.assert_expected_chain()
+
+        self.assertEqual(provider.calls.count("eth_chainId"), 1)
