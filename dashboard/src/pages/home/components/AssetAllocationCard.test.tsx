@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup, fireEvent, render } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { calculateAssetAllocation } from '@ledova/shared';
 import type { HoldingWithWallet, HoldingsSummary } from '@ledova/shared';
@@ -22,15 +22,16 @@ vi.mock('react-chartjs-2', () => ({
 
 const { AssetAllocationCard } = await import('./AssetAllocationCard');
 
-function holding(symbol: string, quantity: string, marketValue: string | null): HoldingWithWallet {
+function holding(symbol: string, quantity: string, marketValue: string | null, chain = 'base'): HoldingWithWallet {
   return {
-    uuid: `holding-${symbol}`,
+    uuid: `holding-${symbol}-${chain}`,
     assetSymbol: symbol,
     assetName: `${symbol} Asset`,
     quantity,
     marketValue,
+    chain,
     asset: { uuid: `asset-${symbol}`, symbol, name: `${symbol} Asset` },
-    walletInfo: { uuid: 'wallet', name: 'Wallet', address: '0x0', chain: 'base' },
+    walletInfo: { uuid: `wallet-${chain}`, name: 'Wallet', address: '0x0', chain },
   } as unknown as HoldingWithWallet;
 }
 
@@ -48,7 +49,6 @@ function draw(holdings: HoldingWithWallet[], totalValue: number) {
         assetAllocation={calculateAssetAllocation(holdings, totalValue)}
         totalValue={totalValue}
         summary={summary}
-        assetQuantities={{}}
         isLoading={false}
         hasError={false}
         onAssetClick={() => {}}
@@ -109,14 +109,78 @@ describe('what the dashboard ring is handed, not what the function returns', () 
   it('prints no percentage beside unpriced, so the label has no number arguing with it', () => {
     const { view } = draw(MIXED, 12);
 
-    expect(view.container.textContent).toContain('SHARES Assetunpriced—');
+    expect(view.container.textContent).toContain('SHARES Asset10,000unpriced—');
     expect(view.container.textContent).not.toContain('unpriced0.0%');
   });
 
   it('keeps the percentage when the whole page is weighed by quantity, since then it means something', () => {
     const { view } = draw(UNPRICED, 0);
 
-    expect(view.container.textContent).toContain('AAA Assetunpriced75.0%');
-    expect(view.container.textContent).toContain('BBB Assetunpriced25.0%');
+    expect(view.container.textContent).toContain('AAA Asset30unpriced75.0%');
+    expect(view.container.textContent).toContain('BBB Asset10unpriced25.0%');
+  });
+});
+
+describe('one coin held on two chains, which the ring draws as one', () => {
+  const ACROSS = [holding('USDC', '300', '300', 'ethereum'), holding('USDC', '100', '100', 'base')];
+
+  it('draws one arc and one line, whatever it is spread over', () => {
+    const { data, view } = draw(ACROSS, 400);
+
+    expect(data.labels).toEqual(['USDC']);
+    expect(data.datasets[0].data).toEqual([100]);
+    expect(view.queryAllByText('USDC Asset')).toHaveLength(1);
+  });
+
+  it('shows the summed quantity on the line, from the field the fold now carries', () => {
+    const priced = [holding('SHR', '300', '600', 'ethereum'), holding('SHR', '100', '200', 'base')];
+
+    const { view } = draw(priced, 800);
+
+    expect(view.container.textContent).toContain('SHR Asset400');
+  });
+
+  it('offers the split, and does not open it until it is asked to', () => {
+    const { view } = draw(ACROSS, 400);
+
+    expect(view.container.textContent).not.toContain('ethereum');
+    fireEvent.click(view.getByLabelText('Show USDC by chain'));
+
+    expect(view.container.textContent).toContain('ethereum');
+    expect(view.container.textContent).toContain('base');
+  });
+
+  it('splits the quantity and the value the line summed, largest chain first', () => {
+    const { view } = draw(ACROSS, 400);
+    fireEvent.click(view.getByLabelText('Show USDC by chain'));
+
+    const chains = view.container.textContent ?? '';
+    expect(chains.indexOf('ethereum')).toBeLessThan(chains.indexOf('base'));
+    expect(chains).toContain('ethereum300');
+    expect(chains).toContain('base100');
+  });
+
+  it('closes again, so the row is a toggle rather than a one-way door', () => {
+    const { view } = draw(ACROSS, 400);
+    fireEvent.click(view.getByLabelText('Show USDC by chain'));
+    fireEvent.click(view.getByLabelText('Hide USDC by chain'));
+
+    expect(view.container.textContent).not.toContain('ethereum');
+  });
+
+  it('says which chain could not be priced, while the line keeps saying it is unpriced', () => {
+    const { view } = draw([holding('USDC', '300', '300', 'ethereum'), holding('USDC', '100', null, 'base')], 300);
+    fireEvent.click(view.getByLabelText('Show USDC by chain'));
+
+    expect(view.container.textContent).toContain('base100unpriced');
+  });
+});
+
+describe('a coin held on one chain', () => {
+  it('offers no expansion, so most rows look exactly as they did', () => {
+    const { view } = draw([holding('USDC', '100', '100', 'base')], 100);
+
+    expect(view.queryByLabelText('Show USDC by chain')).toBeNull();
+    expect(view.container.textContent).not.toContain('base');
   });
 });

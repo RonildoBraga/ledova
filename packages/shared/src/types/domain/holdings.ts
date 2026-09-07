@@ -48,6 +48,13 @@ export interface HoldingsSummary {
 
 export type AllocationBasis = 'value' | 'quantity' | 'unpriced';
 
+export interface AssetChainSlice {
+  chain: string;
+  quantity: number;
+  totalValue: number;
+  priced: boolean;
+}
+
 export interface AssetAllocationItem {
   assetUuid: string;
   symbol: string;
@@ -56,6 +63,8 @@ export interface AssetAllocationItem {
   percentage: number;
   basis: AllocationBasis;
   color: string;
+  totalQuantity: number;
+  perChain: AssetChainSlice[];
   navPerToken?: string | null;
   isYieldToken?: boolean;
 }

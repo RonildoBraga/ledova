@@ -46,7 +46,6 @@ export function HomeScreen() {
     isLoading,
     error,
     holdings,
-    assetQuantities,
     selectedAsset,
     setSelectedAssetUuid,
     wallets,
@@ -128,7 +127,6 @@ export function HomeScreen() {
             assetAllocation={holdings.assetAllocation}
             totalValue={holdings.summary.totalValue}
             summary={holdings.summary}
-            assetQuantities={assetQuantities}
             isLoading={holdings.isLoading}
             hasError={holdings.hasError}
             onAssetClick={handleAssetClick}

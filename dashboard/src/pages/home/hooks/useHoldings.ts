@@ -41,22 +41,9 @@ export function useHoldings(walletsList: Wallet[]) {
     [holdings, summary.totalValue],
   );
 
-  const assetQuantities = useMemo(() => {
-    const quantities: Record<string, number> = {};
-    holdings.forEach((holding) => {
-      const symbol = holding.assetSymbol || holding.asset?.symbol;
-      if (symbol) {
-        const currentQuantity = quantities[symbol] || 0;
-        quantities[symbol] = currentQuantity + parseFloat(holding.quantity || '0');
-      }
-    });
-    return quantities;
-  }, [holdings]);
-
   return {
     summary,
     assetAllocation,
-    assetQuantities,
     isLoading: holdingsQueries.some((q) => q.isLoading),
     hasError: holdingsQueries.some((q) => q.error),
   };

@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { View, Text, ActivityIndicator, TouchableOpacity } from 'react-native';
-import { WalletIcon } from 'phosphor-react-native';
+import { CaretDownIcon, CaretRightIcon, WalletIcon } from 'phosphor-react-native';
 import { Panel } from '../../../components/panel';
 import { AllocationPieChart } from './AllocationPieChart';
 import { ErrorBoundary } from '../../../components/ErrorBoundary';
@@ -12,7 +13,6 @@ interface AssetAllocationCardProps {
   assetAllocation: AssetAllocationItem[];
   totalValue: number;
   summary: HoldingsSummary;
-  assetQuantities: Record<string, number>;
   isLoading: boolean;
   hasError: boolean;
   onAssetClick: (assetUuid: string) => void;
@@ -22,11 +22,11 @@ export function AssetAllocationCard({
   assetAllocation,
   totalValue,
   summary,
-  assetQuantities,
   isLoading,
   hasError,
   onAssetClick,
 }: AssetAllocationCardProps) {
+  const [expanded, setExpanded] = useState<string | null>(null);
   const theme = useAppTheme();
   const { formatDisplayCurrency } = useCurrency();
   const styles = useThemedStyles((theme) => ({
@@ -45,6 +45,22 @@ export function AssetAllocationCard({
       alignItems: 'center',
       gap: theme.spacing.sm,
       paddingVertical: theme.spacing.xs,
+    },
+    chainRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing.sm,
+      paddingVertical: 2,
+      paddingLeft: theme.spacing.lg,
+    },
+    chainName: {
+      color: theme.colors.text.secondary,
+      fontSize: 12,
+      textTransform: 'capitalize',
+    },
+    chainAmount: {
+      color: theme.colors.text.muted,
+      fontSize: 12,
     },
     colorDot: {
       width: theme.spacing.sm,
@@ -148,34 +164,69 @@ export function AssetAllocationCard({
 
       <View style={styles.holdingsList}>
         {assetAllocation.map((item) => {
-          const quantity = assetQuantities[item.symbol];
-          const hasQuantity = quantity !== undefined && quantity > 0;
+          const quantity = item.totalQuantity;
+          const hasQuantity = quantity > 0;
           const showQuantity = hasQuantity && !(item.totalValue > 0 && Math.abs(quantity / item.totalValue - 1) < 0.05);
+          const heldOnSeveralChains = item.perChain.length > 1;
+          const isExpanded = expanded === item.assetUuid;
 
           return (
-            <TouchableOpacity
-              key={item.assetUuid}
-              style={styles.holdingRow}
-              onPress={() => onAssetClick(item.assetUuid)}
-              activeOpacity={0.7}
-            >
-              <View style={[styles.colorDot, { backgroundColor: item.color }]} />
-              <View>
-                <Text style={styles.holdingSymbol}>{item.name}</Text>
-                {item.isYieldToken && item.navPerToken && (
-                  <Text style={styles.navText}>NAV: ${parseFloat(item.navPerToken).toFixed(6)}</Text>
+            <View key={item.assetUuid}>
+              <View style={styles.holdingRow}>
+                {heldOnSeveralChains ? (
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel={isExpanded ? `Hide ${item.symbol} by chain` : `Show ${item.symbol} by chain`}
+                    onPress={() => setExpanded(isExpanded ? null : item.assetUuid)}
+                    activeOpacity={0.7}
+                  >
+                    {isExpanded ? (
+                      <CaretDownIcon size={12} color={theme.colors.text.muted} />
+                    ) : (
+                      <CaretRightIcon size={12} color={theme.colors.text.muted} />
+                    )}
+                  </TouchableOpacity>
+                ) : (
+                  <View style={{ width: 12 }} />
                 )}
+                <TouchableOpacity
+                  style={styles.holdingRow}
+                  onPress={() => onAssetClick(item.assetUuid)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.colorDot, { backgroundColor: item.color }]} />
+                  <View>
+                    <Text style={styles.holdingSymbol}>{item.name}</Text>
+                    {item.isYieldToken && item.navPerToken && (
+                      <Text style={styles.navText}>NAV: ${parseFloat(item.navPerToken).toFixed(6)}</Text>
+                    )}
+                  </View>
+                  <View style={styles.rightGroup}>
+                    {showQuantity && <Text style={styles.quantityText}>{formatQuantity(quantity)}</Text>}
+                    <Text style={styles.holdingValue}>
+                      {item.basis === 'value' ? formatDisplayCurrency(item.totalValue) : 'unpriced'}
+                    </Text>
+                    <Text style={styles.percentageText}>
+                      {item.basis === 'unpriced' ? '—' : formatPercentage(item.percentage, 1)}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
               </View>
-              <View style={styles.rightGroup}>
-                {showQuantity && <Text style={styles.quantityText}>{formatQuantity(quantity)}</Text>}
-                <Text style={styles.holdingValue}>
-                  {item.basis === 'value' ? formatDisplayCurrency(item.totalValue) : 'unpriced'}
-                </Text>
-                <Text style={styles.percentageText}>
-                  {item.basis === 'unpriced' ? '—' : formatPercentage(item.percentage, 1)}
-                </Text>
-              </View>
-            </TouchableOpacity>
+
+              {heldOnSeveralChains &&
+                isExpanded &&
+                item.perChain.map((slice) => (
+                  <View key={slice.chain} style={styles.chainRow}>
+                    <Text style={styles.chainName}>{slice.chain || 'unknown chain'}</Text>
+                    <View style={styles.rightGroup}>
+                      <Text style={styles.chainAmount}>{formatQuantity(slice.quantity)}</Text>
+                      <Text style={styles.chainAmount}>
+                        {slice.priced ? formatDisplayCurrency(slice.totalValue) : 'unpriced'}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+            </View>
           );
         })}
       </View>

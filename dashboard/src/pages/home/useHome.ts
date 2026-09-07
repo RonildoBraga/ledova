@@ -65,7 +65,6 @@ export function useHome() {
     holdings: {
       summary: holdings.summary,
       assetAllocation: holdings.assetAllocation,
-      assetQuantities: holdings.assetQuantities,
       isLoading: walletsSummary.isLoading || holdings.isLoading,
       hasError: holdings.hasError,
     },
