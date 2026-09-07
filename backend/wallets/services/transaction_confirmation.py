@@ -71,32 +71,20 @@ class TransactionConfirmationService:
             )
             TransactionMonitoringService.check_new_transaction(tx)
 
-            holding, _ = Holding.objects.get_or_create(
-                wallet=wallet,
-                asset=asset,
-                defaults={"quantity": Decimal("0")},
-            )
+            fee = transaction_fee or Decimal("0")
+            native = native_asset_for_chain(wallet.chain)
 
-            total_deduction = amount + (transaction_fee or Decimal("0"))
-            new_quantity = holding.quantity - total_deduction
-            holding.quantity = max(Decimal("0"), new_quantity)
-            holding.last_synced_at = timezone.now()
-            holding.save(update_fields=["quantity", "last_synced_at"])
-
-            HoldingSnapshot.objects.update_or_create(
-                holding=holding,
-                snapshot_date=timezone.now().date(),
-                defaults={
-                    "quantity": holding.quantity,
-                    "snapshot_reason": SNAPSHOT_REASON_TRANSACTION,
-                    "caused_by_transaction": tx,
-                },
-            )
+            if asset == native:
+                holding = TransactionConfirmationService._move_holding(tx, asset, -(amount + fee))
+            else:
+                holding = TransactionConfirmationService._move_holding(tx, asset, -amount)
+                if fee:
+                    TransactionConfirmationService._move_holding(tx, native, -fee)
 
             logger.info(
                 "Created pending transaction: "
                 f"tx_hash={tx_hash}, wallet={wallet.address[:10]}..., "
-                f"amount={amount} {asset.symbol}, new_balance={holding.quantity}"
+                f"amount={amount} {asset.symbol}, fee={fee} {native.symbol}, new_balance={holding.quantity}"
             )
 
         return {
@@ -178,8 +166,34 @@ class TransactionConfirmationService:
             send_transaction_notification.defer(user_id=str(user.pk), transaction_id=str(tx.uuid), event_type=event)
 
     @staticmethod
+    def _move_holding(tx: Transaction, asset: Asset, delta: Decimal) -> Holding:
+        holding, _ = Holding.objects.get_or_create(
+            wallet=tx.wallet,
+            asset=asset,
+            defaults={"quantity": Decimal("0")},
+        )
+
+        holding.quantity = max(Decimal("0"), holding.quantity + delta)
+        holding.last_synced_at = timezone.now()
+        holding.save(update_fields=["quantity", "last_synced_at"])
+
+        HoldingSnapshot.objects.update_or_create(
+            holding=holding,
+            snapshot_date=timezone.now().date(),
+            defaults={
+                "quantity": holding.quantity,
+                "snapshot_reason": SNAPSHOT_REASON_TRANSACTION,
+                "caused_by_transaction": tx,
+            },
+        )
+        return holding
+
+    @staticmethod
     def _verify_holding_balance(wallet: Wallet, asset: Asset) -> None:
         sync_holding(wallet, asset)
+        native = native_asset_for_chain(wallet.chain)
+        if asset != native:
+            sync_holding(wallet, native)
 
     @staticmethod
     def _update_snapshot_on_confirmation(tx: Transaction) -> None:
@@ -205,23 +219,17 @@ class TransactionConfirmationService:
 
     @staticmethod
     def _revert_optimistic_holding(tx: Transaction) -> None:
-        holding = Holding.objects.filter(wallet=tx.wallet, asset=tx.asset).first()
-        if not holding:
-            return
+        fee = tx.transaction_fee_estimated or Decimal("0")
+        native = native_asset_for_chain(tx.wallet.chain)
 
-        total_reverted = tx.amount + (tx.transaction_fee or Decimal("0"))
-        holding.quantity += total_reverted
-        holding.last_synced_at = timezone.now()
-        holding.save(update_fields=["quantity", "last_synced_at"])
+        if tx.asset == native:
+            holding = TransactionConfirmationService._move_holding(tx, tx.asset, tx.amount + fee)
+        else:
+            holding = TransactionConfirmationService._move_holding(tx, tx.asset, tx.amount)
+            if fee:
+                TransactionConfirmationService._move_holding(tx, native, fee)
 
-        HoldingSnapshot.objects.update_or_create(
-            holding=holding,
-            snapshot_date=timezone.now().date(),
-            defaults={
-                "quantity": holding.quantity,
-                "snapshot_reason": SNAPSHOT_REASON_TRANSACTION,
-                "caused_by_transaction": tx,
-            },
+        logger.info(
+            f"Reverted optimistic holding: +{tx.amount} {tx.asset.symbol} and +{fee} {native.symbol}, "
+            f"new_balance={holding.quantity}"
         )
-
-        logger.info(f"Reverted optimistic holding: +{total_reverted} {tx.asset.symbol}, new_balance={holding.quantity}")
