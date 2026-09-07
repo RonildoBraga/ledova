@@ -5,14 +5,14 @@ from django.utils import timezone
 
 from shared.utils import get_client_ip
 from shared.utils.blockchain import decode_exception_to_message, decode_revert_reason
-
-DEFAULT = "Failed to prepare the transaction."
-KEY = "pR3t3nd1ngT0B3aReAlK3y"
-NODE_URL = f"https://base-sepolia.g.alchemy.com/v2/{KEY}"
 from shared.utils.datetime_utils import (
     parse_date_to_timezone_aware,
     parse_end_date_inclusive,
 )
+
+DEFAULT = "Failed to prepare the transaction."
+KEY = "pR3t3nd1ngT0B3aReAlK3y"
+NODE_URL = f"https://base-sepolia.g.alchemy.com/v2/{KEY}"
 
 
 class DecodeRevertReasonTests(SimpleTestCase):
