@@ -1,7 +1,7 @@
 from django.contrib import admin, messages
 from django.http import HttpResponseRedirect
-from django.shortcuts import get_object_or_404, render
-from django.urls import re_path, reverse
+from django.shortcuts import render
+from django.urls import reverse
 
 from offerings.exceptions import (
     InvalidOfferingTransitionException,
@@ -9,6 +9,7 @@ from offerings.exceptions import (
 )
 from offerings.models import Offering, OfferingStatus
 from offerings.services import transition_offering, unissued_headroom
+from shared.utils.admin_actions import admin_action_re_path
 from shared.utils.admin_display import action_buttons
 from tokens.admin._helpers import status_badge
 from tokens.admin.review_workflow import ApproveForm, RejectForm
@@ -219,10 +220,11 @@ class OfferingAdmin(admin.ModelAdmin):
 
     def get_urls(self):
         custom_urls = [
-            re_path(
+            admin_action_re_path(
+                self,
                 rf"^(?P<uuid>[0-9a-f-]+)/(?P<action>{'|'.join(TRANSITIONS)})/$",
-                self.admin_site.admin_view(self.transition_view),
-                name="offerings_offering_transition",
+                "offerings_offering_transition",
+                self.transition_view,
             ),
         ]
         return custom_urls + super().get_urls()
@@ -232,8 +234,7 @@ class OfferingAdmin(admin.ModelAdmin):
             return ApproveForm(request.POST or None)
         return RejectForm(request.POST or None)
 
-    def transition_view(self, request, uuid, action):
-        offering = get_object_or_404(Offering, uuid=uuid)
+    def transition_view(self, request, offering, action):
         spec = TRANSITIONS[action]
         change_url = reverse("admin:offerings_offering_change", args=[offering.pk])
         kwargs = {spec["actor"]: request.user} if "actor" in spec else {}

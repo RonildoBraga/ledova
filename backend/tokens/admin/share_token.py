@@ -2,10 +2,11 @@ import logging
 
 from django.contrib import admin, messages
 from django.http import HttpResponseRedirect
-from django.shortcuts import get_object_or_404, render
-from django.urls import path, reverse
+from django.shortcuts import render
+from django.urls import reverse
 
 from integrations.base_chain.exceptions import BaseChainConnectionError
+from shared.utils.admin_actions import admin_action_path
 from shared.utils.admin_display import action_buttons
 from tokens.exceptions import (
     CompanyNotReadyException,
@@ -141,25 +142,11 @@ class ShareTokenAdmin(admin.ModelAdmin):
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [
-            path(
-                "<uuid:uuid>/deploy/",
-                self.admin_site.admin_view(self.deploy_view),
-                name="tokens_sharetoken_deploy",
-            ),
-            path(
-                "<uuid:uuid>/pause/",
-                self.admin_site.admin_view(self.pause_view),
-                name="tokens_sharetoken_pause",
-            ),
-            path(
-                "<uuid:uuid>/unpause/",
-                self.admin_site.admin_view(self.unpause_view),
-                name="tokens_sharetoken_unpause",
-            ),
-            path(
-                "<uuid:uuid>/retry-deploy/",
-                self.admin_site.admin_view(self.retry_deploy_view),
-                name="tokens_sharetoken_retry_deploy",
+            admin_action_path(self, "<uuid:uuid>/deploy/", "tokens_sharetoken_deploy", self.deploy_view),
+            admin_action_path(self, "<uuid:uuid>/pause/", "tokens_sharetoken_pause", self.pause_view),
+            admin_action_path(self, "<uuid:uuid>/unpause/", "tokens_sharetoken_unpause", self.unpause_view),
+            admin_action_path(
+                self, "<uuid:uuid>/retry-deploy/", "tokens_sharetoken_retry_deploy", self.retry_deploy_view
             ),
         ]
         return custom_urls + urls
@@ -214,8 +201,7 @@ class ShareTokenAdmin(admin.ModelAdmin):
     def _paused_on_chain(obj):
         return bounded_chain_read(lambda: ShareTokenService().read_paused(obj), f"paused() of {obj.symbol}")
 
-    def deploy_view(self, request, uuid):
-        token = get_object_or_404(ShareToken, uuid=uuid)
+    def deploy_view(self, request, token):
         change_url = reverse("admin:tokens_sharetoken_change", args=[token.pk])
 
         try:
@@ -245,8 +231,7 @@ class ShareTokenAdmin(admin.ModelAdmin):
         }
         return render(request, "admin/tokens/sharetoken/deploy_confirm.html", context)
 
-    def retry_deploy_view(self, request, uuid):
-        token = get_object_or_404(ShareToken, uuid=uuid)
+    def retry_deploy_view(self, request, token):
         change_url = reverse("admin:tokens_sharetoken_change", args=[token.pk])
         try:
             if request.method == "POST":
@@ -272,14 +257,13 @@ class ShareTokenAdmin(admin.ModelAdmin):
         }
         return render(request, "admin/tokens/sharetoken/retry_deploy_confirm.html", context)
 
-    def pause_view(self, request, uuid):
-        return self._pause_view(request, uuid, "pause")
+    def pause_view(self, request, token):
+        return self._pause_view(request, token, "pause")
 
-    def unpause_view(self, request, uuid):
-        return self._pause_view(request, uuid, "unpause")
+    def unpause_view(self, request, token):
+        return self._pause_view(request, token, "unpause")
 
-    def _pause_view(self, request, uuid, verb):
-        token = get_object_or_404(ShareToken, uuid=uuid)
+    def _pause_view(self, request, token, verb):
         change_url = reverse("admin:tokens_sharetoken_change", args=[token.pk])
         try:
             if request.method == "POST":

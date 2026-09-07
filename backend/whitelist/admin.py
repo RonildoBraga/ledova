@@ -1,12 +1,13 @@
 from django import forms
 from django.contrib import admin, messages
 from django.http import HttpResponseRedirect
-from django.shortcuts import get_object_or_404, render
-from django.urls import path, reverse
+from django.shortcuts import render
+from django.urls import reverse
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 from web3 import Web3
 
+from shared.utils.admin_actions import admin_action_path
 from users.services.eligibility import account_eligibility
 from wallets.models import Wallet
 from whitelist.models import WhitelistEntry, WhitelistStatus
@@ -186,15 +187,17 @@ class WhitelistEntryAdmin(admin.ModelAdmin):
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [
-            path(
+            admin_action_path(
+                self,
                 "<uuid:uuid>/add-to-blockchain/",
-                self.admin_site.admin_view(self.add_to_blockchain_view),
-                name="whitelist_whitelistentry_add_to_blockchain",
+                "whitelist_whitelistentry_add_to_blockchain",
+                self.add_to_blockchain_view,
             ),
-            path(
+            admin_action_path(
+                self,
                 "<uuid:uuid>/remove-from-blockchain/",
-                self.admin_site.admin_view(self.remove_from_blockchain_view),
-                name="whitelist_whitelistentry_remove_from_blockchain",
+                "whitelist_whitelistentry_remove_from_blockchain",
+                self.remove_from_blockchain_view,
             ),
         ]
         return custom_urls + urls
@@ -235,8 +238,7 @@ class WhitelistEntryAdmin(admin.ModelAdmin):
 
     status_actions.short_description = "Quick Actions"
 
-    def add_to_blockchain_view(self, request, uuid):
-        entry = get_object_or_404(WhitelistEntry, uuid=uuid)
+    def add_to_blockchain_view(self, request, entry):
 
         if entry.is_whitelisted:
             messages.warning(request, f"Address {entry.wallet_address} is already whitelisted on blockchain.")
@@ -263,8 +265,7 @@ class WhitelistEntryAdmin(admin.ModelAdmin):
         }
         return render(request, "admin/whitelist/whitelistentry/add_to_blockchain_confirm.html", context)
 
-    def remove_from_blockchain_view(self, request, uuid):
-        entry = get_object_or_404(WhitelistEntry, uuid=uuid)
+    def remove_from_blockchain_view(self, request, entry):
 
         if not entry.is_whitelisted:
             messages.warning(request, f"Address {entry.wallet_address} is not on the blockchain whitelist.")
