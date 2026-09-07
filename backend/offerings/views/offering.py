@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
@@ -41,6 +42,7 @@ class OfferingViewSet(AuthenticatedModelViewSet):
             raise OfferingRefusedException(NOT_DELETABLE)
         instance.delete()
 
+    @extend_schema(responses=OfferingDetailSerializer)
     @action(detail=True, methods=["post"])
     def submit(self, request, uuid=None):
         offering = self.get_object()
@@ -53,6 +55,7 @@ class OfferingViewSet(AuthenticatedModelViewSet):
         page = self.paginate_queryset(Subscription.objects.for_issuer(offering))
         return self.get_paginated_response(IssuerSubscriptionSerializer(page, many=True).data)
 
+    @extend_schema(responses=OfferingDetailSerializer)
     @action(detail=True, methods=["post"])
     def withdraw(self, request, uuid=None):
         offering = self.get_object()

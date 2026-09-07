@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.shortcuts import get_object_or_404
-from rest_framework import viewsets
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -15,6 +16,17 @@ class FiatPurchaseViewSet(viewsets.ViewSet):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        responses=inline_serializer(
+            name="FiatPurchaseWidget",
+            fields={
+                "url": serializers.CharField(),
+                "walletAddress": serializers.CharField(),
+                "chain": serializers.CharField(),
+                "cryptoCurrency": serializers.CharField(),
+            },
+        )
+    )
     @action(detail=False, methods=["post"], url_path="transak-widget-url")
     def transak_widget_url(self, request):
         wallet_uuid = request.data.get("wallet_uuid")

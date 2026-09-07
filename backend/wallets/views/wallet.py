@@ -1,4 +1,5 @@
 from django.db import transaction
+from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -94,6 +95,7 @@ class WalletViewSet(AuthenticatedModelViewSet):
             status=status.HTTP_200_OK,
         )
 
+    @extend_schema(responses=HoldingSerializer(many=True))
     @action(detail=True, methods=["get"], url_path="holdings", url_name="holdings")
     def holdings(self, request, uuid=None):
         wallet = self.get_object()

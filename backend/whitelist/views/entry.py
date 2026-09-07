@@ -1,6 +1,7 @@
 import csv
 
 from django.http import Http404, HttpResponse
+from drf_spectacular.utils import extend_schema
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAdminUser
@@ -50,6 +51,7 @@ class WhitelistEntryViewSet(
         serializer = self.get_serializer(entries[0])
         return Response(serializer.data)
 
+    @extend_schema(responses=WhitelistAddResponseSerializer)
     @action(detail=False, methods=["post"])
     def add(self, request):
         serializer = WhitelistAddSerializer(data=request.data)
@@ -75,6 +77,7 @@ class WhitelistEntryViewSet(
             status=status.HTTP_201_CREATED,
         )
 
+    @extend_schema(responses=WhitelistRemoveResponseSerializer)
     @action(detail=False, methods=["post"])
     def remove(self, request):
         serializer = WhitelistRemoveSerializer(data=request.data)
@@ -100,6 +103,7 @@ class WhitelistEntryViewSet(
             status=status.HTTP_200_OK,
         )
 
+    @extend_schema(responses=WhitelistSyncResponseSerializer)
     @action(detail=False, methods=["post"], url_path="sync/(?P<address>[^/.]+)")
     def sync(self, request, address=None):
         wallet_uuid = unique_wallet_uuid_for(address)

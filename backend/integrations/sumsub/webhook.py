@@ -3,6 +3,7 @@ import logging
 from django.core.exceptions import ValidationError
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
+from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
@@ -32,6 +33,7 @@ class SumSubWebhookView(APIView):
 
     parser_classes = [JSONParser]
 
+    @extend_schema(exclude=True)
     def post(self, request):
         signature = request.headers.get("X-Payload-Digest", "")
 

@@ -6,6 +6,7 @@ from typing import Optional
 from django.conf import settings
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
+from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -35,6 +36,7 @@ class AlchemyWebhookView(APIView):
     authentication_classes = []
     permission_classes = []
 
+    @extend_schema(exclude=True)
     def post(self, request):
         signature = request.headers.get("X-Alchemy-Signature", "")
         signing_key = getattr(settings, "ALCHEMY_WEBHOOK_SIGNING_KEY", "")

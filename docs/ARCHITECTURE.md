@@ -1246,6 +1246,52 @@ everything in flight, and every service written since is already plain functions
 They convert when one is next edited for another reason. Recorded here so the
 absence of a gate for them reads as a decision rather than an oversight.
 
+### The schema response gate
+
+`scripts/check-schema-responses.py` fails when a view returns a shape the
+generated OpenAPI schema does not know about. `make check-schema-responses` runs
+it and CI runs it beside the other source gates. It is static and needs no
+database: it reads the view source, not a generated schema.
+
+drf-spectacular infers an operation's response from `get_serializer_class()`. A
+view that builds its own `Response` with a different serializer is documented as
+returning the wrong shape, and every consumer that trusts the schema inherits the
+error - including the API type drift gate, which cannot tell a schema defect from
+a type defect and would record the former as the latter.
+
+`POST /api/v1/tokens/` was the clearest case. `get_serializer_class` returns
+`ShareTokenCreateSerializer` for the `create` action, so the schema said the 201
+body had eight write fields and no `uuid` or `status`, while the view returned
+`ShareTokenDetailSerializer(token).data`. The TypeScript was right and the schema
+was wrong, and the drift gate reported it as a type error.
+
+Two rules:
+
+- **hand-built-response** - a routable method that returns
+  `Response(XSerializer(...).data)`, directly or through a private helper, must
+  carry an `@extend_schema` naming what it returns. `Response(serializer.data)`
+  where `serializer` came from `self.get_serializer(...)` is exactly what the
+  generator already infers, so it is not a finding.
+- **undeclared-action** - an action returning a literal dict body must declare it
+  too, since the generator has no serializer to read. Error paths are excluded:
+  a `Response({...}, status=HTTP_4xx)` is not the contract.
+
+Naming a response is enough; the gate does not verify the declaration is
+accurate, because that is not decidable from syntax. What it decides is that
+somebody stated something, which is the difference between a wrong answer and no
+answer. `@extend_schema(exclude=True)` is also an answer, and is the right one
+for a provider-facing webhook - it makes "deliberately absent" and "the generator
+could not see it" stop looking the same.
+
+A private helper serves no route, so what it returns is attributed to the
+routable methods that call it. `SubscriptionViewSet._detail` is why: it returns
+`SubscriptionDetailSerializer`, and the actions that matter are `submit` and
+`withdraw`, one of which the generator documented as returning
+`SubscriptionWithdrawSerializer`.
+
+`LEGACY` carries the literal-body actions that predate the gate, keyed by
+`file:rule` and valued by a count that may only shrink.
+
 ### The logging privacy gate
 
 `scripts/check-logging.py` is the mechanical half of "never log an email

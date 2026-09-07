@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -37,6 +38,7 @@ class DocumentViewSet(
         document = self.get_object()
         return stream_stored_file(document.file, document.mime_type, document.original_filename)
 
+    @extend_schema(responses=DocumentSerializer)
     def create(self, request, *args, **kwargs):
         write_ser = self.get_serializer(data=request.data)
         write_ser.is_valid(raise_exception=True)

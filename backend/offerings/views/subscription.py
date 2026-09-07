@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema
 from rest_framework import mixins
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -37,10 +38,12 @@ class SubscriptionViewSet(
     def _detail(self, subscription):
         return Response(SubscriptionDetailSerializer(subscription, context=self.get_serializer_context()).data)
 
+    @extend_schema(responses=SubscriptionDetailSerializer)
     @action(detail=True, methods=["post"])
     def submit(self, request, uuid=None):
         return self._detail(submit_subscription(self.get_object(), submitted_by=request.user))
 
+    @extend_schema(responses=SubscriptionDetailSerializer)
     @action(detail=True, methods=["post"])
     def withdraw(self, request, uuid=None):
         serializer = SubscriptionWithdrawSerializer(data=request.data)
