@@ -1,10 +1,17 @@
-from django.db import IntegrityError, transaction
+from importlib import import_module
+from types import SimpleNamespace
+
+from django.apps import apps
+from django.db import IntegrityError, connection, transaction
 from django.test import TestCase, TransactionTestCase
 
 from shared.tests.tenants import make_tenant
 from tokens.exceptions import InvalidTokenStateException
-from tokens.models import CapitalIncreaseRequest, RequestStatus
+from tokens.models import CapitalIncreaseRequest, RequestStatus, ShareToken
 from tokens.services.capital_increase import submit_capital_increase
+
+CONSTRAINT_NAME = "one_capital_increase_in_flight_per_token"
+GUARD = import_module("tokens.migrations.0026_one_capital_increase_in_flight").refuse_a_token_that_already_has_two
 
 
 class ASecondRaiseIsRefusedWithAReasonTest(TestCase):
@@ -115,3 +122,96 @@ class TheDatabaseRefusesASecondInFlightRowTest(TransactionTestCase):
             with self.subTest(status=status):
                 row = self.a_row(status)
                 self.assertEqual(CapitalIncreaseRequest.objects.get(pk=row.pk).status, status)
+
+
+class TheMigrationGuardRefusesRatherThanChoosingTest(TransactionTestCase):
+
+    reset_sequences = False
+
+    def setUp(self):
+        super().setUp()
+        self.tenant = make_tenant("crowded")
+        self.token = self.tenant.deployed_token
+        CapitalIncreaseRequest.objects.all().delete()
+        self.constraint = next(c for c in CapitalIncreaseRequest._meta.constraints if c.name == CONSTRAINT_NAME)
+        with connection.schema_editor(atomic=False) as editor:
+            editor.remove_constraint(CapitalIncreaseRequest, self.constraint)
+        self.addCleanup(self.put_the_constraint_back)
+
+    def put_the_constraint_back(self):
+        CapitalIncreaseRequest.objects.all().delete()
+        with connection.schema_editor(atomic=False) as editor:
+            editor.add_constraint(CapitalIncreaseRequest, self.constraint)
+
+    def a_request(self, status, additional=25):
+        return CapitalIncreaseRequest.objects.create(
+            token=self.token,
+            additional_shares=additional,
+            new_authorized_total=int(self.token.total_supply) + additional,
+            purpose="Raise",
+            board_resolution_reference=f"BOARD-{additional}",
+            status=status,
+        )
+
+    @staticmethod
+    def run_the_guard():
+        return GUARD(apps, SimpleNamespace(connection=SimpleNamespace(alias="default")))
+
+    def test_one_in_flight_request_per_share_class_lets_the_migration_run(self):
+        self.a_request(RequestStatus.SUBMITTED)
+        self.a_request(RequestStatus.EXECUTED, additional=30)
+        self.a_request(RequestStatus.DRAFT, additional=35)
+
+        self.assertIsNone(self.run_the_guard())
+
+    def test_two_in_flight_requests_stop_the_migration_and_name_both(self):
+        first = self.a_request(RequestStatus.SUBMITTED)
+        second = self.a_request(RequestStatus.APPROVED, additional=30)
+
+        with self.assertRaises(RuntimeError) as refusal:
+            self.run_the_guard()
+
+        said = str(refusal.exception)
+        self.assertIn(self.token.symbol, said)
+        self.assertIn(str(self.token.uuid), said)
+        self.assertIn(f"{first.uuid} (submitted)", said)
+        self.assertIn(f"{second.uuid} (approved)", said)
+        self.assertIn("a decision for an operator, not for a migration", said)
+
+    def test_the_guard_changes_nothing_it_refuses_over(self):
+        first = self.a_request(RequestStatus.SUBMITTED)
+        second = self.a_request(RequestStatus.EXECUTING, additional=30)
+
+        with self.assertRaises(RuntimeError):
+            self.run_the_guard()
+
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual((first.status, second.status), (RequestStatus.SUBMITTED, RequestStatus.EXECUTING))
+        self.assertEqual(CapitalIncreaseRequest.objects.filter(token=self.token).count(), 2)
+
+    def test_a_terminal_pair_is_not_what_the_guard_is_looking_for(self):
+        self.a_request(RequestStatus.REJECTED)
+        self.a_request(RequestStatus.FAILED, additional=30)
+        self.a_request(RequestStatus.EXECUTED, additional=35)
+
+        self.assertIsNone(self.run_the_guard())
+
+    def test_two_share_classes_with_one_each_are_not_a_crowd(self):
+        other = ShareToken.objects.get(pk=self.tenant.deployed_token.pk)
+        other.pk = None
+        other.uuid = None
+        other.symbol = "OTH"
+        other.contract_address = "0x" + "7" * 40
+        other.save()
+        self.a_request(RequestStatus.SUBMITTED)
+        CapitalIncreaseRequest.objects.create(
+            token=other,
+            additional_shares=40,
+            new_authorized_total=int(other.total_supply) + 40,
+            purpose="Raise",
+            board_resolution_reference="BOARD-40",
+            status=RequestStatus.SUBMITTED,
+        )
+
+        self.assertIsNone(self.run_the_guard())
