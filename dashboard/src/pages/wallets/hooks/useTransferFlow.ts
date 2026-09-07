@@ -177,6 +177,7 @@ export function useTransferFlow(selectedWallet: Wallet | null) {
     handleCloseSigningModal,
     handleTransferSuccess,
     setToAddress,
+    setSelectedAsset,
     getTransferType,
   };
 }

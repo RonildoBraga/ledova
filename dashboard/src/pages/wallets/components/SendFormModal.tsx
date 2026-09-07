@@ -46,6 +46,7 @@ interface SendFormModalProps {
   recipientWhitelistStatus?: WhitelistStatus;
   onBack: () => void;
   onTransfer: (asset: UnifiedAsset, toAddress: string, amount: string) => void;
+  onAssetChange?: (asset: UnifiedAsset | null) => void;
   onAddressChange?: (address: string) => void;
 }
 
@@ -64,6 +65,7 @@ export function SendFormModal({
   onBack,
   onTransfer,
   onAddressChange,
+  onAssetChange,
 }: SendFormModalProps) {
   const { formatDisplayCurrency } = useCurrency();
   const [selectedAsset, setSelectedAsset] = useState<UnifiedAsset | null>(null);
@@ -79,8 +81,9 @@ export function SendFormModal({
   useEffect(() => {
     if (assets.length > 0 && !selectedAsset) {
       setSelectedAsset(assets[0]);
+      onAssetChange?.(assets[0]);
     }
-  }, [assets, selectedAsset]);
+  }, [assets, selectedAsset, onAssetChange]);
 
   useEffect(() => {
     if (isOpen) {
@@ -89,8 +92,9 @@ export function SendFormModal({
       setAmount('');
       setShowAddressScanner(false);
       onAddressChange?.('');
+      onAssetChange?.(null);
     }
-  }, [isOpen, onAddressChange]);
+  }, [isOpen, onAddressChange, onAssetChange]);
 
   const handleAddressChange = (address: string) => {
     setToAddress(address);
@@ -229,6 +233,7 @@ export function SendFormModal({
                   type="button"
                   onClick={() => {
                     setSelectedAsset(asset);
+                    onAssetChange?.(asset);
                     setAmount('');
                   }}
                   className={`w-full flex items-center justify-between px-3 py-2.5 text-left transition-colors ${

@@ -85,6 +85,7 @@ export function SendTransferProvider({ children }: { children: ReactNode }) {
           onBack={handleBackToWalletSelection}
           onTransfer={transferFlow.handleCombinedTransfer}
           onAddressChange={transferFlow.setToAddress}
+          onAssetChange={transferFlow.setSelectedAsset}
         />
       )}
 
