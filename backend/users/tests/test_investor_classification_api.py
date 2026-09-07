@@ -302,6 +302,32 @@ class EvidenceViewTest(APITestCase):
 
         self.assertIn(response.status_code, (302, 403))
 
+    def test_the_evidence_renders_in_the_browser_when_its_type_is_one_uploads_allow(self):
+        self.client.force_authenticate(self.user)
+
+        response = self.client.get(self.url)
+
+        self.assertTrue(response.headers["Content-Disposition"].startswith("inline"))
+
+    def test_evidence_stored_as_html_is_downloaded_rather_than_rendered(self):
+        InvestorClassification.objects.filter(pk=self.classification.pk).update(evidence_mime_type="text/html")
+        self.client.force_authenticate(self.user)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.headers["Content-Disposition"].startswith("attachment"))
+        self.assertEqual(self._streamed(response), EVIDENCE_BYTES)
+
+    def test_evidence_with_no_stored_type_is_downloaded_rather_than_rendered(self):
+        InvestorClassification.objects.filter(pk=self.classification.pk).update(evidence_mime_type="")
+        self.client.force_authenticate(self.user)
+
+        response = self.client.get(self.url)
+
+        self.assertTrue(response.headers["Content-Disposition"].startswith("attachment"))
+        self.assertEqual(response.headers["Content-Type"], "application/octet-stream")
+
     def test_a_claim_with_no_evidence_is_404(self):
         bare = make_classification(self.other_account)
         self.client.force_authenticate(self.other_user)
