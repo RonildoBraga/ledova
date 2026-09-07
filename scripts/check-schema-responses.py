@@ -63,6 +63,11 @@ RULES = {
 
 ALLOWED: dict[str, tuple[int, str]] = {}
 
+# Each entry is one category with a fix, not a count with a history: these actions
+# build their body with a ** spread, so which fields cross the layer is not
+# decidable from the source. Lowering an entry means giving that action a written
+# shape - by hand, because the spread is why it cannot be read off. A count that
+# only falls is a ratchet; a count with no stated way down is a hiding place.
 LEGACY: dict[str, int] = {
     "backend/assets/views/asset.py:undeclared-action": 1,
     "backend/portfolios/views/portfolio.py:undeclared-action": 2,
