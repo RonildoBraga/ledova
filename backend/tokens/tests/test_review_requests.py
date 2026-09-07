@@ -739,6 +739,62 @@ class ExecutingIssuanceSweepTest(TestCase):
         request.refresh_from_db()
         return request, issuance
 
+    def _claimed(self, minutes=11):
+        request = issuance_request(self.token, amount=10)
+        ShareIssuanceRequest.objects.filter(pk=request.pk).update(
+            status=RequestStatus.EXECUTING, updated_at=timezone.now() - timedelta(minutes=minutes)
+        )
+        request.refresh_from_db()
+        return request
+
+    def test_a_claim_taken_before_any_mint_was_recorded_is_released_for_retry(self):
+        request = self._claimed()
+
+        self.assertEqual(check_executing_issuance_requests(), {"checked": 1, "resolved": 1})
+
+        request.refresh_from_db()
+        self.assertEqual(request.status, RequestStatus.FAILED)
+        self.assertTrue(request.can_be_executed)
+        self.chain.get_transaction_receipt.assert_not_called()
+
+    def test_a_mint_recorded_without_a_hash_is_not_released(self):
+        request = self._claimed()
+        ShareIssuance.objects.create(
+            token=self.token,
+            recipient_address=RECIPIENT,
+            amount="10",
+            status=IssuanceStatus.PROCESSING,
+            tx_hash="",
+            idempotency_key=ShareTokenService.issuance_key(request),
+        )
+
+        self.assertEqual(check_executing_issuance_requests(), {"checked": 1, "resolved": 0})
+
+        request.refresh_from_db()
+        self.assertEqual(request.status, RequestStatus.EXECUTING)
+        self.assertFalse(request.can_be_executed)
+
+    def test_the_two_unbroadcast_states_do_not_share_a_log_line(self):
+        released = self._claimed()
+        with self.assertLogs("tokens.services.share_token_service", level="WARNING") as released_logs:
+            check_executing_issuance_requests()
+
+        ambiguous = self._claimed()
+        ShareIssuance.objects.create(
+            token=self.token,
+            recipient_address=RECIPIENT,
+            amount="10",
+            status=IssuanceStatus.PROCESSING,
+            tx_hash="",
+            idempotency_key=ShareTokenService.issuance_key(ambiguous),
+        )
+        with self.assertLogs("tokens.services.share_token_service", level="WARNING") as ambiguous_logs:
+            check_executing_issuance_requests()
+
+        self.assertIn(str(released.uuid), " ".join(released_logs.output))
+        self.assertIn("no mint was recorded", " ".join(released_logs.output))
+        self.assertIn("recorded a mint it never named", " ".join(ambiguous_logs.output))
+
     def test_a_mined_mint_completes_the_request_without_sending(self):
         request, issuance = self._stuck()
         self.chain.get_transaction_receipt.return_value = {"status": 1, **RECEIPT}
@@ -896,7 +952,7 @@ class ExecutingIssuanceSweepTest(TestCase):
         hashless, _ = self._stuck(tx_hash=None)
         with self.assertLogs("tokens.services.share_token_service", "WARNING") as logs:
             self.assertEqual(check_executing_issuance_requests(), {"checked": 2, "resolved": 0})
-        self.assertIn("no mint recorded", logs.output[0])
+        self.assertIn("recorded a mint it never named", " ".join(logs.output))
 
         self.chain.get_transaction_receipt.side_effect = ConnectionError("rpc down")
         self.assertEqual(check_executing_issuance_requests(), {"checked": 2, "resolved": 0})
@@ -960,3 +1016,78 @@ class ExecuteReviewRequestTaskTest(TestCase):
         self.assertEqual(result, {"success": False, "error": str(InvalidRecipientAddressException().detail)})
         request.refresh_from_db()
         self.assertEqual(request.status, RequestStatus.APPROVED)
+
+
+class AnUnnamedMintReachesAnOperatorTest(TestCase):
+    def setUp(self):
+        self.chain = patch(CHAIN_CLIENT).start().return_value
+        self.addCleanup(patch.stopall)
+        self.tenant = make_tenant("owner")
+        self.token = self.tenant.deployed_token
+        self.service = ShareTokenService()
+
+    def _claimed(self, minutes=11, tx_hash=""):
+        request = issuance_request(self.token, amount=10)
+        ShareIssuanceRequest.objects.filter(pk=request.pk).update(
+            status=RequestStatus.EXECUTING, updated_at=timezone.now() - timedelta(minutes=minutes)
+        )
+        issuance = ShareIssuance.objects.create(
+            token=self.token,
+            recipient_address=RECIPIENT,
+            amount="10",
+            status=IssuanceStatus.PROCESSING,
+            tx_hash=tx_hash,
+            idempotency_key=ShareTokenService.issuance_key(request),
+        )
+        request.refresh_from_db()
+        return request, issuance
+
+    def test_a_stale_claim_with_no_hash_is_offered_to_the_operator(self):
+        request, issuance = self._claimed()
+
+        self.assertEqual(ShareTokenService.unnamed_mint(request), issuance)
+
+    def test_a_claim_still_inside_the_grace_period_is_left_to_the_worker(self):
+        request, _ = self._claimed(minutes=1)
+
+        self.assertIsNone(ShareTokenService.unnamed_mint(request))
+
+    def test_a_claim_that_named_its_mint_is_not_offered(self):
+        request, _ = self._claimed(tx_hash="0xmint")
+
+        self.assertIsNone(ShareTokenService.unnamed_mint(request))
+
+    def test_naming_the_mint_hands_the_request_back_to_the_sweep(self):
+        request, issuance = self._claimed()
+
+        self.service.name_the_mint(request, "0x" + "ab" * 32)
+
+        issuance.refresh_from_db()
+        request.refresh_from_db()
+        self.assertEqual(issuance.tx_hash, "0x" + "ab" * 32)
+        self.assertEqual(request.status, RequestStatus.EXECUTING)
+        self.assertIsNone(ShareTokenService.unnamed_mint(request))
+
+    def test_releasing_the_claim_makes_the_request_retryable(self):
+        request, issuance = self._claimed()
+
+        self.service.release_unnamed_claim(request)
+
+        request.refresh_from_db()
+        issuance.refresh_from_db()
+        self.assertEqual(request.status, RequestStatus.FAILED)
+        self.assertTrue(request.can_be_executed)
+        self.assertEqual(issuance.status, IssuanceStatus.FAILED)
+
+    def test_neither_operator_action_touches_a_request_that_named_its_mint(self):
+        request, _ = self._claimed(tx_hash="0xmint")
+
+        for act in (
+            lambda: self.service.name_the_mint(request, "0x" + "cd" * 32),
+            lambda: self.service.release_unnamed_claim(request),
+        ):
+            with self.assertRaises(InvalidTokenStateException):
+                act()
+
+        request.refresh_from_db()
+        self.assertEqual(request.status, RequestStatus.EXECUTING)

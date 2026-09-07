@@ -1,5 +1,6 @@
 import logging
 from collections.abc import Callable
+from datetime import timedelta
 from typing import Optional
 
 from django.conf import settings
@@ -54,6 +55,14 @@ LOG_WINDOW = 2000
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 NOT_WHITELISTED = "Recipient wallet is not whitelisted. Whitelist it before executing."
 EXCEEDS_AUTHORIZED = "Amount exceeds authorized shares. Submit a capital increase first."
+RELEASED_BY_OPERATOR = (
+    "An operator checked the chain, found no mint for this request, and released the claim. " "Retrying issues afresh."
+)
+UNNAMED_MINT_GRACE = timedelta(minutes=10)
+CLAIMED_BEFORE_RECORDED = (
+    "The worker claimed this request and stopped before recording a mint, so nothing was sent. "
+    "Retrying issues afresh."
+)
 TOKEN_PAUSED = "Token is paused. Unpause it before executing."
 SHARE_ASSET_CHAIN = BLOCKCHAIN_BASE
 NOT_ATTESTED = "{symbol} at {address} is not the address the factory holds for {identifier}; left unverified"
@@ -595,11 +604,47 @@ class ShareTokenService:
         except Exception as exc:
             logger.error(f"Could not record the {token.symbol} holding of {recipient_address}: {exc}")
 
-    def resolve_executing_issuance(self, request: ShareIssuanceRequest) -> Optional[str]:
-        issuance = self.broadcast_mint(request)
-        if issuance is None:
-            logger.warning(f"Request {request.uuid} is executing with no mint recorded; left for the operator")
+    @classmethod
+    def unnamed_mint(cls, request: ShareIssuanceRequest) -> Optional[ShareIssuance]:
+        recorded = ShareIssuance.objects.filter(idempotency_key=cls.issuance_key(request)).first()
+        if recorded is None or recorded.tx_hash:
             return None
+        if request.updated_at > timezone.now() - UNNAMED_MINT_GRACE:
+            return None
+        return recorded
+
+    @transaction.atomic
+    def name_the_mint(self, request: ShareIssuanceRequest, tx_hash: str) -> ShareIssuance:
+        issuance = self.unnamed_mint(request)
+        if issuance is None:
+            raise InvalidTokenStateException("This request has no unnamed mint to attach a transaction to.")
+        issuance.mark_processing(tx_hash=tx_hash)
+        logger.info(f"Request {request.uuid} had its mint named {tx_hash} by an operator")
+        return issuance
+
+    @transaction.atomic
+    def release_unnamed_claim(self, request: ShareIssuanceRequest) -> ShareIssuanceRequest:
+        issuance = self.unnamed_mint(request)
+        if issuance is None:
+            raise InvalidTokenStateException("This request has no unnamed mint, so there is no claim to release.")
+        issuance.mark_failed(RELEASED_BY_OPERATOR)
+        request.mark_failed(RELEASED_BY_OPERATOR)
+        logger.warning(f"Request {request.uuid} had its claim released by an operator; a retry will mint afresh")
+        return request
+
+    def resolve_executing_issuance(self, request: ShareIssuanceRequest) -> Optional[str]:
+        recorded = ShareIssuance.objects.filter(idempotency_key=self.issuance_key(request)).first()
+        if recorded is None:
+            logger.warning(f"Request {request.uuid} was claimed and no mint was recorded; releasing the claim")
+            request.mark_failed(CLAIMED_BEFORE_RECORDED)
+            return "released"
+        if not recorded.tx_hash:
+            logger.warning(
+                f"Request {request.uuid} recorded a mint it never named, so the send may have gone out; "
+                f"left for the operator"
+            )
+            return None
+        issuance = recorded
         tx_hash = issuance.tx_hash
         receipt = self.chain_client.get_transaction_receipt(tx_hash)
         if receipt is None:
