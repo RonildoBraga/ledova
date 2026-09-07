@@ -710,6 +710,33 @@ each lane does not re-derive it:
   refuses an update that changes one already set. Filling a NULL is the change
   it exists to make, so the immutability guard reads `OLD IS NOT NULL AND OLD <>
   NEW`; `IS DISTINCT FROM` makes the two branches contradict each other.
+- **A derived column whose parent attribute can change needs a propagation
+  rule before that attribute becomes editable anywhere.** The first four R0
+  columns derive from an immutable link; `ShareToken.owner` derives from
+  `Company.owner`, which an operator can edit. A trigger written for the
+  immutable case then refuses **every** write to the child, not only a write
+  to the owner column: on `UPDATE`, `NEW.owner` carries the value already
+  stored while the parent now names a different one, so an ordinary rename
+  raises *does not match* and the row is wedged. The trigger holds both values
+  already, so it distinguishes them: `NEW` different from `OLD` is a caller
+  moving the row, refused unless it equals the parent's current owner;
+  `NEW` equal to `OLD` while the parent differs is a **stale** row, re-derived
+  rather than refused, so the column converges on the next write.
+  Between the parent's change and the child's next write **the policy reads a
+  stale owner** — the old owner still sees the rows and the new one does not —
+  so an owner-transfer feature carries an `AFTER UPDATE` trigger on the parent
+  that re-derives its children. Until one exists, the editable path is closed:
+  `Company.owner` is read-only on an existing company in the admin, and
+  writable only on the add form.
+- **The trigger's local variable takes its type from the column it reads**,
+  `parent.{column}%TYPE`, rather than naming a type. Four R0 parents are
+  `uuid` and the user is a `BigAutoField`, because `CustomUser` extends
+  `AbstractBaseUser` rather than `BaseModel` — so a hard-coded `uuid` is right
+  four times and wrong the fifth, and `users/0020`'s hard-coded `integer` is
+  right until an id passes 2^31 and then raises `integer out of range` inside
+  a trigger, on a write that has nothing to do with ids ([#323](
+  https://github.com/RonildoBraga/ledova/issues/323)). **Neither spelling is
+  safe to copy: the type belongs to the column.**
 - Python supplies as well as the database enforcing: a small model mixin fills
   the column in `save()`, because the trigger is PostgreSQL-only and `make test`
   runs on SQLite. `bulk_create` bypasses `save()`, which is how a test reaches
@@ -736,6 +763,17 @@ each lane does not re-derive it:
   Rows written once never see it, which is why `users/0020`, `wallets/0008` and
   `offerings/0005` are clean. Settling *before* the writes rather than after
   also moves a failing backfill's error to the `UPDATE` that caused it.
+  **It goes in every R0 migration, including the ones where it is measurably
+  inert.** `tokens/0024` writes each row once, so removing the settle leaves
+  its populated round trip green — measured, not assumed. It stays anyway,
+  because the condition is a property of the *backfill*, not of the schema: a
+  later reviewer adding a second pass, or a lane copying this template for a
+  table that takes two columns, gets the guard already there rather than
+  discovering the failure on a populated database. An inert line inside an
+  applied migration cannot be added later — that is #262's ruling — so the
+  choice is to carry it from the start or to accept that the next lane pays
+  for it. A lane whose settle is inert says so in its body, so nobody reads a
+  green round trip as evidence the guard works.
 - **Audit the app's serializers for `exclude`-style field sets before adding the
   column.** A `ModelSerializer` with `exclude = (...)` turns a new model field
   into a *required writable API field*; two in `users` did exactly that, and

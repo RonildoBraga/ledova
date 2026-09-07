@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
 from shared.models import BaseModel
+from tokens.models.owner_column import DerivesOwnerFromCompany
 from tokens.querysets import ShareTokenQuerySet
 
 from .choices import ShareTokenStatus, ShareTokenType
@@ -14,11 +16,21 @@ if TYPE_CHECKING:
     from blockchain.models import BlockchainTransaction
 
 
-class ShareToken(BaseModel):
+class ShareToken(DerivesOwnerFromCompany, BaseModel):
     company = models.ForeignKey(
         "companies.Company",
         on_delete=models.PROTECT,
         related_name="tokens",
+    )
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="+",
+        help_text=(
+            "Owner, derived from company.owner and held directly so a row-level "
+            "security policy can read it without joining companies"
+        ),
     )
 
     name = models.CharField(max_length=100)
