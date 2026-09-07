@@ -668,11 +668,17 @@ parent cannot be read by a policy without a join, so each such table gains a
 direct owner column. The shape is the same every time and is stated here once so
 each lane does not re-derive it:
 
-- The column is added **nullable**, backfilled from the parent link in one
-  `UPDATE` per table on both vendors, altered to **`NOT NULL`**, and indexed by
-  Django's own foreign-key index. `related_name` is `"+"`, because the column
-  exists for a policy to read rather than for anyone to traverse: no reverse
-  accessor appears and no queryset changes shape.
+- The column is added **nullable**, backfilled from the parent link, altered to
+  **`NOT NULL`**, and indexed by Django's own foreign-key index. `related_name`
+  is `"+"`, because the column exists for a policy to read rather than for
+  anyone to traverse: no reverse accessor appears and no queryset changes
+  shape. **How many times the backfill writes each row is the thing to know
+  about it**, and it is not the same question as how many statements it runs.
+  One `UPDATE` per table is the usual shape and writes each row once;
+  `tokens/0023` fills `signing_challenges` with a bulk `UPDATE` and then a loop
+  over the rows it left, several statements over disjoint rows and still one
+  write each; and it writes `tokens_swaporder` twice, once per owner column,
+  which is the case the settle bullet exists for.
 - **`on_delete` mirrors the strictest `on_delete` on the path it derives from.**
   A shortcut to an owner must not make that owner deletable when the path it
   replaces refuses. `Subscription.company` and `Offering.company` are `PROTECT`,
@@ -728,6 +734,56 @@ each lane does not re-derive it:
   that re-derives its children. Until one exists, the editable path is closed:
   `Company.owner` is read-only on an existing company in the admin, and
   writable only on the add form.
+- **A re-parent is refused when it changes the owner and allowed when it does
+  not.** The rule above separates a caller moving the row from a stale row
+  whose parent moved, and there is a third case it does not reach: the row is
+  given a **different parent**. `NEW.{column} IS NOT DISTINCT FROM
+  OLD.{column}` is true there too, so a trigger that only re-derives in that
+  case hands the row to whoever owns its new parent, silently — and the first
+  R0 shape refused exactly that. It also *allowed* a re-parent within one
+  owner, which a blanket link test would take away: a draft offering can be
+  pointed at another share class of the same company today, and the admin
+  offers it. So the guard is about the owner, not the link:
+
+  ```sql
+  IF NEW.{parent_fk} IS DISTINCT FROM OLD.{parent_fk}
+     AND parent_owner IS DISTINCT FROM OLD.{column} THEN
+      RAISE EXCEPTION '{table} may not move to another owner, % to %',
+          OLD.{column}, parent_owner;
+  END IF;
+  ```
+
+  Four cases, and each has to land somewhere deliberate: link unchanged and the
+  parent's attribute moved, **follow**; link changed to a parent with the same
+  owner, **allowed** and the column does not move; link changed to a parent
+  with a different owner, **refused**; the caller moving the column itself,
+  **refused** unless it already equals the parent. `offerings/0006` is the
+  reference spelling. `users/0021` writes the guard on the link alone, which is
+  equivalent there and only there, because `UserProfile.user` is a
+  `OneToOneField` — every re-parent of one of its children necessarily changes
+  the owner. If that ever stops being true, this is the sentence that says
+  where the two forms part.
+
+  **The four lanes word this refusal four ways, and that is deliberate.** Each
+  lane's tests assert its own message, because the assertion is what proves the
+  *trigger* refused rather than a unique index standing in for it. Unifying the
+  wording would make two lanes' tests pass on each other's refusals, which is
+  the check those assertions exist to make. Keep the shape, not the string.
+
+  Nothing on either side of this is visible to the SQLite suite, which is how
+  it reached `tokens/0024` and was found by the full PostgreSQL suite three
+  lanes later.
+- **A replacement condition is read backwards as well as forwards: what did
+  the branch it replaces refuse *or allow*, and where does each of those cases
+  land now?** The amendment above was red-proved for the two properties it
+  added, by its author and by two reviewers, and none of us enumerated what the
+  condition it replaced had been covering — so a refusal was dropped and stayed
+  dropped across three lanes. The correction to that then dropped a permission
+  the same way, in the same afternoon, by asking only what the old branch
+  refused: **both halves are the question.** Proving what a change adds says
+  nothing about what it removes, and a trigger branch is where that gap is
+  least visible, because the cases it stops refusing raise nothing and the
+  cases it starts refusing appear in no test that was written for them.
 - **The trigger's local variable takes its type from the column it reads**,
   `parent.{column}%TYPE`, rather than naming a type. Four R0 parents are
   `uuid` and the user is a `BigAutoField`, because `CustomUser` extends
@@ -773,7 +829,13 @@ each lane does not re-derive it:
   applied migration cannot be added later — that is #262's ruling — so the
   choice is to carry it from the start or to accept that the next lane pays
   for it. A lane whose settle is inert says so in its body, so nobody reads a
-  green round trip as evidence the guard works.
+  green round trip as evidence the guard works. **One call before the first
+  write in each direction is the whole of it**, and `tokens/0023` carries a
+  third in `drop_triggers`: on the reverse path either that call or `unfill`'s
+  carries it alone, measured by disabling each in turn, so the pair is
+  redundant rather than layered. `tokens/0024` copied all three before dropping
+  the extra, which is why the count is written down here rather than left to be
+  inferred from the lane a reader happens to open.
 - **Audit the app's serializers for `exclude`-style field sets before adding the
   column.** A `ModelSerializer` with `exclude = (...)` turns a new model field
   into a *required writable API field*; two in `users` did exactly that, and
