@@ -9,6 +9,7 @@ from offerings.exceptions import (
     InvalidSubscriptionTransitionException,
     SubscriptionRefusedException,
 )
+from offerings.models.owner_column import DerivesCompanyFromOffering
 from offerings.querysets.subscription import SubscriptionQuerySet
 from operators.models import STABLECOIN_ONLY
 from shared.models import BaseModel
@@ -62,11 +63,20 @@ REFUNDABLE_SUBSCRIPTION_STATUSES = [
 REFUND_FIELDS = ["status", "refund_amount", "refund_reference", "refunded_at", "payment_notes", "updated_at"]
 
 
-class Subscription(BaseModel):
+class Subscription(DerivesCompanyFromOffering, BaseModel):
 
     objects = SubscriptionQuerySet.as_manager()
 
     offering = models.ForeignKey("offerings.Offering", on_delete=models.PROTECT, related_name="subscriptions")
+
+    company = models.ForeignKey(
+        "companies.Company",
+        on_delete=models.PROTECT,
+        related_name="+",
+        help_text=(
+            "Owner, derived from offering.company and held directly so a " "row-level security policy can read it"
+        ),
+    )
     user_account = models.ForeignKey("users.UserAccount", on_delete=models.PROTECT, related_name="subscriptions")
     submitted_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
