@@ -154,6 +154,16 @@ class OwnerColumnTriggerTest(TestCase):
                 self.assertEqual(row.user_id, self.user.pk)
                 row.delete()
 
+    def test_the_column_is_not_null_which_is_what_makes_the_fill_guard_unreachable(self):
+        for model, _ in ROWS:
+            with self.subTest(model=model.__name__), connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT is_nullable FROM information_schema.columns " "WHERE table_name = %s AND column_name = %s",
+                    [model._meta.db_table, model._meta.get_field("user").column],
+                )
+
+                self.assertEqual(cursor.fetchone()[0], "NO")
+
     def test_an_ordinary_update_still_works(self):
         row = UserPreferences.objects.create(user_profile=self.profile)
 
