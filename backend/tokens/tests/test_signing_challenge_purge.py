@@ -8,7 +8,7 @@ from tokens.services.signing_challenge import purge_expired_challenges
 from tokens.tasks.signing_challenge import purge_signing_challenges
 
 WALLET = "0x" + "a1" * 20
-RETENTION = 86400
+RETENTION = 3600
 
 
 def a_challenge(*, expires_in, consumed=False, nonce=1):

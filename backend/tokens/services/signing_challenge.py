@@ -53,7 +53,7 @@ def _on_the_wire(value):
 
 
 def challenge_lifetime_seconds() -> int:
-    return getattr(settings, "SIGNING_CHALLENGE_TTL_SECONDS", 300)
+    return settings.SIGNING_CHALLENGE_TTL_SECONDS
 
 
 def issue_challenge(purpose, wallet_address: str, fields: dict, verifying_contract=None, order=None):
@@ -140,7 +140,7 @@ def spend(challenge, signature: str) -> None:
 
 
 def challenge_retention_seconds() -> int:
-    return getattr(settings, "SIGNING_CHALLENGE_RETENTION_SECONDS", 86400)
+    return settings.SIGNING_CHALLENGE_RETENTION_SECONDS
 
 
 @transaction.atomic
