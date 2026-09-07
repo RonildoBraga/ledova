@@ -117,6 +117,7 @@ export const COMPANY_TOKEN_ENDPOINTS = {
   CAPITAL_INCREASES: '/api/v1/tokens/capital-increases/',
   CAPITAL_INCREASE_DETAIL: (uuid: string) => `/api/v1/tokens/capital-increases/${uuid}/` as const,
   CAPITAL_INCREASE_SUBMIT: (uuid: string) => `/api/v1/tokens/capital-increases/${uuid}/submit/` as const,
+  ISSUANCE_REQUESTS: '/api/v1/tokens/issuance-requests/',
 } as const;
 
 export const WALLET_ENDPOINTS = {

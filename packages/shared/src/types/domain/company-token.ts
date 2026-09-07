@@ -135,3 +135,38 @@ export interface CapitalIncreaseResponse {
   page?: number;
   pageSize?: number;
 }
+
+export interface ShareIssuanceRequest {
+  uuid: string;
+  token: string;
+  tokenSymbol: string;
+  tokenName: string;
+  recipientAddress: string;
+  recipientName?: string;
+  amount: number;
+  issuanceType: string;
+  issuanceTypeDisplay: string;
+  reason: string;
+  status: string;
+  statusDisplay: string;
+  dilutionPercentage: number | null;
+  submittedBy: string | null;
+  submittedByEmail: string | null;
+  submittedAt: string | null;
+  reviewedBy?: string | null;
+  reviewedByEmail?: string | null;
+  reviewedAt?: string | null;
+  reviewNotes?: string;
+  rejectionReason?: string;
+  executedIssuance?: string | null;
+  executedAt?: string | null;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface ShareIssuanceRequestResponse {
+  results: ShareIssuanceRequest[];
+  count: number;
+  page?: number;
+  pageSize?: number;
+}

@@ -44,6 +44,7 @@ import type {
   HolderType,
   TokenIssuance,
   CapitalIncreaseRequest,
+  ShareIssuanceRequest,
   CapitalIncreaseStatus,
 } from '@ledova/shared';
 import apiClient from '@services/apiClient';
@@ -459,7 +460,7 @@ export default function CompanyPage() {
 
 const ACTION_ERROR_FALLBACK = 'The request was refused. Please try again.';
 
-function TokenDetailModal({
+export function TokenDetailModal({
   uuid,
   companyStatus,
   onClose,
@@ -480,6 +481,9 @@ function TokenDetailModal({
     isLoadingIssuances,
     capitalIncreases,
     capitalIncreaseCount,
+    issuanceRequests,
+    issuanceRequestCount,
+    isLoadingIssuanceRequests,
     isLoadingCapitalIncreases,
     showCapitalIncreaseForm,
     setShowCapitalIncreaseForm,
@@ -1095,6 +1099,47 @@ function TokenDetailModal({
             )}
           </div>
         )}
+
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold text-text-primary flex items-center gap-1.5">
+              <CoinIcon size={ICON_SM} className="text-text-muted" />
+              Issuance Requests
+              <span className="text-text-muted font-normal">({issuanceRequestCount})</span>
+            </h3>
+          </div>
+          {isLoadingIssuanceRequests ? (
+            <div className="py-4 text-center">
+              <div className="h-5 w-5 border-2 border-brand-subtle border-t-brand rounded-full animate-spin mx-auto" />
+            </div>
+          ) : issuanceRequests.length > 0 ? (
+            <div className="bg-surface-tertiary/50 rounded-lg border border-border divide-y divide-border-subtle">
+              {issuanceRequests.slice(0, 5).map((request: ShareIssuanceRequest) => (
+                <div key={request.uuid} className="flex items-center gap-3 px-3 py-2.5">
+                  <span className="text-xs text-text-muted w-20 flex-shrink-0">
+                    {new Date(request.createdAt).toLocaleDateString()}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm text-text-primary truncate">
+                      {request.amount.toLocaleString()} {request.tokenSymbol} to {request.recipientAddress}
+                    </p>
+                    <p className="text-xs text-text-muted">
+                      {request.reason || request.issuanceTypeDisplay}
+                      {request.rejectionReason ? ` · ${request.rejectionReason}` : ''}
+                    </p>
+                  </div>
+                  <span className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-surface-tertiary text-text-secondary">
+                    {request.statusDisplay}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="bg-surface-tertiary/30 rounded-lg border border-border-subtle py-4 text-center">
+              <p className="text-sm text-text-muted">No issuance requests yet.</p>
+            </div>
+          )}
+        </div>
 
         <div className="flex flex-wrap gap-3 pt-1">
           {isDraft && (

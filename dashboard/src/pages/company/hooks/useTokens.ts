@@ -10,6 +10,7 @@ import {
   downloadTokenRegister,
   getCompanyTokenIssuances,
   getCapitalIncreases,
+  getShareIssuanceRequests,
   createCompanyToken,
   createCapitalIncrease,
   submitCapitalIncrease,
@@ -112,6 +113,12 @@ export function useTokenDetail(uuid: string) {
     enabled: !!uuid,
   });
 
+  const { data: issuanceRequestsResponse, isLoading: isLoadingIssuanceRequests } = useQuery({
+    queryKey: ['token', uuid, 'issuance-requests'],
+    queryFn: () => getShareIssuanceRequests(apiClient, { token: uuid }),
+    enabled: !!uuid,
+  });
+
   const invalidateToken = () => {
     queryClient.invalidateQueries({ queryKey: ['token', uuid] });
     queryClient.invalidateQueries({ queryKey: ['tokens'] });
@@ -171,6 +178,9 @@ export function useTokenDetail(uuid: string) {
     isLoadingIssuances,
     capitalIncreases: capitalIncreases?.results || [],
     capitalIncreaseCount: capitalIncreases?.count || 0,
+    issuanceRequests: issuanceRequestsResponse?.data?.results || [],
+    issuanceRequestCount: issuanceRequestsResponse?.data?.count || 0,
+    isLoadingIssuanceRequests,
     isLoadingCapitalIncreases,
     showCapitalIncreaseForm,
     setShowCapitalIncreaseForm,

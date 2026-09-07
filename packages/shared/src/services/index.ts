@@ -85,6 +85,7 @@ export {
   getCompanyTokenIssuances,
   issueCompanyShares,
   getCapitalIncreases,
+  getShareIssuanceRequests,
   createCapitalIncrease,
   submitCapitalIncrease,
 } from './company-tokens';

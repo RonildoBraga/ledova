@@ -1,7 +1,12 @@
 import django_filters
 from django_filters import CharFilter
 
-from tokens.models import CapitalIncreaseRequest, ShareToken, TransferOrder
+from tokens.models import (
+    CapitalIncreaseRequest,
+    ShareIssuanceRequest,
+    ShareToken,
+    TransferOrder,
+)
 
 
 class CommaSeparatedCharFilter(CharFilter):
@@ -58,3 +63,13 @@ class CapitalIncreaseFilter(django_filters.FilterSet):
 
     def filter_search(self, queryset, name, value):
         return queryset.search(value)
+
+
+class ShareIssuanceRequestFilter(django_filters.FilterSet):
+    token = django_filters.UUIDFilter(field_name="token__uuid")
+    company = django_filters.UUIDFilter(field_name="company__uuid")
+    status = django_filters.CharFilter()
+
+    class Meta:
+        model = ShareIssuanceRequest
+        fields = []
