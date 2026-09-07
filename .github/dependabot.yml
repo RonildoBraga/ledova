@@ -79,6 +79,19 @@ updates:
       # known vectors.
       - dependency-name: "@noble/hashes"
         update-types: ["version-update:semver-major"]
+      # The ESLint 10 block from the root entry applies here too, and the root
+      # entry does not reach this directory: `directory: /` covers packages/shared
+      # and dashboard, the two root workspaces, while mobile has its own lockfile
+      # and this entry. mobile is not exempt the way packages/shared is - it
+      # carries eslint-plugin-react and mobile/eslint.config.mjs imports it,
+      # registers it and spreads its recommended rules, which is where
+      # react/display-name comes from. Without this, the next mobile batch takes
+      # ESLint 10 and the `make lint` step below fails in a Dependabot pull
+      # request rather than in anything a person wrote.
+      - dependency-name: eslint
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@eslint/js"
+        update-types: ["version-update:semver-major"]
     groups:
       all:
         patterns: ["*"]
