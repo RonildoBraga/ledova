@@ -1537,8 +1537,26 @@ say so.
 
 ### Test traps
 
-Four ways a test here has passed while proving nothing, or failed while meaning
+Five ways a test here has passed while proving nothing, or failed while meaning
 nothing. Each was paid for once; none is obvious from reading the test.
+
+**Run it red first, and if it will not go red, say why in the body.** Every
+trap below is a way a test can agree with broken code, and the cheapest check
+for all of them is to run the new test against the tree without the fix. Four
+tests written in one day passed against the code they were meant to prove
+wrong: the revert probe on #219, because the fake's `wait_for_receipt` was an
+unconfigured `Mock` and a `Mock` is not `1`; the unwind pair on #260, because
+orders filled to exactly `share_amount` make `max(0, ...)` floor the second
+subtraction to the same zero; the concurrency pair on #266, because both
+threads were handed the same Python object and refused each other in memory
+rather than in the database; and the reversal probe on #221, because a chain
+balance equal to the post-deduction value made the sync a no-op. In each the
+**fixture** made the broken and the fixed code agree, which is invisible in the
+assertion and obvious in a red run. Where a test genuinely cannot go red —
+#215's signer probe, where `consume_challenge` makes the two compared values
+equal by construction, so there is no unfixed tree to run against — that is
+worth knowing and worth writing in the PR body, because it means the property
+is held somewhere else and the test is documentation rather than proof.
 
 **A `Mock` that reaches a renderer never returns.** Patch a whole service class
 with a bare `Mock`, let a view return its result, and DRF's JSON encoder
@@ -1591,6 +1609,45 @@ reading:
   trusting a local measurement enough to file it, and **re-run a measurement
   before repeating someone else's**: a relayed measurement is not a
   measurement.
+
+**Running a new test against the unfixed code is only half the check. Run it
+against a broken expectation too.** The first asks whether the test notices when
+the product is wrong; the second asks whether it notices at all. A test can pass
+the first and fail the second: #221's red proof was genuine - four scalar
+failures printing real numbers - while the tuple assertions beside them in the
+same file could not fail, because a helper named `fail` had replaced the method
+they raise through, and nobody looked. Change the expected value to something
+absurd; if the test still passes, the assertion is not running. Between one
+afternoon's PRs that produced five tests passing on both sides of a fix, not one
+would have survived that edit.
+
+**Two independently reasonable constants, and nobody compared them.** Neither
+number is wrong where it is written, and the pair is the defect. `order_write`
+throttles at 30/min, which is 1,800 signing challenges an hour from one user;
+the sweep that removes them ran hourly with a batch of 500. `SwapOrder.nonce`
+said *"Unique nonce for replay protection"* in its `help_text` while the schema
+enforced nothing, and the reconciler read `isNonceUsed` as though it did. CI
+writes a generated schema to one path while the `Makefile` defaults to another
+name for the same file. Each half was written by someone with a good reason and
+read by someone checking that half. **When a number in one file only means what
+it says because of a number in another, say so where both can see it, or derive
+one from the other.**
+
+### Measurement traps
+
+Not a test but the same family: a reading that looks like a finding and is
+actually about the observer.
+
+**A browser network capture includes your own probes.** `read_network_requests`
+records the tab, not the application, so a `fetch` issued from `javascript_tool`
+to check an endpoint is indistinguishable in that log from a request the page
+made. A QA session confirmed an API's answer by hand, read the log afterwards,
+and reported that the client had called the endpoint; it had not, and the author
+of the fix spent time hunting a request that was never issued. Decide the
+question first: to learn what the API returns, probe and do not cite the log; to
+learn what the application requests, clear the capture, touch only the UI, and
+read it before probing anything. An absence is the strong result here — a probe
+can manufacture a request in the log but cannot manufacture zero.
 
 ### Shared TypeScript types
 
