@@ -17,6 +17,7 @@ from tokens.serializers import (
     ShareIssuanceCreateSerializer,
     ShareIssuanceListSerializer,
     ShareIssuanceRequestSerializer,
+    ShareRegisterHolderSerializer,
     ShareTokenCreateSerializer,
     ShareTokenDetailSerializer,
     ShareTokenListSerializer,
@@ -151,10 +152,33 @@ class ShareTokenViewSet(AuthenticatedModelViewSet):
         page = self.paginate_queryset(issuances.order_by("-completed_at"))
         return self.get_paginated_response(ShareIssuanceListSerializer(page, many=True).data)
 
+    @extend_schema(
+        responses=inline_serializer(
+            name="ShareRegister",
+            fields={
+                "token": inline_serializer(
+                    name="ShareRegisterToken",
+                    fields={
+                        "uuid": serializers.UUIDField(),
+                        "name": serializers.CharField(),
+                        "symbol": serializers.CharField(),
+                        "status": serializers.CharField(),
+                        "total_supply": serializers.CharField(),
+                    },
+                ),
+                "holders": ShareRegisterHolderSerializer(many=True),
+                "total_holders": serializers.IntegerField(),
+                "issued_supply": serializers.CharField(),
+                "listed_total": serializers.CharField(),
+                "discrepancy": serializers.CharField(),
+            },
+        )
+    )
     @action(detail=True, methods=["get"])
     def holders(self, request, uuid=None):
         token = self.get_object()
-        rows = token_register(token)
+        rows, discrepancy = token_register(token)
+        listed = sum(int(row["balance"]) for row in rows)
         return Response(
             {
                 "token": {
@@ -166,6 +190,9 @@ class ShareTokenViewSet(AuthenticatedModelViewSet):
                 },
                 "holders": api_holders(rows),
                 "total_holders": len(rows),
+                "issued_supply": str(listed + discrepancy),
+                "listed_total": str(listed),
+                "discrepancy": str(discrepancy),
             }
         )
 

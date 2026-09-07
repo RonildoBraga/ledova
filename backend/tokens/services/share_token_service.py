@@ -48,6 +48,8 @@ from tokens.services.holder_identity import identity_at_allotment
 
 logger = logging.getLogger(__name__)
 
+LOG_WINDOW = 2000
+
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 NOT_WHITELISTED = "Recipient wallet is not whitelisted. Whitelist it before executing."
 EXCEEDS_AUTHORIZED = "Amount exceeds authorized shares. Submit a capital increase first."
@@ -424,6 +426,25 @@ class ShareTokenService:
         )
 
         return issuance_request
+
+    def deployment_block(self, tx_hash: str) -> int:
+        return self.chain_client.w3.eth.get_transaction_receipt(tx_hash)["blockNumber"]
+
+    def head_block(self) -> int:
+        return self.chain_client.w3.eth.block_number
+
+    def transfer_participants(self, contract_address: str, from_block: int, window: int = LOG_WINDOW) -> set:
+        token_contract = self.load_share_token(contract_address)
+        head = self.head_block()
+        addresses = set()
+        start = from_block
+        while start <= head:
+            end = min(start + window - 1, head)
+            for entry in token_contract.events.Transfer().get_logs(from_block=start, to_block=end):
+                addresses.add(entry["args"]["from"])
+                addresses.add(entry["args"]["to"])
+            start = end + 1
+        return addresses
 
     def share_supply(self, contract_address: str) -> tuple[int, int]:
         token_contract = self.load_share_token(contract_address)

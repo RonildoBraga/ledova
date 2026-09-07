@@ -137,3 +137,15 @@ class ShareTokenCreateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({"company": "Select the company that issues this token."})
             attrs["company"] = companies[0]
         return attrs
+
+
+class ShareRegisterHolderSerializer(serializers.Serializer):
+    address = serializers.CharField()
+    name = serializers.CharField(allow_null=True)
+    balance = serializers.CharField()
+    percentage = serializers.FloatField()
+    source = serializers.CharField()
+    holder_type = serializers.CharField()
+    entered_on = serializers.DateTimeField(allow_null=True)
+    share_class = serializers.CharField()
+    identity_source = serializers.CharField()

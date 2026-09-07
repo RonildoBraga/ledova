@@ -1,6 +1,6 @@
 import csv
 import io
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from django.test import TestCase
 from django.utils import timezone
@@ -58,6 +58,14 @@ class IdentitySurvivesAWalletDeletionTest(TestCase):
         self.account.user_profiles.add(profile)
         self.wallet = Wallet.objects.create(user_account=self.account, address=HOLDER, chain="base")
         WhitelistEntry.objects.create(wallet=self.wallet)
+        self.chain = Mock()
+        self.chain.deployment_block.return_value = 1
+        self.chain.transfer_participants.return_value = set()
+        self.chain.get_token_balance.return_value = 100
+        self.chain.share_supply.return_value = (1000, 100)
+        service = patch("tokens.services.register.ShareTokenService").start()
+        service.return_value = self.chain
+        self.addCleanup(patch.stopall)
 
     def _allot(self, name="", address="", stamped=True):
         return ShareIssuance.objects.create(
@@ -71,7 +79,7 @@ class IdentitySurvivesAWalletDeletionTest(TestCase):
         )
 
     def _row(self):
-        rows = token_register(self.token, service=object())
+        rows, _ = token_register(self.token, service=self.chain)
         return next(row for row in rows if row["address"].lower() == HOLDER)
 
     def test_the_stamp_resolves_the_holders_identity_at_allotment(self):

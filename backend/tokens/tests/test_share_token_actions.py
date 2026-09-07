@@ -148,7 +148,7 @@ class ShareTokenActionTest(APITestCase):
         )
         service = service_class.return_value
         service.create_issuance_request.return_value = issuance_request
-        register.return_value = HOLDERS
+        register.return_value = (HOLDERS, 0)
 
         issue = self.client.post(
             f"/api/v1/tokens/{token.uuid}/issue/",
@@ -210,8 +210,13 @@ class ShareTokenActionTest(APITestCase):
         self.assertIn("issuanceType", bad_type.json())
         service_class.return_value.create_issuance_request.assert_not_called()
 
+    @patch("tokens.services.register.ShareTokenService")
     @patch("tokens.views.share_token.ShareTokenService")
-    def test_detail_actions_keep_filter_params_off_the_token_lookup(self, service_class):
+    def test_detail_actions_keep_filter_params_off_the_token_lookup(self, service_class, register_chain):
+        register_chain.return_value.deployment_block.return_value = 1
+        register_chain.return_value.transfer_participants.return_value = set()
+        register_chain.return_value.get_token_balance.return_value = 0
+        register_chain.return_value.share_supply.return_value = (0, 0)
         token = self.tenant.deployed_token
         completed = ShareIssuance.objects.create(
             token=token, recipient_address=RECIPIENT, amount="5", status=IssuanceStatus.COMPLETED
