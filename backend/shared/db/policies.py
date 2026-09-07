@@ -136,7 +136,10 @@ PUBLIC_TERM = {
     "with select_related, which is an INNER JOIN, so a company this policy hides deletes the token row that "
     "points at it - count() disagrees with the page, because Django strips the join for count(). The EXISTS "
     "term reads tokens_sharetoken, which is safe in both directions: today that table carries no policy, and "
-    "after tokens/0024 its policy is a leaf on owner_id, so neither reads back into this one. This term is the exact dual of the market term the token policy will carry: a company is visible because a token of its is on the market, and that token is visible because it is on the market. Removing either one leaves a row whose parent or child is hidden, which is the R13 failure.",
+    "after tokens/0024 its policy is a leaf on owner_id, so neither reads back into this one. This term is the "
+    "exact dual of the market term the token policy will carry: a company is visible because a token of its is "
+    "on the market, and that token is visible because it is on the market. Removing either one leaves a row "
+    "whose parent or child is hidden, which is the R13 failure.",
     "offerings_offering": "open_now() is deliberately not visible_to_user - the subscription serializer and "
     "services/subscription.py re-read the offering under select_for_update, and an owner-only policy turns "
     "that into DoesNotExist on the subscribe path rather than a refusal.",
@@ -149,7 +152,12 @@ AWAITING_R0 = {
     "the pair would recurse. With owner_id the policy is owner_id = principal OR the market predicate, which "
     "reads nothing else. Until then the table carries no policy and the market keeps working. When it "
     "lands it must carry LOCKING_IS_READING with it: offerings/services/offering.py:135 locks a "
-    "ShareToken, and that line is safe today only because this table has no policy at all. And the leaf is not owner_id alone: #322 makes ShareToken.owner_id the company owner's user, so that term by itself hides every deployed token from an investor. The market term has to be on the token's own columns - deployed, with a contract address - and it composes only because HAS_A_TOKEN_ON_THE_MARKET on companies_company is its exact dual. Either term alone breaks the pair, which is why R13's closure between these two tables holds by construction rather than by luck.",
+    "ShareToken, and that line is safe today only because this table has no policy at all. And the leaf is not "
+    "owner_id alone: #322 makes ShareToken.owner_id the company owner's user, so that term by itself hides "
+    "every deployed token from an investor. The market term has to be on the token's own columns - deployed, "
+    "with a contract address - and it composes only because HAS_A_TOKEN_ON_THE_MARKET on companies_company is "
+    "its exact dual. Either term alone breaks the pair, which is why R13's closure between these two tables "
+    "holds by construction rather than by luck.",
     "tokens_capitalincreaserequest": (
         "Reaches its company through token -> company and has no company_id yet. The tokens R0 lane "
         "adds the column; until it lands there is nothing for a policy to compare."
