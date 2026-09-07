@@ -27,10 +27,15 @@ ELIGIBILITY_SCOPED = (
     "and the documented exception in ARCHITECTURE.md. Pinned by MARKET_ROUTES and DIRECTORY_ROUTES."
 )
 SIGNED_RELAY = (
-    "Relays an already-signed transaction and takes no tenant identifier at all. BroadcastTransferSerializer "
-    "(tokens/serializers/transfer_order.py) refuses a foreign chain id, a contract creation and any target "
-    "outside known_contract_addresses(), and there is nothing further to scope: the caller cannot produce a "
-    "signature it does not hold, and every transaction it can broadcast is one the signer already authorised."
+    "Relays an already-signed transaction and takes no tenant identifier at all, so the signature is the only "
+    "thing that can carry tenancy. TradingTransferViewSet.broadcast recovers the sender with "
+    "decode_signed_transaction and hands it to tokens.trading_wallet_access.resolve_verified_evm_wallets, "
+    "which answers 404 unless the caller holds a verified wallet at that address - the same call the prepare "
+    "route beside it makes. BroadcastTransferSerializer (tokens/serializers/transfer_order.py) refuses a "
+    "foreign chain id, a contract creation and any target outside known_contract_addresses() before that. "
+    "Note what this reason may not say: that a caller cannot produce a signature it does not hold. A signed "
+    "transaction is public from the moment it is broadcast, so anyone can replay one - see issue #190. "
+    "Pinned by tokens/tests/test_trading_transfer_broadcast.py."
 )
 NOT_MATRIX_AUTHENTICABLE = (
     "It cannot become a ROUTES row however well it reads as one: the cross-tenant matrix authenticates "
