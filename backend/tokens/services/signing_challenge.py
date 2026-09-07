@@ -174,5 +174,5 @@ def purge_expired_challenges(now=None, batch: int = 500, passes: int = 20) -> in
 
 @transaction.atomic
 def _purge_one_batch(cutoff, batch: int) -> int:
-    deleted, _ = SigningChallenge.objects.purgeable(cutoff, batch).delete()
-    return deleted
+    _, by_model = SigningChallenge.objects.purgeable(cutoff, batch).delete()
+    return by_model.get(SigningChallenge._meta.label, 0)

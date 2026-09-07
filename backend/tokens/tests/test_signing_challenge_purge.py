@@ -1,7 +1,7 @@
 from datetime import timedelta
 from unittest.mock import patch
 
-from django.test import TestCase, override_settings
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 
 from tokens.models import SigningChallenge, SigningChallengePurpose
@@ -72,7 +72,7 @@ class ExpiredChallengesArePurgedTest(TestCase):
 
 
 @override_settings(SIGNING_CHALLENGE_RETENTION_SECONDS=RETENTION)
-class TheSweepDrainsTheBacklogRatherThanOneBatchTest(TestCase):
+class TheSweepDrainsTheBacklogRatherThanOneBatchTest(TransactionTestCase):
 
     BATCH = 4
 
@@ -96,6 +96,22 @@ class TheSweepDrainsTheBacklogRatherThanOneBatchTest(TestCase):
 
         self.assertEqual(removed, 10)
         self.assertEqual(one_batch.call_count, 3)
+
+    def test_each_batch_commits_on_its_own_so_a_later_failure_keeps_the_earlier_deletions(self):
+        real = _purge_one_batch
+        calls = {"n": 0}
+
+        def fail_on_the_third(cutoff, batch):
+            calls["n"] += 1
+            if calls["n"] == 3:
+                raise RuntimeError("the database went away")
+            return real(cutoff, batch)
+
+        with patch("tokens.services.signing_challenge._purge_one_batch", side_effect=fail_on_the_third):
+            with self.assertRaises(RuntimeError):
+                purge_expired_challenges(batch=self.BATCH)
+
+        self.assertEqual(SigningChallenge.objects.count(), len(self.stale) - 2 * self.BATCH)
 
     def test_a_backlog_the_run_cannot_finish_is_reported_rather_than_left_silent(self):
         with patch("tokens.services.signing_challenge._purge_one_batch", return_value=self.BATCH):
