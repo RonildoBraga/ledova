@@ -14,7 +14,12 @@ BODYLESS = {"head", "options", "trace"}
 UNAUTHENTICATED_AUTH = "Unauthenticated auth surface: there is no session yet, so there is no tenant to cross."
 PROVIDER_WEBHOOK = "Provider webhook: no session, authenticated by signature, and it names its own subject."
 GLOBAL_CATALOGUE = "Global catalogue shared by every tenant and deliberately not owner-scoped."
-CREATES_OWN_ROW = "Creation route: writes a row owned by the caller and carries no foreign identifier."
+CREATES_OWN_ROW = "Creation route: writes a row owned by the caller and accepts no writable relation."
+CREATES_OWN_ROW_SCOPED_FK = (
+    "Creation route owned by the caller. Every writable relation it accepts is re-scoped in the "
+    "serializer's get_fields(), either through visible_to_user or to a global catalogue queryset, "
+    "so a foreign identifier in the body cannot reach a row the caller cannot already see."
+)
 SELF_SCOPED = "Acts only on the caller's own rows and takes no identifier."
 ELIGIBILITY_SCOPED = (
     "Cross-tenant listing scoped by users.services.eligibility rather than by owner, "
@@ -51,15 +56,15 @@ EXEMPT = {
     ("get", "/api/feature-flags/{}/"): GLOBAL_CATALOGUE,
     ("post", "/api/device-tokens/"): CREATES_OWN_ROW,
     ("post", "/api/device-tokens/register/"): CREATES_OWN_ROW,
-    ("post", "/api/favourite-assets/"): CREATES_OWN_ROW,
+    ("post", "/api/favourite-assets/"): CREATES_OWN_ROW_SCOPED_FK,
     ("post", "/api/financial-profiles/"): CREATES_OWN_ROW,
-    ("post", "/api/investor-classifications/"): CREATES_OWN_ROW,
+    ("post", "/api/investor-classifications/"): CREATES_OWN_ROW_SCOPED_FK,
     ("post", "/api/notification-preferences/"): CREATES_OWN_ROW,
-    ("post", "/api/portfolios/"): CREATES_OWN_ROW,
+    ("post", "/api/portfolios/"): CREATES_OWN_ROW_SCOPED_FK,
     ("post", "/api/user-accounts/"): CREATES_OWN_ROW,
-    ("post", "/api/user-preferences/"): CREATES_OWN_ROW,
-    ("post", "/api/user-profiles/"): CREATES_OWN_ROW,
-    ("post", "/api/v1/companies/"): CREATES_OWN_ROW,
+    ("post", "/api/user-preferences/"): CREATES_OWN_ROW_SCOPED_FK,
+    ("post", "/api/user-profiles/"): CREATES_OWN_ROW_SCOPED_FK,
+    ("post", "/api/v1/companies/"): CREATES_OWN_ROW_SCOPED_FK,
     ("post", "/api/v1/documents/"): CREATES_OWN_ROW,
     ("get", "/api/notifications/unread-count/"): SELF_SCOPED,
     ("post", "/api/notifications/mark-all-read/"): SELF_SCOPED,
