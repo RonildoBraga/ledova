@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
-from openai import OpenAI, OpenAIError
+from openai import OpenAI, OpenAIError, Timeout
 from pydantic import BaseModel, ValidationError
 
 from integrations.llm_extract.exceptions import (
@@ -55,12 +55,14 @@ class LlmExtractClient:
         base_url: str | None = None,
         model: str | None = None,
         timeout_s: float = 120.0,
+        connect_timeout_s: float = 5.0,
     ) -> None:
         self.base_url = _validate_local_base_url(base_url or settings.LLM_BASE_URL)
         self.model = (model or settings.LLM_MODEL).strip()
         if not self.model:
             raise ImproperlyConfigured("LLM_MODEL must not be blank")
         self.timeout_s = timeout_s
+        self.connect_timeout_s = connect_timeout_s
 
     def _get_api_key(self) -> str:
         return "ollama"
@@ -77,7 +79,7 @@ class LlmExtractClient:
         client = OpenAI(
             base_url=self.base_url,
             api_key=self._get_api_key(),
-            timeout=self.timeout_s,
+            timeout=Timeout(self.timeout_s, connect=self.connect_timeout_s),
         )
 
         started = time.monotonic()
@@ -103,7 +105,7 @@ class LlmExtractClient:
             )
         except OpenAIError as e:
             logger.warning("llm_extract: local upstream call failed")
-            raise LlmExtractError() from e
+            raise LlmExtractError(f"{LlmExtractError.default_detail} at LLM_BASE_URL={self.base_url}") from e
         duration_ms = int((time.monotonic() - started) * 1000)
 
         raw = response.choices[0].message.content or ""

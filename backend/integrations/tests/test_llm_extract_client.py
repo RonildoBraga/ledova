@@ -57,6 +57,29 @@ class LlmExtractClientBoundaryTests(SimpleTestCase):
 
         self.assertNotIn("private upstream detail", str(raised.exception.detail))
 
+    @override_settings(LLM_BASE_URL="http://host.docker.internal:11434/v1", LLM_MODEL="local-model")
+    @patch("integrations.llm_extract.client.OpenAI")
+    def test_the_refusal_names_the_setting_and_the_address_it_tried(self, openai_class: MagicMock) -> None:
+        openai_class.return_value.chat.completions.create.side_effect = OpenAIError("private upstream detail")
+
+        with self.assertRaises(LlmExtractError) as raised:
+            LlmExtractClient().extract(image_bytes=b"image", prompt="prompt", schema=ExampleExtraction)
+
+        self.assertIn("LLM_BASE_URL=http://host.docker.internal:11434/v1", str(raised.exception.detail))
+        self.assertNotIn("private upstream detail", str(raised.exception.detail))
+
+    @override_settings(LLM_BASE_URL="http://localhost:11434/v1", LLM_MODEL="local-model")
+    @patch("integrations.llm_extract.client.OpenAI")
+    def test_an_unreachable_host_is_given_up_on_in_seconds_not_minutes(self, openai_class: MagicMock) -> None:
+        message = MagicMock(content='{"amount": 1}')
+        openai_class.return_value.chat.completions.create.return_value = MagicMock(choices=[MagicMock(message=message)])
+
+        LlmExtractClient().extract(image_bytes=b"image", prompt="prompt", schema=ExampleExtraction)
+
+        timeout = openai_class.call_args.kwargs["timeout"]
+        self.assertEqual(timeout.connect, 5.0)
+        self.assertEqual(timeout.read, 120.0)
+
     @override_settings(LLM_BASE_URL="http://localhost:11434/v1", LLM_MODEL="local-model")
     @patch("integrations.llm_extract.client.logger")
     @patch("integrations.llm_extract.client.OpenAI")
