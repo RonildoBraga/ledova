@@ -456,9 +456,6 @@ class AtomicSwapService:
             publish_trading_event("swap_failed", str(swap_order.share_token.uuid))
             raise SwapExecutionException(f"Swap execution failed: {user_friendly_msg}") from e
 
-    def get_pending_swaps_for_wallet_ids(self, wallet_ids):
-        return SwapOrder.objects.pending_for_wallet_ids(wallet_ids)
-
     def find_swap_order_by_transfer_order(self, transfer_order: TransferOrder) -> Optional[SwapOrder]:
         return SwapOrder.objects.for_transfer_order(transfer_order)
 
