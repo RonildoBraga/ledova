@@ -69,6 +69,12 @@ def challenge_lifetime_seconds() -> int:
 
 def issue_challenge(purpose, wallet_address: str, fields: dict, verifying_contract=None, order=None, wallet=None):
     types = CHALLENGE_TYPES[purpose]
+    owner = wallet or (order.wallet if order is not None else None)
+    if owner is None:
+        raise ValueError(
+            "A signing challenge needs the wallet it is issued to, either directly or through its order. "
+            "The caller is authenticated, so the service holds it."
+        )
     wallet_of_record = to_checksum_address(wallet_address)
     nonce = secrets.randbits(63)
     expires_at = timezone.now() + timezone.timedelta(seconds=challenge_lifetime_seconds())
@@ -83,7 +89,7 @@ def issue_challenge(purpose, wallet_address: str, fields: dict, verifying_contra
 
     return SigningChallenge.objects.create(
         purpose=purpose,
-        wallet=wallet or (order.wallet if order is not None else None),
+        wallet=owner,
         wallet_address=wallet_of_record,
         chain_id=domain["chainId"],
         verifying_contract=domain["verifyingContract"],
