@@ -62,13 +62,27 @@ export function AssetAllocationCard({
     );
   }
 
-  if (summary.holdingsCount === 0 || assetAllocation.length === 0) {
+  if (summary.holdingsCount === 0 && assetAllocation.length === 0) {
     return (
       <Panel>
         <div className="flex flex-col items-center justify-center py-8 gap-2 min-h-[200px]">
           <WalletIcon size={ICON_XL} className="text-text-subtle" />
           <p className="text-sm text-text-muted">No holdings yet</p>
-          <p className="text-xs text-text-subtle text-center">Add wallets to see allocation</p>
+          <p className="text-xs text-text-subtle text-center">Holdings appear here once a wallet holds something</p>
+        </div>
+      </Panel>
+    );
+  }
+
+  if (assetAllocation.length === 0) {
+    return (
+      <Panel>
+        <div className="flex flex-col items-center justify-center py-8 gap-2 min-h-[200px]">
+          <WalletIcon size={ICON_XL} className="text-text-subtle" />
+          <p className="text-sm text-text-muted">Allocation cannot be shown</p>
+          <p className="text-xs text-text-subtle text-center">
+            {summary.holdingsCount} holding{summary.holdingsCount === 1 ? '' : 's'} could not be weighted
+          </p>
         </div>
       </Panel>
     );
