@@ -366,3 +366,47 @@ class LayerDiscoveryTest(SimpleTestCase):
 
         self.assertIn("admin_view", source)
         self.assertEqual(rules_for(source, "admin"), [gate.ADMIN_BARE_VIEW])
+
+
+def signals_in(source):
+    return sorted(rule for _, rule in gate.signal_findings(ast.parse(source)))
+
+
+class SignalRuleTest(SimpleTestCase):
+
+    def test_the_three_import_shapes_are_all_flagged(self):
+        self.assertEqual(signals_in("from django.db.models.signals import post_save"), [gate.SIGNAL_IMPORT])
+        self.assertEqual(signals_in("import django.db.models.signals"), [gate.SIGNAL_IMPORT])
+        self.assertEqual(signals_in("from django.db.models import signals"), [gate.SIGNAL_IMPORT])
+
+    def test_an_aliased_import_is_still_the_same_import(self):
+        self.assertEqual(signals_in("import django.db.models.signals as s"), [gate.SIGNAL_IMPORT])
+        self.assertEqual(signals_in("from django.db.models import signals as s"), [gate.SIGNAL_IMPORT])
+
+    def test_the_ordinary_model_imports_are_not_flagged(self):
+        self.assertEqual(signals_in("from django.db import models"), [])
+        self.assertEqual(signals_in("from django.db.models import Q"), [])
+        self.assertEqual(signals_in("from django.db import transaction"), [])
+
+    def test_the_rule_reads_imports_so_a_string_import_goes_past_it(self):
+        self.assertEqual(signals_in("importlib.import_module('django.db.models.signals')"), [])
+
+    def test_the_one_sanctioned_receiver_is_the_only_allowed_entry_for_this_rule(self):
+        keys = [key for key in gate.ALLOWED if key.endswith(f":{gate.SIGNAL_IMPORT}")]
+
+        self.assertEqual(keys, ["backend/shared/apps.py:django-signals"])
+        self.assertEqual(gate.ALLOWED[keys[0]][0], 1)
+
+    def test_the_sanctioned_receiver_is_where_the_allowed_entry_says_it_is(self):
+        source = (gate.BACKEND / "shared/apps.py").read_text()
+
+        self.assertEqual(signals_in(source), [gate.SIGNAL_IMPORT])
+        self.assertIn("post_delete.connect", source)
+
+    def test_the_backend_walk_reaches_beyond_the_four_layers(self):
+        walked = {path.relative_to(gate.BACKEND) for path in gate.backend_files()}
+
+        self.assertIn(Path("shared/apps.py"), walked)
+        self.assertIn(Path("shared/storage.py"), walked)
+        self.assertTrue(all("tests" not in part.parts for part in walked))
+        self.assertTrue(all("migrations" not in part.parts for part in walked))
