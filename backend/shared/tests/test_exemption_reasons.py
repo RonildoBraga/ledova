@@ -1,6 +1,7 @@
 import ast
 import inspect
 import textwrap
+from pathlib import Path
 
 from django.db import models
 from django.test import SimpleTestCase
@@ -17,21 +18,18 @@ OWNER_MODELS = ("CustomUser", "UserProfile", "UserAccount", "Company")
 
 IDENTITY_FREE_USER_READS = frozenset({"is_authenticated"})
 
-REASONS_WITH_A_TEST = {
-    "UNAUTHENTICATED_AUTH",
-    "PROVIDER_WEBHOOK",
-    "GLOBAL_CATALOGUE",
-    "CREATES_OWN_ROW",
-    "CREATES_OWN_ROW_SCOPED_FK",
-    "SELF_SCOPED",
-    "ELIGIBILITY_SCOPED",
-    "ELIGIBILITY_SCOPED_ASYNC",
-    "SIGNED_RELAY",
-    "STAFF_UNSCOPED",
-    "STAFF_WHITELIST",
-    "BODY_IDENTIFIED",
-    "CHAIN_ADDRESS_READ",
-}
+
+def reasons_this_module_exercises():
+    tree = ast.parse(Path(__file__).read_text())
+    return {
+        node.args[0].value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "routes_for"
+        and node.args
+        and isinstance(node.args[0], ast.Constant)
+    }
 
 
 def _callbacks():
@@ -111,12 +109,12 @@ class EveryReasonIsTestedTest(SimpleTestCase):
     def test_every_reason_in_use_has_a_test_in_this_module(self):
         in_use = {REASON_NAME.get(id(reason)) for reason in EXEMPT.values()}
 
-        self.assertEqual(in_use - REASONS_WITH_A_TEST, set())
+        self.assertEqual(in_use - reasons_this_module_exercises(), set())
 
     def test_no_test_here_outlives_the_reason_it_checks(self):
         in_use = {REASON_NAME.get(id(reason)) for reason in EXEMPT.values()}
 
-        self.assertEqual(REASONS_WITH_A_TEST - in_use, set())
+        self.assertEqual(reasons_this_module_exercises() - in_use, set())
 
     def test_every_exempt_route_resolves_to_a_registered_callback(self):
         missing = sorted(route for route in EXEMPT if route not in CALLBACKS)
@@ -209,6 +207,7 @@ class CataloguesAndListingsTest(SimpleTestCase):
                                 self.assertNotEqual(argument.id, "user")
 
     def test_the_eligibility_scoped_listings_are_pinned_by_the_matrix(self):
+        self.assertNotEqual(routes_for("ELIGIBILITY_SCOPED"), [])
         self.assertNotEqual(matrix.MARKET_ROUTES, ())
         self.assertNotEqual(matrix.DIRECTORY_ROUTES, ())
 
