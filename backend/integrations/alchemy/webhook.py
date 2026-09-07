@@ -12,6 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from integrations.webhooks import is_stale
+from shared.db.middleware import RunsOnTheOperatorConnection
 from wallets.models import Transaction, Wallet
 from wallets.tasks import confirm_pending_transaction
 
@@ -32,7 +33,7 @@ def verify_alchemy_signature(payload: bytes, signature: str, signing_key: str) -
 
 
 @method_decorator(csrf_exempt, name="dispatch")
-class AlchemyWebhookView(APIView):
+class AlchemyWebhookView(RunsOnTheOperatorConnection, APIView):
     authentication_classes = []
     permission_classes = []
 

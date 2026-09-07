@@ -3,11 +3,12 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from shared.views.principal import SetsThePrincipalOnTheConnection
 from whitelist.serializers import WhitelistStatusSerializer
 from whitelist.services import WhitelistService
 
 
-class WhitelistStatusView(APIView):
+class WhitelistStatusView(SetsThePrincipalOnTheConnection, APIView):
 
     permission_classes = [IsAuthenticated]
 

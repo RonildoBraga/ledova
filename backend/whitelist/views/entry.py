@@ -8,6 +8,7 @@ from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 
 from shared.utils import csv_cell
+from shared.views.principal import SetsThePrincipalOnTheConnection
 from whitelist.exceptions import (
     BatchEntriesRequiredException,
     BatchSizeLimitExceededException,
@@ -26,6 +27,7 @@ from whitelist.services import WhitelistService, unique_wallet_uuid_for
 
 
 class WhitelistEntryViewSet(
+    SetsThePrincipalOnTheConnection,
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
     viewsets.GenericViewSet,

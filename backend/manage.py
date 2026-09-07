@@ -2,9 +2,13 @@
 import os
 import sys
 
+SERVES_REQUESTS = ("runserver",)
+
 
 def main():
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "ledova_backend.settings")
+    if not set(sys.argv[1:2]) & set(SERVES_REQUESTS):
+        os.environ.setdefault("RLS_AMBIENT_ALIAS", "operator")
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:

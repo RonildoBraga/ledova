@@ -20,6 +20,7 @@ from integrations.kyc.constants import (
 )
 from integrations.sumsub import SumSubService
 from integrations.webhooks import is_stale
+from shared.db.middleware import RunsOnTheOperatorConnection
 from users.models.user_profile import UserProfile
 from users.services import IdentityVerificationService
 
@@ -27,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 @method_decorator(csrf_exempt, name="dispatch")
-class SumSubWebhookView(APIView):
+class SumSubWebhookView(RunsOnTheOperatorConnection, APIView):
     authentication_classes = []
     permission_classes = []
 

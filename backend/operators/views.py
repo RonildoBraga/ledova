@@ -5,9 +5,10 @@ from rest_framework.views import APIView
 
 from operators.models import Operator
 from operators.serializers import OperatorSerializer
+from shared.views.principal import SetsThePrincipalOnTheConnection
 
 
-class OperatorView(APIView):
+class OperatorView(SetsThePrincipalOnTheConnection, APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(responses=OperatorSerializer)

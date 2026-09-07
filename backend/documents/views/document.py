@@ -11,9 +11,11 @@ from documents.serializers.document import (
 )
 from documents.services.document import create_document
 from shared.views import stream_stored_file
+from shared.views.principal import SetsThePrincipalOnTheConnection
 
 
 class DocumentViewSet(
+    SetsThePrincipalOnTheConnection,
     mixins.CreateModelMixin,
     mixins.RetrieveModelMixin,
     mixins.ListModelMixin,

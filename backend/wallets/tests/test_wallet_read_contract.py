@@ -1,5 +1,7 @@
 from decimal import Decimal
 
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from rest_framework.test import APITestCase
 
 from assets.models import Asset, AssetChainDeployment
@@ -22,8 +24,11 @@ class WalletReadContractTest(APITestCase):
     def test_list_reports_string_balances_from_holdings_without_per_row_queries(self):
         Wallet.objects.create(user_account=self.tenant.account, address="0x" + "9" * 40, chain="ethereum")
 
-        with self.assertNumQueries(2):
+        with CaptureQueriesContext(connection) as captured:
             response = self.client.get("/api/wallets/")
+
+        principal = [entry for entry in captured.captured_queries if "set_config" in entry["sql"]]
+        self.assertEqual(len(captured), len(principal) + 2)
 
         self.assertEqual(response.status_code, 200)
         rows = {row["uuid"]: row for row in response.json()["results"]}

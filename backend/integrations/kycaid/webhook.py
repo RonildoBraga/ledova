@@ -16,6 +16,7 @@ from integrations.kyc.constants import (
 )
 from integrations.kycaid.client import KYCAIDService
 from integrations.webhooks import is_stale
+from shared.db.middleware import RunsOnTheOperatorConnection
 from users.models.user_profile import UserProfile
 from users.services import IdentityVerificationService
 
@@ -23,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 @method_decorator(csrf_exempt, name="dispatch")
-class KYCAIDWebhookView(APIView):
+class KYCAIDWebhookView(RunsOnTheOperatorConnection, APIView):
 
     authentication_classes = []
     permission_classes = []

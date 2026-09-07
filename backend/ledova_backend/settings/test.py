@@ -24,3 +24,5 @@ class _DisableMigrations(dict):
 
 
 MIGRATION_MODULES = _DisableMigrations()
+
+RLS_AMBIENT_ALIAS = "default"
