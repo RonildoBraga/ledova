@@ -721,20 +721,21 @@ each lane does not re-derive it:
   real rows, not a test asserting a non-behaviour.
 - **Settle deferred constraints before the backfill writes, in both
   directions.** `SET CONSTRAINTS ALL IMMEDIATE` at the top of `backfill` and of
-  `unfill`, guarded on `vendor == "postgresql"`. Without it a migration that
-  gives **one table two owner columns** fails on populated data, forward and
-  reverse, with `cannot ALTER TABLE ... because it has pending trigger events`.
-  The cause is not that the backfill re-arms the new column's constraint —
+  `unfill`, guarded on `vendor == "postgresql"`. The condition that needs it is
+  **a row the migration writes twice**: the second `UPDATE` queues a deferred
+  FK-check event whatever columns it touches, because PostgreSQL's
+  keys-unchanged skip cannot apply to a row version the current transaction
+  produced, and `ALTER TABLE` then refuses with `cannot ALTER TABLE ... because
+  it has pending trigger events` while *any* event is pending on the relation,
+  not only the constraint being dropped. Two owner columns on one table is the
+  common way to reach that, and it is how `tokens/0023` reached it, but a
+  single column backfilled in two passes over the same rows reaches it just as
+  well; **it is the second write that matters, not the second column**. The
+  cause is not the backfill re-arming the new column's own constraint —
   `AddField` emits `SET CONSTRAINTS <that one> IMMEDIATE` inline and it holds.
-  It is that **a row this transaction has already written queues a deferred
-  FK-check event on its next `UPDATE`, whatever columns that `UPDATE` touches**,
-  because PostgreSQL's keys-unchanged skip cannot apply to a row version the
-  current transaction produced; and `ALTER TABLE` refuses while *any* event is
-  pending on the relation, not only the constraint being dropped. One table
-  written once never sees it, which is why `users/0020`, `wallets/0008` and
-  `offerings/0005` are clean and `tokens/0023` was not. Settling *before* the
-  writes rather than after also moves a failing backfill's error to the
-  `UPDATE` that caused it.
+  Rows written once never see it, which is why `users/0020`, `wallets/0008` and
+  `offerings/0005` are clean. Settling *before* the writes rather than after
+  also moves a failing backfill's error to the `UPDATE` that caused it.
 - **Audit the app's serializers for `exclude`-style field sets before adding the
   column.** A `ModelSerializer` with `exclude = (...)` turns a new model field
   into a *required writable API field*; two in `users` did exactly that, and

@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from shared.tests.schema import migrate_to, restore_every_migration
 from shared.tests.tenants import make_tenant
+from tokens.exceptions import ChallengeUnknownException
 from tokens.models import (
     CapitalIncreaseRequest,
     ShareIssuanceRequest,
@@ -25,10 +26,24 @@ from tokens.serializers.swap_order import (
     SwapOrderDetailSerializer,
     SwapOrderListSerializer,
 )
+from tokens.services.signing_challenge import consume_challenge, issue_challenge
 
 POSTGRES_ONLY = "The trigger is PostgreSQL; SQLite has no derive-and-refuse"
 MIGRATION_ROUND_TRIP_ONLY = "Deferred constraint checks are PostgreSQL; SQLite queues nothing to settle"
 BEFORE_THE_OWNER_COLUMNS = [("tokens", "0022_swap_nonce_is_unique")]
+TABLE = "signing_challenges"
+TRIGGER = "signing_challenges_wallet_is_checked"
+SIGNATURE = "0x" + "ab" * 65
+
+
+def orphan(challenge):
+    with connection.cursor() as cursor:
+        if connection.vendor == "postgresql":
+            cursor.execute(f"ALTER TABLE {TABLE} DISABLE TRIGGER {TRIGGER}")
+        cursor.execute(f"UPDATE {TABLE} SET wallet_id = NULL WHERE digest = %s", [challenge.digest])
+        if connection.vendor == "postgresql":
+            cursor.execute(f"ALTER TABLE {TABLE} ENABLE TRIGGER {TRIGGER}")
+    return SigningChallenge.objects.get(pk=challenge.pk)
 
 
 class EveryRowCarriesItsOwnerTest(TestCase):
@@ -133,6 +148,20 @@ class TheTriggerRefusesWhatTheServiceDidNotSupplyTest(TransactionTestCase):
 
         self.assertEqual(SigningChallenge.objects.get(pk=challenge.pk).wallet_id, self.tenant.wallet.pk)
 
+    def test_a_row_the_migration_could_not_resolve_cannot_be_written_again(self):
+        challenge = self.a_legacy_challenge()
+
+        with self.assertRaises(Exception) as refusal:
+            with transaction.atomic():
+                challenge.mark_consumed(SIGNATURE)
+
+        self.assertIn("is required", str(refusal.exception))
+
+    def a_legacy_challenge(self):
+        challenge = self.a_challenge(wallet=self.tenant.wallet, digest="0x" + "1a" * 32)
+        challenge.save()
+        return orphan(challenge)
+
     def test_a_swap_cannot_name_a_wallet_its_order_does_not(self):
         other = make_tenant("stranger").wallet
         swap = self.tenant.swap
@@ -192,3 +221,44 @@ class TheMigrationRoundTripsOnPopulatedTablesTest(TransactionTestCase):
 
         swap = SwapOrder.objects.get(pk=self.tenant.swap.pk)
         self.assertEqual((swap.seller_wallet_id, swap.buyer_wallet_id), (self.seller, self.buyer))
+
+
+class AChallengeWithNoOwnerIsNotOfferedForConsumptionTest(TransactionTestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.tenant = make_tenant("ownerless")
+        self.challenge = orphan(
+            issue_challenge(
+                SigningChallengePurpose.ORDER_CREATE,
+                self.tenant.wallet.address,
+                {
+                    "tokenUuid": str(self.tenant.deployed_token.uuid),
+                    "orderType": "sell",
+                    "quantity": 5,
+                    "minQuantity": 0,
+                    "pricePerShare": "2.50",
+                },
+                wallet=self.tenant.wallet,
+            )
+        )
+
+    def consume(self):
+        with transaction.atomic():
+            consume_challenge(
+                self.challenge.digest,
+                SigningChallengePurpose.ORDER_CREATE,
+                self.tenant.wallet.address,
+                SIGNATURE,
+            )
+
+    def test_it_is_refused_as_unknown_rather_than_answered(self):
+        with self.assertRaises(ChallengeUnknownException):
+            self.consume()
+
+    def test_it_is_left_unspent_rather_than_half_written(self):
+        with self.assertRaises(ChallengeUnknownException):
+            self.consume()
+
+        self.challenge.refresh_from_db()
+        self.assertIsNone(self.challenge.consumed_at)
