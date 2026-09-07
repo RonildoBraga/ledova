@@ -84,8 +84,6 @@ generate-tokens:
 
 check: check-comments check-layers check-logging check-type-check check-schema-responses install-backend install-node-if-missing
 	$(NPM) run typecheck
-	$(NPM) --prefix marketing run type-check
-	$(NPM) --prefix mobile run type-check
 	$(NPM) --prefix mobile run check:resolution
 	cd backend && SECRET_KEY="$$( $(PYTHON) -c 'import secrets; print(secrets.token_urlsafe(32))')" STORAGE_BACKEND=local $(PYTHON) manage.py check
 

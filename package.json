@@ -11,7 +11,7 @@
     "lint": "npm run lint --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "format": "npm run format --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present && npm run type-check -w dashboard"
+    "typecheck": "npm run type-check --workspaces --if-present && npm --prefix marketing run type-check && npm --prefix mobile run type-check"
   },
   "packageManager": "npm@11.5.2",
   "engines": {
