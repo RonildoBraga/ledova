@@ -142,6 +142,25 @@ effects rather than imported from the entry. For a gate, prefer the failure that
 shouts. The same rule decides everything else here: an empty `testMatch` makes
 the script refuse to run rather than treat every file as a test.
 
+**The script also holds one rule that is not about mobile.** A workspace package
+may not import itself by name: `packages/shared` reaching for `@ledova/shared`,
+or a subpath of it, is refused. Before the `extraNodeModules` map added in #216
+that import failed loudly, because it is exactly the specifier Metro could not
+resolve from inside `packages/shared/src`; with the map it resolves back into the
+package and makes a cycle instead, so the fix for one silent failure turned a
+loud failure into a quiet one. The rule is derived rather than named: each
+directory under `packages/` with a `package.json` contributes its own `name`, so
+renaming a package moves the rule with it. It walks the whole package rather than
+`packages/*/src`, because a self-import in `tests` is a cycle at test time as
+surely as one in `src` is at bundle time.
+
+That rule breaks the dashboard's Vite build as readily as the mobile bundle, so
+it belongs in `scripts/` beside the other gates rather than under `mobile/`. It
+is here because this script already walks `packages/` and CI already runs it, and
+moving it needs an edit to `.github/workflows` that no session can currently
+make. **The filename is narrower than what the file does, and that is recorded
+rather than accepted.**
+
 Its extension list matches the one `scripts/check-comments.py` uses for the
 client trees, so the two gates agree on what counts as mobile source. And because
 an unrecognised specifier now fails rather than being skipped, the precision of
