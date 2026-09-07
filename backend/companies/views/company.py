@@ -71,6 +71,12 @@ class CompanyViewSet(AuthenticatedModelViewSet):
             return Company.objects.manageable_by_user(user)
         return Company.objects.visible_to_user(user)
 
+    @extend_schema(
+        responses=inline_serializer(
+            name="CompanyRegistered",
+            fields={"message": serializers.CharField(), "company": CompanyDetailSerializer()},
+        )
+    )
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -95,6 +101,7 @@ class CompanyViewSet(AuthenticatedModelViewSet):
     def stats(self, request, uuid=None):
         return Response(company_stats(self.get_object()))
 
+    @extend_schema(responses=CompanyAPIKeySerializer)
     @action(detail=True, methods=["get", "post"], url_path="api-key")
     def api_key(self, request, uuid=None):
         company = self.get_object()

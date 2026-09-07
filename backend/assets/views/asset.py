@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
@@ -29,6 +30,7 @@ class AssetViewSet(AuthenticatedReadOnlyViewSet):
             queryset = queryset.filter_by_supported_chains()
         return queryset
 
+    @extend_schema(responses=AssetSnapshotSerializer(many=True))
     @action(detail=True, methods=["get"], url_path="snapshots")
     def snapshots(self, request, **kwargs):
         asset = self.get_object()

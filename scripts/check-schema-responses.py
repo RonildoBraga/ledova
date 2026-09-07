@@ -65,7 +65,6 @@ ALLOWED: dict[str, tuple[int, str]] = {}
 
 LEGACY: dict[str, int] = {
     "backend/assets/views/asset.py:undeclared-action": 1,
-    "backend/companies/views/company.py:undeclared-action": 1,
     "backend/portfolios/views/portfolio.py:undeclared-action": 2,
     "backend/tokens/views/share_token.py:undeclared-action": 1,
     "backend/tokens/views/trading_order.py:undeclared-action": 2,
@@ -107,9 +106,31 @@ def is_action(node: ast.FunctionDef) -> bool:
     return any(name.endswith("action") for name in decorator_names(node))
 
 
+def _locals_holding_serializers(node: ast.FunctionDef) -> dict[str, str]:
+    """Local names assigned a serializer instance, so `x = S(...)` then `Response(x.data)` is seen."""
+    held: dict[str, str] = {}
+    for statement in ast.walk(node):
+        if not isinstance(statement, ast.Assign) or not isinstance(statement.value, ast.Call):
+            continue
+        called = statement.value.func
+        if not isinstance(called, ast.Name) or not called.id.endswith("Serializer"):
+            continue
+        for target in statement.targets:
+            if isinstance(target, ast.Name):
+                held[target.id] = called.id
+    return held
+
+
 def serializers_returned(node: ast.FunctionDef) -> set[str]:
-    """Serializer classes instantiated inside a Response(...) in this method."""
+    """Serializer classes a Response(...) in this method renders.
+
+    Both spellings count: instantiated inside the call, and instantiated into a
+    local first. The second is not a rarer shape - CompanyViewSet.create uses it -
+    and a gate that only sees the first reports the tidier code and misses the
+    other.
+    """
     found: set[str] = set()
+    held = _locals_holding_serializers(node)
 
     for statement in ast.walk(node):
         if not isinstance(statement, ast.Call):
@@ -117,11 +138,13 @@ def serializers_returned(node: ast.FunctionDef) -> set[str]:
         if not isinstance(statement.func, ast.Name) or statement.func.id != "Response":
             continue
         for inner in ast.walk(statement):
-            if not isinstance(inner, ast.Call) or not isinstance(inner.func, ast.Name):
-                continue
-            name = inner.func.id
-            if name.endswith("Serializer"):
-                found.add(name)
+            if isinstance(inner, ast.Call) and isinstance(inner.func, ast.Name):
+                if inner.func.id.endswith("Serializer"):
+                    found.add(inner.func.id)
+            elif isinstance(inner, ast.Attribute) and isinstance(inner.value, ast.Name):
+                serializer = held.get(inner.value.id)
+                if serializer and inner.attr == "data":
+                    found.add(serializer)
     return found
 
 
