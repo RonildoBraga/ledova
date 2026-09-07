@@ -2,6 +2,7 @@ from rest_framework import serializers
 
 from offerings.exceptions import SubscriptionRefusedException
 from offerings.models import Offering, Subscription
+from offerings.models.subscription import SubscriptionStatus
 from offerings.services.payments import build_instruction
 from offerings.services.subscription import create_draft
 from operators.exceptions import SettlementAssetNotDeployedException
@@ -73,6 +74,8 @@ class SubscriptionDetailSerializer(SubscriptionListSerializer):
         read_only_fields = fields
 
     def get_payment_instruction(self, subscription):
+        if subscription.status != SubscriptionStatus.AWAITING_PAYMENT:
+            return None
         if not subscription.reference:
             return None
         try:
