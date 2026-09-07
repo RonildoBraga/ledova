@@ -36,9 +36,10 @@ export const OFFERING_WITHDRAWABLE_STATUSES: OfferingStatus[] = ['draft', 'submi
 export const DIRECTORY_COPY = {
   EMPTY_TITLE: 'No companies are listed yet',
   EMPTY_BODY:
-    'The directory shows a company only once its owner opts in. Nothing is hidden from you — no issuer has ' +
-    'opened its share register to investors on this platform yet. Check back, or ask the operator when the ' +
-    'first offering is expected.',
+    'A company appears here once its owner has opted in and one of its share classes is deployed on chain. ' +
+    'Both are needed, so the directory can be empty while an issuer has already opted in and is waiting to ' +
+    'deploy. Nothing is hidden from you. Check back, or ask the operator when the first share class is ' +
+    'expected on chain.',
   INELIGIBLE_TITLE: 'Verify your investor status to see the directory',
   INELIGIBLE_BODY:
     'Offers on this platform are made only to wholesale and sophisticated investors. Submit a classification ' +
