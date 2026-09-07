@@ -58,8 +58,35 @@ describe('a shares-only portfolio, priced at nothing', () => {
     expect(summary.byAssetType[0]?.label).toBe('Tokenized Securities');
   });
 
-  it('leaves the allocation doughnut empty because the total is zero', () => {
-    expect(calculateAssetAllocation(shares, calculateHoldingsSummary(shares, 1).totalValue)).toEqual([]);
+  it('weights the doughnut by quantity when nothing on the page has a price', () => {
+    const allocation = calculateAssetAllocation(shares, calculateHoldingsSummary(shares, 1).totalValue);
+
+    expect(allocation.map((item) => [item.symbol, item.percentage])).toEqual([['ORD', 100]]);
+  });
+
+  it('splits an unpriced doughnut between two share classes by how many are held', () => {
+    const other = holding({
+      uuid: 'pref-holding',
+      asset: asset({ uuid: 'pref-uuid', symbol: 'PREF' }),
+      assetSymbol: 'PREF',
+      assetName: 'Acme Preference',
+      quantity: '750.000000000000000000',
+    });
+
+    const allocation = calculateAssetAllocation([...shares, other], 0);
+
+    expect(allocation.map((item) => [item.symbol, item.percentage])).toEqual([
+      ['PREF', 75],
+      ['ORD', 25],
+    ]);
+  });
+
+  it('stays empty when there is genuinely nothing held', () => {
+    expect(calculateAssetAllocation([], 0)).toEqual([]);
+  });
+
+  it('stays empty when a holding is of nothing at all', () => {
+    expect(calculateAssetAllocation([holding({ quantity: '0' })], 0)).toEqual([]);
   });
 
   it('still fills the doughnut once one priced holding sits beside the shares', () => {
