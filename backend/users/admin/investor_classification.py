@@ -274,3 +274,6 @@ class InvestorClassificationAdmin(admin.ModelAdmin):
         else:
             messages.add_message(request, spec.get("level", messages.SUCCESS), spec["done"])
         return HttpResponseRedirect(change_url)
+
+    def has_delete_permission(self, request, obj=None):
+        return False

@@ -3,7 +3,7 @@ import type { BaseEntity } from '../common';
 export type InvestorCategory =
   'product_value' | 'accountant_certificate' | 'professional_investor' | 'associated_person';
 
-export type InvestorClassificationStatus = 'submitted' | 'verified' | 'rejected' | 'revoked';
+export type InvestorClassificationStatus = 'submitted' | 'verified' | 'rejected' | 'revoked' | 'withdrawn';
 
 export type CertifierBody = 'ca_anz' | 'cpa_australia' | 'ipa';
 
