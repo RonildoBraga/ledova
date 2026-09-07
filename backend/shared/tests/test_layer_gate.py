@@ -85,7 +85,7 @@ class Snapshot:
 
 class ViewLayerRuleTest(SimpleTestCase):
 
-    def test_atomic_decorating_a_drf_write_hook_is_allowed(self):
+    def test_atomic_decorating_a_drf_write_hook_that_only_delegates_is_allowed(self):
         source = """
 class ThingViewSet:
     @transaction.atomic
@@ -93,6 +93,28 @@ class ThingViewSet:
         return super().create(request)
 """
         self.assertEqual(rules_for(source, "views"), [])
+
+    def test_atomic_on_a_write_hook_that_orchestrates_is_flagged(self):
+        source = """
+class ThingViewSet:
+    @transaction.atomic
+    def create(self, request):
+        existing = self.get_queryset().first()
+        serializer = self.get_serializer(existing, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+"""
+        self.assertEqual(rules_for(source, "views"), [gate.VIEW_TRANSACTION])
+
+    def test_atomic_delegating_to_a_different_hook_is_flagged(self):
+        source = """
+class ThingViewSet:
+    @transaction.atomic
+    def create(self, request):
+        return super().update(request)
+"""
+        self.assertEqual(rules_for(source, "views"), [gate.VIEW_TRANSACTION])
 
     def test_an_atomic_block_in_a_view_body_is_flagged(self):
         source = """
@@ -116,7 +138,10 @@ class ThingViewSet:
         allowed = """
 class ThingViewSet:
     def get_queryset(self):
-        return Thing.objects.visible_to_user(self.request.user).select_for_update()
+        queryset = Thing.objects.visible_to_user(self.request.user)
+        if self.action in {"update", "partial_update"}:
+            return queryset.select_for_update()
+        return queryset
 """
         flagged = """
 class ThingViewSet:
@@ -140,6 +165,121 @@ class ThingViewSet:
 """
         self.assertEqual(rules_for(scoped, "views"), [])
         self.assertEqual(rules_for(bare, "views"), [gate.VIEW_ORM])
+
+    def test_an_unguarded_lock_in_get_queryset_is_flagged(self):
+        source = """
+class ThingViewSet:
+    def get_queryset(self):
+        return Thing.objects.visible_to_user(self.request.user).select_for_update()
+"""
+        self.assertEqual(rules_for(source, "views"), [gate.VIEW_LOCK])
+
+    def test_a_lock_guarded_by_a_getattr_action_check_is_allowed(self):
+        source = """
+class ThingViewSet:
+    def get_queryset(self):
+        queryset = Thing.objects.visible_to_user(self.request.user)
+        if getattr(self, "action", None) in {"update"}:
+            return queryset.select_for_update()
+        return queryset
+"""
+        self.assertEqual(rules_for(source, "views"), [])
+
+    def test_a_logger_in_a_view_is_flagged(self):
+        source = """
+logger = logging.getLogger(__name__)
+
+
+class ThingViewSet:
+    def get_queryset(self):
+        return Thing.objects.visible_to_user(self.request.user)
+"""
+        self.assertEqual(rules_for(source, "views"), [gate.VIEW_LOGGER])
+
+    def test_an_unscoped_branch_beside_a_scoped_one_is_flagged(self):
+        source = """
+class ThingViewSet:
+    def get_queryset(self):
+        if self.request.user.is_staff:
+            return Thing.objects.all()
+        return Thing.objects.visible_to_user(self.request.user)
+"""
+        self.assertEqual(rules_for(source, "views"), [gate.VIEW_ORM])
+
+    def test_a_class_level_queryset_attribute_is_examined(self):
+        source = """
+class ThingViewSet:
+    queryset = Thing.objects.all()
+
+    def get_queryset(self):
+        return Thing.objects.visible_to_user(self.request.user)
+"""
+        self.assertEqual(rules_for(source, "views"), [gate.VIEW_ORM])
+
+    def test_scoping_carried_on_a_local_variable_is_allowed(self):
+        source = """
+class ThingViewSet:
+    def get_queryset(self):
+        queryset = Thing.objects.with_relations()
+        if self.action in MANAGE:
+            return queryset.manageable_by_user(self.request.user)
+        return queryset.visible_to_user(self.request.user)
+"""
+        self.assertEqual(rules_for(source, "views"), [])
+
+    def test_a_scoping_call_in_the_arguments_scopes_the_expression(self):
+        source = """
+class ThingViewSet:
+    def get_queryset(self):
+        return Thing.objects.in_directory().filter(company__in=eligible_investor_companies(self.request.user))
+"""
+        self.assertEqual(rules_for(source, "views"), [])
+
+    def test_filtering_a_second_model_by_a_row_from_get_object_is_allowed(self):
+        source = """
+class ThingViewSet:
+    def issuances(self, request, uuid=None):
+        token = self.get_object()
+        return ShareIssuance.objects.filter_by_token(token)
+"""
+        self.assertEqual(rules_for(source, "views"), [])
+
+    def test_a_scoping_name_mentioned_elsewhere_no_longer_excuses_the_function(self):
+        source = """
+class ThingViewSet:
+    def leaky(self):
+        if self.request.user.is_staff:
+            return Other.objects.all()
+        return self.get_queryset()
+"""
+        self.assertEqual(rules_for(source, "views"), [gate.VIEW_ORM])
+
+
+class CallReceiverTest(SimpleTestCase):
+
+    def test_a_manager_reached_through_a_call_is_still_a_query_in_a_model(self):
+        source = """
+class Thing:
+    def owner(self):
+        return get_user_model().objects.first()
+"""
+        self.assertEqual(rules_for(source, "models"), [gate.MODEL_QUERY])
+
+    def test_apps_get_model_is_still_a_query_in_a_model(self):
+        source = """
+class Thing:
+    def other(self):
+        return apps.get_model("app", "Other").objects.all()
+"""
+        self.assertEqual(rules_for(source, "models"), [gate.MODEL_QUERY])
+
+    def test_type_self_is_the_models_own_manager(self):
+        source = """
+class Thing:
+    def bind(self):
+        return type(self).objects.filter(pk=self.pk)
+"""
+        self.assertEqual(rules_for(source, "models"), [])
 
 
 class TaskLayerRuleTest(SimpleTestCase):

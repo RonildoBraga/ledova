@@ -28,6 +28,7 @@ TREES = (
     ("backend", PY + CSS, True),
     ("dashboard/src", TS + CSS, True),
     ("mobile/src", TS, True),
+    ("mobile/scripts", TS, True),
     ("mobile", TS, False),
     ("packages/shared", TS, True),
     ("packages/scripts", TS, True),
