@@ -8,7 +8,7 @@ from documents.serializers.document import (
     DocumentSerializer,
     DocumentUploadSerializer,
 )
-from documents.tasks.extract import extract_document
+from documents.services.document import create_document
 from shared.views import stream_stored_file
 
 
@@ -25,7 +25,7 @@ class DocumentViewSet(
     serializer_class = DocumentSerializer
 
     def get_queryset(self):
-        return Document.objects.for_user(self.request.user).prefetch_related("extractions")
+        return Document.objects.visible_to_user(self.request.user).prefetch_related("extractions")
 
     def get_serializer_class(self):
         if self.action == "create":
@@ -38,19 +38,10 @@ class DocumentViewSet(
         return stream_stored_file(document.file, document.mime_type, document.original_filename)
 
     def create(self, request, *args, **kwargs):
-        write_ser = DocumentUploadSerializer(data=request.data)
+        write_ser = self.get_serializer(data=request.data)
         write_ser.is_valid(raise_exception=True)
 
-        upload = write_ser.validated_data["file"]
-        document = Document.objects.create(
-            uploaded_by=request.user,
-            document_type=write_ser.validated_data["document_type"],
-            note=write_ser.validated_data.get("note", ""),
-            original_filename=upload.name,
-            mime_type=write_ser.validated_data["mime_type"],
-            file=upload,
-        )
-        extract_document.defer(document_uuid=str(document.uuid))
+        document = create_document(request.user, write_ser.validated_data)
 
         return Response(
             DocumentSerializer(document, context=self.get_serializer_context()).data,

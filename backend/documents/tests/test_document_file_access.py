@@ -122,7 +122,7 @@ class DocumentFileUrlTest(APITestCase):
         self.assertIn(f"/api/v1/documents/{document.uuid}/file/", file_url)
         self.assertNotIn("/media/", file_url)
 
-    @patch("documents.views.document.extract_document.defer")
+    @patch("documents.services.document.extract_document.defer")
     def test_an_upload_reports_the_same_route(self, _defer):
         response = self.client.post(
             "/api/v1/documents/",
@@ -186,7 +186,7 @@ class DocumentUploadAllowlistTest(APITestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(Document.objects.count(), 0)
 
-    @patch("documents.views.document.extract_document.defer")
+    @patch("documents.services.document.extract_document.defer")
     def test_a_pdf_upload_is_stored_with_the_allowlisted_mime_type(self, _defer):
         response = self._upload("payslip.pdf", "application/pdf")
 
