@@ -1482,6 +1482,17 @@ reading:
   before repeating someone else's**: a relayed measurement is not a
   measurement.
 
+**Running a new test against the unfixed code is only half the check. Run it
+against a broken expectation too.** The first asks whether the test notices when
+the product is wrong; the second asks whether it notices at all. A test can pass
+the first and fail the second: #221's red proof was genuine - four scalar
+failures printing real numbers - while the tuple assertions beside them in the
+same file could not fail, because a helper named `fail` had replaced the method
+they raise through, and nobody looked. Change the expected value to something
+absurd; if the test still passes, the assertion is not running. Between one
+afternoon's PRs that produced five tests passing on both sides of a fix, not one
+would have survived that edit.
+
 **Two independently reasonable constants, and nobody compared them.** Neither
 number is wrong where it is written, and the pair is the defect. `order_write`
 throttles at 30/min, which is 1,800 signing challenges an hour from one user;
