@@ -43,7 +43,7 @@ export function useOfferings() {
     offerings: offeringsQuery.data?.data?.results ?? [],
     tokens: (tokensQuery.data?.data?.results ?? []).filter((token) => token.status === 'deployed'),
     settlementAssets: operatorQuery.data?.data?.supportedSettlementAssets ?? [],
-    isLoading: offeringsQuery.isLoading || tokensQuery.isLoading,
+    isLoading: offeringsQuery.isLoading || tokensQuery.isLoading || operatorQuery.isLoading,
     refresh,
   };
 }
