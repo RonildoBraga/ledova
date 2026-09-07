@@ -43,6 +43,12 @@ class UserProfileAdmin(admin.ModelAdmin):
     list_select_related = ("user", "citizenship_country")
     inlines = [FinancialProfileInline]
 
+    def get_readonly_fields(self, request, obj=None):
+        readonly = list(super().get_readonly_fields(request, obj))
+        if obj is not None:
+            readonly.append("user")
+        return readonly
+
     @admin.display(description="Email", ordering="user__email")
     def email(self, obj):
         return obj.user.email

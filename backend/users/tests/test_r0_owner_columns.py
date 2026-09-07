@@ -106,7 +106,7 @@ class OwnerColumnTriggerTest(TestCase):
                             [self.stranger.pk, row.pk],
                         )
 
-                self.assertIn("does not match user_profile.user_id", str(raised.exception))
+                self.assertIn("user_id cannot be moved to", str(raised.exception))
                 row.delete()
 
     def test_moving_a_row_to_another_users_profile_is_refused(self):
@@ -122,7 +122,7 @@ class OwnerColumnTriggerTest(TestCase):
                             [self.stranger_profile.pk, row.pk],
                         )
 
-                self.assertIn("does not match user_profile.user_id", str(raised.exception))
+                self.assertIn("user_profile_id cannot change", str(raised.exception))
                 row.delete()
 
     def test_changing_the_profile_and_the_owner_together_is_still_refused(self):
@@ -138,7 +138,7 @@ class OwnerColumnTriggerTest(TestCase):
                             [self.stranger_profile.pk, self.stranger.pk, row.pk],
                         )
 
-                self.assertIn("user_id cannot change", str(raised.exception))
+                self.assertIn("user_profile_id cannot change", str(raised.exception))
                 row.delete()
 
     def test_nulling_the_owner_is_repaired_rather_than_refused(self):
