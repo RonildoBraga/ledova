@@ -12,7 +12,7 @@ from offerings.models import (
     Subscription,
     SubscriptionStatus,
 )
-from offerings.services.subscription import accept, issue_instruction, submit
+from offerings.services.subscription import accept, confirm_payment, issue_instruction, submit
 from offerings.tests.factories import (
     configure_operator,
     draft_subscription,
@@ -128,6 +128,56 @@ class SubscriptionApiTest(APITestCase):
         self.assertEqual(instruction["contractAddress"], "0x" + "5" * 40)
         self.assertEqual(instruction["decimals"], 2)
         self.assertEqual(instruction["settlementAmount"], "2500")
+
+    def test_a_paid_subscription_stops_asking_for_money(self):
+        subscription = draft_subscription(self.tenant)
+        submit(subscription, submitted_by=self.tenant.user)
+        accept(subscription)
+        issue_instruction(subscription, rail=SettlementRail.BANK_TRANSFER)
+        confirm_payment(
+            subscription,
+            confirmed_by=self.tenant.user,
+            amount_received=subscription.amount_due,
+            received_on=timezone.now().date(),
+        )
+
+        body = self.client.get(f"{BASE}{subscription.uuid}/").json()
+
+        self.assertEqual(body["status"], SubscriptionStatus.PAID)
+        self.assertIsNone(body["paymentInstruction"])
+        self.assertEqual(body["reference"], subscription.reference)
+
+    def test_a_part_payment_that_leaves_it_awaiting_keeps_the_instruction(self):
+        subscription = draft_subscription(self.tenant)
+        submit(subscription, submitted_by=self.tenant.user)
+        accept(subscription)
+        issue_instruction(subscription, rail=SettlementRail.BANK_TRANSFER)
+        confirm_payment(
+            subscription,
+            confirmed_by=self.tenant.user,
+            amount_received=Decimal("1.00"),
+            received_on=timezone.now().date(),
+        )
+
+        body = self.client.get(f"{BASE}{subscription.uuid}/").json()
+
+        self.assertEqual(body["status"], SubscriptionStatus.AWAITING_PAYMENT)
+        self.assertIsNotNone(body["paymentInstruction"])
+
+    def test_only_an_awaiting_subscription_carries_an_instruction(self):
+        subscription = draft_subscription(self.tenant)
+        submit(subscription, submitted_by=self.tenant.user)
+        accept(subscription)
+        issue_instruction(subscription, rail=SettlementRail.BANK_TRANSFER)
+        detail = f"{BASE}{subscription.uuid}/"
+
+        self.assertIsNotNone(self.client.get(detail).json()["paymentInstruction"])
+
+        for status in (SubscriptionStatus.PAID, SubscriptionStatus.ALLOTTED, SubscriptionStatus.REFUNDED):
+            with self.subTest(status=status):
+                Subscription.objects.filter(pk=subscription.pk).update(status=status)
+
+                self.assertIsNone(self.client.get(detail).json()["paymentInstruction"])
 
     def test_a_deployment_withdrawn_after_the_instruction_leaves_the_detail_readable(self):
         subscription = draft_subscription(self.tenant)
