@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
@@ -42,6 +43,7 @@ class OfferingViewSet(AuthenticatedModelViewSet):
         instance.delete()
 
     @action(detail=True, methods=["post"])
+    @extend_schema(responses=OfferingDetailSerializer)
     def submit(self, request, uuid=None):
         offering = self.get_object()
         submit_offering(offering, submitted_by=request.user)
@@ -54,6 +56,7 @@ class OfferingViewSet(AuthenticatedModelViewSet):
         return self.get_paginated_response(IssuerSubscriptionSerializer(page, many=True).data)
 
     @action(detail=True, methods=["post"])
+    @extend_schema(responses=OfferingDetailSerializer)
     def withdraw(self, request, uuid=None):
         offering = self.get_object()
         serializer = OfferingWithdrawSerializer(data=request.data)

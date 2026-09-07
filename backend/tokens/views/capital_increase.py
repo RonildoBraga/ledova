@@ -1,5 +1,6 @@
 from django.shortcuts import get_object_or_404
-from rest_framework import status
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers, status
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
@@ -44,6 +45,7 @@ class CapitalIncreaseViewSet(AuthenticatedModelViewSet):
             return super().filter_queryset(queryset)
         return queryset
 
+    @extend_schema(responses=CapitalIncreaseDetailSerializer)
     def create(self, request, *args, **kwargs):
         token_uuid = request.data.get("token")
         if not token_uuid:
@@ -61,6 +63,12 @@ class CapitalIncreaseViewSet(AuthenticatedModelViewSet):
         instance.delete()
 
     @action(detail=True, methods=["post"])
+    @extend_schema(
+        responses=inline_serializer(
+            name="CapitalIncreaseSubmitted",
+            fields={"message": serializers.CharField(), "request": CapitalIncreaseDetailSerializer()},
+        )
+    )
     def submit(self, request, uuid=None):
         capital_increase = self.get_object()
         submit_capital_increase(capital_increase, request.user)

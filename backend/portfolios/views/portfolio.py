@@ -1,5 +1,6 @@
 from datetime import datetime
 
+from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
@@ -76,6 +77,7 @@ class PortfolioViewSet(AuthenticatedModelViewSet):
         )
 
     @action(detail=True, methods=["get"], url_path="snapshots")
+    @extend_schema(responses=PortfolioValuePointSerializer(many=True))
     def snapshots(self, request, *args, **kwargs):
         portfolio = self.get_object()
         params = request.query_params

@@ -1,4 +1,5 @@
-from rest_framework import status
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers, status
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.response import Response
@@ -74,6 +75,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
         return Response(response_data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["post"])
+    @extend_schema(responses=TransferOrderDetailSerializer)
     def cancel(self, request, uuid=None):
         order = cancel_signed_order(
             order=self.get_object(),
@@ -107,6 +109,17 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
         return Response(message_data, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["get"], url_path="swap")
+    @extend_schema(
+        responses=inline_serializer(
+            name="SwapOrderForSigning",
+            fields={
+                "swap_order": SwapOrderDetailSerializer(),
+                "typed_data": serializers.JSONField(),
+                "user_role": serializers.CharField(),
+                "has_signed": serializers.BooleanField(),
+            },
+        )
+    )
     def swap(self, request, uuid=None):
         atomic_swap_service, swap_order, user_role, has_signed = self._get_authorized_swap_context(request)
 
@@ -125,6 +138,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
         )
 
     @action(detail=True, methods=["post"], url_path="swap/sign")
+    @extend_schema(responses=SwapOrderDetailSerializer)
     def swap_sign(self, request, uuid=None):
         transfer_order = self.get_object()
 
@@ -253,6 +267,16 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
         return Response(result)
 
     @action(detail=True, methods=["post"], url_path="modify")
+    @extend_schema(
+        responses=inline_serializer(
+            name="TransferOrderModified",
+            fields={
+                "order": TransferOrderDetailSerializer(),
+                "modification_count": serializers.IntegerField(),
+                "changes": serializers.JSONField(),
+            },
+        )
+    )
     def modify(self, request, uuid=None):
         order = self.get_object()
 

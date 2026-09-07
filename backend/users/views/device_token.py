@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -22,6 +23,7 @@ class DeviceTokenViewSet(AuthenticatedModelViewSet):
         return DeviceToken.objects.visible_to_user(self.request.user).filter(is_active=True)
 
     @action(detail=False, methods=["post"], url_path="register")
+    @extend_schema(responses=DeviceTokenSerializer)
     def register_token(self, request):
         serializer = RegisterDeviceTokenSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

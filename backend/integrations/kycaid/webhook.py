@@ -3,6 +3,7 @@ import logging
 from django.core.exceptions import ValidationError
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
+from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -27,6 +28,7 @@ class KYCAIDWebhookView(APIView):
     authentication_classes = []
     permission_classes = []
 
+    @extend_schema(exclude=True)
     def post(self, request):
         signature = request.headers.get("x-data-integrity", "")
 

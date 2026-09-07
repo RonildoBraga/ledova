@@ -1,4 +1,5 @@
 from django.http import Http404
+from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -35,6 +36,7 @@ class InvestorClassificationViewSet(AuthenticatedModelViewSet):
         self.get_object().withdraw()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+    @extend_schema(responses=InvestorEligibilitySerializer)
     @action(detail=False, methods=["get"])
     def eligibility(self, request):
         outcome = investor_eligibility(request.user)

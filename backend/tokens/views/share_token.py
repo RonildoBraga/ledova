@@ -1,7 +1,8 @@
 import csv
 
 from django.http import HttpResponse
-from rest_framework import status
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers, status
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
@@ -61,6 +62,7 @@ class ShareTokenViewSet(AuthenticatedModelViewSet):
             return super().filter_queryset(queryset)
         return queryset
 
+    @extend_schema(responses=ShareTokenDetailSerializer)
     def create(self, request, *args, **kwargs):
         if not Company.objects.manageable_by_user(request.user).exists():
             raise PermissionDenied("You must be associated with a company to create tokens.")
@@ -70,6 +72,12 @@ class ShareTokenViewSet(AuthenticatedModelViewSet):
         token = serializer.save()
         return Response(ShareTokenDetailSerializer(token).data, status=status.HTTP_201_CREATED)
 
+    @extend_schema(
+        responses=inline_serializer(
+            name="TokenDeploymentStarted",
+            fields={"message": serializers.CharField(), "token": ShareTokenDetailSerializer()},
+        )
+    )
     @action(detail=True, methods=["post"])
     def deploy(self, request, uuid=None):
         token = self.get_object()
@@ -83,18 +91,40 @@ class ShareTokenViewSet(AuthenticatedModelViewSet):
         except BaseChainConnectionError as exc:
             raise TokenPauseFailedException(f"Chain unreachable: {exc}") from exc
 
+    @extend_schema(
+        responses=inline_serializer(
+            name="TokenPaused",
+            fields={"message": serializers.CharField(), "token": ShareTokenDetailSerializer()},
+        )
+    )
     @action(detail=True, methods=["post"])
     def pause(self, request, uuid=None):
         token = self.get_object()
         self._chain_service().pause(token)
         return Response({"message": "Token paused successfully.", "token": ShareTokenDetailSerializer(token).data})
 
+    @extend_schema(
+        responses=inline_serializer(
+            name="TokenUnpaused",
+            fields={"message": serializers.CharField(), "token": ShareTokenDetailSerializer()},
+        )
+    )
     @action(detail=True, methods=["post"])
     def unpause(self, request, uuid=None):
         token = self.get_object()
         self._chain_service().unpause(token)
         return Response({"message": "Token unpaused successfully.", "token": ShareTokenDetailSerializer(token).data})
 
+    @extend_schema(
+        responses=inline_serializer(
+            name="ShareIssuanceRequested",
+            fields={
+                "message": serializers.CharField(),
+                "token": ShareTokenDetailSerializer(),
+                "issuance_request": ShareIssuanceRequestSerializer(),
+            },
+        )
+    )
     @action(detail=True, methods=["post"])
     def issue(self, request, uuid=None):
         token = self.get_object()

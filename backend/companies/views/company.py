@@ -1,4 +1,5 @@
-from rest_framework import status
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
@@ -112,6 +113,12 @@ class CompanyViewSet(AuthenticatedModelViewSet):
         )
 
     @action(detail=True, methods=["post"], url_path="status")
+    @extend_schema(
+        responses=inline_serializer(
+            name="CompanyStatusUpdated",
+            fields={"message": serializers.CharField(), "company": CompanyDetailSerializer()},
+        )
+    )
     def status_update(self, request, uuid=None):
         company = self.get_object()
 
@@ -148,6 +155,12 @@ class CompanyViewSet(AuthenticatedModelViewSet):
         )
 
     @action(detail=True, methods=["post"])
+    @extend_schema(
+        responses=inline_serializer(
+            name="CompanyApplicationSubmitted",
+            fields={"message": serializers.CharField(), "company": ApplicationStatusSerializer()},
+        )
+    )
     def submit(self, request, uuid=None):
         company = self.get_object()
 
@@ -164,6 +177,12 @@ class CompanyViewSet(AuthenticatedModelViewSet):
         )
 
     @action(detail=True, methods=["post"])
+    @extend_schema(
+        responses=inline_serializer(
+            name="CompanyApplicationResubmitted",
+            fields={"message": serializers.CharField(), "company": ApplicationStatusSerializer()},
+        )
+    )
     def resubmit(self, request, uuid=None):
         company = self.get_object()
 
@@ -180,6 +199,12 @@ class CompanyViewSet(AuthenticatedModelViewSet):
         )
 
     @action(detail=True, methods=["post"])
+    @extend_schema(
+        responses=inline_serializer(
+            name="CompanyApplicationWithdrawn",
+            fields={"message": serializers.CharField(), "company": ApplicationStatusSerializer()},
+        )
+    )
     def withdraw(self, request, uuid=None):
         company = self.get_object()
 
@@ -196,6 +221,7 @@ class CompanyViewSet(AuthenticatedModelViewSet):
         )
 
     @action(detail=True, methods=["get"], url_path="application-status")
+    @extend_schema(responses=ApplicationStatusSerializer)
     def application_status(self, request, uuid=None):
         company = self.get_object()
         return Response(ApplicationStatusSerializer(company).data)

@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -10,6 +11,7 @@ class WhitelistStatusView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(responses=WhitelistStatusSerializer)
     def get(self, request, address):
         data = WhitelistService().investor_status(address)
 

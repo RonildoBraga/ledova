@@ -4,7 +4,8 @@ from django.conf import settings
 from django.middleware.csrf import get_token
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
-from rest_framework import status
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers, status
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -94,6 +95,16 @@ class AuthViewSet(TokenCookieMixin, ViewSet):
         return [AllowAny()]
 
     @action(detail=False, methods=["post"], url_path="signup")
+    @extend_schema(
+        responses=inline_serializer(
+            name="AuthIdentity",
+            fields={
+                "uuid": serializers.UUIDField(allow_null=True),
+                "email": serializers.EmailField(),
+                "is_email_verified": serializers.BooleanField(),
+            },
+        )
+    )
     def signup(self, request):
         serializer = UserSignupSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -109,6 +120,23 @@ class AuthViewSet(TokenCookieMixin, ViewSet):
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=["post"], url_path="signin")
+    @extend_schema(
+        responses=inline_serializer(
+            name="AuthSession",
+            fields={
+                "uuid": serializers.UUIDField(allow_null=True),
+                "email": serializers.EmailField(),
+                "is_email_verified": serializers.BooleanField(),
+                "tokens": serializers.ListField(
+                    child=inline_serializer(
+                        name="AuthTokenPair",
+                        fields={"access_token": serializers.CharField(), "refresh_token": serializers.CharField()},
+                    ),
+                    required=False,
+                ),
+            },
+        )
+    )
     def signin(self, request):
         serializer = UserSigninSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -121,6 +149,12 @@ class AuthViewSet(TokenCookieMixin, ViewSet):
         return self.session_response(request, UserSigninSerializer(instance=user).data, access_token, refresh_token)
 
     @action(detail=False, methods=["post"], url_path="signout")
+    @extend_schema(
+        responses=inline_serializer(
+            name="AuthSignedOut",
+            fields={"message": serializers.CharField()},
+        )
+    )
     def signout(self, request):
         if request.user.is_authenticated:
             refresh_jti = request.auth.get("rjti") if request.auth else None
@@ -130,6 +164,12 @@ class AuthViewSet(TokenCookieMixin, ViewSet):
         return self.clear_token_cookies(response)
 
     @action(detail=False, methods=["post"], url_path="signout-all")
+    @extend_schema(
+        responses=inline_serializer(
+            name="AuthSignedOutEverywhere",
+            fields={"message": serializers.CharField()},
+        )
+    )
     def signout_all(self, request):
         TokenService.revoke_all(request.user)
 
@@ -137,6 +177,12 @@ class AuthViewSet(TokenCookieMixin, ViewSet):
         return self.clear_token_cookies(response)
 
     @action(detail=False, methods=["post"], url_path="token/refresh")
+    @extend_schema(
+        responses=inline_serializer(
+            name="AuthTokensRefreshed",
+            fields={"access": serializers.CharField(), "refresh": serializers.CharField()},
+        )
+    )
     def token_refresh(self, request):
         refresh_token = self.presented_refresh_token(request)
         if not refresh_token:
@@ -161,6 +207,23 @@ class AuthViewSet(TokenCookieMixin, ViewSet):
         return self.set_token_cookies(response, access_token, refresh_token)
 
     @action(detail=False, methods=["post"], url_path="email-verification")
+    @extend_schema(
+        responses=inline_serializer(
+            name="AuthEmailVerified",
+            fields={
+                "uuid": serializers.UUIDField(allow_null=True),
+                "email": serializers.EmailField(),
+                "is_email_verified": serializers.BooleanField(),
+                "tokens": serializers.ListField(
+                    child=inline_serializer(
+                        name="AuthTokenPair",
+                        fields={"access_token": serializers.CharField(), "refresh_token": serializers.CharField()},
+                    ),
+                    required=False,
+                ),
+            },
+        )
+    )
     def email_verification(self, request):
         serializer = EmailVerificationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -182,6 +245,12 @@ class AuthViewSet(TokenCookieMixin, ViewSet):
         )
 
     @action(detail=False, methods=["post"], url_path="resend-verification")
+    @extend_schema(
+        responses=inline_serializer(
+            name="AuthVerificationResent",
+            fields={"message": serializers.CharField()},
+        )
+    )
     def resend_verification(self, request):
         serializer = ResendVerificationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -204,6 +273,12 @@ class AuthViewSet(TokenCookieMixin, ViewSet):
 
     @action(detail=False, methods=["get"], url_path="auth/verify")
     @method_decorator(ensure_csrf_cookie)
+    @extend_schema(
+        responses=inline_serializer(
+            name="AuthSessionValidity",
+            fields={"valid": serializers.BooleanField(), "expiresAt": serializers.DateTimeField(required=False)},
+        )
+    )
     def verify(self, request):
         if request.user.is_authenticated and request.auth:
             return Response(
@@ -215,6 +290,12 @@ class AuthViewSet(TokenCookieMixin, ViewSet):
         return Response({"valid": False}, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=["post"], url_path="change-password")
+    @extend_schema(
+        responses=inline_serializer(
+            name="AuthPasswordChanged",
+            fields={"message": serializers.CharField()},
+        )
+    )
     def change_password(self, request):
         serializer = ChangePasswordSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

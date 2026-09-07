@@ -25,6 +25,8 @@ jobs:
         run: python scripts/check-type-check.py
       - name: Logging privacy gate
         run: python scripts/check-logging.py
+      - name: Schema response gate
+        run: python scripts/check-schema-responses.py
       - name: Gate script tests
         run: make test-gates PYTHON=python
 
