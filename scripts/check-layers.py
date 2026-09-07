@@ -61,7 +61,6 @@ LEGACY = frozenset(
     {
         "backend/assets/models/asset.py:query-in-model",
         "backend/authentication/views/user.py:raw-orm-in-view",
-        "backend/users/views/notification.py:raw-orm-in-view",
         "backend/whitelist/views/entry.py:raw-orm-in-view",
         "backend/whitelist/views/status.py:logger-in-view",
     }
