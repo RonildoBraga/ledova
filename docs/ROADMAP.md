@@ -530,8 +530,10 @@ Not started.
   fixed: **incoming AUD transfers carrying their reference text**, delivered
   through **a webhook or a poll**. The reference format is not negotiable with
   a provider — `normalize_reference`, the Crockford alphabet and the
-  18-character lodgement limit are what the platform issues and what the
-  operator matches on today, and a provider must carry them unchanged. The two
+  operator's prefix followed by an eight-character code
+  (`REFERENCE_CODE_LENGTH`) are what the platform issues, inside the
+  18-character field a reference must fit (`MAX_REFERENCE_LENGTH`), and a
+  provider must carry them unchanged. The two
   shapes the desk weighed are a read-only open-banking feed on the operator's
   own account and a payments provider issuing a PayID or virtual account per
   subscription; the choice between them is the scheduled question. The
