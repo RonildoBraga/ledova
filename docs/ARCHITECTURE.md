@@ -868,6 +868,34 @@ a layer. Test:
 from the resolved URLconf rather than naming routes, so a new row action is
 covered the day it is registered.
 
+**The same principle governs fields, not only actions: the admin may not be more
+permissive than the API for the same row.** `CompanyUpdateSerializer` refuses to
+change `acn`, `abn` or `company_type` once a company leaves `DRAFT`, and never
+exposes `owner` at all — and `CompanyAdmin` let staff change all four at any
+status, so the rule the API stated was defeated by opening the change page.
+`CompanyAdmin.get_readonly_fields` now locks them, in the shape
+`ShareTokenAdmin.get_readonly_fields` already used for a deployed token.
+
+`owner` locks on every existing company rather than only after `DRAFT`, and for a
+stronger reason than the serializer's silence: ownership is the tenancy root.
+`Company.visible_to_user` and `manageable_by_user` are both `filter(owner=user)`,
+so reassigning it moves every company-scoped row to a different tenant with no
+record beyond a generic admin history entry. It stays editable on the *add* form,
+because the column is `NOT NULL` and locking it there would make an
+admin-created company impossible. If an operator ever does need to reassign one,
+that is a row action carrying a reason, not an editable field.
+
+Gate: `backend/companies/tests/test_admin_matches_the_api.py`. Neither side is
+written out. The immutable set is found by offering the serializer a changed
+value for every field it exposes, twice — once with the instance at `DRAFT` and
+once past it — and taking the difference, so a field refused because the *value*
+is invalid is not mistaken for a field refused because it is immutable. That
+subtraction is the whole trick: without it an empty `abn` reads as locked. The
+admin side is `get_form(request, obj).fields`. A test asserts the probe finds
+exactly `company_type`, `acn` and `abn`, so the comparison cannot pass by finding
+nothing. The sweep across every other admin and serializer pair is not written
+yet.
+
 **Operationally**: grant `change_` on the eleven models these routes act on —
 `assets.asset`, `companies.company`, `offerings.offering`,
 `offerings.subscription`, `tokens.mintrequest`, `tokens.yieldtoken`,

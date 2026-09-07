@@ -13,6 +13,8 @@ from shared.utils.admin_display import action_buttons
 from tokens.admin._helpers import status_badge
 from wallets.models import Wallet
 
+IMMUTABLE_AFTER_DRAFT = ("company_type", "acn", "abn")
+
 STATUS_COLORS = {
     CompanyStatus.DRAFT: "#6c757d",
     CompanyStatus.SUBMITTED: "#17a2b8",
@@ -340,6 +342,16 @@ class CompanyAdmin(admin.ModelAdmin):
             ),
         ]
         return custom_urls + super().get_urls()
+
+    def get_readonly_fields(self, request, obj=None):
+        readonly = list(super().get_readonly_fields(request, obj))
+        if obj is None:
+            return readonly
+
+        readonly.append("owner")
+        if obj.status != CompanyStatus.DRAFT:
+            readonly.extend(IMMUTABLE_AFTER_DRAFT)
+        return readonly
 
     def get_form(self, request, obj=None, **kwargs):
         request._operator_wallet_owner = obj.owner if obj is not None else None
