@@ -1,9 +1,35 @@
 # Ledova
 
-Ledova is an open-source reference implementation of infrastructure for
-tokenized company equity: companies deploy a share token, issue shares to
-whitelisted investor wallets, and an operator runs the whole thing from the
-Django admin.
+## The problem
+
+Private company shares are difficult to issue, manage, transfer, and invest in compared with publicly traded shares. Ownership records, investor onboarding, payments, share registries, and transfers can involve multiple disconnected systems and significant manual administration.
+
+Companies also have limited control over the infrastructure through which their private shares are offered and managed.
+
+## The Ledova solution
+
+Ledova is a platform for creating and operating digital private equity markets.
+
+Companies can represent their shares as blockchain-based tokens and use Ledova to manage the lifecycle of those shares — from issuance and investor onboarding through ownership tracking and transfers.
+
+Ledova can be deployed in different ways. A company could operate its own Ledova instance and maintain direct control over its investors, share issuance, and registry. Alternatively, a platform operator or registry provider could operate Ledova on behalf of multiple companies.
+
+Investors don't need to be crypto-native. They can invest using AUD/fiat or supported stablecoins, while Ledova handles the connection between the investment, the tokenized shares, and the company's ownership registry.
+
+## Core features
+
+1. Company onboarding — Create and manage companies and their equity structure.
+2. Tokenized shares — Issue blockchain tokens representing shares or classes of shares in a private company.
+3. Investor onboarding — Register investors and support identity/KYC and compliance processes.
+4. Capital raising — Allow eligible investors to purchase tokenized shares offered by companies.
+5. Fiat and stablecoin payments — Support investment using AUD/fiat as well as supported stablecoins.
+6. Digital share registry — Maintain an auditable record of shareholders, holdings, issuances, and transfers.
+7. Share transfers — Allow permitted transfers of tokenized shares between investors while enforcing the company's rules.
+8. Investor portfolios — Give investors a view of their private-company holdings and transaction history.
+9. Company dashboard — Give issuers visibility into shareholders, capital raised, ownership, transactions, and token supply.
+10. Compliance controls — Provide KYC/AML, investor eligibility, transfer restrictions, and other controls required by the operator.
+11. Self-hosted or multi-company operation — A company can operate Ledova for itself, or an operator can provide the infrastructure and registry service to multiple issuers.
+12. Crypto wallet functionality — Support sending, receiving, and managing the blockchain assets required to interact with the platform.
 
 > **Experimental and unaudited.** Use Ledova only with synthetic data on a local
 > development chain or a supported public testnet. It is not production ready
