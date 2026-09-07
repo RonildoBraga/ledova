@@ -309,6 +309,7 @@ backend log.
 | --- | --- | --- |
 | `LLM_BASE_URL` | `http://host.docker.internal:11434/v1` | No |
 | `LLM_MODEL` | `qwen2.5vl:7b` | No |
+| `LLM_EXTRA_HOSTS` | empty | No |
 
 **The default points at a service on the host, and a host firewall that drops
 bridge-to-host traffic makes it unreachable from the containers.** `ufw` does
@@ -321,9 +322,19 @@ Two remedies, either of which works for both: run the service **inside the
 compose network** and point the variable at its service name, or open the
 bridge to the host port (`ufw allow in on docker0 to any port 11434`). The
 first is preferred, and it is what the local chain section below assumes.
-`_validate_local_base_url` currently allows only `localhost`, `127.0.0.1`,
-`::1` and `host.docker.internal`, so a compose service name needs adding to
-that allowlist before the first remedy can be used for the LLM.
+
+**`LLM_EXTRA_HOSTS` is what makes the first remedy expressible, and it is
+empty by default.** `_validate_local_base_url` admits `localhost`,
+`127.0.0.1`, `::1` and `host.docker.internal` and nothing else until an
+operator names a hostname in `LLM_EXTRA_HOSTS` — a comma-separated list, so
+`LLM_EXTRA_HOSTS=ollama` with `LLM_BASE_URL=http://ollama:11434/v1` points
+extraction at a sibling container. **The default is unchanged and the opt-in
+is the whole control**: the allowlist is what makes *a document never leaves
+this machine* true, and a compose service name is a weaker statement than a
+loopback address, because `ollama` resolves to whatever is on that network.
+Name only hosts you control, and only on a deployment where you know what
+else is on the network. Entries are hostnames — no scheme, no port, no path —
+because the value is compared against the URL's host and nothing else.
 
 Installing the service on the host is **not sufficient on such a host**: an
 operator who installs Ollama and sees the same failure has fixed the first

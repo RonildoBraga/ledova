@@ -22,19 +22,26 @@ logger = logging.getLogger(__name__)
 _LOCAL_LLM_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "host.docker.internal"})
 
 
+def _admitted_hosts() -> frozenset[str]:
+    return _LOCAL_LLM_HOSTS | set(getattr(settings, "LLM_EXTRA_HOSTS", []))
+
+
 def _validate_local_base_url(value: str) -> str:
     candidate = value.strip().rstrip("/")
     parsed = urlsplit(candidate)
 
     if (
         parsed.scheme not in {"http", "https"}
-        or parsed.hostname not in _LOCAL_LLM_HOSTS
+        or parsed.hostname not in _admitted_hosts()
         or parsed.username is not None
         or parsed.password is not None
         or parsed.query
         or parsed.fragment
     ):
-        raise ImproperlyConfigured("LLM_BASE_URL must use a local loopback or host.docker.internal endpoint")
+        raise ImproperlyConfigured(
+            "LLM_BASE_URL must use a local loopback endpoint, host.docker.internal, "
+            "or a hostname named in LLM_EXTRA_HOSTS"
+        )
 
     return candidate
 

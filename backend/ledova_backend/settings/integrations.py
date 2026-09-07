@@ -50,6 +50,7 @@ BLOCKSTREAM_TIMEOUT = int(os.environ.get("BLOCKSTREAM_TIMEOUT", "30"))
 
 LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "http://host.docker.internal:11434/v1")
 LLM_MODEL = os.environ.get("LLM_MODEL", "qwen2.5vl:7b")
+LLM_EXTRA_HOSTS = [host.strip().lower() for host in os.environ.get("LLM_EXTRA_HOSTS", "").split(",") if host.strip()]
 
 LEDOVA_ADMIN_BASE_URL = os.environ.get("LEDOVA_ADMIN_BASE_URL", "http://localhost:5174/admin").rstrip("/")
 PUBLIC_API_BASE_URL = os.environ.get("PUBLIC_API_BASE_URL", "http://localhost:8000").rstrip("/")
