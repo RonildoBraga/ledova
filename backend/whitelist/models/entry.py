@@ -91,8 +91,12 @@ class WhitelistEntry(BaseModel):
             ]
         )
 
-    def mark_failed(self, error: str = "") -> None:
+    def mark_failed(self, error: str = "", tx_hash: str | None = None) -> None:
         self.status = WhitelistStatus.FAILED
         if error:
             self.notes = f"Error: {error}\n{self.notes}"
-        self.save(update_fields=["status", "notes", "updated_at"])
+        fields = ["status", "notes", "updated_at"]
+        if tx_hash:
+            self.add_tx_hash = tx_hash
+            fields.append("add_tx_hash")
+        self.save(update_fields=fields)

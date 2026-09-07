@@ -1,6 +1,7 @@
 from unittest.mock import Mock
 
-from django.test import TestCase
+from django.db import transaction
+from django.test import TestCase, TransactionTestCase
 
 from blockchain.models import BlockchainTransaction, TransactionStatus, TransactionType
 from integrations.base_chain.exceptions import BaseChainTransactionError
@@ -15,11 +16,11 @@ from whitelist.exceptions import (
 from whitelist.models import WhitelistEntry, WhitelistStatus
 from whitelist.services import WhitelistService
 
-RECEIPT = {"blockNumber": 7, "blockHash": bytes.fromhex("ab" * 32), "gasUsed": 21000}
+RECEIPT = {"status": 1, "blockNumber": 7, "blockHash": bytes.fromhex("ab" * 32), "gasUsed": 21000}
 SIGNER = "0x" + "f" * 40
 
 
-class WhitelistServiceTransactionTest(TestCase):
+class WhitelistServiceTransactionTest(TransactionTestCase):
     def setUp(self):
         self.account = UserAccount.objects.create()
         self.wallet = Wallet.objects.create(user_account=self.account, address="0x" + "a" * 40, chain="base")
@@ -30,7 +31,10 @@ class WhitelistServiceTransactionTest(TestCase):
         service.chain_client = Mock()
         service.chain_client.to_checksum_address.side_effect = lambda address: address
         service.chain_client.account_from_key.return_value.address = SIGNER
-        service.chain_client.send_transaction.return_value = ("0xhash", RECEIPT)
+        service.chain_client.build_transaction.return_value = {}
+        service.chain_client.sign_transaction.return_value = b"signed"
+        service.chain_client.send_raw_transaction.return_value = "0xhash"
+        service.chain_client.receipt_even_if_reverted.return_value = RECEIPT
         service.signer_key = "0xoperator"
         service.contract_address = "0x" + "d" * 40
         service._contract = Mock()
@@ -57,8 +61,8 @@ class WhitelistServiceTransactionTest(TestCase):
         self.assertEqual((record.related_model, record.related_uuid), ("whitelist.WhitelistEntry", self.entry.uuid))
         self.assertEqual((record.tx_hash, record.block_number, record.gas_used), ("0xhash", 7, 21000))
         service._contract.functions.addToWhitelist.assert_called_once_with(self.wallet.address)
-        service.chain_client.send_transaction.assert_called_once_with(
-            service._contract.functions.addToWhitelist.return_value, "0xoperator", wait_for_receipt=True
+        service.chain_client.build_transaction.assert_called_once_with(
+            service._contract.functions.addToWhitelist.return_value, from_address=SIGNER
         )
 
     def test_add_creates_the_entry_for_a_wallet_without_one(self):
@@ -82,19 +86,70 @@ class WhitelistServiceTransactionTest(TestCase):
 
         self.assertFalse(BlockchainTransaction.objects.exists())
 
-    def test_chain_failure_is_persisted_on_the_record_and_the_entry(self):
+    def test_a_refusal_before_the_send_is_failed_and_says_why(self):
         service = self._service()
-        service.chain_client.send_transaction.side_effect = BaseChainTransactionError("boom")
+        service.chain_client.sign_transaction.side_effect = BaseChainTransactionError("boom")
 
         with self.assertRaises(WhitelistOperationFailedException) as ctx:
             service.add_to_whitelist(self.wallet.address)
 
         self.assertEqual(str(ctx.exception.detail), "Add to Whitelist failed.")
         record = BlockchainTransaction.objects.get()
-        self.assertEqual((record.status, record.error_message), (TransactionStatus.FAILED, "boom"))
+        self.assertEqual(
+            (record.status, record.error_message, record.tx_hash), (TransactionStatus.FAILED, "boom", None)
+        )
         self.entry.refresh_from_db()
         self.assertEqual(self.entry.status, WhitelistStatus.FAILED)
         self.assertIn("Error: boom", self.entry.notes)
+
+    def test_a_send_whose_fate_is_unknown_is_not_called_failed(self):
+        service = self._service()
+        service.chain_client.send_raw_transaction.side_effect = BaseChainTransactionError("no response")
+
+        with self.assertRaises(WhitelistOperationFailedException):
+            service.add_to_whitelist(self.wallet.address)
+
+        record = BlockchainTransaction.objects.get()
+        self.assertEqual((record.status, record.tx_hash), (TransactionStatus.PENDING, None))
+        self.assertIn("no response", record.error_message)
+        self.entry.refresh_from_db()
+        self.assertEqual(self.entry.status, WhitelistStatus.PENDING)
+
+    def test_a_receipt_that_never_arrives_keeps_the_hash_and_leaves_the_entry_pending(self):
+        service = self._service()
+        service.chain_client.receipt_even_if_reverted.side_effect = BaseChainTransactionError("receipt timed out")
+
+        with self.assertRaises(WhitelistOperationFailedException):
+            service.add_to_whitelist(self.wallet.address)
+
+        record = BlockchainTransaction.objects.get()
+        self.assertEqual((record.status, record.tx_hash), (TransactionStatus.SUBMITTED, "0xhash"))
+        self.assertIn("receipt timed out", record.error_message)
+        self.entry.refresh_from_db()
+        self.assertEqual(self.entry.status, WhitelistStatus.PENDING)
+
+    def test_an_add_the_chain_reverted_keeps_its_hash_on_the_entry(self):
+        service = self._service()
+        service.chain_client.receipt_even_if_reverted.return_value = {**RECEIPT, "status": 0}
+
+        with self.assertRaises(WhitelistOperationFailedException):
+            service.add_to_whitelist(self.wallet.address)
+
+        record = BlockchainTransaction.objects.get()
+        self.assertEqual((record.status, record.tx_hash), (TransactionStatus.REVERTED, "0xhash"))
+        self.entry.refresh_from_db()
+        self.assertEqual((self.entry.status, self.entry.add_tx_hash), (WhitelistStatus.FAILED, "0xhash"))
+
+    def test_a_caller_that_wraps_the_add_in_a_transaction_is_refused(self):
+        service = self._service()
+
+        with self.assertRaises(RuntimeError):
+            with transaction.atomic():
+                service.add_to_whitelist(self.wallet.address)
+
+        service.chain_client.send_raw_transaction.assert_not_called()
+        self.entry.refresh_from_db()
+        self.assertEqual(self.entry.status, WhitelistStatus.PENDING)
 
     def test_remove_marks_the_entry_removed(self):
         self.entry.mark_active("0xearlier")
