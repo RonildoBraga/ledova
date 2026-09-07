@@ -41,6 +41,7 @@ help:
 	@echo "  make check-logging            Fail on a log line that can carry a credential or an email"
 	@echo "  make check-schema-responses   Fail on a view whose response the schema does not know"
 	@echo "  make check-test-shadowing     Fail on a test helper that shadows a TestCase method"
+	@echo "  make check-error-bodies       Fail on an API error body built from an exception's text"
 	@echo "  make test-gates               Run the unit tests of the gate scripts"
 	@echo "  make audit                    Fail on a new production dependency advisory"
 	@echo "  make test                     Run workspace, mobile, and contract tests"
@@ -83,7 +84,7 @@ build:
 generate-tokens:
 	$(NPM) exec -- tsx packages/scripts/generate-css-tokens.mjs
 
-check: check-comments check-layers check-logging check-type-check check-schema-responses check-test-shadowing install-backend install-node-if-missing
+check: check-comments check-layers check-logging check-error-bodies check-type-check check-schema-responses check-test-shadowing install-backend install-node-if-missing
 	$(NPM) run typecheck
 	$(NPM) --prefix mobile run check:resolution
 	cd backend && SECRET_KEY="$$( $(PYTHON) -c 'import secrets; print(secrets.token_urlsafe(32))')" STORAGE_BACKEND=local $(PYTHON) manage.py check
@@ -105,6 +106,8 @@ check-layers:
 
 check-schema-responses:
 	$(PYTHON) scripts/check-schema-responses.py
+check-error-bodies:
+	$(PYTHON) scripts/check-error-bodies.py
 
 check-test-shadowing:
 	$(PYTHON) scripts/check-test-shadowing.py

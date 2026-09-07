@@ -17,7 +17,10 @@ from companies.models import CompanyStatus
 from companies.services.company import primary_wallet_for
 from integrations.base_chain import get_base_chain_client
 from integrations.base_chain.client import BROADCAST_ROUND_TRIPS, HTTP_TIMEOUT_SECONDS
-from integrations.base_chain.exceptions import BaseChainContractError
+from integrations.base_chain.exceptions import (
+    BaseChainConnectionError,
+    BaseChainContractError,
+)
 from operators.settlement import settlement_deployments
 from shared.constants import BLOCKCHAIN_BASE
 from tokens.exceptions import (
@@ -75,6 +78,14 @@ CAP_NOT_RAISED = (
 
 class ShareTokenService:
 
+    @classmethod
+    def or_refuse(cls) -> "ShareTokenService":
+        try:
+            return cls()
+        except BaseChainConnectionError as exc:
+            logger.error(f"Chain unreachable while building the token service: {exc}")
+            raise TokenPauseFailedException("The chain is unreachable.") from exc
+
     def __init__(self):
         self.chain_client = get_base_chain_client()
         self._factory_contract = None
@@ -105,7 +116,8 @@ class ShareTokenService:
                     self.factory_address,
                 )
             except BaseChainContractError as e:
-                raise ContractLoadException(f"Failed to load contract: {e}") from e
+                logger.error(f"ShareTokenFactory could not be loaded: {e}")
+                raise ContractLoadException("The token factory contract could not be loaded.") from e
         return self._factory_contract
 
     @staticmethod
@@ -201,7 +213,7 @@ class ShareTokenService:
         except Exception as exc:
             logger.error(f"getTokenByIdentifier({identifier}) failed: {exc}")
             self._abandon_unless_sent(token)
-            raise TokenDeploymentFailedException(f"Token deployment failed: {exc}") from exc
+            raise TokenDeploymentFailedException("Token deployment failed.") from exc
         if contract_address:
             logger.info(f"Adopting {token.symbol} already created at {contract_address} for {identifier}")
             self._warn_on_cap_mismatch(token, contract_address)
@@ -284,7 +296,7 @@ class ShareTokenService:
             logger.error(f"createShareToken({identifier}) {tx_hash} still unconfirmed, token stays deploying: {exc}")
             if tx_record:
                 tx_record.mark_failed(str(exc))
-            raise TokenDeploymentFailedException(f"Token deployment unconfirmed: {exc}") from exc
+            raise TokenDeploymentFailedException("Token deployment is unconfirmed.") from exc
 
         if tx_record:
             self._confirm_record(tx_record, receipt)
@@ -327,7 +339,7 @@ class ShareTokenService:
             if tx_record:
                 tx_record.mark_failed(str(exc))
             self._abandon_unless_sent(token)
-            raise TokenDeploymentFailedException(f"Token deployment failed: {exc}") from exc
+            raise TokenDeploymentFailedException("Token deployment failed.") from exc
 
         tx_record.mark_submitted(tx_hash)
         if not token.bind_deployment_transaction(tx_hash, tx_record):
@@ -343,7 +355,7 @@ class ShareTokenService:
         except Exception as exc:
             logger.error(f"createShareToken({identifier}) unconfirmed, token stays deploying: {exc}")
             tx_record.mark_failed(str(exc))
-            raise TokenDeploymentFailedException(f"Token deployment unconfirmed: {exc}") from exc
+            raise TokenDeploymentFailedException("Token deployment is unconfirmed.") from exc
 
         self._confirm_record(tx_record, receipt)
         if token.deployment_tx_hash != tx_hash:
@@ -491,7 +503,10 @@ class ShareTokenService:
         try:
             request.mark_executing()
         except ValueError as exc:
-            raise InvalidTokenStateException(str(exc)) from exc
+            logger.error(f"Request {request.uuid} could not be claimed for execution: {exc}")
+            raise InvalidTokenStateException(
+                f"Cannot execute request with status '{request.get_status_display()}'"
+            ) from exc
 
     def _refuse_if_paused(self, request: ShareIssuanceRequest) -> None:
         token = request.token
@@ -752,7 +767,7 @@ class ShareTokenService:
         except Exception as exc:
             logger.error(f"setAuthorizedShares {tx_hash} for request {request.uuid} still unconfirmed: {exc}")
             tx_record.mark_failed(str(exc))
-            raise TokenDeploymentFailedException(f"Capital increase unconfirmed: {exc}") from exc
+            raise TokenDeploymentFailedException("The capital increase is unconfirmed.") from exc
 
         self._confirm_record(tx_record, receipt)
         logger.info(
@@ -824,7 +839,7 @@ class ShareTokenService:
             logger.error(f"setAuthorizedShares({new_authorized_total}) not sent: {exc}")
             if tx_record:
                 tx_record.mark_failed(str(exc))
-            raise TokenDeploymentFailedException(f"Capital increase failed: {exc}") from exc
+            raise TokenDeploymentFailedException("The capital increase failed.") from exc
 
         tx_record.mark_submitted(tx_hash)
         logger.info(f"setAuthorizedShares({new_authorized_total}) sent for {token.symbol}: {tx_hash}")
@@ -833,7 +848,7 @@ class ShareTokenService:
         except Exception as exc:
             logger.error(f"setAuthorizedShares({new_authorized_total}) {tx_hash} unconfirmed: {exc}")
             tx_record.mark_failed(str(exc))
-            raise TokenDeploymentFailedException(f"Capital increase unconfirmed: {exc}") from exc
+            raise TokenDeploymentFailedException("The capital increase is unconfirmed.") from exc
 
         self._confirm_record(tx_record, receipt)
         return {**self._tx_result(tx_hash, receipt), "new_authorized_total": new_authorized_total}
@@ -861,7 +876,7 @@ class ShareTokenService:
             return self.load_share_token(token.contract_address).functions.paused().call()
         except Exception as exc:
             logger.error(f"paused() could not be read for {token.symbol}: {exc}")
-            raise TokenPauseFailedException(f"Token paused state could not be read: {exc}") from exc
+            raise TokenPauseFailedException("The token's paused state could not be read.") from exc
 
     def _set_paused(self, token: ShareToken, paused: bool) -> None:
         function_name = "pause" if paused else "unpause"
@@ -877,7 +892,7 @@ class ShareTokenService:
             except Exception as exc:
                 logger.error(f"{function_name}() failed for {token.symbol}: {exc}")
                 if not self._paused_state_is(token, paused):
-                    raise TokenPauseFailedException(f"Token {function_name} failed: {exc}") from exc
+                    raise TokenPauseFailedException(f"Token {function_name} failed.") from exc
                 logger.warning(f"{function_name}() for {token.symbol} failed after the call mined; reconciling")
         if paused:
             token.mark_paused()
@@ -924,7 +939,7 @@ class ShareTokenService:
                 logger.error(f"Failed to get balance for {token.symbol}: {e}")
                 raise WalletBalancesUnavailableException(
                     f"{WalletBalancesUnavailableException.default_detail} The balance of {token.symbol} could "
-                    f"not be read: {e}"
+                    f"not be read."
                 ) from e
 
         for deployment in settlement_deployments():
@@ -947,7 +962,7 @@ class ShareTokenService:
                 logger.error(f"Failed to get settlement asset balance for {asset.symbol}: {e}")
                 raise WalletBalancesUnavailableException(
                     f"{WalletBalancesUnavailableException.default_detail} The balance of {asset.symbol} could "
-                    f"not be read: {e}"
+                    f"not be read."
                 ) from e
 
         return {"walletAddress": wallet_checksum, "balances": balances}

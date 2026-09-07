@@ -54,4 +54,4 @@ class ServiceErrorMessageTests(SimpleTestCase):
         service.chain_client.load_contract.side_effect = BaseChainContractError("ABI missing")
         with self.assertRaises(ContractLoadException) as ctx:
             service.factory_contract
-        self.assertEqual(str(ctx.exception.detail), "Failed to load contract: ABI missing")
+        self.assertEqual(str(ctx.exception.detail), "The token factory contract could not be loaded.")

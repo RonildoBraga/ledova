@@ -130,7 +130,7 @@ class WhitelistService:
             if entry:
                 entry.mark_failed(str(e))
             logger.error(f"{function_name}({checksum_address}) failed: {e}")
-            raise WhitelistOperationFailedException(f"{TransactionType(tx_type).label} failed: {e}") from e
+            raise WhitelistOperationFailedException(f"{TransactionType(tx_type).label} failed.") from e
 
         tx_record.mark_submitted(tx_hash)
         if receipt:

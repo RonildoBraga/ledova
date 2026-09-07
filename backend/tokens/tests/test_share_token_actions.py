@@ -90,7 +90,7 @@ class ShareTokenActionTest(APITestCase):
     def test_unreachable_chain_answers_with_detail_instead_of_crashing(self, chain_client):
         response = self.client.post(f"/api/v1/tokens/{self.tenant.deployed_token.uuid}/pause/")
         self.assertEqual(response.status_code, 503)
-        self.assertEqual(response.json()["detail"], "Chain unreachable: down")
+        self.assertEqual(response.json()["detail"], "The chain is unreachable.")
 
     @patch("tokens.tasks.deploy_share_token_task")
     def test_deploy_guards_leave_the_token_in_draft(self, deploy_task):

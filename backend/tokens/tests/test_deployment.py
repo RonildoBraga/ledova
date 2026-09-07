@@ -122,7 +122,7 @@ class DeployTokenTest(TestCase):
 
     def test_failure_before_the_transaction_returns_to_draft_with_the_error(self):
         self.chain.send_transaction.side_effect = RuntimeError("nonce too low")
-        with self.assertRaisesMessage(TokenDeploymentFailedException, "nonce too low"):
+        with self.assertRaisesMessage(TokenDeploymentFailedException, "Token deployment failed."):
             self._service(factory()).deploy_token(self.token)
 
         self.token.refresh_from_db()
@@ -142,7 +142,7 @@ class DeployTokenTest(TestCase):
         self.token.mark_deploying()
         contract = factory()
         contract.functions.getTokenByIdentifier.return_value.call.side_effect = ConnectionError("rpc down")
-        with self.assertRaisesMessage(TokenDeploymentFailedException, "rpc down"):
+        with self.assertRaisesMessage(TokenDeploymentFailedException, "Token deployment failed."):
             self._service(contract).deploy_token(self.token)
         self.token.refresh_from_db()
         self.assertEqual(self.token.status, ShareTokenStatus.DRAFT)
@@ -161,7 +161,7 @@ class DeployTokenTest(TestCase):
 
     def test_lost_receipt_after_sending_leaves_the_token_deploying(self):
         self.chain.wait_for_receipt.side_effect = RuntimeError("timeout")
-        with self.assertRaisesMessage(TokenDeploymentFailedException, "timeout"):
+        with self.assertRaisesMessage(TokenDeploymentFailedException, "Token deployment is unconfirmed."):
             self._service(factory()).deploy_token(self.token)
 
         self.token.refresh_from_db()
@@ -172,7 +172,7 @@ class DeployTokenTest(TestCase):
         )
 
     def test_receipt_without_the_event_leaves_the_token_deploying(self):
-        with self.assertRaisesMessage(TokenDeploymentFailedException, "No ShareTokenCreated event"):
+        with self.assertRaisesMessage(TokenDeploymentFailedException, "Token deployment is unconfirmed."):
             self._service(factory(events=[])).deploy_token(self.token)
 
         self.token.refresh_from_db()
@@ -182,7 +182,7 @@ class DeployTokenTest(TestCase):
         self._sent()
         contract = factory()
         contract.functions.getTokenByIdentifier.return_value.call.side_effect = ConnectionError("rpc down")
-        with self.assertRaisesMessage(TokenDeploymentFailedException, "rpc down"):
+        with self.assertRaisesMessage(TokenDeploymentFailedException, "Token deployment failed."):
             self._service(contract).deploy_token(self.token)
 
         self.token.refresh_from_db()
@@ -209,7 +209,7 @@ class DeployTokenTest(TestCase):
     def test_resume_on_an_unconfirmed_transaction_keeps_the_token_deploying(self):
         record = self._sent()
         self.chain.wait_for_receipt.side_effect = RuntimeError("still pending")
-        with self.assertRaisesMessage(TokenDeploymentFailedException, "still pending"):
+        with self.assertRaisesMessage(TokenDeploymentFailedException, "Token deployment is unconfirmed."):
             self._service(factory()).deploy_token(self.token)
 
         self.token.refresh_from_db()
@@ -262,7 +262,7 @@ class DeployTokenTest(TestCase):
 
         self.chain.send_transaction.side_effect = other_worker_binds_then_this_send_fails
         self.assertIsNone(self.token.deployment_tx_hash)
-        with self.assertRaisesMessage(TokenDeploymentFailedException, "nonce too low"):
+        with self.assertRaisesMessage(TokenDeploymentFailedException, "Token deployment failed."):
             self._service(factory()).deploy_token(self.token)
 
         self.token.refresh_from_db()
@@ -292,7 +292,7 @@ class DeployTokenTest(TestCase):
 
         self.chain.send_transaction.side_effect = other_worker_writes_first
         self.chain.wait_for_receipt.side_effect = RuntimeError("Transaction failed: 0xcreate (status=0)")
-        with self.assertRaisesMessage(TokenDeploymentFailedException, "status=0"):
+        with self.assertRaisesMessage(TokenDeploymentFailedException, "Token deployment is unconfirmed."):
             self._service(factory()).deploy_token(self.token)
 
         self.token.refresh_from_db()
@@ -413,7 +413,7 @@ class PauseTest(TestCase):
 
     def test_chain_failure_keeps_the_status_and_surfaces(self):
         self.chain.send_transaction.side_effect = RuntimeError("execution reverted")
-        with self.assertRaisesMessage(TokenPauseFailedException, "Token pause failed: execution reverted"):
+        with self.assertRaisesMessage(TokenPauseFailedException, "Token pause failed."):
             self.service.pause(self.token)
         self.token.refresh_from_db()
         self.assertEqual(self.token.status, ShareTokenStatus.DEPLOYED)
@@ -452,7 +452,7 @@ class PauseTest(TestCase):
 
     def test_unreadable_paused_state_surfaces_before_any_call(self):
         self._contract().functions.paused.return_value.call.side_effect = ConnectionError("rpc down")
-        with self.assertRaisesMessage(TokenPauseFailedException, "Token paused state could not be read: rpc down"):
+        with self.assertRaisesMessage(TokenPauseFailedException, "The token's paused state could not be read."):
             self.service.pause(self.token)
         self.chain.send_transaction.assert_not_called()
 

@@ -148,7 +148,7 @@ class TokenTransferService:
 
         except (BaseChainTransactionError, BaseChainContractError) as e:
             logger.error(f"Broadcast failed: {e}")
-            raise TransferBroadcastException(f"Transfer broadcast failed: {e}") from e
+            raise TransferBroadcastException("Transfer broadcast failed.") from e
         except ValueError as e:
             logger.error(f"Invalid transaction hex: {e}")
             raise TransferBroadcastException("Transfer broadcast failed: Invalid transaction format") from e

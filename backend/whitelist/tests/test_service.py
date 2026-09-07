@@ -89,7 +89,7 @@ class WhitelistServiceTransactionTest(TestCase):
         with self.assertRaises(WhitelistOperationFailedException) as ctx:
             service.add_to_whitelist(self.wallet.address)
 
-        self.assertEqual(str(ctx.exception.detail), "Add to Whitelist failed: boom")
+        self.assertEqual(str(ctx.exception.detail), "Add to Whitelist failed.")
         record = BlockchainTransaction.objects.get()
         self.assertEqual((record.status, record.error_message), (TransactionStatus.FAILED, "boom"))
         self.entry.refresh_from_db()

@@ -92,7 +92,7 @@ def chain_service():
     except BaseChainConnectionError as exc:
         logger.error(f"Register could not reach the chain: {exc}")
         raise RegisterUnavailableException(
-            f"{RegisterUnavailableException.default_detail} The chain has been unreachable since this request: {exc}"
+            f"{RegisterUnavailableException.default_detail} The chain was unreachable when this request ran."
         ) from exc
 
 
@@ -107,7 +107,7 @@ def _deployment_block(token, reader) -> int:
             logger.error(f"Register could not read the deployment block of {token.symbol}: {exc}")
             raise RegisterUnavailableException(
                 f"{RegisterUnavailableException.default_detail} The deployment block of {token.symbol} could not "
-                f"be read from transaction {token.deployment_tx_hash}: {exc}"
+                f"be read from transaction {token.deployment_tx_hash}."
             ) from exc
     raise RegisterUnavailableException(
         f"{RegisterUnavailableException.default_detail} {token.symbol} records no deployment block and no "
@@ -126,7 +126,7 @@ def _holder_addresses(token, reader) -> list:
         logger.error(f"Register could not read the transfer history of {token.symbol}: {exc}")
         raise RegisterUnavailableException(
             f"{RegisterUnavailableException.default_detail} The transfer history of {token.symbol} could not be "
-            f"read: {exc}"
+            f"read."
         ) from exc
     addresses.update(participants)
     addresses.discard(ZERO_ADDRESS)
@@ -140,8 +140,7 @@ def _issued_supply(token, reader) -> int:
     except Exception as exc:
         logger.error(f"Register could not read the issued supply of {token.symbol}: {exc}")
         raise RegisterUnavailableException(
-            f"{RegisterUnavailableException.default_detail} The issued supply of {token.symbol} could not be "
-            f"read: {exc}"
+            f"{RegisterUnavailableException.default_detail} The issued supply of {token.symbol} could not be " f"read."
         ) from exc
 
 
@@ -203,7 +202,7 @@ def _chain_balances(token, addresses, reader):
             logger.error(f"Register could not read the balance of {address} on {token.symbol}: {exc}")
             raise RegisterUnavailableException(
                 f"{RegisterUnavailableException.default_detail} The balance of {address} on {token.symbol} could "
-                f"not be read: {exc}"
+                f"not be read."
             ) from exc
     return balances
 

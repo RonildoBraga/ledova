@@ -87,4 +87,4 @@ class StablecoinService(BaseTokenService):
         except (BaseChainTransactionError, BaseChainContractError) as e:
             tx_record.mark_failed(str(e))
             logger.error(f"Failed to burn AUDY: {e}")
-            raise StablecoinBurnFailedException(f"Stablecoin burning failed: {e}") from e
+            raise StablecoinBurnFailedException("Stablecoin burning failed.") from e
