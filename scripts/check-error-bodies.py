@@ -63,13 +63,11 @@ RULES = {
 # about that function, and the claim has to be true.
 SANITISERS = {"decode_exception_to_message"}
 
-LEGACY: dict[str, int] = {
-    # The five native and ERC-20 send paths. wallets/services/transfers.py is on the
-    # owner-merge list, so they move in their own PR rather than dragging this one in
-    # front of the owner. The fix is the same as the eighteen here: a fixed message and
-    # a logged diagnostic. This count only falls.
-    "backend/wallets/services/transfers.py": 5,
-}
+# Empty, and it is meant to stay that way. It held the five native and ERC-20 send
+# paths in wallets/services/transfers.py, which #274 fixed the same way as the
+# eighteen here - a fixed message and a logged diagnostic - so the count fell to
+# zero and the gate said so rather than letting a satisfied pin sit here forever.
+LEGACY: dict[str, int] = {}
 
 
 def api_exception_names() -> set[str]:
