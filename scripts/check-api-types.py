@@ -58,55 +58,127 @@ ROOT = Path(__file__).resolve().parent.parent
 SHARED = ROOT / "packages/shared/src"
 
 TYPE_DEBT: dict[str, tuple[int, str]] = {
+    "Company:CompanyList": (
+        27,
+        "GET /api/v1/companies/ serves CompanyListSerializer while the service is typed "
+        "apiClient.get<Company>. The list shape is deliberately smaller; the type claims the "
+        "detail shape. Narrow the list type rather than widen the serializer.",
+    ),
+    "Company:CompanyUpdate": (
+        27,
+        "CompanyViewSet declares no update or partial_update, so DRF answers PATCH with "
+        "CompanyUpdateSerializer - fifteen write fields - while the service is typed "
+        "apiClient.patch<Company>. All three call sites invalidate rather than read.",
+    ),
+    "CompanyShareToken:TokenDeploymentStarted": (
+        16,
+        "The action returns {'message': ..., 'token': ...}, declared as TokenDeploymentStarted. The service "
+        "is typed as the inner object, so every field of it is absent from the envelope. The "
+        "clients invalidate rather than read the body today, so nothing is broken - the type is "
+        "simply not what the endpoint sends. Fix by typing the envelope, not by pinning.",
+    ),
+    "CompanyShareToken:TokenPaused": (
+        16,
+        "The action returns {'message': ..., 'token': ...}, declared as TokenPaused. The service "
+        "is typed as the inner object, so every field of it is absent from the envelope. The "
+        "clients invalidate rather than read the body today, so nothing is broken - the type is "
+        "simply not what the endpoint sends. Fix by typing the envelope, not by pinning.",
+    ),
+    "CompanyShareToken:TokenUnpaused": (
+        16,
+        "The action returns {'message': ..., 'token': ...}, declared as TokenUnpaused. The service "
+        "is typed as the inner object, so every field of it is absent from the envelope. The "
+        "clients invalidate rather than read the body today, so nothing is broken - the type is "
+        "simply not what the endpoint sends. Fix by typing the envelope, not by pinning.",
+    ),
+    "CompanyShareToken:ShareIssuanceRequested": (
+        16,
+        "The action returns {'message': ..., 'token': ...}, declared as ShareIssuanceRequested. The service "
+        "is typed as the inner object, so every field of it is absent from the envelope. The "
+        "clients invalidate rather than read the body today, so nothing is broken - the type is "
+        "simply not what the endpoint sends. Fix by typing the envelope, not by pinning.",
+    ),
+    "CapitalIncreaseRequest:CapitalIncreaseSubmitted": (
+        15,
+        "The action returns {'message': ..., 'request': ...}, declared as CapitalIncreaseSubmitted. The service "
+        "is typed as the inner object, so every field of it is absent from the envelope. The "
+        "clients invalidate rather than read the body today, so nothing is broken - the type is "
+        "simply not what the endpoint sends. Fix by typing the envelope, not by pinning.",
+    ),
+    "CompanyShareToken:ShareTokenList": (
+        2,
+        "GET /api/v1/tokens/ serves ShareTokenListSerializer, which omits deployment_tx_hash and "
+        "updated_at, while the service is typed apiClient.get<CompanyShareToken>.",
+    ),
     "FinancialProfile:FinancialProfile": (
-        4,
+        6,
         "FinancialProfileSerializer carries exclude = ('created_at', 'updated_at') while the "
         "interface extends BaseEntity, which declares createdAt and updatedAt required. Two "
-        "fields on each of POST and PATCH. Fix by narrowing the interface, not by widening the "
-        "serializer: nothing reads them.",
+        "fields on each of GET, POST and PATCH.",
+    ),
+    "UserPreferences:UserPreferences": (
+        4,
+        "UserPreferencesSerializer carries exclude = ('created_at', 'updated_at') while the "
+        "interface extends BaseEntity, which declares both required. Two fields on each of GET "
+        "and POST.",
+    ),
+    "FeatureFlag:FeatureFlag": (
+        2,
+        "FeatureFlagSerializer carries exclude = ('created_at', 'updated_at') while the interface "
+        "extends BaseEntity, which declares both required.",
     ),
     "DeviceToken:DeviceToken": (
         1,
         "DeviceTokenSerializer lists created_at but not updated_at, while the interface extends "
         "BaseEntity, which declares both required.",
     ),
-    "UserPreferences:UserPreferences": (
-        2,
-        "UserPreferencesSerializer carries exclude = ('created_at', 'updated_at') while the "
-        "interface extends BaseEntity, which declares both required.",
-    ),
-    "Company:CompanyUpdate": (
-        27,
-        "CompanyViewSet declares no update or partial_update, so DRF answers PATCH with "
-        "CompanyUpdateSerializer - fifteen write fields - while the service is typed "
-        "apiClient.patch<Company>. All three call sites invalidate rather than read the "
-        "response, so nothing is broken today.",
-    ),
 }
 
 SCHEMA_DEBT: dict[str, tuple[int, str]] = {
     "AccountExportData:UserProfile": (
         33,
-        "users/views/user_profile.py:39 returns lifecycle.export_account_data(request.user), a "
-        "plain dict, so the generator falls back to the viewset's serializer. The interface is "
-        "correct. Tracked by #211.",
+        "users/views/user_profile.py export-data returns lifecycle.export_account_data(user), a "
+        "literal body, so the generator falls back to the viewset's serializer. The interface is "
+        "correct. In check-schema-responses.py's LEGACY; tracked by #211.",
+    ),
+    "TokenIssuancesResponse:ShareTokenDetail": (
+        5,
+        "tokens/views/share_token.py issuances returns a literal paginated body and the generator "
+        "falls back to the viewset's serializer. The interface is correct. Tracked by #211.",
     ),
     "TokenHoldersResponse:ShareTokenDetail": (
         3,
-        "tokens/views/share_token.py:125 builds its own response and the generator falls back to "
-        "the viewset's serializer. The interface is correct. Tracked by #211.",
+        "tokens/views/share_token.py holders returns a literal body and the generator falls back "
+        "to the viewset's serializer. The interface is correct. Tracked by #211.",
     ),
-    "CompanyShareToken:ShareTokenCreate": (
-        8,
-        "tokens/views/share_token.py:71 returns Response(ShareTokenDetailSerializer(token).data) "
-        "while get_serializer_class names ShareTokenCreateSerializer for the create action. The "
-        "interface is correct. Tracked by #211.",
+    "CompanyStats:CompanyDetail": (
+        3,
+        "companies/views/company.py stats returns company_stats(...), a literal body, so the "
+        "generator falls back to the viewset's serializer. The interface is correct. Tracked by "
+        "#211.",
     ),
-    "CapitalIncreaseRequest:CapitalIncreaseCreate": (
-        11,
-        "tokens/views/capital_increase.py:56 returns Response(CapitalIncreaseDetailSerializer("
-        "capital_increase).data) while get_serializer_class names the create serializer. The "
-        "interface is correct. Tracked by #211.",
+    "ExchangeRate:Asset": (
+        3,
+        "assets/views/asset.py exchange_rates returns a literal body and the generator falls back "
+        "to the viewset's serializer. The interface is correct. Tracked by #211.",
+    ),
+    "CapitalIncreaseResponse:CapitalIncreaseList": (
+        2,
+        "tokens/views/capital_increase.py list returns a literal body carrying count and results, "
+        "and the generator documents the row serializer. The interface is correct. Tracked by "
+        "#211.",
+    ),
+    "MarkAllReadResponse:Notification": (
+        1,
+        "users/views/notification.py mark_all_read returns {'marked': n}, a literal body, so the "
+        "generator falls back to the viewset's serializer. The interface is correct. Tracked by "
+        "#211.",
+    ),
+    "UnreadCountResponse:Notification": (
+        1,
+        "users/views/notification.py unread_count returns {'unreadCount': n}, a literal body, so "
+        "the generator falls back to the viewset's serializer. The interface is correct. Tracked "
+        "by #211.",
     ),
 }
 
