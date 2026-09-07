@@ -131,8 +131,24 @@ class TheTriggerRefusesAnOwnerTheCompanyDoesNotNameTest(TransactionTestCase):
             with transaction.atomic():
                 ShareToken.objects.filter(pk=token.pk).update(company=self.stranger.company)
 
-        self.assertIn("cannot change", str(refusal.exception))
+        self.assertIn("cannot move this row to another owner", str(refusal.exception))
         self.assertEqual(ShareToken.objects.get(pk=token.pk).owner_id, self.tenant.company.owner_id)
+
+    def test_a_token_may_move_between_two_companies_of_the_same_owner(self):
+        token = self.a_token(symbol="MOVE")
+        token.save()
+        sibling = Company.objects.create(
+            owner=self.tenant.company.owner,
+            name="Second company of the same owner",
+            acn="000000489",
+            status=self.tenant.company.status,
+        )
+
+        ShareToken.objects.filter(pk=token.pk).update(company=sibling)
+
+        refreshed = ShareToken.objects.get(pk=token.pk)
+        self.assertEqual(refreshed.company_id, sibling.pk)
+        self.assertEqual(refreshed.owner_id, self.tenant.company.owner_id)
 
     def test_the_move_is_refused_by_the_trigger_and_not_by_the_unique_symbol(self):
         token = self.a_token(symbol="MOVE")
@@ -218,9 +234,10 @@ class TheReverseRestoresTheFunctionItReplacedTest(TestCase):
         without = self._body("0025_a_token_cannot_change_company", "WITHOUT_REPARENTING")
         with_it = self._body("0025_a_token_cannot_change_company", "WITH_REPARENTING")
         guard = (
-            "        IF NEW.{parent_fk} IS DISTINCT FROM OLD.{parent_fk} THEN\n"
-            "            RAISE EXCEPTION '{table}.{parent_fk} cannot change, from % to %',"
-            " OLD.{parent_fk}, NEW.{parent_fk};\n"
+            "        IF NEW.{parent_fk} IS DISTINCT FROM OLD.{parent_fk}\n"
+            "           AND parent_owner_id IS DISTINCT FROM OLD.{column} THEN\n"
+            "            RAISE EXCEPTION '{table} cannot move this row to another owner, from % to %',\n"
+            "                OLD.{column}, parent_owner_id;\n"
             "        END IF;\n\n"
         )
 

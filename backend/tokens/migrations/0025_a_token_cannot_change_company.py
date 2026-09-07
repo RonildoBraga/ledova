@@ -14,8 +14,10 @@ BEGIN
     END IF;
 
     IF TG_OP = 'UPDATE' THEN
-        IF NEW.{parent_fk} IS DISTINCT FROM OLD.{parent_fk} THEN
-            RAISE EXCEPTION '{table}.{parent_fk} cannot change, from % to %', OLD.{parent_fk}, NEW.{parent_fk};
+        IF NEW.{parent_fk} IS DISTINCT FROM OLD.{parent_fk}
+           AND parent_owner_id IS DISTINCT FROM OLD.{column} THEN
+            RAISE EXCEPTION '{table} cannot move this row to another owner, from % to %',
+                OLD.{column}, parent_owner_id;
         END IF;
 
         IF NEW.{column} IS NULL OR NEW.{column} IS NOT DISTINCT FROM OLD.{column} THEN
