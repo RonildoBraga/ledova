@@ -282,3 +282,57 @@ class TheGateCountsWhatItCannotSee(_Repository):
 
         self.assertGreater(sites, 0, "if this is zero the pattern stopped matching, not the debt")
         self.assertIn("Wallet", types)
+
+
+class AHelperThatTakesTheUrlIsCountedToo(_Repository):
+
+    def test_a_type_reached_only_inside_a_local_helper_is_reported(self):
+        self.endpoints("  WALLETS: { LIST: '/api/wallets/' },")
+        self.service(
+            """
+            import type { PrepareTransferResponse } from '../types/thing';
+            const post = <T>(c, url, data) => c.post<T>(url, data);
+            export const prepare = (c, uuid, data) =>
+              post<PrepareTransferResponse>(c, `/api/wallets/${uuid}/prepare-transfer/`, data);
+            """
+        )
+
+        self.assertEqual(sorted(gate.types_reached_only_through_a_local_helper()), ["PrepareTransferResponse"])
+
+    def test_a_type_a_direct_call_also_reaches_is_not_reported_as_helper_only(self):
+        self.endpoints("  WALLETS: { LIST: '/api/wallets/' },")
+        self.service(
+            """
+            import type { Wallet } from '../types/thing';
+            const post = <T>(c, url, data) => c.post<T>(url, data);
+            export const listWallets = (c) => c.get<Wallet>(ENDPOINTS.WALLETS.LIST);
+            export const createWallet = (c, data) => post<Wallet>(c, '/api/wallets/', data);
+            """
+        )
+
+        self.assertEqual(gate.types_reached_only_through_a_local_helper(), {})
+
+    def test_a_fourth_call_through_the_helper_moves_the_number(self):
+        self.endpoints("  WALLETS: { LIST: '/api/wallets/' },")
+        one = """
+            import type { PrepareTransferResponse } from '../types/thing';
+            const post = <T>(c, url, data) => c.post<T>(url, data);
+            export const prepare = (c, uuid, data) => post<PrepareTransferResponse>(c, urlFor(uuid), data);
+        """
+        self.service(one)
+        before = gate.types_reached_only_through_a_local_helper()
+
+        self.service(one + "export const broadcast = (c, uuid, data) => post<BroadcastTransferResponse>(c, u, data);")
+        after = gate.types_reached_only_through_a_local_helper()
+
+        self.assertEqual(sorted(before), ["PrepareTransferResponse"])
+        self.assertEqual(sorted(after), ["BroadcastTransferResponse", "PrepareTransferResponse"])
+
+    def test_the_repository_has_the_three_the_success_line_reports(self):
+        gate.ROOT = REPO_ROOT
+        gate.SHARED = REPO_ROOT / "packages/shared/src"
+
+        through = gate.types_reached_only_through_a_local_helper()
+
+        self.assertGreater(len(through), 0, "if this is zero the pattern stopped matching, not the debt")
+        self.assertIn("PrepareTransferResponse", through)

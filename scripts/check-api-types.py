@@ -268,6 +268,13 @@ LITERAL_CALL = re.compile(
     r"\b\w+\.(get|post|put|patch|delete)(?:<([^>]*(?:<[^>]*>)?[^>]*)>)?\s*\(\s*[`'\"]",
     re.S,
 )
+# A third way past both patterns: the call is made inside a local helper that takes
+# the URL as a parameter, so the argument is neither a constant nor a literal, and
+# the concrete type argument is at the caller rather than at the apiClient call.
+# wallet-transfers.ts does this for three types. Following url back to the caller's
+# template literal is real static analysis; counting the helpers is not, and an
+# unreported hole is the thing this gate exists to refuse.
+HELPER_CALL = re.compile(r"\b([a-z]\w*)<([^>]*(?:<[^>]*>)?[^>]*)>\s*\(", re.S)
 INTERFACE = re.compile(r"^export interface (\w+)([^{]*)\{(.*?)^\}", re.S | re.M)
 FIELD = re.compile(r"^\s*(\w+)(\??):\s*([^;]+);", re.M)
 PICK = re.compile(r"Pick<\s*(\w+)\s*,\s*([^>]+)>")
@@ -352,6 +359,21 @@ def calls_the_gate_cannot_see() -> tuple[int, list[str]]:
         for _, generic, _ in CALL.findall(source):
             seen_by_constant |= set(re.findall(r"\b([A-Z]\w+)", generic or "")) - GENERIC_NOISE
     return sites, sorted(reached - seen_by_constant)
+
+
+def types_reached_only_through_a_local_helper() -> dict[str, list[str]]:
+    seen_directly: set[str] = set()
+    through: dict[str, set[str]] = {}
+    for path in sorted((SHARED / "services").glob("*.ts")):
+        source = path.read_text()
+        for _, generic, _ in CALL.findall(source):
+            seen_directly |= set(re.findall(r"\b([A-Z]\w+)", generic or "")) - GENERIC_NOISE
+        for _, generic in LITERAL_CALL.findall(source):
+            seen_directly |= set(re.findall(r"\b([A-Z]\w+)", generic or "")) - GENERIC_NOISE
+        for helper, generic in HELPER_CALL.findall(source):
+            for name in set(re.findall(r"\b([A-Z]\w+)", generic or "")) - GENERIC_NOISE:
+                through.setdefault(name, set()).add(f"{path.name}:{helper}")
+    return {name: sorted(where) for name, where in through.items() if name not in seen_directly}
 
 
 def service_calls() -> dict[tuple[str, str], set[str]]:
@@ -574,6 +596,13 @@ def main() -> int:
         print(
             f"{len(unseen_types)} shared types are reached only by those sites and are unchecked "
             f"entirely: {', '.join(unseen_types)}. #349 moves the nine files onto constants."
+        )
+    through_a_helper = types_reached_only_through_a_local_helper()
+    if through_a_helper:
+        named = ", ".join(f"{name} ({', '.join(where)})" for name, where in sorted(through_a_helper.items()))
+        print(
+            f"{len(through_a_helper)} more are reached only inside a local helper that takes the URL as a "
+            f"parameter, so neither pattern above sees them either: {named}."
         )
     return 0
 
