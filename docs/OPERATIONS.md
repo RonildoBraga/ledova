@@ -310,6 +310,30 @@ backend log.
 | `LLM_BASE_URL` | `http://host.docker.internal:11434/v1` | No |
 | `LLM_MODEL` | `qwen2.5vl:7b` | No |
 
+**The default points at a service on the host, and a host firewall that drops
+bridge-to-host traffic makes it unreachable from the containers.** `ufw` does
+this by default on Arch and Ubuntu: `host.docker.internal` and the bridge
+gateway (`172.17.0.1`) both time out from the worker, with no route error to
+say why. `BLOCKCHAIN_RPC_URL` in `backend/.env.example` defaults the same way
+(`http://host.docker.internal:8545`) and has the same problem.
+
+Two remedies, either of which works for both: run the service **inside the
+compose network** and point the variable at its service name, or open the
+bridge to the host port (`ufw allow in on docker0 to any port 11434`). The
+first is preferred, and it is what the local chain section below assumes.
+`_validate_local_base_url` currently allows only `localhost`, `127.0.0.1`,
+`::1` and `host.docker.internal`, so a compose service name needs adding to
+that allowlist before the first remedy can be used for the LLM.
+
+Installing the service on the host is **not sufficient on such a host**: an
+operator who installs Ollama and sees the same failure has fixed the first
+cause and not the second. The failure names the setting to look at —
+`LLM extraction service unavailable; check LLM_BASE_URL` — and not its value,
+because `_validate_local_base_url` checks the scheme, host, userinfo, query
+and fragment and **never the path**, so a value like
+`http://127.0.0.1:11434/v1/sk-proj-…` passes it and would otherwise reach the
+uploader's screen.
+
 ### Clients
 
 Client variables are public build configuration. They are embedded in the
