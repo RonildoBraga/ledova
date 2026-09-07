@@ -45,3 +45,14 @@ class DerivesOwnerFromCompany(models.Model):
         if self.owner_id is None and self.company_id is not None:
             self.owner_id = self.company.owner_id
         super().save(*args, **kwargs)
+
+
+class DerivesOwnerFromToken(models.Model):
+
+    class Meta:
+        abstract = True
+
+    def save(self, *args, **kwargs):
+        if self.owner_id is None and self.token_id is not None:
+            self.owner_id = self.token.company.owner_id
+        super().save(*args, **kwargs)

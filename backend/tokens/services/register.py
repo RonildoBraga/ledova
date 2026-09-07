@@ -5,6 +5,15 @@ from integrations.base_chain.exceptions import BaseChainConnectionError
 from shared.utils import csv_cell
 from tokens.exceptions import RegisterUnavailableException
 from tokens.models import ShareIssuance
+from tokens.models.choices import (
+    IDENTITY_LABELS,
+    IDENTITY_LIVE,
+    IDENTITY_NONE,
+    IDENTITY_RECORDED,
+    IDENTITY_STAMPED,
+    IDENTITY_TREASURY_LABEL,
+    IDENTITY_UNRESOLVABLE,
+)
 from tokens.services.share_token_service import ShareTokenService
 from whitelist.models import HolderType
 from whitelist.services.identity import UNIDENTIFIED, identities_for
@@ -23,20 +32,6 @@ ZERO_ADDRESS = "0x" + "0" * 40
 
 EMPTY_ALLOTMENT = {"shares": 0, "entered_on": None, "paid": ZERO, "backed": 0, "unbacked": 0}
 
-IDENTITY_LIVE = "profile"
-IDENTITY_STAMPED = "stamped"
-IDENTITY_RECORDED = "recorded"
-IDENTITY_TREASURY_LABEL = "treasury_label"
-IDENTITY_UNRESOLVABLE = "unresolvable"
-IDENTITY_NONE = "none"
-
-IDENTITY_LABELS = {
-    IDENTITY_LIVE: "Current profile",
-    IDENTITY_RECORDED: "Name recorded at allotment, identity never resolved",
-    IDENTITY_TREASURY_LABEL: "Whitelist entry label, no profile exists",
-    IDENTITY_UNRESOLVABLE: "Not resolvable, two wallets share this address",
-    IDENTITY_NONE: "Not identified",
-}
 
 IDENTITY_BY_HOLDER_TYPE = {
     HolderType.MEMBER.value: IDENTITY_LIVE,

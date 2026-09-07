@@ -233,6 +233,35 @@ Australian financial-record and AML/CTF customer-identification obligations are
 the constraints to confirm it against. Set `0` while the period is undecided —
 serving and purging both stop, and nothing is deleted.
 
+**A register of former members is kept for seven years, and that is a statutory
+clock rather than a preference.** Section 169(3) of the Corporations Act requires
+the register to retain a member who has ceased to hold shares for seven years
+after they ceased, so `tokens_formerholder` holds the name and residential
+address of people who have stopped being customers, **deliberately**, because the
+statute requires it and not because the platform wants it. The retention sweep is
+the platform's only discretion here, and it runs on the statute's clock.
+
+| Variable | Default | Required |
+| --- | --- | --- |
+| `FORMER_MEMBER_RETENTION_DAYS` | `2557` (seven years) | No |
+
+It is **its own constant and not `CLASSIFICATION_EVIDENCE_RETENTION_DAYS`**, which
+happens to be the same 2557 days for a different obligation over different data,
+and which B3 has already attached payslips to. Two obligations that share a number
+should not share a constant, or a change to one silently moves the other.
+
+The clock runs from `ceased_on`, not from when the row was written, because that is
+what the section measures.
+
+**Nobody deletes one of these rows through the API.** Under R24 the row-level
+policy for `tokens_formerholder` reads `("owner_id = <principal>", "false")`: the
+issuer that owns the share class can read its own former members and can insert,
+update and delete nothing. The fold task writes them on the operator alias, the
+retention sweep deletes them on the same alias, and a correction to a former
+member's particulars is an operator action through the admin — an issuer cannot
+correct even a misspelt name through the API, because a register entry under
+s169(3) is a statutory record rather than the issuer's own data.
+
 ### Media storage
 
 | Variable | Default | Required |

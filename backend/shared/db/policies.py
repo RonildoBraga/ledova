@@ -107,6 +107,7 @@ POLICIES = {
         f"owner_id = {PRINCIPAL} OR ({ON_THE_MARKET})",
         _company("company_id", MANAGEABLE_COMPANIES),
     ),
+    "tokens_formerholder": (f"owner_id = {PRINCIPAL}", "false"),
 }
 
 LOCKING_IS_READING = (
@@ -120,6 +121,13 @@ LOCKING_IS_READING = (
 )
 
 DERIVED_FROM_A_MUTABLE_ATTRIBUTE = {
+    "tokens_formerholder": "R24: operator-written. The read term is owner_id alone and carries no market term, "
+    "because tokens_sharetoken's public term one hop up exists so investors can browse a listing, and copying it "
+    "here would publish former members' names and home addresses to every investor who can see the class. The "
+    "write term is false for all three commands: the fold task writes on the operator alias, the retention sweep "
+    "deletes on the same alias on the statute's clock, and a correction to a former member's particulars is an "
+    "operator action through the admin rather than an issuer edit, because a register entry under s169(3) is a "
+    "statutory record and not the issuer's data.",
     "tokens_sharetoken.owner_id": "Derived through company.owner, which is the only owner attribute an admin "
     "can edit. Between the parent changing and the child's next write the column is stale, so the previous "
     "owner keeps seeing the rows - #322 re-derives a stale row in the trigger and makes Company.owner "

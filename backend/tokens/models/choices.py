@@ -76,3 +76,24 @@ class SwapOrderStatus(models.TextChoices):
     COMPLETED = "completed", "Completed"
     FAILED = "failed", "Failed"
     EXPIRED = "expired", "Expired"
+
+
+IDENTITY_LIVE = "profile"
+IDENTITY_STAMPED = "stamped"
+IDENTITY_RECORDED = "recorded"
+IDENTITY_TREASURY_LABEL = "treasury_label"
+IDENTITY_UNRESOLVABLE = "unresolvable"
+IDENTITY_NONE = "none"
+IDENTITY_UNKNOWN = "unknown"
+
+IDENTITY_LABELS = {
+    IDENTITY_LIVE: "Current profile",
+    IDENTITY_STAMPED: "Stamped at the time",
+    IDENTITY_RECORDED: "Name recorded at allotment, identity never resolved",
+    IDENTITY_TREASURY_LABEL: "Whitelist entry label, no profile exists",
+    IDENTITY_UNRESOLVABLE: "Not resolvable, two wallets share this address",
+    IDENTITY_NONE: "Not identified",
+    IDENTITY_UNKNOWN: "Never identified while it held shares",
+}
+
+IDENTITY_SOURCE_CHOICES = [(value, label) for value, label in IDENTITY_LABELS.items()]
