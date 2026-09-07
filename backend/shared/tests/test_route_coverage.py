@@ -32,10 +32,12 @@ SIGNED_RELAY = (
     "outside known_contract_addresses(), and there is nothing further to scope: the caller cannot produce a "
     "signature it does not hold, and every transaction it can broadcast is one the signer already authorised."
 )
-MARKET_WIDE_STREAM = (
-    "Scoped by tokens.services.trading_events.resolve_deployed_token_uuid, which admits any share class with "
-    "a contract address and applies no owner and no eligibility test. Deliberately market-wide, but broader "
-    "than the market listing beside it: see issue #180."
+ELIGIBILITY_SCOPED_ASYNC = (
+    "Scoped by users.services.eligibility exactly as the market listing beside it is: "
+    "tokens.services.trading_events.resolve_streamable_token_uuid returns None unless "
+    "investor_eligibility(user).is_eligible, so an ineligible caller gets the same 404 as a phantom uuid. "
+    "Pinned by tokens/tests/test_trading_events_authorization.py rather than by the matrix, because it is a "
+    "plain async Django view rather than a DRF one and force_authenticate does not reach it."
 )
 BROKEN_BEFORE_IT_SCOPES = (
     "Answers 500 to every caller before it reaches any tenancy decision: TradingOrderViewSet.get_serializer_class "
@@ -88,7 +90,7 @@ EXEMPT = {
     ("post", "/api/users/identity-verification/token/"): SELF_SCOPED,
     ("get", "/api/v1/directory/tokens/"): ELIGIBILITY_SCOPED,
     ("get", "/api/v1/trading/tokens/"): ELIGIBILITY_SCOPED,
-    ("get", "/api/v1/trading/events/stream/"): MARKET_WIDE_STREAM,
+    ("get", "/api/v1/trading/events/stream/"): ELIGIBILITY_SCOPED_ASYNC,
     ("post", "/api/v1/trading/orders/create/message/"): BROKEN_BEFORE_IT_SCOPES,
     ("post", "/api/v1/trading/transfers/broadcast/"): SIGNED_RELAY,
     ("get", "/api/v1/companies/{}/api-key/"): STAFF_UNSCOPED,

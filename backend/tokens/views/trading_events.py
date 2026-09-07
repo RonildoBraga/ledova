@@ -8,7 +8,7 @@ from django.http import HttpResponse, StreamingHttpResponse
 
 from authentication.classes import HybridJWTAuthentication
 from tokens.events import TRADING_EVENT_TYPES, TRADING_EVENTS_CHANNEL
-from tokens.services.trading_events import resolve_deployed_token_uuid
+from tokens.services.trading_events import resolve_streamable_token_uuid
 
 HEARTBEAT_INTERVAL = 30
 
@@ -101,7 +101,7 @@ async def trading_events_stream(request):
     if user is None:
         return HttpResponse("Unauthorized", status=401, content_type="text/plain")
 
-    token_uuid = await resolve_deployed_token_uuid(request.GET.get("token"))
+    token_uuid = await resolve_streamable_token_uuid(user, request.GET.get("token"))
     if token_uuid is None:
         return HttpResponse("Token not found", status=404, content_type="text/plain")
 
