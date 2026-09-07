@@ -154,7 +154,7 @@ class ShareTokenViewSet(AuthenticatedModelViewSet):
     @action(detail=True, methods=["get"])
     def holders(self, request, uuid=None):
         token = self.get_object()
-        rows = token_register(token)
+        rows, discrepancy = token_register(token)
         return Response(
             {
                 "token": {
@@ -166,6 +166,7 @@ class ShareTokenViewSet(AuthenticatedModelViewSet):
                 },
                 "holders": api_holders(rows),
                 "total_holders": len(rows),
+                "discrepancy": str(discrepancy),
             }
         )
 

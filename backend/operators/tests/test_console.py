@@ -1,6 +1,6 @@
 from datetime import timedelta
 from decimal import Decimal
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from django.contrib.auth import get_user_model
 from django.db import connection
@@ -69,6 +69,15 @@ def _checks():
     return {check.label: check for check in configuration_health()}
 
 
+def _chain_reader(balances):
+    reader = Mock()
+    reader.deployment_block.return_value = 1
+    reader.transfer_participants.return_value = set()
+    reader.get_token_balance.side_effect = lambda contract, address: balances[address]
+    reader.share_supply.return_value = (0, sum(balances.values()))
+    return reader
+
+
 class WorklistTest(TestCase):
     def setUp(self):
         self.owner = User.objects.create_user(email="console-owner@example.test", password="pw-12345678")
@@ -90,6 +99,7 @@ class WorklistTest(TestCase):
             total_supply="10000",
             status=status,
             contract_address=Web3.to_checksum_address("0x" + symbol.encode().hex().ljust(40, "0")[:40]),
+            deployment_tx_hash="0x" + symbol.encode().hex().ljust(64, "0")[:64],
         )
 
     def _offering(self, token, status, cap=100, opens_at=None):
@@ -254,7 +264,7 @@ class WorklistTest(TestCase):
 
         self.assertEqual(counts[AMBIGUOUS_ROW], 1)
         self.assertEqual(counts[UNIDENTIFIED_ROW], 0)
-        register = token_register(token, service=None)
+        register, _ = token_register(token, service=_chain_reader({SHARED: 25}))
         self.assertEqual([row["holder_type"] for row in register], [HolderType.AMBIGUOUS.value])
 
     def test_a_whitelisted_address_whose_wallet_names_nobody_raises_the_red_queue(self):
@@ -269,7 +279,7 @@ class WorklistTest(TestCase):
         counts = _counts()
 
         self.assertEqual(counts[UNIDENTIFIED_ROW], 1)
-        register = token_register(token, service=None)
+        register, _ = token_register(token, service=_chain_reader({NAMELESS_ADDRESS: 40}))
         self.assertEqual([row["holder_type"] for row in register], [HolderType.UNIDENTIFIED.value])
 
     def test_the_queue_is_never_smaller_than_the_register_it_stands_for(self):
@@ -283,10 +293,10 @@ class WorklistTest(TestCase):
             )
 
         counts = _counts()
+        reader = _chain_reader({SHARED: 25, STRANGER: 10, self.wallet.address: 5})
+        rows, _ = token_register(token, service=reader)
         unnameable = [
-            row
-            for row in token_register(token, service=None)
-            if row["holder_type"] in {HolderType.AMBIGUOUS.value, HolderType.UNIDENTIFIED.value}
+            row for row in rows if row["holder_type"] in {HolderType.AMBIGUOUS.value, HolderType.UNIDENTIFIED.value}
         ]
 
         self.assertEqual(len(unnameable), 2)

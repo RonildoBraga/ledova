@@ -216,6 +216,7 @@ def make_tenant(label, *, staff=False, superuser=False):
         status=ShareTokenStatus.DEPLOYED,
         contract_address=_hex40("c", number),
         chain=BLOCKCHAIN_BASE,
+        deployment_tx_hash=f"0x{number:064x}",
     )
     capital_increase = CapitalIncreaseRequest.objects.create(
         token=deployed_token,

@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from integrations.base_chain.exceptions import BaseChainConnectionError
 from shared.utils import csv_cell
+from tokens.exceptions import RegisterUnavailableException
 from tokens.models import ShareIssuance
 from tokens.services.share_token_service import ShareTokenService
 from whitelist.models import HolderType
@@ -13,12 +14,14 @@ logger = logging.getLogger(__name__)
 ZERO = Decimal("0.00")
 
 SOURCE_CHAIN = "blockchain"
-SOURCE_ALLOTMENTS = "issuances"
 
 SOURCE_LABELS = {
     SOURCE_CHAIN: "Confirmed on chain",
-    SOURCE_ALLOTMENTS: "Allotment record, not confirmed on chain",
 }
+
+ZERO_ADDRESS = "0x" + "0" * 40
+
+EMPTY_ALLOTMENT = {"shares": 0, "entered_on": None, "paid": ZERO, "backed": 0, "unbacked": 0}
 
 IDENTITY_LIVE = "profile"
 IDENTITY_STAMPED = "stamped"
@@ -83,7 +86,58 @@ def chain_service():
         return ShareTokenService()
     except BaseChainConnectionError as exc:
         logger.error(f"Register could not reach the chain: {exc}")
-        return None
+        raise RegisterUnavailableException(
+            f"{RegisterUnavailableException.default_detail} The chain has been unreachable since this request: {exc}"
+        ) from exc
+
+
+def _deployment_block(token, reader) -> int:
+    transaction = token.deployment_transaction
+    if transaction is not None and transaction.block_number is not None:
+        return transaction.block_number
+    if token.deployment_tx_hash:
+        try:
+            return reader.deployment_block(token.deployment_tx_hash)
+        except Exception as exc:
+            logger.error(f"Register could not read the deployment block of {token.symbol}: {exc}")
+            raise RegisterUnavailableException(
+                f"{RegisterUnavailableException.default_detail} The deployment block of {token.symbol} could not "
+                f"be read from transaction {token.deployment_tx_hash}: {exc}"
+            ) from exc
+    raise RegisterUnavailableException(
+        f"{RegisterUnavailableException.default_detail} {token.symbol} records no deployment block and no "
+        f"deployment transaction, so the transfer history has no start and the holder set cannot be built."
+    )
+
+
+def _holder_addresses(token, reader) -> list:
+    allotments = _allotments(token)
+    addresses = set(allotments)
+    try:
+        participants = reader.transfer_participants(token.contract_address, _deployment_block(token, reader))
+    except RegisterUnavailableException:
+        raise
+    except Exception as exc:
+        logger.error(f"Register could not read the transfer history of {token.symbol}: {exc}")
+        raise RegisterUnavailableException(
+            f"{RegisterUnavailableException.default_detail} The transfer history of {token.symbol} could not be "
+            f"read: {exc}"
+        ) from exc
+    addresses.update(participants)
+    addresses.discard(ZERO_ADDRESS)
+    addresses.discard(ZERO_ADDRESS.lower())
+    return sorted(addresses), allotments
+
+
+def _issued_supply(token, reader) -> int:
+    try:
+        return reader.share_supply(token.contract_address)[1]
+    except Exception as exc:
+        logger.error(f"Register could not read the issued supply of {token.symbol}: {exc}")
+        raise RegisterUnavailableException(
+            f"{RegisterUnavailableException.default_detail} The issued supply of {token.symbol} could not be "
+            f"read: {exc}"
+        ) from exc
 
 
 def _allotments(token) -> dict:
@@ -136,33 +190,33 @@ def _subscription(issuance):
 
 
 def _chain_balances(token, addresses, reader):
-    if not token.is_deployed or reader is None or not addresses:
-        return None
     balances = {}
     for address in addresses:
         try:
             balances[address] = reader.get_token_balance(token.contract_address, address)
         except Exception as exc:
-            logger.error(
-                f"Register could not read the balance of {address} on {token.symbol}: {exc}; discarding the whole "
-                f"chain read and falling back to the allotment record for every holder"
-            )
-            return None
+            logger.error(f"Register could not read the balance of {address} on {token.symbol}: {exc}")
+            raise RegisterUnavailableException(
+                f"{RegisterUnavailableException.default_detail} The balance of {address} on {token.symbol} could "
+                f"not be read: {exc}"
+            ) from exc
     return balances
 
 
-def _register(token, reader) -> list[dict]:
-    allotments = _allotments(token)
-    if not allotments:
-        return []
+def _register(token, reader) -> tuple[list[dict], int]:
+    addresses, allotments = _holder_addresses(token, reader)
+    if not addresses:
+        return [], 0
     stamps = ShareIssuance.objects.filter_by_token(token).latest_identity_stamps()
-    identities = identities_for(list(allotments))
-    balances = _chain_balances(token, list(allotments), reader)
-    source = SOURCE_ALLOTMENTS if balances is None else SOURCE_CHAIN
+    identities = identities_for(addresses)
+    balances = _chain_balances(token, addresses, reader)
+    issued = _issued_supply(token, reader)
+    source = SOURCE_CHAIN
 
     rows = []
-    for address, allotment in allotments.items():
-        balance = allotment["shares"] if balances is None else balances[address]
+    for address in addresses:
+        allotment = allotments.get(address, EMPTY_ALLOTMENT)
+        balance = balances[address]
         if not balance or balance <= 0:
             continue
         identity = identities.get(address.lower(), UNIDENTIFIED)
@@ -203,14 +257,13 @@ def _register(token, reader) -> list[dict]:
             }
         )
 
-    total = sum(int(row["balance"]) for row in rows)
     for row in rows:
-        row["percentage"] = round(int(row["balance"]) / total * 100, 2) if total else 0
+        row["percentage"] = round(int(row["balance"]) / issued * 100, 2) if issued else 0
     rows.sort(key=lambda row: int(row["balance"]), reverse=True)
-    return rows
+    return rows, issued - sum(int(row["balance"]) for row in rows)
 
 
-def token_register(token, service=None) -> list[dict]:
+def token_register(token, service=None) -> tuple[list[dict], int]:
     return _register(token, service if service is not None else chain_service())
 
 
@@ -219,15 +272,15 @@ def api_holders(rows) -> list[dict]:
 
 
 def export_rows(token, requested_by) -> list[list]:
-    rows = token_register(token)
+    rows, discrepancy = token_register(token)
     logger.info(
         f"Register export of {token.symbol} for company {token.company_id}: "
         f"{len(rows)} rows, requested by user {getattr(requested_by, 'pk', None)}"
     )
-    if any(row["source"] != SOURCE_CHAIN for row in rows):
+    if discrepancy:
         logger.warning(
-            f"Register export of {token.symbol} for company {token.company_id} is not confirmed on chain; "
-            f"every row carries {SOURCE_LABELS[SOURCE_ALLOTMENTS]}"
+            f"Register export of {token.symbol} for company {token.company_id} does not account for the whole "
+            f"issued supply: {discrepancy} shares are held by nobody the register lists"
         )
     return [_csv_row(row) for row in rows]
 

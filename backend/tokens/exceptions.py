@@ -283,3 +283,12 @@ class ChallengeMismatchException(SigningChallengeException):
 
     def __init__(self, what: str):
         super().__init__(detail=f"This signing challenge was not issued for this {what}.")
+
+
+class RegisterUnavailableException(APIException):
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    default_detail = (
+        "The share register cannot be produced because the chain could not be read. It is not shown from the "
+        "allotment record, because a register that may be missing members cannot say so about itself. The "
+        "allotments themselves are on the subscriptions and allotments listing."
+    )

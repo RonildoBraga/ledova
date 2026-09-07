@@ -425,6 +425,17 @@ class ShareTokenService:
 
         return issuance_request
 
+    def deployment_block(self, tx_hash: str) -> int:
+        return self.chain_client.w3.eth.get_transaction_receipt(tx_hash)["blockNumber"]
+
+    def transfer_participants(self, contract_address: str, from_block: int) -> set:
+        token_contract = self.load_share_token(contract_address)
+        addresses = set()
+        for entry in token_contract.events.Transfer().get_logs(from_block=from_block):
+            addresses.add(entry["args"]["from"])
+            addresses.add(entry["args"]["to"])
+        return addresses
+
     def share_supply(self, contract_address: str) -> tuple[int, int]:
         token_contract = self.load_share_token(contract_address)
         return token_contract.functions.authorizedShares().call(), token_contract.functions.totalSupply().call()
