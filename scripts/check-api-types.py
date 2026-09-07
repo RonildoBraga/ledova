@@ -170,12 +170,12 @@ SCHEMA_DEBT: dict[str, tuple[int, str]] = {
         "tracked as a follow-up to #211.",
     ),
     "CreateOrderMessageResponse:TransferOrderCreate": (
-        9,
+        10,
         "tokens/views/trading_order.py create_message builds a signing challenge body while "
         "get_serializer_class names TransferOrderCreateSerializer, so the generator documents the "
         "request shape as the response. The interface is correct. Tracked as a follow-up to #211.",
     ),
-    "CancelOrderMessageResponse:TransferOrderList": (9, "tokens/views/trading_order.py builds this body itself while get_serializer_class names a TransferOrder serializer, so the generator documents the wrong shape. The interface is correct. In check-schema-responses.py's LEGACY; tracked by #211."),
+    "CancelOrderMessageResponse:TransferOrderList": (10, "tokens/views/trading_order.py builds this body itself while get_serializer_class names a TransferOrder serializer, so the generator documents the wrong shape. The interface is correct. In check-schema-responses.py's LEGACY; tracked by #211."),
     "ApprovalStatusResponse:TransferOrderList": (7, "tokens/views/trading_order.py builds this body itself while get_serializer_class names a TransferOrder serializer, so the generator documents the wrong shape. The interface is correct. In check-schema-responses.py's LEGACY; tracked by #211."),
     "ApprovalDataResponse:TransferOrderList": (1, "tokens/views/trading_order.py builds this body itself while get_serializer_class names a TransferOrder serializer, so the generator documents the wrong shape. The interface is correct. In check-schema-responses.py's LEGACY; tracked by #211."),
     "MarketData:ShareTokenList": (
@@ -192,7 +192,7 @@ SCHEMA_DEBT: dict[str, tuple[int, str]] = {
         "interface is correct. Tracked as a follow-up to #211.",
     ),
     "OrderModificationMessageResponse:TransferOrderList": (
-        6,
+        12,
         "tokens/views/trading_order.py create_message builds its own body while "
         "get_serializer_class names TransferOrderCreateSerializer, and the generator documents "
         "neither. The interface is correct. Tracked as a follow-up to #211.",
