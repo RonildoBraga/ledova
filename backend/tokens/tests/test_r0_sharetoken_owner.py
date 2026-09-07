@@ -137,12 +137,7 @@ class TheTriggerRefusesAnOwnerTheCompanyDoesNotNameTest(TransactionTestCase):
     def test_a_token_may_move_between_two_companies_of_the_same_owner(self):
         token = self.a_token(symbol="MOVE")
         token.save()
-        sibling = Company.objects.create(
-            owner=self.tenant.company.owner,
-            name="Second company of the same owner",
-            acn="000000489",
-            status=self.tenant.company.status,
-        )
+        sibling = self.sibling_company()
 
         ShareToken.objects.filter(pk=token.pk).update(company=sibling)
 
@@ -150,12 +145,33 @@ class TheTriggerRefusesAnOwnerTheCompanyDoesNotNameTest(TransactionTestCase):
         self.assertEqual(refreshed.company_id, sibling.pk)
         self.assertEqual(refreshed.owner_id, self.tenant.company.owner_id)
 
-    def test_the_move_is_refused_by_the_trigger_and_not_by_the_unique_symbol(self):
+    def sibling_company(self):
+        return Company.objects.create(
+            owner=self.tenant.company.owner,
+            name="Second company of the same owner",
+            acn="000000489",
+            status=self.tenant.company.status,
+        )
+
+    def test_neither_move_is_decided_by_the_unique_company_symbol(self):
         token = self.a_token(symbol="MOVE")
         token.save()
-        taken = set(ShareToken.objects.filter(company=self.stranger.company).values_list("symbol", flat=True))
 
-        self.assertNotIn("MOVE", taken)
+        for company in (self.stranger.company, self.sibling_company()):
+            with self.subTest(company=company.name):
+                taken = set(ShareToken.objects.filter(company=company).values_list("symbol", flat=True))
+                self.assertNotIn(token.symbol, taken)
+
+    def test_the_only_company_keyed_constraint_is_the_one_the_tests_control_for(self):
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT conname FROM pg_constraint WHERE conrelid = 'tokens_sharetoken'::regclass "
+                "AND contype IN ('u', 'x') AND pg_get_constraintdef(oid) LIKE %s",
+                ["%company_id%"],
+            )
+            keyed = {name for (name,) in cursor.fetchall()}
+
+        self.assertEqual(keyed, {"unique_company_symbol"})
 
     def test_a_token_stays_with_its_company_when_something_else_changes(self):
         token = self.a_token()
