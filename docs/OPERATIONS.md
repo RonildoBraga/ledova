@@ -174,11 +174,14 @@ RedisCache    process A: allow x6   process B: allow x4 DENY x2    10 allowed
 
 `CACHES["default"]` now points at `REDIS_URL` with the key prefix `ledova`, so the
 count is shared between processes and survives a restart. **Redis is therefore a
-dependency of signing in.** With it unreachable the throttle raises
-`redis.exceptions.ConnectionError` and sign-in answers 500 rather than admitting
-unlimited attempts — fail closed, deliberately, because the alternative is the
-defect this replaced. Compose makes that visible: `backend` and `worker` now wait
-for the `redis` healthcheck. The trading event stream still swallows its own Redis
+dependency of signing in.** With it unreachable the throttle cannot count, and the
+request answers **503** with *"This service is temporarily unavailable. Please try
+again shortly."* — fail closed, deliberately, because the alternative is admitting
+unlimited attempts, which is the defect this replaced. It is a 503 and not a 500
+because a cache outage is a service that is down rather than a bug: the log line
+names the cache and carries the driver's own message for an operator, and the
+member reads a sentence instead of an internal error. Compose makes the dependency
+visible: `backend` and `worker` now wait for the `redis` healthcheck. The trading event stream still swallows its own Redis
 failures and only degrades, which is right for a notification and wrong for a
 brute-force defence.
 
