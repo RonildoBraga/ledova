@@ -111,7 +111,7 @@ class OwnerColumnTriggerTest(TestCase):
                             [self.stranger.company.pk, row.pk],
                         )
 
-                self.assertIn("does not match its parent", str(raised.exception))
+                self.assertIn("cannot be moved to", str(raised.exception))
 
     def test_moving_a_row_to_another_companys_parent_is_refused(self):
         cases = (
@@ -127,7 +127,7 @@ class OwnerColumnTriggerTest(TestCase):
                             [foreign, row.pk],
                         )
 
-                self.assertIn("does not match its parent", str(raised.exception))
+                self.assertIn("cannot move this row to another company", str(raised.exception))
 
     def test_changing_the_parent_and_the_company_together_is_still_refused(self):
         with self.assertRaises((IntegrityError, ProgrammingError)) as raised:
@@ -137,7 +137,7 @@ class OwnerColumnTriggerTest(TestCase):
                     [self.stranger.offering.pk, self.stranger.company.pk, self.issuer.subscription.pk],
                 )
 
-        self.assertIn("company_id cannot change", str(raised.exception))
+        self.assertIn("cannot move this row to another company", str(raised.exception))
 
     def test_nulling_the_company_is_repaired_rather_than_refused(self):
         for model, row in self._rows():

@@ -110,7 +110,7 @@ class OwnerColumnTriggerTest(TestCase):
                     [self.stranger.pk, row.pk],
                 )
 
-        self.assertIn("does not match wallet.user_account_id", str(raised.exception))
+        self.assertIn("user_account_id cannot be moved to", str(raised.exception))
 
     def test_moving_a_transaction_to_another_accounts_wallet_is_refused(self):
         row = Transaction.objects.create(
@@ -129,7 +129,7 @@ class OwnerColumnTriggerTest(TestCase):
                     [self.stranger_wallet.pk, row.pk],
                 )
 
-        self.assertIn("does not match wallet.user_account_id", str(raised.exception))
+        self.assertIn("cannot move this row to another user_account", str(raised.exception))
 
     def test_changing_the_wallet_and_the_account_together_is_still_refused(self):
         row = Transaction.objects.create(
@@ -148,7 +148,7 @@ class OwnerColumnTriggerTest(TestCase):
                     [self.stranger_wallet.pk, self.stranger.pk, row.pk],
                 )
 
-        self.assertIn("user_account_id cannot change", str(raised.exception))
+        self.assertIn("cannot move this row to another user_account", str(raised.exception))
 
     def test_nulling_the_account_is_repaired_rather_than_refused(self):
         row = Transaction.objects.create(

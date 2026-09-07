@@ -45,6 +45,12 @@ class WalletAdmin(admin.ModelAdmin):
     )
     actions = ["verify_wallets", "sync_holdings_action"]
 
+    def get_readonly_fields(self, request, obj=None):
+        readonly = list(super().get_readonly_fields(request, obj))
+        if obj is not None and obj.verification_status == WALLET_VERIFICATION_STATUS_VERIFIED:
+            readonly.append("user_account")
+        return readonly
+
     def get_queryset(self, request):
 
         return (
