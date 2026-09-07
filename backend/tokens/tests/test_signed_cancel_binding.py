@@ -86,6 +86,23 @@ class SignedCancelBindingTest(APITestCase):
         self.order.refresh_from_db()
         self.assertEqual(self.order.status, TransferOrderStatus.OPEN)
 
+    def test_a_signature_refused_because_the_order_moved_is_still_spent(self):
+        issued = self.request_challenge()
+        signature = self.sign(issued)
+        TransferOrder.objects.filter(pk=self.order.pk).update(status=TransferOrderStatus.MATCHED)
+
+        refused = self.post_cancel(issued["digest"], signature)
+
+        self.assertEqual(refused.status_code, 400, refused.content)
+        self.assertIsNotNone(SigningChallenge.objects.get(digest=issued["digest"]).consumed_at)
+
+        self.reopen()
+        replay = self.post_cancel(issued["digest"], signature)
+
+        self.assertEqual(replay.status_code, 409, replay.content)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, TransferOrderStatus.OPEN)
+
     def test_a_challenge_issued_for_another_order_is_refused(self):
         other = self._order()
         issued = self.request_challenge(other)

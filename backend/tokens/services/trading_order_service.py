@@ -64,9 +64,6 @@ class TradingOrderService:
         digest: Optional[str],
         signature: Optional[str],
     ):
-        if not order.can_cancel:
-            raise OrderCancellationException(f"Order with status '{order.get_status_display()}' cannot be cancelled.")
-
         if not signature or not digest:
             raise SignatureRequiredException()
 
