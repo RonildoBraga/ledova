@@ -734,38 +734,50 @@ each lane does not re-derive it:
   that re-derives its children. Until one exists, the editable path is closed:
   `Company.owner` is read-only on an existing company in the admin, and
   writable only on the add form.
-- **The branch decides re-parenting explicitly rather than inheriting whichever
-  way the condition falls.** The rule above separates a caller moving the row
-  from a stale row whose parent moved, and there is a third case it does not
-  reach: the row is given a **different parent**. `NEW.{column} IS NOT DISTINCT
-  FROM OLD.{column}` is true there too, so a trigger that only re-derives in
-  that case hands the row to whoever owns its new parent, silently — and the
-  first R0 shape refused it. The link tells the two apart, so its test goes
-  first:
+- **A re-parent is refused when it changes the owner and allowed when it does
+  not.** The rule above separates a caller moving the row from a stale row
+  whose parent moved, and there is a third case it does not reach: the row is
+  given a **different parent**. `NEW.{column} IS NOT DISTINCT FROM
+  OLD.{column}` is true there too, so a trigger that only re-derives in that
+  case hands the row to whoever owns its new parent, silently — and the first
+  R0 shape refused exactly that. It also *allowed* a re-parent within one
+  owner, which a blanket link test would take away: a draft offering can be
+  pointed at another share class of the same company today, and the admin
+  offers it. So the guard is about the owner, not the link:
 
   ```sql
-  IF NEW.{parent_fk} IS DISTINCT FROM OLD.{parent_fk} THEN
-      RAISE EXCEPTION '{table}.{parent_fk} cannot change, from % to %',
-          OLD.{parent_fk}, NEW.{parent_fk};
+  IF NEW.{parent_fk} IS DISTINCT FROM OLD.{parent_fk}
+     AND parent_owner IS DISTINCT FROM OLD.{column} THEN
+      RAISE EXCEPTION '{table}.{parent_fk} cannot move this row to another
+          owner, from % to %', OLD.{column}, parent_owner;
   END IF;
   ```
 
-  **For all five lanes the decision is refuse**: no product path moves a
-  profile, a token, a wallet or an offering between owners. It is written as a
-  decision rather than a rule because a lane whose rows are legitimately
-  re-parented would answer the other way, and would then have to say so.
-  Nothing on either side of it is visible to the SQLite suite, which is how it
-  reached `tokens/0024` and was found by the full PostgreSQL suite three
+  Four cases, and each has to land somewhere deliberate: link unchanged and the
+  parent's attribute moved, **follow**; link changed to a parent with the same
+  owner, **allowed** and the column does not move; link changed to a parent
+  with a different owner, **refused**; the caller moving the column itself,
+  **refused** unless it already equals the parent. `offerings/0006` is the
+  reference spelling. `users/0021` writes the guard on the link alone, which is
+  equivalent there and only there, because `UserProfile.user` is a
+  `OneToOneField` — every re-parent of one of its children necessarily changes
+  the owner. If that ever stops being true, this is the sentence that says
+  where the two forms part.
+
+  Nothing on either side of this is visible to the SQLite suite, which is how
+  it reached `tokens/0024` and was found by the full PostgreSQL suite three
   lanes later.
 - **A replacement condition is read backwards as well as forwards: what did
-  the branch it replaces refuse, and where does each of those cases land
-  now?** The amendment above was red-proved for the two properties it added,
-  by its author and by two reviewers, and none of us enumerated what the
-  condition it replaced had been covering — so a refusal was dropped and
-  stayed dropped across three lanes. Proving what a change adds says nothing
-  about what it removes, and a trigger branch is where that gap is least
-  visible, because the cases it stops refusing raise nothing and appear in no
-  test that was written for them.
+  the branch it replaces refuse *or allow*, and where does each of those cases
+  land now?** The amendment above was red-proved for the two properties it
+  added, by its author and by two reviewers, and none of us enumerated what the
+  condition it replaced had been covering — so a refusal was dropped and stayed
+  dropped across three lanes. The correction to that then dropped a permission
+  the same way, in the same afternoon, by asking only what the old branch
+  refused: **both halves are the question.** Proving what a change adds says
+  nothing about what it removes, and a trigger branch is where that gap is
+  least visible, because the cases it stops refusing raise nothing and the
+  cases it starts refusing appear in no test that was written for them.
 - **The trigger's local variable takes its type from the column it reads**,
   `parent.{column}%TYPE`, rather than naming a type. Four R0 parents are
   `uuid` and the user is a `BigAutoField`, because `CustomUser` extends
