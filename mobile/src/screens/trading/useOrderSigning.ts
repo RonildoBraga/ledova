@@ -6,10 +6,10 @@ import type {
   TransferOrder,
   Wallet,
 } from '@ledova/shared';
-import { encodeEthereumMessage, encodeEthereumTypedData } from '../../utils/keystone/urEncoder';
+import { encodeEthereumTypedData } from '../../utils/keystone/urEncoder';
 import { getWalletVerificationEvmChainId } from '@ledova/shared';
 import { getSeedPhrase } from '../../services/secureKeyStorage';
-import { signEthereumMessage, signEthereumTypedData } from '../../utils/softwareWallet/localSigner';
+import { signEthereumTypedData } from '../../utils/softwareWallet/localSigner';
 import { useOrderCreateMessage, useOrderCancelMessage, useCreateOrder, useCancelOrder } from './useTrading';
 
 export type OrderSigningStep =
@@ -85,22 +85,13 @@ export function useOrderSigning({ mode, orderData, orderUuid, wallet, onSuccess 
       return;
     }
 
-    const encoded =
-      'digest' in messageData
-        ? encodeEthereumTypedData(
-            wallet.address,
-            { domain: messageData.domain, types: messageData.types, message: messageData.message },
-            wallet.derivationPath || undefined,
-            wallet.masterFingerprint || undefined,
-            getWalletVerificationEvmChainId(wallet.chain) ?? undefined,
-          )
-        : encodeEthereumMessage(
-            wallet.address,
-            messageData.message,
-            wallet.derivationPath || undefined,
-            wallet.masterFingerprint || undefined,
-            getWalletVerificationEvmChainId(wallet.chain) ?? undefined,
-          );
+    const encoded = encodeEthereumTypedData(
+      wallet.address,
+      { domain: messageData.domain, types: messageData.types, message: messageData.message },
+      wallet.derivationPath || undefined,
+      wallet.masterFingerprint || undefined,
+      getWalletVerificationEvmChainId(wallet.chain) ?? undefined,
+    );
 
     if (!encoded) {
       setError('Failed to encode message for signing');
@@ -118,11 +109,11 @@ export function useOrderSigning({ mode, orderData, orderUuid, wallet, onSuccess 
 
       setStep('submitting');
 
-      if (isCreating && orderData && !('digest' in messageData)) {
+      if (isCreating && orderData) {
         createOrderMutation.mutate(
           {
             ...orderData,
-            message: messageData.message,
+            digest: messageData.digest,
             signature,
           },
           {
@@ -136,7 +127,7 @@ export function useOrderSigning({ mode, orderData, orderUuid, wallet, onSuccess 
             },
           },
         );
-      } else if (!isCreating && orderUuid && 'digest' in messageData) {
+      } else if (!isCreating && orderUuid) {
         cancelOrderMutation.mutate(
           {
             uuid: orderUuid,
@@ -176,16 +167,13 @@ export function useOrderSigning({ mode, orderData, orderUuid, wallet, onSuccess 
         return;
       }
 
-      const signature =
-        'digest' in messageData
-          ? await signEthereumTypedData(
-              mnemonic,
-              wallet.derivationPath,
-              messageData.domain,
-              messageData.types,
-              messageData.message,
-            )
-          : await signEthereumMessage(mnemonic, wallet.derivationPath, messageData.message);
+      const signature = await signEthereumTypedData(
+        mnemonic,
+        wallet.derivationPath,
+        messageData.domain,
+        messageData.types,
+        messageData.message,
+      );
       handleSignatureReceived(signature);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to sign message');

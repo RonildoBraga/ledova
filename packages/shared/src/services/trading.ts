@@ -66,7 +66,7 @@ export const createOrder = (apiClient: AxiosInstance, data: SignedCreateOrderReq
     quantity: data.quantity,
     min_quantity: data.minQuantity ?? 0,
     price_per_share: data.pricePerShare,
-    message: data.message,
+    digest: data.digest,
     signature: data.signature,
   });
 

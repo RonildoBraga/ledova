@@ -31,6 +31,18 @@ CHALLENGE_TYPES = {
             {"name": "deadline", "type": "uint256"},
         ]
     },
+    SigningChallengePurpose.ORDER_CREATE: {
+        "OrderCreate": [
+            {"name": "tokenUuid", "type": "string"},
+            {"name": "orderType", "type": "string"},
+            {"name": "quantity", "type": "uint256"},
+            {"name": "minQuantity", "type": "uint256"},
+            {"name": "pricePerShare", "type": "string"},
+            {"name": "wallet", "type": "address"},
+            {"name": "nonce", "type": "uint256"},
+            {"name": "deadline", "type": "uint256"},
+        ]
+    },
 }
 
 
@@ -102,6 +114,13 @@ def consume_challenge(digest: str, purpose, wallet_address: str, signature: str,
         raise InvalidSignatureException("The signature does not match the wallet this challenge was issued to.")
 
     return challenge
+
+
+def assert_payload_matches(challenge, expected: dict) -> None:
+    message = challenge.payload["message"]
+    for field, value in expected.items():
+        if str(message.get(field)) != str(value):
+            raise ChallengeMismatchException("request")
 
 
 def spend(challenge, signature: str) -> None:

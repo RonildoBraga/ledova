@@ -339,7 +339,7 @@ ROUTES = (
             "walletAddress": "{own_wallet_address}",
             "quantity": 1,
             "pricePerShare": "2.50",
-            "message": "order",
+            "digest": DIGEST,
             "signature": SIGNATURE,
         },
         foreign=400,
@@ -453,6 +453,7 @@ class CrossTenantRouteMatrixTest(APITestCase):
         trading_orders.get_order_cancel_message.return_value = {}
         trading_orders.get_order_create_message.return_value = {}
         trading_orders.verify_order_create_signature.return_value = None
+        self._service("tokens.views.trading_order.verify_and_spend_create").return_value = None
         trading_transfers = self._service("tokens.views.trading_transfer.TokenTransferService")
         trading_transfers.contract_address.return_value = "0x" + "6" * 40
         trading_transfers.return_value.prepare_transfer.return_value = {}

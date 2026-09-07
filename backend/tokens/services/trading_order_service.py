@@ -2,12 +2,7 @@ import logging
 from decimal import Decimal
 from typing import Optional
 
-from shared.utils import generate_order_create_message, verify_signature
-from tokens.exceptions import (
-    InvalidSignatureException,
-    OrderCancellationException,
-    SignatureRequiredException,
-)
+from tokens.exceptions import OrderCancellationException, SignatureRequiredException
 from tokens.models import (
     ShareToken,
     SigningChallengePurpose,
@@ -16,6 +11,7 @@ from tokens.models import (
 )
 from tokens.serializers import TransferOrderDetailSerializer
 from tokens.services.signing_challenge import (
+    assert_payload_matches,
     challenge_response,
     consume_challenge,
     issue_challenge,
@@ -32,31 +28,32 @@ class TradingOrderService:
         token_uuid: str,
         order_type: str,
         quantity: int,
+        min_quantity: int,
         price_per_share: Decimal,
-        message: Optional[str],
+        digest: Optional[str],
         signature: Optional[str],
-    ) -> None:
-        if not signature or not message:
+    ):
+        if not signature or not digest:
             raise SignatureRequiredException()
 
-        expected_message = generate_order_create_message(
-            wallet_address=wallet_address,
-            token_uuid=token_uuid,
-            order_type=order_type,
-            quantity=quantity,
-            price_per_share=str(price_per_share),
+        challenge = consume_challenge(
+            digest,
+            SigningChallengePurpose.ORDER_CREATE,
+            wallet_address,
+            signature,
+        )
+        assert_payload_matches(
+            challenge,
+            {
+                "tokenUuid": token_uuid,
+                "orderType": order_type,
+                "quantity": quantity,
+                "minQuantity": min_quantity,
+                "pricePerShare": price_per_share,
+            },
         )
 
-        if message != expected_message:
-            raise InvalidSignatureException(f"Invalid message. Expected: '{expected_message}'")
-
-        if not verify_signature(message, signature, wallet_address):
-            raise InvalidSignatureException(
-                "Signature does not match the wallet address. "
-                "Please sign with the wallet that will place this order."
-            )
-
-        logger.info(f"Signature verified for {wallet_address[:10]}... creating {order_type} order")
+        return challenge
 
     @staticmethod
     def verify_order_cancel_signature(
@@ -89,32 +86,24 @@ class TradingOrderService:
         return order
 
     @staticmethod
-    def get_order_create_message(
-        wallet_address: str,
-        token_uuid: str,
-        order_type: str,
-        quantity: int,
-        price_per_share: Decimal,
-    ) -> dict:
-        message = generate_order_create_message(
-            wallet_address=wallet_address,
-            token_uuid=token_uuid,
-            order_type=order_type,
-            quantity=quantity,
-            price_per_share=str(price_per_share),
+    def get_order_create_message(token, wallet_address, order_type, quantity, min_quantity, price_per_share) -> dict:
+        challenge = issue_challenge(
+            SigningChallengePurpose.ORDER_CREATE,
+            wallet_address,
+            {
+                "tokenUuid": str(token.uuid),
+                "orderType": order_type,
+                "quantity": str(quantity),
+                "minQuantity": str(min_quantity),
+                "pricePerShare": str(price_per_share),
+            },
+            verifying_contract=token.contract_address,
         )
 
         return {
-            "wallet_address": wallet_address,
-            "token_uuid": token_uuid,
-            "order_type": order_type,
-            "quantity": quantity,
-            "price_per_share": str(price_per_share),
-            "message": message,
-            "instructions": (
-                "Sign this message with your wallet to prove ownership. "
-                "Then POST to /create/ with the signature and message fields."
-            ),
+            "token_uuid": str(token.uuid),
+            "wallet_address": challenge.wallet_address,
+            **challenge_response(challenge),
         }
 
     @staticmethod
