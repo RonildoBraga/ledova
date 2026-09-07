@@ -33,7 +33,7 @@ class SwapOrder(DerivesWalletsFromOrders, BaseModel):
 
     seller_wallet = models.ForeignKey(
         "wallets.Wallet",
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="+",
         help_text=(
             "Seller, derived from sell_order.wallet and held directly so a " "row-level security policy can read it"
@@ -41,7 +41,7 @@ class SwapOrder(DerivesWalletsFromOrders, BaseModel):
     )
     buyer_wallet = models.ForeignKey(
         "wallets.Wallet",
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="+",
         help_text=(
             "Buyer, derived from buy_order.wallet and held directly so a " "row-level security policy can read it"

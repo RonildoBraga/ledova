@@ -30,7 +30,7 @@ class SigningChallenge(DerivesWalletFromOrder, BaseModel):
 
     wallet = models.ForeignKey(
         "wallets.Wallet",
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="+",
         null=True,
         blank=True,

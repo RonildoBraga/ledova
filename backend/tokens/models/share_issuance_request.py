@@ -19,7 +19,7 @@ class ShareIssuanceRequest(DerivesCompanyFromToken, ReviewableRequest):
 
     company = models.ForeignKey(
         "companies.Company",
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="+",
         help_text=("Owner, derived from token.company and held directly so a " "row-level security policy can read it"),
     )

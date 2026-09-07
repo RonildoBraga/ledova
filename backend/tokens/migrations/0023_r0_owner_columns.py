@@ -234,13 +234,13 @@ CHALLENGE_HELP = (
 
 def _company(null):
     return models.ForeignKey(
-        null=null, on_delete=models.CASCADE, related_name="+", to="companies.company", help_text=COMPANY_HELP
+        null=null, on_delete=models.PROTECT, related_name="+", to="companies.company", help_text=COMPANY_HELP
     )
 
 
 def _wallet(null, help_text):
     return models.ForeignKey(
-        null=null, on_delete=models.CASCADE, related_name="+", to="wallets.wallet", help_text=help_text
+        null=null, on_delete=models.PROTECT, related_name="+", to="wallets.wallet", help_text=help_text
     )
 
 
