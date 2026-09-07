@@ -748,8 +748,8 @@ each lane does not re-derive it:
   ```sql
   IF NEW.{parent_fk} IS DISTINCT FROM OLD.{parent_fk}
      AND parent_owner IS DISTINCT FROM OLD.{column} THEN
-      RAISE EXCEPTION '{table}.{parent_fk} cannot move this row to another
-          owner, from % to %', OLD.{column}, parent_owner;
+      RAISE EXCEPTION '{table} may not move to another owner, % to %',
+          OLD.{column}, parent_owner;
   END IF;
   ```
 
@@ -763,6 +763,12 @@ each lane does not re-derive it:
   `OneToOneField` — every re-parent of one of its children necessarily changes
   the owner. If that ever stops being true, this is the sentence that says
   where the two forms part.
+
+  **The four lanes word this refusal four ways, and that is deliberate.** Each
+  lane's tests assert its own message, because the assertion is what proves the
+  *trigger* refused rather than a unique index standing in for it. Unifying the
+  wording would make two lanes' tests pass on each other's refusals, which is
+  the check those assertions exist to make. Keep the shape, not the string.
 
   Nothing on either side of this is visible to the SQLite suite, which is how
   it reached `tokens/0024` and was found by the full PostgreSQL suite three
