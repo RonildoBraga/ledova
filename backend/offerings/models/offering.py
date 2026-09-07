@@ -3,6 +3,7 @@ from django.db import models
 from django.utils import timezone
 
 from offerings.exceptions import InvalidOfferingTransitionException
+from offerings.models.owner_column import DerivesCompanyFromToken
 from offerings.querysets.offering import OfferingQuerySet
 from operators.models import STABLECOIN_ONLY
 from shared.constants import CURRENCY_AUD, CURRENCY_CHOICES
@@ -33,11 +34,18 @@ class OfferingExemption(models.TextChoices):
     WHOLESALE_CLIENT = "s761g_wholesale_client", "Wholesale client (s761G)"
 
 
-class Offering(BaseModel):
+class Offering(DerivesCompanyFromToken, BaseModel):
 
     objects = OfferingQuerySet.as_manager()
 
     token = models.ForeignKey("tokens.ShareToken", on_delete=models.PROTECT, related_name="offerings")
+
+    company = models.ForeignKey(
+        "companies.Company",
+        on_delete=models.PROTECT,
+        related_name="+",
+        help_text=("Owner, derived from token.company and held directly so a " "row-level security policy can read it"),
+    )
 
     status = models.CharField(max_length=20, choices=OfferingStatus.choices, default=OfferingStatus.DRAFT)
     exemption = models.CharField(max_length=30, choices=OfferingExemption.choices)
