@@ -8,6 +8,11 @@ from eth_utils import to_checksum_address
 from hexbytes import HexBytes
 
 TYPED_ENVELOPE_MAX_PREFIX = 0x7F
+SUPPORTED_ENVELOPE_TYPES = frozenset({1, 2})
+
+
+class UnsupportedEnvelopeError(ValueError):
+    pass
 
 
 @dataclass(frozen=True)
@@ -17,6 +22,7 @@ class DecodedSignedTransaction:
     chain_id: Optional[int]
     value: int
     data: bytes
+    envelope_type: Optional[int]
 
 
 def decode_signed_transaction(raw_transaction: bytes) -> DecodedSignedTransaction:
@@ -27,12 +33,17 @@ def decode_signed_transaction(raw_transaction: bytes) -> DecodedSignedTransactio
         if raw_transaction[0] <= TYPED_ENVELOPE_MAX_PREFIX:
             fields = TypedTransaction.from_bytes(HexBytes(raw_transaction)).as_dict()
             chain_id: Optional[int] = int(fields["chainId"])
+            envelope_type: Optional[int] = int(fields["type"])
         else:
             fields = LegacyTransaction.from_bytes(raw_transaction).as_dict()
             chain_id = _legacy_chain_id(int(fields["v"]))
+            envelope_type = None
         sender = Account.recover_transaction(raw_transaction)
     except Exception as exc:
         raise ValueError("Unable to decode signed transaction") from exc
+
+    if envelope_type is not None and envelope_type not in SUPPORTED_ENVELOPE_TYPES:
+        raise UnsupportedEnvelopeError(f"Transaction envelope type {envelope_type} is not supported")
 
     to = bytes(fields.get("to") or b"")
     return DecodedSignedTransaction(
@@ -41,6 +52,7 @@ def decode_signed_transaction(raw_transaction: bytes) -> DecodedSignedTransactio
         chain_id=chain_id,
         value=int(fields.get("value") or 0),
         data=bytes(fields.get("data") or b""),
+        envelope_type=envelope_type,
     )
 
 

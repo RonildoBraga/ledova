@@ -19,6 +19,10 @@ ERC20_TRANSFER_SELECTOR = bytes.fromhex("a9059cbb")
 ERC20_TRANSFER_DATA_LENGTH = 68
 ADDRESS_PADDING = 12
 DEFAULT_TOKEN_DECIMALS = 18
+AMOUNT_MAX_DIGITS = 30
+AMOUNT_DECIMAL_PLACES = 18
+AMOUNT_LIMIT = Decimal(10) ** (AMOUNT_MAX_DIGITS - AMOUNT_DECIMAL_PLACES)
+AMOUNT_QUANTUM = Decimal(1).scaleb(-AMOUNT_DECIMAL_PLACES)
 
 CHAIN_ID_SETTING = {
     BLOCKCHAIN_ETHEREUM: "ETHEREUM_CHAIN_ID",
@@ -32,6 +36,10 @@ CONTRACT_CREATION = "Contract creation cannot be broadcast through a wallet tran
 UNSUPPORTED_PAYLOAD = "Only a native transfer or an ERC-20 transfer call can be broadcast through this wallet."
 MALFORMED_RECIPIENT = "The ERC-20 recipient argument is malformed."
 ERC20_CARRIES_VALUE = "An ERC-20 transfer call cannot also send native currency."
+UNSUPPORTED_ENVELOPE = "Only legacy, type 1 and type 2 transactions can be broadcast through this wallet."
+SIGNER_MISMATCH = "The signed transaction was signed by {signer}, not by this wallet."
+AMOUNT_OUT_OF_RANGE = "The transfer amount is larger than this asset can record."
+AMOUNT_TOO_PRECISE = "The transfer amount is finer than this asset can record."
 
 
 @dataclass(frozen=True)
@@ -77,6 +85,9 @@ def _evm_plan(wallet, signed_transaction: str) -> SignedTransferPlan:
     decoded = _decode(signed_transaction)
     expected = expected_chain_id(wallet.chain)
 
+    if decoded.sender.lower() != wallet.address.lower():
+        raise InvalidTransactionException(SIGNER_MISMATCH.format(signer=decoded.sender))
+
     if decoded.chain_id is None:
         raise InvalidTransactionException(UNSIGNED_NETWORK)
 
@@ -93,7 +104,7 @@ def _evm_plan(wallet, signed_transaction: str) -> SignedTransferPlan:
     if not decoded.data:
         return SignedTransferPlan(
             to_address=decoded.to,
-            amount=Decimal(from_wei(decoded.value, "ether")),
+            amount=_recordable(Decimal(from_wei(decoded.value, "ether"))),
             token_contract=None,
         )
 
@@ -102,24 +113,53 @@ def _evm_plan(wallet, signed_transaction: str) -> SignedTransferPlan:
 
     recipient, raw_amount = _erc20_transfer_arguments(decoded.data)
     asset = TransactionConfirmationService.resolve_transfer_asset(wallet, decoded.to)
-    decimals = asset.decimals if asset.decimals is not None else DEFAULT_TOKEN_DECIMALS
 
     return SignedTransferPlan(
         to_address=recipient,
-        amount=_scaled(raw_amount, decimals),
+        amount=_recordable(_scaled(raw_amount, _decimals_for(asset, wallet, decoded.to))),
         token_contract=decoded.to,
     )
 
 
 def _decode(signed_transaction: str):
-    from tokens.services.signed_transactions import decode_signed_transaction
+    from tokens.services.signed_transactions import (
+        UnsupportedEnvelopeError,
+        decode_signed_transaction,
+    )
 
     raw = signed_transaction[2:] if signed_transaction.startswith("0x") else signed_transaction
 
     try:
         return decode_signed_transaction(bytes.fromhex(raw))
+    except UnsupportedEnvelopeError:
+        raise InvalidTransactionException(UNSUPPORTED_ENVELOPE)
     except ValueError:
         raise InvalidTransactionException(UNDECODABLE)
+
+
+def _decimals_for(asset, wallet, contract_address: str) -> int:
+    from assets.models import AssetChainDeployment
+
+    deployment = AssetChainDeployment.objects.filter(
+        asset=asset, chain__iexact=normalize_chain(wallet.chain), contract_address__iexact=contract_address
+    ).first()
+    if deployment is not None and deployment.decimals is not None:
+        return deployment.decimals
+    if asset.decimals is not None:
+        return asset.decimals
+    return DEFAULT_TOKEN_DECIMALS
+
+
+def _recordable(amount: Decimal) -> Decimal:
+    if amount >= AMOUNT_LIMIT:
+        raise InvalidTransactionException(AMOUNT_OUT_OF_RANGE)
+
+    with localcontext() as context:
+        context.prec = AMOUNT_MAX_DIGITS + 1
+        if amount != amount.quantize(AMOUNT_QUANTUM):
+            raise InvalidTransactionException(AMOUNT_TOO_PRECISE)
+
+    return amount
 
 
 def _erc20_transfer_arguments(data: bytes) -> Tuple[str, int]:
