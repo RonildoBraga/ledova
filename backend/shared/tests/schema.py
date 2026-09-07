@@ -26,7 +26,14 @@ def unapplied_migrations() -> list[str]:
 
 def restore_every_migration() -> None:
     executor = _executor()
-    executor.migrate(executor.loader.graph.leaf_nodes())
+    leaves = executor.loader.graph.leaf_nodes()
+    if not leaves:
+        raise AssertionError(
+            "The migration graph has no leaves, so restoring it would restore nothing and say it succeeded. "
+            "These settings disable migrations, and a test that rolls the schema back cannot run under them."
+        )
+
+    executor.migrate(leaves)
 
     left = unapplied_migrations()
     if left:
