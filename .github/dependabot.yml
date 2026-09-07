@@ -19,6 +19,12 @@ updates:
   # "node", so `tsc -b` fails on the first file and `npm run typecheck` on the second.
   # Drop this when both tsconfigs are migrated (aliases rewritten as ./src/... targets,
   # moduleResolution "bundler") - see #122, which is the pull request this blocks.
+  # ESLint 10 removed `context.getFilename()`, and eslint-plugin-react 7.37.5 -
+  # its latest release - still calls it from lib/util/version.js:31. Every rule
+  # routed through Components.componentRule throws before linting a single file:
+  # "TypeError: Error while loading rule 'react/display-name':
+  # contextOrFilename.getFilename is not a function". Drop this when
+  # eslint-plugin-react ships a release that supports ESLint 10.
   - package-ecosystem: npm
     directory: /
     schedule:
@@ -26,6 +32,10 @@ updates:
     open-pull-requests-limit: 5
     ignore:
       - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+      - dependency-name: eslint
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@eslint/js"
         update-types: ["version-update:semver-major"]
     groups:
       root-and-workspaces:
@@ -69,6 +79,19 @@ updates:
       # known vectors.
       - dependency-name: "@noble/hashes"
         update-types: ["version-update:semver-major"]
+      # The ESLint 10 block from the root entry applies here too, and the root
+      # entry does not reach this directory: `directory: /` covers packages/shared
+      # and dashboard, the two root workspaces, while mobile has its own lockfile
+      # and this entry. mobile is not exempt the way packages/shared is - it
+      # carries eslint-plugin-react and mobile/eslint.config.mjs imports it,
+      # registers it and spreads its recommended rules, which is where
+      # react/display-name comes from. Without this, the next mobile batch takes
+      # ESLint 10 and the `make lint` step below fails in a Dependabot pull
+      # request rather than in anything a person wrote.
+      - dependency-name: eslint
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@eslint/js"
+        update-types: ["version-update:semver-major"]
     groups:
       all:
         patterns: ["*"]
@@ -109,6 +132,14 @@ updates:
       - dependency-name: hardhat
         update-types: ["version-update:semver-major"]
       - dependency-name: "@nomicfoundation/*"
+        update-types: ["version-update:semver-major"]
+      # chai 6 is blocked by the same pin, one level down: hardhat-toolbox 4
+      # requires hardhat-chai-matchers ^2, and 2.1.2 peers chai ^4.2.0, so
+      # `npm ci` refuses the tree. @types/chai has to move with chai, not ahead
+      # of it. Both lift when the Hardhat 3 migration above is taken.
+      - dependency-name: chai
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/chai"
         update-types: ["version-update:semver-major"]
     groups:
       all:

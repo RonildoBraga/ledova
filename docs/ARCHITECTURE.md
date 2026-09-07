@@ -885,6 +885,15 @@ the rest converts when it is next edited for another reason.
   calls it. A test must leave no promise pending when it ends: a request stubbed
   with a promise that never settles keeps Jest alive after the run reports
   success, so stub with a deferred you resolve before the test returns.
+- Linting is a gate, not a local habit. `make lint` runs ESLint over the
+  dashboard, `packages/shared`, marketing and mobile, and solhint over the
+  contracts, and CI runs it on every pull request. Warnings are allowed and
+  errors are not: every workspace is at zero errors, so the gate holds that line
+  rather than trying to reach it. It exists because a Dependabot bump of ESLint 9
+  to 10 passed all four checks — nothing in CI ran ESLint at all — while
+  `eslint-plugin-react` 7.37.5, its latest release, crashed on the first file
+  with `contextOrFilename.getFilename is not a function`. A tool nothing runs is
+  a preference, not a standard.
 - The dashboard smoke: `dashboard/tests/smoke/*.smoke.ts` drives a real Chromium
   against the built bundle, and `make smoke` runs it in CI on every pull request.
   It answers one question — does the shipped bundle boot and route without
