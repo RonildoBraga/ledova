@@ -23,6 +23,20 @@ CANNOT_AUTHENTICATE = (
 )
 
 
+REFUSED_CREDENTIALS = ("password authentication failed", "no password supplied", "authentication failed")
+
+CANNOT_CONNECT = "{alias} cannot connect as {user}: {cause}"
+
+
+def _causal_line(error) -> str:
+    return str(error).strip().splitlines()[0]
+
+
+def _is_a_refused_credential(error) -> bool:
+    said = str(error).lower()
+    return any(phrase in said for phrase in REFUSED_CREDENTIALS)
+
+
 def _ask(alias, statement):
     connection = connections[alias]
     connection.close()
@@ -31,11 +45,15 @@ def _ask(alias, statement):
             cursor.execute(statement)
             return cursor.fetchone()[0]
     except OperationalError as error:
+        cause = _causal_line(error)
+        user = settings.DATABASES[alias]["USER"]
+        if not _is_a_refused_credential(error):
+            raise CommandError(CANNOT_CONNECT.format(alias=alias, user=user, cause=cause)) from error
         raise CommandError(
             CANNOT_AUTHENTICATE.format(
                 alias=alias,
-                user=settings.DATABASES[alias]["USER"],
-                error=str(error).strip().splitlines()[-1],
+                user=user,
+                error=cause,
                 prefix="RLS_APP_DB" if alias == APP_ALIAS else "RLS_OPERATOR_DB",
             )
         ) from error

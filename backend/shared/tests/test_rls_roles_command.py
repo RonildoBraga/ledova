@@ -7,7 +7,15 @@ from django.test import SimpleTestCase, override_settings
 
 from shared.db import APP_ALIAS, MIGRATE_ALIAS, OPERATOR_ALIAS
 
-REFUSED = 'connection failed: FATAL:  password authentication failed for user "ledova_app"'
+REFUSED = (
+    'connection failed: connection to server at "127.0.0.1", port 5432 failed: '
+    'FATAL:  password authentication failed for user "ledova_app"\n'
+    "\tIs the server running on that host and accepting TCP/IP connections?"
+)
+UNREACHABLE = (
+    'connection failed: connection to server at "127.0.0.1", port 59999 failed: Connection refused\n'
+    "\tIs the server running on that host and accepting TCP/IP connections?"
+)
 CONNECTIONS = "shared.management.commands.check_rls_roles.connections"
 
 THREE_ALIASES = {
@@ -20,11 +28,11 @@ THREE_ALIASES = {
 @override_settings(DATABASES=THREE_ALIASES)
 class ARefusedConnectionSaysWhatToDoAboutIt(SimpleTestCase):
 
-    def _refused(self, alias):
+    def _refused(self, alias, message=REFUSED):
         def connection_for(asked_alias):
             connection = MagicMock()
             if asked_alias == alias:
-                connection.cursor.side_effect = OperationalError(REFUSED)
+                connection.cursor.side_effect = OperationalError(message)
             else:
                 connection.cursor.return_value.__enter__.return_value.fetchone.return_value = (False,)
             return connection
@@ -67,3 +75,22 @@ class ARefusedConnectionSaysWhatToDoAboutIt(SimpleTestCase):
                 call_command("check_rls_roles")
 
         self.assertIn("password authentication failed", str(refusal.exception))
+
+    def test_the_causal_line_is_carried_rather_than_the_hint_beneath_it(self):
+        with patch(CONNECTIONS, self._refused(APP_ALIAS)):
+            with self.assertRaises(CommandError) as refusal:
+                call_command("check_rls_roles")
+
+        message = str(refusal.exception)
+        self.assertIn("password authentication failed", message)
+        self.assertNotIn("Is the server running on that host", message)
+
+    def test_a_server_that_is_not_there_is_not_told_to_reset_a_password(self):
+        with patch(CONNECTIONS, self._refused(APP_ALIAS, UNREACHABLE)):
+            with self.assertRaises(CommandError) as refusal:
+                call_command("check_rls_roles")
+
+        message = str(refusal.exception)
+        self.assertIn("Connection refused", message)
+        self.assertNotIn("ALTER ROLE", message)
+        self.assertNotIn("POSTGRES_HOST_AUTH_METHOD", message)
