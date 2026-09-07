@@ -76,7 +76,7 @@ the rule wins and the file is the backlog.
 
 | Layer | Owns | Never contains | Reference |
 | --- | --- | --- | --- |
-| `models/` | Fields, `TextChoices`, constraints, `__str__`, properties over own fields, single-row transitions (guard, set fields, `save(update_fields=...)`, at most about ten lines, raising the app's `APIException` on a bad state) | Queries on other models, multi-step workflows, external I/O | `companies/models/company.py` |
+| `models/` | Fields, `TextChoices`, constraints, `__str__`, properties over own fields, single-row transitions (guard, set fields, `save(update_fields=...)`, at most about ten lines, raising the app's `APIException` on a bad state) | Queries on other models, multi-step workflows, external I/O | `offerings/models/offering.py` |
 | `querysets/` | Every reusable query: `visible_to_user`, `manageable_by_user`, status filters, `select_related` bundles, annotations, aggregates; wired with `objects = XQuerySet.as_manager()` | Saves, side effects, calls into services | `offerings/querysets/offering.py` |
 | `services/` | Orchestration across models, external I/O (chain, KYC, email), `transaction.atomic` and `select_for_update`; the one place a multi-model workflow lives. Plain module-level `verb_noun` functions, named after the noun | HTTP objects, serializers, `Response` | `offerings/services/subscription.py` |
 | `serializers/` | JSON shape and input validation; writable FKs scoped in `get_fields()` with `visible_to_user` | Business rules, locking, queries beyond FK scoping | `offerings/serializers/subscription.py` |
@@ -695,8 +695,9 @@ what to do about it. Every one of the 27 `XService` classes dates from the
 initial seed commit; every one of the service modules added since is plain
 `verb_noun` functions, and none has been added as a class. Post-seed view
 modules average about 35 lines, while every view module over 140 lines is
-seed-era. `tokens/services/register.py` escapes CSV cells in the service;
-`whitelist/views/entry.py` hand-rolls them in the view.
+seed-era. `tokens/services/register.py` escapes CSV cells with `shared.utils.csv_cell`;
+`whitelist/views/entry.py` writes them straight from the view with no escaping
+at all.
 
 So this is a half-finished migration whose destination already exists in the
 tree, not an absent standard. The consequence for how to finish it: **do not
