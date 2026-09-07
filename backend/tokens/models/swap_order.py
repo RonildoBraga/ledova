@@ -91,6 +91,9 @@ class SwapOrder(BaseModel):
         verbose_name = "Swap Order"
         verbose_name_plural = "Swap Orders"
         ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["nonce"], name="unique_swap_nonce"),
+        ]
         indexes = [
             models.Index(fields=["status"]),
             models.Index(fields=["seller_address"]),

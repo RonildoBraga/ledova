@@ -1,9 +1,10 @@
 from datetime import timedelta
 from unittest.mock import Mock, patch
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
+from web3 import Web3
 
 from shared.tests.tenants import make_tenant
 from tokens.models import SwapOrder, TransferOrder
@@ -173,3 +174,101 @@ class TheChainIsAskedOutsideEveryTransactionTest(TransactionTestCase):
         self.assertEqual(service.resolve_executing_swap(self.swap), "executed")
 
         self.assertEqual(seen, [False])
+
+
+class TwoSwapsCannotShareANonceTest(TestCase):
+
+    def test_the_database_refuses_a_second_swap_with_the_same_nonce(self):
+        tenant = make_tenant("nonces")
+        first = tenant.swap
+
+        with self.assertRaises(IntegrityError):
+            SwapOrder.objects.create(
+                sell_order=first.sell_order,
+                buy_order=first.buy_order,
+                share_token=first.share_token,
+                payment_asset=first.payment_asset,
+                seller_address=first.seller_address,
+                buyer_address=first.buyer_address,
+                share_amount=first.share_amount,
+                payment_amount=first.payment_amount,
+                nonce=first.nonce,
+                order_hash="0x" + "ab" * 32,
+                expires_at=first.expires_at,
+                status=SwapOrderStatus.CREATED,
+            )
+
+    def test_a_different_nonce_is_accepted_so_the_constraint_is_about_the_nonce(self):
+        tenant = make_tenant("nonces-ok")
+        first = tenant.swap
+
+        second = SwapOrder.objects.create(
+            sell_order=first.sell_order,
+            buy_order=first.buy_order,
+            share_token=first.share_token,
+            payment_asset=first.payment_asset,
+            seller_address=first.seller_address,
+            buyer_address=first.buyer_address,
+            share_amount=first.share_amount,
+            payment_amount=first.payment_amount,
+            nonce=first.nonce + 1,
+            order_hash="0x" + "cd" * 32,
+            expires_at=first.expires_at,
+            status=SwapOrderStatus.CREATED,
+        )
+
+        self.assertNotEqual(second.pk, first.pk)
+
+
+@override_settings(ATOMIC_SWAP_ADDRESS=CONTRACT, BLOCKCHAIN_OPERATOR_KEY="0x" + "11" * 32)
+@patch("tokens.services.atomic_swap_service.publish_trading_event")
+class TheReceiptMustNameThisOrderTest(TestCase):
+
+    def setUp(self):
+        self.tenant = make_tenant("receipts")
+        self.swap = self.tenant.swap
+        SwapOrder.objects.filter(pk=self.swap.pk).update(status=SwapOrderStatus.EXECUTING, tx_hash="0xsettled")
+        self.swap.refresh_from_db()
+
+    @staticmethod
+    def hashing_service():
+        with patch("tokens.services.atomic_swap_service.get_base_chain_client"), patch(
+            "tokens.services.atomic_swap_service.WhitelistService"
+        ):
+            service = AtomicSwapService()
+        service.chain_client.chain_id = 84532
+        service.chain_client.to_checksum_address.side_effect = Web3.to_checksum_address
+        return service
+
+    def service(self, events):
+        service = self.hashing_service()
+        service.is_nonce_used = Mock(return_value=True)
+        contract = Mock()
+        contract.events.SwapExecuted.return_value.process_receipt.return_value = events
+        service.chain_client.load_contract.return_value = contract
+        service.chain_client.receipt_even_if_reverted.return_value = {"status": 1}
+        return service
+
+    def test_a_receipt_naming_this_order_completes_the_swap(self, _publish):
+        expected = self.hashing_service().executed_order_hash(self.swap)
+        service = self.service([{"args": {"orderHash": bytes.fromhex(expected.lstrip("0x"))}}])
+
+        self.assertEqual(service.resolve_executing_swap(self.swap), "executed")
+
+    def test_a_receipt_naming_another_order_leaves_the_swap_alone(self, _publish):
+        service = self.service([{"args": {"orderHash": bytes.fromhex("ee" * 32)}}])
+
+        self.assertIsNone(service.resolve_executing_swap(self.swap))
+
+        self.swap.refresh_from_db()
+        self.assertEqual(self.swap.status, SwapOrderStatus.EXECUTING)
+
+    def test_a_receipt_with_no_swap_event_leaves_the_swap_alone(self, _publish):
+        service = self.service([])
+
+        self.assertIsNone(service.resolve_executing_swap(self.swap))
+
+    def test_the_hash_checked_is_the_digest_the_contract_emits_not_the_struct_hash(self, _publish):
+        service = self.hashing_service()
+
+        self.assertNotEqual(service.executed_order_hash(self.swap).lstrip("0x"), self.swap.order_hash.lstrip("0x"))

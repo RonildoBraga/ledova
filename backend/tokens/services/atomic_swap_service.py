@@ -8,7 +8,7 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from eth_account import Account
-from eth_account.messages import encode_typed_data
+from eth_account.messages import _hash_eip191_message, encode_typed_data
 
 from blockchain.models import BlockchainTransaction, TransactionStatus, TransactionType
 from integrations.base_chain import get_base_chain_client
@@ -493,6 +493,25 @@ class AtomicSwapService:
             .get(pk=swap_order.pk)
         )
 
+    def executed_order_hash(self, swap_order: SwapOrder) -> str:
+        signable = encode_typed_data(full_message=self.get_typed_data(swap_order))
+        return _hash_eip191_message(signable).hex()
+
+    def chain_says_this_swap_executed(self, swap_order: SwapOrder) -> bool:
+        if not swap_order.tx_hash:
+            return True
+
+        receipt = self.chain_client.receipt_even_if_reverted(swap_order.tx_hash)
+        contract = self.chain_client.load_contract("AtomicSwap", self.contract_address)
+        expected = self.executed_order_hash(swap_order)
+
+        for event in contract.events.SwapExecuted().process_receipt(receipt):
+            if event["args"]["orderHash"].hex().lstrip("0x") == expected.lstrip("0x"):
+                return True
+
+        logger.error(f"Swap {swap_order.uuid} broadcast as {swap_order.tx_hash} settled a different order")
+        return False
+
     def is_nonce_used(self, account: str, nonce: int) -> bool:
         contract = self.chain_client.load_contract("AtomicSwap", self.contract_address)
         return contract.functions.isNonceUsed(self.chain_client.to_checksum_address(account), nonce).call()
@@ -504,6 +523,8 @@ class AtomicSwapService:
         settled = self.is_nonce_used(swap_order.seller_address, swap_order.nonce)
 
         if settled:
+            if not self.chain_says_this_swap_executed(swap_order):
+                return None
             return self._settle_from_chain(swap_order)
 
         if not swap_order.deadline_passed:
