@@ -548,11 +548,12 @@ views — over the hooks Phase 2 is producing. Features 4 and 5 are
 dashboard-only for investors until then, which is why nothing is built on
 mobile before this phase. It is a constraint on Phase 2 rather than a note
 about Phase 4: **a shared hook moved now is designed for both clients**,
-because the second client is scheduled rather than hypothetical. Issuers stay
-dashboard-only this phase. The decision's other half — the README's mobile
-mention gaining "Phase 4" beside it — belongs to the next docs pass and is not
-in this change.
-([B7b](https://github.com/RonildoBraga/ledova/issues/115#issuecomment-5574947880))
+because the second client is scheduled rather than hypothetical. B7b's other
+half — the README's mobile mention gaining "Phase 4" beside it — belongs to the
+next docs pass and is not in this change. Issuers are dashboard-only this
+phase, which is B2 rather than this decision; B7b is silent on the issuer half.
+([B7b](https://github.com/RonildoBraga/ledova/issues/115#issuecomment-5574947880),
+[B2](https://github.com/RonildoBraga/ledova/issues/115#issuecomment-5574848881))
 
 Not started, and gated on the trading work in the
 [`deferred-hardening`](https://github.com/RonildoBraga/ledova/issues?q=is%3Aopen+label%3Adeferred-hardening) issues. While the `trading_enabled` flag is off,
