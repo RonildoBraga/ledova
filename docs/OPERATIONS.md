@@ -639,6 +639,14 @@ and a policy on every tenant table. Four things about running that deployment:
   principal is a session-level `SET`, and a pgbouncer transaction-pooled handover
   does not carry it. The symptom is not an error: it is one request reading
   another user's principal. Session pooling or none.
+- **`manage.py --settings=x runserver` refuses to boot**, and the message names the
+  variable rather than the argument order. The runserver exemption is keyed on
+  `sys.argv[1:2]`, so a global option before the subcommand makes `manage.py`
+  set the operator ambient alias and the server's own guard then refuses to
+  serve requests unscoped. That is the right side to fail on — it will not start
+  rather than start wrong — but the error says `RLS_AMBIENT_ALIAS is
+  'operator'`, which reads like a configuration problem. Put the subcommand
+  first: `manage.py runserver --settings=x`.
 - **`manage.py check_rls_roles` runs in CI's PostgreSQL step and at startup.** It
   connects on each alias and asserts what no test can see — the app role lacks
   `BYPASSRLS` and owns no table, the operator role has it, the migrate role owns

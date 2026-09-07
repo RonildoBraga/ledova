@@ -47,7 +47,7 @@ class Migration(migrations.Migration):
         ("documents", "0001_initial"),
         ("offerings", "0005_r0_owner_columns"),
         ("portfolios", "0001_initial"),
-        ("tokens", "0001_initial"),
+        ("tokens", "0024_r0_sharetoken_owner"),
         ("users", "0020_r0_owner_columns"),
         ("wallets", "0008_r0_owner_column"),
         ("whitelist", "0001_initial"),

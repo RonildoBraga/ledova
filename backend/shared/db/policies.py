@@ -5,7 +5,17 @@ VISIBLE_COMPANIES = "app_visible_company_ids"
 MANAGEABLE_COMPANIES = "app_manageable_company_ids"
 PUBLIC_COMPANIES = "app_public_company_ids"
 OPEN_TO_INVESTORS = "status = 'active' AND is_open_to_investors"
-ON_THE_MARKET = "status = 'deployed' AND length(contract_address) > 0"
+
+
+def on_the_market(prefix: str = "") -> str:
+    return f"{prefix}status = 'deployed' AND length({prefix}contract_address) > 0"
+
+
+ON_THE_MARKET = on_the_market()
+ISSUES_THE_OFFERING = (
+    "offering_id IN (SELECT uuid FROM offerings_offering " f"WHERE company_id IN (SELECT {VISIBLE_COMPANIES}()))"
+)
+
 SIGNS_FOR_A_COMPANY = (
     "EXISTS (SELECT 1 FROM companies_company operating WHERE operating.operator_wallet_id = wallets.uuid)"
 )
@@ -16,8 +26,7 @@ HOLDS_A_SIGNING_WALLET = (
 )
 HAS_A_TOKEN_ON_THE_MARKET = (
     "EXISTS (SELECT 1 FROM tokens_sharetoken listed "
-    "WHERE listed.company_id = companies_company.uuid "
-    "AND listed.status = 'deployed' AND length(listed.contract_address) > 0)"
+    f"WHERE listed.company_id = companies_company.uuid AND {on_the_market('listed.')})"
 )
 
 HELPERS = {
@@ -78,7 +87,10 @@ POLICIES = {
     "portfolios": (_member("user_account_id"), _member("user_account_id")),
     "favourite_assets": (_member("user_account_id"), _member("user_account_id")),
     "users_investorclassification": (_member("user_account_id"), _member("user_account_id")),
-    "offerings_subscription": (_member("user_account_id"), _member("user_account_id")),
+    "offerings_subscription": (
+        f"{_member('user_account_id')} OR {ISSUES_THE_OFFERING}",
+        _member("user_account_id"),
+    ),
     "tokens_transferorder": (
         f"{_member('owner_account_id')} AND {OWNERSHIP_BOUND}",
         f"{_member('owner_account_id')} AND {OWNERSHIP_BOUND}",
@@ -89,6 +101,10 @@ POLICIES = {
     ),
     "offerings_offering": (
         _company_or_public("company_id"),
+        _company("company_id", MANAGEABLE_COMPANIES),
+    ),
+    "tokens_sharetoken": (
+        f"owner_id = {PRINCIPAL} OR ({ON_THE_MARKET})",
         _company("company_id", MANAGEABLE_COMPANIES),
     ),
 }
@@ -111,6 +127,60 @@ DERIVED_FROM_A_MUTABLE_ATTRIBUTE = {
     "before it exists, and this is the entry that says so.",
 }
 
+BYPASSES_VISIBLE_TO_USER = {
+    "Subscription.for_issuer": (
+        "offerings/views/offering.py subscriptions",
+        "offerings_subscription: the issuer term, offering_id in the offerings this principal's companies own",
+        "shared/tests/test_two_scope_fixture.py - a subscription whose buyer does not own the offering",
+    ),
+    "Offering.open_now": (
+        "offerings/serializers/subscription.py:147, and the select_for_update re-reads at "
+        "offerings/services/subscription.py 463, 499 and 566",
+        "offerings_offering: the public company term, and the UPDATE policy's USING is as wide, so the "
+        "re-read can lock what the serializer offered",
+        "shared/tests/test_rls_isolation.py - a public row is locked and the write still refused",
+    ),
+    "ShareToken.in_directory": (
+        "offerings/views/directory.py",
+        "tokens_sharetoken: the market predicate, and companies_company: open to investors",
+        "shared/tests/test_cross_tenant_routes_under_rls.py - the directory rows of the 184-route matrix",
+    ),
+    "ShareToken.deployed_with_contract": (
+        "tokens/views/trading_token.py, tokens/services/trading_events.py:22, "
+        "tokens/services/share_token_service.py:861",
+        "tokens_sharetoken: the market predicate, wider than the directory because a token is tradeable "
+        "without its issuer opting into the browse surface",
+        "shared/tests/test_cross_tenant_routes_under_rls.py - "
+        "test_the_market_answers_without_the_issuers_directory_opt_in",
+    ),
+    "Company.all on the eligibility path": (
+        "users/services/eligibility.py:110",
+        "companies_company: owner, open to investors, or holding a token on the market. The policy is "
+        "narrower than all(), and both consumers - the directory and the subscription serializer - filter "
+        "to companies that are open or listed, so the narrowing is invisible to them",
+        "shared/tests/test_cross_tenant_routes_under_rls.py - the directory and market rows",
+    ),
+    "TransferOrder.all in the cancel path": (
+        "tokens/services/trading_order_cancel.py:15",
+        "tokens_transferorder: member account and the ownership_bound predicate; the service is reached "
+        "only from a view that already resolved the order under the principal",
+        "shared/tests/test_cross_tenant_routes_under_rls.py - the cancel rows",
+    ),
+    "Company.all on the administrative actions": (
+        "companies/views/company.py:70",
+        "no policy term: those actions run on the operator connection by operator_actions, because a staff "
+        "member does not own the company they administer",
+        "shared/tests/test_principal_coverage.py - the administrative-action gate",
+    ),
+    "ShareIssuance.with_token, SwapOrder.for_transfer_order": (
+        "tokens/views/share_token.py:149, tokens/views/trading_order.py:232",
+        "no policy term today: both tables are classified out of POLICIES, and each is reached only through "
+        "a parent the view already resolved under the principal",
+        "the classification's own reason, which is all that stands behind it - R13 cannot watch a table "
+        "with no policy",
+    ),
+}
+
 R13_WATCHES_BOTH_ENDS = (
     "R13's set is computed rather than maintained: links_between_policy_tables() walks Django's metadata for "
     "every non-nullable foreign key whose both ends carry policies, with a non-empty control behind it. The "
@@ -119,6 +189,24 @@ R13_WATCHES_BOTH_ENDS = (
 )
 
 PUBLIC_TERM = {
+    "tokens_sharetoken": "The secondary market is deployed_with_contract(), wider than the directory: a "
+    "token is tradeable without its issuer opting into the browse surface, and "
+    "test_the_market_answers_without_the_issuers_directory_opt_in says so in its name. #322 makes owner_id "
+    "the company owner's user, so the owner term alone hides every deployed token from an investor - the "
+    "second term has to be on the token's own columns. It is the exact dual of "
+    "HAS_A_TOKEN_ON_THE_MARKET on companies_company: a company is visible because a token of its is on the "
+    "market, and that token is visible because it is on the market. Remove either and R13's closure between "
+    "the two tables fails, which is why it holds by construction rather than by luck. The policy reads only "
+    "this table's own columns, so it forms no cycle with the company term that reads it.",
+    "offerings_subscription": "R12 at a third table, found by Omarch 2 measuring rather than reading. "
+    "OfferingViewSet.subscriptions reads Subscription.objects.for_issuer(offering) with no visible_to_user, "
+    "deliberately - the scope is the offering's ownership rather than the subscriber's account - so a "
+    "member-only policy shows an issuer their own subscriptions and silently drops everyone else's. "
+    "Measured with two tenants: as the owner for_issuer returns 2, as the app role with the issuer's "
+    "principal it returns 1, and that is feature 4's capital-raised view answering short with no error. "
+    "The read term adds the offerings the principal's companies own; WITH CHECK stays member-only, because "
+    "an issuer does not write a subscription on someone's behalf. No cycle: offerings_offering's policy "
+    "does not read subscriptions.",
     "customer_accounts_account": "R14, one link along from wallets: the account that holds a company's "
     "operator wallet is the platform's account. R13 found it the moment the wallet became visible - the "
     "wallet's user_account is not nullable, so select_related would have deleted the wallet row it had just "
@@ -146,18 +234,6 @@ PUBLIC_TERM = {
 }
 
 AWAITING_R0 = {
-    "tokens_sharetoken": "Needs a direct owner_id (tokens/0024) before it can carry one. Its read policy has "
-    "to be a leaf, because companies_company's own market term is an EXISTS over this table: a policy here "
-    "that called app_visible_company_ids() would read companies_company, whose policy would read back, and "
-    "the pair would recurse. With owner_id the policy is owner_id = principal OR the market predicate, which "
-    "reads nothing else. Until then the table carries no policy and the market keeps working. When it "
-    "lands it must carry LOCKING_IS_READING with it: offerings/services/offering.py:135 locks a "
-    "ShareToken, and that line is safe today only because this table has no policy at all. And the leaf is not "
-    "owner_id alone: #322 makes ShareToken.owner_id the company owner's user, so that term by itself hides "
-    "every deployed token from an investor. The market term has to be on the token's own columns - deployed, "
-    "with a contract address - and it composes only because HAS_A_TOKEN_ON_THE_MARKET on companies_company is "
-    "its exact dual. Either term alone breaks the pair, which is why R13's closure between these two tables "
-    "holds by construction rather than by luck.",
     "tokens_capitalincreaserequest": (
         "Reaches its company through token -> company and has no company_id yet. The tokens R0 lane "
         "adds the column; until it lands there is nothing for a policy to compare."
@@ -216,7 +292,10 @@ NOT_TENANCY = {
     "feature_flags": "A kill switch wearing a tenancy method's name: visible_to_user filters on enabled.",
     "whitelist_whitelistentry": "Staff-only, which is authorisation rather than tenancy, and stays in code.",
     "signing_challenges": "Reached by address through a service rather than by any queryset; #256 deleted "
-    "the two methods that looked like scoping. The tokens R0 lane decides its column.",
+    "the two methods that looked like scoping. #305 gave it a wallet column, and it is nullable, so a "
+    "policy on it would hide exactly the rows consumable() already refuses - no-policy and policy agree on "
+    "every row, which is a reason to leave it rather than an absence of one. If the column ever becomes "
+    "NOT NULL, or if a queryset starts reading challenges the service does not, that agreement ends.",
     "holdings": "Reached only through its wallet, which is scoped, and carries no tenant column of its own.",
     "asset_chain_deployments": "Part of the asset catalogue.",
     "asset_snapshots": "Price history for the catalogue, identical for every tenant.",

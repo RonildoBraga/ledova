@@ -6,6 +6,7 @@ from django.test import TransactionTestCase
 
 from shared.db.policies import (
     AWAITING_R0,
+    BYPASSES_VISIBLE_TO_USER,
     DERIVED_FROM_A_MUTABLE_ATTRIBUTE,
     HELPERS,
     LEAF_TABLES,
@@ -107,6 +108,21 @@ class EveryTenantTableIsScopedByAPolicyTest(TransactionTestCase):
             with self.subTest(table=table):
                 self.assertGreater(len(reason), 80)
                 self.assertEqual(self._ask(SCOPED, table), [(False, False)])
+
+    def test_every_deliberate_bypass_names_its_call_site_term_and_proof(self):
+        for name, entry in BYPASSES_VISIBLE_TO_USER.items():
+            with self.subTest(read=name):
+                site, term, proof = entry
+                self.assertGreater(len(site), 10, f"{name} must name where it is read")
+                self.assertGreater(len(term), 40, f"{name} must name the term that admits its rows")
+                self.assertGreater(len(proof), 40, f"{name} must name the fixture row that proves it")
+
+    def test_the_audit_covers_every_queryset_the_views_reach_past_visible_to_user(self):
+        named = " ".join(site for site, _, _ in BYPASSES_VISIBLE_TO_USER.values())
+
+        for site in ("offerings/views/directory.py", "tokens/views/trading_token.py", "users/services/eligibility.py"):
+            with self.subTest(site=site):
+                self.assertIn(site, named)
 
     def test_every_column_derived_from_a_mutable_attribute_names_what_goes_stale(self):
         for column, reason in DERIVED_FROM_A_MUTABLE_ATTRIBUTE.items():
