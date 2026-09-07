@@ -18,6 +18,10 @@ from wallets.services.holdings import sync_holding
 
 logger = logging.getLogger(__name__)
 
+UNREADABLE_HOLDINGS = (
+    "{count} holding(s) of wallet {wallet} could not be read from the chain; last_synced_at stays where it was"
+)
+
 
 class WalletSyncService:
 
@@ -35,11 +39,14 @@ class WalletSyncService:
 
             result = WalletSyncService._process_transactions(wallet, transactions_data)
 
-            holdings_updated = WalletSyncService._sync_holdings_from_blockchain(wallet)
+            holdings_updated, unreadable = WalletSyncService._sync_holdings_from_blockchain(wallet)
             result["holdings"] = holdings_updated
 
-            wallet.last_synced_at = timezone.now()
-            wallet.save(update_fields=["last_synced_at"])
+            if unreadable:
+                logger.warning(UNREADABLE_HOLDINGS.format(count=unreadable, wallet=wallet.uuid))
+            else:
+                wallet.last_synced_at = timezone.now()
+                wallet.save(update_fields=["last_synced_at"])
 
             return result
 
@@ -143,9 +150,10 @@ class WalletSyncService:
         return asset
 
     @staticmethod
-    def _sync_holdings_from_blockchain(wallet: Wallet) -> int:
+    def _sync_holdings_from_blockchain(wallet: Wallet) -> tuple[int, int]:
         assets = [holding.asset for holding in wallet.holdings.select_related("asset").filter(asset__is_verified=True)]
-        return sum(1 for asset in assets if sync_holding(wallet, asset) is not None)
+        written = [asset for asset in assets if sync_holding(wallet, asset) is not None]
+        return len(written), len(assets) - len(written)
 
     @staticmethod
     def _calculate_market_value(amount: Decimal, asset: Asset, timestamp: datetime) -> Optional[Decimal]:
