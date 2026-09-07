@@ -1,7 +1,7 @@
 from django.db import models
 from django.db.models import QuerySet
 
-from tokens.models.choices import RequestStatus
+from tokens.models.choices import IN_FLIGHT_STATUSES, RequestStatus
 
 
 class CapitalIncreaseRequestQuerySet(QuerySet):
@@ -26,6 +26,9 @@ class CapitalIncreaseRequestQuerySet(QuerySet):
 
     def pending(self):
         return self.filter(status__in=[RequestStatus.SUBMITTED, RequestStatus.UNDER_REVIEW, RequestStatus.APPROVED])
+
+    def in_flight(self):
+        return self.filter(status__in=IN_FLIGHT_STATUSES)
 
     def needing_attention(self):
         return self.filter(

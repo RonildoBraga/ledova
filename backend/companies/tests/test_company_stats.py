@@ -38,9 +38,19 @@ class CompanyStatsTest(APITestCase):
     def _issuance(self, token, recipient, status=IssuanceStatus.COMPLETED):
         return ShareIssuance.objects.create(token=token, recipient_address=recipient, amount="10", status=status)
 
-    def _capital_increase(self, status):
+    def _a_second_class(self, number):
+        return ShareToken.objects.create(
+            company=self.company,
+            name=f"Class {number} shares",
+            symbol=f"IN{number}",
+            total_supply="1000",
+            status=ShareTokenStatus.DEPLOYED,
+            contract_address=f"0x{number + 1:040x}",
+        )
+
+    def _capital_increase(self, status, token=None):
         return CapitalIncreaseRequest.objects.create(
-            token=self.deployed,
+            token=token or self.deployed,
             additional_shares=100,
             new_authorized_total=1100,
             purpose="Growth",
@@ -55,7 +65,10 @@ class CompanyStatsTest(APITestCase):
         self._issuance(self.deployed, holder_b)
         self._issuance(self.deployed, "0x" + "3" * 40, status=IssuanceStatus.PENDING)
         self._issuance(self.draft, "0x" + "4" * 40)
-        for status in RequestStatus:
+        in_flight = (RequestStatus.SUBMITTED, RequestStatus.UNDER_REVIEW, RequestStatus.APPROVED)
+        for index, status in enumerate(in_flight):
+            self._capital_increase(status, token=self._a_second_class(index))
+        for status in set(RequestStatus) - set(in_flight):
             self._capital_increase(status)
         self.client.force_authenticate(self.owner)
 
@@ -64,7 +77,7 @@ class CompanyStatsTest(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            {"totalTokens": 1, "totalShareholders": 2, "pendingActions": 3, "pendingCapitalIncreases": 3},
+            {"totalTokens": 4, "totalShareholders": 2, "pendingActions": 3, "pendingCapitalIncreases": 3},
         )
 
     def test_the_shareholder_count_never_reads_the_chain_and_costs_the_same_at_any_size(self):
