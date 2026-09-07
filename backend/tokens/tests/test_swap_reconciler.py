@@ -1,0 +1,175 @@
+from datetime import timedelta
+from unittest.mock import Mock, patch
+
+from django.db import transaction
+from django.test import TestCase, TransactionTestCase, override_settings
+from django.utils import timezone
+
+from shared.tests.tenants import make_tenant
+from tokens.models import SwapOrder, TransferOrder
+from tokens.models.choices import SwapOrderStatus, TransferOrderStatus
+from tokens.services import AtomicSwapService
+from tokens.tasks.swap_reconciler import STALE_EXECUTION_AGE, resolve_executing_swaps
+
+CONTRACT = "0x" + "9d" * 20
+
+
+@override_settings(ATOMIC_SWAP_ADDRESS=CONTRACT, BLOCKCHAIN_OPERATOR_KEY="0x" + "11" * 32)
+@patch("tokens.services.atomic_swap_service.publish_trading_event")
+class AnExecutingSwapIsAskedOfTheChainTest(TestCase):
+
+    def setUp(self):
+        self.tenant = make_tenant("stuck")
+        self.swap = self.tenant.swap
+        self.stale(self.swap)
+
+    @staticmethod
+    def stale(swap, status=SwapOrderStatus.EXECUTING):
+        SwapOrder.objects.filter(pk=swap.pk).update(
+            status=status, updated_at=timezone.now() - STALE_EXECUTION_AGE - timedelta(minutes=1)
+        )
+        swap.refresh_from_db()
+
+    def expire(self):
+        SwapOrder.objects.filter(pk=self.swap.pk).update(expires_at=timezone.now() - timedelta(minutes=1))
+        self.swap.refresh_from_db()
+
+    def service(self, nonce_used):
+        with patch("tokens.services.atomic_swap_service.get_base_chain_client"), patch(
+            "tokens.services.atomic_swap_service.WhitelistService"
+        ):
+            service = AtomicSwapService()
+        service.is_nonce_used = Mock(return_value=nonce_used)
+        return service
+
+    def status(self):
+        self.swap.refresh_from_db()
+        return self.swap.status
+
+    def test_a_swap_whose_nonce_the_chain_used_is_reconciled_to_completed(self, _publish):
+        self.assertEqual(self.service(True).resolve_executing_swap(self.swap), "executed")
+
+        self.assertEqual(self.status(), SwapOrderStatus.COMPLETED)
+
+    def test_a_swap_whose_nonce_is_unused_and_whose_deadline_has_passed_is_failed(self, _publish):
+        self.expire()
+
+        self.assertEqual(self.service(False).resolve_executing_swap(self.swap), "never executed")
+
+        self.assertEqual(self.status(), SwapOrderStatus.FAILED)
+
+    def test_a_swap_whose_nonce_is_unused_and_still_live_is_left_alone(self, _publish):
+        self.assertIsNone(self.service(False).resolve_executing_swap(self.swap))
+
+        self.assertEqual(self.status(), SwapOrderStatus.EXECUTING)
+
+    def test_a_swap_that_moved_on_before_the_write_is_not_reconciled_twice(self, _publish):
+        service = self.service(True)
+        service.is_nonce_used = Mock(
+            side_effect=lambda *_: SwapOrder.objects.filter(pk=self.swap.pk).update(status=SwapOrderStatus.COMPLETED)
+            or True
+        )
+
+        self.assertIsNone(service.resolve_executing_swap(self.swap))
+
+
+@override_settings(ATOMIC_SWAP_ADDRESS=CONTRACT, BLOCKCHAIN_OPERATOR_KEY="0x" + "11" * 32)
+class TheSweepFindsOnlyStuckSwapsTest(TestCase):
+
+    def setUp(self):
+        self.tenant = make_tenant("sweeper")
+        self.swap = self.tenant.swap
+
+    def age(self, status, minutes):
+        SwapOrder.objects.filter(pk=self.swap.pk).update(
+            status=status, updated_at=timezone.now() - timedelta(minutes=minutes)
+        )
+
+    @patch("tokens.tasks.swap_reconciler.AtomicSwapService")
+    def test_a_swap_executing_for_longer_than_the_grace_period_is_checked(self, service_class):
+        service_class.return_value.resolve_executing_swap.return_value = "executed"
+        self.age(SwapOrderStatus.EXECUTING, 20)
+
+        self.assertEqual(resolve_executing_swaps(), {"checked": 1, "resolved": 1})
+
+    @patch("tokens.tasks.swap_reconciler.AtomicSwapService")
+    def test_a_swap_that_has_just_started_executing_is_left_for_the_broadcast(self, service_class):
+        self.age(SwapOrderStatus.EXECUTING, 1)
+
+        self.assertEqual(resolve_executing_swaps(), {"checked": 0, "resolved": 0})
+        service_class.assert_not_called()
+
+    @patch("tokens.tasks.swap_reconciler.AtomicSwapService")
+    def test_a_swap_in_any_other_status_is_not_swept(self, service_class):
+        for status in (SwapOrderStatus.READY, SwapOrderStatus.COMPLETED, SwapOrderStatus.FAILED):
+            self.age(status, 20)
+
+            self.assertEqual(resolve_executing_swaps(), {"checked": 0, "resolved": 0}, status)
+
+    @patch("tokens.tasks.swap_reconciler.AtomicSwapService")
+    def test_one_swap_that_cannot_be_reached_does_not_stop_the_sweep(self, service_class):
+        service_class.return_value.resolve_executing_swap.side_effect = RuntimeError("rpc down")
+        self.age(SwapOrderStatus.EXECUTING, 20)
+
+        self.assertEqual(resolve_executing_swaps(), {"checked": 1, "resolved": 0})
+
+
+class UnwindingASwapTwiceCostsTheOrdersNothingExtraTest(TestCase):
+
+    def setUp(self):
+        self.tenant = make_tenant("unwinder")
+        self.swap = self.tenant.swap
+        self.filled_before = self.swap.share_amount * 3
+        TransferOrder.objects.filter(pk__in=[self.swap.sell_order_id, self.swap.buy_order_id]).update(
+            quantity=self.filled_before, filled_quantity=self.filled_before, status=TransferOrderStatus.MATCHED
+        )
+        self.swap = SwapOrder.objects.select_related("sell_order", "buy_order").get(pk=self.swap.pk)
+
+    def filled(self):
+        return [
+            TransferOrder.objects.get(pk=pk).filled_quantity for pk in (self.swap.sell_order_id, self.swap.buy_order_id)
+        ]
+
+    def test_a_second_unwind_does_not_subtract_the_share_amount_again(self):
+        self.swap.mark_failed("first")
+        after_one = self.filled()
+
+        self.swap.mark_failed("second")
+
+        self.assertEqual(after_one, [self.filled_before - self.swap.share_amount] * 2)
+        self.assertEqual(self.filled(), after_one)
+
+    def test_the_orders_start_far_enough_above_the_share_amount_for_a_second_subtraction_to_show(self):
+        self.assertGreater(self.filled_before - 2 * self.swap.share_amount, 0)
+
+    def test_the_reason_recorded_is_the_one_that_actually_failed_it(self):
+        self.swap.mark_failed("the chain refused it")
+        self.swap.mark_failed("a later sweep guessed")
+
+        self.swap.refresh_from_db()
+        self.assertEqual(self.swap.error_message, "the chain refused it")
+
+
+@override_settings(ATOMIC_SWAP_ADDRESS=CONTRACT, BLOCKCHAIN_OPERATOR_KEY="0x" + "11" * 32)
+@patch("tokens.services.atomic_swap_service.publish_trading_event")
+class TheChainIsAskedOutsideEveryTransactionTest(TransactionTestCase):
+
+    def setUp(self):
+        self.tenant = make_tenant("outside")
+        self.swap = self.tenant.swap
+        SwapOrder.objects.filter(pk=self.swap.pk).update(status=SwapOrderStatus.EXECUTING)
+        self.swap.refresh_from_db()
+
+    def test_the_nonce_read_does_not_happen_inside_an_open_transaction(self, _publish):
+        with patch("tokens.services.atomic_swap_service.get_base_chain_client"), patch(
+            "tokens.services.atomic_swap_service.WhitelistService"
+        ):
+            service = AtomicSwapService()
+        seen = []
+        service.is_nonce_used = Mock(
+            side_effect=lambda *_: seen.append(transaction.get_connection().in_atomic_block) or True
+        )
+
+        self.assertEqual(service.resolve_executing_swap(self.swap), "executed")
+
+        self.assertEqual(seen, [False])

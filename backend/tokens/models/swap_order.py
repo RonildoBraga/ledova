@@ -103,6 +103,10 @@ class SwapOrder(BaseModel):
         return f"Swap {self.share_amount} {self.share_token.symbol} @ {self.payment_amount}"
 
     @property
+    def deadline_passed(self):
+        return timezone.now() > self.expires_at
+
+    @property
     def is_expired(self):
         if self.status == SwapOrderStatus.EXPIRED:
             return True
@@ -113,7 +117,7 @@ class SwapOrder(BaseModel):
                 SwapOrderStatus.SELLER_SIGNED,
                 SwapOrderStatus.BUYER_SIGNED,
             ]
-            and timezone.now() > self.expires_at
+            and self.deadline_passed
         )
 
     @property
@@ -188,6 +192,9 @@ class SwapOrder(BaseModel):
             order.save(update_fields=update_fields)
 
     def mark_failed(self, error_message: str):
+        if self.status == SwapOrderStatus.FAILED:
+            return
+
         self.status = SwapOrderStatus.FAILED
         self.error_message = error_message
         self.save(update_fields=["status", "error_message", "updated_at"])
