@@ -75,8 +75,6 @@ LEGACY: dict[str, int] = {
     "backend/tokens/views/share_token.py:raw-orm-in-view": 1,
     "backend/tokens/views/trading_order.py:raw-orm-in-view": 1,
     "backend/tokens/views/trading_token.py:raw-orm-in-view": 1,
-    "backend/users/views/notification_preferences.py:transaction-in-view": 1,
-    "backend/users/views/user_preferences.py:transaction-in-view": 1,
 }
 
 
