@@ -157,7 +157,37 @@ compared against the literal `true` and treats anything else as off.
 | `LEDOVA_ADMIN_BASE_URL` | `http://localhost:5174/admin` | No |
 | `PUBLIC_API_BASE_URL` | `http://localhost:8000` | No |
 | `OPERATOR_NAME` | `Ledova operator` | No, used only when the operator row is created |
-| `REDIS_URL` | `redis://redis:6379/0` | Only for the trading event stream (`tokens/events.py`, `tokens/views/trading_events.py`), which is off while the trading flag is off. Nothing else reads it: background work is Procrastinate on PostgreSQL and there is no `CACHES` setting |
+| `REDIS_URL` | `redis://redis:6379/0` | **Yes.** It is `CACHES["default"]`, which holds the sign-in throttle, and it is the trading event stream (`tokens/events.py`, `tokens/views/trading_events.py`). Background work is still Procrastinate on PostgreSQL |
+
+**The sign-in throttle counts in Redis, and it did not always.** `auth_email`
+limits sign-in to 10 an hour per address and DRF keeps that count in
+`django.core.cache`. Until #369 there was no `CACHES` setting at all, so Django's
+default applied: `LocMemCache`, a dict inside one process. QA1 cleared a
+fifty-seven-minute lockout by restarting the container, and every extra uvicorn
+worker or replica multiplied the limit, because each one counted alone. Measured,
+two processes against a limit of 10:
+
+```
+LocMemCache   process A: allow x6   process B: allow x6            12 allowed
+RedisCache    process A: allow x6   process B: allow x4 DENY x2    10 allowed
+```
+
+`CACHES["default"]` now points at `REDIS_URL` with the key prefix `ledova`, so the
+count is shared between processes and survives a restart. **Redis is therefore a
+dependency of signing in.** With it unreachable the throttle raises
+`redis.exceptions.ConnectionError` and sign-in answers 500 rather than admitting
+unlimited attempts — fail closed, deliberately, because the alternative is the
+defect this replaced. Compose makes that visible: `backend` and `worker` now wait
+for the `redis` healthcheck. The trading event stream still swallows its own Redis
+failures and only degrades, which is right for a notification and wrong for a
+brute-force defence.
+
+The same cache now holds the Transak access token (`integrations/transak/client.py`),
+which becomes shared rather than per-process. That is the intended direction — one
+token fetch instead of one per worker — and is named here because it is a
+consequence of the change rather than the point of it.
+
+Test settings keep `LocMemCache`, so the suite needs no Redis.
 
 ### Auth cookies and tokens
 
