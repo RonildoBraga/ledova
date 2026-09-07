@@ -29,6 +29,13 @@ class AssetQuerySet(QuerySet):
             chain_deployments__is_active=True,
         ).first()
 
+    def for_chain_and_contract(self, chain, contract_address):
+        return self.filter(
+            chain_deployments__chain=chain,
+            chain_deployments__contract_address__iexact=contract_address,
+            chain_deployments__is_active=True,
+        ).first()
+
     def search(self, search_query):
         if not search_query:
             return self

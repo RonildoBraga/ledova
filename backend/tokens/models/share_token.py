@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 class ShareToken(BaseModel):
     company = models.ForeignKey(
         "companies.Company",
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="tokens",
     )
 
@@ -80,6 +80,10 @@ class ShareToken(BaseModel):
     @property
     def is_deployed(self) -> bool:
         return self.status == ShareTokenStatus.DEPLOYED and self.contract_address is not None
+
+    @property
+    def is_on_chain(self) -> bool:
+        return bool(self.contract_address)
 
     def mark_deploying(self, tx_hash: str = None, transaction: BlockchainTransaction = None) -> None:
         self.status = ShareTokenStatus.DEPLOYING

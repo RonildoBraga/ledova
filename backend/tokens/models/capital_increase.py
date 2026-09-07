@@ -14,7 +14,7 @@ class CapitalIncreaseRequest(ReviewableRequest):
 
     token = models.ForeignKey(
         "tokens.ShareToken",
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="capital_increase_requests",
     )
 
@@ -54,11 +54,11 @@ class CapitalIncreaseRequest(ReviewableRequest):
 
     can_be_submitted = can_be_edited
 
-    def submit(self, user) -> None:
+    def submit(self, user, dilution_percentage) -> None:
         if not self.can_be_submitted:
             raise InvalidTokenStateException(f"Cannot submit request with status '{self.get_status_display()}'.")
 
-        self.dilution_percentage = self.calculate_dilution()
+        self.dilution_percentage = dilution_percentage
         self.status = RequestStatus.SUBMITTED
         self.submitted_by = user
         self.submitted_at = timezone.now()

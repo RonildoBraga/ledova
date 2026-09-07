@@ -13,6 +13,7 @@ from assets.models import Asset, AssetType
 from assets.services.identity import free_symbol, verified_contract_asset
 from blockchain.models import BlockchainTransaction, TransactionStatus, TransactionType
 from companies.models import CompanyStatus
+from companies.services.company import primary_wallet_for
 from integrations.base_chain import get_base_chain_client
 from integrations.base_chain.exceptions import BaseChainContractError
 from operators.settlement import settlement_deployments
@@ -20,6 +21,7 @@ from shared.constants import BLOCKCHAIN_BASE
 from tokens.exceptions import (
     CompanyNotReadyException,
     ContractLoadException,
+    DeployedShareClassException,
     InvalidHolderAddressException,
     InvalidRecipientAddressException,
     InvalidTokenAddressException,
@@ -41,6 +43,7 @@ from tokens.models import (
     ShareTokenStatus,
 )
 from tokens.querysets.share_issuance import ISSUANCE_KEY_PREFIX
+from tokens.services.dilution import dilution_for
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +106,7 @@ class ShareTokenService:
             )
         if token.company.status != CompanyStatus.ACTIVE:
             raise CompanyNotReadyException("Company must be active before deploying tokens.")
-        primary_wallet = token.company.get_primary_wallet()
+        primary_wallet = primary_wallet_for(token.company)
         if primary_wallet is None:
             raise CompanyNotReadyException(
                 "Company must have an operator wallet or verified ETH wallet before deploying tokens."
@@ -275,7 +278,7 @@ class ShareTokenService:
         return contract_address
 
     def _create_share_token(self, token: ShareToken, identifier: str) -> str:
-        issuer_wallet = token.company.get_primary_wallet()
+        issuer_wallet = primary_wallet_for(token.company)
         if issuer_wallet is None:
             self._abandon_unless_sent(token)
             raise CompanyNotReadyException("Company has no operator wallet or verified ETH wallet")
@@ -411,7 +414,7 @@ class ShareTokenService:
             submitted_at=timezone.now(),
         )
 
-        issuance_request.dilution_percentage = issuance_request.calculate_dilution()
+        issuance_request.dilution_percentage = dilution_for(issuance_request)
         issuance_request.save(update_fields=["dilution_percentage", "updated_at"])
 
         logger.info(
@@ -868,3 +871,12 @@ class ShareTokenService:
                 logger.warning(f"Failed to get settlement asset balance for {asset.symbol}: {e}")
 
         return {"walletAddress": wallet_checksum, "balances": balances}
+
+
+def delete_share_token(token) -> None:
+    if token.is_on_chain:
+        logger.warning(f"Refused to delete {token.symbol}: on chain at {token.contract_address}")
+        raise DeployedShareClassException(token.symbol)
+
+    logger.info(f"Deleting share class {token.symbol} for company {token.company_id}")
+    token.delete()

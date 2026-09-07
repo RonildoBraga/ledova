@@ -18,7 +18,7 @@ from companies.serializers import (
     CompanyStatusUpdateSerializer,
     CompanyUpdateSerializer,
 )
-from companies.services import submit_application, transition_company
+from companies.services import delete_company, submit_application, transition_company
 from shared.views import AuthenticatedModelViewSet
 from tokens.services.company_stats import company_stats
 
@@ -86,6 +86,9 @@ class CompanyViewSet(AuthenticatedModelViewSet):
 
     def perform_update(self, serializer):
         serializer.save()
+
+    def perform_destroy(self, instance):
+        delete_company(instance)
 
     @action(detail=True, methods=["get"])
     def stats(self, request, uuid=None):

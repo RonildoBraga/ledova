@@ -132,7 +132,7 @@ class DocumentCustomerRouteTest(APITestCase):
         self.assertFalse(Document.objects.filter(uuid=disposable.uuid).exists())
         self.assertFalse(DocumentExtraction.objects.filter(uuid=disposable_extraction.uuid).exists())
 
-    @patch("documents.views.document.extract_document.defer")
+    @patch("documents.services.document.extract_document.defer")
     def test_multipart_upload_is_server_bound_for_every_role(self, defer_task):
         for index, (actor, _, _, _) in enumerate(self.actor_cases):
             self.client.force_authenticate(actor)

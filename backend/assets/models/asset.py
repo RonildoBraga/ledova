@@ -71,11 +71,4 @@ class Asset(BaseModel):
 
     @classmethod
     def get_by_chain_and_contract(cls, chain: str, contract_address: str) -> Optional["Asset"]:
-        from assets.models.asset_chain_deployment import AssetChainDeployment
-
-        deployment = (
-            AssetChainDeployment.objects.select_related("asset")
-            .filter(chain=chain, contract_address__iexact=contract_address, is_active=True)
-            .first()
-        )
-        return deployment.asset if deployment else None
+        return cls.objects.for_chain_and_contract(chain, contract_address)

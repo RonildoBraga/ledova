@@ -5,7 +5,6 @@ from django.utils import timezone
 from shared.models import BaseModel
 
 from .choices import RequestStatus
-from .share_issuance import ShareIssuance
 
 
 class ReviewableRequest(BaseModel):
@@ -74,8 +73,7 @@ class ReviewableRequest(BaseModel):
     def can_be_executed(self) -> bool:
         return self.status in self.EXECUTABLE_STATUSES
 
-    def calculate_dilution(self) -> float:
-        current_supply = ShareIssuance.objects.completed_supply(self.token)
+    def dilution_against(self, current_supply: int) -> float:
         if current_supply == 0:
             return 0.0
         return round(self.share_delta / (current_supply + self.share_delta) * 100, 2)

@@ -23,7 +23,15 @@ from shared.tests.tenants import (
     route_context,
     snapshot,
 )
-from tokens.models import ShareIssuanceRequest, ShareToken, ShareTokenStatus, SwapOrder
+from tokens.models import (
+    CapitalIncreaseRequest,
+    ShareIssuance,
+    ShareIssuanceRequest,
+    ShareToken,
+    ShareTokenStatus,
+    SwapOrder,
+    TransferOrder,
+)
 
 SIGNATURE = "0x" + "ab" * 65
 RECIPIENT = "0x" + "9" * 40
@@ -59,6 +67,17 @@ def _upload_listing_documents(tenant):
 
 def _clear_subscriptions(tenant):
     Subscription.objects.filter(user_account=tenant.account).delete()
+
+
+def _clear_the_register(tenant):
+    _clear_subscriptions(tenant)
+    SwapOrder.objects.filter(share_token__company=tenant.company).delete()
+    TransferOrder.objects.filter(token__company=tenant.company).delete()
+    Offering.objects.filter(token__company=tenant.company).delete()
+    CapitalIncreaseRequest.objects.filter(token__company=tenant.company).delete()
+    ShareIssuanceRequest.objects.filter(token__company=tenant.company).delete()
+    ShareIssuance.objects.filter(token__company=tenant.company).delete()
+    ShareToken.objects.filter(company=tenant.company).delete()
 
 
 def _open_the_offering_to_the_actor(tenant):
@@ -171,7 +190,7 @@ ROUTES = (
     Route("get", "/api/v1/companies/{company}/"),
     Route("put", "/api/v1/companies/{company}/", {"name": "Renamed", "acn": "{acn}"}),
     Route("patch", "/api/v1/companies/{company}/", {"name": "Renamed"}),
-    Route("delete", "/api/v1/companies/{company}/", prepare=_clear_subscriptions),
+    Route("delete", "/api/v1/companies/{company}/", prepare=_clear_the_register),
     Route("post", "/api/v1/companies/{company}/submit/", {"confirm": True}, prepare=_upload_listing_documents),
     Route("post", "/api/v1/companies/{company}/resubmit/", {"response": "Done"}, prepare=_request_company_info),
     Route("post", "/api/v1/companies/{company}/withdraw/", {}),
