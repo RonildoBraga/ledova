@@ -1,6 +1,5 @@
 import logging
 import secrets
-import time
 from datetime import timedelta
 from typing import Optional
 
@@ -8,7 +7,7 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from eth_account import Account
-from eth_account.messages import encode_typed_data
+from eth_account.messages import _hash_eip191_message, encode_typed_data
 
 from blockchain.models import BlockchainTransaction, TransactionStatus, TransactionType
 from integrations.base_chain import get_base_chain_client
@@ -112,7 +111,7 @@ class AtomicSwapService:
         }
 
     def _generate_nonce(self) -> int:
-        return int(time.time() * 1000000) + secrets.randbelow(1000000)
+        return secrets.randbits(63)
 
     def _compute_order_hash(self, swap_order: SwapOrder) -> str:
         typed_data = self.get_typed_data(swap_order)
@@ -484,6 +483,76 @@ class AtomicSwapService:
         swap_order.mark_failed(reason)
         logger.error(f"Swap {swap_order.uuid} reverted on chain and moved nothing: {tx_hash}")
         publish_trading_event("swap_failed", str(swap_order.share_token.uuid))
+
+    @staticmethod
+    def _locked_with_its_orders(swap_order: SwapOrder) -> SwapOrder:
+        return (
+            SwapOrder.objects.select_for_update()
+            .select_related("sell_order", "buy_order", "share_token")
+            .get(pk=swap_order.pk)
+        )
+
+    def executed_order_hash(self, swap_order: SwapOrder) -> str:
+        signable = encode_typed_data(full_message=self.get_typed_data(swap_order))
+        return _hash_eip191_message(signable).hex()
+
+    def chain_says_this_swap_executed(self, swap_order: SwapOrder) -> bool:
+        if not swap_order.tx_hash:
+            return True
+
+        receipt = self.chain_client.receipt_even_if_reverted(swap_order.tx_hash)
+        contract = self.chain_client.load_contract("AtomicSwap", self.contract_address)
+        expected = self.executed_order_hash(swap_order)
+
+        for event in contract.events.SwapExecuted().process_receipt(receipt):
+            if event["args"]["orderHash"].hex().lstrip("0x") == expected.lstrip("0x"):
+                return True
+
+        logger.error(f"Swap {swap_order.uuid} broadcast as {swap_order.tx_hash} settled a different order")
+        return False
+
+    def is_nonce_used(self, account: str, nonce: int) -> bool:
+        contract = self.chain_client.load_contract("AtomicSwap", self.contract_address)
+        return contract.functions.isNonceUsed(self.chain_client.to_checksum_address(account), nonce).call()
+
+    def resolve_executing_swap(self, swap_order: SwapOrder) -> Optional[str]:
+        if swap_order.status != SwapOrderStatus.EXECUTING:
+            return None
+
+        settled = self.is_nonce_used(swap_order.seller_address, swap_order.nonce)
+
+        if settled:
+            if not self.chain_says_this_swap_executed(swap_order):
+                return None
+            return self._settle_from_chain(swap_order)
+
+        if not swap_order.deadline_passed:
+            logger.info(f"Swap {swap_order.uuid} is still executing and its deadline is still live; leaving it")
+            return None
+
+        return self._abandon_unsettled(swap_order)
+
+    @transaction.atomic
+    def _settle_from_chain(self, swap_order: SwapOrder) -> Optional[str]:
+        swap = self._locked_with_its_orders(swap_order)
+        if swap.status != SwapOrderStatus.EXECUTING:
+            return None
+
+        swap.mark_completed()
+        logger.info(f"Swap {swap.uuid} settled on chain while its outcome was unknown; reconciled to completed")
+        publish_trading_event("swap_completed", str(swap.share_token.uuid))
+        return "executed"
+
+    @transaction.atomic
+    def _abandon_unsettled(self, swap_order: SwapOrder) -> Optional[str]:
+        swap = self._locked_with_its_orders(swap_order)
+        if swap.status != SwapOrderStatus.EXECUTING:
+            return None
+
+        swap.mark_failed("The swap nonce was never used on chain and the deadline has passed.")
+        logger.warning(f"Swap {swap.uuid} never reached the chain and can no longer; reconciled to failed")
+        publish_trading_event("swap_failed", str(swap.share_token.uuid))
+        return "never executed"
 
     def find_swap_order_by_transfer_order(self, transfer_order: TransferOrder) -> Optional[SwapOrder]:
         return SwapOrder.objects.for_transfer_order(transfer_order)
