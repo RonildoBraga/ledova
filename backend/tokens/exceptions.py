@@ -252,3 +252,34 @@ class DeployedShareClassException(APIException):
             "whatever its status. Pause it to stop transfers; the record is kept either way."
         )
         super().__init__(detail=detail)
+
+
+class SigningChallengeException(APIException):
+    expose_code = True
+
+
+class ChallengeUnknownException(SigningChallengeException):
+    status_code = status.HTTP_400_BAD_REQUEST
+    default_detail = "No signing challenge matches this signature. Request a new one."
+    default_code = "challenge_unknown"
+
+
+class ChallengeExpiredException(SigningChallengeException):
+    status_code = status.HTTP_400_BAD_REQUEST
+    default_detail = "This signing challenge has expired. Request a new one."
+    default_code = "challenge_expired"
+
+
+class ChallengeAlreadyUsedException(SigningChallengeException):
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "This signing challenge has already been used and cannot be used again."
+    default_code = "challenge_already_used"
+
+
+class ChallengeMismatchException(SigningChallengeException):
+    status_code = status.HTTP_400_BAD_REQUEST
+    default_detail = "This signing challenge was not issued for this action."
+    default_code = "challenge_mismatch"
+
+    def __init__(self, what: str):
+        super().__init__(detail=f"This signing challenge was not issued for this {what}.")

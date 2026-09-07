@@ -52,6 +52,7 @@ def _clear_open_classifications(tenant):
 
 
 SIGNATURE = "0x" + "ab" * 65
+DIGEST = "0x" + "cd" * 32
 RECIPIENT = "0x" + "9" * 40
 NEW_WALLET_ADDRESS = "0x" + "e" * 40
 ALLOWANCE = {
@@ -345,7 +346,7 @@ ROUTES = (
         rejects="walletUuid",
     ),
     Route("get", "/api/v1/trading/orders/{order}/"),
-    Route("post", "/api/v1/trading/orders/{order}/cancel/", {"message": "cancel", "signature": SIGNATURE}),
+    Route("post", "/api/v1/trading/orders/{order}/cancel/", {"digest": DIGEST, "signature": SIGNATURE}),
     Route("get", "/api/v1/trading/orders/{order}/cancel/message/"),
     Route("post", "/api/v1/trading/orders/{order}/modify/", {"message": "modify", "signature": SIGNATURE}),
     Route("post", "/api/v1/trading/orders/{order}/modify/message/", {"newQuantity": 5}),
@@ -458,6 +459,7 @@ class CrossTenantRouteMatrixTest(APITestCase):
         order_transfers = self._service("tokens.views.trading_order.TokenTransferService")
         order_transfers.return_value.create_order_and_match.return_value = (None, None)
         trading_orders.build_order_response.return_value = {}
+        self._service("tokens.views.trading_order.cancel_signed_order").side_effect = lambda order, **kwargs: order
         modifications = self._service("tokens.views.trading_order.OrderModificationService").return_value
         modifications.generate_modification_message.return_value = {}
         modifications.apply_modification.side_effect = lambda order, **kwargs: (order, {})

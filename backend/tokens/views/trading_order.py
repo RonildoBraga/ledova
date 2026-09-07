@@ -25,6 +25,7 @@ from tokens.services import (
     TokenTransferService,
     TradingOrderService,
 )
+from tokens.services.trading_order_cancel import cancel_signed_order
 from tokens.trading_wallet_access import resolve_verified_evm_wallets
 
 
@@ -81,15 +82,11 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
 
     @action(detail=True, methods=["post"])
     def cancel(self, request, uuid=None):
-        order = self.get_object()
-
-        TradingOrderService.verify_order_cancel_signature(
-            order=order,
-            message=request.data.get("message"),
+        order = cancel_signed_order(
+            order=self.get_object(),
+            digest=request.data.get("digest"),
             signature=request.data.get("signature"),
         )
-
-        order = TradingOrderService.cancel_order(order)
 
         return Response(TransferOrderDetailSerializer(order).data)
 
