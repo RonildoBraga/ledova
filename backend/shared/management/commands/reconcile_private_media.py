@@ -2,21 +2,10 @@ import filecmp
 import os
 import shutil
 
-from django.apps import apps
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
-from django.db import models
 
-from shared.storage import PrivateMediaStorage
-
-
-def private_file_fields():
-    for model in apps.get_models():
-        for field in model._meta.get_fields():
-            if not isinstance(field, models.FileField):
-                continue
-            if isinstance(getattr(field, "storage", None), PrivateMediaStorage):
-                yield model, field.name
+from shared.storage import private_file_fields
 
 
 def stored_names(model, field_name):
