@@ -5,7 +5,7 @@ from django.contrib.admin.sites import AdminSite
 from django.db import connection
 from django.test import RequestFactory, TestCase, TransactionTestCase
 
-from shared.tests.schema import migrate_to, restore_every_migration
+from shared.tests.schema import app_tip, migrate_to, restore_every_migration
 from shared.tests.tenants import make_tenant
 from wallets.admin.wallet import WalletAdmin
 from wallets.constants import WALLET_VERIFICATION_STATUS_VERIFIED
@@ -91,7 +91,7 @@ class TheReverseRestoresTheBodyThatBehavesTest(TransactionTestCase):
             Transaction.objects.filter(pk=tenant.transaction.pk).update(amount=Decimal("3"))
         self.assertIn("does not match wallet.user_account_id", str(wedged.exception))
 
-        migrate_to([("wallets", "0009_trigger_follows_and_refuses")])
+        migrate_to(app_tip("wallets"))
         Transaction.objects.filter(pk=tenant.transaction.pk).update(amount=Decimal("4"))
         tenant.transaction.refresh_from_db()
         self.assertEqual(tenant.transaction.user_account_id, other.account.uuid)
