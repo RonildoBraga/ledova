@@ -4,22 +4,10 @@ from django.db.models import OuterRef, Subquery
 
 TABLES = ("NotificationPreferences", "UserPreferences", "FinancialProfile")
 
-REVERSE_ORDER = (
-    "Operations reverse back to front, so drop_triggers runs before unfill sets every user_id to NULL. "
-    "An operation appended after install_triggers would move that boundary, and unfill would then hit the "
-    "trigger's own cannot-change guard and the reverse would be impossible."
-)
-
 UNREACHABLE_TODAY = (
     "UserProfile.user is a non-nullable OneToOneField and all three user_profile links are non-nullable, "
     "so neither this guard nor the trigger's matching RAISE can fire under the current schema. Both are "
     "here for the R0 lanes whose parent link is nullable, where the same shape does fire."
-)
-
-SKIPPED_ON_SQLITE = (
-    "The derive-and-refuse trigger is PostgreSQL only. SQLite has no plpgsql, "
-    "and the column exists for a PostgreSQL row-level security policy, so a "
-    "SQLite deployment has nothing for the trigger to protect."
 )
 
 FUNCTION = """
@@ -94,16 +82,9 @@ def backfill(apps, schema_editor):
 
 
 def unfill(apps, schema_editor):
-    connection = schema_editor.connection
     for name in TABLES:
         model = apps.get_model("users", name)
-        if connection.vendor == "postgresql":
-            names = _names(apps, name)
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT to_regclass(%s) IS NOT NULL", [names["trigger"]])
-                if cursor.fetchone()[0]:
-                    raise RuntimeError(f"{names['trigger']} is still installed. {REVERSE_ORDER}")
-        model._base_manager.using(connection.alias).update(user_id=None)
+        model._base_manager.using(schema_editor.connection.alias).update(user_id=None)
 
 
 def install_triggers(apps, schema_editor):
