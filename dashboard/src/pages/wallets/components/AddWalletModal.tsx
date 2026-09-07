@@ -6,6 +6,7 @@ import {
   isBitcoinChain,
   DESIGN_TOKENS,
   fetchBatchBalances,
+  describeFailure,
 } from '@ledova/shared';
 
 const ICON_XS = DESIGN_TOKENS.icon.sizes.xs;
@@ -183,7 +184,7 @@ function AccountSelector({ urString, onSelectAccounts, onCancel, isLoading: isIm
         fetchBalances(result.addresses);
       }
     } catch (error) {
-      console.error('Failed to extract QR data:', error);
+      console.error(`Failed to extract QR data: ${describeFailure(error)}`);
     } finally {
       setIsLoading(false);
     }

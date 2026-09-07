@@ -6,6 +6,7 @@ import {
   submitApplication,
   resubmitApplication,
   withdrawApplication,
+  describeFailure,
 } from '@ledova/shared';
 import type { CompanyDocument, DocumentType } from '@ledova/shared';
 import { apiClient } from '../../services/apiClient';
@@ -34,17 +35,12 @@ export function useCompanyDocuments() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (docUuid: string) => {
-      console.log('[Delete] Deleting document:', docUuid, 'from company:', companyUuid);
-      return deleteCompanyDocument(apiClient, companyUuid!, docUuid);
-    },
+    mutationFn: (docUuid: string) => deleteCompanyDocument(apiClient, companyUuid!, docUuid),
     onSuccess: () => {
-      console.log('[Delete] Success');
       queryClient.invalidateQueries({ queryKey: ['company-documents', companyUuid] });
     },
     onError: (error: unknown) => {
-      const err = error as { response?: { status?: number; data?: unknown }; message?: string };
-      console.log('[Delete] Error:', err?.response?.status, JSON.stringify(err?.response?.data), err?.message);
+      console.error(`Company document delete failed: ${describeFailure(error)}`);
     },
   });
 

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { UserIcon, BuildingsIcon } from '@phosphor-icons/react';
-import { CACHE_TIMING, DESIGN_TOKENS } from '@ledova/shared';
+import { CACHE_TIMING, DESIGN_TOKENS, describeFailure } from '@ledova/shared';
 import { AuthLayout } from '@components/AuthLayout';
 import apiClient from '@services/apiClient';
 
@@ -67,7 +67,7 @@ export function SignupAccountType() {
         navigate('/signup/identity-verification');
       }
     } catch (error) {
-      console.error('Failed to update account role:', error);
+      console.error(`Failed to update account role: ${describeFailure(error)}`);
       setIsSubmitting(false);
     }
   };

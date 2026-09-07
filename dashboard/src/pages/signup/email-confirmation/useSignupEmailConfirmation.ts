@@ -6,6 +6,7 @@ import {
   validateEmailConfirmation,
   formatVerificationToken,
   EMAIL_CONFIRMATION_VALIDATION,
+  describeFailure,
 } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 
@@ -49,7 +50,7 @@ export const useSignupEmailConfirmation = () => {
 
       onSuccess();
     } catch (error: unknown) {
-      console.error('Email verification failed:', error);
+      console.error(`Email verification failed: ${describeFailure(error)}`);
       const axiosError = error as { response?: { data?: unknown } };
       if (axiosError.response?.data) {
         const errorData = axiosError.response.data;
@@ -82,7 +83,7 @@ export const useSignupEmailConfirmation = () => {
       setSuccessMessage('Verification code sent! Please check your email.');
       setVerificationCode('');
     } catch (error) {
-      console.error('Failed to resend verification code:', error);
+      console.error(`Failed to resend verification code: ${describeFailure(error)}`);
       setGeneralError('Failed to resend code. Please try again.');
     } finally {
       setIsResending(false);

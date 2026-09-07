@@ -242,14 +242,20 @@ class SumSubService(KYCProvider):
             response = requests.request(method=method, url=url, headers=headers, json=data, timeout=30)
 
         if not response.ok:
-            try:
-                error_body = response.json()
-                logger.error(f"SumSub API Error: {response.status_code} - {error_body}")
-            except Exception:
-                logger.error(f"SumSub API Error: {response.status_code} - {response.text}")
+            logger.error(f"SumSub API Error: {response.status_code} for {method} {endpoint}")
             response.raise_for_status()
 
         return response.json()
+
+    @staticmethod
+    def _review_answer(body: Dict[str, Any]) -> str:
+        review = body.get("review")
+        if not isinstance(review, dict):
+            review = body
+        result = review.get("reviewResult")
+        if not isinstance(result, dict):
+            result = {}
+        return result.get("reviewAnswer") or review.get("reviewStatus") or "none"
 
     def get_applicant_data(self, applicant_id: str) -> Dict[str, Any]:
         endpoint = f"/resources/applicants/{applicant_id}/one"
@@ -257,7 +263,7 @@ class SumSubService(KYCProvider):
         logger.info(f"[SUMSUB_CLIENT] Fetching applicant data for {applicant_id} from {self.base_url}{endpoint}")
         response = self._make_request("GET", endpoint)
 
-        logger.info(f"[SUMSUB_CLIENT] Applicant data response for {applicant_id}: {response}")
+        logger.info(f"[SUMSUB_CLIENT] Applicant data for {applicant_id}: review answer {self._review_answer(response)}")
         return response
 
     def get_applicant_by_external_id(self, external_user_id: str) -> Dict[str, Any]:
@@ -283,7 +289,7 @@ class SumSubService(KYCProvider):
 
         logger.info(f"[SUMSUB_CLIENT] Fetching status for applicant {applicant_id} from {self.base_url}{endpoint}")
         response = self._make_request("GET", endpoint)
-        logger.info(f"[SUMSUB_CLIENT] Status response for {applicant_id}: {response}")
+        logger.info(f"[SUMSUB_CLIENT] Status for {applicant_id}: review answer {self._review_answer(response)}")
         return response
 
     def verify_webhook_signature(self, payload: bytes, signature: str) -> bool:

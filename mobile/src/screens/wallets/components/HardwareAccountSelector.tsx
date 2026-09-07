@@ -5,7 +5,7 @@ import { PrimaryButton, SecondaryButton } from '../../../components/buttons';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
 import type { DerivedAddress, HardwareWalletImport } from '@ledova/shared';
 import { extractFromKeystoneQR } from '../../../utils/keystone/bcurDecoder';
-import { getBlockchainDisplayName } from '@ledova/shared';
+import { getBlockchainDisplayName, describeFailure } from '@ledova/shared';
 import { useFetchBalances } from '../../../hooks';
 
 interface HardwareAccountSelectorProps {
@@ -119,7 +119,7 @@ export function HardwareAccountSelector({ urString, onSelectAccounts, onCancel }
         fetchBalances(result.addresses);
       }
     } catch (error) {
-      console.error('Failed to extract QR data:', error);
+      console.error(`Failed to extract QR data: ${describeFailure(error)}`);
     } finally {
       setIsLoading(false);
     }

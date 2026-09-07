@@ -34,9 +34,9 @@ class ExpoPushClient:
         if not messages:
             return []
 
-        for msg in messages:
+        for index, msg in enumerate(messages):
             if not self._validate_token(msg.get("to", "")):
-                raise ExpoPushError(f"Invalid Expo push token format: {msg.get('to')}")
+                raise ExpoPushError(f"Invalid Expo push token format in message {index}")
 
         results = []
         for i in range(0, len(messages), self.MAX_BATCH_SIZE):
@@ -57,7 +57,7 @@ class ExpoPushClient:
             )
 
             if not response.ok:
-                logger.error(f"[EXPO_PUSH] API Error: {response.status_code} - {response.text}")
+                logger.error(f"[EXPO_PUSH] API Error: {response.status_code} for {len(messages)} notification(s)")
                 raise ExpoPushError(
                     f"Expo Push API error: {response.status_code}",
                     {"status_code": response.status_code, "response": response.text},
@@ -68,9 +68,8 @@ class ExpoPushClient:
 
             for i, ticket in enumerate(tickets):
                 if ticket.get("status") == "error":
-                    logger.warning(
-                        f"[EXPO_PUSH] Notification {i} failed: {ticket.get('message')} - {ticket.get('details')}"
-                    )
+                    reason = ticket.get("details") or {}
+                    logger.warning(f"[EXPO_PUSH] Notification {i} failed: {reason.get('error') or 'unspecified'}")
                 else:
                     logger.debug(f"[EXPO_PUSH] Notification {i} sent: {ticket.get('id')}")
 

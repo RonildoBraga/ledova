@@ -48,7 +48,7 @@ class SessionService:
         user.last_login = timezone.now()
         user.save(update_fields=["last_login"])
 
-        logger.info(f"User {user.email} successfully authenticated")
+        logger.info(f"User {user.pk} successfully authenticated")
         return user
 
     @staticmethod
@@ -73,7 +73,7 @@ class SessionService:
 
         ensure_defaults(user)
 
-        logger.info(f"User account created/updated for {user.email}")
+        logger.info(f"User account created/updated for user {user.pk}")
         return user
 
     @staticmethod

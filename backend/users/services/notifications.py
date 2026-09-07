@@ -31,7 +31,7 @@ class NotificationService:
         )
 
         if prefs and not prefs.can_receive_notification(notification_type):
-            logger.info(f"Skipped for user {user.email}: {notification_type} notifications disabled")
+            logger.info(f"Skipped for user {user.pk}: {notification_type} notifications disabled")
             return {
                 "status": "skipped",
                 "reason": f"{notification_type} notifications disabled",
@@ -42,7 +42,7 @@ class NotificationService:
         device_tokens = list(DeviceToken.objects.filter(user=user, is_active=True))
 
         if not device_tokens:
-            logger.info(f"No active devices for user {user.email}")
+            logger.info(f"No active devices for user {user.pk}")
             return {
                 "status": "no_devices",
                 "sent": 0,
@@ -75,9 +75,9 @@ class NotificationService:
                     if error_type in ["DeviceNotRegistered", "InvalidCredentials"]:
                         token = device_tokens[i]
                         DeviceToken.objects.filter(pk=token.pk).update(is_active=False)
-                        logger.info(f"Deactivated invalid token for {user.email}: {token.push_token[:30]}...")
+                        logger.info(f"Deactivated device token {token.pk} of user {user.pk}: {error_type}")
 
-            logger.info(f"Sent to user {user.email}: {sent} successful, {failed} failed")
+            logger.info(f"Sent to user {user.pk}: {sent} successful, {failed} failed")
 
             return {
                 "status": "sent",
@@ -87,7 +87,7 @@ class NotificationService:
             }
 
         except ExpoPushError as e:
-            logger.error(f"Failed to send to user {user.email}: {e}")
+            logger.error(f"Failed to send to user {user.pk}: {e}")
             return {
                 "status": "error",
                 "error": str(e),

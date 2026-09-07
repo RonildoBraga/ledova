@@ -6,6 +6,7 @@ import {
   PASSWORD_VALIDATION,
   isNumericOnly,
   validatePassword,
+  describeFailure,
 } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 
@@ -82,7 +83,7 @@ export const useSignupUser = () => {
 
       onSuccess();
     } catch (error: unknown) {
-      console.error('Account creation failed:', error);
+      console.error(`Account creation failed: ${describeFailure(error)}`);
       const axiosError = error as { response?: { data?: unknown } };
       if (axiosError.response?.data) {
         const errorData = axiosError.response.data;

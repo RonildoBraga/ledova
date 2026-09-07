@@ -4,7 +4,8 @@
 NPM ?= npm
 PYTHON ?= python3
 
-.PHONY: help install install-backend init-local check-local-env build generate-tokens check check-comments check-layers audit test \
+.PHONY: help install install-backend init-local check-local-env build generate-tokens check check-comments check-layers \
+	check-logging test-gates audit test \
 	dev-up dev-down dev-logs contracts-compile contracts-test contracts-deploy-local \
 	contracts-deploy-testnet chain-test smoke
 
@@ -35,6 +36,8 @@ help:
 	@echo "  make check                    Run static checks, including mobile and Django"
 	@echo "  make check-comments           Fail on any comment or docstring in source"
 	@echo "  make check-layers             Fail on a new backend layer violation"
+	@echo "  make check-logging            Fail on a log line that can carry a credential or an email"
+	@echo "  make test-gates               Run the unit tests of the gate scripts"
 	@echo "  make audit                    Fail on a new production dependency advisory"
 	@echo "  make test                     Run workspace, mobile, and contract tests"
 	@echo "  make smoke                    Run the dashboard smoke tests against the built bundle"
@@ -68,7 +71,7 @@ build:
 generate-tokens:
 	$(NPM) exec -- tsx packages/scripts/generate-css-tokens.mjs
 
-check: check-comments check-layers install-backend
+check: check-comments check-layers check-logging install-backend
 	$(NPM) run typecheck
 	$(NPM) --prefix marketing run type-check
 	$(NPM) --prefix mobile run type-check
@@ -80,6 +83,12 @@ check-comments:
 
 check-layers:
 	$(PYTHON) scripts/check-layers.py
+
+check-logging:
+	$(PYTHON) scripts/check-logging.py
+
+test-gates:
+	$(PYTHON) -m unittest discover --start-directory scripts/tests --top-level-directory scripts/tests
 
 audit:
 	$(NPM) audit --omit=dev --audit-level=low

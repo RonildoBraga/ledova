@@ -1,7 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 
-import { getUserProfiles, updateUserProfileCompletion, getCompanies, CACHE_TIMING } from '@ledova/shared';
+import {
+  getUserProfiles,
+  updateUserProfileCompletion,
+  getCompanies,
+  CACHE_TIMING,
+  describeFailure,
+} from '@ledova/shared';
 import { useFinancialProfile } from '@hooks/useFinancialProfile';
 import { useAccountRole } from '@hooks/useAccountRole';
 import apiClient from '@services/apiClient';
@@ -81,7 +87,7 @@ export const useReview = (): ReviewHookReturn => {
       navigate(signupRole === 'company' ? '/company' : '/home');
     },
     onError: (error) => {
-      console.error('Signup completion failed:', error);
+      console.error(`Signup completion failed: ${describeFailure(error)}`);
     },
   });
 

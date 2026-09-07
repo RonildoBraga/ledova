@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 
-const SIGNED_OUT_API_NOISE = ['Failed to load resource', 'API Client Error:'];
+const SIGNED_OUT_API_NOISE = ['Failed to load resource', 'API request failed:'];
 
 async function serveASignedOutBackend(page: Page) {
   await page.route('**/api/**', (route) =>

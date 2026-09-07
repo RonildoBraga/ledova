@@ -1,6 +1,11 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getIdentityVerificationToken, getIdentityVerificationStatus, CACHE_TIMING } from '@ledova/shared';
+import {
+  getIdentityVerificationToken,
+  getIdentityVerificationStatus,
+  CACHE_TIMING,
+  describeFailure,
+} from '@ledova/shared';
 import apiClient from '@services/apiClient';
 import snsWebSdk from '@sumsub/websdk';
 
@@ -115,8 +120,8 @@ export function useIdentityVerification() {
             setJustSubmitted(true);
           })
           .on('idCheck.onError', (error) => {
-            console.error('SumSub error:', error);
             const errorMessage = error?.error || 'An error occurred during verification';
+            console.error(`SumSub verification error: ${errorMessage}`);
             setSdkError(errorMessage);
           })
           .build();
@@ -124,7 +129,7 @@ export function useIdentityVerification() {
         snsWebSdkInstance.launch(containerId);
         setSdkActive(true);
       } catch (error: unknown) {
-        console.error('Failed to launch verification:', error);
+        console.error(`Failed to launch verification: ${describeFailure(error)}`);
         const errorMessage = error instanceof Error ? error.message : 'Failed to start verification';
         setSdkError(errorMessage);
       } finally {

@@ -1,5 +1,11 @@
 import { useState, useEffect } from 'react';
-import { getFinancialProfiles, createFinancialProfile, updateFinancialProfile, getUserProfiles } from '@ledova/shared';
+import {
+  getFinancialProfiles,
+  createFinancialProfile,
+  updateFinancialProfile,
+  getUserProfiles,
+  describeFailure,
+} from '@ledova/shared';
 import apiClient from '@services/apiClient';
 import type { CreateFinancialProfile, FinancialProfileFormState, FormErrors } from '@ledova/shared';
 
@@ -60,7 +66,7 @@ export const useSignupFinancialProfile = () => {
         setGeneralError('Please complete your user profile first.');
       }
     } catch (error) {
-      console.error('Failed to load financial profile:', error);
+      console.error(`Failed to load financial profile: ${describeFailure(error)}`);
       setGeneralError('Failed to load profile. Please try again.');
     } finally {
       setIsLoading(false);
@@ -142,7 +148,7 @@ export const useSignupFinancialProfile = () => {
 
       onSuccess();
     } catch (error: unknown) {
-      console.error('Financial profile update failed:', error);
+      console.error(`Financial profile update failed: ${describeFailure(error)}`);
       const axiosError = error as { response?: { data?: unknown } };
       if (axiosError.response?.data) {
         const errorData = axiosError.response.data;
