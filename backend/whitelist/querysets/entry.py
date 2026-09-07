@@ -45,7 +45,7 @@ class WhitelistEntryQuerySet(QuerySet):
 
         return self.filter(status=WhitelistStatus.PENDING)
 
-    def failed_with_a_sent_add(self, cutoff):
+    def failed_with_a_sent_add(self):
         from whitelist.models import WhitelistStatus
 
-        return self.filter(status=WhitelistStatus.FAILED, updated_at__gte=cutoff).exclude(add_tx_hash__isnull=True)
+        return self.filter(status=WhitelistStatus.FAILED).exclude(add_tx_hash__isnull=True)

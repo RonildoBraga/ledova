@@ -9,7 +9,6 @@ from users.models import UserAccount
 from wallets.models import Wallet
 from whitelist.models import WhitelistEntry, WhitelistStatus
 from whitelist.services import WhitelistService
-from whitelist.services.whitelist import GETH_TXPOOL_LIFETIME
 
 HASH = "0x" + "7a" * 32
 REMOVE_HASH = "0x" + "22" * 32
@@ -80,8 +79,19 @@ class AFailedAddTheChainContradictsIsReconciledTest(TestCase):
         self.assertEqual(result["checked"], 0)
         service.is_whitelisted.assert_not_called()
 
-    def test_an_add_older_than_the_node_would_hold_it_is_left_alone(self):
-        entry = self.an_entry(age=GETH_TXPOOL_LIFETIME + timedelta(minutes=1))
+    def test_an_add_older_than_any_node_would_hold_it_is_still_reconciled(self):
+        entry = self.an_entry(age=timedelta(days=3))
+        service = self.service(on_chain=True)
+
+        result = service.reconcile_failed_adds()
+
+        entry.refresh_from_db()
+        self.assertEqual((entry.status, entry.add_tx_hash), (WhitelistStatus.ACTIVE, HASH))
+        self.assertEqual((result["checked"], result["activated"]), (1, 1))
+        service.is_whitelisted.assert_called_once()
+
+    def test_a_failure_with_no_hash_is_left_alone_however_old_it_is(self):
+        entry = self.an_entry(tx_hash=None, age=timedelta(days=30))
         service = self.service(on_chain=True)
 
         result = service.reconcile_failed_adds()

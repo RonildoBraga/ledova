@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from datetime import timezone as dt_timezone
 from typing import Optional
 
@@ -26,8 +26,6 @@ from whitelist.exceptions import (
 from whitelist.models import WhitelistEntry, WhitelistStatus
 
 logger = logging.getLogger(__name__)
-
-GETH_TXPOOL_LIFETIME = timedelta(hours=3)
 
 WHITELIST_ENTRY_LABEL = "whitelist.WhitelistEntry"
 
@@ -283,11 +281,10 @@ class WhitelistService:
         )
         return latest == TransactionType.WHITELIST_ADD
 
-    def reconcile_failed_adds(self, now=None) -> dict:
-        cutoff = (now or timezone.now()) - GETH_TXPOOL_LIFETIME
+    def reconcile_failed_adds(self) -> dict:
         result = {"checked": 0, "activated": 0, "left_failed": 0, "removals_the_chain_kept": 0, "errors": []}
 
-        for entry in WhitelistEntry.objects.failed_with_a_sent_add(cutoff):
+        for entry in WhitelistEntry.objects.failed_with_a_sent_add():
             result["checked"] += 1
             try:
                 if not self.is_whitelisted(entry.wallet_address):
