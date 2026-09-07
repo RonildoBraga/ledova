@@ -1482,6 +1482,18 @@ reading:
   before repeating someone else's**: a relayed measurement is not a
   measurement.
 
+**Two independently reasonable constants, and nobody compared them.** Neither
+number is wrong where it is written, and the pair is the defect. `order_write`
+throttles at 30/min, which is 1,800 signing challenges an hour from one user;
+the sweep that removes them ran hourly with a batch of 500. `SwapOrder.nonce`
+said *"Unique nonce for replay protection"* in its `help_text` while the schema
+enforced nothing, and the reconciler read `isNonceUsed` as though it did. CI
+writes a generated schema to one path while the `Makefile` defaults to another
+name for the same file. Each half was written by someone with a good reason and
+read by someone checking that half. **When a number in one file only means what
+it says because of a number in another, say so where both can see it, or derive
+one from the other.**
+
 ### Measurement traps
 
 Not a test but the same family: a reading that looks like a finding and is
