@@ -18,6 +18,8 @@ from tokens.serializers.share_token import (
 
 POSTGRES_ONLY = "The trigger is PostgreSQL; SQLite has no derive-and-refuse"
 BEFORE_THE_OWNER_COLUMN = [("tokens", "0023_r0_owner_columns")]
+BEFORE_THE_REPARENT_REFUSAL = [("tokens", "0024_r0_sharetoken_owner")]
+WITH_THE_REPARENT_REFUSAL = [("tokens", "0025_a_token_cannot_change_company")]
 
 
 class EveryTokenCarriesItsOwnerTest(TestCase):
@@ -258,3 +260,31 @@ class TheReverseRestoresTheFunctionItReplacedTest(TestCase):
         )
 
         self.assertEqual(without.replace(guard, ""), with_it)
+
+
+@skipUnless(connection.vendor == "postgresql", POSTGRES_ONLY)
+class TheHoleIsBackAfterTheReverseAndGoneAfterTheForwardTest(TransactionTestCase):
+
+    def tearDown(self):
+        restore_every_migration()
+        super().tearDown()
+
+    def test_the_reverse_restores_the_behaviour_and_not_only_the_text(self):
+        tenant = make_tenant("roundtrip-hole")
+        stranger = make_tenant("roundtrip-stranger")
+        token = tenant.deployed_token
+        ShareToken.objects.filter(pk=token.pk).update(symbol="RTRP")
+
+        migrate_to(BEFORE_THE_REPARENT_REFUSAL)
+        ShareToken.objects.filter(pk=token.pk).update(company=stranger.company)
+        self.assertEqual(ShareToken.objects.get(pk=token.pk).owner_id, stranger.company.owner_id)
+
+        ShareToken.objects.filter(pk=token.pk).update(company=tenant.company)
+        migrate_to(WITH_THE_REPARENT_REFUSAL)
+
+        with self.assertRaises(Exception) as refusal:
+            with transaction.atomic():
+                ShareToken.objects.filter(pk=token.pk).update(company=stranger.company)
+
+        self.assertIn("cannot move this row to another owner", str(refusal.exception))
+        self.assertEqual(ShareToken.objects.get(pk=token.pk).owner_id, tenant.company.owner_id)
