@@ -144,8 +144,7 @@ class TradingReadIsolationTest(APITestCase):
             Web3.to_checksum_address(self.bob_wallet.address)
         )
 
-    @patch("tokens.views.swap.AtomicSwapService")
-    def test_pending_swaps_rejects_foreign_address_before_service_construction(self, service_class):
+    def test_pending_swaps_rejects_a_foreign_address(self):
         self.client.force_authenticate(self.bob)
         response = self.client.get(
             "/api/v1/trading/swaps/",
@@ -153,13 +152,8 @@ class TradingReadIsolationTest(APITestCase):
         )
 
         self.assertEqual(response.status_code, 404)
-        service_class.assert_not_called()
 
-    @patch("tokens.views.swap.AtomicSwapService")
-    def test_pending_swaps_accepts_owned_case_variant_and_passes_wallet_ids(self, service_class):
-        service_class.return_value.get_pending_swaps_for_wallet_ids.return_value = (
-            SwapOrder.objects.pending_for_wallet_ids([self.bob_wallet.uuid])
-        )
+    def test_pending_swaps_accepts_an_owned_case_variant(self):
         self.client.force_authenticate(self.bob)
 
         response = self.client.get(
@@ -170,14 +164,9 @@ class TradingReadIsolationTest(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["count"], 1)
         self.assertEqual(response.data["results"][0]["uuid"], str(self.swap.uuid))
-        service_class.return_value.get_pending_swaps_for_wallet_ids.assert_called_once_with((self.bob_wallet.uuid,))
 
-    @patch("tokens.views.swap.AtomicSwapService")
-    def test_pending_swaps_are_paginated_and_newest_first(self, service_class):
+    def test_pending_swaps_are_paginated_and_newest_first(self):
         newer_swap = self._make_swap(self.alice_order, self.bob_order, "6")
-        service_class.return_value.get_pending_swaps_for_wallet_ids.return_value = (
-            SwapOrder.objects.pending_for_wallet_ids([self.bob_wallet.uuid])
-        )
         self.client.force_authenticate(self.bob)
 
         response = self.client.get(

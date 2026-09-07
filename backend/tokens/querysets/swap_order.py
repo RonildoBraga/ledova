@@ -1,6 +1,7 @@
 from django.db.models import F, Q, QuerySet
 
 from tokens.models.choices import SwapOrderStatus
+from wallets.models import Wallet
 
 
 class SwapOrderQuerySet(QuerySet):
@@ -22,6 +23,21 @@ class SwapOrderQuerySet(QuerySet):
         )
         return self.filter(sell_order_owned | buy_order_owned)
 
+    def visible_to_user(self, user):
+        if user is None or not user.is_authenticated:
+            return self.none()
+        wallet_ids = list(Wallet.objects.visible_to_user(user).verified_evm().values_list("uuid", flat=True))
+        return self.for_wallet_ids(wallet_ids)
+
+    def awaiting_signature(self):
+        return self.filter(
+            status__in=[
+                SwapOrderStatus.CREATED,
+                SwapOrderStatus.SELLER_SIGNED,
+                SwapOrderStatus.BUYER_SIGNED,
+            ],
+        )
+
     def pending(self):
         return self.exclude(status__in=[SwapOrderStatus.COMPLETED, SwapOrderStatus.FAILED, SwapOrderStatus.EXPIRED])
 
@@ -32,17 +48,7 @@ class SwapOrderQuerySet(QuerySet):
         return self.filter(share_token=token, status="completed").order_by("-completed_at").first()
 
     def pending_for_wallet_ids(self, wallet_ids):
-        return (
-            self.for_wallet_ids(wallet_ids)
-            .filter(
-                status__in=[
-                    SwapOrderStatus.CREATED,
-                    SwapOrderStatus.SELLER_SIGNED,
-                    SwapOrderStatus.BUYER_SIGNED,
-                ],
-            )
-            .with_related()
-        )
+        return self.for_wallet_ids(wallet_ids).awaiting_signature().with_related()
 
     def for_transfer_order(self, order):
         return self.filter(Q(sell_order=order) | Q(buy_order=order)).first()

@@ -4,7 +4,6 @@ from rest_framework.response import Response
 from shared.views import AuthenticatedListViewSet
 from tokens.models import SwapOrder
 from tokens.serializers.swap_order import SwapOrderListSerializer
-from tokens.services import AtomicSwapService
 from tokens.trading_wallet_access import resolve_verified_evm_wallets
 
 
@@ -15,7 +14,7 @@ class SwapOrderViewSet(AuthenticatedListViewSet):
     ordering_fields = ["created_at", "status"]
 
     def get_queryset(self):
-        return SwapOrder.objects.none()
+        return SwapOrder.objects.visible_to_user(self.request.user).awaiting_signature().with_related()
 
     def list(self, request, *args, **kwargs):
         wallet_address = request.query_params.get("wallet_address")
@@ -24,9 +23,7 @@ class SwapOrderViewSet(AuthenticatedListViewSet):
 
         authorized_wallets = resolve_verified_evm_wallets(request.user, [wallet_address])
 
-        atomic_swap_service = AtomicSwapService()
-        swap_orders = atomic_swap_service.get_pending_swaps_for_wallet_ids(authorized_wallets.wallet_ids)
-        swap_orders = self.filter_queryset(swap_orders)
+        swap_orders = self.filter_queryset(self.get_queryset().for_wallet_ids(authorized_wallets.wallet_ids))
 
         page = self.paginate_queryset(swap_orders)
         if page is not None:
