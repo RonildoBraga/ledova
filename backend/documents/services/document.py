@@ -1,7 +1,10 @@
+from django.db import transaction
+
 from documents.models import Document
 from documents.tasks.extract import extract_document
 
 
+@transaction.atomic
 def create_document(uploaded_by, validated_data) -> Document:
     upload = validated_data["file"]
     document = Document.objects.create(
