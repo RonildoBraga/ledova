@@ -57,8 +57,6 @@ jobs:
       - name: Type-check workspaces
         run: |
           npm run typecheck
-          npm --prefix marketing run type-check
-          npm --prefix mobile run type-check
 
       - name: Mobile imports resolve from mobile/node_modules
         run: npm --prefix mobile run check:resolution

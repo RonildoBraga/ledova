@@ -31,6 +31,12 @@ neither `files` nor `include` itself, because a local one overwrites the base's.
 An `extends` that cannot be resolved is reported rather than skipped. The gate
 answering "nothing found" because it could not read the file is the failure this
 rule exists to prevent, one level up.
+
+A workspace in WORKSPACES with no `type-check` script, no `package.json` or no
+`tsconfig.json` is reported for the same reason. The gate knows how many
+workspaces it expects, so a workspace falling out of its coverage is something it
+can see - and the only other signal was a smaller number inside a green success
+line, which nobody diffs between runs.
 """
 
 from __future__ import annotations
@@ -163,11 +169,17 @@ def main() -> int:
     for name in WORKSPACES:
         manifest = ROOT / name / "package.json"
         tsconfig = ROOT / name / "tsconfig.json"
-        if not manifest.exists() or not tsconfig.exists():
+        missing = [p.name for p in (manifest, tsconfig) if not p.exists()]
+        if missing:
+            failures.append(f"{name}: listed in WORKSPACES but has no {' and no '.join(missing)}.")
             continue
 
         script = json.loads(manifest.read_text()).get("scripts", {}).get("type-check")
         if script is None:
+            failures.append(
+                f"{name}: listed in WORKSPACES but declares no type-check script, so this gate "
+                "checks nothing there. Add one, or remove the workspace from WORKSPACES."
+            )
             continue
 
         checked += 1
@@ -194,7 +206,7 @@ def main() -> int:
             )
 
     if failures:
-        print(f"Type-check scripts that examine nothing ({len(failures)}):\n", file=sys.stderr)
+        print(f"Workspaces whose type-check does not check them ({len(failures)}):\n", file=sys.stderr)
         for failure in failures:
             print(f"  {failure}", file=sys.stderr)
         return 1
