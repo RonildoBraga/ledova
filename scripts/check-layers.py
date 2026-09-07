@@ -70,6 +70,10 @@ ALLOWED: dict[str, tuple[int, str]] = {
 }
 
 LEGACY: dict[str, int] = {
+    "backend/assets/views/asset.py:raw-orm-in-view": 1,
+    "backend/offerings/views/offering.py:raw-orm-in-view": 1,
+    "backend/tokens/views/share_token.py:raw-orm-in-view": 1,
+    "backend/tokens/views/trading_order.py:raw-orm-in-view": 1,
     "backend/tokens/views/trading_token.py:raw-orm-in-view": 1,
     "backend/users/views/notification_preferences.py:transaction-in-view": 1,
     "backend/users/views/user_preferences.py:transaction-in-view": 1,
@@ -144,28 +148,6 @@ def names_scoped_in(scope: ast.AST, parents: dict) -> set[str]:
         for node in ast.walk(scope)
         if isinstance(node, ast.Name) and chain_is_scoped(node, parents)
     }
-
-
-def scoped_objects_in(scope: ast.AST) -> set[str]:
-    # `token = self.get_object()` puts a row the caller may already see into `token`.
-    # Filtering another model by it carries that scoping, which is why four views
-    # read `SecondModel.objects.for_thing(thing)` and are right to.
-    names = set()
-    for node in ast.walk(scope):
-        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
-            if names_in(node.value) & SCOPING_CALLS:
-                names.add(node.targets[0].id)
-    return names
-
-
-def outermost_of(node: ast.AST, parents: dict) -> ast.AST:
-    current = node
-    while True:
-        parent = parents.get(id(current))
-        if isinstance(parent, ast.Attribute) or (isinstance(parent, ast.Call) and parent.func is current):
-            current = parent
-            continue
-        return current
 
 
 def assigned_name(node: ast.AST, parents: dict) -> str | None:
@@ -253,15 +235,12 @@ def view_findings(tree: ast.AST):
 
     scopes = [tree] + [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
     carried = {id(scope): names_scoped_in(scope, parents) for scope in scopes}
-    scoped_rows = {id(scope): scoped_objects_in(scope) for scope in scopes}
 
     for scope in scopes:
         for node in manager_accesses(scope):
             if chain_is_scoped(node, parents):
                 continue
             if assigned_name(node, parents) in carried[id(scope)]:
-                continue
-            if names_in(outermost_of(node, parents)) & scoped_rows[id(scope)]:
                 continue
             found.append((node.lineno, VIEW_ORM))
 

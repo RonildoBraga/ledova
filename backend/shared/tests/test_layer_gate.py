@@ -235,14 +235,14 @@ class ThingViewSet:
 """
         self.assertEqual(rules_for(source, "views"), [])
 
-    def test_filtering_a_second_model_by_a_row_from_get_object_is_allowed(self):
+    def test_filtering_a_second_model_by_a_row_from_get_object_is_still_flagged(self):
         source = """
 class ThingViewSet:
     def issuances(self, request, uuid=None):
         token = self.get_object()
         return ShareIssuance.objects.filter_by_token(token)
 """
-        self.assertEqual(rules_for(source, "views"), [])
+        self.assertEqual(rules_for(source, "views"), [gate.VIEW_ORM])
 
     def test_a_scoping_name_mentioned_elsewhere_no_longer_excuses_the_function(self):
         source = """

@@ -994,12 +994,24 @@ The general form: when a rule flags the reference app, or the same shape in
 several files at once, the rule is wrong and the fix is to sharpen it. Never
 excuse a file into `LEGACY` to make a number go down.
 
-It has now happened a third time, and the count is the tell. Sharpening the rules
-surfaced eight findings; four of them were one shape in four files —
-`thing = self.get_object()` and then `SecondModel.objects.for_thing(thing)`. A row
-the caller may already see, carrying its scoping into the query it filters. Four
-files agreeing is the rule being wrong, so the rule now follows the row, and those
-four are not backlog.
+The heuristic has a boundary, found by trying to apply it a third time and being
+argued out of it. Sharpening the rules surfaced eight findings, four of them one
+shape in four files — `thing = self.get_object()` and then
+`SecondModel.objects.for_thing(thing)`. I read four files agreeing as the rule
+being wrong and loosened it to follow the row. That was a misreading: **the
+heuristic is about false positives, and four files agreeing means the shape is
+common, not that it is safe.**
+
+Whether a row the caller can see implies its children are visible is a property of
+each relation, and no rule over the syntax can know it. This product has a
+relation where it is meant not to hold — `offerings/views/offering.py`'s
+`subscriptions` action is outside `MANAGE_ACTIONS`, so it reads through
+`visible_to_user`, and `Subscription.objects.for_issuer(offering)` would return
+every investor's subscriptions. It is correct today only because
+`Company.visible_to_user` and `Company.manageable_by_user` have identical bodies,
+and the tenancy section below describes deliberate pressure to widen the first.
+Loosening the rule would have removed the standing warning from the one line that
+says so. Those four are pinned with counts instead.
 
 ### The seed-era service classes
 
