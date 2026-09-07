@@ -103,10 +103,10 @@ class AtomicSwapService:
                 "buyer": swap_order.buyer_address,
                 "shareToken": swap_order.share_token.contract_address,
                 "paymentToken": payment_address(swap_order),
-                "shareAmount": swap_order.share_amount,
-                "paymentAmount": swap_order.payment_amount,
-                "nonce": swap_order.nonce,
-                "deadline": deadline,
+                "shareAmount": str(swap_order.share_amount),
+                "paymentAmount": str(swap_order.payment_amount),
+                "nonce": str(swap_order.nonce),
+                "deadline": str(deadline),
             },
         }
 
