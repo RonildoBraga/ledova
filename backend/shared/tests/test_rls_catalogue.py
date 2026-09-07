@@ -36,9 +36,7 @@ def views_the_gate_counts():
     spec.loader.exec_module(gate)
     counted = set(gate.LEGACY) | set(gate.ALLOWED)
     suffix = f":{gate.VIEW_ORM}"
-    return sorted(
-        key[len("backend/") : -len(suffix)] for key in counted if key.endswith(suffix) and "/views/" in key
-    )
+    return sorted(key[len("backend/") : -len(suffix)] for key in counted if key.endswith(suffix) and "/views/" in key)
 
 
 def model_tables():
