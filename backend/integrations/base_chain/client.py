@@ -25,6 +25,10 @@ from integrations.base_chain.exceptions import (
 logger = logging.getLogger(__name__)
 
 LOG_PREFIX = "[BASE_CHAIN]"
+
+HTTP_TIMEOUT_SECONDS = 30
+WEB3_MUST_NOT_ESTIMATE = 1
+BROADCAST_ROUND_TRIPS = 7
 GAS_HEADROOM = 1.2
 
 
@@ -32,6 +36,7 @@ class BaseChainClient:
 
     _instance: Optional["BaseChainClient"] = None
     _web3: Optional[Web3] = None
+    _answered_chain_id: Optional[int] = None
 
     def __new__(cls) -> "BaseChainClient":
         if cls._instance is None:
@@ -46,7 +51,8 @@ class BaseChainClient:
         rpc_url = getattr(settings, "BLOCKCHAIN_RPC_URL", "http://localhost:8545")
 
         try:
-            self._web3 = Web3(Web3.HTTPProvider(rpc_url))
+            type(self)._answered_chain_id = None
+            self._web3 = Web3(Web3.HTTPProvider(rpc_url, request_kwargs={"timeout": HTTP_TIMEOUT_SECONDS}))
             self._web3.middleware_onion.inject(ExtraDataToPOAMiddleware, layer=0)
 
             chain_id = self._web3.eth.chain_id
@@ -66,7 +72,10 @@ class BaseChainClient:
             raise BaseChainConnectionError("Failed to connect to configured EVM endpoint") from e
 
     def assert_expected_chain(self) -> int:
-        actual_chain_id = self.w3.eth.chain_id
+        actual_chain_id = type(self)._answered_chain_id
+        if actual_chain_id is None:
+            actual_chain_id = self.w3.eth.chain_id
+            type(self)._answered_chain_id = actual_chain_id
         expected_chain_id = settings.BLOCKCHAIN_CHAIN_ID
         if actual_chain_id != expected_chain_id:
             raise BaseChainConnectionError(
@@ -188,9 +197,14 @@ class BaseChainClient:
         else:
             tx["gasPrice"] = gas_price
 
+        tx["gas"] = gas if gas is not None else WEB3_MUST_NOT_ESTIMATE
         tx = contract_function.build_transaction(tx)
 
-        tx["gas"] = self.estimate_gas(tx) if gas is None else gas
+        if gas is None:
+            tx.pop("gas", None)
+            tx["gas"] = self.estimate_gas(tx)
+        else:
+            tx["gas"] = gas
 
         return tx
 

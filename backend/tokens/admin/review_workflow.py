@@ -6,7 +6,8 @@ from django.urls import reverse
 
 from shared.utils.admin_actions import admin_action_path
 from shared.utils.admin_display import action_buttons
-from tokens.models import RequestStatus
+from tokens.models import RequestStatus, ShareIssuanceRequest
+from tokens.services import ShareTokenService
 from tokens.tasks import execute_review_request_task
 
 from ._helpers import status_badge
@@ -33,6 +34,26 @@ STATUS_ACTIONS = {
     RequestStatus.EXECUTED: [("Executed", None, "#20c997")],
     RequestStatus.REJECTED: [("Request Rejected", None, "#e9ecef", "#6c757d")],
 }
+
+
+UNNAMED_MINT_ACTIONS = [
+    ("Record transaction hash", "name_mint", "#007bff"),
+    ("Release claim", "release_claim", "#dc3545"),
+]
+
+
+class NameMintForm(forms.Form):
+    tx_hash = forms.CharField(
+        label="Transaction hash found on chain",
+        max_length=66,
+        widget=forms.TextInput(attrs={"placeholder": "0x…"}),
+    )
+
+    def clean_tx_hash(self):
+        value = self.cleaned_data["tx_hash"].strip()
+        if not value.startswith("0x") or len(value) != 66:
+            raise forms.ValidationError("A transaction hash is 0x followed by 64 hexadecimal characters.")
+        return value
 
 
 class ApproveForm(forms.Form):
@@ -82,6 +103,8 @@ class ReviewWorkflowAdmin(admin.ModelAdmin):
             ("approve", "approve", self.approve_view),
             ("reject", "reject", self.reject_view),
             ("execute", "execute", self.execute_view),
+            ("name-mint", "name_mint", self.name_mint_view),
+            ("release-claim", "release_claim", self.release_claim_view),
         ]
         custom = [
             admin_action_path(self, f"<uuid:uuid>/{slug}/", self._url_name(action), view)
@@ -116,6 +139,8 @@ class ReviewWorkflowAdmin(admin.ModelAdmin):
         if obj.pk is None:
             return "-"
         items = STATUS_ACTIONS.get(obj.status, [])
+        if self._has_an_unnamed_mint(obj):
+            items = items + UNNAMED_MINT_ACTIONS
         return action_buttons(
             [
                 (label, action and reverse(f"admin:{self._url_name(action)}", args=[obj.uuid]), *colors)
@@ -170,6 +195,39 @@ class ReviewWorkflowAdmin(admin.ModelAdmin):
             messages.warning(request, f"{self.label} rejected for {obj.token.symbol}")
             return HttpResponseRedirect(self._change_url(obj))
         return self._render(request, obj, "reject", form)
+
+    @staticmethod
+    def _has_an_unnamed_mint(obj):
+        if obj.status != RequestStatus.EXECUTING or not isinstance(obj, ShareIssuanceRequest):
+            return False
+        return ShareTokenService.unnamed_mint(obj) is not None
+
+    def name_mint_view(self, request, obj):
+        if not self._has_an_unnamed_mint(obj):
+            return self._refuse(request, obj, "record a transaction hash for")
+        form = NameMintForm(request.POST or None)
+        if request.method == "POST" and form.is_valid():
+            ShareTokenService().name_the_mint(obj, form.cleaned_data["tx_hash"])
+            messages.info(
+                request,
+                f"Recorded {form.cleaned_data['tx_hash']} for {obj.token.symbol}. "
+                "The sweep will read its receipt and finish the request.",
+            )
+            return HttpResponseRedirect(self._change_url(obj))
+        return self._render(request, obj, "name mint", form)
+
+    def release_claim_view(self, request, obj):
+        if not self._has_an_unnamed_mint(obj):
+            return self._refuse(request, obj, "release the claim on")
+        if request.method == "POST":
+            ShareTokenService().release_unnamed_claim(obj)
+            messages.warning(
+                request,
+                f"Released the claim on {obj.token.symbol}. Retrying will mint afresh, so do this only "
+                "after checking the chain shows no mint for this request.",
+            )
+            return HttpResponseRedirect(self._change_url(obj))
+        return self._render(request, obj, "release claim", None)
 
     def execute_view(self, request, obj):
         if not obj.can_be_executed:
