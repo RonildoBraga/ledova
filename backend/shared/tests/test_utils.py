@@ -5,6 +5,10 @@ from django.utils import timezone
 
 from shared.utils import get_client_ip
 from shared.utils.blockchain import decode_exception_to_message, decode_revert_reason
+
+DEFAULT = "Failed to prepare the transaction."
+KEY = "pR3t3nd1ngT0B3aReAlK3y"
+NODE_URL = f"https://base-sepolia.g.alchemy.com/v2/{KEY}"
 from shared.utils.datetime_utils import (
     parse_date_to_timezone_aware,
     parse_end_date_inclusive,
@@ -26,14 +30,36 @@ class DecodeRevertReasonTests(SimpleTestCase):
             "Insufficient balance: you have 5 tokens but need 10",
         )
 
-    def test_unknown_selector_and_no_hex_fall_back(self):
-        stale_selector = "0xc5487b9a"
-        self.assertEqual(
-            decode_exception_to_message(Exception(stale_selector)), f"Unknown error (selector: {stale_selector})"
-        )
+    def test_an_exception_with_no_hex_falls_back(self):
         self.assertEqual(
             decode_exception_to_message(Exception("boom"), "Swap execution failed"), "Swap execution failed"
         )
+
+    def test_a_selector_outside_the_closed_set_is_not_repeated_back(self):
+        for label, text in (
+            ("a stale selector", "0xc5487b9a"),
+            ("a reverted unknown", "execution reverted: 0xdeadbeefcafebabe"),
+            ("hex in the node url", "Max retries exceeded with url: https://node.test/v2/0x1234567890abcdef1234"),
+            ("a long provider blob", "some provider text 0x" + "ab" * 200),
+        ):
+            with self.subTest(case=label):
+                served = decode_exception_to_message(Exception(text), DEFAULT)
+
+                self.assertEqual(served, DEFAULT)
+                self.assertNotIn("0x", served)
+
+    def test_the_closed_set_still_answers_with_its_own_sentence(self):
+        for selector, expected in (
+            ("0xdf17e316", "Account is not whitelisted"),
+            ("0xc56873ba", "Swap order has expired"),
+        ):
+            with self.subTest(selector=selector):
+                served = decode_exception_to_message(
+                    Exception(f"execution reverted: {selector} at {NODE_URL}"), DEFAULT
+                )
+
+                self.assertEqual(served, expected)
+                self.assertNotIn(KEY, served)
 
 
 class GetClientIpTests(SimpleTestCase):

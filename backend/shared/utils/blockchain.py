@@ -62,7 +62,7 @@ def decode_exception_to_message(exception: Exception, default_message: str = "Tr
 
     if error_data:
         error_name, message, params = decode_revert_reason(error_data)
-        if message:
+        if error_name and message:
             if error_name == "ERC20InsufficientBalance":
                 balance = params.get("balance", 0)
                 needed = params.get("needed", 0)
