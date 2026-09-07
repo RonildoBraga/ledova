@@ -31,6 +31,7 @@ def restore_every_migration() -> None:
     left = unapplied_migrations()
     if left:
         raise AssertionError(
-            "The schema was not restored: a rollback took these migrations with it and nothing put them back: "
+            "The schema was not restored, which is a defect in this test's rollback and not in whatever else "
+            "may have failed alongside it: a rollback took these migrations with it and nothing put them back: "
             + ", ".join(left)
         )
