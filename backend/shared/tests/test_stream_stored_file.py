@@ -3,7 +3,9 @@ import io
 from django.http import Http404
 from django.test import SimpleTestCase
 
+from shared.uploads import ALLOWED_UPLOAD_MIME_TYPES
 from shared.views import stream_stored_file
+from shared.views.files import INLINE_MIME_TYPES, NEVER_INLINE_MIME_TYPES
 
 
 class StoredField:
@@ -59,3 +61,17 @@ class StreamStoredFileDispositionTest(SimpleTestCase):
     def test_a_missing_field_is_still_404(self):
         with self.assertRaises(Http404):
             stream_stored_file(None, "application/pdf")
+
+
+class InlineTypeSetTest(SimpleTestCase):
+
+    def test_no_active_content_type_can_reach_the_inline_set(self):
+        self.assertTrue(INLINE_MIME_TYPES.isdisjoint(NEVER_INLINE_MIME_TYPES))
+
+    def test_the_inline_set_is_the_upload_allowlist_minus_the_active_content_types(self):
+        self.assertEqual(INLINE_MIME_TYPES, frozenset(ALLOWED_UPLOAD_MIME_TYPES) - NEVER_INLINE_MIME_TYPES)
+
+    def test_adding_svg_to_the_upload_allowlist_would_not_make_it_render(self):
+        widened = frozenset(ALLOWED_UPLOAD_MIME_TYPES | {"image/svg+xml"}) - NEVER_INLINE_MIME_TYPES
+
+        self.assertNotIn("image/svg+xml", widened)
