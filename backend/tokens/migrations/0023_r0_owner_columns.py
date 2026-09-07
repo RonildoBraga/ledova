@@ -157,6 +157,15 @@ def backfill(apps, schema_editor):
     for name, (filled, remaining) in counts.items():
         print(f"  {name}: {filled} filled, {remaining} left null")
 
+    _settle_deferred_constraints(schema_editor)
+
+
+def _settle_deferred_constraints(schema_editor):
+    if schema_editor.connection.vendor != "postgresql":
+        return
+    with schema_editor.connection.cursor() as cursor:
+        cursor.execute("SET CONSTRAINTS ALL IMMEDIATE;")
+
 
 def _backfill_challenges(apps, alias):
     challenge = apps.get_model("tokens", "SigningChallenge")
@@ -189,6 +198,7 @@ def _backfill_challenges(apps, alias):
 
 
 def unfill(apps, schema_editor):
+    _settle_deferred_constraints(schema_editor)
     alias = schema_editor.connection.alias
     for model_name, column, _fk, _app, _model, _owner in DERIVED:
         apps.get_model("tokens", model_name)._base_manager.using(alias).update(**{f"{column}_id": None})
@@ -213,6 +223,7 @@ def install_triggers(apps, schema_editor):
 def drop_triggers(apps, schema_editor):
     if schema_editor.connection.vendor != "postgresql":
         return
+    _settle_deferred_constraints(schema_editor)
     with schema_editor.connection.cursor() as cursor:
         for spec in DERIVED:
             names = _derived_names(apps, *spec)
