@@ -719,12 +719,18 @@ this codebase, and `MEDIA_ROOT` holds nothing an authenticated route serves.
   runs no compensating code. It deletes only files no row references that have
   not changed for `GRACE` (24 hours), walks only `SWEPT_STORAGE_PREFIXES`, and
   runs nightly as `sweep_private_uploads` or by hand as
-  `manage.py sweep_orphaned_files --dry-run`.
+  `manage.py sweep_orphaned_files --dry-run`. **The grace period is what makes
+  sweeping the default safe**: a file written moments before its row commits is
+  briefly indistinguishable from an orphan — that window is exactly the defect
+  #176 fixed — and 24 hours is a margin no commit will ever need.
   Reference: `backend/shared/storage.py`. Gate:
   `backend/shared/tests/test_orphaned_files.py`, which walks
   `apps.get_models()` and fails for any private `FileField` that is neither
   swept nor named in `RETAINED_AFTER_ROW_DELETE` with a reason — so a fourth
-  file-holding model cannot be added without deciding which it is.
+  file-holding model cannot be added without deciding which it is. It derives
+  each model's storage prefix by calling `generate_filename` on an unsaved
+  probe instance, so it checks every declared field rather than only the rows a
+  test happened to create.
 - **`users.InvestorClassification.evidence_file` is the one exception, and it
   is deliberate.** Classification evidence has a statutory retention horizon
   and outlives its subject on purpose; account deletion does not purge it

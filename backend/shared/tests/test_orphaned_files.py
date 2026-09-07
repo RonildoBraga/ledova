@@ -2,6 +2,7 @@ import tempfile
 from datetime import timedelta
 from pathlib import Path
 from unittest.mock import patch
+from uuid import uuid4
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
@@ -52,16 +53,39 @@ class PrivateFileFieldCoverageTest(TestCase):
     def test_the_swept_and_retained_prefixes_do_not_overlap(self):
         self.assertEqual(set(SWEPT_STORAGE_PREFIXES) & set(RETAINED_STORAGE_PREFIXES), set())
 
-    def test_every_stored_upload_path_falls_under_a_declared_prefix(self):
-        declared = SWEPT_STORAGE_PREFIXES + RETAINED_STORAGE_PREFIXES
-        undeclared = []
+    @staticmethod
+    def _unsaved_probe(model):
+        instance = model()
+        for field in model._meta.fields:
+            if not field.is_relation or field.related_model is None:
+                continue
+            related = field.related_model()
+            if any(f.name == "uuid" for f in field.related_model._meta.fields):
+                related.uuid = uuid4()
+            setattr(instance, field.name, related)
+        return instance
 
-        for model, field_name in private_file_fields():
-            for name in model.objects.exclude(**{field_name: ""}).values_list(field_name, flat=True):
-                if name and not name.startswith(tuple(f"{prefix}/" for prefix in declared)):
-                    undeclared.append(f"{model._meta.label}.{field_name}: {name}")
+    def _declared_prefix_of(self, model, field_name):
+        field = model._meta.get_field(field_name)
+        return field.generate_filename(self._unsaved_probe(model), "probe.pdf").split("/", 1)[0]
+
+    def test_every_private_file_field_writes_under_a_declared_prefix(self):
+        declared = set(SWEPT_STORAGE_PREFIXES) | set(RETAINED_STORAGE_PREFIXES)
+        undeclared = [
+            f"{model._meta.label}.{field_name} -> {self._declared_prefix_of(model, field_name)}/"
+            for model, field_name in private_file_fields()
+            if self._declared_prefix_of(model, field_name) not in declared
+        ]
 
         self.assertEqual(undeclared, [])
+
+    def test_a_retained_model_writes_under_a_retained_prefix_and_a_swept_one_does_not(self):
+        for model, field_name in private_file_fields():
+            with self.subTest(model=model._meta.label):
+                prefix = self._declared_prefix_of(model, field_name)
+                retained = model._meta.label in RETAINED_AFTER_ROW_DELETE
+                self.assertEqual(prefix in RETAINED_STORAGE_PREFIXES, retained)
+                self.assertEqual(prefix in SWEPT_STORAGE_PREFIXES, not retained)
 
     def test_the_receivers_are_connected_for_every_swept_field(self):
         connected = {lookup[0] for lookup, *_rest in post_delete.receivers}
