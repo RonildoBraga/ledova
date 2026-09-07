@@ -757,6 +757,15 @@ each lane does not re-derive it:
   Nothing on either side of it is visible to the SQLite suite, which is how it
   reached `tokens/0024` and was found by the full PostgreSQL suite three
   lanes later.
+- **A replacement condition is read backwards as well as forwards: what did
+  the branch it replaces refuse, and where does each of those cases land
+  now?** The amendment above was red-proved for the two properties it added,
+  by its author and by two reviewers, and none of us enumerated what the
+  condition it replaced had been covering — so a refusal was dropped and
+  stayed dropped across three lanes. Proving what a change adds says nothing
+  about what it removes, and a trigger branch is where that gap is least
+  visible, because the cases it stops refusing raise nothing and appear in no
+  test that was written for them.
 - **The trigger's local variable takes its type from the column it reads**,
   `parent.{column}%TYPE`, rather than naming a type. Four R0 parents are
   `uuid` and the user is a `BigAutoField`, because `CustomUser` extends
