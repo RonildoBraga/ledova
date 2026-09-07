@@ -49,5 +49,70 @@ class DocumentedTreesMatchTheGate(unittest.TestCase):
             self.assertTrue((ROOT / tree).is_dir(), f"{tree} is documented but is not a directory")
 
 
+class EverySourceFileIsReachedByATree(unittest.TestCase):
+
+    def test_nothing_is_outside_the_trees_without_a_stated_reason(self):
+        scanned = {
+            path.resolve() for tree, extensions, recurse in gate.TREES for path in gate.files_in(tree, extensions, recurse)
+        }
+
+        self.assertEqual(gate.unscanned_source_files(scanned), [])
+
+    def test_every_exemption_states_a_reason(self):
+        for path, reason in gate.NOT_SCANNED.items():
+            with self.subTest(path=path):
+                self.assertGreater(len(reason), 40, f"{path} needs a reason, not a label")
+
+    def test_dropping_a_tree_leaves_its_files_unreached(self):
+        without_backend = {
+            path.resolve()
+            for tree, extensions, recurse in gate.TREES
+            if tree != "backend"
+            for path in gate.files_in(tree, extensions, recurse)
+        }
+
+        self.assertGreater(len(gate.unscanned_source_files(without_backend)), 500)
+
+
+class AnExemptionCoversWhatItNamesAndNothingElse(unittest.TestCase):
+
+    def test_a_stated_path_exempts_the_tree_under_it(self):
+        self.assertTrue(gate._exempt("scripts/check-comments.py"))
+        self.assertTrue(gate._exempt("dashboard/tests/smoke/login.spec.ts"))
+
+    def test_a_sibling_whose_name_starts_the_same_is_not_exempt(self):
+        self.assertFalse(gate._exempt("scripts-extra/thing.ts"))
+        self.assertFalse(gate._exempt("dashboard/tests/smoketest.ts"))
+
+    def test_every_stated_exemption_is_a_path_that_exists(self):
+        for stated in gate.NOT_SCANNED:
+            with self.subTest(path=stated):
+                self.assertTrue((ROOT / stated).exists(), f"{stated} is exempt from a gate it no longer meets")
+
+
+class GeneratedOutputIsInvisibleRatherThanExempted(unittest.TestCase):
+
+    PROBE = ROOT / "contracts" / "typechain-types" / "__gate_probe__.ts"
+
+    def test_a_file_git_ignores_is_not_a_source_file_the_gate_can_see(self):
+        self.PROBE.parent.mkdir(parents=True, exist_ok=True)
+        self.PROBE.write_text("export const probe = 1;\n")
+        self.addCleanup(self.PROBE.unlink, missing_ok=True)
+        self.addCleanup(gate.tracked_files.cache_clear)
+        gate.tracked_files.cache_clear()
+
+        self.assertNotIn(self.PROBE, gate.tracked_files())
+        self.assertEqual(gate.unscanned_source_files(set()), gate.unscanned_source_files({self.PROBE.resolve()}))
+
+    def test_the_probe_would_be_seen_if_git_did_not_ignore_it(self):
+        visible = ROOT / "contracts" / "__gate_probe__.ts"
+        visible.write_text("export const probe = 1;\n")
+        self.addCleanup(visible.unlink, missing_ok=True)
+        self.addCleanup(gate.tracked_files.cache_clear)
+        gate.tracked_files.cache_clear()
+
+        self.assertIn(visible, gate.tracked_files())
+
+
 if __name__ == "__main__":
     unittest.main()

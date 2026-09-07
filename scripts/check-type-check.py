@@ -42,6 +42,32 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 WORKSPACES = ("dashboard", "marketing", "mobile", "packages/shared")
+
+# WORKSPACES is closed against shrinking - a name here whose workspace has lost its
+# type-check script is a failure. It was open the other way: a fifth workspace nobody
+# added was simply not gated, and the success line reported a number that looked like
+# coverage. Discovery closes that end, and NOT_A_WORKSPACE states the exceptions rather
+# than leaving them to the list's silence.
+NOT_A_WORKSPACE = {
+    "contracts": "Hardhat's own TypeScript, type-checked by `npm --prefix contracts run compile`.",
+}
+
+SKIPPED_DIRECTORIES = frozenset({"node_modules", ".git", "dist", "build", ".next", "coverage"})
+
+
+def undeclared_workspaces() -> list[str]:
+    """Directories that look like a type-checked workspace and are not in WORKSPACES."""
+    found = []
+    for manifest in sorted(ROOT.rglob("package.json")):
+        if any(part in SKIPPED_DIRECTORIES for part in manifest.parts):
+            continue
+        directory = manifest.parent
+        if directory == ROOT or not (directory / "tsconfig.json").exists():
+            continue
+        name = directory.relative_to(ROOT).as_posix()
+        if name not in WORKSPACES and name not in NOT_A_WORKSPACE:
+            found.append(name)
+    return found
 BUILD_MODE = re.compile(r"(^|\s)(-b|--build)(\s|$)")
 LINE_COMMENT = re.compile(r"(^|\s)//.*$", re.MULTILINE)
 BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
@@ -173,7 +199,18 @@ def main() -> int:
             print(f"  {failure}", file=sys.stderr)
         return 1
 
-    print(f"Type-check scripts reach their files in {checked} workspaces.")
+    undeclared = undeclared_workspaces()
+    if undeclared:
+        print(f"Workspaces this gate does not know about ({len(undeclared)}):\n", file=sys.stderr)
+        for name in undeclared:
+            print(f"  {name}: has a package.json and a tsconfig.json, and is not in WORKSPACES", file=sys.stderr)
+        print(
+            "\nAdd it to WORKSPACES, or to NOT_A_WORKSPACE with the reason it is exempt.",
+            file=sys.stderr,
+        )
+        return 1
+
+    print(f"Type-check scripts reach their files in {checked} workspaces, and no workspace is unknown.")
     return 0
 
 

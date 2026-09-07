@@ -12,8 +12,10 @@ import argparse
 import ast
 import io
 import re
+import subprocess
 import sys
 import tokenize
+from functools import lru_cache
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -41,25 +43,48 @@ TREES = (
     ("contracts/test", TS, True),
 )
 
-SKIP_ANYWHERE = frozenset({".git", ".mypy_cache", ".pytest_cache", ".ruff_cache", "__pycache__", "node_modules"})
+# The trees above say what is scanned. This says what is deliberately not, so that a
+# file appearing outside every tree is a failure rather than a silence. Without it the
+# extension tuples and the recurse flags are prose: flipping "backend" to False drops
+# 838 files and the gate still reports a green line with a smaller number in it.
+NOT_SCANNED = {
+    "scripts": "The gate scripts state their own rules in module docstrings, which is what they are for.",
+    "dashboard/scripts": "check-react-singleton.mjs is a gate too, and states its rule in a docstring.",
+    "dashboard/tests/smoke": "Playwright smoke specs, which describe steps rather than implement behaviour.",
+}
 
-SKIP_AT_TOP = frozenset(
-    {
-        ".expo",
-        ".next",
-        ".venv",
-        "artifacts",
-        "build",
-        "cache",
-        "coverage",
-        "dist",
-        "htmlcov",
-        "media",
-        "staticfiles",
-        "typechain-types",
-        "venv",
-    }
-)
+
+class NotAWorkingTree(Exception):
+    pass
+
+
+@lru_cache(maxsize=1)
+def tracked_files() -> tuple[Path, ...]:
+    result = subprocess.run(
+        ["git", "-C", str(ROOT), "ls-files", "-z", "--cached", "--others", "--exclude-standard"], capture_output=True, text=True, check=False
+    )
+    if result.returncode != 0:
+        raise NotAWorkingTree(result.stderr.strip() or "git ls-files failed")
+    return tuple(sorted(ROOT / name for name in result.stdout.split("\0") if name))
+
+
+def _exempt(relative: str) -> bool:
+    segments = relative.split("/")
+    return any(segments[: len(stated.split("/"))] == stated.split("/") for stated in NOT_SCANNED)
+
+
+def unscanned_source_files(scanned: set) -> list[str]:
+    known = set(PY + TS + CSS + SOL)
+    missing = []
+
+    for path in tracked_files():
+        if path.suffix not in known or path.resolve() in scanned:
+            continue
+        relative = path.relative_to(ROOT).as_posix()
+        if not _exempt(relative):
+            missing.append(relative)
+    return missing
+
 
 PY_DIRECTIVE = re.compile(r"^(?:noqa|pragma|isort)\b|^(?:type|fmt)\s*:")
 PY_CODING = re.compile(r"^#\s*(?:-\*-\s*)?coding[:=]\s*[-\w.]+\s*(?:-\*-)?\s*$")
@@ -383,14 +408,10 @@ def files_in(tree: str, extensions: tuple[str, ...], recurse: bool):
     base = ROOT / tree
     if not base.is_dir():
         return
-    candidates = base.rglob("*") if recurse else base.iterdir()
-    for path in sorted(candidates):
-        if path.suffix not in extensions or not path.is_file():
+    for path in tracked_files():
+        if path.suffix not in extensions or not path.is_relative_to(base):
             continue
-        parts = path.relative_to(base).parts
-        if any(part in SKIP_ANYWHERE for part in parts):
-            continue
-        if parts[:1] and parts[0] in SKIP_AT_TOP:
+        if not recurse and path.parent != base:
             continue
         yield path
 
@@ -404,12 +425,25 @@ def main() -> int:
     )
     arguments = parser.parse_args()
 
+    try:
+        tracked_files()
+    except NotAWorkingTree as error:
+        print(
+            f"check-comments needs the tracked file list and git would not give it: {error}\n"
+            "The gate reads `git ls-files` so that generated and ignored output is invisible\n"
+            "by construction rather than by a third hand-maintained skip list.",
+            file=sys.stderr,
+        )
+        return 1
+
     violations: list[str] = []
     allowed: list[str] = []
     checked = 0
 
+    scanned: set = set()
     for tree, extensions, recurse in TREES:
         for path in files_in(tree, extensions, recurse):
+            scanned.add(path.resolve())
             checked += 1
             relative = path.relative_to(ROOT)
             text = path.read_text(encoding="utf-8-sig", errors="replace")
@@ -438,7 +472,20 @@ def main() -> int:
         )
         return 1
 
-    print(f"No comments or docstrings in {checked} source files.")
+    missing = unscanned_source_files(scanned)
+    if missing:
+        print(f"Source files no tree reaches ({len(missing)}):\n", file=sys.stderr)
+        for relative in missing:
+            print(f"  {relative}", file=sys.stderr)
+        print(
+            "\nAdd the tree to TREES, or the path to NOT_SCANNED with the reason it is exempt."
+            "\nThe extension tuples and the recurse flags mean nothing without this check:"
+            "\nflipping one drops files and leaves a green line saying a smaller number.",
+            file=sys.stderr,
+        )
+        return 1
+
+    print(f"No comments or docstrings in {checked} source files, and none outside the trees.")
     return 0
 
 

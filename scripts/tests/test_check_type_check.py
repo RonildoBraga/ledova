@@ -171,3 +171,54 @@ class BuildModeDetection(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AWorkspaceNobodyDeclaredIsAFailure(_Workspace):
+
+    def setUp(self):
+        super().setUp()
+        declared = gate.WORKSPACES
+        exempt = dict(gate.NOT_A_WORKSPACE)
+        self.addCleanup(setattr, gate, "WORKSPACES", declared)
+        self.addCleanup(setattr, gate, "NOT_A_WORKSPACE", exempt)
+
+    def _candidate(self, name):
+        (self.root / name).mkdir(parents=True, exist_ok=True)
+        (self.root / name / "package.json").write_text(json.dumps({"scripts": {"type-check": "tsc"}}))
+        (self.root / name / "tsconfig.json").write_text(json.dumps({"include": ["src"]}))
+
+    def test_a_directory_that_looks_like_a_workspace_and_is_not_listed_is_found(self):
+        self._candidate("qa-console")
+        gate.WORKSPACES = ()
+        gate.NOT_A_WORKSPACE = {}
+
+        self.assertEqual(gate.undeclared_workspaces(), ["qa-console"])
+
+    def test_listing_it_settles_it(self):
+        self._candidate("qa-console")
+        gate.WORKSPACES = ("qa-console",)
+        gate.NOT_A_WORKSPACE = {}
+
+        self.assertEqual(gate.undeclared_workspaces(), [])
+
+    def test_so_does_exempting_it_with_a_reason(self):
+        self._candidate("qa-console")
+        gate.WORKSPACES = ()
+        gate.NOT_A_WORKSPACE = {"qa-console": "Not type-checked here."}
+
+        self.assertEqual(gate.undeclared_workspaces(), [])
+
+    def test_a_directory_without_a_tsconfig_is_not_a_candidate(self):
+        (self.root / "docs-site").mkdir()
+        (self.root / "docs-site" / "package.json").write_text(json.dumps({"scripts": {}}))
+        gate.WORKSPACES = ()
+        gate.NOT_A_WORKSPACE = {}
+
+        self.assertEqual(gate.undeclared_workspaces(), [])
+
+    def test_node_modules_is_not_searched(self):
+        self._candidate("dashboard/node_modules/some-package")
+        gate.WORKSPACES = ()
+        gate.NOT_A_WORKSPACE = {}
+
+        self.assertEqual(gate.undeclared_workspaces(), [])
