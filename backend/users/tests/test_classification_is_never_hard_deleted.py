@@ -130,13 +130,9 @@ class TheMemberWithdrawsRatherThanDeletesTest(_EvidenceCase, APITestCase):
 
 
 class WithdrawnEvidenceStillHasARetentionClockTest(_EvidenceCase, TestCase):
-    def test_every_terminal_status_carries_a_retention_clock(self):
-        terminal = {
-            InvestorClassificationStatus.VERIFIED,
-            InvestorClassificationStatus.REJECTED,
-            InvestorClassificationStatus.REVOKED,
-            InvestorClassificationStatus.WITHDRAWN,
-        }
+    def test_no_status_can_exist_without_a_retention_clock(self):
+        awaiting_a_ruling = {InvestorClassificationStatus.SUBMITTED.value}
+        terminal = set(InvestorClassificationStatus.values) - awaiting_a_ruling
 
         self.assertEqual(terminal - set(RETENTION_CLOCK), set())
 
