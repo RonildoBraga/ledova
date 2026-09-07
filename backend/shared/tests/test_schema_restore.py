@@ -1,8 +1,8 @@
-from unittest import skipUnless
+from unittest import skipIf, skipUnless
 
 from django.conf import settings
 from django.db import connection
-from django.test import TransactionTestCase
+from django.test import TestCase, TransactionTestCase
 
 from shared.tests.schema import (
     app_tip,
@@ -54,3 +54,14 @@ class ARollbackIsRestoredForEveryAppItTouchedTest(TransactionTestCase):
 
         self.assertEqual(unapplied_migrations(), [])
         self.assertIn(OFFERINGS_TABLE, tables())
+
+
+@skipIf(MIGRATIONS_ENABLED, "The refusal is about settings that disable migrations")
+class RestoringAnEmptyGraphIsRefusedTest(TestCase):
+
+    def test_a_graph_with_no_leaves_is_refused_rather_than_reported_clean(self):
+        with self.assertRaisesRegex(AssertionError, "no leaves"):
+            restore_every_migration()
+
+    def test_the_graph_really_is_empty_under_these_settings(self):
+        self.assertEqual(app_tip("tokens"), [])
