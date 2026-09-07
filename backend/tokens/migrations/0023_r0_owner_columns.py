@@ -133,6 +133,7 @@ def _fill(rows, column, owner):
 
 
 def backfill(apps, schema_editor):
+    _settle_deferred_constraints(schema_editor)
     alias = schema_editor.connection.alias
     counts = {}
 
@@ -156,8 +157,6 @@ def backfill(apps, schema_editor):
 
     for name, (filled, remaining) in counts.items():
         print(f"  {name}: {filled} filled, {remaining} left null")
-
-    _settle_deferred_constraints(schema_editor)
 
 
 def _settle_deferred_constraints(schema_editor):

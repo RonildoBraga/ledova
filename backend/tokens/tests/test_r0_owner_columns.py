@@ -5,6 +5,7 @@ from django.db import connection, transaction
 from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
 
+from shared.tests.schema import migrate_to, restore_every_migration
 from shared.tests.tenants import make_tenant
 from tokens.models import (
     CapitalIncreaseRequest,
@@ -26,6 +27,8 @@ from tokens.serializers.swap_order import (
 )
 
 POSTGRES_ONLY = "The trigger is PostgreSQL; SQLite has no derive-and-refuse"
+MIGRATION_ROUND_TRIP_ONLY = "Deferred constraint checks are PostgreSQL; SQLite queues nothing to settle"
+BEFORE_THE_OWNER_COLUMNS = [("tokens", "0022_swap_nonce_is_unique")]
 
 
 class EveryRowCarriesItsOwnerTest(TestCase):
@@ -171,3 +174,21 @@ class TheColumnsAreRequiredWhereThePathIsTest(TransactionTestCase):
         for key, nullable in rows.items():
             if key != ("signing_challenges", "wallet_id"):
                 self.assertEqual(nullable, "NO", key)
+
+
+@skipUnless(connection.vendor == "postgresql", MIGRATION_ROUND_TRIP_ONLY)
+class TheMigrationRoundTripsOnPopulatedTablesTest(TransactionTestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.tenant = make_tenant("roundtrip")
+        self.seller = self.tenant.swap.sell_order.wallet_id
+        self.buyer = self.tenant.swap.buy_order.wallet_id
+        self.addCleanup(restore_every_migration)
+
+    def test_a_table_that_gains_two_owner_columns_survives_the_round_trip(self):
+        migrate_to(BEFORE_THE_OWNER_COLUMNS)
+        restore_every_migration()
+
+        swap = SwapOrder.objects.get(pk=self.tenant.swap.pk)
+        self.assertEqual((swap.seller_wallet_id, swap.buyer_wallet_id), (self.seller, self.buyer))
