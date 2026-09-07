@@ -218,6 +218,8 @@ class TradingEventsAuthorizationTest(TestCase):
             status="active",
         )
         self.deployed_token = self._make_token("LIVE", ShareTokenStatus.DEPLOYED)
+        self.addressless_token = self._make_token("NOADDR", ShareTokenStatus.DEPLOYED)
+        ShareToken.objects.filter(pk=self.addressless_token.pk).update(contract_address=None)
         self.draft_token = self._make_token("DRAFT", ShareTokenStatus.DRAFT)
         self.paused_token = self._make_token("PAUSE", ShareTokenStatus.PAUSED)
 
@@ -267,6 +269,7 @@ class TradingEventsAuthorizationTest(TestCase):
             str(uuid4()),
             str(self.draft_token.uuid),
             str(self.paused_token.uuid),
+            str(self.addressless_token.uuid),
         )
 
         for target in targets:

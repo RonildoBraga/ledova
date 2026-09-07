@@ -32,13 +32,20 @@ SIGNED_RELAY = (
     "outside known_contract_addresses(), and there is nothing further to scope: the caller cannot produce a "
     "signature it does not hold, and every transaction it can broadcast is one the signer already authorised."
 )
+NOT_MATRIX_AUTHENTICABLE = (
+    "It cannot become a ROUTES row however well it reads as one: the cross-tenant matrix authenticates "
+    "through DRF, and a plain Django view never sees force_authenticate, so every case there answers 401 "
+    "and no assertion about tenancy is reachable. A route in this position stays exempt with a reason "
+    "naming its scoping call and the test file that pins it instead."
+)
 ELIGIBILITY_SCOPED_ASYNC = (
     "Scoped by users.services.eligibility exactly as the market listing beside it is: "
     "tokens.services.trading_events.resolve_streamable_token_uuid returns None unless "
-    "investor_eligibility(user).is_eligible, so an ineligible caller gets the same 404 as a phantom uuid. "
-    "Pinned by tokens/tests/test_trading_events_authorization.py rather than by the matrix, because it is a "
-    "plain async Django view rather than a DRF one and force_authenticate does not reach it."
-)
+    "investor_eligibility(user).is_eligible, and only then asks whether the token is deployed with a "
+    "contract address - the same queryset the market listing serves. An ineligible caller therefore gets "
+    "the same 404 as a phantom uuid, without a token lookup, so the two are indistinguishable by timing "
+    "as well as by body. Pinned by tokens/tests/test_trading_events_authorization.py. "
+) + NOT_MATRIX_AUTHENTICABLE
 BROKEN_BEFORE_IT_SCOPES = (
     "Answers 500 to every caller before it reaches any tenancy decision: TradingOrderViewSet.get_serializer_class "
     "does not map the create_message action, so validated_data lacks the fields the action reads and it raises "

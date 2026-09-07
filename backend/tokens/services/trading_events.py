@@ -19,7 +19,7 @@ async def resolve_streamable_token_uuid(user, raw_token_uuid):
     if not await sync_to_async(_is_eligible)(user):
         return None
 
-    if not await ShareToken.objects.deployed().filter(uuid=token_uuid).aexists():
+    if not await ShareToken.objects.deployed_with_contract().filter(uuid=token_uuid).aexists():
         return None
 
     return token_uuid
