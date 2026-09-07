@@ -27,7 +27,7 @@ class SwapSettlementAddressTest(TestCase):
         )
 
     def test_the_swap_payment_address_follows_the_receiving_chain(self):
-        self.assertEqual(self.asset.contract_address, BASE_ADDRESS)
+        self.assertEqual(self.asset.chain_deployments.first().contract_address, BASE_ADDRESS)
         self.assertEqual(payment_address(self.tenant.swap), BASE_ADDRESS)
 
         operator = Operator.get()
