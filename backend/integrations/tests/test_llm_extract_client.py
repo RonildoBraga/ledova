@@ -47,6 +47,24 @@ class LlmExtractClientBoundaryTests(SimpleTestCase):
         with self.assertRaises(ImproperlyConfigured):
             _validate_local_base_url("http://ollama:11434/v1")
 
+    @override_settings(LLM_EXTRA_HOSTS=["*"])
+    def test_a_wildcard_entry_admits_nothing_because_it_names_a_host_rather_than_a_pattern(self) -> None:
+        for value in ("http://ollama:11434/v1", "http://evil.test/v1", "https://example.test/v1"):
+            with self.subTest(value=value), self.assertRaises(ImproperlyConfigured):
+                _validate_local_base_url(value)
+
+    @override_settings(LLM_EXTRA_HOSTS=["*"])
+    def test_a_wildcard_entry_leaves_the_local_four_exactly_as_they_were(self) -> None:
+        for value in ("http://localhost:11434/v1", "http://host.docker.internal:11434/v1"):
+            with self.subTest(value=value):
+                self.assertEqual(_validate_local_base_url(value), value)
+
+    @override_settings(LLM_EXTRA_HOSTS=["*.internal", "ollama*", "0.0.0.0/0"])
+    def test_a_glob_or_a_range_admits_nothing_because_a_host_is_matched_by_equality(self) -> None:
+        for value in ("http://svc.internal:11434/v1", "http://ollama2:11434/v1", "http://10.0.0.5:11434/v1"):
+            with self.subTest(value=value), self.assertRaises(ImproperlyConfigured):
+                _validate_local_base_url(value)
+
     @override_settings(LLM_EXTRA_HOSTS=["ollama"])
     def test_the_default_four_are_still_admitted_when_a_host_is_opted_in(self) -> None:
         for value in ("http://localhost:11434/v1", "http://host.docker.internal:11434/v1"):

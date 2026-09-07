@@ -334,7 +334,10 @@ this machine* true, and a compose service name is a weaker statement than a
 loopback address, because `ollama` resolves to whatever is on that network.
 Name only hosts you control, and only on a deployment where you know what
 else is on the network. Entries are hostnames — no scheme, no port, no path —
-because the value is compared against the URL's host and nothing else.
+because the value is compared against the URL's host and nothing else. **There
+is no wildcard**: `LLM_EXTRA_HOSTS=*` admits a host literally named `*` and so
+admits nothing, and `*.internal` likewise. There is no way to open this to a
+range, which is deliberate — every admitted host is one an operator typed.
 
 Installing the service on the host is **not sufficient on such a host**: an
 operator who installs Ollama and sees the same failure has fixed the first
