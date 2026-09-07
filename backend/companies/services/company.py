@@ -4,6 +4,7 @@ from django.db import transaction
 
 from companies.exceptions import (
     CompanyHoldsARegisterException,
+    CompanyHoldsShareClassesException,
     MissingRequiredDocumentsException,
 )
 from companies.models import LISTING_REQUIRED_DOCUMENTS, Company, DocumentType
@@ -73,10 +74,15 @@ def submit_application(company: Company, submitted_by) -> Company:
 
 
 def delete_company(company: Company) -> None:
-    share_classes = company.tokens.deployed().count()
+    on_chain = company.tokens.on_chain().count()
+    if on_chain:
+        logger.warning(f"Refused to delete {company.name}: {on_chain} on-chain share class(es) hold its register")
+        raise CompanyHoldsARegisterException(on_chain)
+
+    share_classes = company.tokens.count()
     if share_classes:
-        logger.warning(f"Refused to delete {company.name}: {share_classes} deployed share class(es) hold its register")
-        raise CompanyHoldsARegisterException(share_classes)
+        logger.warning(f"Refused to delete {company.name}: {share_classes} share class(es) are still attached")
+        raise CompanyHoldsShareClassesException(share_classes)
 
     logger.info(f"Deleting company: {company.name} (ACN: {company.acn})")
     company.delete()

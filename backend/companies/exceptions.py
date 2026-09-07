@@ -32,8 +32,22 @@ class CompanyHoldsARegisterException(APIException):
 
     def __init__(self, share_classes: int):
         detail = (
-            f"{share_classes} deployed share class(es) carry this company's register of members and the issuance "
+            f"{share_classes} on-chain share class(es) carry this company's register of members and the issuance "
             "trail behind it, so the company cannot be deleted. Delist it instead, which keeps the record and "
             "closes the company to investors."
+        )
+        super().__init__(detail=detail)
+
+
+class CompanyHoldsShareClassesException(APIException):
+
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "This company still has share classes and cannot be deleted."
+    default_code = "company_holds_share_classes"
+
+    def __init__(self, share_classes: int):
+        detail = (
+            f"This company still has {share_classes} share class(es), none of them on chain. Delete them first, "
+            "then the company."
         )
         super().__init__(detail=detail)

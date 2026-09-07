@@ -30,6 +30,9 @@ class ShareTokenQuerySet(QuerySet):
     def deployed_with_contract(self):
         return self.deployed().exclude(contract_address__isnull=True).exclude(contract_address="")
 
+    def on_chain(self):
+        return self.exclude(contract_address__isnull=True).exclude(contract_address="")
+
     def stuck_deploying(self, cutoff):
         from tokens.models.choices import ShareTokenStatus
 

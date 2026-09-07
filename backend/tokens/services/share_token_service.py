@@ -874,8 +874,8 @@ class ShareTokenService:
 
 
 def delete_share_token(token) -> None:
-    if token.is_deployed:
-        logger.warning(f"Refused to delete {token.symbol}: deployed at {token.contract_address}")
+    if token.is_on_chain:
+        logger.warning(f"Refused to delete {token.symbol}: on chain at {token.contract_address}")
         raise DeployedShareClassException(token.symbol)
 
     logger.info(f"Deleting share class {token.symbol} for company {token.company_id}")

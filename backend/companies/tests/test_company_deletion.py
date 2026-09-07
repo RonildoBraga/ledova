@@ -122,16 +122,37 @@ class CompanyDeletionTest(APITestCase):
         response = self._delete(self.company)
 
         self.assertEqual(response.status_code, 409, response.content)
-        self.assertTrue(response.json()["detail"].startswith("2 deployed share class(es)"))
+        self.assertTrue(response.json()["detail"].startswith("2 on-chain share class(es)"))
 
-    def test_an_undeployed_share_class_still_refuses_the_delete_at_the_database(self):
+    def test_a_draft_share_class_is_refused_by_the_route_and_told_what_to_do(self):
         company = Company.objects.create(owner=self.owner, name="Draft Pty Ltd", acn="555555555")
         draft = ShareToken.objects.create(company=company, name="Draft shares", symbol="DRF", total_supply="100")
 
         response = self._delete(company)
 
         self.assertEqual(response.status_code, 409, response.content)
+        detail = response.json()["detail"]
+        self.assertIn("1 share class(es), none of them on chain", detail)
+        self.assertIn("Delete them first", detail)
+        self.assertNotIn("must be kept", detail)
         self.assertTrue(ShareToken.objects.filter(pk=draft.pk).exists())
+        self.assertTrue(Company.objects.filter(pk=company.pk).exists())
+
+    def test_a_paused_share_class_holds_the_company_open_the_same_as_a_deployed_one(self):
+        company = Company.objects.create(owner=self.owner, name="Paused Pty Ltd", acn="777777777")
+        ShareToken.objects.create(
+            company=company,
+            name="Paused ordinary shares",
+            symbol="PSD",
+            total_supply="10000",
+            status=ShareTokenStatus.PAUSED,
+            contract_address=Web3.to_checksum_address("0x" + "e7" * 20),
+        )
+
+        response = self._delete(company)
+
+        self.assertEqual(response.status_code, 409, response.content)
+        self.assertIn("register of members", response.json()["detail"])
         self.assertTrue(Company.objects.filter(pk=company.pk).exists())
 
     def test_a_company_with_no_share_classes_is_still_deletable(self):
@@ -197,3 +218,52 @@ class DeployedShareClassDeletionTest(APITestCase):
 
         self.assertEqual(response.status_code, 204)
         self.assertFalse(ShareToken.objects.filter(pk=draft.pk).exists())
+
+    def test_pausing_a_share_class_does_not_make_it_deletable(self):
+        paused = ShareToken.objects.create(
+            company=self.company,
+            name="Paused ordinary shares",
+            symbol="PSD",
+            total_supply="10000",
+            status=ShareTokenStatus.PAUSED,
+            contract_address=Web3.to_checksum_address("0x" + "e7" * 20),
+        )
+
+        token_response = self.client.delete(f"/api/v1/tokens/{paused.uuid}/")
+        company_response = self.client.delete(f"/api/v1/companies/{self.company.uuid}/")
+
+        self.assertEqual(token_response.status_code, 409, token_response.content)
+        self.assertIn("PSD", token_response.json()["detail"])
+        self.assertEqual(company_response.status_code, 409, company_response.content)
+        self.assertTrue(ShareToken.objects.filter(pk=paused.pk).exists())
+        self.assertTrue(Company.objects.filter(pk=self.company.pk).exists())
+
+    def test_a_share_class_mid_deployment_is_not_deletable_either(self):
+        deploying = ShareToken.objects.create(
+            company=self.company,
+            name="Deploying ordinary shares",
+            symbol="DPG",
+            total_supply="10000",
+            status=ShareTokenStatus.DEPLOYING,
+            contract_address=Web3.to_checksum_address("0x" + "f7" * 20),
+        )
+
+        response = self.client.delete(f"/api/v1/tokens/{deploying.uuid}/")
+
+        self.assertEqual(response.status_code, 409, response.content)
+        self.assertTrue(ShareToken.objects.filter(pk=deploying.pk).exists())
+
+    def test_a_share_class_whose_status_says_deployed_without_an_address_is_not_an_on_chain_register(self):
+        headless = ShareToken.objects.create(
+            company=self.company,
+            name="Headless ordinary shares",
+            symbol="HDL",
+            total_supply="10000",
+            status=ShareTokenStatus.DEPLOYED,
+            contract_address=None,
+        )
+
+        token_response = self.client.delete(f"/api/v1/tokens/{headless.uuid}/")
+
+        self.assertEqual(token_response.status_code, 204, token_response.content)
+        self.assertFalse(ShareToken.objects.filter(pk=headless.pk).exists())

@@ -506,17 +506,32 @@ only be deleted deliberately, never by deleting the share class above it; a
 `PROTECT` on `SwapOrder.share_token` as well would be refused by
 `TransferOrder.token` first and add nothing.
 
-`CompanyViewSet.perform_destroy` calls `companies.services.company.delete_company`,
-which refuses a company holding any **deployed** share class with **409
-Conflict** and names delisting as what to do instead. 409 rather than 403 or
-400: the caller is authorised and the request is well-formed, and it is the
-state of the resource that conflicts — the same reading, and the same status,
-that `shared/api/exceptions.py` already gives a raw `ProtectedError`. A company
-whose only share class is a draft falls through to that generic 409, because
-`ShareToken.company` protects a draft too; a company with no share classes at
-all is still deletable. Delisting is the operator's archive path and it already
-exists; test data is removed through the Django admin, share class first. No new
-archive model was built for this.
+`CompanyViewSet.perform_destroy` calls `companies.services.company.delete_company`
+and `ShareTokenViewSet.perform_destroy` calls
+`tokens.services.share_token_service.delete_share_token`. Both refuse with **409
+Conflict** — the caller is authorised and the request is well-formed, and it is
+the state of the resource that conflicts, which is the same reading and the same
+status `shared/api/exceptions.py` already gives a raw `ProtectedError`.
+
+**The two routes ask one question, and the question is `contract_address`, not
+`status`.** `ShareToken.is_on_chain` and `ShareTokenQuerySet.on_chain()` are that
+question; a class with an address has been on chain and is a register of members
+whatever its status reads. Two predicates for one invariant is what let the first
+bypass through, and status alone reopens it: a **paused** class is on chain with
+its holders intact, and `is_deployed` — `status == DEPLOYED and contract_address
+is not None` — is false for it. Do not reach for `is_deployed` or `deployed()`
+here; they answer a narrower question, about what the class is doing now rather
+than whether it exists on a chain.
+
+A company holding an on-chain share class is refused and told to delist. A
+company whose classes are all still drafts is refused too, by the route and not
+by the collector, and told to delete them first: a draft is not a register, so
+"referenced by rows that must be kept" was the wrong sentence for it, and half a
+rule enforced by a generic handler is not a rule. A company with no share classes
+is deletable. Delisting is the operator's archive path and it already exists;
+test data is removed through the Django admin, share class first. No new archive
+model was built for this. The `PROTECT` edges stay the backstop under both
+refusals, for the shapes neither route anticipated.
 
 `WhitelistEntry.wallet` is still `CASCADE`, deliberately and for now. Deleting a
 wallet deletes the whitelist entry, and since point 3 resolves holder identity

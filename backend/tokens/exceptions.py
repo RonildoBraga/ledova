@@ -248,7 +248,7 @@ class DeployedShareClassException(APIException):
 
     def __init__(self, symbol: str):
         detail = (
-            f"{symbol} is deployed on chain and is the register of members for its holders, so it cannot be "
-            "deleted. Pause it instead, which stops transfers and keeps the record."
+            f"{symbol} is on chain and is the register of members for its holders, so it cannot be deleted, "
+            "whatever its status. Pause it to stop transfers; the record is kept either way."
         )
         super().__init__(detail=detail)
