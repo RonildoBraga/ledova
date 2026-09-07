@@ -18,6 +18,8 @@ from whitelist.services import WhitelistService
 
 RECEIPT = {"status": 1, "blockNumber": 7, "blockHash": bytes.fromhex("ab" * 32), "gasUsed": 21000}
 SIGNER = "0x" + "f" * 40
+ADD_HASH = "0x" + "11" * 32
+REMOVE_HASH = "0x" + "22" * 32
 
 
 class WhitelistServiceTransactionTest(TransactionTestCase):
@@ -139,6 +141,22 @@ class WhitelistServiceTransactionTest(TransactionTestCase):
         self.assertEqual((record.status, record.tx_hash), (TransactionStatus.REVERTED, "0xhash"))
         self.entry.refresh_from_db()
         self.assertEqual((self.entry.status, self.entry.add_tx_hash), (WhitelistStatus.FAILED, "0xhash"))
+
+    def test_a_reverted_remove_records_its_own_hash_and_leaves_the_add_hash_alone(self):
+        service = self._service(on_chain=True)
+        WhitelistEntry.objects.filter(pk=self.entry.pk).update(
+            status=WhitelistStatus.ACTIVE, is_whitelisted=True, add_tx_hash=ADD_HASH
+        )
+        service.chain_client.send_raw_transaction.return_value = REMOVE_HASH
+        service.chain_client.receipt_even_if_reverted.return_value = {**RECEIPT, "status": 0}
+
+        with self.assertRaises(WhitelistOperationFailedException):
+            service.remove_from_whitelist(self.wallet.address)
+
+        self.entry.refresh_from_db()
+        self.assertEqual(self.entry.status, WhitelistStatus.FAILED)
+        self.assertEqual(self.entry.add_tx_hash, ADD_HASH)
+        self.assertEqual(self.entry.remove_tx_hash, REMOVE_HASH)
 
     def test_a_caller_that_wraps_the_add_in_a_transaction_is_refused(self):
         service = self._service()

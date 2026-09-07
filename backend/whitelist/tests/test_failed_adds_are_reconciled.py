@@ -11,6 +11,7 @@ from whitelist.services import WhitelistService
 from whitelist.services.whitelist import GETH_TXPOOL_LIFETIME
 
 HASH = "0x" + "7a" * 32
+REMOVE_HASH = "0x" + "22" * 32
 
 
 class AFailedAddTheChainContradictsIsReconciledTest(TestCase):
@@ -77,6 +78,17 @@ class AFailedAddTheChainContradictsIsReconciledTest(TestCase):
 
         self.assertEqual(service.reconcile_failed_adds()["checked"], 0)
         service.is_whitelisted.assert_not_called()
+
+    def test_a_reverted_remove_is_reactivated_on_the_add_hash_and_not_on_its_own(self):
+        entry = self.an_entry()
+        WhitelistEntry.objects.filter(pk=entry.pk).update(remove_tx_hash=REMOVE_HASH)
+
+        result = self.service(on_chain=True).reconcile_failed_adds()
+
+        entry.refresh_from_db()
+        self.assertEqual((entry.status, entry.add_tx_hash), (WhitelistStatus.ACTIVE, HASH))
+        self.assertEqual(entry.remove_tx_hash, REMOVE_HASH)
+        self.assertEqual((result["checked"], result["activated"]), (1, 1))
 
     def test_a_chain_that_will_not_answer_leaves_the_entry_where_it_was(self):
         entry = self.an_entry()

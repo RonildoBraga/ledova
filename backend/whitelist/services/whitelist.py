@@ -30,6 +30,12 @@ logger = logging.getLogger(__name__)
 GETH_TXPOOL_LIFETIME = timedelta(hours=3)
 
 
+RECORD_A_REVERTED_WRITE = {
+    TransactionType.WHITELIST_ADD: WhitelistEntry.mark_add_failed,
+    TransactionType.WHITELIST_REMOVE: WhitelistEntry.mark_remove_failed,
+}
+
+
 def unique_wallet_uuid_for(address: str):
     wallet_ids = list(Wallet.objects.filter_by_address(address).order_by("uuid").values_list("uuid", flat=True)[:2])
     if len(wallet_ids) != 1:
@@ -136,9 +142,8 @@ class WhitelistService:
         tx_record = self._record_attempt(
             tx_type, function_name, checksum_address, self.signer_address, self.contract_address, entry
         )
-        contract_function = getattr(self.contract.functions, function_name)(checksum_address)
-
         try:
+            contract_function = getattr(self.contract.functions, function_name)(checksum_address)
             tx = self.chain_client.build_transaction(contract_function, from_address=self.signer_address)
             signed = self.chain_client.sign_transaction(tx, self.signer_key)
         except Exception as e:
@@ -168,7 +173,7 @@ class WhitelistService:
         if receipt["status"] != 1:
             tx_record.mark_reverted(f"{function_name} reverted on chain ({tx_hash})")
             if entry:
-                entry.mark_failed(f"{function_name} reverted on chain", tx_hash=tx_hash)
+                RECORD_A_REVERTED_WRITE[tx_type](entry, f"{function_name} reverted on chain", tx_hash)
             raise self._refuse(tx_type, function_name, checksum_address, f"reverted on chain ({tx_hash})")
 
         tx_record.mark_confirmed(
