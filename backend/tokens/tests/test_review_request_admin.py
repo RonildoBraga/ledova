@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from shared.tests.tenants import make_tenant
 from tokens.models import CapitalIncreaseRequest, RequestStatus, ShareIssuanceRequest
+from tokens.services.capital_increase import submit_capital_increase
 
 User = get_user_model()
 
@@ -29,7 +30,7 @@ class ReviewRequestAdminTest(TestCase):
         self.client.force_login(self.admin)
         self.tenant = make_tenant("owner")
         self.capital_increase = self.tenant.capital_increase
-        self.capital_increase.submit(self.tenant.user)
+        submit_capital_increase(self.capital_increase, self.tenant.user)
         self.issuance = ShareIssuanceRequest.objects.create(
             token=self.tenant.deployed_token,
             recipient_address="0x" + "a" * 40,
