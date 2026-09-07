@@ -56,16 +56,3 @@ class HoldingSnapshot(BaseModel):
     @property
     def asset(self):
         return self.holding.asset
-
-    @property
-    def market_value(self):
-        from assets.models import AssetSnapshot
-
-        snapshot = (
-            AssetSnapshot.objects.filter(asset=self.holding.asset, source_timestamp__date=self.snapshot_date)
-            .order_by("-source_timestamp")
-            .first()
-        )
-        if snapshot:
-            return self.quantity * snapshot.price
-        return None
