@@ -1,11 +1,18 @@
 import secrets
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
 from companies.exceptions import InvalidStatusTransitionException
 from companies.querysets.company import CompanyQuerySet
+from companies.validators import (
+    ABN_DOES_NOT_CARRY_ACN,
+    abn_carries_acn,
+    validate_abn,
+    validate_acn,
+)
 from shared.models import BaseModel
 
 
@@ -48,8 +55,8 @@ class Company(BaseModel):
         default=CompanyType.PROPRIETARY,
     )
 
-    acn = models.CharField(max_length=11, unique=True)
-    abn = models.CharField(max_length=14, blank=True)
+    acn = models.CharField(max_length=11, unique=True, validators=[validate_acn])
+    abn = models.CharField(max_length=14, blank=True, validators=[validate_abn])
 
     status = models.CharField(
         max_length=20,
@@ -139,6 +146,11 @@ class Company(BaseModel):
 
     def __str__(self):
         return f"{self.name} ({self.acn})"
+
+    def clean(self):
+        super().clean()
+        if self.abn and self.acn and not abn_carries_acn(self.abn, self.acn):
+            raise ValidationError({"abn": ABN_DOES_NOT_CARRY_ACN})
 
     def save(self, *args, **kwargs):
         if not self.api_key:

@@ -905,6 +905,44 @@ yet.
 previously worked through these buttons on `is_staff` alone stops being able to,
 which is the point.
 
+## Company identifiers
+
+An ACN and an ABN are checked for their **check digits**, not only their length,
+and the check runs on every write path. `companies/validators.py` holds both
+algorithms; the fields carry them as `validators=[...]`, which is what reaches
+the admin (a `ModelForm` calls `full_clean`), and the serializers call the same
+functions so the API answers 400 rather than 500. **The residual gap is a direct
+ORM write**: `Company.objects.create(acn=...)` runs no validator, and no
+`CheckConstraint` can express a checksum. That is stated rather than implied
+covered.
+
+`Company.clean()` carries the one rule that needs both fields: **an Australian
+company's ABN is its ACN with two check digits in front**, so the last nine
+digits of the ABN must be the ACN. That holds for ASIC-registered companies,
+which is every `company_type` this product has — it is *not* true of ABNs in
+general, and the ABR's own published example, `83 914 571 673`, is the proof:
+its last nine digits are not a valid ACN. A test pins that, so the next reader
+does not widen the rule to all ABNs.
+
+**What the checks are worth, stated as a number rather than as a feeling.** The
+ABN check is a modulus of 89, which is prime and larger than any weight, so it
+catches **every** single-digit error. The ACN check is a weighted modulus of 10,
+and five of its eight weights share a factor with 10 — so it does not.
+Corrupting one digit of ASIC's published example gives 81 candidates and the
+check accepts 8 of them, every one at a position weighted 8, 6, 5, 4 or 2.
+`test_the_acn_check_misses_only_what_a_modulus_of_ten_cannot_see` asserts that
+shape rather than a count, and asserts the set is non-empty so the limitation
+cannot quietly disappear. **A checksum is a typo filter, not verification**: only
+a registry lookup says a number belongs to a real company, and that is tracked
+as its own issue rather than implied by this one.
+
+Reference: `backend/companies/validators.py`. Gate:
+`backend/companies/tests/test_identifier_checksums.py`, whose fixtures are the
+**published worked examples** — ASIC's `004 085 616` and the ABR's
+`83 914 571 673` — rather than numbers this codebase generated. A checksum test
+whose expected values came out of the implementation under test agrees with
+itself for any algorithm, including a wrong one.
+
 ## Coding rules
 
 **A rule belongs here only with two things attached: the file that is its
