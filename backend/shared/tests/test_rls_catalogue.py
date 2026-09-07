@@ -1,6 +1,9 @@
+import importlib.util
+from pathlib import Path
 from unittest import skipUnless
 
 from django.apps import apps
+from django.conf import settings
 from django.db import connection
 from django.test import TransactionTestCase
 
@@ -23,6 +26,19 @@ POLICY_EXPRESSIONS = (
 )
 
 NEGATIONS = (" not in ", "<>", "!=", " is distinct from ")
+
+LAYER_GATE = Path(settings.BASE_DIR).parent / "scripts" / "check-layers.py"
+
+
+def views_the_gate_counts():
+    spec = importlib.util.spec_from_file_location("check_layers_for_the_audit", LAYER_GATE)
+    gate = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gate)
+    counted = set(gate.LEGACY) | set(gate.ALLOWED)
+    suffix = f":{gate.VIEW_ORM}"
+    return sorted(
+        key[len("backend/") : -len(suffix)] for key in counted if key.endswith(suffix) and "/views/" in key
+    )
 
 
 def model_tables():
@@ -117,10 +133,17 @@ class EveryTenantTableIsScopedByAPolicyTest(TransactionTestCase):
                 self.assertGreater(len(term), 40, f"{name} must name the term that admits its rows")
                 self.assertGreater(len(proof), 40, f"{name} must name the fixture row that proves it")
 
-    def test_the_audit_covers_every_queryset_the_views_reach_past_visible_to_user(self):
+    def test_the_audit_covers_every_view_the_layer_gate_counts_as_reaching_the_orm(self):
         named = " ".join(site for site, _, _ in BYPASSES_VISIBLE_TO_USER.values())
 
-        for site in ("offerings/views/directory.py", "tokens/views/trading_token.py", "users/services/eligibility.py"):
+        for path in views_the_gate_counts():
+            with self.subTest(view=path):
+                self.assertIn(path, named, f"{path} reaches the ORM in a view and the audit does not say why")
+
+    def test_the_two_services_that_read_past_the_scope_are_named(self):
+        named = " ".join(site for site, _, _ in BYPASSES_VISIBLE_TO_USER.values())
+
+        for site in ("users/services/eligibility.py", "tokens/services/trading_order_cancel.py"):
             with self.subTest(site=site):
                 self.assertIn(site, named)
 

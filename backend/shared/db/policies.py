@@ -172,6 +172,15 @@ BYPASSES_VISIBLE_TO_USER = {
         "member does not own the company they administer",
         "shared/tests/test_principal_coverage.py - the administrative-action gate",
     ),
+    "AssetSnapshot.filter(asset=...) on the snapshots action": (
+        "assets/views/asset.py:42",
+        "no policy term: asset_snapshots is UNSCOPED, price history for the catalogue that is identical "
+        "for every tenant. The read is bounded anyway - the asset comes from get_object(), which goes "
+        "through a get_queryset() that does call visible_to_user, so the only snapshots reachable belong "
+        "to an asset this principal can already see",
+        "shared/tests/test_cross_tenant_routes_under_rls.py - the asset rows of the route matrix, which "
+        "reach the action through the same get_object()",
+    ),
     "ShareIssuance.with_token, SwapOrder.for_transfer_order": (
         "tokens/views/share_token.py:149, tokens/views/trading_order.py:232",
         "no policy term today: both tables are classified out of POLICIES, and each is reached only through "
