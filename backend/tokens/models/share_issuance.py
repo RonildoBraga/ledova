@@ -33,7 +33,16 @@ class ShareIssuance(BaseModel):
     recipient_name = models.CharField(
         max_length=255,
         blank=True,
-        help_text="Optional name/label for the recipient",
+        help_text="The holder's name as it stood when the shares were allotted",
+    )
+    recipient_residential_address = models.TextField(
+        blank=True,
+        help_text="The holder's residential address as it stood when the shares were allotted",
+    )
+    identity_stamped_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the recipient name and address were stamped, or null if they never were",
     )
 
     amount = models.CharField(

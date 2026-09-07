@@ -26,6 +26,8 @@ from tokens.models import (
     ShareTokenStatus,
 )
 from tokens.services.register import (
+    IDENTITY_LABELS,
+    IDENTITY_LIVE,
     REGISTER_HEADERS,
     SOURCE_ALLOTMENTS,
     SOURCE_CHAIN,
@@ -221,7 +223,17 @@ class HolderTypeTest(RegisterTestBase):
 
         self.assertEqual(
             set(holders[0]),
-            {"address", "name", "balance", "percentage", "source", "holderType", "enteredOn", "shareClass"},
+            {
+                "address",
+                "name",
+                "balance",
+                "percentage",
+                "source",
+                "holderType",
+                "enteredOn",
+                "shareClass",
+                "identitySource",
+            },
         )
         self.assertEqual(holders[0]["shareClass"], "REG")
         self.assertIsNotNone(holders[0]["enteredOn"])
@@ -246,9 +258,11 @@ class RegisterExportTest(RegisterTestBase):
         body = {row[0]: row for row in rows[1:]}
         self.assertEqual(body["Mary Member"][1], RESIDENCE)
         self.assertEqual(body["Mary Member"][3:7], ["Member", "REG", "100", SOURCE_LABELS[SOURCE_CHAIN]])
-        self.assertEqual(body["Mary Member"][8:], ["Active", "250.00"])
+        self.assertEqual(body["Mary Member"][7], IDENTITY_LABELS[IDENTITY_LIVE])
+        self.assertEqual(body["Mary Member"][9:], ["Active", "250.00"])
         self.assertEqual(body["Company treasury"][1], "")
-        self.assertEqual(body["Company treasury"][9], "")
+        self.assertEqual(body["Company treasury"][7], IDENTITY_LABELS[IDENTITY_LIVE])
+        self.assertEqual(body["Company treasury"][10], "")
 
     def test_the_residential_address_never_reaches_the_api(self):
         member_account = _account("member@example.test", "Mary Member", RESIDENCE)
@@ -304,7 +318,7 @@ class RegisterTruthTest(RegisterTestBase):
         row = list(csv.reader(io.StringIO(response.content.decode())))[1]
         self.assertEqual(row[0], "Mia Mixed")
         self.assertEqual(row[5], "1010")
-        self.assertEqual(row[9], "")
+        self.assertEqual(row[10], "")
 
     def test_a_chain_balance_below_the_allotment_prints_no_amount_paid(self):
         account = _account("cut@example.test", "Cut Down", RESIDENCE)
@@ -318,7 +332,7 @@ class RegisterTruthTest(RegisterTestBase):
         row = list(csv.reader(io.StringIO(response.content.decode())))[1]
         self.assertEqual(row[5], "42")
         self.assertEqual(row[6], SOURCE_LABELS[SOURCE_CHAIN])
-        self.assertEqual(row[9], "")
+        self.assertEqual(row[10], "")
 
     def test_a_scaled_back_subscription_prints_the_money_backing_the_shares_not_the_money_received(self):
         account = _account("sca@example.test", "Sam Scaled", RESIDENCE)
@@ -339,7 +353,7 @@ class RegisterTruthTest(RegisterTestBase):
 
         row = list(csv.reader(io.StringIO(response.content.decode())))[1]
         self.assertEqual(row[5], "40")
-        self.assertEqual(row[9], "100.00")
+        self.assertEqual(row[10], "100.00")
 
     def test_an_allotment_the_money_record_has_not_caught_up_with_prints_no_amount_paid(self):
         account = _account("lag@example.test", "Lagging Mirror", RESIDENCE)
@@ -354,7 +368,7 @@ class RegisterTruthTest(RegisterTestBase):
 
         row = list(csv.reader(io.StringIO(response.content.decode())))[1]
         self.assertEqual(row[5], "40")
-        self.assertEqual(row[9], "")
+        self.assertEqual(row[10], "")
 
     def test_a_holding_every_share_of_which_was_subscribed_prints_the_total_paid(self):
         account = _account("sue@example.test", "Sue Subscribed", RESIDENCE)
@@ -368,7 +382,7 @@ class RegisterTruthTest(RegisterTestBase):
 
         row = list(csv.reader(io.StringIO(response.content.decode())))[1]
         self.assertEqual(row[5], "50")
-        self.assertEqual(row[9], "125.00")
+        self.assertEqual(row[10], "125.00")
 
     def test_a_register_that_is_not_chain_confirmed_says_so_on_every_csv_row(self):
         self._allot(MEMBER, 100)

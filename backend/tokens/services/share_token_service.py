@@ -44,6 +44,7 @@ from tokens.models import (
 )
 from tokens.querysets.share_issuance import ISSUANCE_KEY_PREFIX
 from tokens.services.dilution import dilution_for
+from tokens.services.holder_identity import identity_at_allotment
 
 logger = logging.getLogger(__name__)
 
@@ -486,10 +487,13 @@ class ShareTokenService:
 
         self._start_execution(request)
         if issuance is None:
+            stamped = identity_at_allotment(recipient)
             issuance = ShareIssuance.objects.create(
                 token=token,
                 recipient_address=recipient,
-                recipient_name=request.recipient_name,
+                recipient_name=request.recipient_name or stamped.name,
+                recipient_residential_address=stamped.residential_address,
+                identity_stamped_at=timezone.now() if stamped else None,
                 amount=str(request.amount),
                 issuance_type=request.issuance_type,
                 reason=f"Issuance request: {request.reason}",
