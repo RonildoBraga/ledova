@@ -131,6 +131,41 @@ class OwnerColumnTriggerTest(TestCase):
 
         self.assertIn("does not match wallet.user_account_id", str(raised.exception))
 
+    def test_changing_the_wallet_and_the_account_together_is_still_refused(self):
+        row = Transaction.objects.create(
+            wallet=self.wallet,
+            asset=self.asset,
+            amount="1",
+            tx_hash="0x" + "4" * 64,
+            chain="base",
+            from_address="0x" + "b" * 40,
+        )
+
+        with self.assertRaises((IntegrityError, ProgrammingError)) as raised:
+            with transaction.atomic(), connection.cursor() as cursor:
+                cursor.execute(
+                    'UPDATE "transactions" SET wallet_id = %s, user_account_id = %s WHERE uuid = %s',
+                    [self.stranger_wallet.pk, self.stranger.pk, row.pk],
+                )
+
+        self.assertIn("user_account_id cannot change", str(raised.exception))
+
+    def test_nulling_the_account_is_repaired_rather_than_refused(self):
+        row = Transaction.objects.create(
+            wallet=self.wallet,
+            asset=self.asset,
+            amount="1",
+            tx_hash="0x" + "5" * 64,
+            chain="base",
+            from_address="0x" + "b" * 40,
+        )
+
+        with connection.cursor() as cursor:
+            cursor.execute('UPDATE "transactions" SET user_account_id = NULL WHERE uuid = %s', [row.pk])
+
+        row.refresh_from_db()
+        self.assertEqual(row.user_account_id, self.account.pk)
+
     def test_an_ordinary_update_still_works(self):
         row = Transaction.objects.create(
             wallet=self.wallet,
