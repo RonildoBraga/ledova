@@ -346,11 +346,14 @@ def dotted_name(node: ast.expr) -> str | None:
     return None
 
 
+def is_scanned_logger(name: str | None) -> bool:
+    return bool(name) and name.rsplit(".", 1)[-1].lower() in LOG_OBJECTS
+
+
 def is_logging_call(node: ast.Call) -> bool:
     if not isinstance(node.func, ast.Attribute) or node.func.attr not in LOG_METHODS:
         return False
-    name = dotted_name(node.func.value)
-    return bool(name) and name.rsplit(".", 1)[-1].lower() in LOG_OBJECTS
+    return is_scanned_logger(dotted_name(node.func.value))
 
 
 def private_reference(node: ast.expr) -> str | None:
@@ -465,8 +468,9 @@ def alias_findings(tree: ast.AST) -> list[tuple[int, str, str]]:
         if dotted_name(node.value.func) != "logging.getLogger":
             continue
         for target in node.targets:
-            if isinstance(target, ast.Name) and target.id not in LOG_OBJECTS:
-                findings.append((node.lineno, LOG_ALIAS, f"{target.id} = logging.getLogger(...)"))
+            name = dotted_name(target)
+            if name and not is_scanned_logger(name):
+                findings.append((node.lineno, LOG_ALIAS, f"{name} = logging.getLogger(...)"))
     return findings
 
 
