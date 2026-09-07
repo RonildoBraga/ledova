@@ -72,7 +72,7 @@ export const createOrder = (apiClient: AxiosInstance, data: SignedCreateOrderReq
 
 export const cancelOrder = (apiClient: AxiosInstance, uuid: string, data: SignedCancelOrderRequest) =>
   apiClient.post<TransferOrder>(TRADING_ENDPOINTS.ORDERS.CANCEL(uuid), {
-    message: data.message,
+    digest: data.digest,
     signature: data.signature,
   });
 

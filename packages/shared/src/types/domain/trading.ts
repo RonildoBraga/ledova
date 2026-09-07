@@ -200,11 +200,22 @@ export interface CreateOrderMessageResponse {
   instructions: string;
 }
 
-export interface CancelOrderMessageResponse {
+export interface SigningChallengeTypedData {
+  domain: {
+    name: string;
+    version: string;
+    chainId: number;
+    verifyingContract: string;
+  };
+  types: Record<string, { name: string; type: string }[]>;
+  message: Record<string, string | number>;
+}
+
+export interface CancelOrderMessageResponse extends SigningChallengeTypedData {
   orderUuid: string;
   walletAddress: string;
-  message: string;
-  instructions: string;
+  digest: string;
+  expiresAt: string;
 }
 
 export interface SignedCreateOrderRequest extends CreateOrderRequest {
@@ -213,7 +224,7 @@ export interface SignedCreateOrderRequest extends CreateOrderRequest {
 }
 
 export interface SignedCancelOrderRequest {
-  message: string;
+  digest: string;
   signature: string;
 }
 
