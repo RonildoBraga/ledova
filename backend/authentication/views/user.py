@@ -1,7 +1,6 @@
 from datetime import datetime
 
 from django.conf import settings
-from django.contrib.auth import get_user_model
 from django.middleware.csrf import get_token
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -13,7 +12,6 @@ from rest_framework.viewsets import ViewSet
 from rest_framework_simplejwt.exceptions import TokenError
 
 from authentication.classes import HybridJWTAuthentication
-from authentication.managers.user import EmailLookupState
 from authentication.serializers.user import (
     ChangePasswordSerializer,
     EmailVerificationSerializer,
@@ -22,11 +20,10 @@ from authentication.serializers.user import (
     UserSignupSerializer,
 )
 from authentication.services.email_codes import EmailCodeService
+from authentication.services.email_lookup import find_unique_user
 from authentication.services.sessions import SessionService
 from authentication.services.tokens import TokenService
 from authentication.throttles import EmailRateThrottle
-
-User = get_user_model()
 
 TRANSPORT_HEADER = "X-Auth-Transport"
 
@@ -171,8 +168,7 @@ class AuthViewSet(TokenCookieMixin, ViewSet):
         token = serializer.validated_data["token"]
         email = serializer.validated_data["email"]
 
-        lookup = User.objects.resolve_email(email)
-        user = lookup.user if lookup.state is EmailLookupState.UNIQUE else None
+        user = find_unique_user(email)
 
         if user is None or not EmailCodeService.verify(user, token):
             return Response(
@@ -192,8 +188,7 @@ class AuthViewSet(TokenCookieMixin, ViewSet):
 
         email = serializer.validated_data.get("email")
         if email:
-            lookup = User.objects.resolve_email(email)
-            user = lookup.user if lookup.state is EmailLookupState.UNIQUE else None
+            user = find_unique_user(email)
         elif request.user.is_authenticated:
             user = request.user
         else:
