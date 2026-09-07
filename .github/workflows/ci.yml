@@ -142,8 +142,8 @@ jobs:
         run: |
           python manage.py migrate --settings=ledova_backend.settings.test_postgres --noinput
           python manage.py spectacular \
-            --settings=ledova_backend.settings.test_postgres --file /tmp/schema.yml
-          python ../scripts/check-api-types.py --schema /tmp/schema.yml
+            --settings=ledova_backend.settings.test_postgres --file /tmp/ledova-schema.yml
+          python ../scripts/check-api-types.py --schema /tmp/ledova-schema.yml
       - name: SQLite migration tests
         run: >-
           python manage.py test authentication.tests.test_email_migration

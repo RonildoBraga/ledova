@@ -6,7 +6,9 @@ PYTHON ?= python3
 
 # The API type drift gate reads a generated OpenAPI schema rather than generating one,
 # so it needs no Django on the host. CI generates it in the Django job, where the
-# database schema generation touches already exists; SCHEMA points at the result.
+# database schema generation touches already exists, and writes it to this same path -
+# two files naming one artefact differently is how `make check-api-types` comes to say
+# no schema exists while CI has just written one.
 SCHEMA ?= /tmp/ledova-schema.yml
 
 .PHONY: help install install-backend install-node-if-missing init-local check-local-env build generate-tokens check check-comments check-layers \
