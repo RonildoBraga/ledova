@@ -327,9 +327,12 @@ that allowlist before the first remedy can be used for the LLM.
 
 Installing the service on the host is **not sufficient on such a host**: an
 operator who installs Ollama and sees the same failure has fixed the first
-cause and not the second. The failure now names the setting and its value —
-`LLM extraction service unavailable at LLM_BASE_URL=...` — so the message
-says which address to test.
+cause and not the second. The failure names the setting to look at —
+`LLM extraction service unavailable; check LLM_BASE_URL` — and not its value,
+because `_validate_local_base_url` checks the scheme, host, userinfo, query
+and fragment and **never the path**, so a value like
+`http://127.0.0.1:11434/v1/sk-proj-…` passes it and would otherwise reach the
+uploader's screen.
 
 ### Clients
 

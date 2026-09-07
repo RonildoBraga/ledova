@@ -105,7 +105,7 @@ class LlmExtractClient:
             )
         except OpenAIError as e:
             logger.warning("llm_extract: local upstream call failed")
-            raise LlmExtractError(f"{LlmExtractError.default_detail} at LLM_BASE_URL={self.base_url}") from e
+            raise LlmExtractError(f"{LlmExtractError.default_detail}; check LLM_BASE_URL") from e
         duration_ms = int((time.monotonic() - started) * 1000)
 
         raw = response.choices[0].message.content or ""
