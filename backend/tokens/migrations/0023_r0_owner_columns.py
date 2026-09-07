@@ -248,9 +248,14 @@ def _company(null):
     )
 
 
-def _wallet(null, help_text):
+def _wallet(null, help_text, blank=False):
     return models.ForeignKey(
-        null=null, on_delete=models.PROTECT, related_name="+", to="wallets.wallet", help_text=help_text
+        null=null,
+        blank=blank,
+        on_delete=models.PROTECT,
+        related_name="+",
+        to="wallets.wallet",
+        help_text=help_text,
     )
 
 
@@ -267,7 +272,9 @@ class Migration(migrations.Migration):
         migrations.AddField(model_name="shareissuancerequest", name="company", field=_company(True)),
         migrations.AddField(model_name="swaporder", name="seller_wallet", field=_wallet(True, SELLER_HELP)),
         migrations.AddField(model_name="swaporder", name="buyer_wallet", field=_wallet(True, BUYER_HELP)),
-        migrations.AddField(model_name="signingchallenge", name="wallet", field=_wallet(True, CHALLENGE_HELP)),
+        migrations.AddField(
+            model_name="signingchallenge", name="wallet", field=_wallet(True, CHALLENGE_HELP, blank=True)
+        ),
         migrations.RunPython(backfill, unfill),
         migrations.AlterField(model_name="capitalincreaserequest", name="company", field=_company(False)),
         migrations.AlterField(model_name="shareissuancerequest", name="company", field=_company(False)),
