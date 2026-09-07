@@ -43,6 +43,14 @@ class ASecondRaiseIsRefusedWithAReasonTest(TestCase):
         self.assertIn(self.token.symbol, served)
         self.assertIn(self.first.get_status_display(), served)
 
+    def test_the_refusal_names_a_remedy_the_issuer_can_actually_reach(self):
+        with self.assertRaises(InvalidTokenStateException) as refusal:
+            submit_capital_increase(self.a_draft(), self.tenant.user)
+
+        served = str(refusal.exception.detail)
+        self.assertIn("ask the operator to reject it", served)
+        self.assertNotIn("withdraw", served.lower())
+
     def test_a_draft_beside_one_in_flight_is_allowed_to_exist(self):
         self.a_draft()
 

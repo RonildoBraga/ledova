@@ -16,11 +16,22 @@ def refuse_a_token_that_already_has_two(apps, schema_editor):
         .filter(in_flight__gt=1)
         .order_by("token_id")
     )
-    offenders = [(str(row["token_id"]), row["in_flight"]) for row in crowded]
+    offenders = [row["token_id"] for row in crowded]
     if not offenders:
         return
 
-    named = ", ".join(f"{token} has {count}" for token, count in offenders)
+    crowding = (
+        model._base_manager.using(alias)
+        .filter(status__in=IN_FLIGHT, token_id__in=offenders)
+        .select_related("token")
+        .order_by("token_id", "created_at")
+    )
+    by_class = {}
+    for request in crowding:
+        heading = f"{request.token.symbol} ({request.token_id})"
+        by_class.setdefault(heading, []).append(f"{request.uuid} ({request.status})")
+    named = "; ".join(f"{heading}: {', '.join(rows)}" for heading, rows in by_class.items())
+
     raise RuntimeError(
         "This migration allows one capital increase in flight per share class, and these already have more "
         f"than one: {named}. Which of them should proceed is a decision for an operator, not for a migration, "
@@ -45,7 +56,7 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="capitalincreaserequest",
             constraint=models.UniqueConstraint(
-                condition=models.Q(("status__in", ("submitted", "under_review", "approved", "executing"))),
+                condition=models.Q(("status__in", IN_FLIGHT)),
                 fields=("token",),
                 name="one_capital_increase_in_flight_per_token",
             ),
