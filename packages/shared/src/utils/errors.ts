@@ -112,6 +112,15 @@ function retryAfterOf(response: { headers?: unknown; data?: unknown }): number |
   return null;
 }
 
+function sentenceOf(value: unknown): string | null {
+  if (typeof value === 'string') return value.trim() ? value : null;
+  if (Array.isArray(value) && value.length > 0 && value.every((each) => typeof each === 'string')) {
+    const joined = value.join(' ').trim();
+    return joined ? joined : null;
+  }
+  return null;
+}
+
 export function readSignInError(error: unknown): SignInErrorReading {
   const response = (error as { response?: { status?: number; headers?: unknown; data?: unknown } })?.response;
   if (!response || !('data' in response)) return { generalError: UNRECOGNISED };
@@ -124,8 +133,8 @@ export function readSignInError(error: unknown): SignInErrorReading {
   if (!data || typeof data !== 'object') return { generalError: UNRECOGNISED };
 
   const body = data as Record<string, unknown>;
-  if (typeof body.detail === 'string' && body.detail.trim()) return { generalError: body.detail };
-  if (typeof body.error === 'string' && body.error.trim()) return { generalError: body.error };
+  const announced = sentenceOf(body.detail) ?? sentenceOf(body.error);
+  if (announced) return { generalError: announced };
 
   const fieldErrors = Object.keys(body).some((key) => Array.isArray(body[key]));
   if (fieldErrors) return { fieldErrors: body as Record<string, string[]> };
