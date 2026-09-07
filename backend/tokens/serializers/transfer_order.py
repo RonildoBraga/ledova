@@ -236,7 +236,7 @@ class OrderModificationRequestSerializer(serializers.Serializer):
 
 class OrderModificationExecuteSerializer(serializers.Serializer):
 
-    message = serializers.CharField()
+    digest = serializers.CharField()
     signature = serializers.CharField()
 
     def validate_signature(self, value):

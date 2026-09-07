@@ -188,7 +188,7 @@ export function OrderSigningModal({
 
             {signing.messageData && (
               <View style={styles.summaryBox}>
-                {isCreating && 'tokenUuid' in signing.messageData && (
+                {signing.messageData.purpose === 'order_create' && (
                   <>
                     <View style={styles.summaryRow}>
                       <Text style={styles.summaryLabel}>Type</Text>
@@ -206,7 +206,7 @@ export function OrderSigningModal({
                     </View>
                   </>
                 )}
-                {!isCreating && 'orderUuid' in signing.messageData && (
+                {signing.messageData.purpose === 'order_cancel' && (
                   <>
                     <View style={styles.summaryRow}>
                       <Text style={styles.summaryLabel}>Order</Text>

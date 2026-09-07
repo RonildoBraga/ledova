@@ -275,7 +275,7 @@ export function OrderSigningFlow({
             {messageData && (
               <div className="bg-surface-tertiary rounded-lg p-4 space-y-2">
                 <div className="grid grid-cols-2 gap-2 text-sm">
-                  {isCreating && 'tokenUuid' in messageData && (
+                  {messageData.purpose === 'order_create' && (
                     <>
                       <div className="text-text-muted">Type</div>
                       <div
@@ -289,7 +289,7 @@ export function OrderSigningFlow({
                       <div className="text-text-primary">${messageData.message.pricePerShare}</div>
                     </>
                   )}
-                  {isCancelling && 'orderUuid' in messageData && (
+                  {messageData.purpose === 'order_cancel' && (
                     <>
                       <div className="text-text-muted">Order</div>
                       <div className="text-text-primary font-mono text-xs">{messageData.orderUuid.slice(0, 8)}...</div>

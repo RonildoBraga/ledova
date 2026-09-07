@@ -123,7 +123,7 @@ export const getOrderModificationMessage = (
 
 export const modifyOrder = (apiClient: AxiosInstance, orderUuid: string, data: SignedOrderModificationRequest) =>
   apiClient.post<OrderModificationResponse>(TRADING_ENDPOINTS.ORDERS.MODIFY(orderUuid), {
-    message: data.message,
+    digest: data.digest,
     signature: data.signature,
   });
 

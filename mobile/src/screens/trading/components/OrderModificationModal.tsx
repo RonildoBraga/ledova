@@ -5,10 +5,10 @@ import { formatCurrency, getWalletVerificationEvmChainId } from '@ledova/shared'
 import type { TransferOrder, Wallet } from '@ledova/shared';
 import { CustomModal } from '../../../components/modal';
 import { QRDisplay, QRScanner } from '../../../components/qr';
-import { encodeEthereumMessage } from '../../../utils/keystone/urEncoder';
+import { encodeEthereumTypedData } from '../../../utils/keystone/urEncoder';
 import { decodeKeystoneMessageSignature } from '../../../utils/keystone/urDecoder';
 import { getSeedPhrase } from '../../../services/secureKeyStorage';
-import { signEthereumMessage } from '../../../utils/softwareWallet/localSigner';
+import { signEthereumTypedData } from '../../../utils/softwareWallet/localSigner';
 import {
   useOrderModificationMessage,
   useExecuteOrderModification,
@@ -219,9 +219,9 @@ export function OrderModificationModal({ visible, onClose, order, wallet, onSucc
       setStep('error');
       return;
     }
-    const encoded = encodeEthereumMessage(
+    const encoded = encodeEthereumTypedData(
       wallet.address,
-      messageData.message,
+      { domain: messageData.domain, types: messageData.types, message: messageData.message },
       wallet.derivationPath || undefined,
       wallet.masterFingerprint || undefined,
       getWalletVerificationEvmChainId(wallet.chain) ?? undefined,
@@ -240,7 +240,7 @@ export function OrderModificationModal({ visible, onClose, order, wallet, onSucc
       if (!messageData || !order) return;
       setStep('submitting');
       executeModificationMutation.mutate(
-        { orderUuid: order.uuid, data: { message: messageData.message, signature } },
+        { orderUuid: order.uuid, data: { digest: messageData.digest, signature } },
         {
           onSuccess: () => {
             setStep('success');
@@ -270,7 +270,13 @@ export function OrderModificationModal({ visible, onClose, order, wallet, onSucc
         setStep('instructions');
         return;
       }
-      const signature = await signEthereumMessage(mnemonic, wallet.derivationPath, messageData.message);
+      const signature = await signEthereumTypedData(
+        mnemonic,
+        wallet.derivationPath,
+        messageData.domain,
+        messageData.types,
+        messageData.message,
+      );
       handleSignatureScanned(signature);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to sign');

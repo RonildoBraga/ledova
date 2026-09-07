@@ -18,7 +18,7 @@ const ICON_HERO = DESIGN_TOKENS.icon.sizes.hero;
 const ICON_DISPLAY = DESIGN_TOKENS.icon.sizes.display;
 import { useQRScanner, QRScannerView } from '@components/qr';
 import type { Wallet, TransferOrder } from '@ledova/shared';
-import { encodeEthereumMessage } from '@utils/keystone/urEncoder';
+import { encodeEthereumTypedData } from '@utils/keystone/urEncoder';
 import { decodeKeystoneMessageSignature } from '@utils/keystone/urDecoder';
 import {
   useOrderModificationMessage,
@@ -175,9 +175,9 @@ export function OrderModificationModal({ isOpen, onClose, order, wallet, onSucce
       return;
     }
 
-    const encoded = encodeEthereumMessage(
+    const encoded = encodeEthereumTypedData(
       wallet.address,
-      messageData.message,
+      { domain: messageData.domain, types: messageData.types, message: messageData.message },
       wallet.derivationPath || undefined,
       wallet.masterFingerprint || undefined,
       getWalletVerificationEvmChainId(wallet.chain) ?? undefined,
@@ -203,7 +203,7 @@ export function OrderModificationModal({ isOpen, onClose, order, wallet, onSucce
         {
           orderUuid: order.uuid,
           data: {
-            message: messageData.message,
+            digest: messageData.digest,
             signature,
           },
         },

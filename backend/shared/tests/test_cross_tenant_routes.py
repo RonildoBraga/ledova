@@ -348,7 +348,7 @@ ROUTES = (
     Route("get", "/api/v1/trading/orders/{order}/"),
     Route("post", "/api/v1/trading/orders/{order}/cancel/", {"digest": DIGEST, "signature": SIGNATURE}),
     Route("get", "/api/v1/trading/orders/{order}/cancel/message/"),
-    Route("post", "/api/v1/trading/orders/{order}/modify/", {"message": "modify", "signature": SIGNATURE}),
+    Route("post", "/api/v1/trading/orders/{order}/modify/", {"digest": DIGEST, "signature": SIGNATURE}),
     Route("post", "/api/v1/trading/orders/{order}/modify/message/", {"newQuantity": 5}),
     Route("get", "/api/v1/trading/orders/{order}/modifications/"),
     Route("get", "/api/v1/trading/orders/{order}/swap/?wallet_address={own_wallet_address}"),
