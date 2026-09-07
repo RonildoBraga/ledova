@@ -12,3 +12,7 @@ class BaseChainTransactionError(BaseChainError):
 
 class BaseChainContractError(BaseChainError):
     pass
+
+
+class GasEstimationError(BaseChainTransactionError):
+    pass

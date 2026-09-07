@@ -19,11 +19,13 @@ from integrations.base_chain.exceptions import (
     BaseChainConnectionError,
     BaseChainContractError,
     BaseChainTransactionError,
+    GasEstimationError,
 )
 
 logger = logging.getLogger(__name__)
 
 LOG_PREFIX = "[BASE_CHAIN]"
+GAS_HEADROOM = 1.2
 
 
 class BaseChainClient:
@@ -188,17 +190,17 @@ class BaseChainClient:
 
         tx = contract_function.build_transaction(tx)
 
-        if gas is None:
-            try:
-                estimated_gas = self.w3.eth.estimate_gas(tx)
-                tx["gas"] = int(estimated_gas * 1.2)
-            except Exception as e:
-                logger.warning(f"{LOG_PREFIX} Gas estimation failed: {e}. Using default.")
-                tx["gas"] = 500000
-        else:
-            tx["gas"] = gas
+        tx["gas"] = self.estimate_gas(tx) if gas is None else gas
 
         return tx
+
+    def estimate_gas(self, tx: TxParams) -> int:
+        try:
+            return int(self.w3.eth.estimate_gas(tx) * GAS_HEADROOM)
+        except Exception as e:
+            raise GasEstimationError(
+                f"The node would not estimate gas for this transaction, so it is not being sent: {e}"
+            ) from e
 
     def sign_transaction(self, tx: TxParams, private_key: str) -> bytes:
         expected_chain_id = self.assert_expected_chain()
