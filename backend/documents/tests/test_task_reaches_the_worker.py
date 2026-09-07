@@ -7,7 +7,7 @@ from django.test import SimpleTestCase
 
 TASK = "documents.tasks.extract.extract_document"
 
-WHAT_A_WORKER_IMPORTS = """
+DECLARED = """
 import django, json, os
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "ledova_backend.settings.test")
 django.setup()
@@ -15,10 +15,20 @@ from ledova_backend.procrastinate_app import app
 print(json.dumps(sorted(app.tasks)))
 """
 
+AFTER_THE_URLCONF = """
+import django, json, os
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "ledova_backend.settings.test")
+django.setup()
+from django.urls import get_resolver
+get_resolver().url_patterns
+from ledova_backend.procrastinate_app import app
+print(json.dumps(sorted(app.tasks)))
+"""
 
-def tasks_a_worker_would_find():
+
+def registry(script):
     finished = subprocess.run(
-        [sys.executable, "-c", WHAT_A_WORKER_IMPORTS],
+        [sys.executable, "-c", script],
         capture_output=True,
         text=True,
         cwd=settings.BASE_DIR,
@@ -27,21 +37,23 @@ def tasks_a_worker_would_find():
     return set(json.loads(finished.stdout.strip().splitlines()[-1]))
 
 
-class TheExtractionTaskIsRegisteredWhereItRunsTest(SimpleTestCase):
+class RegistrationIsDeclaredRatherThanIncidentalTest(SimpleTestCase):
 
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.registered = tasks_a_worker_would_find()
+        cls.declared = registry(DECLARED)
+        cls.after_urls = registry(AFTER_THE_URLCONF)
 
-    def test_a_worker_finds_the_task_the_document_service_defers(self):
-        self.assertIn(TASK, self.registered)
+    def test_django_setup_alone_registers_the_task_the_document_service_defers(self):
+        self.assertIn(TASK, self.declared)
 
-    def test_the_registry_read_this_way_is_the_workers_and_not_this_process(self):
-        from ledova_backend.procrastinate_app import app
+    def test_loading_the_urlconf_adds_no_task_that_was_not_already_declared(self):
+        self.assertEqual(sorted(self.after_urls - self.declared), [])
 
-        self.assertGreater(len(self.registered), 20)
-        self.assertLessEqual(self.registered, set(app.tasks))
+    def test_the_subprocesses_answered_with_a_registry_rather_than_with_nothing(self):
+        self.assertGreater(len(self.declared), 20)
+        self.assertGreater(len(self.after_urls), 20)
 
     def test_the_service_defers_the_name_that_was_looked_for(self):
         from documents.tasks.extract import extract_document
