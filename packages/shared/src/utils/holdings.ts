@@ -25,7 +25,7 @@ export function calculateHoldingsSummary(holdings: HoldingWithWallet[], walletsC
       totalValue: data.totalValue,
       holdingsCount: data.holdingsCount,
     }))
-    .sort((a, b) => b.percentage - a.percentage);
+    .sort((a, b) => b.totalValue - a.totalValue);
 
   return {
     totalValue,
@@ -35,16 +35,6 @@ export function calculateHoldingsSummary(holdings: HoldingWithWallet[], walletsC
   };
 }
 
-/**
- * A private company's shares have no market feed, so `marketValue` is null and the
- * total is zero. Weighting the ring by value then divides by zero, and returning
- * nothing told an investor holding 10,000 shares that they held none (#250).
- *
- * When nothing on the page is priced, the ring is weighted by quantity instead:
- * "cannot be drawn by value" is not "does not exist". A mixed portfolio keeps the
- * value basis, so an unpriced holding sits at 0% beside the priced ones rather
- * than distorting them.
- */
 export function calculateAssetAllocation(holdings: HoldingWithWallet[], totalValue: number): AssetAllocationItem[] {
   const assetMap = new Map<
     string,
