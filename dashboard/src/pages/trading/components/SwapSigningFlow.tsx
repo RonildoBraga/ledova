@@ -9,6 +9,7 @@ const ICON_XL = DESIGN_TOKENS.icon.sizes.xl;
 const ICON_HERO = DESIGN_TOKENS.icon.sizes.hero;
 const ICON_DISPLAY = DESIGN_TOKENS.icon.sizes.display;
 import { useQRScanner, QRScannerView } from '@components/qr';
+import { SeedPhraseInput } from '@components/SeedPhraseInput';
 import type { SwapOrder, Wallet } from '@ledova/shared';
 import { useAtomicSwapSigning } from '../hooks/useAtomicSwapSigning';
 import { decodeKeystoneMessageSignature, decodeKeystoneSignedTransaction } from '@utils/keystone/urDecoder';
@@ -389,23 +390,7 @@ export function SwapSigningFlow({ isOpen, onClose, swap, walletAddress, wallet, 
               {isApproval ? ' to approve token transfer' : ' to sign the swap'}
             </p>
 
-            <div>
-              <label className="block text-sm font-medium text-text-secondary mb-2">Seed Phrase</label>
-              <textarea
-                value={seedPhrase}
-                onChange={(e) => setSeedPhrase(e.target.value)}
-                placeholder="Enter your 12 or 24 word seed phrase"
-                rows={3}
-                className="w-full px-3 py-2 rounded-lg bg-surface-tertiary border border-border-subtle text-text-primary placeholder-text-muted text-sm resize-none focus:outline-none focus:ring-2 focus:ring-brand-mid/50"
-                style={{ WebkitTextSecurity: 'disc' } as React.CSSProperties}
-                autoComplete="off"
-                autoCorrect="off"
-                spellCheck={false}
-              />
-              <p className="text-xs text-text-muted mt-1">
-                Your seed phrase is used locally for signing and is never stored or transmitted.
-              </p>
-            </div>
+            <SeedPhraseInput value={seedPhrase} onChange={setSeedPhrase} />
 
             {signingError && (
               <div className="p-3 bg-error/10 border border-error/20 rounded-lg">
@@ -424,7 +409,7 @@ export function SwapSigningFlow({ isOpen, onClose, swap, walletAddress, wallet, 
               <button
                 type="button"
                 onClick={isApproval ? handleSoftwareApprovalSign : handleSoftwareSwapSign}
-                disabled={!seedPhrase.trim()}
+                disabled={!seedPhrase.trim() || !wallet?.derivationPath}
                 className="flex-1 py-3 rounded-lg font-medium text-white bg-brand-mid hover:bg-brand disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 Sign
