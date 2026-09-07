@@ -27,7 +27,7 @@ from whitelist.models import WhitelistEntry, WhitelistStatus
 
 logger = logging.getLogger(__name__)
 
-MEMPOOL_LIFETIME = timedelta(hours=3)
+GETH_TXPOOL_LIFETIME = timedelta(hours=3)
 
 
 def unique_wallet_uuid_for(address: str):
@@ -267,7 +267,7 @@ class WhitelistService:
         return result["synced"]
 
     def reconcile_failed_adds(self, now=None) -> dict:
-        cutoff = (now or timezone.now()) - MEMPOOL_LIFETIME
+        cutoff = (now or timezone.now()) - GETH_TXPOOL_LIFETIME
         result = {"checked": 0, "activated": 0, "left_failed": 0, "errors": []}
 
         for entry in WhitelistEntry.objects.failed_with_a_sent_add(cutoff):

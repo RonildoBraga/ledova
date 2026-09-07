@@ -8,7 +8,7 @@ from users.models import UserAccount
 from wallets.models import Wallet
 from whitelist.models import WhitelistEntry, WhitelistStatus
 from whitelist.services import WhitelistService
-from whitelist.services.whitelist import MEMPOOL_LIFETIME
+from whitelist.services.whitelist import GETH_TXPOOL_LIFETIME
 
 HASH = "0x" + "7a" * 32
 
@@ -60,8 +60,8 @@ class AFailedAddTheChainContradictsIsReconciledTest(TestCase):
         self.assertEqual(result["checked"], 0)
         service.is_whitelisted.assert_not_called()
 
-    def test_an_add_older_than_the_mempool_can_hold_it_is_left_alone(self):
-        entry = self.an_entry(age=MEMPOOL_LIFETIME + timedelta(minutes=1))
+    def test_an_add_older_than_the_node_would_hold_it_is_left_alone(self):
+        entry = self.an_entry(age=GETH_TXPOOL_LIFETIME + timedelta(minutes=1))
         service = self.service(on_chain=True)
 
         result = service.reconcile_failed_adds()
