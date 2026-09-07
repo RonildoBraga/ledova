@@ -25,6 +25,7 @@ class OfferingStatus(models.TextChoices):
 
 LIVE_OFFERING_STATUSES = [OfferingStatus.SUBMITTED, OfferingStatus.UNDER_REVIEW, OfferingStatus.APPROVED]
 EDITABLE_OFFERING_STATUSES = [OfferingStatus.DRAFT, OfferingStatus.REJECTED]
+SUBMITTABLE_OFFERING_STATUSES = [OfferingStatus.DRAFT, OfferingStatus.REJECTED]
 
 
 class OfferingExemption(models.TextChoices):
@@ -144,12 +145,11 @@ class Offering(DerivesCompanyFromToken, BaseModel):
             raise InvalidOfferingTransitionException(from_status=self.get_status_display(), to_status=to_status.label)
 
     def submit(self, submitted_by=None):
-        self._require_status(EDITABLE_OFFERING_STATUSES, OfferingStatus.SUBMITTED)
+        self._require_status(SUBMITTABLE_OFFERING_STATUSES, OfferingStatus.SUBMITTED)
         self.status = OfferingStatus.SUBMITTED
         self.submitted_at = timezone.now()
         self.submitted_by = submitted_by
-        self.rejection_reason = ""
-        self.save(update_fields=["status", "submitted_at", "submitted_by", "rejection_reason", "updated_at"])
+        self.save(update_fields=["status", "submitted_at", "submitted_by", "updated_at"])
 
     def start_review(self, reviewed_by=None):
         self._require_status([OfferingStatus.SUBMITTED], OfferingStatus.UNDER_REVIEW)
