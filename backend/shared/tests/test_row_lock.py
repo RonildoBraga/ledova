@@ -44,16 +44,14 @@ class ARefusalReturnedKeepsWhatTheBlockWroteTest(TransactionTestCase):
         self.assertEqual(act_under_row_lock(FeatureFlag.objects.all(), self.flag.pk, act), "done")
         self.assertEqual(self.flags(), [NAME, f"{NAME}_written"])
 
-    def test_the_refusal_is_raised_after_the_block_has_closed(self):
-        seen = []
+    def test_the_block_commits_before_the_refusal_is_raised(self):
+        committed = []
 
         def act(row):
-            seen.append(transaction.get_connection().in_atomic_block)
+            transaction.on_commit(lambda: committed.append(True))
             return row, OrderCancellationException("refused")
 
-        try:
+        with self.assertRaises(OrderCancellationException):
             act_under_row_lock(FeatureFlag.objects.all(), self.flag.pk, act)
-        except OrderCancellationException:
-            seen.append(transaction.get_connection().in_atomic_block)
 
-        self.assertEqual(seen, [True, False])
+        self.assertEqual(committed, [True])
