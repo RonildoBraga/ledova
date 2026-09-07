@@ -505,7 +505,7 @@ class AtomicSwapService:
         expected = self.executed_order_hash(swap_order)
 
         for event in contract.events.SwapExecuted().process_receipt(receipt):
-            if event["args"]["orderHash"].hex().lstrip("0x") == expected.lstrip("0x"):
+            if event["args"]["orderHash"].hex().removeprefix("0x") == expected.removeprefix("0x"):
                 return True
 
         logger.error(f"Swap {swap_order.uuid} broadcast as {swap_order.tx_hash} settled a different order")
