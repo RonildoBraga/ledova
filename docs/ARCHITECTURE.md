@@ -956,12 +956,9 @@ the rest converts when it is next edited for another reason.
   meaning. There is no "unless it is really needed" clause: wanting to explain a
   line is the signal to rename the thing or add a test, never a licence to
   comment it. `make check-comments` enforces this, and
-  [the gate](#the-comment-gate) below is the authority on what it covers. The
-  rule covers `backend/`, `dashboard/src`, `mobile/src`, `packages/shared`,
-  `packages/scripts`, `marketing/src`, `contracts/contracts`,
-  `contracts/scripts`, `contracts/test`, and the root build config of
-  `dashboard/`, `marketing/`, `mobile/` and `contracts/`, each by the extensions
-  the gate lists. The root `scripts/`
+  [the gate](#the-comment-gate) below is the authority on what it covers — it
+  lists the trees once, and a test holds that list to the one the gate reads, so
+  this paragraph does not carry a second copy to go stale. The root `scripts/`
   tree is outside them: every file there carries a module docstring. The only comment
   lines permitted are functional directives the tooling reads: `# noqa`,
   `# type:`, `# pragma`, `# fmt:`, `# isort` and the shebang/coding lines in
@@ -1049,12 +1046,22 @@ docstrings, which also catches a bare string statement sitting where a docstring
 would.
 
 What it covers, by extension: `.py` and `.css` under `backend/`; `.ts`, `.tsx`,
-`.js`, `.jsx`, `.mjs` and `.cjs` in the client, shared and contract-script
-trees, plus `.css` in `dashboard/src` and `marketing/src`; `.sol` under
-`contracts/contracts`. The build configuration at the root of `dashboard/`,
-`marketing/`, `mobile/` and `contracts/` is covered too, but only at that root,
-not recursively. `TREES` at the top of the script is the machine-readable copy
-of that list — change it and this section together.
+`.js`, `.jsx`, `.mjs` and `.cjs` in the client, shared, mobile-script and
+contract-script trees, plus `.css` in `dashboard/src` and `marketing/src`;
+`.sol` under `contracts/contracts`. The build configuration at the root of
+`dashboard/`, `marketing/`, `mobile/` and `contracts/` is covered too, but only
+at that root, not recursively.
+
+The trees are, in full: `backend`, `dashboard/src`, `mobile/src`,
+`mobile/scripts`, `mobile`, `packages/shared`, `packages/scripts`,
+`marketing/src`, `dashboard`, `marketing`, `contracts`, `contracts/contracts`,
+`contracts/scripts`, `contracts/test`.
+
+`TREES` at the top of the script is the machine-readable copy of that sentence,
+and `scripts/tests/test_check_comments_trees.py` fails if the two disagree in
+either direction. That test exists because they did disagree: #185 added
+`mobile/scripts` to `TREES` and this section kept saying otherwise, and the
+instruction to "change it and this section together" is not a mechanism.
 
 One thing sits outside it: the admin templates under `backend/*/templates/` are
 not checked. They carry no comments today; keep it that way.
