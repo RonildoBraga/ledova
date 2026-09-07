@@ -704,6 +704,35 @@ this codebase, and `MEDIA_ROOT` holds nothing an authenticated route serves.
   caller's original filename in a stored key — the original filename lives in
   a column and is handed back in `Content-Disposition` by
   `stream_stored_file(field, mime_type, filename)`.
+- **A file is owned by its row, and a file with no row is deleted.** Django has
+  not removed a file on row delete since 1.3, so nothing did: an ordinary
+  `DELETE` answering 204 left the bytes behind, and retention here is
+  row-driven — `purge_expired_evidence` enumerates rows and deletes their
+  files, so a file with no row was unreachable by every mechanism meant to
+  remove it. Two things now hold the rule, because neither is enough alone.
+  `shared.apps.SharedConfig.ready` connects a `post_delete` receiver for every
+  private `FileField` it discovers, and that receiver deletes **through
+  `transaction.on_commit`** — deleting inside the transaction would mean a
+  rolled-back delete restores the row and loses the file, which is worse than
+  the bug it fixes. And `shared.services.orphaned_files` sweeps what no
+  receiver can reach: a process killed between the file write and the commit
+  runs no compensating code. It deletes only files no row references that have
+  not changed for `GRACE` (24 hours), walks only `SWEPT_STORAGE_PREFIXES`, and
+  runs nightly as `sweep_private_uploads` or by hand as
+  `manage.py sweep_orphaned_files --dry-run`.
+  Reference: `backend/shared/storage.py`. Gate:
+  `backend/shared/tests/test_orphaned_files.py`, which walks
+  `apps.get_models()` and fails for any private `FileField` that is neither
+  swept nor named in `RETAINED_AFTER_ROW_DELETE` with a reason — so a fourth
+  file-holding model cannot be added without deciding which it is.
+- **`users.InvestorClassification.evidence_file` is the one exception, and it
+  is deliberate.** Classification evidence has a statutory retention horizon
+  and outlives its subject on purpose; account deletion does not purge it
+  early. `purge_classification_evidence` is the only thing that removes it, and
+  `users/` is in `RETAINED_STORAGE_PREFIXES` so the sweep never walks it. The
+  consequence is that a **hard delete of a classification row carrying evidence
+  is itself the defect** — the surviving file is correct behaviour, and the row
+  should refuse or soft-delete instead. Tracked on issue 177.
 - The bytes reach a caller through one authenticated action per model, which
   resolves the row through the app's own owner-scoped queryset and then calls
   `shared.views.stream_stored_file`. A foreign row is the same 404 as a phantom
