@@ -58,6 +58,9 @@ class OfferingListSerializer(serializers.ModelSerializer):
             "opens_at",
             "closes_at",
             "is_open",
+            "can_be_edited",
+            "rejection_reason",
+            "close_reason",
             "created_at",
         ]
         read_only_fields = fields
