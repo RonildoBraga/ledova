@@ -59,6 +59,9 @@ def custom_exception_handler(exc, context):
             "code": getattr(exc, "code", "authentication_failed"),
         }
 
+    if getattr(exc, "expose_code", False) and isinstance(response.data, dict) and "code" not in response.data:
+        response.data["code"] = exc.default_code
+
     view = context.get("view")
     request = context.get("request")
     log_data = {

@@ -2,18 +2,24 @@ import logging
 from decimal import Decimal
 from typing import Optional
 
-from shared.utils import (
-    generate_order_cancel_message,
-    generate_order_create_message,
-    verify_signature,
-)
+from shared.utils import generate_order_create_message, verify_signature
 from tokens.exceptions import (
     InvalidSignatureException,
     OrderCancellationException,
     SignatureRequiredException,
 )
-from tokens.models import ShareToken, TransferOrder, TransferOrderType
+from tokens.models import (
+    ShareToken,
+    SigningChallengePurpose,
+    TransferOrder,
+    TransferOrderType,
+)
 from tokens.serializers import TransferOrderDetailSerializer
+from tokens.services.signing_challenge import (
+    challenge_response,
+    consume_challenge,
+    issue_challenge,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -55,24 +61,19 @@ class TradingOrderService:
     @staticmethod
     def verify_order_cancel_signature(
         order: TransferOrder,
-        message: Optional[str],
+        digest: Optional[str],
         signature: Optional[str],
-    ) -> None:
-        if not order.can_cancel:
-            raise OrderCancellationException(f"Order with status '{order.get_status_display()}' cannot be cancelled.")
-
-        if not signature or not message:
+    ):
+        if not signature or not digest:
             raise SignatureRequiredException()
 
-        expected_message = generate_order_cancel_message(str(order.uuid))
-
-        if message != expected_message:
-            raise InvalidSignatureException(f"Invalid message. Expected: '{expected_message}'")
-
-        if not verify_signature(message, signature, order.wallet_address):
-            raise InvalidSignatureException("Signature does not match the wallet address that created this order.")
-
-        logger.info(f"Signature verified for order {order.uuid}")
+        return consume_challenge(
+            digest,
+            SigningChallengePurpose.ORDER_CANCEL,
+            order.wallet_address,
+            signature,
+            order=order,
+        )
 
     @staticmethod
     def cancel_order(order: TransferOrder) -> TransferOrder:
@@ -121,15 +122,18 @@ class TradingOrderService:
         if not order.can_cancel:
             raise OrderCancellationException(f"Order with status '{order.get_status_display()}' cannot be cancelled.")
 
-        message = generate_order_cancel_message(str(order.uuid))
+        challenge = issue_challenge(
+            SigningChallengePurpose.ORDER_CANCEL,
+            order.wallet_address,
+            {"orderUuid": str(order.uuid)},
+            verifying_contract=order.token.contract_address,
+            order=order,
+        )
 
         return {
             "order_uuid": str(order.uuid),
-            "wallet_address": order.wallet_address,
-            "message": message,
-            "instructions": (
-                "Sign this message with your wallet to prove ownership. " "Then POST to /cancel/ with the signature."
-            ),
+            "wallet_address": challenge.wallet_address,
+            **challenge_response(challenge),
         }
 
     @staticmethod
