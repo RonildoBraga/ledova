@@ -1,3 +1,5 @@
+import atexit
+import shutil
 import tempfile
 
 from . import *  # noqa: F401,F403
@@ -8,6 +10,9 @@ EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 STORAGE_BACKEND = "local"
 MEDIA_ROOT = tempfile.mkdtemp(prefix="ledova-test-media-")
 PRIVATE_MEDIA_ROOT = tempfile.mkdtemp(prefix="ledova-test-private-media-")
+
+atexit.register(shutil.rmtree, MEDIA_ROOT, ignore_errors=True)
+atexit.register(shutil.rmtree, PRIVATE_MEDIA_ROOT, ignore_errors=True)
 
 
 class _DisableMigrations(dict):
