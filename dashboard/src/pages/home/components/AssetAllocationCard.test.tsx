@@ -20,7 +20,7 @@ vi.mock('react-chartjs-2', () => ({
 
 const { AssetAllocationCard } = await import('./AssetAllocationCard');
 
-function holding(symbol: string, quantity: string, marketValue: string): HoldingWithWallet {
+function holding(symbol: string, quantity: string, marketValue: string | null): HoldingWithWallet {
   return {
     uuid: `holding-${symbol}`,
     assetSymbol: symbol,
@@ -56,8 +56,8 @@ function draw(holdings: HoldingWithWallet[], totalValue: number) {
   return { ...drawn[drawn.length - 1], view };
 }
 
-const UNPRICED = [holding('AAA', '30', '0'), holding('BBB', '10', '0')];
-const MIXED = [holding('SHARES', '10000', '0'), holding('USDC', '12', '12')];
+const UNPRICED = [holding('AAA', '30', null), holding('BBB', '10', null)];
+const MIXED = [holding('SHARES', '10000', null), holding('USDC', '12', '12')];
 
 beforeEach(() => {
   cleanup();
@@ -98,5 +98,19 @@ describe('what the dashboard ring is handed, not what the function returns', () 
 
     expect(view.getByText('excludes 1 unpriced holding')).toBeTruthy();
     expect(view.getByText('unpriced')).toBeTruthy();
+  });
+
+  it('prints no percentage beside unpriced, so the label has no number arguing with it', () => {
+    const { view } = draw(MIXED, 12);
+
+    expect(view.container.textContent).toContain('SHARES Assetunpriced—');
+    expect(view.container.textContent).not.toContain('unpriced0.0%');
+  });
+
+  it('keeps the percentage when the whole page is weighed by quantity, since then it means something', () => {
+    const { view } = draw(UNPRICED, 0);
+
+    expect(view.container.textContent).toContain('AAA Assetunpriced75.0%');
+    expect(view.container.textContent).toContain('BBB Assetunpriced25.0%');
   });
 });

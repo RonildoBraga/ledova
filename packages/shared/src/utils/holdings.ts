@@ -1,12 +1,22 @@
 import { getHoldingAssetTypeLabel, HOLDING_ASSET_TYPE, getChartColor } from '../constants';
-import type { HoldingWithWallet, HoldingsSummary, AssetTypeSummary, AssetAllocationItem } from '../types';
+import type {
+  AllocationBasis,
+  AssetAllocationItem,
+  AssetTypeSummary,
+  HoldingsSummary,
+  HoldingWithWallet,
+} from '../types';
+
+function priceCameBack(holding: HoldingWithWallet): boolean {
+  return holding.marketValue !== null && holding.marketValue !== undefined && holding.marketValue !== '';
+}
 
 export function calculateHoldingsSummary(holdings: HoldingWithWallet[], walletsCount: number): HoldingsSummary {
   const assetTypeMap = new Map<string, { totalValue: number; holdingsCount: number }>();
   let totalValue = 0;
 
   for (const holding of holdings) {
-    const value = parseFloat(holding.marketValue) || 0;
+    const value = parseFloat(holding.marketValue ?? '') || 0;
     const assetType = holding.asset?.assetType || HOLDING_ASSET_TYPE.ERC20_TOKEN;
 
     totalValue += value;
@@ -43,6 +53,7 @@ export function calculateAssetAllocation(holdings: HoldingWithWallet[], totalVal
       name: string;
       totalValue: number;
       totalQuantity: number;
+      priced: boolean;
       navPerToken?: string | null;
       isYieldToken?: boolean;
     }
@@ -50,19 +61,21 @@ export function calculateAssetAllocation(holdings: HoldingWithWallet[], totalVal
 
   for (const holding of holdings) {
     const assetUuid = holding.asset?.uuid || holding.assetSymbol;
-    const value = parseFloat(holding.marketValue) || 0;
+    const value = parseFloat(holding.marketValue ?? '') || 0;
     const quantity = parseFloat(holding.quantity) || 0;
 
     const existing = assetMap.get(assetUuid);
     if (existing) {
       existing.totalValue += value;
       existing.totalQuantity += quantity;
+      existing.priced = existing.priced && priceCameBack(holding);
     } else {
       assetMap.set(assetUuid, {
         symbol: holding.assetSymbol || holding.asset?.symbol || 'Unknown',
         name: holding.assetName || holding.asset?.name || 'Unknown Asset',
         totalValue: value,
         totalQuantity: quantity,
+        priced: priceCameBack(holding),
         navPerToken: holding.asset?.navPerToken,
         isYieldToken: holding.asset?.isYieldToken,
       });
@@ -82,7 +95,7 @@ export function calculateAssetAllocation(holdings: HoldingWithWallet[], totalVal
       name: data.name,
       totalValue: data.totalValue,
       percentage: ((weighByQuantity ? data.totalQuantity : data.totalValue) / basisTotal) * 100,
-      priced: !weighByQuantity && data.totalValue > 0,
+      basis: (weighByQuantity ? 'quantity' : data.priced ? 'value' : 'unpriced') as AllocationBasis,
       color: getChartColor(index),
       navPerToken: data.navPerToken,
       isYieldToken: data.isYieldToken,

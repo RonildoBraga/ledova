@@ -32,7 +32,7 @@ function holding(overrides: Partial<HoldingWithWallet> = {}): HoldingWithWallet 
     assetSymbol: 'ORD',
     assetName: 'Acme Ordinary',
     quantity: '250.000000000000000000',
-    marketValue: null as unknown as string,
+    marketValue: null,
     lastSyncedAt: '2026-09-01T00:00:00Z',
     walletInfo: { uuid: 'wallet-uuid', name: undefined, address: `0x${'a'.repeat(40)}`, chain: 'base' },
     ...overrides,
@@ -105,6 +105,48 @@ describe('a shares-only portfolio, priced at nothing', () => {
     expect(allocation.map((item) => [item.symbol, item.percentage])).toEqual([
       ['USDC', 100],
       ['ORD', 0],
+    ]);
+  });
+});
+
+describe('a slice says what its share is a share of', () => {
+  const shares = holding({ assetSymbol: 'ORD', asset: asset({ uuid: 'ord' }) });
+  const stablecoin = holding({
+    assetSymbol: 'USDC',
+    assetName: 'USD Coin',
+    quantity: '12',
+    marketValue: '12.00',
+    asset: asset({ uuid: 'usdc', symbol: 'USDC', name: 'USD Coin', currentPrice: '1.00' }),
+  });
+
+  it('says quantity when nothing on the page carried a price, because that is what it weighed by', () => {
+    expect(calculateAssetAllocation([shares], 0).map((item) => item.basis)).toEqual(['quantity']);
+  });
+
+  it('says unpriced for the holding a value-weighted page could not count', () => {
+    expect(calculateAssetAllocation([shares, stablecoin], 12).map((item) => [item.symbol, item.basis])).toEqual([
+      ['USDC', 'value'],
+      ['ORD', 'unpriced'],
+    ]);
+  });
+
+  it('says value for a priced holding the wallet has since emptied, rather than calling it unpriced', () => {
+    const emptied = holding({
+      assetSymbol: 'USDC',
+      quantity: '0',
+      marketValue: '0.00',
+      asset: asset({ uuid: 'usdc', symbol: 'USDC', currentPrice: '1.00' }),
+    });
+
+    expect(calculateAssetAllocation([emptied, stablecoin], 12).map((item) => item.basis)).toEqual(['value']);
+  });
+
+  it('reads whether a price came back rather than whether it was positive', () => {
+    const worthless = holding({ quantity: '5', marketValue: '0.00', asset: asset({ currentPrice: '0.00' }) });
+
+    expect(calculateAssetAllocation([worthless, stablecoin], 12).map((item) => [item.symbol, item.basis])).toEqual([
+      ['USDC', 'value'],
+      ['ORD', 'value'],
     ]);
   });
 });

@@ -89,7 +89,7 @@ export function AssetAllocationCard({
   }
 
   const drawn = assetAllocation.filter((item) => item.percentage > 0);
-  const unpricedCount = assetAllocation.filter((item) => !item.priced).length;
+  const unpricedCount = assetAllocation.filter((item) => item.basis === 'unpriced').length;
 
   const data = {
     labels: drawn.map((item) => item.symbol),
@@ -121,7 +121,7 @@ export function AssetAllocationCard({
           label: (context: { dataIndex: number }) => {
             const item = drawn[context.dataIndex];
             const share = formatPercentage(item.percentage, 1);
-            return item.priced
+            return item.basis === 'value'
               ? `${item.symbol}: ${formatDisplayCurrency(item.totalValue)} (${share})`
               : `${item.symbol}: unpriced (${share} by quantity)`;
           },
@@ -175,10 +175,10 @@ export function AssetAllocationCard({
                 <div className="flex-1 flex items-baseline justify-end gap-2">
                   {showQuantity && <span className="text-xs text-text-muted">{formatQuantity(quantity)}</span>}
                   <span className="text-xs text-text-muted">
-                    {item.priced ? formatDisplayCurrency(item.totalValue) : 'unpriced'}
+                    {item.basis === 'value' ? formatDisplayCurrency(item.totalValue) : 'unpriced'}
                   </span>
                   <span className="text-sm font-semibold text-text-primary min-w-[36px] text-right">
-                    {formatPercentage(item.percentage, 1)}
+                    {item.basis === 'unpriced' ? '—' : formatPercentage(item.percentage, 1)}
                   </span>
                 </div>
               </button>

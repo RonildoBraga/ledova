@@ -69,7 +69,7 @@ export function AllocationPieChart({ data, totalValue, isLoading }: AllocationPi
     );
   }
 
-  const unpricedCount = data.filter((item) => !item.priced).length;
+  const unpricedCount = data.filter((item) => item.basis === 'unpriced').length;
 
   const chartData = data
     .filter((item) => item.percentage != null && item.color && item.percentage > 0)
