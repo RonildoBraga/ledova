@@ -53,7 +53,7 @@ class _Repository(unittest.TestCase):
         return path
 
     def findings(self, document: dict):
-        findings, _matched = gate.scan(self.schema(document))
+        findings, _matched, _unmatched = gate.scan(self.schema(document))
         return [(name, component, absent) for _endpoint, name, component, absent in findings]
 
 

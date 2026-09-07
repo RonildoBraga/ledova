@@ -251,7 +251,7 @@ ENDPOINT_ENTRY = re.compile(r"^\s*(\w+):\s*(?:\([^)]*\)\s*=>\s*)?[`']([^`'\n]+)[
 # pinning the receiver's name means renaming a parameter silently stops the gate
 # checking those calls.
 CALL = re.compile(
-    r"\b\w+\.(get|post|put|patch|delete)(?:<([^>]*(?:<[^>]*>)?[^>]*)>)?\s*\(\s*([A-Z_]+(?:\.\w+)+)",
+    r"\b\w+\.(get|post|put|patch|delete)(?:<([^>]*(?:<[^>]*>)?[^>]*)>)?\s*\(\s*([A-Z][A-Z0-9_]*(?:\.\w+)+)",
     re.S,
 )
 INTERFACE = re.compile(r"^export interface (\w+)([^{]*)\{(.*?)^\}", re.S | re.M)
@@ -433,10 +433,15 @@ def scan(schema_path: Path):
 
     findings: list[tuple[str, str, str, list[str]]] = []
     matched = 0
+    unmatched: list[str] = []
 
     for (verb, url), names in sorted(calls.items()):
         referenced = responses.get((verb, url))
         if not referenced:
+            # A call the schema has no operation for. Not a failure - the endpoint
+            # may be one of #211's schemaless views - but counting only the matches
+            # makes a partial number read as a total.
+            unmatched.append(f"{verb.upper()} {url}")
             continue
         matched += 1
         for name in sorted(names):
@@ -466,7 +471,7 @@ def scan(schema_path: Path):
             )
             if absent:
                 findings.append((f"{verb.upper()} {url}", name, best, absent))
-    return findings, matched
+    return findings, matched, sorted(set(unmatched))
 
 
 def main() -> int:
@@ -480,7 +485,7 @@ def main() -> int:
         return 0
 
     try:
-        findings, matched = scan(arguments.schema)
+        findings, matched, unmatched = scan(arguments.schema)
     except Unresolvable as error:
         print(f"{error}\n", file=sys.stderr)
         print(
@@ -526,9 +531,11 @@ def main() -> int:
         return 1
 
     print(
-        f"No shared type requires an absent field across {matched} matched endpoints "
+        f"No shared type requires an absent field across {matched} of "
+        f"{matched + len(unmatched)} service calls "
         f"({sum(pinned_counts[k] for k in TYPE_DEBT)} known type findings, "
-        f"{sum(pinned_counts[k] for k in SCHEMA_DEBT)} awaiting the schema fixes in #211)."
+        f"{sum(pinned_counts[k] for k in SCHEMA_DEBT)} awaiting the schema fixes in #211; "
+        f"{len(unmatched)} reaching no operation the schema declares)."
     )
     return 0
 
