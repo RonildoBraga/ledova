@@ -1384,9 +1384,11 @@ the purest instance of what the rule forbids, since that is how a *custom*
 signal is defined -- passed, as did `django.contrib.auth.signals`, the family
 most likely to appear under `authentication/`. It now matches `django.dispatch`
 and anything beneath it, and any `django.*` module with a `signals` segment, in
-all of the `from X import y`, `import X` and `from X import signals` forms,
-aliased or not. A `signals` module outside `django` is somebody else's and is
-not this rule's business. Like `bare-admin-view` it reads syntax, so
+both the `from X import y` and `import X` forms, aliased or not. The first asks
+about the **joined** module path, so `from django import dispatch` is the same
+import as `import django.dispatch` and is caught as one. A `signals` module
+outside `django` is somebody else's and is not this rule's business. Like
+`bare-admin-view` it reads syntax, so
 `importlib.import_module("django.dispatch")` goes past it.
 
 ### The seed-era service classes

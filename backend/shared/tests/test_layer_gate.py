@@ -386,6 +386,12 @@ class SignalRuleTest(SimpleTestCase):
         self.assertEqual(signals_in("import django.dispatch as d"), [gate.SIGNAL_IMPORT])
         self.assertEqual(signals_in("from django.dispatch.dispatcher import Signal"), [gate.SIGNAL_IMPORT])
 
+    def test_the_module_named_as_an_alias_is_the_same_import(self):
+        self.assertEqual(signals_in("from django import dispatch"), [gate.SIGNAL_IMPORT])
+        self.assertEqual(signals_in("from django import dispatch as d"), [gate.SIGNAL_IMPORT])
+        self.assertEqual(signals_in("from django.contrib.auth import signals"), [gate.SIGNAL_IMPORT])
+        self.assertEqual(signals_in("from django import db"), [])
+
     def test_the_other_django_signal_families_are_flagged(self):
         self.assertEqual(signals_in("from django.contrib.auth.signals import user_logged_in"), [gate.SIGNAL_IMPORT])
         self.assertEqual(signals_in("from django.core.signals import request_finished"), [gate.SIGNAL_IMPORT])

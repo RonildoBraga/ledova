@@ -121,9 +121,8 @@ def signal_findings(tree: ast.AST):
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom):
             module = node.module or ""
-            if is_signal_module(module):
-                yield node.lineno, SIGNAL_IMPORT
-            elif module.startswith("django.") and any(alias.name == "signals" for alias in node.names):
+            joined = (f"{module}.{alias.name}" for alias in node.names)
+            if is_signal_module(module) or any(is_signal_module(name) for name in joined):
                 yield node.lineno, SIGNAL_IMPORT
         elif isinstance(node, ast.Import):
             for alias in node.names:
