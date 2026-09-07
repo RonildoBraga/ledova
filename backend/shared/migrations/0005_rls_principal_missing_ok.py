@@ -1,14 +1,10 @@
 from django.db import migrations
 
-from shared.db.policy_sql import install, remove
+from shared.db.policy_sql import install
 
 
 def _reinstall(apps, schema_editor):
     install(schema_editor)
-
-
-def _uninstall(apps, schema_editor):
-    remove(schema_editor)
 
 
 class Migration(migrations.Migration):
@@ -18,5 +14,5 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunPython(_reinstall, _uninstall),
+        migrations.RunPython(_reinstall, migrations.RunPython.noop),
     ]
