@@ -7,18 +7,18 @@ const ICON_SM = DESIGN_TOKENS.icon.sizes.sm;
 const highlights = [
   {
     icon: ChartBarIcon,
-    title: 'Portfolio Tracking',
-    description: 'Monitor all your assets in real-time',
+    title: 'Your holdings',
+    description: 'Shares, transfers and balances against the company\u2019s own register',
   },
   {
     icon: CubeIcon,
-    title: 'Air-Gapped Signing',
-    description: 'Hardware wallet support for maximum security',
+    title: 'You sign every transfer',
+    description: 'With your recovery phrase in the app, or a hardware wallet',
   },
   {
     icon: ShieldCheckIcon,
-    title: 'Non-Custodial',
-    description: 'Your keys, your assets',
+    title: 'Non-custodial',
+    description: 'Your keys stay yours, and every transfer is signed by you',
   },
 ];
 
@@ -35,11 +35,14 @@ export function BrandingPanel() {
       <div className="relative z-10 max-w-md text-center space-y-8">
         <div className="space-y-4">
           <h2 className="text-3xl font-bold text-text-primary">
-            Your assets,
+            Your shares,
             <br />
-            <span className="text-brand-mid">your control</span>
+            <span className="text-brand-mid">your keys</span>
           </h2>
-          <p className="text-text-secondary">A smart wallet that puts you in charge of your digital assets.</p>
+          <p className="text-text-secondary">
+            Ledova is where companies issue tokenised shares and investors hold them. The wallet that holds yours is
+            yours: you sign every transfer, and Ledova never holds your keys.
+          </p>
         </div>
 
         <div className="relative mx-auto">
