@@ -73,19 +73,6 @@ class TradingOrderService:
         )
 
     @staticmethod
-    def cancel_order(order: TransferOrder) -> TransferOrder:
-        if not order.can_cancel:
-            raise OrderCancellationException(f"Order with status '{order.get_status_display()}' cannot be cancelled.")
-
-        order.cancel()
-        logger.info(f"Cancelled order: {order.uuid}")
-
-        from tokens.events import publish_trading_event
-
-        publish_trading_event("order_cancelled", str(order.token.uuid))
-        return order
-
-    @staticmethod
     def get_order_create_message(token, wallet_address, order_type, quantity, min_quantity, price_per_share) -> dict:
         challenge = issue_challenge(
             SigningChallengePurpose.ORDER_CREATE,

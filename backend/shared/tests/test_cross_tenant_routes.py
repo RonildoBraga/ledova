@@ -470,7 +470,6 @@ class CrossTenantRouteMatrixTest(APITestCase):
         register_chain.get_token_balance.return_value = 0
         register_chain.share_supply.return_value = (0, 0)
         trading_orders = self._service("tokens.views.trading_order.TradingOrderService")
-        trading_orders.cancel_order.side_effect = lambda order: order
         trading_orders.get_order_cancel_message.return_value = {}
         trading_orders.get_order_create_message.return_value = {}
         trading_orders.verify_order_create_signature.return_value = None
