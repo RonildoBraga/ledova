@@ -447,7 +447,7 @@ class AtomicSwapService:
         self._record_sent(swap_order, tx_record, tx_hash)
 
         try:
-            receipt = self.chain_client.wait_for_receipt(tx_hash)
+            receipt = self.chain_client.receipt_even_if_reverted(tx_hash)
         except Exception as e:
             logger.error(f"Swap {swap_order.uuid} broadcast as {tx_hash} but its receipt is unknown: {e}")
             return tx_hash
@@ -474,9 +474,10 @@ class AtomicSwapService:
             publish_trading_event("swap_completed", str(swap_order.share_token.uuid))
             return
 
-        tx_record.mark_reverted("Transaction reverted")
-        swap_order.mark_failed("Transaction reverted")
-        logger.error(f"Swap {swap_order.uuid} reverted on chain: {tx_hash}")
+        reason = f"The chain reverted the swap: {tx_hash}"
+        tx_record.mark_reverted(reason)
+        swap_order.mark_failed(reason)
+        logger.error(f"Swap {swap_order.uuid} reverted on chain and moved nothing: {tx_hash}")
         publish_trading_event("swap_failed", str(swap_order.share_token.uuid))
 
     def find_swap_order_by_transfer_order(self, transfer_order: TransferOrder) -> Optional[SwapOrder]:

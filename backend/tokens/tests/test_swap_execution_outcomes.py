@@ -11,6 +11,8 @@ from tokens.models.choices import SwapOrderStatus
 from tokens.services import AtomicSwapService
 
 CONTRACT = "0x" + "9d" * 20
+CONFIRMED = {"status": 1, "blockNumber": 7, "blockHash": "0xb", "gasUsed": 21000}
+REVERTED = {"status": 0, "blockNumber": 8, "blockHash": "0xc", "gasUsed": 500000}
 SIGNATURE = "0x" + "ab" * 65
 
 
@@ -39,6 +41,7 @@ class SwapExecutionRecordsItsOutcomeTest(TransactionTestCase):
         client.to_checksum_address.side_effect = lambda address: address
         client.build_transaction.return_value = {}
         client.sign_transaction.return_value = b"signed"
+        client.wait_for_receipt.side_effect = AssertionError("the swap must read the receipt, not ask for a verdict")
         return client
 
     def status(self):
@@ -79,7 +82,7 @@ class SwapExecutionRecordsItsOutcomeTest(TransactionTestCase):
     def test_a_broadcast_whose_receipt_never_arrives_keeps_its_hash(self, _call, _balances):
         client = self.chain_client()
         client.send_raw_transaction.return_value = "0xsent"
-        client.wait_for_receipt.side_effect = TimeoutError("receipt timed out")
+        client.receipt_even_if_reverted.side_effect = TimeoutError("receipt timed out")
 
         self.assertEqual(self.service(client).execute_swap(self.swap), "0xsent")
 
@@ -92,11 +95,44 @@ class SwapExecutionRecordsItsOutcomeTest(TransactionTestCase):
     def test_a_confirmed_receipt_completes_the_swap(self, _call, _balances):
         client = self.chain_client()
         client.send_raw_transaction.return_value = "0xdone"
-        client.wait_for_receipt.return_value = {"status": 1, "blockNumber": 7, "blockHash": "0xb", "gasUsed": 21000}
+        client.receipt_even_if_reverted.return_value = CONFIRMED
 
         self.service(client).execute_swap(self.swap)
 
         self.assertEqual(self.status(), SwapOrderStatus.COMPLETED)
+
+    @patch.object(AtomicSwapService, "validate_swap_balances")
+    @patch.object(AtomicSwapService, "_execute_swap_call")
+    def test_a_swap_the_chain_reverted_is_failed_and_moved_nothing(self, _call, _balances):
+        client = self.chain_client()
+        client.send_raw_transaction.return_value = "0xreverted"
+        client.receipt_even_if_reverted.return_value = REVERTED
+
+        self.assertEqual(self.service(client).execute_swap(self.swap), "0xreverted")
+
+        self.assertEqual(self.status(), SwapOrderStatus.FAILED)
+        record = BlockchainTransaction.objects.get(related_uuid=self.swap.uuid)
+        self.assertEqual((record.status, record.tx_hash), (TransactionStatus.REVERTED, "0xreverted"))
+        self.assertIn("0xreverted", record.error_message)
+
+    @patch.object(AtomicSwapService, "validate_swap_balances")
+    @patch.object(AtomicSwapService, "_execute_swap_call")
+    def test_a_revert_and_an_unknown_receipt_do_not_land_in_the_same_state(self, _call, _balances):
+        reverted = self.chain_client()
+        reverted.send_raw_transaction.return_value = "0xreverted"
+        reverted.receipt_even_if_reverted.return_value = REVERTED
+        self.service(reverted).execute_swap(self.swap)
+        after_revert = self.status()
+
+        SwapOrder.objects.filter(pk=self.swap.pk).update(status=SwapOrderStatus.READY)
+        self.swap.refresh_from_db()
+        silent = self.chain_client()
+        silent.send_raw_transaction.return_value = "0xsilent"
+        silent.receipt_even_if_reverted.side_effect = TimeoutError("no receipt")
+        self.service(silent).execute_swap(self.swap)
+
+        self.assertEqual(after_revert, SwapOrderStatus.FAILED)
+        self.assertEqual(self.status(), SwapOrderStatus.EXECUTING)
 
     @patch.object(AtomicSwapService, "validate_swap_balances")
     @patch.object(AtomicSwapService, "_execute_swap_call")
