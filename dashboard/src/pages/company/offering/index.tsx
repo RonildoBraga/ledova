@@ -159,7 +159,7 @@ export default function OfferingPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { company, companyUuid, isLoading: isLoadingCompany } = useCompany();
-  const { offerings, tokens, isLoading: isLoadingOfferings, refresh } = useOfferings();
+  const { offerings, tokens, settlementAssets, isLoading: isLoadingOfferings, refresh } = useOfferings();
   const [actionError, setActionError] = useState<string | null>(null);
 
   const settle = () => {
@@ -261,7 +261,7 @@ export default function OfferingPage() {
 
       <SubscriptionsPanel offerings={offerings} />
 
-      <OfferingForm tokens={tokens} busy={busy} onCreate={handleCreate} />
+      <OfferingForm tokens={tokens} busy={busy} settlementAssets={settlementAssets} onCreate={handleCreate} />
 
       <Panel title="What Happens Next" icon={<InfoIcon size={20} />}>
         <div className="px-2 py-2">

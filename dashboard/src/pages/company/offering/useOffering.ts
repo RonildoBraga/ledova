@@ -4,6 +4,7 @@ import {
   createOffering,
   deleteOffering,
   getCompanyTokens,
+  getOperator,
   getOfferings,
   getOfferingSubscriptions,
   submitOffering,
@@ -30,11 +31,18 @@ export function useOfferings() {
     staleTime: CACHE_TIMING.SHORT_STALE_TIME,
   });
 
+  const operatorQuery = useQuery({
+    queryKey: ['operator'],
+    queryFn: () => getOperator(apiClient),
+    staleTime: CACHE_TIMING.SHORT_STALE_TIME,
+  });
+
   const refresh = () => queryClient.invalidateQueries({ queryKey: OFFERINGS_KEY });
 
   return {
     offerings: offeringsQuery.data?.data?.results ?? [],
     tokens: (tokensQuery.data?.data?.results ?? []).filter((token) => token.status === 'deployed'),
+    settlementAssets: operatorQuery.data?.data?.supportedSettlementAssets ?? [],
     isLoading: offeringsQuery.isLoading || tokensQuery.isLoading,
     refresh,
   };
