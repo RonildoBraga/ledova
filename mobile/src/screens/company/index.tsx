@@ -174,7 +174,7 @@ export function CompanyScreen() {
             <StatTab
               icon={<CoinIcon />}
               label="Tokens"
-              value={stats.totalTokens}
+              value={tokensHook.totalCount}
               active={activeTab === 'tokens'}
               onPress={() => setActiveTab('tokens')}
             />
