@@ -162,16 +162,16 @@ class TheTriggerRefusesAnOwnerTheCompanyDoesNotNameTest(TransactionTestCase):
                 taken = set(ShareToken.objects.filter(company=company).values_list("symbol", flat=True))
                 self.assertNotIn(token.symbol, taken)
 
-    def test_the_only_company_keyed_constraint_is_the_one_the_tests_control_for(self):
+    def test_the_only_unique_index_touching_the_link_is_the_one_the_tests_control_for(self):
         with connection.cursor() as cursor:
             cursor.execute(
-                "SELECT conname FROM pg_constraint WHERE conrelid = 'tokens_sharetoken'::regclass "
-                "AND contype IN ('u', 'x') AND pg_get_constraintdef(oid) LIKE %s",
-                ["%company_id%"],
+                "SELECT indexname FROM pg_indexes WHERE tablename = %s "
+                "AND indexdef LIKE '%%UNIQUE%%' AND indexdef LIKE %s",
+                ["tokens_sharetoken", "%company_id%"],
             )
-            keyed = {name for (name,) in cursor.fetchall()}
+            touching = {name for (name,) in cursor.fetchall()}
 
-        self.assertEqual(keyed, {"unique_company_symbol"})
+        self.assertEqual(touching, {"unique_company_symbol"})
 
     def test_a_token_stays_with_its_company_when_something_else_changes(self):
         token = self.a_token()
