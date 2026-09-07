@@ -2,9 +2,9 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { useAuth, useFeatureFlags } from '@hooks';
 import NotFoundPage from '@pages/NotFound';
+import { RootRedirect } from './routes/RootRedirect';
 import HomePage from '@pages/home';
 
-const MARKETING_URL = import.meta.env.VITE_MARKETING_URL || 'http://localhost:5173';
 import SignInPage from '@pages/signin';
 import { SignupUser } from '@pages/signup/user';
 import { SignupEmailConfirmation } from '@pages/signup/email-confirmation';
@@ -77,14 +77,6 @@ function PublicOnlyRoute({ children }: RouteGuardProps) {
   if (isLoading) return <LoadingSpinner />;
   if (isAuthenticated) return <Navigate to="/home" replace />;
   return <>{children}</>;
-}
-
-function RootRedirect() {
-  const { isAuthenticated, isLoading } = useAuth();
-  if (isLoading) return null;
-  if (isAuthenticated) return <Navigate to="/home" replace />;
-  window.location.href = MARKETING_URL;
-  return null;
 }
 
 function App() {
