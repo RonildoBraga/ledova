@@ -340,10 +340,17 @@ them after `make build` and fails on any drift.
    transfer and cannot fund two subscriptions. Two operators confirming that one
    hash at the same instant both pass the pre-check, so `confirm_payment` also
    catches the index's `IntegrityError` and turns it into the same refusal the
-   pre-check gives, rather than a 500 for whoever loses. The bank rail has no
-   such key: settlement there is operator-attested, so a statement line already
-   recorded against another subscription is a **warning** on the confirming
-   operator's screen, naming the other references, not a refusal. Every money
+   pre-check gives, rather than a 500 for whoever loses. The hash is required,
+   format-checked and enforced unique, but **not verified against the chain**:
+   `confirm_payment` never asks whether that hash exists, moves the right
+   amount, or reaches the operator's wallet. For an operator transcribing a
+   transfer from a block explorer that is a defensible trust boundary — the
+   operator is trusted throughout this admin — but it does mean a stablecoin
+   payment is confirmed on the operator's word, exactly like a bank transfer.
+   The bank rail has no such key: settlement there is operator-attested, so a
+   statement line already recorded against another subscription is a
+   **warning** on the confirming operator's screen, naming the other
+   references, not a refusal. Every money
    action in the admin — acceptance, confirmation, refund, rejection, retry,
    bulk allotment and scale back — writes a `LogEntry`, so a restated
    `amount_received` leaves the earlier figure in the object's history even
