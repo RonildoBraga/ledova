@@ -14,6 +14,11 @@ from tokens.services import AtomicSwapService
 from tokens.tasks.swap_reconciler import STALE_EXECUTION_AGE, resolve_executing_swaps
 
 CONTRACT = "0x" + "9d" * 20
+LEADING_ZERO_HASH = "0a" + "bc" * 31
+
+
+def swap_executed(order_hash):
+    return {"args": {"orderHash": bytes.fromhex(order_hash.removeprefix("0x"))}}
 
 
 @override_settings(ATOMIC_SWAP_ADDRESS=CONTRACT, BLOCKCHAIN_OPERATOR_KEY="0x" + "11" * 32)
@@ -252,12 +257,12 @@ class TheReceiptMustNameThisOrderTest(TestCase):
 
     def test_a_receipt_naming_this_order_completes_the_swap(self, _publish):
         expected = self.hashing_service().executed_order_hash(self.swap)
-        service = self.service([{"args": {"orderHash": bytes.fromhex(expected.lstrip("0x"))}}])
+        service = self.service([swap_executed(expected)])
 
         self.assertEqual(service.resolve_executing_swap(self.swap), "executed")
 
     def test_a_receipt_naming_another_order_leaves_the_swap_alone(self, _publish):
-        service = self.service([{"args": {"orderHash": bytes.fromhex("ee" * 32)}}])
+        service = self.service([swap_executed("ee" * 32)])
 
         self.assertIsNone(service.resolve_executing_swap(self.swap))
 
@@ -272,7 +277,16 @@ class TheReceiptMustNameThisOrderTest(TestCase):
     def test_the_hash_checked_is_the_digest_the_contract_emits_not_the_struct_hash(self, _publish):
         service = self.hashing_service()
 
-        self.assertNotEqual(service.executed_order_hash(self.swap).lstrip("0x"), self.swap.order_hash.lstrip("0x"))
+        self.assertNotEqual(
+            service.executed_order_hash(self.swap).removeprefix("0x"),
+            self.swap.order_hash.removeprefix("0x"),
+        )
+
+    def test_an_order_hash_that_begins_with_a_zero_is_matched_rather_than_mangled(self, _publish):
+        service = self.service([swap_executed(LEADING_ZERO_HASH)])
+        service.executed_order_hash = Mock(return_value=LEADING_ZERO_HASH)
+
+        self.assertEqual(service.resolve_executing_swap(self.swap), "executed")
 
 
 class TheNonceGeneratorDoesNotRelyOnTheConstraintTest(TestCase):
