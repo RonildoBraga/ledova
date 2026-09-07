@@ -7,6 +7,11 @@ from tokens.models import ShareToken
 
 PRICE_PLACES = Decimal("0.01")
 
+SHARES_ARE_WHOLE = (
+    "A share is a whole unit. The ShareToken contract returns 0 from decimals() and takes no decimals "
+    "argument at deployment, so a share class cannot record any other value."
+)
+
 
 class ShareTokenListSerializer(serializers.ModelSerializer):
 
@@ -112,6 +117,11 @@ class ShareTokenCreateSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         fields["company"].queryset = Company.objects.manageable_by_user(getattr(request, "user", None))
         return fields
+
+    def validate_decimals(self, value):
+        if value != 0:
+            raise serializers.ValidationError(SHARES_ARE_WHOLE)
+        return value
 
     def validate_symbol(self, value):
         if not value.isalpha():
