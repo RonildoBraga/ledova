@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 LOG_PREFIX = "[BASE_CHAIN]"
 
 HTTP_TIMEOUT_SECONDS = 30
-UNESTIMATED_GAS = 1
+WEB3_MUST_NOT_ESTIMATE = 1
 BROADCAST_ROUND_TRIPS = 7
 GAS_HEADROOM = 1.2
 
@@ -197,9 +197,14 @@ class BaseChainClient:
         else:
             tx["gasPrice"] = gas_price
 
-        tx["gas"] = gas if gas is not None else UNESTIMATED_GAS
+        tx["gas"] = gas if gas is not None else WEB3_MUST_NOT_ESTIMATE
         tx = contract_function.build_transaction(tx)
-        tx["gas"] = gas if gas is not None else self.estimate_gas(tx)
+
+        if gas is None:
+            tx.pop("gas", None)
+            tx["gas"] = self.estimate_gas(tx)
+        else:
+            tx["gas"] = gas
 
         return tx
 
