@@ -1,7 +1,6 @@
 import logging
 from decimal import Decimal
 
-from django.db import transaction
 from django.utils import timezone
 
 from assets.models import Asset, AssetSnapshot
@@ -10,6 +9,7 @@ from integrations.base_chain.exceptions import (
     BaseChainContractError,
     BaseChainTransactionError,
 )
+from shared.db import atomic
 from tokens.exceptions import (
     YieldTokenContractNotConfiguredException,
     YieldTokenMintFailedException,
@@ -59,7 +59,7 @@ class YieldTokenService(BaseTokenService):
             "lastNavUpdate": self.get_last_nav_update(),
         }
 
-    @transaction.atomic
+    @atomic()
     def update_nav(
         self,
         new_nav_per_token: Decimal,

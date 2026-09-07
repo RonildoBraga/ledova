@@ -1,8 +1,6 @@
 import logging
 from typing import Optional, Union
 
-from django.db import transaction
-
 from assets.models import Asset
 from integrations.base_chain import get_base_chain_client
 from integrations.base_chain.exceptions import (
@@ -10,6 +8,7 @@ from integrations.base_chain.exceptions import (
     BaseChainTransactionError,
 )
 from operators.settlement import deployment_for
+from shared.db import atomic
 from tokens.exceptions import (
     InsufficientBalanceException,
     InvalidRecipientAddressException,
@@ -153,7 +152,7 @@ class TokenTransferService:
             logger.error(f"Invalid transaction hex: {e}")
             raise TransferBroadcastException("Transfer broadcast failed: Invalid transaction format") from e
 
-    @transaction.atomic
+    @atomic()
     def match_orders(
         self, buy_order: TransferOrder, sell_order: TransferOrder, match_quantity: Optional[int] = None
     ) -> dict:
@@ -277,7 +276,7 @@ class TokenTransferService:
 
         return None
 
-    @transaction.atomic
+    @atomic()
     def create_order_and_match(
         self,
         token: ShareToken,

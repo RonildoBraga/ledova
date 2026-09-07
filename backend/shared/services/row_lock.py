@@ -1,8 +1,8 @@
-from django.db import transaction
+from shared.db import atomic
 
 
 def act_under_row_lock(queryset, pk, act):
-    with transaction.atomic():
+    with atomic():
         row = queryset.select_for_update().get(pk=pk)
         value, refusal = act(row)
 

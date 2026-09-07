@@ -1,5 +1,4 @@
-from django.db import transaction
-
+from shared.db import atomic
 from shared.views.base import AuthenticatedModelViewSet
 from users.models.financial_profile import FinancialProfile
 from users.serializers.financial_profile import FinancialProfileSerializer
@@ -24,6 +23,6 @@ class FinancialProfileViewSet(AuthenticatedModelViewSet):
     def perform_update(self, serializer):
         serializer.save()
 
-    @transaction.atomic
+    @atomic()
     def update(self, request, *args, **kwargs):
         return super().update(request, *args, **kwargs)

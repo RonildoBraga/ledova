@@ -4,7 +4,6 @@ from datetime import timedelta
 from typing import Optional
 
 from django.conf import settings
-from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 from web3 import Web3
@@ -23,6 +22,7 @@ from integrations.base_chain.exceptions import (
 )
 from operators.settlement import settlement_deployments
 from shared.constants import BLOCKCHAIN_BASE
+from shared.db import atomic
 from tokens.exceptions import (
     CompanyNotReadyException,
     ContractLoadException,
@@ -629,7 +629,7 @@ class ShareTokenService:
             return None
         return recorded
 
-    @transaction.atomic
+    @atomic()
     def name_the_mint(self, request: ShareIssuanceRequest, tx_hash: str) -> ShareIssuance:
         issuance = self.unnamed_mint(request)
         if issuance is None:
@@ -638,7 +638,7 @@ class ShareTokenService:
         logger.info(f"Request {request.uuid} had its mint named {tx_hash} by an operator")
         return issuance
 
-    @transaction.atomic
+    @atomic()
     def release_unnamed_claim(self, request: ShareIssuanceRequest) -> ShareIssuanceRequest:
         issuance = self.unnamed_mint(request)
         if issuance is None:
@@ -679,7 +679,7 @@ class ShareTokenService:
         refused = False
         failure = None
         result = None
-        with transaction.atomic():
+        with atomic():
             ShareToken.objects.select_for_update().get(pk=token.pk)
             request.refresh_from_db(fields=["status"])
             if not request.can_be_executed:
@@ -806,7 +806,7 @@ class ShareTokenService:
             f"setAuthorizedShares {tx_hash} for request {request.uuid} mined while the worker was gone; completing"
         )
         result = {**self._tx_result(tx_hash, receipt), "new_authorized_total": request.new_authorized_total}
-        with transaction.atomic():
+        with atomic():
             ShareToken.objects.select_for_update().get(pk=request.token.pk)
             request.refresh_from_db(fields=["status"])
             if request.status == RequestStatus.EXECUTED:

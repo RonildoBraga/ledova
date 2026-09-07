@@ -3,7 +3,8 @@ import logging
 
 import redis
 from django.conf import settings
-from django.db import transaction
+
+from shared.db import on_commit
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,7 @@ def publish_trading_event(event_type: str, token_uuid: str):
         "event": event_type,
         "token": str(token_uuid),
     }
-    transaction.on_commit(lambda: _publish(event_type, payload))
+    on_commit(lambda: _publish(event_type, payload))
 
 
 def _publish(event_type: str, payload: dict) -> None:

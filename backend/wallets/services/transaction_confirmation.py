@@ -3,13 +3,13 @@ from decimal import Decimal
 from typing import Any, Dict, Optional
 
 from django.contrib.auth import get_user_model
-from django.db import transaction
 from django.utils import timezone
 
 from assets.models import Asset, AssetType
 from assets.services.identity import native_asset_for_chain
 from compliance.services.transaction_monitoring import TransactionMonitoringService
 from shared.constants import normalize_chain
+from shared.db import atomic
 from users.tasks.notifications import send_transaction_notification
 from wallets.constants import (
     SNAPSHOT_REASON_TRANSACTION,
@@ -54,7 +54,7 @@ class TransactionConfirmationService:
         chain = normalize_chain(wallet.chain)
         asset = TransactionConfirmationService.resolve_transfer_asset(wallet, token_contract)
 
-        with transaction.atomic():
+        with atomic():
             tx = Transaction.objects.create(
                 wallet=wallet,
                 tx_hash=tx_hash,
@@ -115,7 +115,7 @@ class TransactionConfirmationService:
             logger.info(f"Transaction already confirmed: {tx_hash}")
             return {"status": "already_confirmed", "tx_hash": tx_hash}
 
-        with transaction.atomic():
+        with atomic():
             tx.status = TRANSACTION_STATUS_CONFIRMED
             tx.block_number = block_number
             tx.block_timestamp = block_timestamp or timezone.now()
@@ -148,7 +148,7 @@ class TransactionConfirmationService:
             logger.info(f"Transaction not pending, cannot fail: {tx_hash}")
             return {"status": "not_pending", "tx_hash": tx_hash, "current_status": tx.status}
 
-        with transaction.atomic():
+        with atomic():
             tx.status = TRANSACTION_STATUS_FAILED
             tx.save(update_fields=["status"])
 

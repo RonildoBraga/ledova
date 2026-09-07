@@ -1,13 +1,12 @@
 import logging
 
-from django.db import transaction
-
 from companies.exceptions import (
     CompanyHoldsARegisterException,
     CompanyHoldsShareClassesException,
     MissingRequiredDocumentsException,
 )
 from companies.models import LISTING_REQUIRED_DOCUMENTS, Company, DocumentType
+from shared.db import atomic
 from users.models import UserProfile
 from users.tasks.notifications import send_push_notification
 from wallets.models import Wallet
@@ -45,7 +44,7 @@ def register_company(owner, name: str, acn: str, primary_contact_data: dict, **k
     return company
 
 
-@transaction.atomic
+@atomic()
 def transition_company(company: Company, method: str, **kwargs) -> Company:
     getattr(company, method)(**kwargs)
     message = APPLICANT_NOTIFICATIONS.get(method)
@@ -61,7 +60,7 @@ def transition_company(company: Company, method: str, **kwargs) -> Company:
     return company
 
 
-@transaction.atomic
+@atomic()
 def submit_application(company: Company, submitted_by) -> Company:
     uploaded_types = set(company.documents.values_list("document_type", flat=True))
     missing_types = {dt.value for dt in LISTING_REQUIRED_DOCUMENTS} - uploaded_types

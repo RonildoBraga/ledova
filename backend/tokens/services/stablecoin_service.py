@@ -2,7 +2,6 @@ import logging
 from typing import Optional
 
 from django.conf import settings
-from django.db import transaction
 from web3 import Web3
 
 from blockchain.models import BlockchainTransaction, TransactionStatus, TransactionType
@@ -10,6 +9,7 @@ from integrations.base_chain.exceptions import (
     BaseChainContractError,
     BaseChainTransactionError,
 )
+from shared.db import atomic
 from tokens.exceptions import (
     StablecoinBurnFailedException,
     StablecoinContractNotConfiguredException,
@@ -37,7 +37,7 @@ class StablecoinService(BaseTokenService):
             signer_key=signer_key,
         )
 
-    @transaction.atomic
+    @atomic()
     def burn(
         self,
         amount: int,

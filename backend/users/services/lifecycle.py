@@ -2,7 +2,6 @@ import logging
 from datetime import datetime
 from uuid import uuid4
 
-from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -10,13 +9,14 @@ from authentication.email import normalize_email
 from authentication.managers.user import EmailLookupState
 from authentication.services import TokenService
 from portfolios.models import Portfolio
+from shared.db import atomic
 from users.models import FinancialProfile, UserAccount, UserPreferences, UserProfile
 from wallets.models import Transaction, Wallet
 
 logger = logging.getLogger(__name__)
 
 
-@transaction.atomic
+@atomic()
 def delete_account(user):
     logger.info("Account deletion requested")
 

@@ -1,14 +1,14 @@
 from django.core.management.base import BaseCommand
-from django.db import transaction
 
 from compliance.models import AlertProcedureStep, AlertProcedureTemplate
 from compliance.seeds.procedure_templates import PROCEDURE_TEMPLATES
+from shared.db import atomic
 
 
 class Command(BaseCommand):
     help = "Sync alert procedure templates to the database (idempotent)"
 
-    @transaction.atomic
+    @atomic()
     def handle(self, *args, **options):
         verbosity = options["verbosity"]
         created = updated = steps_created = steps_updated = 0

@@ -1,7 +1,6 @@
 import logging
 from typing import Any, Dict, Optional
 
-from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import APIException
 
@@ -18,6 +17,7 @@ from integrations.kyc.constants import (
     REVIEW_RED,
     REVIEW_YELLOW,
 )
+from shared.db import atomic
 from shared.models.country import Country
 from users.models.user_profile import UserProfile
 
@@ -159,7 +159,7 @@ class IdentityVerificationService:
             user_profile.is_id_verified = False
             user_profile.verified_at = None
 
-        with transaction.atomic():
+        with atomic():
             user_profile.save()
 
             if normalized.review_result == REVIEW_GREEN and not was_verified:
@@ -215,7 +215,7 @@ class IdentityVerificationService:
 
         try:
 
-            with transaction.atomic():
+            with atomic():
                 RiskAssessmentService.calculate_and_create(user_account=user_account, pep_data=pep_data)
             logger.info(f"Triggered risk assessment for account {user_account.uuid}")
         except Exception as e:
