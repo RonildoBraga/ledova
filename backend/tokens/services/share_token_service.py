@@ -70,6 +70,10 @@ CLAIMED_BEFORE_RECORDED = (
 TOKEN_PAUSED = "Token is paused. Unpause it before executing."
 SHARE_ASSET_CHAIN = BLOCKCHAIN_BASE
 NOT_ATTESTED = "{symbol} at {address} is not the address the factory holds for {identifier}; left unverified"
+ANOTHER_INCREASE_IN_FLIGHT = (
+    "{symbol} has another capital increase in flight ({status}), so this one cannot be executed yet. "
+    "One share class raises its cap once at a time; resolve that one first."
+)
 CAP_NOT_RAISED = (
     "Authorized shares are already at or above the requested total. "
     "Resubmit the capital increase against the current cap."
@@ -677,6 +681,7 @@ class ShareTokenService:
     def _execute_capital_increase(self, request: CapitalIncreaseRequest) -> dict:
         token = request.token
         refused = False
+        crowded_by = ""
         failure = None
         result = None
         with atomic():
@@ -684,7 +689,13 @@ class ShareTokenService:
             request.refresh_from_db(fields=["status"])
             if not request.can_be_executed:
                 raise InvalidTokenStateException(f"Cannot execute request with status '{request.get_status_display()}'")
-            tx_record = self._recorded_increase(request)
+            crowding = CapitalIncreaseRequest.objects.in_flight().filter(token=token).exclude(pk=request.pk).first()
+            if crowding is not None:
+                crowded_by = ANOTHER_INCREASE_IN_FLIGHT.format(
+                    symbol=token.symbol, status=crowding.get_status_display().lower()
+                )
+                request.mark_refused(crowded_by)
+            tx_record = None if crowded_by else self._recorded_increase(request)
             if tx_record is not None:
                 try:
                     result = self._resume_capital_increase(request, tx_record)
@@ -692,7 +703,7 @@ class ShareTokenService:
                     raise
                 except Exception as exc:
                     failure = exc
-            if failure is None and result is None:
+            if failure is None and result is None and not crowded_by:
                 authorized, _ = self.share_supply(token.contract_address)
                 token.refresh_from_db(fields=["total_supply"])
                 if authorized == request.new_authorized_total and int(token.total_supply) < authorized:
@@ -725,6 +736,8 @@ class ShareTokenService:
             elif result is not None:
                 self._complete_capital_increase(request, result)
 
+        if crowded_by:
+            raise IssuanceRefusedException(crowded_by)
         if refused:
             raise IssuanceRefusedException(CAP_NOT_RAISED)
         if failure is not None:
