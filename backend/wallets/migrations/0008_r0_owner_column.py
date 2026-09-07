@@ -40,7 +40,7 @@ BEGIN
             NEW.{column}, parent_account_id;
     END IF;
 
-    IF TG_OP = 'UPDATE' AND OLD.{column} IS DISTINCT FROM NEW.{column} THEN
+    IF TG_OP = 'UPDATE' AND OLD.{column} IS NOT NULL AND OLD.{column} <> NEW.{column} THEN
         RAISE EXCEPTION '{table}.user_account_id cannot change, from % to %', OLD.{column}, NEW.{column};
     END IF;
 

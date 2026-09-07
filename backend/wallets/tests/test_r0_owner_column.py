@@ -166,6 +166,15 @@ class OwnerColumnTriggerTest(TestCase):
         row.refresh_from_db()
         self.assertEqual(row.user_account_id, self.account.pk)
 
+    def test_the_column_is_not_null_which_is_what_makes_the_fill_guard_unreachable(self):
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT is_nullable FROM information_schema.columns WHERE table_name = %s AND column_name = %s",
+                [Transaction._meta.db_table, Transaction._meta.get_field("user_account").column],
+            )
+
+            self.assertEqual(cursor.fetchone()[0], "NO")
+
     def test_an_ordinary_update_still_works(self):
         row = Transaction.objects.create(
             wallet=self.wallet,
