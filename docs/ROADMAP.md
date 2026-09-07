@@ -524,8 +524,38 @@ Not started.
   bank feed and a chain watcher propose the match instead of the operator
   reading a statement, and where `SubscriptionPayment` earns its place if
   multi-tranche reconciliation is still wanted then.
+- **The provider is undecided, and the requirement is not.** The owner has
+  chosen to pick a bank feed or payment service when Phase 3 is scheduled
+  rather than now, so nothing here names one. What any provider must give is
+  fixed: **incoming AUD transfers carrying their reference text**, delivered
+  through **a webhook or a poll**. The reference format is not negotiable with
+  a provider — `normalize_reference`, the Crockford alphabet and the
+  operator's prefix followed by an eight-character code
+  (`REFERENCE_CODE_LENGTH`) are what the platform issues, inside the
+  18-character field a reference must fit (`MAX_REFERENCE_LENGTH`), and a
+  provider must carry them unchanged. The two
+  shapes the desk weighed are a read-only open-banking feed on the operator's
+  own account and a payments provider issuing a PayID or virtual account per
+  subscription; the choice between them is the scheduled question. The
+  stablecoin rail's chain watcher is the other half of Phase 3 and needs no
+  provider at all.
+  ([B7c](https://github.com/RonildoBraga/ledova/issues/115#issuecomment-5574962513))
 
 ## Phase 4 — Secondary transfers
+
+**Mobile's investor half lands in this phase.** The owner has decided that the
+investor directory and the subscription flow reach mobile in Phase 4 — offering
+detail, subscription on both rails, and the payment-instruction and allotment
+views — over the hooks Phase 2 is producing. Features 4 and 5 are
+dashboard-only for investors until then, which is why nothing is built on
+mobile before this phase. It is a constraint on Phase 2 rather than a note
+about Phase 4: **a shared hook moved now is designed for both clients**,
+because the second client is scheduled rather than hypothetical. B7b's other
+half — the README's mobile mention gaining "Phase 4" beside it — belongs to the
+next docs pass and is not in this change. Issuers are dashboard-only this
+phase, which is B2 rather than this decision; B7b is silent on the issuer half.
+([B7b](https://github.com/RonildoBraga/ledova/issues/115#issuecomment-5574947880),
+[B2](https://github.com/RonildoBraga/ledova/issues/115#issuecomment-5574848881))
 
 Not started, and gated on the trading work in the
 [`deferred-hardening`](https://github.com/RonildoBraga/ledova/issues?q=is%3Aopen+label%3Adeferred-hardening) issues. While the `trading_enabled` flag is off,
@@ -619,6 +649,29 @@ decision below). Mainnet deployment configuration is deliberately absent.
 - **No comments and no docstrings in source.** Settled, and now mechanically
   gated by `make check-comments` rather than held by review alone. See the
   coding rules in [ARCHITECTURE.md](ARCHITECTURE.md#coding-rules).
+- **One portfolio line per asset, summed across chains.** The owner has decided
+  the portfolio shows one line and one ring slice per asset, summing the
+  `Holding` rows across every chain it is held on, with the per-chain split
+  visible when the line is expanded. Send and receive go on choosing a chain,
+  because a transfer happens on one. The asset model does not change. This is
+  the display rule the rest of #10 is built to, and it composes with the
+  value-source label B5 settled, which
+  [#346](https://github.com/RonildoBraga/ledova/issues/346) still has to carry:
+  a summed line says what it is a sum of, and an unpriced holding contributes
+  zero, and says so rather than doing it silently.
+  ([B7d](https://github.com/RonildoBraga/ledova/issues/115#issuecomment-5574975348))
+- **The shared types are generated, once there is something to generate from.**
+  The owner has decided `packages/shared/src/types` is generated from the
+  OpenAPI schema — not now, but when every client-facing endpoint is declared
+  and [#209](https://github.com/RonildoBraga/ledova/pull/209)'s drift gate has
+  run clean across a release. Until then the hand-written types stay, and that
+  gate refuses drift between them and the schema once it merges. The order
+  matters and is the whole decision: generating early would produce
+  types for the endpoints that happen to be declared and silence the gate for
+  the ones that are not. The hand-written files retire in the same PR that
+  generates their replacements, and the drift gate becomes the generation step
+  rather than being deleted.
+  ([B7e](https://github.com/RonildoBraga/ledova/issues/115#issuecomment-5575002254))
 
 ## Open questions
 
