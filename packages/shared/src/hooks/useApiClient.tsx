@@ -1,5 +1,5 @@
 import type { AxiosInstance } from 'axios';
-import { createContext, createElement, useContext } from 'react';
+import { createContext, useContext } from 'react';
 import type { ReactNode } from 'react';
 
 const ApiClientContext = createContext<AxiosInstance | null>(null);
@@ -10,7 +10,7 @@ export interface ApiClientProviderProps {
 }
 
 export function ApiClientProvider({ client, children }: ApiClientProviderProps) {
-  return createElement(ApiClientContext.Provider, { value: client }, children);
+  return <ApiClientContext.Provider value={client}>{children}</ApiClientContext.Provider>;
 }
 
 export function useApiClient(): AxiosInstance {

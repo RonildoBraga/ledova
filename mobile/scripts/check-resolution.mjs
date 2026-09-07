@@ -5,6 +5,7 @@ import process from 'node:process';
 
 const MOBILE = path.resolve(import.meta.dirname, '..');
 const REPO = path.resolve(MOBILE, '..');
+const WORKSPACE = path.join(REPO, 'packages');
 const resolver = createRequire(path.join(MOBILE, 'index.ts'));
 
 const SOURCE_FILE = /\.(tsx?|jsx?|mjs|cjs)$/;
@@ -18,6 +19,9 @@ const development = new Set(Object.keys(manifest.devDependencies ?? {}));
 const metroConfig = await readFile(path.join(MOBILE, 'metro.config.js'), 'utf8');
 
 const { default: jestConfig } = await import(path.join(MOBILE, 'jest.config.js'));
+
+const { default: metro } = await import(path.join(MOBILE, 'metro.config.js'));
+const aliases = metro.resolver?.extraNodeModules ?? {};
 
 if (!Array.isArray(jestConfig.testMatch) || jestConfig.testMatch.length === 0) {
   console.error('jest.config.js declares no testMatch, so a test file cannot be told from bundled code.');
@@ -42,6 +46,18 @@ async function* sourceFiles(dir) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) yield* sourceFiles(full);
     else if (SOURCE_FILE.test(entry.name)) yield full;
+  }
+}
+
+async function* workspaceFiles() {
+  for (const entry of await readdir(WORKSPACE, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const src = path.join(WORKSPACE, entry.name, 'src');
+    try {
+      yield* sourceFiles(src);
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
   }
 }
 
@@ -112,11 +128,46 @@ for (const [specifier, site] of [...sites].sort()) {
   }
 }
 
+const workspaceSites = new Map();
+
+for await (const file of workspaceFiles()) {
+  const text = await readFile(file, 'utf8');
+  for (const match of text.matchAll(SPECIFIER)) {
+    const specifier = match[1] ?? match[2];
+    if (specifier.startsWith('.') || specifier.startsWith('/')) continue;
+    if (!workspaceSites.has(specifier)) {
+      workspaceSites.set(specifier, `${path.relative(REPO, file)}:${lineOf(text, match.index)}`);
+    }
+  }
+}
+
+for (const [specifier, site] of [...workspaceSites].sort()) {
+  const name = packageOf(specifier);
+  if (isBuiltin(specifier) || aliases[name] !== undefined) {
+    const target = aliases[name];
+    if (target !== undefined && !path.resolve(target).startsWith(path.join(MOBILE, 'node_modules') + path.sep)) {
+      failures.push(
+        `${site}: '${name}' is aliased to ${path.relative(REPO, path.resolve(target))}, outside mobile/node_modules`,
+      );
+    }
+    continue;
+  }
+  failures.push(
+    `${site}: '${name}' has no metro.config.js extraNodeModules alias, so Metro cannot resolve it from packages/`,
+  );
+}
+
 if (failures.length > 0) {
   console.error(`Mobile imports that mobile/node_modules cannot satisfy (${failures.length}):\n`);
   for (const failure of failures) console.error(`  ${failure}`);
-  console.error('\nMetro resolves from mobile/ and ../packages only. A green tsc does not mean the bundle resolves.');
+  console.error(
+    '\nMetro walks up from the importing file, so a file in packages/ reaches neither mobile/node_modules' +
+      '\nnor the repo root. A green tsc does not mean the bundle resolves; only an export does.',
+  );
   process.exit(1);
 }
 
-console.log(`Mobile resolution clean: ${sites.size} runtime specifiers resolve from mobile/node_modules.`);
+console.log(
+  `Mobile resolution clean: ${sites.size} runtime specifiers from mobile/, ` +
+    `${workspaceSites.size} from packages/, all reaching mobile/node_modules.`,
+);
