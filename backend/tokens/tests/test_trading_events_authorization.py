@@ -3,7 +3,7 @@ from unittest.mock import Mock, patch
 from uuid import uuid4
 
 from django.contrib.auth import get_user_model
-from django.test import SimpleTestCase, TestCase
+from django.test import TestCase
 
 from authentication.services.tokens import TokenService
 from companies.models import Company
@@ -68,14 +68,15 @@ class _FakeRedis:
         self.closed = True
 
 
-class TradingEventDisclosureTest(SimpleTestCase):
+class TradingEventDisclosureTest(TestCase):
     @patch("tokens.events._get_redis_client")
     def test_publisher_payload_contains_no_order_or_swap_identifier(self, get_client):
         client = Mock()
         get_client.return_value = client
         token_uuid = str(uuid4())
 
-        publish_trading_event("order_created", token_uuid)
+        with self.captureOnCommitCallbacks(execute=True):
+            publish_trading_event("order_created", token_uuid)
 
         client.publish.assert_called_once()
         channel, raw_payload = client.publish.call_args.args
