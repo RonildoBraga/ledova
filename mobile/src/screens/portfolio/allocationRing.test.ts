@@ -52,3 +52,27 @@ describe('usePortfolio hands the mobile ring the same allocation the dashboard d
     ]);
   });
 });
+
+describe('an item says whether a price stands behind its share', () => {
+  it('marks every slice unpriced when the ring falls back to quantity', () => {
+    expect(calculateAssetAllocation(UNPRICED, 0).map((item) => [item.symbol, item.priced])).toEqual([
+      ['AAA', false],
+      ['BBB', false],
+    ]);
+  });
+
+  it('marks the unpriced holding in a mixed portfolio, which the value basis puts at 0%', () => {
+    const mixed = [holding('SHARES', '10000', '0'), holding('USDC', '12', '12')];
+
+    expect(calculateAssetAllocation(mixed, 12).map((item) => [item.symbol, item.percentage, item.priced])).toEqual([
+      ['USDC', 100, true],
+      ['SHARES', 0, false],
+    ]);
+  });
+
+  it('marks every slice priced when every slice carries a value', () => {
+    const priced = [holding('AAA', '30', '10'), holding('BBB', '10', '30')];
+
+    expect(calculateAssetAllocation(priced, 40).every((item) => item.priced)).toBe(true);
+  });
+});

@@ -82,6 +82,7 @@ export function calculateAssetAllocation(holdings: HoldingWithWallet[], totalVal
       name: data.name,
       totalValue: data.totalValue,
       percentage: ((weighByQuantity ? data.totalQuantity : data.totalValue) / basisTotal) * 100,
+      priced: !weighByQuantity && data.totalValue > 0,
       color: getChartColor(index),
       navPerToken: data.navPerToken,
       isYieldToken: data.isYieldToken,

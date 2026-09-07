@@ -52,6 +52,7 @@ export interface AssetAllocationItem {
   name: string;
   totalValue: number;
   percentage: number;
+  priced: boolean;
   color: string;
   navPerToken?: string | null;
   isYieldToken?: boolean;
