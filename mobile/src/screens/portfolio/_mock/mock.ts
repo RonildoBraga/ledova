@@ -98,6 +98,7 @@ export const generateMockHoldingsData = () => {
 
     return walletsForAsset.map((wallet) => ({
       uuid: `holding-${asset.uuid}-${wallet.uuid}`,
+      chain: wallet.chain,
       assetSymbol: asset.symbol,
       assetName: asset.name,
       quantity: (asset.value / (assetIndex + 1) / 100).toString(),

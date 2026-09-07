@@ -56,16 +56,6 @@ class Asset(BaseModel):
     def __repr__(self):
         return f"<Asset: {self.symbol} ({self.asset_type})>"
 
-    @property
-    def chain(self):
-        dep = self.chain_deployments.first()
-        return dep.chain if dep else None
-
-    @property
-    def contract_address(self):
-        dep = self.chain_deployments.first()
-        return dep.contract_address if dep else None
-
     def get_deployment_for_chain(self, chain: str) -> Optional["AssetChainDeployment"]:
         return self.chain_deployments.filter(chain=chain, is_active=True).first()
 

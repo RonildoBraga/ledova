@@ -7,6 +7,7 @@ from wallets.models import Holding
 class HoldingSerializer(serializers.ModelSerializer):
     wallet_uuid = serializers.CharField(source="wallet.uuid", read_only=True)
     wallet_address = serializers.CharField(source="wallet.address", read_only=True)
+    chain = serializers.CharField(source="wallet.chain", read_only=True)
     asset_uuid = serializers.CharField(source="asset.uuid", read_only=True)
     asset_symbol = serializers.CharField(source="asset.symbol", read_only=True)
     asset_name = serializers.CharField(source="asset.name", read_only=True)
@@ -19,6 +20,7 @@ class HoldingSerializer(serializers.ModelSerializer):
             "uuid",
             "wallet_uuid",
             "wallet_address",
+            "chain",
             "asset_uuid",
             "asset_symbol",
             "asset_name",
