@@ -388,11 +388,9 @@ class AtomicSwapService:
         except InsufficientBalanceException:
             raise
         except Exception as e:
-            raw_error = str(e)
-            self._record_never_sent(swap_order, relayer_account.address, arguments, raw_error)
-            raise SwapExecutionException(
-                f"Swap execution failed: {decode_exception_to_message(e, 'Swap execution failed')}"
-            ) from e
+            told_to_the_parties = decode_exception_to_message(e, "Swap execution failed")
+            self._record_never_sent(swap_order, relayer_account.address, arguments, str(e), told_to_the_parties)
+            raise SwapExecutionException(f"Swap execution failed: {told_to_the_parties}") from e
 
         return signed_tx, self._record_intent(swap_order, relayer_account.address, arguments)
 
@@ -431,10 +429,17 @@ class AtomicSwapService:
         return tx_record
 
     @transaction.atomic(durable=True)
-    def _record_never_sent(self, swap_order: SwapOrder, relayer_address: str, arguments: dict, raw_error: str) -> None:
+    def _record_never_sent(
+        self,
+        swap_order: SwapOrder,
+        relayer_address: str,
+        arguments: dict,
+        raw_error: str,
+        told_to_the_parties: str,
+    ) -> None:
         tx_record = self._new_transaction_record(swap_order, relayer_address, arguments)
         tx_record.mark_failed(raw_error)
-        swap_order.mark_failed(raw_error)
+        swap_order.mark_failed(told_to_the_parties)
         logger.error(f"Swap {swap_order.uuid} was never sent: {raw_error}")
         publish_trading_event("swap_failed", str(swap_order.share_token.uuid))
 
