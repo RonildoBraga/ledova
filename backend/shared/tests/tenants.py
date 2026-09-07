@@ -20,6 +20,7 @@ from companies.models import (
     CompanyType,
     DocumentType,
 )
+from companies.validators import acn_check_digit
 from documents.models import Document
 from offerings.models import Offering, OfferingExemption, Subscription
 from portfolios.models import Portfolio
@@ -117,6 +118,11 @@ def reference_data():
     return SimpleNamespace(asset=asset, spare_asset=spare_asset, stablecoin=stablecoin, country=country)
 
 
+def an_acn(number: int) -> str:
+    base = f"{number:08d}"
+    return base + str(acn_check_digit(base))
+
+
 def make_tenant(label, *, staff=False, superuser=False):
     number = next(_sequence)
     refs = reference_data()
@@ -187,7 +193,7 @@ def make_tenant(label, *, staff=False, superuser=False):
         owner=user,
         name=f"{label} Pty Ltd",
         company_type=CompanyType.PROPRIETARY,
-        acn=f"{number:09d}",
+        acn=an_acn(number),
         operator_wallet=wallet,
     )
     company_document = CompanyDocument.objects.create(
