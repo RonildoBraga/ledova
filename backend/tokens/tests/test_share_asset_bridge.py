@@ -152,15 +152,13 @@ class IssuanceSeedsTheHoldingTest(TestCase):
         return request
 
     def _balance(self, value):
-        client = Mock()
-        client.get_token_balance.return_value = value
-        return patch("wallets.services.chain.get_blockchain_client", return_value=client)
+        return patch.object(ShareTokenService, "get_token_balance", return_value=value)
 
     def test_an_allotment_to_a_whitelisted_investor_wallet_writes_the_holding(self):
         WhitelistEntry.objects.create(wallet=self.wallet, status=WhitelistStatus.ACTIVE, is_whitelisted=True)
         request = self._request(self.wallet.address)
 
-        with self._balance(Decimal("25")):
+        with self._balance(25):
             self.service.execute_request(request)
 
         request.refresh_from_db()
@@ -177,7 +175,7 @@ class IssuanceSeedsTheHoldingTest(TestCase):
         )
         request = self._request(treasury)
 
-        with self._balance(Decimal("25")):
+        with self._balance(25):
             self.service.execute_request(request)
 
         request.refresh_from_db()

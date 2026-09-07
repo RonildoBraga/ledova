@@ -95,13 +95,13 @@ class ChainBalanceTest(TestCase):
             factory.assert_not_called()
             self.assertIsNone(fetch_chain_balance(self.wallet, self.eth))
 
-    def test_holding_sync_writes_chain_balances_and_keeps_unreachable_ones(self):
+    def test_holding_sync_writes_chain_balances_and_reports_the_unreachable_ones(self):
         eth_holding = Holding.objects.create(wallet=self.wallet, asset=self.eth, quantity=Decimal("1"))
         usdc_holding = Holding.objects.create(wallet=self.wallet, asset=self.usdc, quantity=Decimal("5"))
         self.client_mock.get_token_balance.return_value = None
 
         with patch("wallets.services.chain.get_blockchain_client", return_value=self.client_mock):
-            self.assertEqual(WalletSyncService._sync_holdings_from_blockchain(self.wallet), 1)
+            self.assertEqual(WalletSyncService._sync_holdings_from_blockchain(self.wallet), (1, 1))
 
         eth_holding.refresh_from_db()
         usdc_holding.refresh_from_db()
