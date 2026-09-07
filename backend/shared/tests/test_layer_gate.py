@@ -379,11 +379,36 @@ class SignalRuleTest(SimpleTestCase):
         self.assertEqual(signals_in("import django.db.models.signals"), [gate.SIGNAL_IMPORT])
         self.assertEqual(signals_in("from django.db.models import signals"), [gate.SIGNAL_IMPORT])
 
+    def test_a_custom_signal_and_its_receiver_decorator_are_flagged(self):
+        self.assertEqual(signals_in("from django.dispatch import Signal"), [gate.SIGNAL_IMPORT])
+        self.assertEqual(signals_in("from django.dispatch import receiver"), [gate.SIGNAL_IMPORT])
+        self.assertEqual(signals_in("import django.dispatch"), [gate.SIGNAL_IMPORT])
+        self.assertEqual(signals_in("import django.dispatch as d"), [gate.SIGNAL_IMPORT])
+        self.assertEqual(signals_in("from django.dispatch.dispatcher import Signal"), [gate.SIGNAL_IMPORT])
+
+    def test_the_module_named_as_an_alias_is_the_same_import(self):
+        self.assertEqual(signals_in("from django import dispatch"), [gate.SIGNAL_IMPORT])
+        self.assertEqual(signals_in("from django import dispatch as d"), [gate.SIGNAL_IMPORT])
+        self.assertEqual(signals_in("from django.contrib.auth import signals"), [gate.SIGNAL_IMPORT])
+        self.assertEqual(signals_in("from django import db"), [])
+
+    def test_the_other_django_signal_families_are_flagged(self):
+        self.assertEqual(signals_in("from django.contrib.auth.signals import user_logged_in"), [gate.SIGNAL_IMPORT])
+        self.assertEqual(signals_in("from django.core.signals import request_finished"), [gate.SIGNAL_IMPORT])
+        self.assertEqual(signals_in("from django.db.backends.signals import connection_created"), [gate.SIGNAL_IMPORT])
+
+    def test_a_signals_module_outside_django_is_not_this_rule(self):
+        self.assertEqual(signals_in("from mysignals import signals"), [])
+        self.assertEqual(signals_in("from app.signals import thing"), [])
+        self.assertEqual(signals_in("import signals"), [])
+
     def test_an_aliased_import_is_still_the_same_import(self):
         self.assertEqual(signals_in("import django.db.models.signals as s"), [gate.SIGNAL_IMPORT])
         self.assertEqual(signals_in("from django.db.models import signals as s"), [gate.SIGNAL_IMPORT])
 
     def test_the_ordinary_model_imports_are_not_flagged(self):
+        self.assertEqual(signals_in("from django.contrib.auth import get_user_model"), [])
+        self.assertEqual(signals_in("import django"), [])
         self.assertEqual(signals_in("from django.db import models"), [])
         self.assertEqual(signals_in("from django.db.models import Q"), [])
         self.assertEqual(signals_in("from django.db import transaction"), [])
