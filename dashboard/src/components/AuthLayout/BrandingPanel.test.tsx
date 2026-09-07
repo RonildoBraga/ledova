@@ -1,13 +1,19 @@
 // @vitest-environment jsdom
 
-import { render as renderComponent, screen } from '@testing-library/react';
+import { cleanup, render as renderComponent, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { BrandingPanel } from './BrandingPanel';
 
+const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+afterEach(() => {
+  cleanup();
+  client.clear();
+});
+
 function render() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return renderComponent(
     <QueryClientProvider client={client}>
       <BrandingPanel />
