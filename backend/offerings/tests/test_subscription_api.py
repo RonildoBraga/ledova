@@ -12,7 +12,12 @@ from offerings.models import (
     Subscription,
     SubscriptionStatus,
 )
-from offerings.services.subscription import accept, confirm_payment, issue_instruction, submit
+from offerings.services.subscription import (
+    accept,
+    confirm_payment,
+    issue_instruction,
+    submit,
+)
 from offerings.tests.factories import (
     configure_operator,
     draft_subscription,
