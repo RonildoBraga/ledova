@@ -4,7 +4,7 @@
 NPM ?= npm
 PYTHON ?= python3
 
-.PHONY: help install install-backend init-local check-local-env build generate-tokens check check-comments check-layers \
+.PHONY: help install install-backend install-node-if-missing init-local check-local-env build generate-tokens check check-comments check-layers \
 	check-logging test-gates audit test \
 	dev-up dev-down dev-logs contracts-compile contracts-test contracts-deploy-local \
 	contracts-deploy-testnet chain-test smoke lint
@@ -58,6 +58,14 @@ install:
 install-backend:
 	$(PYTHON) -m pip install -r backend/requirements-dev.txt
 
+# Each workspace resolves from its own node_modules. mobile's type-check reads
+# expo/tsconfig.base, so without mobile's own install tsc fails before it reads a
+# line of project code, which looks like a real type error and is not.
+install-node-if-missing:
+	@test -d node_modules || $(NPM) ci
+	@test -d marketing/node_modules || $(NPM) --prefix marketing ci
+	@test -d mobile/node_modules || $(NPM) --prefix mobile ci
+
 init-local:
 	$(PYTHON) scripts/init-local-env.py
 
@@ -72,7 +80,7 @@ build:
 generate-tokens:
 	$(NPM) exec -- tsx packages/scripts/generate-css-tokens.mjs
 
-check: check-comments check-layers check-logging install-backend
+check: check-comments check-layers check-logging install-backend install-node-if-missing
 	$(NPM) run typecheck
 	$(NPM) --prefix marketing run type-check
 	$(NPM) --prefix mobile run type-check
