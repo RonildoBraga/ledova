@@ -6,13 +6,17 @@ shadowing gate". This script is the mechanical half of that rule; keep the two
 in step.
 
 A test class that defines `def fail(self, ...)` replaces `TestCase.fail`, and
-`TestCase.fail` is what every type-specific assertion raises through:
-assertEqual on a tuple, list, dict or string goes to assertTupleEqual and
-friends, which build the difference message and then call self.fail. With fail
-shadowed, the message is built, the helper is called instead of the failure
-being raised, and the assertion passes. assertTrue and assertIsNone raise
-directly, so they still work - which is why the shadowing is invisible: most of
-the suite behaves and one family of assertions silently stops checking.
+most of the assertion surface raises through it. Only the handful that call
+`raise self.failureException` themselves survive: `_baseAssertEqual`, which is
+why assertEqual on a scalar is always real, plus assertTrue and assertRegex.
+Everything else builds its message and calls self.fail - so with fail shadowed
+the message is built, the helper is called, and the assertion passes.
+
+Measured, not assumed. Silent under a shadowed fail: assertEqual on a tuple,
+list, dict, set or string; assertIn; assertNotIn; assertIsNone; assertIsInstance;
+assertGreater; assertCountEqual. Still raising: assertEqual on a scalar,
+assertTrue, assertRegex. That mixture is why the shadowing is invisible - the
+suite keeps failing where you look and stops checking where you do not.
 
 That happened here. `ReversingOnlyWhatWasDeductedTest.fail(tx_hash)` made six
 tuple assertions inert across the file, and they were found only because a
@@ -118,9 +122,10 @@ def main() -> int:
         for finding in findings:
             print(f"  {finding}", file=sys.stderr)
         print(
-            "\nassertEqual on a tuple, list, dict or string raises through TestCase.fail."
-            "\nA helper of the same name replaces it, so those assertions stop checking and"
-            "\nkeep passing. Rename the helper."
+            "\nMost assertions raise through TestCase.fail - assertEqual on a tuple, list, dict,"
+            "\nset or string, and assertIn, assertIsNone, assertIsInstance, assertGreater among"
+            "\nothers. A helper of the same name replaces it, so those assertions stop checking"
+            "\nand keep passing. Rename the helper."
             '\n\nThe rule and its scope are in docs/ARCHITECTURE.md, "The test shadowing gate".',
             file=sys.stderr,
         )

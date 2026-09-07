@@ -1333,15 +1333,20 @@ routable methods that call it. `SubscriptionViewSet._detail` is why: it returns
 name is a `unittest.TestCase` attribute. `make check-test-shadowing` runs it and
 CI runs it beside the other source gates. It is static and needs no database.
 
-**Why it is worth a gate rather than a convention.** `assertEqual` on a tuple,
-list, dict or string does not raise directly. It dispatches to
-`assertTupleEqual` and its siblings, which build the difference message and then
-call `self.fail`. A test class that defines `def fail(self, tx_hash)` as a
-helper **replaces the method every one of those assertions raises through**, so
-they build their message, call the helper, and pass. `assertTrue` and
-`assertIsNone` raise directly and keep working, which is what makes the failure
-invisible: the suite behaves, and one family of assertions silently stops
-checking.
+**Why it is worth a gate rather than a convention.** Most of the assertion
+surface raises through `TestCase.fail`. Only the few that call
+`raise self.failureException` themselves survive a shadowed one: `assertEqual`
+on a **scalar**, because `_baseAssertEqual` raises directly, plus `assertTrue`
+and `assertRegex`. A test class that defines `def fail(self, tx_hash)` as a
+helper **replaces the method everything else raises through**, so those
+assertions build their difference message, call the helper, and pass.
+
+Measured rather than assumed. **Silent** under a shadowed `fail`: `assertEqual`
+on a tuple, list, dict, set or string; `assertIn`; `assertNotIn`; `assertIsNone`;
+`assertIsInstance`; `assertGreater`; `assertCountEqual`. **Still raising**:
+`assertEqual` on a scalar, `assertTrue`, `assertRegex`. That mixture is what
+makes the failure invisible - the suite keeps failing where you are looking and
+stops checking where you are not.
 
 That is not hypothetical. `ReversingOnlyWhatWasDeductedTest` shipped with a
 `fail(tx_hash)` helper, and six tuple assertions across that file were inert

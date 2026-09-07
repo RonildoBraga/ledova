@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import ast
 import importlib.util
+import inspect
 import unittest
 from decimal import Decimal
 from pathlib import Path
@@ -86,6 +87,51 @@ class TheDefectTheGateIsAbout(unittest.TestCase):
             Ordinary().assertEqual(
                 (Decimal("1"), Decimal("2")), (Decimal("3"), Decimal("4"))
             )
+
+
+class WhichAssertionsStopChecking(unittest.TestCase):
+
+    class Shadowed(unittest.TestCase):
+        def fail(self, msg=None):
+            return "swallowed"
+
+        def runTest(self):
+            pass
+
+    def setUp(self):
+        self.shadowed = self.Shadowed()
+
+    def silent(self, run):
+        run()
+
+    def test_the_assertions_that_go_through_fail_stop_checking(self):
+        self.silent(lambda: self.shadowed.assertEqual((1, 2), (3, 4)))
+        self.silent(lambda: self.shadowed.assertEqual([1], [2]))
+        self.silent(lambda: self.shadowed.assertEqual({"a": 1}, {"a": 2}))
+        self.silent(lambda: self.shadowed.assertEqual({1}, {2}))
+        self.silent(lambda: self.shadowed.assertEqual("a\nb", "a\nc"))
+        self.silent(lambda: self.shadowed.assertIn(1, [2]))
+        self.silent(lambda: self.shadowed.assertNotIn(2, [2]))
+        self.silent(lambda: self.shadowed.assertIsNone(1))
+        self.silent(lambda: self.shadowed.assertIsInstance(1, str))
+        self.silent(lambda: self.shadowed.assertGreater(1, 2))
+        self.silent(lambda: self.shadowed.assertCountEqual([1], [2]))
+
+    def test_the_assertions_that_raise_for_themselves_keep_checking(self):
+        for run in (
+            lambda: self.shadowed.assertEqual(1, 2),
+            lambda: self.shadowed.assertEqual(Decimal("1"), Decimal("2")),
+            lambda: self.shadowed.assertTrue(False),
+            lambda: self.shadowed.assertRegex("a", "b"),
+        ):
+            with self.assertRaises(AssertionError):
+                run()
+
+    def test_a_scalar_assertEqual_survives_because_it_raises_without_fail(self):
+        source = inspect.getsource(unittest.TestCase._baseAssertEqual)
+
+        self.assertIn("raise self.failureException", source)
+        self.assertNotIn("self.fail(", source)
 
 
 class TheReservedSetIsDerivedRatherThanListed(unittest.TestCase):
