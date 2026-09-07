@@ -27,7 +27,7 @@ class WalletReadContractTest(APITestCase):
         with CaptureQueriesContext(connection) as captured:
             response = self.client.get("/api/wallets/")
 
-        principal = [entry for entry in captured.captured_queries if "set_config" in entry["sql"]]
+        principal = [entry for entry in captured.captured_queries if "app.user_id" in entry["sql"]]
         self.assertEqual(len(captured), len(principal) + 2)
 
         self.assertEqual(response.status_code, 200)

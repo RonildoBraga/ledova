@@ -32,6 +32,8 @@ HELPERS = {
     PUBLIC_COMPANIES: f"SELECT uuid FROM companies_company WHERE {OPEN_TO_INVESTORS}",
 }
 
+IDENTICAL_TODAY = (VISIBLE_COMPANIES, MANAGEABLE_COMPANIES)
+
 LEAF_TABLES = ("companies_company", "users_userprofile", "customer_accounts_account_user_profiles")
 
 

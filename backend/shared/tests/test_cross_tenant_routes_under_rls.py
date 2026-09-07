@@ -24,6 +24,19 @@ def runs_on_the_operator_connection(path, method):
 @skipUnless(POSTGRES, REASON)
 class TheMatrixHoldsWhenTheDatabaseIsTheOnlyThingHoldingItTest(CrossTenantRouteMatrixTest):
 
+    def setUp(self):
+        super().setUp()
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT current_user")
+            assumed = cursor.fetchone()[0]
+
+        self.assertNotEqual(
+            assumed,
+            settings.RLS_ROLES["app"],
+            "a previous test left the connection as the app role, so everything after it ran scoped by "
+            "accident - the leak is the failure, not whatever fails next",
+        )
+
     @contextmanager
     def as_the_app_role(self):
         with connection.cursor() as cursor:

@@ -2,6 +2,7 @@ from unittest import skipUnless
 
 from django.conf import settings
 from django.db import connection, transaction
+from django.db.utils import Error, ProgrammingError
 from django.test import TestCase
 
 from companies.models import Company
@@ -92,13 +93,20 @@ class ThePolicyScopesWhatTheQuerysetScopedTest(TestCase):
     def test_a_write_for_another_tenant_is_refused_rather_than_hidden(self):
         self.as_the_app_role_for(self.one.user)
 
-        with self.assertRaises(Exception), transaction.atomic():
+        with self.assertRaises(ProgrammingError) as caught, transaction.atomic():
             Wallet.objects.create(user_account=self.two.account, address="0x" + "e" * 40, chain="base")
+
+        self.assertIn("row-level security policy", str(caught.exception))
 
     def test_a_query_with_no_principal_raises_rather_than_returning_nothing(self):
         with connection.cursor() as cursor:
             cursor.execute(f"SET ROLE {settings.RLS_ROLES['app']}")
         self.addCleanup(self.back_to_the_owner)
 
-        with self.assertRaises(Exception), transaction.atomic():
+        with self.assertRaises(Error) as caught, transaction.atomic():
             list(Company.objects.all())
+
+        self.assertRegex(
+            str(caught.exception),
+            r'unrecognized configuration parameter "app\.user_id"|invalid input syntax for type bigint',
+        )

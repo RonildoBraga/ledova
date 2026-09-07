@@ -834,6 +834,35 @@ runs. Both mechanisms hold at once on purpose:
   NULL owner and hides the row, which is the fail-closed behaviour a nullable
   owner column relies on; `NOT IN` and `<>` invert under NULL and make a legacy
   row visible to everyone. A test reads `pg_policies` and refuses a negation.
+- **Policies are written per command, never one `FOR ALL`.** `SELECT` carries
+  the read scope and `INSERT`, `UPDATE` and `DELETE` carry the write scope, as
+  separate statements. `companies_company` is read at two scopes on purpose —
+  `visible_to_user` for issuer surfaces and `all()` for the market — and one
+  `FOR ALL` policy under `FORCE` can only encode the stricter of the two.
+- **A table reached past a company carries the public-visibility term its own
+  querysets already use.** `app_visible_company_ids()` is the set a principal
+  *owns*, not the set they may *see*: the directory reads companies through
+  `open_to_investors()` and the market reads tokens through
+  `deployed_with_contract()`, neither of which was ever owner-scoped. An
+  owner-only policy empties the browse surface every investor starts on and
+  turns the subscribe path's `select_for_update().get()` into `DoesNotExist`.
+  Eligibility stays in code; **RLS decides visibility, not eligibility**.
+- **A visible row's parent is visible.** For every non-nullable foreign key
+  between policy tables, a row admitted by the child's `SELECT` policy must have
+  its parent admitted by the parent's, or `select_related` deletes the child:
+  the join is `INNER`, and Django strips an unused `select_related` join for
+  `count()`, so **the count disagrees with the page**. Measured on the market
+  before it was fixed — `count 1`, `rows 0`, same transaction. An invariant test
+  enumerates the foreign-key graph and asserts closure per principal, rather
+  than the rule being remembered per view.
+- **Rows the platform owns are readable by every principal.** A wallet named as
+  a company's `operator_wallet` is not a tenant's row; hiding it from someone
+  who may see the company is the same defect one column along, and the account
+  that holds such a wallet follows immediately, because a wallet's
+  `user_account` is not nullable. Writes on those rows stay on the operator
+  connection. The wrong fix is to narrow the company's public term to companies
+  whose operator wallet happens to be visible — that makes a company's public
+  visibility depend on a wallet's ownership, which nobody would find by reading.
 - **Every table is classified, and the classification is enumerated rather than
   described.** `shared/db/policies.py` is the catalogue: a policy, a stated
   reason for carrying none, or a named R0 column it is still waiting for. The
