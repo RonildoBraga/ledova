@@ -8,6 +8,7 @@ from django.test import SimpleTestCase, TestCase
 from authentication.services.tokens import TokenService
 from companies.models import Company
 from feature_flags.models import FeatureFlag
+from shared.tests.tenants import make_eligible, make_tenant
 from tokens.events import (
     TRADING_EVENT_TYPES,
     TRADING_EVENTS_CHANNEL,
@@ -16,6 +17,10 @@ from tokens.events import (
 from tokens.models import ShareToken
 from tokens.models.choices import ShareTokenStatus, ShareTokenType
 from tokens.views.trading_events import _event_stream, _format_public_trading_event
+from users.models.investor_classification import (
+    InvestorClassification,
+    InvestorClassificationStatus,
+)
 
 User = get_user_model()
 
@@ -198,12 +203,13 @@ class TradingEventsAuthorizationTest(TestCase):
             password="pw-12345678",
             is_active=True,
         )
-        self.investor = User.objects.create_user(
-            email="investor@sse.example.test",
-            password="pw-12345678",
-            is_active=True,
-        )
+        self.eligible = make_tenant("sse-eligible")
+        make_eligible(self.eligible)
+        self.investor = self.eligible.user
         self.investor_access, self.investor_refresh = TokenService.issue(self.investor)
+
+        self.ineligible = make_tenant("sse-ineligible")
+        self.ineligible_access = TokenService.issue(self.ineligible.user)[0]
         self.company = Company.objects.create(
             owner=self.issuer,
             name="SSE Market Pty Ltd",
@@ -212,6 +218,8 @@ class TradingEventsAuthorizationTest(TestCase):
             status="active",
         )
         self.deployed_token = self._make_token("LIVE", ShareTokenStatus.DEPLOYED)
+        self.addressless_token = self._make_token("NOADDR", ShareTokenStatus.DEPLOYED)
+        ShareToken.objects.filter(pk=self.addressless_token.pk).update(contract_address=None)
         self.draft_token = self._make_token("DRAFT", ShareTokenStatus.DRAFT)
         self.paused_token = self._make_token("PAUSE", ShareTokenStatus.PAUSED)
 
@@ -230,7 +238,7 @@ class TradingEventsAuthorizationTest(TestCase):
         self.client.cookies["access"] = access_token
 
     @patch("tokens.views.trading_events._event_stream", side_effect=lambda _token_uuid: _empty_stream())
-    def test_unrelated_investor_can_subscribe_to_deployed_market_token(self, event_stream):
+    def test_an_eligible_investor_unrelated_to_the_issuer_can_subscribe(self, event_stream):
         self._authenticate_cookie(self.investor_access)
 
         response = self.client.get(self.endpoint, {"token": str(self.deployed_token.uuid)})
@@ -261,6 +269,7 @@ class TradingEventsAuthorizationTest(TestCase):
             str(uuid4()),
             str(self.draft_token.uuid),
             str(self.paused_token.uuid),
+            str(self.addressless_token.uuid),
         )
 
         for target in targets:
@@ -273,14 +282,36 @@ class TradingEventsAuthorizationTest(TestCase):
         event_stream.assert_not_called()
 
     @patch("tokens.views.trading_events._event_stream", side_effect=lambda _token_uuid: _empty_stream())
-    def test_staff_receives_the_same_public_target_boundary(self, event_stream):
-        staff = User.objects.create_user(
-            email="staff@sse.example.test",
-            password="pw-12345678",
-            is_staff=True,
-            is_active=True,
+    def test_an_ineligible_investor_is_refused_exactly_as_a_phantom_token_is(self, event_stream):
+        self._authenticate_cookie(self.ineligible_access)
+
+        deployed = self.client.get(self.endpoint, {"token": str(self.deployed_token.uuid)})
+        phantom = self.client.get(self.endpoint, {"token": str(uuid4())})
+
+        self.assertEqual(deployed.status_code, 404)
+        self.assertEqual(deployed.content, b"Token not found")
+        self.assertEqual((deployed.status_code, deployed.content), (phantom.status_code, phantom.content))
+        event_stream.assert_not_called()
+
+    @patch("tokens.views.trading_events._event_stream", side_effect=lambda _token_uuid: _empty_stream())
+    def test_eligibility_is_lost_with_the_classification_that_carried_it(self, event_stream):
+        self._authenticate_cookie(self.investor_access)
+        self.assertEqual(self.client.get(self.endpoint, {"token": str(self.deployed_token.uuid)}).status_code, 200)
+
+        InvestorClassification.objects.filter(user_account=self.eligible.account).update(
+            status=InvestorClassificationStatus.REVOKED
         )
-        self._authenticate_cookie(TokenService.issue(staff)[0])
+
+        response = self.client.get(self.endpoint, {"token": str(self.deployed_token.uuid)})
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.content, b"Token not found")
+
+    @patch("tokens.views.trading_events._event_stream", side_effect=lambda _token_uuid: _empty_stream())
+    def test_staff_receives_the_same_public_target_boundary(self, event_stream):
+        staff = make_tenant("sse-staff", staff=True)
+        make_eligible(staff)
+        self._authenticate_cookie(TokenService.issue(staff.user)[0])
 
         deployed_response = self.client.get(self.endpoint, {"token": str(self.deployed_token.uuid)})
         draft_response = self.client.get(self.endpoint, {"token": str(self.draft_token.uuid)})
