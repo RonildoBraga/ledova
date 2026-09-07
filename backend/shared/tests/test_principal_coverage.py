@@ -27,6 +27,8 @@ NO_PRINCIPAL_NEEDED = {
 
 ROUTED_ONLY_IN_DEBUG = {"django.views.static.serve"}
 
+STAFF_ACTIONS_ON_THE_SCOPED_CONNECTION = {}
+
 
 def walk(patterns, prefix="", app=None):
     for entry in patterns:
@@ -92,3 +94,38 @@ class EveryRoutedViewSaysWhichConnectionItRunsOnTest(SimpleTestCase):
         ]
 
         self.assertGreater(len(classified), 30)
+
+
+class AStaffOnlyActionSaysWhichConnectionItRunsOnTest(SimpleTestCase):
+
+    def test_every_administrative_action_runs_on_the_operator_connection(self):
+        borrowing = []
+        for name, (target, _, _) in sorted(routed_views().items()):
+            administrative = frozenset(getattr(target, "administrative_actions", ()))
+            if not administrative:
+                continue
+            unrouted = administrative - frozenset(getattr(target, "operator_actions", ()))
+            if unrouted and name not in STAFF_ACTIONS_ON_THE_SCOPED_CONNECTION:
+                borrowing.append(f"{name}: {sorted(unrouted)}")
+
+        self.assertEqual(
+            borrowing,
+            [],
+            "A staff-only action reaches every tenant, and a staff member does not own the rows it reaches, "
+            "so the scoped connection hides them. Name the actions in operator_actions, or add the view to "
+            "STAFF_ACTIONS_ON_THE_SCOPED_CONNECTION with the reason its staff actions stay scoped.",
+        )
+
+    def test_the_check_would_notice_an_action_that_borrowed_the_scoped_connection(self):
+        found = [
+            name
+            for name, (target, _, _) in routed_views().items()
+            if frozenset(getattr(target, "administrative_actions", ()))
+        ]
+
+        self.assertNotEqual(found, [])
+
+    def test_every_exemption_states_a_reason_rather_than_a_label(self):
+        for name, reason in STAFF_ACTIONS_ON_THE_SCOPED_CONNECTION.items():
+            with self.subTest(view=name):
+                self.assertGreater(len(reason), 60, f"{name} needs a reason, not a label")

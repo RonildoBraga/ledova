@@ -103,8 +103,8 @@ class TheRequestNamesItsPrincipalExactlyOnceTest(APITestCase):
     def _named(captured):
         touching = [entry["sql"] for entry in captured.captured_queries if PRINCIPAL_SETTING in entry["sql"]]
         return (
-            [sql for sql in touching if "NULL" not in sql],
-            [sql for sql in touching if "NULL" in sql],
+            [sql for sql in touching if "set_config" in sql],
+            [sql for sql in touching if sql.strip().upper().startswith("RESET")],
         )
 
     def test_an_authenticated_request_sets_the_principal_once(self):

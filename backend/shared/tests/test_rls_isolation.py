@@ -9,6 +9,7 @@ from offerings.models import Subscription
 from portfolios.models import Portfolio
 from shared.db.principal import PRINCIPAL_SETTING
 from shared.tests.tenants import make_tenant
+from tokens.models import ShareToken
 from users.models import UserAccount, UserPreferences
 from wallets.models import Transaction, Wallet
 
@@ -39,23 +40,43 @@ class ThePolicyScopesWhatTheQuerysetScopedTest(TestCase):
         self.assertIn(self.one.company, Company.objects.all())
         self.assertIn(self.two.company, Company.objects.all())
 
-    def test_the_default_manager_returns_one_tenants_companies(self):
+    def _withdraw_from_the_market(self, tenant):
+        ShareToken.objects.filter(company=tenant.company).update(status="draft", contract_address=None)
+        Company.objects.filter(pk=tenant.company.pk).update(is_open_to_investors=False)
+
+    def test_a_company_that_has_published_nothing_is_invisible_to_another_principal(self):
+        self._withdraw_from_the_market(self.two)
         self.as_the_app_role_for(self.one.user)
 
         self.assertEqual(list(Company.objects.all()), [self.one.company])
 
     def test_the_same_query_under_the_other_principal_returns_the_other_tenant(self):
+        self._withdraw_from_the_market(self.one)
         self.as_the_app_role_for(self.two.user)
 
         self.assertEqual(list(Company.objects.all()), [self.two.company])
 
+    def test_a_company_with_a_token_on_the_market_is_visible_to_every_principal(self):
+        self.as_the_app_role_for(self.one.user)
+
+        self.assertIn(self.two.company, Company.objects.all())
+
     def test_an_account_member_table_is_scoped_without_its_queryset(self):
         self.as_the_app_role_for(self.one.user)
 
-        self.assertEqual({wallet.user_account_id for wallet in Wallet.objects.all()}, {self.one.account.uuid})
+        visible = {wallet.uuid for wallet in Wallet.objects.all()}
+        self.assertIn(self.one.wallet.uuid, visible)
+        self.assertNotIn(self.two.spare_wallet.uuid, visible)
+
         self.assertEqual({row.user_account_id for row in Transaction.objects.all()}, {self.one.account.uuid})
         self.assertEqual({row.user_account_id for row in Portfolio.objects.all()}, {self.one.account.uuid})
-        self.assertEqual(list(UserAccount.objects.all()), [self.one.account])
+        self.assertIn(self.one.account, UserAccount.objects.all())
+
+    def test_a_wallet_that_signs_for_a_company_is_visible_to_every_principal(self):
+        self.as_the_app_role_for(self.one.user)
+
+        self.assertIn(self.two.wallet.uuid, {wallet.uuid for wallet in Wallet.objects.all()})
+        self.assertIn(self.two.account, UserAccount.objects.all())
 
     def test_a_profile_owned_table_is_scoped_by_the_column_r0_added(self):
         self.as_the_app_role_for(self.one.user)

@@ -23,7 +23,7 @@ def reset_principal(alias: str | None = None) -> None:
     if connection is None or connection.connection is None:
         return
     with connection.cursor() as cursor:
-        cursor.execute("SELECT set_config(%s, NULL, false)", [PRINCIPAL_SETTING])
+        cursor.execute(f"RESET {PRINCIPAL_SETTING}")
 
 
 def principal_of(alias: str | None = None):

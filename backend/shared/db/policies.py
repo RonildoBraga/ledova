@@ -3,6 +3,22 @@ PRINCIPAL = "current_setting('app.user_id')::bigint"
 MEMBER_ACCOUNTS = "app_member_account_ids"
 VISIBLE_COMPANIES = "app_visible_company_ids"
 MANAGEABLE_COMPANIES = "app_manageable_company_ids"
+PUBLIC_COMPANIES = "app_public_company_ids"
+OPEN_TO_INVESTORS = "status = 'active' AND is_open_to_investors"
+ON_THE_MARKET = "status = 'deployed' AND length(contract_address) > 0"
+SIGNS_FOR_A_COMPANY = (
+    "EXISTS (SELECT 1 FROM companies_company operating WHERE operating.operator_wallet_id = wallets.uuid)"
+)
+HOLDS_A_SIGNING_WALLET = (
+    "EXISTS (SELECT 1 FROM wallets signing JOIN companies_company operating "
+    "ON operating.operator_wallet_id = signing.uuid "
+    "WHERE signing.user_account_id = customer_accounts_account.uuid)"
+)
+HAS_A_TOKEN_ON_THE_MARKET = (
+    "EXISTS (SELECT 1 FROM tokens_sharetoken listed "
+    "WHERE listed.company_id = companies_company.uuid "
+    "AND listed.status = 'deployed' AND length(listed.contract_address) > 0)"
+)
 
 HELPERS = {
     MEMBER_ACCOUNTS: f"""
@@ -13,6 +29,7 @@ HELPERS = {
     """,
     VISIBLE_COMPANIES: f"SELECT uuid FROM companies_company WHERE owner_id = {PRINCIPAL}",
     MANAGEABLE_COMPANIES: f"SELECT uuid FROM companies_company WHERE owner_id = {PRINCIPAL}",
+    PUBLIC_COMPANIES: f"SELECT uuid FROM companies_company WHERE {OPEN_TO_INVESTORS}",
 }
 
 LEAF_TABLES = ("companies_company", "users_userprofile", "customer_accounts_account_user_profiles")
@@ -26,6 +43,10 @@ def _company(column, helper):
     return f"{column} IN (SELECT {helper}())"
 
 
+def _company_or_public(column):
+    return f"{_company(column, VISIBLE_COMPANIES)} OR {_company(column, PUBLIC_COMPANIES)}"
+
+
 OWNERSHIP_BOUND = (
     "EXISTS (SELECT 1 FROM wallets held "
     "WHERE held.uuid = tokens_transferorder.wallet_id "
@@ -34,7 +55,10 @@ OWNERSHIP_BOUND = (
 )
 
 POLICIES = {
-    "companies_company": (f"owner_id = {PRINCIPAL}", f"owner_id = {PRINCIPAL}"),
+    "companies_company": (
+        f"owner_id = {PRINCIPAL} OR ({OPEN_TO_INVESTORS}) OR {HAS_A_TOKEN_ON_THE_MARKET}",
+        f"owner_id = {PRINCIPAL}",
+    ),
     "users_userprofile": (f"user_id = {PRINCIPAL}", f"user_id = {PRINCIPAL}"),
     "customer_accounts_account_user_profiles": (
         f"userprofile_id IN (SELECT uuid FROM users_userprofile WHERE user_id = {PRINCIPAL})",
@@ -46,8 +70,8 @@ POLICIES = {
     "users_financialprofile": (f"user_id = {PRINCIPAL}", f"user_id = {PRINCIPAL}"),
     "users_notification_preferences": (f"user_id = {PRINCIPAL}", f"user_id = {PRINCIPAL}"),
     "users_userpreferences": (f"user_id = {PRINCIPAL}", f"user_id = {PRINCIPAL}"),
-    "customer_accounts_account": (_member("uuid"), _member("uuid")),
-    "wallets": (_member("user_account_id"), _member("user_account_id")),
+    "customer_accounts_account": (f"{_member('uuid')} OR {HOLDS_A_SIGNING_WALLET}", _member("uuid")),
+    "wallets": (f"{_member('user_account_id')} OR {SIGNS_FOR_A_COMPANY}", _member("user_account_id")),
     "transactions": (_member("user_account_id"), _member("user_account_id")),
     "portfolios": (_member("user_account_id"), _member("user_account_id")),
     "favourite_assets": (_member("user_account_id"), _member("user_account_id")),
@@ -61,17 +85,42 @@ POLICIES = {
         _company("company_id", VISIBLE_COMPANIES),
         _company("company_id", MANAGEABLE_COMPANIES),
     ),
-    "tokens_sharetoken": (
-        _company("company_id", VISIBLE_COMPANIES),
-        _company("company_id", MANAGEABLE_COMPANIES),
-    ),
     "offerings_offering": (
-        _company("company_id", VISIBLE_COMPANIES),
+        _company_or_public("company_id"),
         _company("company_id", MANAGEABLE_COMPANIES),
     ),
 }
 
+PUBLIC_TERM = {
+    "customer_accounts_account": "R14, one link along from wallets: the account that holds a company's "
+    "operator wallet is the platform's account. R13 found it the moment the wallet became visible - the "
+    "wallet's user_account is not nullable, so select_related would have deleted the wallet row it had just "
+    "been allowed to see. The term reads wallets, which reads companies_company, which reads "
+    "tokens_sharetoken, which reads nothing back.",
+    "wallets": "R14: a wallet named as a company's operator_wallet is the platform's row, not a tenant's. A "
+    "viewer who may see the company must be able to see it, or the join reports a company with no operator "
+    "wallet - the same defect as a deleted row, one column along and quieter. The term reads "
+    "companies_company, which reads tokens_sharetoken, which reads nothing back, so there is no cycle now "
+    "and none after tokens/0024 makes that policy a leaf. Writes stay owner-only: nobody edits the "
+    "platform's wallet from the scoped connection.",
+    "companies_company": "Two reasons past ownership, and both were measured rather than argued. The "
+    "directory reads companies through open_to_investors() rather than visible_to_user, so an owner-only "
+    "policy empties the browse surface every investor starts on. And the secondary market joins the company "
+    "with select_related, which is an INNER JOIN, so a company this policy hides deletes the token row that "
+    "points at it - count() disagrees with the page, because Django strips the join for count(). The EXISTS "
+    "term reads tokens_sharetoken, which is safe in both directions: today that table carries no policy, and "
+    "after tokens/0024 its policy is a leaf on owner_id, so neither reads back into this one.",
+    "offerings_offering": "open_now() is deliberately not visible_to_user - the subscription serializer and "
+    "services/subscription.py re-read the offering under select_for_update, and an owner-only policy turns "
+    "that into DoesNotExist on the subscribe path rather than a refusal.",
+}
+
 AWAITING_R0 = {
+    "tokens_sharetoken": "Needs a direct owner_id (tokens/0024) before it can carry one. Its read policy has "
+    "to be a leaf, because companies_company's own market term is an EXISTS over this table: a policy here "
+    "that called app_visible_company_ids() would read companies_company, whose policy would read back, and "
+    "the pair would recurse. With owner_id the policy is owner_id = principal OR the market predicate, which "
+    "reads nothing else. Until then the table carries no policy and the market keeps working.",
     "tokens_capitalincreaserequest": (
         "Reaches its company through token -> company and has no company_id yet. The tokens R0 lane "
         "adds the column; until it lands there is nothing for a policy to compare."

@@ -14,10 +14,14 @@ def _install(apps, schema_editor):
         for table, (readable, writable) in POLICIES.items():
             cursor.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
             cursor.execute(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY")
-            cursor.execute(f"DROP POLICY IF EXISTS {table}_tenant ON {table}")
+            for suffix in ("read", "insert", "update", "delete"):
+                cursor.execute(f"DROP POLICY IF EXISTS {table}_{suffix} ON {table}")
+            cursor.execute(f"CREATE POLICY {table}_read ON {table} FOR SELECT USING ({readable})")
+            cursor.execute(f"CREATE POLICY {table}_insert ON {table} FOR INSERT WITH CHECK ({writable})")
             cursor.execute(
-                f"CREATE POLICY {table}_tenant ON {table} FOR ALL USING ({readable}) WITH CHECK ({writable})"
+                f"CREATE POLICY {table}_update ON {table} FOR UPDATE USING ({writable}) WITH CHECK ({writable})"
             )
+            cursor.execute(f"CREATE POLICY {table}_delete ON {table} FOR DELETE USING ({writable})")
 
 
 def _remove(apps, schema_editor):
@@ -26,7 +30,8 @@ def _remove(apps, schema_editor):
 
     with schema_editor.connection.cursor() as cursor:
         for table in POLICIES:
-            cursor.execute(f"DROP POLICY IF EXISTS {table}_tenant ON {table}")
+            for suffix in ("read", "insert", "update", "delete"):
+                cursor.execute(f"DROP POLICY IF EXISTS {table}_{suffix} ON {table}")
             cursor.execute(f"ALTER TABLE {table} NO FORCE ROW LEVEL SECURITY")
             cursor.execute(f"ALTER TABLE {table} DISABLE ROW LEVEL SECURITY")
 

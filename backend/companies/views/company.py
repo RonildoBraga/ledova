@@ -25,7 +25,8 @@ from tokens.services.company_stats import company_stats
 
 
 class CompanyViewSet(AuthenticatedModelViewSet):
-    administrative_actions = {"api_key", "status_update"}
+    administrative_actions = frozenset({"api_key", "status_update"})
+    operator_actions = administrative_actions
     manageable_actions = {
         "destroy",
         "partial_update",
