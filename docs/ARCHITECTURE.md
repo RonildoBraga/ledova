@@ -519,10 +519,11 @@ holds it, because its subject is one share class and its two callers are the two
 `GET /api/v1/tokens/{uuid}/holders/` keeps its path and its four original keys —
 `address`, `name`, `balance`, `percentage` — and gains `holderType`, `enteredOn`
 and `shareClass`. `GET /api/v1/tokens/{uuid}/register/export/` writes the
-s169-shaped CSV, ten columns: Name, Residential address, Wallet address, Holder
-type, Class, Shares held, Balance source, Date entered, Whitelist status,
-Amount paid. Both are scoped by `ShareToken.objects.visible_to_user` and pinned
-in the cross-tenant route matrix. The privacy boundary is deliberate: the
+s169-shaped CSV, twelve columns: Name, Residential address, Wallet address,
+Holder type, Class, Shares held, Percentage of issued supply, Balance source,
+Identity source, Date entered, Whitelist status, Amount paid. Both are scoped
+by `ShareToken.objects.visible_to_user` and pinned in the cross-tenant route
+matrix. The privacy boundary is deliberate: the
 dashboard shows name, holder type and holding, and the residential address
 appears in the CSV only. Each export writes one application log line naming the
 requesting user's primary key and the row count, and that is the whole of the

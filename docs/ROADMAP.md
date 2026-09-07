@@ -448,7 +448,7 @@ console are all shipped.
   ended, only of allotments that happened. Whether a derived register can
   satisfy 169(3) at all, or whether it forces the Phase 2 `Transfer` log
   indexer and a stored ceased-on date, is the question. Counsel question,
-  flagged.
+  stated for the brief in [COUNSEL.md](COUNSEL.md).
 - **The operator console is one page and costs nothing structural.** It replaces
   the dead redirect at `/admin/operators/operator/` — no `AdminSite` subclass,
   no URL namespace, no model. It carries a configuration health strip that
@@ -474,7 +474,7 @@ console are all shipped.
   to.** Naming the registrant is a fact about this deployment. Whether that
   party carries the section 168 obligation is a question for the issuer and its
   advisers, and the console says so in as many words. Counsel question,
-  flagged.
+  stated for the brief in [COUNSEL.md](COUNSEL.md).
 
 ## Phase 2 — Eligibility and the register
 
@@ -675,6 +675,13 @@ decision below). Mainnet deployment configuration is deliberately absent.
 
 ## Open questions
 
+- **Four questions are with counsel**, stated in [COUNSEL.md](COUNSEL.md):
+  section 169(3) retention of members who ceased in the last seven years
+  against a register derived from current balances; who carries the section 168
+  obligation to keep the register; the evidence-retention period behind
+  `CLASSIFICATION_EVIDENCE_RETENTION_DAYS`; and the excluded category the
+  operator relies on to run the platform without a licence. The answers are
+  recorded as owner decisions and this list points at them when they land.
 - Should modifying an order re-run matching automatically? Creating one
   matches; modifying one no longer reports a candidate match.
 - `NotificationPreferences` is a separate model that would fold into
