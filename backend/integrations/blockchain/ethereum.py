@@ -7,6 +7,8 @@ from django.utils.dateparse import parse_datetime
 from web3 import Web3
 from web3.exceptions import TimeExhausted, TransactionNotFound
 
+from integrations.base_chain.exceptions import GasEstimationError
+
 from .base import BlockchainClient
 
 logger = logging.getLogger(__name__)
@@ -54,8 +56,6 @@ class EthereumClient(BlockchainClient):
             "type": "function",
         },
     ]
-
-    ERC20_DEFAULT_GAS_LIMIT = 80000
 
     def __init__(self, rpc_url: str, expected_chain_id: int, *, asset_transfer_history_enabled: bool = False):
         self.rpc_url = rpc_url
@@ -241,8 +241,10 @@ class EthereumClient(BlockchainClient):
             return gas_with_buffer
 
         except Exception as e:
-            logger.warning(f"Gas estimation failed, using default: {str(e)}")
-            return self.ERC20_DEFAULT_GAS_LIMIT
+            logger.warning(f"ERC-20 gas estimation failed for {contract_address}: {str(e)}")
+            raise GasEstimationError(
+                "The node would not estimate gas for this transfer, so it is not being prepared."
+            ) from e
 
     def get_nonce(self, address: str) -> int:
         try:
