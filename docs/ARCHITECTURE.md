@@ -696,6 +696,13 @@ negative answer or failure. Signup completion still awaits its explicit auth
 refresh before navigating. `packages/shared/tests/hooks/useAuth.test.tsx` and
 the dashboard's `ProtectedRoute.test.tsx` cover these policies.
 
+Both clients use the shared `useUserPreferences` and `useCurrency` hooks.
+Preferences and exchange-rate queries start only after authentication; cached
+preferences are hidden again when authentication is lost. Mobile now applies
+the same authentication gate to exchange-rate requests as the dashboard.
+Currency display keeps the AUD fallback, USD identity conversion and an
+unavailable marker when a required rate cannot be read.
+
 ## Tenancy model
 
 There is one database and one operator per deployment. Isolation is enforced in
