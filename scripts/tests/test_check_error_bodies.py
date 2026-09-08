@@ -19,9 +19,9 @@ SUBCLASSES = {"TransferPreparationException", "BlockchainAPIError"}
 NOTE_METHODS = {"mark_failed", "mark_refused"}
 
 
-def findings(source: str, notes=frozenset()):
+def findings(source: str, notes=frozenset(), helpers=frozenset()):
     tree = ast.parse(source)
-    return gate.findings_in(tree, SUBCLASSES, set(notes), Path("service.py"))
+    return gate.findings_in(tree, SUBCLASSES, set(notes), set(helpers), Path("service.py"))
 
 
 class AnExceptionsTextReachingTheBody(unittest.TestCase):
@@ -216,3 +216,62 @@ class TheMethodSetIsDerivedFromTheSourceRatherThanListed(unittest.TestCase):
 
         self.assertIn("review_notes", exposed.get("CapitalIncreaseRequest", set()))
         self.assertNotIn("MintRequest", exposed)
+
+
+class AnExceptionHandedToAHelperThatBuildsOne(unittest.TestCase):
+
+    HELPERS = {"_refuse"}
+
+    def test_the_call_site_is_a_finding_even_though_the_callee_is_not_a_subclass(self):
+        found = findings(
+            "try:\n    x()\nexcept Exception as e:\n    raise self._refuse(kind, name, address, e) from e\n",
+            helpers=self.HELPERS,
+        )
+
+        self.assertEqual(len(found), 1)
+        self.assertIn(gate.SERVES_EXCEPTION_TEXT, found[0])
+
+    def test_a_plain_function_helper_counts_the_same_as_a_method(self):
+        found = findings(
+            "try:\n    x()\nexcept Exception as e:\n    raise _refuse(e)\n",
+            helpers=self.HELPERS,
+        )
+
+        self.assertEqual(len(found), 1)
+
+    def test_a_helper_called_with_nothing_caught_is_not_a_finding(self):
+        found = findings(
+            "try:\n    x()\nexcept Exception as e:\n    logger.error(e)\n    raise self._refuse(kind, name)\n",
+            helpers=self.HELPERS,
+        )
+
+        self.assertEqual(found, [])
+
+    def test_a_helper_reached_after_the_handler_through_a_name_that_outlived_it(self):
+        source = (
+            "def run():\n"
+            "    failure = None\n"
+            "    try:\n"
+            "        x()\n"
+            "    except Exception as e:\n"
+            "        failure = e\n"
+            "    if failure is not None:\n"
+            "        raise _refuse(failure)\n"
+        )
+
+        self.assertEqual(len(findings(source, helpers=self.HELPERS)), 1)
+
+
+class TheHelperSetIsDerivedFromTheSourceRatherThanListed(unittest.TestCase):
+
+    def setUp(self):
+        self.helpers = gate.helpers_that_build_an_exception(gate.api_exception_names())
+
+    def test_a_helper_that_interpolates_a_parameter_into_an_exception_is_in_the_set(self):
+        self.assertIn("_require_status", self.helpers)
+
+    def test_a_helper_that_logs_its_parameter_and_raises_a_fixed_message_is_not(self):
+        self.assertNotIn("_refuse", self.helpers)
+
+    def test_a_sanitiser_is_not_a_helper_that_builds_one(self):
+        self.assertNotIn("decode_exception_to_message", self.helpers)

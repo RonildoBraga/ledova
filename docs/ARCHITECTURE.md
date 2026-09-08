@@ -1877,11 +1877,39 @@ measured, because the first version of this rule did not. The scan taints names
 assigned from the caught exception and then reads the **enclosing function**, so a
 finding one statement later is still a finding.
 
-**What neither rule covers.** A field written outside a handler from a value that
-travelled there in some other way; a serializer that builds a string in a
-`SerializerMethodField` rather than exposing a model field; and any path where the
+**An exception handed to a helper that builds one.** #390 measured the third way
+past both rules, and it is the one that has already nearly cost something: a
+rebase on #339 restored `f"{label} failed: {error}"` inside
+`whitelist/services/whitelist.py:_refuse`, and the gate exited 0 while one test
+caught it. Neither end is visible — at the call site the callee is
+`self._refuse`, not a subclass; inside the helper there is no handler for the
+taint to start from.
+
+The set of such helpers is derived from the source too: functions that construct
+an `APIException` subclass from one of their **own parameters**. A call to one
+with a caught-derived argument is a finding. Restoring that line makes the gate
+name all three call sites:
+
+```
+backend/whitelist/services/whitelist.py:153 _refuse(e): serves-exception-text
+backend/whitelist/services/whitelist.py:159 _refuse(e): serves-exception-text
+backend/whitelist/services/whitelist.py:171 _refuse(e): serves-exception-text
+```
+
+The set is broad — forty-seven functions, most of them interpolating a symbol or
+a status rather than an exception — and that is deliberate: **the call site is
+where the precision is.** Passing a caught exception into anything that
+interpolates its parameters into an exception is the dangerous act, whatever the
+parameter was meant to be. `_refuse` as it stands is *not* in the set, because it
+logs its parameter and builds a fixed message; that is what a helper of this
+shape should look like.
+
+**What none of the three rules covers.** A field written outside a handler from a
+value that travelled there in some other way; a serializer that builds a string in
+a `SerializerMethodField` rather than exposing a model field; a helper two calls
+deep, since the taint follows one boundary and not a chain; and any path where the
 receiver's model cannot be read from the call site and is not in the allowlist. The
-first two are decidable and unbuilt; the third is why the allowlist exists rather
+first three are decidable and unbuilt; the last is why the allowlist exists rather
 than being an oversight.
 
 The subclass set is collected from the source, following `APIException` through

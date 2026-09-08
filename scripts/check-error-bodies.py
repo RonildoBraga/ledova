@@ -123,6 +123,46 @@ def api_exception_names() -> set[str]:
     return found
 
 
+def helpers_that_build_an_exception(subclasses: set[str]) -> set[str]:
+    """Functions that construct an APIException subclass from one of their own parameters.
+
+    A caught exception handed to one of these reaches a response body the same way
+    it would from the handler, and the gate sees neither end: at the call site the
+    callee is not a subclass, and inside the helper there is no handler for
+    `_derives_from` to be asked about. #390 measured that on
+    `whitelist/services/whitelist.py:_refuse`, where a rebase had restored the leak
+    and only a test noticed.
+    """
+    helpers: set[str] = set()
+    for path in sorted(BACKEND.rglob("*.py")):
+        parts = path.relative_to(BACKEND).parts
+        if "migrations" in parts or "tests" in parts:
+            continue
+        try:
+            tree = ast.parse(path.read_text())
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            parameters = {argument.arg for argument in node.args.args} - {"self", "cls"}
+            if not parameters:
+                continue
+            for call in ast.walk(node):
+                if not (isinstance(call, ast.Call) and isinstance(call.func, ast.Name)):
+                    continue
+                if call.func.id not in subclasses:
+                    continue
+                arguments = list(call.args) + [k.value for k in call.keywords]
+                if any(
+                    isinstance(inner, ast.Name) and inner.id in parameters
+                    for argument in arguments
+                    for inner in ast.walk(argument)
+                ) and not any(_sanitised(inner) for argument in arguments for inner in ast.walk(argument)):
+                    helpers.add(node.name)
+    return helpers
+
+
 def fields_each_model_exposes() -> dict[str, set[str]]:
     exposed: dict[str, set[str]] = {}
     for path in sorted(BACKEND.rglob("serializers/*.py")):
@@ -225,7 +265,15 @@ def _handlers_in(scope: ast.AST) -> list[ast.ExceptHandler]:
     return [node for node in ast.walk(scope) if isinstance(node, ast.ExceptHandler) and node.name]
 
 
-def _call_findings(scope: ast.AST, caught: str, tainted: set[str], subclasses, notes, relative) -> list[str]:
+def _called_name(func: ast.AST) -> str:
+    if isinstance(func, ast.Name):
+        return func.id
+    if isinstance(func, ast.Attribute):
+        return func.attr
+    return ""
+
+
+def _call_findings(scope, caught, tainted, subclasses, notes, helpers, relative) -> list[str]:
     findings: list[str] = []
     for statement in ast.walk(scope):
         if not isinstance(statement, ast.Call):
@@ -241,6 +289,10 @@ def _call_findings(scope: ast.AST, caught: str, tainted: set[str], subclasses, n
             findings.append(
                 f"{relative}:{statement.lineno} {statement.func.id}({caught}): {SERVES_EXCEPTION_TEXT}"
             )
+        elif _called_name(statement.func) in helpers:
+            findings.append(
+                f"{relative}:{statement.lineno} {_called_name(statement.func)}({caught}): {SERVES_EXCEPTION_TEXT}"
+            )
         elif isinstance(statement.func, ast.Attribute) and statement.func.attr in notes:
             receiver = f"{ast.unparse(statement.func.value)}.{statement.func.attr}"
             if receiver not in ALLOWED_NOTE_RECEIVERS:
@@ -250,7 +302,7 @@ def _call_findings(scope: ast.AST, caught: str, tainted: set[str], subclasses, n
     return findings
 
 
-def findings_in(tree: ast.AST, subclasses: set[str], notes: set[str], relative: Path) -> list[str]:
+def findings_in(tree, subclasses, notes, helpers, relative) -> list[str]:
     findings: list[str] = []
     seen: set[str] = set()
 
@@ -263,12 +315,12 @@ def findings_in(tree: ast.AST, subclasses: set[str], notes: set[str], relative: 
             # it are the ones that outlive it, because Python unbinds `as name` on exit.
             # A finding outside the handler is the same defect one statement later, and
             # #366's capital-increase site was exactly that shape.
-            for finding in _call_findings(handler, caught, tainted, subclasses, notes, relative):
+            for finding in _call_findings(handler, caught, tainted, subclasses, notes, helpers, relative):
                 if finding not in seen:
                     seen.add(finding)
                     findings.append(finding)
             if tainted and scope is not tree:
-                for finding in _call_findings(scope, caught, tainted, subclasses, notes, relative):
+                for finding in _call_findings(scope, caught, tainted, subclasses, notes, helpers, relative):
                     if finding not in seen:
                         seen.add(finding)
                         findings.append(finding)
@@ -278,6 +330,7 @@ def findings_in(tree: ast.AST, subclasses: set[str], notes: set[str], relative: 
 def scan() -> tuple[list[str], int]:
     subclasses = api_exception_names()
     notes = note_methods_a_client_reads()
+    helpers = helpers_that_build_an_exception(subclasses)
     findings: list[str] = []
     checked = 0
 
@@ -290,7 +343,7 @@ def scan() -> tuple[list[str], int]:
             tree = ast.parse(path.read_text())
         except SyntaxError:
             continue
-        findings += findings_in(tree, subclasses, notes, path.relative_to(ROOT))
+        findings += findings_in(tree, subclasses, notes, helpers, path.relative_to(ROOT))
 
     return findings, checked
 
