@@ -41,6 +41,13 @@ export { formatSourceOfFunds, formatIntendedUse } from './formatting-labels';
 export { validateUserProfileField } from './user-validation';
 export { getUserVerificationStatus, type VerificationStatusType } from './user-verification';
 export { getNextPageParam } from './pagination';
-export { createUserFriendlyError, getErrorMessage, hasServiceErrorDetail, describeFailure } from './errors';
+export {
+  createUserFriendlyError,
+  getErrorMessage,
+  hasServiceErrorDetail,
+  describeFailure,
+  readSignInError,
+} from './errors';
+export type { SignInErrorReading } from './errors';
 export { calculateHoldingsSummary, calculateAssetAllocation } from './holdings';
 export { calculateWalletTotals, filterWalletsByChain } from './wallet';

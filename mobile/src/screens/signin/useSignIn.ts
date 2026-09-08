@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { signin, FormErrors, SigninRequest } from '@ledova/shared';
+import { readSignInError, signin, FormErrors, SigninRequest } from '@ledova/shared';
 import { apiClient, rotateRefreshToken, UserFriendlyError } from '../../services/apiClient';
 import { storeTokens } from '../../services/tokenStorage';
 import { notificationsService } from '../../services/notificationsService';
@@ -75,51 +75,12 @@ export const useSignIn = () => {
         return false;
       }
 
-      const hasResponse = (error: unknown): error is { response: { data: unknown } } => {
-        return (
-          typeof error === 'object' &&
-          error !== null &&
-          'response' in error &&
-          typeof error.response === 'object' &&
-          error.response !== null &&
-          'data' in error.response
-        );
-      };
-
-      if (hasResponse(err)) {
-        const responseData = err.response.data;
-
-        if (Array.isArray(responseData)) {
-          setGeneralError(responseData.join(' '));
-          return false;
-        }
-
-        if (typeof responseData === 'string') {
-          setGeneralError(responseData);
-          return false;
-        }
-
-        if (responseData && typeof responseData === 'object' && 'error' in responseData) {
-          const errorObj = responseData as { error: string };
-          setGeneralError(errorObj.error);
-          return false;
-        }
-
-        if (typeof responseData === 'object' && responseData !== null) {
-          const hasFieldErrors = Object.keys(responseData).some((key) =>
-            Array.isArray((responseData as Record<string, unknown>)[key]),
-          );
-
-          if (hasFieldErrors) {
-            setErrors(responseData as FormErrors);
-          } else {
-            setGeneralError('Invalid email or password. Please check your credentials and try again.');
-          }
-          return false;
-        }
+      const reading = readSignInError(err);
+      if (reading.fieldErrors) {
+        setErrors(reading.fieldErrors as FormErrors);
+        return false;
       }
-
-      setGeneralError('Unable to sign in at the moment. Please try again later.');
+      setGeneralError(reading.generalError ?? null);
       return false;
     }
   };
