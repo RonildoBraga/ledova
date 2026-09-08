@@ -111,17 +111,13 @@ class ShareTokenCreateSerializer(serializers.ModelSerializer):
             "is_transferable",
             "is_divisible",
         ]
+        extra_kwargs = {"decimals": {"error_messages": {"max_value": SHARES_ARE_WHOLE}}}
 
     def get_fields(self):
         fields = super().get_fields()
         request = self.context.get("request")
         fields["company"].queryset = Company.objects.manageable_by_user(getattr(request, "user", None))
         return fields
-
-    def validate_decimals(self, value):
-        if value != 0:
-            raise serializers.ValidationError(SHARES_ARE_WHOLE)
-        return value
 
     def validate_symbol(self, value):
         if not value.isalpha():

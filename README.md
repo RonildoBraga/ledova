@@ -46,9 +46,12 @@ Investors don't need to be crypto-native. They can invest using AUD/fiat or supp
 | Company | Registers, is approved, deploys a share token, issues shares up to its authorized cap |
 | Investor | Verifies identity, is whitelisted, holds shares in a verified EVM wallet |
 
-Shares are minted on allotment. The authorized share count is the cap; total
-supply is what has actually been issued. Only whitelisted addresses can receive
-a share token, enforced by the contract on every transfer.
+Shares are minted on allotment as whole units; fractional shares are not
+supported. The authorized share count is the cap; the contract's total supply
+is what has actually been issued. The API retains `totalSupply` as a historical
+name for the authorized cap and reports issued shares as `issuedSupply`.
+Only whitelisted addresses can receive a share token, enforced by the contract
+on every transfer.
 
 ## Two deployment modes
 

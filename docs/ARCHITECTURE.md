@@ -203,7 +203,12 @@ them after `make build` and fails on any drift.
 ## Data flow of an issuance
 
 1. An operator or issuer creates a `ShareToken` in `DRAFT` with a name, symbol
-   and `total_supply` (the authorized cap).
+   and `total_supply` (the authorized cap). The historical API key `totalSupply`
+   represents this same cap; `issuedSupply` and the contract's `totalSupply()`
+   represent shares actually issued. Shares use whole units: model validation
+   and the `share_token_whole_units` database constraint require
+   `ShareToken.decimals` to be zero, matching the contract. Settlement assets
+   retain their own decimal precision.
 2. `POST /api/v1/tokens/{uuid}/deploy/` calls
    `ShareTokenService.start_deployment`. It refuses unless the token is `DRAFT`,
    the company is `ACTIVE` and the company has a primary wallet, then moves the

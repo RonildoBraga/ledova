@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from django.conf import settings
+from django.core.validators import MaxValueValidator
 from django.db import models
 from django.utils import timezone
 
@@ -42,7 +43,7 @@ class ShareToken(DerivesOwnerFromCompany, BaseModel):
     )
 
     total_supply = models.CharField(max_length=78)
-    decimals = models.PositiveSmallIntegerField(default=0)
+    decimals = models.PositiveSmallIntegerField(default=0, validators=[MaxValueValidator(0)])
     is_transferable = models.BooleanField(default=True)
     is_divisible = models.BooleanField(default=False)
 
@@ -80,6 +81,7 @@ class ShareToken(DerivesOwnerFromCompany, BaseModel):
         verbose_name_plural = "Share Tokens"
         ordering = ["-created_at"]
         constraints = [
+            models.CheckConstraint(condition=models.Q(decimals=0), name="share_token_whole_units"),
             models.UniqueConstraint(
                 fields=["company", "symbol"],
                 name="unique_company_symbol",
