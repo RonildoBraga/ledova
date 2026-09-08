@@ -8,8 +8,14 @@ from web3 import Web3
 from blockchain.models import BlockchainTransaction
 from shared.tests.tenants import make_tenant
 from tokens.admin.capital_increase import CapitalIncreaseAdmin
+from tokens.admin.share_issuance_request import ShareIssuanceRequestAdmin
 from tokens.exceptions import TokenDeploymentFailedException
-from tokens.models import CapitalIncreaseRequest, RequestStatus, ShareIssuance
+from tokens.models import (
+    CapitalIncreaseRequest,
+    RequestStatus,
+    ShareIssuance,
+    ShareIssuanceRequest,
+)
 from tokens.serializers import CapitalIncreaseDetailSerializer
 from tokens.serializers.share_issuance_request import ShareIssuanceRequestSerializer
 from tokens.services import ShareTokenService
@@ -137,6 +143,32 @@ class WhatTheIssuerReadsAfterAFailedExecutionTest(TestCase):
         shown = CapitalIncreaseAdmin(CapitalIncreaseRequest, admin.site).last_execution_error(request)
 
         self.assertEqual(shown, "-")
+
+    def issuance_admin(self):
+        return ShareIssuanceRequestAdmin(ShareIssuanceRequest, admin.site)
+
+    def test_the_admin_puts_the_issuance_diagnostic_in_front_of_the_operator_too(self):
+        request = self.a_failed_issuance()
+
+        shown = self.issuance_admin().last_execution_error(request)
+
+        self.assertIn(KEY, shown)
+
+    def test_an_issuance_request_that_never_failed_shows_no_error_row(self):
+        request = self._approved(issuance_request(self.token))
+
+        shown = self.issuance_admin().last_execution_error(request)
+
+        self.assertEqual(shown, "-")
+
+    def test_the_issuance_request_carries_no_blockchain_transaction_of_its_own(self):
+        request = self.a_failed_issuance()
+
+        self.assertFalse(
+            BlockchainTransaction.objects.filter(
+                related_model=ShareIssuanceRequest._meta.label, related_uuid=request.uuid
+            ).exists()
+        )
 
     def test_one_capital_increase_failure_is_logged_once(self):
         with self.assertLogs("tokens.services.share_token_service", level="ERROR") as logged:

@@ -79,16 +79,19 @@ class ReviewWorkflowAdmin(admin.ModelAdmin):
     def detail_rows(self, obj) -> list[tuple[str, str]]:
         return []
 
-    @admin.display(description="Last execution error")
-    def last_execution_error(self, obj) -> str:
-        recorded = (
+    def recorded_execution_error(self, obj) -> str:
+        return (
             BlockchainTransaction.objects.filter(related_model=type(obj)._meta.label, related_uuid=obj.uuid)
             .exclude(error_message="")
             .order_by("-created_at")
             .values_list("error_message", flat=True)
             .first()
+            or ""
         )
-        return recorded or "-"
+
+    @admin.display(description="Last execution error")
+    def last_execution_error(self, obj) -> str:
+        return self.recorded_execution_error(obj) or "-"
 
     def execution_steps(self, obj) -> list[str]:
         return []

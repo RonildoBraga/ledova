@@ -1,6 +1,7 @@
 from django.contrib import admin
 
-from tokens.models import RequestStatus, ShareIssuanceRequest
+from tokens.models import RequestStatus, ShareIssuance, ShareIssuanceRequest
+from tokens.services import ShareTokenService
 
 from ._helpers import short_hex
 from .review_workflow import ReviewWorkflowAdmin
@@ -10,6 +11,17 @@ from .review_workflow import ReviewWorkflowAdmin
 class ShareIssuanceRequestAdmin(ReviewWorkflowAdmin):
     label = "Issuance"
     deletable_status = RequestStatus.SUBMITTED
+
+    def recorded_execution_error(self, obj) -> str:
+        return (
+            ShareIssuance.objects.filter(idempotency_key=ShareTokenService.issuance_key(obj))
+            .exclude(error_message="")
+            .order_by("-created_at")
+            .values_list("error_message", flat=True)
+            .first()
+            or ""
+        )
+
     list_display = [
         "token_symbol",
         "recipient_display",
