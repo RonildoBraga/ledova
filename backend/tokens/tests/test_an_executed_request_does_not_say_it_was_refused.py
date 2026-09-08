@@ -11,8 +11,8 @@ from shared.tests.tenants import make_tenant
 from tokens.models import CapitalIncreaseRequest, RequestStatus, ShareIssuanceRequest
 
 _MIGRATION = import_module("tokens.migrations.0029_execution_notes")
-MOVE = _MIGRATION.move_what_the_system_wrote
-REVERSE = _MIGRATION.put_it_back_where_it_was
+ANNOTATE = _MIGRATION.retain_legacy_history
+REVERSE = _MIGRATION.remove_legacy_context
 
 REVIEWER_WROTE = "Checked the shareholder agreement; the allocation matches clause 4."
 NOT_WHITELISTED = "Recipient wallet is not whitelisted. Whitelist it before executing."
@@ -130,7 +130,7 @@ class AnExecutedRequestDoesNotSayItWasRefusedTest(TestCase):
         self.assertIn(NOT_WHITELISTED, self.request.execution_notes)
 
 
-class TheMigrationMovesOnlyWhatTheSystemWroteTest(TestCase):
+class TheMigrationPreservesUnattributedNotesTest(TestCase):
 
     def setUp(self):
         self.tenant = make_tenant("issuer")
@@ -147,54 +147,68 @@ class TheMigrationMovesOnlyWhatTheSystemWroteTest(TestCase):
         )
 
     @staticmethod
-    def run_the_move():
-        return MOVE(apps, SimpleNamespace(connection=SimpleNamespace(alias="default")))
+    def run_the_annotation():
+        return ANNOTATE(apps, SimpleNamespace(connection=SimpleNamespace(alias="default")))
 
     @staticmethod
     def run_the_reverse():
         return REVERSE(apps, SimpleNamespace(connection=SimpleNamespace(alias="default")))
 
-    def test_a_machine_refusal_moves_to_the_field_that_means_it(self):
+    def test_an_old_refusal_is_preserved_with_context_that_identifies_it_as_history(self):
         request = self.a_request(f"Execution refused: {NOT_WHITELISTED}")
 
-        self.run_the_move()
+        self.run_the_annotation()
 
         request.refresh_from_db()
-        self.assertEqual(request.review_notes, "")
-        self.assertEqual(request.execution_notes, f"Execution refused: {NOT_WHITELISTED}")
+        self.assertEqual(request.review_notes, f"Execution refused: {NOT_WHITELISTED}")
+        self.assertEqual(request.execution_notes, _MIGRATION.LEGACY_CONTEXT)
 
-    def test_a_machine_failure_moves_too(self):
+    def test_an_old_failure_is_preserved_without_guessing_who_wrote_it(self):
         request = self.a_request("Execution failed: the node timed out")
 
-        self.run_the_move()
+        self.run_the_annotation()
 
         request.refresh_from_db()
-        self.assertEqual(request.review_notes, "")
-        self.assertIn("the node timed out", request.execution_notes)
+        self.assertEqual(request.review_notes, "Execution failed: the node timed out")
+        self.assertEqual(request.execution_notes, _MIGRATION.LEGACY_CONTEXT)
 
     def test_a_persons_note_is_left_exactly_where_it_is(self):
         request = self.a_request(REVIEWER_WROTE)
 
-        self.run_the_move()
+        self.run_the_annotation()
 
         request.refresh_from_db()
         self.assertEqual(request.review_notes, REVIEWER_WROTE)
-        self.assertEqual(request.execution_notes, "")
+        self.assertEqual(request.execution_notes, _MIGRATION.LEGACY_CONTEXT)
+
+    def test_a_reviewers_approval_can_begin_with_either_execution_prefix(self):
+        for prefix in ("Execution refused: ", "Execution failed: "):
+            with self.subTest(prefix=prefix):
+                notes = f"{prefix}during the earlier proposal; this allocation is now approved."
+                request = self.a_request("")
+                request.status = RequestStatus.SUBMITTED
+                request.save(update_fields=["status"])
+                request.approve(self.tenant.user, notes=notes)
+
+                self.run_the_annotation()
+
+                request.refresh_from_db()
+                self.assertEqual(request.review_notes, notes)
 
     def test_a_note_that_merely_mentions_a_refusal_is_a_persons_note(self):
         mentions = "The issuer says the earlier Execution refused: message was addressed."
         request = self.a_request(mentions)
 
-        self.run_the_move()
+        self.run_the_annotation()
 
         request.refresh_from_db()
         self.assertEqual(request.review_notes, mentions)
-        self.assertEqual(request.execution_notes, "")
+        self.assertEqual(request.execution_notes, _MIGRATION.LEGACY_CONTEXT)
 
     def test_the_reverse_puts_the_row_back_as_it_found_it(self):
         original = f"Execution refused: {NOT_WHITELISTED}"
         request = self.a_request(original)
-        self.run_the_move()
+        self.run_the_annotation()
 
         self.run_the_reverse()
 
@@ -213,6 +227,29 @@ class TheMigrationMovesOnlyWhatTheSystemWroteTest(TestCase):
         request.refresh_from_db()
         self.assertEqual(request.execution_notes, written_by_the_new_code)
         self.assertEqual(request.review_notes, "")
+
+    def test_running_the_annotation_or_reverse_again_keeps_new_execution_history(self):
+        request = self.a_request(REVIEWER_WROTE)
+        self.run_the_annotation()
+        request.refresh_from_db()
+        request.mark_executed()
+        history = request.execution_notes
+
+        self.run_the_annotation()
+        self.run_the_reverse()
+
+        request.refresh_from_db()
+        self.assertEqual(request.review_notes, REVIEWER_WROTE)
+        self.assertEqual(request.execution_notes, history)
+
+    def test_an_empty_review_note_does_not_acquire_invented_history(self):
+        request = self.a_request("")
+
+        self.run_the_annotation()
+
+        request.refresh_from_db()
+        self.assertEqual(request.review_notes, "")
+        self.assertEqual(request.execution_notes, "")
 
 
 _migration_modules = getattr(settings, "MIGRATION_MODULES", {})
@@ -258,9 +295,8 @@ class ExecutionNotesMigrationRoundTripTest(TransactionTestCase):
         migrated = migrate_to(after)
         for name, pk, notes in cases:
             request = migrated.get_model("tokens", name).objects.get(pk=pk)
-            machine = notes.startswith(_MIGRATION.MACHINE_PREFIXES)
-            self.assertEqual(request.review_notes, "" if machine else notes)
-            self.assertEqual(request.execution_notes, notes if machine else "")
+            self.assertEqual(request.review_notes, notes)
+            self.assertEqual(request.execution_notes, _MIGRATION.LEGACY_CONTEXT)
 
         reversed_apps = migrate_to(before)
         for name, pk, notes in cases:

@@ -45,7 +45,9 @@ class ReviewableRequest(BaseModel):
         help_text="Staff member who reviewed the request",
     )
     reviewed_at = models.DateTimeField(blank=True, null=True, help_text="When the request was reviewed")
-    review_notes = models.TextField(blank=True, help_text="Notes from the reviewer")
+    review_notes = models.TextField(
+        blank=True, help_text="Reviewer notes; older entries may also contain historical execution messages"
+    )
     execution_notes = models.TextField(
         blank=True,
         help_text="What each execution attempt did, in order. Written by the system; review_notes is the person's",

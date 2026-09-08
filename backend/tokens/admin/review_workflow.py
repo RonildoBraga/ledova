@@ -94,11 +94,11 @@ class ReviewWorkflowAdmin(admin.ModelAdmin):
             (
                 "Review",
                 {
-                    "fields": ["reviewed_by", "reviewed_at", "review_notes", "rejection_reason", "execution_notes"],
+                    "fields": ["reviewed_by", "reviewed_at", "review_notes", "rejection_reason"],
                     "classes": ["collapse"],
                 },
             ),
-            ("Execution", {"fields": ["executed_issuance", "executed_at"], "classes": ["collapse"]}),
+            ("Execution", {"fields": ["executed_issuance", "executed_at", "execution_notes"], "classes": ["collapse"]}),
             ("Timestamps", {"fields": ["created_at", "updated_at"], "classes": ["collapse"]}),
         ]
 

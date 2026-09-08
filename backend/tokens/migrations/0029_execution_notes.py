@@ -1,34 +1,28 @@
 from django.db import migrations, models
 
 NOTES = "What each execution attempt did, in order. Written by the system; review_notes is the person's"
-MACHINE_PREFIXES = ("Execution refused: ", "Execution failed: ")
+LEGACY_CONTEXT = (
+    "Legacy review notes are preserved verbatim and may include earlier execution messages. "
+    "They describe the past; the request status records the current outcome."
+)
+REVIEW_NOTES = "Reviewer notes; older entries may also contain historical execution messages"
 REQUESTS = ("ShareIssuanceRequest", "CapitalIncreaseRequest")
 
 
-def move_what_the_system_wrote(apps, schema_editor):
+def retain_legacy_history(apps, schema_editor):
     alias = schema_editor.connection.alias
     for name in REQUESTS:
         model = apps.get_model("tokens", name)
-        moved = []
-        for request in model._base_manager.using(alias).exclude(review_notes=""):
-            if request.review_notes.startswith(MACHINE_PREFIXES):
-                request.execution_notes = request.review_notes
-                request.review_notes = ""
-                moved.append(request)
-        model._base_manager.using(alias).bulk_update(moved, ["review_notes", "execution_notes"])
+        model._base_manager.using(alias).exclude(review_notes="").filter(execution_notes="").update(
+            execution_notes=LEGACY_CONTEXT
+        )
 
 
-def put_it_back_where_it_was(apps, schema_editor):
+def remove_legacy_context(apps, schema_editor):
     alias = schema_editor.connection.alias
     for name in REQUESTS:
         model = apps.get_model("tokens", name)
-        restored = []
-        for request in model._base_manager.using(alias).filter(review_notes="").exclude(execution_notes=""):
-            if request.execution_notes.startswith(MACHINE_PREFIXES):
-                request.review_notes = request.execution_notes
-                request.execution_notes = ""
-                restored.append(request)
-        model._base_manager.using(alias).bulk_update(restored, ["review_notes", "execution_notes"])
+        model._base_manager.using(alias).filter(execution_notes=LEGACY_CONTEXT).update(execution_notes="")
 
 
 class Migration(migrations.Migration):
@@ -48,5 +42,15 @@ class Migration(migrations.Migration):
             name="execution_notes",
             field=models.TextField(blank=True, help_text=NOTES),
         ),
-        migrations.RunPython(move_what_the_system_wrote, put_it_back_where_it_was),
+        migrations.AlterField(
+            model_name="capitalincreaserequest",
+            name="review_notes",
+            field=models.TextField(blank=True, help_text=REVIEW_NOTES),
+        ),
+        migrations.AlterField(
+            model_name="shareissuancerequest",
+            name="review_notes",
+            field=models.TextField(blank=True, help_text=REVIEW_NOTES),
+        ),
+        migrations.RunPython(retain_legacy_history, remove_legacy_context),
     ]

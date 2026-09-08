@@ -250,6 +250,18 @@ them after `make build` and fails on any drift.
 9. Pause and unpause read `paused()` first and reconcile the database when the
    chain is already in the target state.
 
+Review and execution notes have separate ownership. Reviewers write
+`review_notes`; execution attempts append timestamped entries to
+`execution_notes` in the database, so an older request object cannot overwrite
+an intervening attempt. Successful execution adds its outcome after earlier
+refusals. The operator view places this history in the Execution section.
+
+The execution-history migration preserves every existing review note verbatim.
+It cannot establish authorship from phrases such as "Execution failed", which
+a reviewer could also have typed. It adds fixed context identifying old notes
+as historical and the request status as the current outcome. It does not
+reconstruct overwritten reviewer notes or infer missing execution events.
+
 ## Data flow of an offering
 
 1. The owner sets `Company.is_open_to_investors` from the dashboard through
