@@ -9,6 +9,11 @@ class LlmExtractError(APIException):
     default_code = "llm_extract_unavailable"
 
 
+class LlmExtractTransientError(LlmExtractError):
+
+    default_code = "llm_extract_transient"
+
+
 class LlmExtractValidationError(APIException):
 
     status_code = status.HTTP_422_UNPROCESSABLE_ENTITY

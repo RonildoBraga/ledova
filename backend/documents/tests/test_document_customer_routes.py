@@ -105,6 +105,29 @@ class DocumentCustomerRouteTest(APITestCase):
         self.assertEqual(detail_response.status_code, 200)
         self.assertEqual(detail_response.json()["latestExtraction"]["uuid"], str(latest_extraction.uuid))
 
+    def test_no_customer_route_or_role_receives_the_internal_extraction_diagnostic(self):
+        diagnostic = "RuntimeError: /private/extraction/provider-key-synthetic; check LLM_BASE_URL"
+        for actor, document, _, latest in self.actor_cases:
+            self.client.force_authenticate(actor)
+            for status in ExtractionStatus.values:
+                with self.subTest(role=actor.email, status=status):
+                    latest.status = status
+                    latest.error = diagnostic
+                    latest.save(update_fields=["status", "error"])
+                    listing = self.client.get("/api/v1/documents/")
+                    detail = self.client.get(f"/api/v1/documents/{document.uuid}/")
+                    self.assertEqual(listing.status_code, 200)
+                    self.assertEqual(detail.status_code, 200)
+                    rows = self._response_rows(listing)
+                    for extraction in (rows[0]["latestExtraction"], detail.json()["latestExtraction"]):
+                        self.assertNotIn(diagnostic, str(extraction))
+                        if status == ExtractionStatus.FAILED:
+                            self.assertIn("contact support", extraction["error"])
+                        else:
+                            self.assertEqual(extraction["error"], "")
+                    latest.refresh_from_db()
+                    self.assertEqual(latest.error, diagnostic)
+
     def test_list_query_count_does_not_grow_with_documents(self):
         actor, _, _, _ = self.actor_cases[0]
         self.client.force_authenticate(actor)

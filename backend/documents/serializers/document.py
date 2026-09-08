@@ -1,11 +1,20 @@
 from django.urls import reverse
 from rest_framework import serializers
 
-from documents.models import Document, DocumentExtraction
+from documents.models import Document, DocumentExtraction, ExtractionStatus
 from shared.uploads import validate_upload
 
 
 class DocumentExtractionSerializer(serializers.ModelSerializer):
+    error = serializers.SerializerMethodField()
+
+    def get_error(self, obj: DocumentExtraction) -> str:
+        if obj.status == ExtractionStatus.FAILED:
+            return (
+                "We couldn't read this document. Try uploading it again, or contact support if the problem continues."
+            )
+        return ""
+
     class Meta:
         model = DocumentExtraction
         fields = [

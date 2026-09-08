@@ -2,12 +2,13 @@ from unittest.mock import MagicMock, patch
 
 from django.core.exceptions import ImproperlyConfigured
 from django.test import SimpleTestCase, override_settings
-from openai import OpenAIError
+from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAIError
 from pydantic import BaseModel
 
 from integrations.llm_extract.client import LlmExtractClient, _validate_local_base_url
 from integrations.llm_extract.exceptions import (
     LlmExtractError,
+    LlmExtractTransientError,
     LlmExtractValidationError,
 )
 
@@ -101,6 +102,38 @@ class LlmExtractClientBoundaryTests(SimpleTestCase):
 
         self.assertNotIn("private upstream detail", str(raised.exception.detail))
 
+    @override_settings(LLM_BASE_URL="http://localhost:11434/v1", LLM_MODEL="local-model")
+    @patch("integrations.llm_extract.client.OpenAI")
+    def test_only_connection_timeout_rate_limit_and_server_failures_are_retryable(self, openai_class):
+        errors = [APIConnectionError(request=MagicMock()), APITimeoutError(request=MagicMock())]
+        errors.extend(
+            APIStatusError("private upstream detail", response=MagicMock(status_code=status), body=None)
+            for status in (408, 429, 500, 503)
+        )
+        for error in errors:
+            with self.subTest(error=type(error).__name__, status=getattr(error, "status_code", None)):
+                openai_class.return_value.chat.completions.create.side_effect = error
+                with self.assertRaises(LlmExtractTransientError) as raised:
+                    LlmExtractClient().extract(image_bytes=b"image", prompt="prompt", schema=ExampleExtraction)
+                self.assertNotIn("private upstream detail", str(raised.exception.detail))
+                self.assertIs(raised.exception.__cause__, error)
+
+    @override_settings(LLM_BASE_URL="http://localhost:11434/v1", LLM_MODEL="local-model")
+    @patch("integrations.llm_extract.client.OpenAI")
+    def test_permanent_and_unclassified_upstream_failures_are_not_retryable(self, openai_class):
+        errors = [OpenAIError("private upstream detail")]
+        errors.extend(
+            APIStatusError("private upstream detail", response=MagicMock(status_code=status), body=None)
+            for status in (400, 401, 403, 404, 409, 422)
+        )
+        for error in errors:
+            with self.subTest(error=type(error).__name__, status=getattr(error, "status_code", None)):
+                openai_class.return_value.chat.completions.create.side_effect = error
+                with self.assertRaises(LlmExtractError) as raised:
+                    LlmExtractClient().extract(image_bytes=b"image", prompt="prompt", schema=ExampleExtraction)
+                self.assertNotIsInstance(raised.exception, LlmExtractTransientError)
+                self.assertNotIn("private upstream detail", str(raised.exception.detail))
+
     @override_settings(LLM_BASE_URL="http://host.docker.internal:11434/v1", LLM_MODEL="local-model")
     @patch("integrations.llm_extract.client.OpenAI")
     def test_the_refusal_names_the_setting_without_serving_its_value(self, openai_class: MagicMock) -> None:
@@ -135,6 +168,8 @@ class LlmExtractClientBoundaryTests(SimpleTestCase):
         timeout = openai_class.call_args.kwargs["timeout"]
         self.assertEqual(timeout.connect, 5.0)
         self.assertEqual(timeout.read, 120.0)
+        self.assertEqual(openai_class.call_args.kwargs["max_retries"], 0)
+        openai_class.return_value.close.assert_called_once_with()
 
     @override_settings(LLM_BASE_URL="http://localhost:11434/v1", LLM_MODEL="local-model")
     @patch("integrations.llm_extract.client.logger")
