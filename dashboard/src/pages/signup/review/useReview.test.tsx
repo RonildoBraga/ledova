@@ -3,8 +3,9 @@
 import type { PropsWithChildren } from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { updateUserProfileCompletion } from '@ledova/shared';
+import { getCompanies, updateUserProfileCompletion } from '@ledova/shared';
 import { AUTH_QUERY_KEY } from '@hooks/useAuth';
+import { useAccountRole } from '@hooks/useAccountRole';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const navigate = vi.fn();
@@ -18,7 +19,7 @@ vi.mock('@ledova/shared', async (importOriginal) => ({
   useFinancialProfile: () => ({ financialProfile: { uuid: 'financial-1' }, isLoading: false }),
 }));
 
-vi.mock('@hooks/useAccountRole', () => ({ useAccountRole: () => ({ role: 'investor' }) }));
+vi.mock('@hooks/useAccountRole', () => ({ useAccountRole: vi.fn(() => ({ role: 'investor' })) }));
 
 import { useReview } from './useReview';
 
@@ -37,6 +38,12 @@ describe('the last click of signup', () => {
   beforeEach(() => {
     navigate.mockClear();
     vi.mocked(updateUserProfileCompletion).mockClear();
+    vi.mocked(useAccountRole).mockReturnValue({
+      role: 'investor',
+      isCompany: false,
+      isInvestor: true,
+      isLoading: false,
+    });
   });
 
   afterEach(() => {
@@ -79,7 +86,19 @@ describe('the last click of signup', () => {
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/home'));
   });
 
-  it('sends an investor to home', async () => {
+  it.each([
+    ['investor', '/home'],
+    ['company', '/company'],
+  ] as const)('sends a %s to %s', async (role, destination) => {
+    vi.mocked(useAccountRole).mockReturnValue({
+      role,
+      isCompany: role === 'company',
+      isInvestor: role === 'investor',
+      isLoading: false,
+    });
+    vi.mocked(getCompanies).mockResolvedValue({ data: { results: [{ uuid: 'company-1' }] } } as Awaited<
+      ReturnType<typeof getCompanies>
+    >);
     const { client, wrapper } = harness();
     vi.spyOn(client, 'refetchQueries').mockResolvedValue(undefined);
     const { result } = renderHook(() => useReview(), { wrapper });
@@ -87,6 +106,6 @@ describe('the last click of signup', () => {
 
     act(() => result.current.completeSignup());
 
-    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/home'));
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith(destination));
   });
 });
