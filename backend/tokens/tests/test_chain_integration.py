@@ -168,14 +168,14 @@ class ChainTestMixin:
             model_label=request._meta.label, request_uuid=str(request.uuid), executed_by=self.staff.pk
         )
 
-    def _increase(self, additional):
+    def _increase(self, additional, status=RequestStatus.APPROVED):
         return CapitalIncreaseRequest.objects.create(
             token=self.token,
             additional_shares=additional,
             new_authorized_total=CAP + additional,
             purpose="Growth",
             board_resolution_reference=f"BOARD-{additional}",
-            status=RequestStatus.APPROVED,
+            status=status,
         )
 
 
@@ -628,52 +628,67 @@ class ShareTokenChainConcurrencyTest(ChainTestMixin, APITransactionTestCase):
             self.assertLess(time.monotonic(), deadline, "timed out waiting on the chain")
             time.sleep(0.05)
 
-    def test_two_increases_executed_in_one_block_window_cannot_lower_the_cap(self):
+    def test_two_workers_on_one_increase_send_one_transaction(self):
         self._deployed()
-        big = self._increase(1000)
-        small = self._increase(50)
-        rpc = self.w3.provider.make_request
-
-        def restore_mining():
-            rpc("evm_setAutomine", [True])
-            rpc("evm_mine", [])
-
-        self.addCleanup(restore_mining)
-        rpc("evm_setAutomine", [False])
+        increase = self._increase(1000)
         nonce_before = self._signer_nonce()
         results = {}
 
-        def worker(name, request):
+        def worker(name):
             try:
-                results[name] = self._execute(request)
+                results[name] = self._execute(increase)
             except Exception as exc:
                 results[name] = exc
             finally:
                 connection.close()
 
-        first = threading.Thread(target=worker, args=("big", big))
-        second = threading.Thread(target=worker, args=("small", small))
+        first = threading.Thread(target=worker, args=("first",))
+        second = threading.Thread(target=worker, args=("second",))
         first.start()
-        self._wait_until(lambda: self._signer_nonce() == nonce_before + 1)
         second.start()
-        time.sleep(1)
-        self.assertEqual(self._signer_nonce(), nonce_before + 1)
-        self.assertEqual(results, {})
-        self.assertEqual(self._contract().functions.authorizedShares().call(), CAP)
-
-        rpc("evm_mine", [])
         first.join(timeout=60)
         second.join(timeout=60)
-        self.assertFalse(first.is_alive() or second.is_alive(), results)
 
-        self.assertIsInstance(results["big"], dict, results)
-        self.assertTrue(results["big"]["success"], results)
-        self.assertEqual(results["small"], {"success": False, "error": CAP_NOT_RAISED})
+        self.assertFalse(first.is_alive() or second.is_alive(), results)
+        succeeded = sorted(bool(value.get("success")) for value in results.values())
+        self.assertEqual(succeeded, [False, True], results)
+        refused = [value for value in results.values() if not value.get("success")][0]
+        self.assertIn("Cannot execute request with status", refused["error"])
         self.assertEqual(self._signer_nonce(), nonce_before + 1)
         self.assertEqual(self._contract().functions.authorizedShares().call(), CAP + 1000)
-        big.refresh_from_db()
+        increase.refresh_from_db()
+        self.token.refresh_from_db()
+        self.assertEqual((increase.status, self.token.total_supply), (RequestStatus.EXECUTED, str(CAP + 1000)))
+
+    def test_a_later_increase_that_would_not_raise_the_cap_is_refused(self):
+        self._deployed()
+        big = self._increase(1000)
+
+        self.assertTrue(self._execute(big)["success"])
+
+        small = self._increase(50)
+        result = self._execute(small)
+
+        self.assertEqual(result, {"success": False, "error": CAP_NOT_RAISED})
         small.refresh_from_db()
         self.token.refresh_from_db()
-        self.assertEqual((big.status, small.status), (RequestStatus.EXECUTED, RequestStatus.APPROVED))
+        self.assertEqual(small.status, RequestStatus.APPROVED)
         self.assertEqual(small.review_notes, f"Execution refused: {CAP_NOT_RAISED}")
+        self.assertEqual(self._contract().functions.authorizedShares().call(), CAP + 1000)
         self.assertEqual(self.token.total_supply, str(CAP + 1000))
+
+    def test_resuming_a_failed_increase_while_another_is_in_flight_is_refused_with_a_reason(self):
+        self._deployed()
+        stalled = self._increase(1000, status=RequestStatus.FAILED)
+        self._increase(50)
+        nonce_before = self._signer_nonce()
+
+        result = self._execute(stalled)
+
+        stalled.refresh_from_db()
+        self.assertFalse(result["success"], result)
+        self.assertIn("has another capital increase in flight", result["error"])
+        self.assertIn("has another capital increase in flight", stalled.review_notes)
+        self.assertEqual(stalled.status, RequestStatus.FAILED)
+        self.assertEqual(self._signer_nonce(), nonce_before)
+        self.assertEqual(self._contract().functions.authorizedShares().call(), CAP)
