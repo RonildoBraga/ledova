@@ -1,5 +1,5 @@
 /** @jest-environment jsdom */
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { focusManager, onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import axios from 'axios';
 import type { PropsWithChildren } from 'react';
@@ -86,5 +86,36 @@ describe('shared authentication follows the client refetch policy', () => {
 
     await waitFor(() => expect(result.current.every((auth) => auth.isAuthenticated)).toBe(true));
     expect(get).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a public form mounted when its nested auth consumer retries a failed check', async () => {
+    const { get, wrapper } = harness();
+    let rejectRetry!: (error: Error) => void;
+    get.mockRejectedValueOnce(new Error('No session')).mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectRetry = reject;
+        }),
+    );
+
+    function Form() {
+      useAuth();
+      return <form aria-label="Sign in" />;
+    }
+
+    function PublicRoute() {
+      const { isLoading } = useAuth();
+      return isLoading ? <span>Checking session</span> : <Form />;
+    }
+
+    render(<PublicRoute />, { wrapper });
+    expect(screen.queryByRole('form', { name: 'Sign in' })).toBeNull();
+    await waitFor(() => expect(get).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('form', { name: 'Sign in' })).toBeTruthy();
+
+    await act(async () => rejectRetry(new Error('Still no session')));
+
+    expect(screen.getByRole('form', { name: 'Sign in' })).toBeTruthy();
+    expect(get).toHaveBeenCalledTimes(2);
   });
 });

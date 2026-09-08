@@ -18,7 +18,7 @@ export function useAuth() {
 
   return {
     isAuthenticated: query.isSuccess && (query.data?.data?.valid ?? false),
-    isLoading: query.isLoading,
+    isLoading: query.isLoading && !query.isFetched,
     isFetching: query.isFetching,
     refetch: query.refetch,
   };

@@ -689,7 +689,10 @@ does not automatically retry a failed request, but a later mount may recheck a
 previous failure; the dashboard's former `retryOnMount: false` no longer keeps
 that failed answer in place.
 
-The hook exposes fetching separately from initial loading. The dashboard's
+The hook exposes fetching separately from the first session check. A retry after
+a completed failure does not restore initial loading: public forms keep their
+nested auth consumers mounted, so another failure cannot create a remount loop.
+The dashboard's
 protected route waits while a cached negative is being rechecked, keeps
 protected content hidden until a positive answer, and redirects after a
 negative answer or failure. Signup completion still awaits its explicit auth
