@@ -157,6 +157,7 @@ export interface ShareIssuanceRequest {
   reviewedByEmail?: string | null;
   reviewedAt?: string | null;
   reviewNotes?: string;
+  executionNotes?: string;
   rejectionReason?: string;
   executedIssuance?: string | null;
   executedAt?: string | null;
