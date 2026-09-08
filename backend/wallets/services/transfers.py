@@ -125,6 +125,8 @@ class TransferService:
         amount: Optional[str] = None,
         transaction_fee: Optional[str] = None,
         token_contract: Optional[str] = None,
+        *,
+        principal_id,
     ) -> Dict[str, Any]:
         chain = normalize_chain(wallet.chain)
 
@@ -162,7 +164,7 @@ class TransferService:
                 token_contract=token_contract,
             )
 
-        TransferService._schedule_confirmation_checks(tx_hash, str(wallet.uuid))
+        TransferService._schedule_confirmation_checks(tx_hash, str(wallet.uuid), principal_id)
 
         return {
             "success": True,
@@ -173,15 +175,15 @@ class TransferService:
         }
 
     @staticmethod
-    def _schedule_confirmation_checks(tx_hash: str, wallet_uuid: str) -> None:
+    def _schedule_confirmation_checks(tx_hash: str, wallet_uuid: str, principal_id) -> None:
         from wallets.tasks import confirm_pending_transaction
 
         confirm_pending_transaction.configure(schedule_in={"seconds": 30}).defer(
-            tx_hash=tx_hash, wallet_uuid=wallet_uuid
+            tx_hash=tx_hash, wallet_uuid=wallet_uuid, principal_id=principal_id
         )
 
         confirm_pending_transaction.configure(schedule_in={"seconds": 120}).defer(
-            tx_hash=tx_hash, wallet_uuid=wallet_uuid
+            tx_hash=tx_hash, wallet_uuid=wallet_uuid, principal_id=principal_id
         )
 
     @staticmethod

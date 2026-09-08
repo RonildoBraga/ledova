@@ -37,11 +37,32 @@ PRINCIPAL_BEARING = {
     "tokens.tasks.review_request.execute_review_request_task": "Executes one issuer's issuance request, on the "
     "money path, and records the issuance against it.",
     "wallets.tasks.confirmation.confirm_pending_transaction": "Confirms one wallet's transaction and moves the "
-    "balance it belongs to, on the money path.",
+    "balance it belongs to, on the money path. Converted: its principal is a required argument, the "
+    "request that broadcast the transfer passes its user, and the Alchemy webhook and the "
+    "check_all_pending_transactions sweep pass None because no user caused those runs. The principal is "
+    "captured at enqueue and used at run, and that gap grows with the delay: the second confirmation check "
+    "is scheduled 120 seconds out, and a principal who left the account in between resolves no wallet and "
+    'the task answers "Wallet not found" - fails closed and quiet, with the sweep finishing the row as '
+    "the operator. The design covers it; the sentence exists so the next conversion with a longer delay "
+    "knows the gap is proportional to it.",
     "wallets.tasks.sync.sync_wallet": "Reads and writes the holdings of exactly one wallet.",
     "documents.tasks.extract.extract_document": "Reads one uploader's document and writes an extraction " "against it.",
     "users.tasks.notifications.send_push_notification": "Sends to one user's device tokens.",
     "users.tasks.notifications.send_transaction_notification": "Sends to one user about one transaction.",
+}
+
+OPERATOR_READS = {
+    "users.services.accounts.account_members": "R15, and the first catalogue entry whose boundary is a "
+    "function rather than a table: what makes it safe is not the operator connection but the account it is "
+    "handed. transaction_confirmation.py:168 passes tx.wallet.user_account, from a wallet the task already "
+    "resolved under its own principal, so a caller cannot ask for an account it could not reach. A future "
+    "caller that took the account from a request body would break that without touching this function. "
+    "Deciding who to tell about an account's transaction is "
+    "an account-level question, and users_userprofile's policy answers a user-level one - scoped, the "
+    "notification reaches only the member who acted. Measured: as the owner two members, as the app role "
+    "one. The helper runs on the operator connection, takes the account as its only input, and filters to "
+    "that account's members itself, so BYPASSRLS cannot return anyone else. Widening the profile policy "
+    "instead would change what UserProfile.visible_to_user means everywhere to fix one service.",
 }
 
 READS_MUST_SURVIVE_THE_POLICIES = {

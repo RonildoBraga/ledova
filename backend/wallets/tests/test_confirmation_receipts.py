@@ -87,7 +87,9 @@ class BitcoinConfirmationTaskTest(TestCase):
         client.get_block_timestamp.return_value = 1700000000
 
         with patch("wallets.tasks.confirmation.get_blockchain_client", return_value=client):
-            result = confirm_pending_transaction(tx_hash="btc-hash", wallet_uuid=str(self.wallet.uuid))
+            result = confirm_pending_transaction(
+                tx_hash="btc-hash", wallet_uuid=str(self.wallet.uuid), principal_id=None
+            )
 
         self.assertEqual(result["status"], "confirmed")
         self.tx.refresh_from_db()
@@ -100,7 +102,9 @@ class BitcoinConfirmationTaskTest(TestCase):
         client.get_transaction_receipt.return_value = {"confirmed": False, "confirmations": 0}
 
         with patch("wallets.tasks.confirmation.get_blockchain_client", return_value=client):
-            result = confirm_pending_transaction(tx_hash="btc-hash", wallet_uuid=str(self.wallet.uuid))
+            result = confirm_pending_transaction(
+                tx_hash="btc-hash", wallet_uuid=str(self.wallet.uuid), principal_id=None
+            )
 
         self.assertEqual(result["status"], "failed")
         self.tx.refresh_from_db()

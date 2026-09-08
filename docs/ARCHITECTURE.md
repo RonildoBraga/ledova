@@ -997,6 +997,22 @@ cannot:
 - The **router and the principal** have unit tests of their own, since neither
   is exercised by the two above.
 
+**Stage R2 — the conversions, and the failure direction they inherit.** A task
+converted to run scoped takes its principal as a **required argument with no
+default**, because the principal belongs to the *enqueue* rather than to the
+task: a task with three enqueue sites has three answers, and one omissible
+argument would let a caller silently downgrade to the operator connection. A
+required one turns that into an error at author time — the first conversion
+found seven existing callers that way.
+
+The failure direction is worth stating because it is **invisible from the task's
+own code**. The worker process sets its ambient alias to the operator one, so a
+task that forgets to select a principal at all runs **unscoped**, not empty.
+That is the right direction for a sweep, which needs to see every tenant, and
+the wrong one for a task acting for a user, which would then read rows its
+principal may not. Nothing in the task says which it is; only the catalogue
+does.
+
 **Why R1 and R2 are separate releases.** With policies on and querysets still
 in, a green matrix says the policy is *sufficient*. With the querysets removed,
 a green matrix says they were not doing anything the policy misses. Both

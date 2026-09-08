@@ -8,6 +8,7 @@ from django.test import SimpleTestCase
 from ledova_backend.procrastinate_app import app
 from shared.tasks.catalogue import (
     CLASSIFIED,
+    OPERATOR_READS,
     PRINCIPAL_BEARING,
     READS_MUST_SURVIVE_THE_POLICIES,
     SYSTEM_WIDE,
@@ -73,3 +74,19 @@ class AConversionMustProveItsReadsSurviveTheSelectPoliciesTest(SimpleTestCase):
         for name, reason in READS_MUST_SURVIVE_THE_POLICIES.items():
             with self.subTest(task=name):
                 self.assertGreater(len(reason), 120, f"{name} needs the failure named, not the risk labelled")
+
+
+class EveryOperatorReadIsNamedAndReachableTest(SimpleTestCase):
+
+    def test_every_catalogued_operator_read_resolves_to_something_callable(self):
+        import importlib
+
+        for path in OPERATOR_READS:
+            with self.subTest(read=path):
+                module_path, _, attribute = path.rpartition(".")
+                self.assertTrue(callable(getattr(importlib.import_module(module_path), attribute)))
+
+    def test_every_operator_read_states_why_the_policies_cannot_answer_it(self):
+        for path, reason in OPERATOR_READS.items():
+            with self.subTest(read=path):
+                self.assertGreater(len(reason), 150, f"{path} needs the question named, not the escape labelled")
