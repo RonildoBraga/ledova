@@ -7,7 +7,7 @@ from django.test import TestCase
 from shared.tests.tenants import make_tenant
 from tokens.models import RequestStatus, ShareIssuanceRequest
 
-_MIGRATION = import_module("tokens.migrations.0028_execution_notes")
+_MIGRATION = import_module("tokens.migrations.0029_execution_notes")
 MOVE = _MIGRATION.move_what_the_system_wrote
 REVERSE = _MIGRATION.put_it_back_where_it_was
 
