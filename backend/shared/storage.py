@@ -46,7 +46,11 @@ def private_file_fields():
         for field in model._meta.get_fields():
             if not isinstance(field, models.FileField):
                 continue
-            if isinstance(getattr(field, "storage", None), PrivateMediaStorage):
+            if (
+                field.deconstruct()[3].get("storage") is private_storage
+                or field.storage is private_storage()
+                or isinstance(field.storage, PrivateMediaStorage)
+            ):
                 yield model, field.name
 
 
