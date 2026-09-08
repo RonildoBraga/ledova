@@ -1085,6 +1085,9 @@ this codebase, and `MEDIA_ROOT` holds nothing an authenticated route serves.
   `django.conf.urls.static` would serve to anyone while `DEBUG` is true. The
   three today are `companies.CompanyDocument.file`,
   `documents.Document.file` and `users.InvestorClassification.evidence_file`.
+  Lifecycle discovery follows this storage declaration and the private alias,
+  so S3 and GCS fields receive the same deletion hooks and reference protection
+  as local files. It must not depend on filesystem storage inheritance.
 - The upload path names nothing about the uploader. `company_document_path`,
   `document_upload_path` and `investor_evidence_path` all build
   `<owner uuid>/.../<random uuid><ext>`: a leaked key says which row it belongs
@@ -1119,6 +1122,10 @@ this codebase, and `MEDIA_ROOT` holds nothing an authenticated route serves.
   each model's storage prefix by calling `generate_filename` on an unsaved
   probe instance, so it checks every declared field rather than only the rows a
   test happened to create.
+  `backend/shared/tests/test_cloud_storage_lifecycle.py` exercises the S3 and
+  GCS adapters with synthetic objects: startup registration, live references,
+  committed and rolled-back deletion, rollback uploads, grace and retained
+  evidence. These checks require no filesystem path or live bucket.
 - **`users.InvestorClassification.evidence_file` is the one exception, and it
   is deliberate.** Classification evidence has a statutory retention horizon
   and outlives its subject on purpose; account deletion does not purge it
