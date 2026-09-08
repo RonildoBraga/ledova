@@ -65,6 +65,7 @@ class CapitalIncreaseDetailSerializer(serializers.ModelSerializer):
             "reviewed_by_email",
             "reviewed_at",
             "review_notes",
+            "execution_notes",
             "rejection_reason",
             "executed_issuance",
             "executed_at",

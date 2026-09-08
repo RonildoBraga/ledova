@@ -45,6 +45,10 @@ class ReviewableRequest(BaseModel):
     )
     reviewed_at = models.DateTimeField(blank=True, null=True, help_text="When the request was reviewed")
     review_notes = models.TextField(blank=True, help_text="Notes from the reviewer")
+    execution_notes = models.TextField(
+        blank=True,
+        help_text="What each execution attempt did, in order. Written by the system; review_notes is the person's",
+    )
     rejection_reason = models.TextField(blank=True, help_text="Reason for rejection (if rejected)")
 
     executed_issuance = models.OneToOneField(
@@ -114,17 +118,22 @@ class ReviewableRequest(BaseModel):
         self.status = RequestStatus.EXECUTING
         self.updated_at = now
 
+    def _record_attempt(self, line: str) -> None:
+        stamped = f"{timezone.now().isoformat(timespec='seconds')} {line}"
+        self.execution_notes = f"{self.execution_notes}\n{stamped}".strip() if self.execution_notes else stamped
+
     def mark_executed(self, issuance=None) -> None:
         self.status = RequestStatus.EXECUTED
         self.executed_issuance = issuance
         self.executed_at = timezone.now()
-        self.save(update_fields=["status", "executed_issuance", "executed_at", "updated_at"])
+        self._record_attempt("Executed")
+        self.save(update_fields=["status", "executed_issuance", "executed_at", "execution_notes", "updated_at"])
 
     def mark_refused(self, reason: str) -> None:
-        self.review_notes = f"Execution refused: {reason}"
-        self.save(update_fields=["review_notes", "updated_at"])
+        self._record_attempt(f"Refused: {reason}")
+        self.save(update_fields=["execution_notes", "updated_at"])
 
     def mark_failed(self, error: str) -> None:
         self.status = RequestStatus.FAILED
-        self.review_notes = f"Execution failed: {error}"
-        self.save(update_fields=["status", "review_notes", "updated_at"])
+        self._record_attempt(f"Failed: {error}")
+        self.save(update_fields=["status", "execution_notes", "updated_at"])
