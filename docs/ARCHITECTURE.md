@@ -2316,8 +2316,10 @@ left for the next person to rediscover.
 
 ### Test traps
 
-Five ways a test here has passed while proving nothing, or failed while meaning
-nothing. Each was paid for once; none is obvious from reading the test.
+The ways a test here has passed while proving nothing, or failed while meaning
+nothing. Each was paid for once; none is obvious from reading the test. This
+opened saying five and was still saying five several traps later, so it no
+longer carries a count.
 
 **Run it red first, and if it will not go red, say why in the body.** Every
 trap below is a way a test can agree with broken code, and the cheapest check
@@ -2356,6 +2358,40 @@ by the code, so the test passes on the unfixed tree and proves nothing. Use
 `shared/api/exceptions.py` turns an unhandled exception into a 500 `Response`
 rather than re-raising, so `assertRaises` never fires — assert the status code
 and the row count instead.
+
+**A test of the policies proves nothing about the routing if it runs on one
+connection.** `RLS_AMBIENT_ALIAS` is `migrate` under `settings.test_postgres`,
+so a request, its fixtures and its assertions all share a connection and the
+only way to take the app role is `SET ROLE`. That is a real policy test, and it
+is also the shape under which a view that reached the wrong connection still
+passes, because there is no other connection to reach. `settings.test_scoped`
+makes `app` the ambient alias; `shared.tests.scoped.RunsOnTheScopedConnection`
+carries the `databases` set, the principal a request would arrive with, and
+`as_an_operator_would()`. The CI step is *Request path on the scoped
+connection*. Three things follow, none of them obvious:
+
+- **A bare `transaction.atomic()` in a test is exempt from
+  `check-connection-binding` by design, and under `test_scoped` it binds to
+  `default`** — the alias the decorator resolved at import, not the one the
+  router picks. A per-case rollback written that way rolls back a connection the
+  request never used, so every case after the first sees the previous one's
+  rows. Tests use `shared.db.atomic()` and
+  `transaction.set_rollback(True, using=current_alias())`.
+- **A fixture is not a request, and it needs the connection that would really
+  write it.** `snapshot()` reads the *other* tenant's rows to assert they were
+  untouched; under a principal those rows are not visible at all, so it asks the
+  operator. `make_eligible()` sets ID verification and a classification, which
+  is a compliance action the app role may not perform on itself. Both go through
+  `as_an_operator_would()`, a no-op on one connection. An operator write the
+  request must then observe has to **commit**: an open transaction on one
+  connection is invisible from another, so the rollback that isolates a case
+  cannot also stage it.
+- **A failure count far larger than the change explains is the harness, not the
+  policies.** Turning the matrix scoped produced 178 failures twice, and both
+  times the tell was that 159 of them shared one status code rather than the
+  total. The first was the missing `set_rollback` above; the second was the same
+  bare `atomic()` binding to `default`. One line took 178 to 3. Read what the
+  failures have in common before reading the count.
 
 **`SimpleTestCase` forbids a database connection, and `transaction.on_commit`
 wants one even when it runs its callback immediately.** `on_commit` reaches

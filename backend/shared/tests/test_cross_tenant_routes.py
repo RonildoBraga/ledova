@@ -1,11 +1,12 @@
 from collections import namedtuple
+from contextlib import contextmanager
 from datetime import timedelta
 from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import transaction
 from django.utils import timezone
-from rest_framework.test import APITestCase
+from rest_framework.test import APITransactionTestCase
 
 from companies.models import (
     LISTING_REQUIRED_DOCUMENTS,
@@ -16,6 +17,7 @@ from companies.models import (
 from feature_flags.models import FeatureFlag
 from offerings.models import Offering, OfferingStatus, Subscription
 from operators.models import Operator
+from shared.db import atomic, current_alias
 from shared.tests.tenants import (
     make_eligible,
     make_tenant,
@@ -452,7 +454,31 @@ def _fill(value, context):
     return value
 
 
-class CrossTenantRouteMatrixTest(APITestCase):
+class CrossTenantRouteMatrixTest(APITransactionTestCase):
+
+    @staticmethod
+    def routes():
+        return ROUTES
+
+    @contextmanager
+    def undone_before_the_next_case(self):
+        with atomic():
+            yield
+            transaction.set_rollback(True, using=current_alias())
+
+    @contextmanager
+    def as_an_operator_would(self):
+        yield
+
+    @contextmanager
+    def committed_where_a_request_on_another_connection_can_read_it(self):
+        with self.as_an_operator_would():
+            yield
+
+    @contextmanager
+    def as_whoever_may_write_the_fixture(self, route, context, owner, actor):
+        yield
+
     def setUp(self):
         FeatureFlag.objects.update_or_create(name="trading_enabled", defaults={"enabled": True})
         self._patch("rest_framework.throttling.SimpleRateThrottle.allow_request", return_value=True)
@@ -547,7 +573,8 @@ class CrossTenantRouteMatrixTest(APITestCase):
         return text
 
     def test_foreign_rows_are_not_found_and_left_untouched(self):
-        before = snapshot(self.other)
+        with self.as_an_operator_would():
+            before = snapshot(self.other)
         foreign = route_context(self.other)
         phantom = phantom_context(self.other)
 
@@ -563,7 +590,8 @@ class CrossTenantRouteMatrixTest(APITestCase):
                     self.assert_rejected_for_the_right_reason(route, foreign_response, "foreign")
                     self.assert_rejected_for_the_right_reason(route, phantom_response, "phantom")
 
-        self.assertEqual(snapshot(self.other), before)
+        with self.as_an_operator_would():
+            self.assertEqual(snapshot(self.other), before)
         for service in self.services:
             self.assertEqual(service.mock_calls, [])
 
@@ -574,11 +602,11 @@ class CrossTenantRouteMatrixTest(APITestCase):
             for route in ROUTES:
                 with self.subTest(actor=actor.label, route=f"{route.method} {route.path}"):
 
-                    with transaction.atomic():
+                    with self.undone_before_the_next_case():
                         if route.prepare:
-                            route.prepare(actor)
+                            with self.as_whoever_may_write_the_fixture(route, own, actor, actor):
+                                route.prepare(actor)
                         response = self.send(route, actor, own)
-                        transaction.set_rollback(True)
                     self.assertIn(response.status_code, (200, 201, 202, 204), _body(response))
 
     def test_operator_routes_are_staff_only_and_reach_every_tenant(self):
@@ -588,12 +616,12 @@ class CrossTenantRouteMatrixTest(APITestCase):
             self.client.force_authenticate(actor.user)
             for route in OPERATOR_ROUTES:
                 with self.subTest(actor=actor.label, route=f"{route.method} {route.path}"):
-                    with transaction.atomic():
+                    with self.undone_before_the_next_case():
                         if route.prepare:
-                            route.prepare(self.other)
+                            with self.as_whoever_may_write_the_fixture(route, foreign, self.other, actor):
+                                route.prepare(self.other)
                         foreign_response = self.send(route, actor, foreign)
                         phantom_response = self.send(route, actor, phantom)
-                        transaction.set_rollback(True)
                     if actor.user.is_staff:
                         self.assertEqual(foreign_response.status_code, 200, foreign_response.content)
                         self.assertEqual(phantom_response.status_code, 404, phantom_response.content)
@@ -609,12 +637,13 @@ class CrossTenantRouteMatrixTest(APITestCase):
             self.client.force_authenticate(actor.user)
             for route in DIRECTORY_ROUTES + MARKET_ROUTES:
                 with self.subTest(actor=actor.label, route=f"{route.method} {route.path}"):
-                    with transaction.atomic():
-                        make_eligible(actor)
-                        open_to_investors(self.other)
+                    with self.undone_before_the_next_case():
+                        with self.as_whoever_may_write_the_fixture(route, foreign, actor, actor):
+                            make_eligible(actor)
+                        with self.as_whoever_may_write_the_fixture(route, foreign, self.other, actor):
+                            open_to_investors(self.other)
                         foreign_response = self.send(route, actor, foreign)
                         phantom_response = self.send(route, actor, phantom)
-                        transaction.set_rollback(True)
                     self.assertEqual(foreign_response.status_code, 200, foreign_response.content)
                     self.assertEqual(phantom_response.status_code, 404, phantom_response.content)
 
@@ -624,10 +653,10 @@ class CrossTenantRouteMatrixTest(APITestCase):
             self.client.force_authenticate(actor.user)
             for route in MARKET_ROUTES + DIRECTORY_ROUTES:
                 with self.subTest(actor=actor.label, route=f"{route.method} {route.path}"):
-                    with transaction.atomic():
-                        make_eligible(actor)
+                    with self.undone_before_the_next_case():
+                        with self.as_whoever_may_write_the_fixture(route, foreign, actor, actor):
+                            make_eligible(actor)
                         foreign_response = self.send(route, actor, foreign)
-                        transaction.set_rollback(True)
                     expected = 200 if route in MARKET_ROUTES else 404
                     self.assertEqual(foreign_response.status_code, expected, foreign_response.content)
 
@@ -638,11 +667,11 @@ class CrossTenantRouteMatrixTest(APITestCase):
             self.client.force_authenticate(actor.user)
             for route in DIRECTORY_ROUTES + MARKET_ROUTES:
                 with self.subTest(actor=actor.label, route=f"{route.method} {route.path}"):
-                    with transaction.atomic():
-                        open_to_investors(self.other)
+                    with self.undone_before_the_next_case():
+                        with self.as_whoever_may_write_the_fixture(route, foreign, self.other, actor):
+                            open_to_investors(self.other)
                         foreign_response = self.send(route, actor, foreign)
                         phantom_response = self.send(route, actor, phantom)
-                        transaction.set_rollback(True)
                     self.assertEqual(foreign_response.status_code, 404, foreign_response.content)
                     self.assertEqual(phantom_response.status_code, 404, phantom_response.content)
                     self.assertEqual(self.masked(foreign_response, foreign), self.masked(phantom_response, phantom))
@@ -689,7 +718,6 @@ class CrossTenantRouteMatrixTest(APITestCase):
 
         self.assertIsNone(self.client.get(GLOBAL_ROUTES[0]).json()["paymentInstructions"])
 
-        with transaction.atomic():
+        with self.committed_where_a_request_on_another_connection_can_read_it():
             make_eligible(alice)
-            self.assertEqual(self.client.get(GLOBAL_ROUTES[0]).json()["paymentInstructions"], RAILS)
-            transaction.set_rollback(True)
+        self.assertEqual(self.client.get(GLOBAL_ROUTES[0]).json()["paymentInstructions"], RAILS)

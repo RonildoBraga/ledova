@@ -182,6 +182,8 @@ jobs:
             --settings=ledova_backend.settings.test_scoped --noinput
           python manage.py test users.tests.test_account_type_under_the_app_role \
             --settings=ledova_backend.settings.test_scoped --noinput
+          python manage.py test shared.tests.test_cross_tenant_routes_under_rls \
+            --settings=ledova_backend.settings.test_scoped --noinput
       - name: Row-level-security roles and catalogue (the half no test can see)
         env:
           POSTGRES_HOST: 127.0.0.1
