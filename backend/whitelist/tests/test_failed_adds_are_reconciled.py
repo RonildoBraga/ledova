@@ -119,6 +119,84 @@ class AFailedAddTheChainContradictsIsReconciledTest(TestCase):
         self.assertEqual((entry.remove_tx_hash, entry.is_whitelisted), (REMOVE_HASH, True))
         self.assertEqual((result["activated"], result["removals_the_chain_kept"]), (0, 1))
 
+    def test_a_reconciled_removal_is_read_and_warned_about_only_once(self):
+        entry = self.an_entry(last_attempt=TransactionType.WHITELIST_REMOVE)
+        WhitelistEntry.objects.filter(pk=entry.pk).update(is_whitelisted=True, remove_tx_hash=REMOVE_HASH)
+        service = self.service(on_chain=True)
+
+        with self.assertLogs("whitelist.services.whitelist", level="WARNING") as logs:
+            results = [service.reconcile_failed_adds() for _ in range(3)]
+
+        self.assertEqual([result["checked"] for result in results], [1, 0, 0])
+        self.assertEqual(len(logs.output), 1)
+        service.is_whitelisted.assert_called_once_with(self.wallet.address)
+        entry.refresh_from_db()
+        self.assertEqual((entry.status, entry.is_whitelisted), (WhitelistStatus.FAILED, True))
+        self.assertEqual((entry.add_tx_hash, entry.remove_tx_hash), (HASH, REMOVE_HASH))
+
+    def test_a_new_failed_removal_is_reconciled_and_warned_about_again(self):
+        entry = self.an_entry(last_attempt=TransactionType.WHITELIST_REMOVE)
+        service = self.service(on_chain=True)
+        service.reconcile_failed_adds()
+        entry.refresh_from_db()
+        entry.mark_remove_failed("retry reverted", "0x" + "33" * 32)
+        self.an_attempt(entry, TransactionType.WHITELIST_REMOVE)
+
+        with self.assertLogs("whitelist.services.whitelist", level="WARNING") as logs:
+            results = [service.reconcile_failed_adds() for _ in range(2)]
+
+        self.assertEqual([result["checked"] for result in results], [1, 0])
+        self.assertEqual(len(logs.output), 1)
+        self.assertEqual(service.is_whitelisted.call_count, 2)
+
+    def test_overlapping_sweeps_warn_about_the_same_failure_only_once(self):
+        self.an_entry(last_attempt=TransactionType.WHITELIST_REMOVE)
+        first = self.service(on_chain=True)
+        second = self.service(on_chain=True)
+
+        def answer_after_another_sweep(address):
+            second.reconcile_failed_adds()
+            return True
+
+        first.is_whitelisted.side_effect = answer_after_another_sweep
+
+        with self.assertLogs("whitelist.services.whitelist", level="WARNING") as logs:
+            result = first.reconcile_failed_adds()
+
+        self.assertEqual(len(logs.output), 1)
+        self.assertEqual(result["removals_the_chain_kept"], 0)
+
+    def test_a_retry_during_the_chain_read_is_left_for_a_new_sweep(self):
+        entry = self.an_entry(last_attempt=TransactionType.WHITELIST_REMOVE)
+        service = self.service(on_chain=True)
+
+        def answer_after_a_retry(address):
+            entry.mark_remove_failed("new failure", REMOVE_HASH)
+            self.an_attempt(entry, TransactionType.WHITELIST_REMOVE)
+            return True
+
+        service.is_whitelisted.side_effect = answer_after_a_retry
+
+        with self.assertNoLogs("whitelist.services.whitelist", level="WARNING"):
+            result = service.reconcile_failed_adds()
+
+        self.assertEqual(result["removals_the_chain_kept"], 0)
+        service.is_whitelisted.side_effect = None
+        self.assertEqual(service.reconcile_failed_adds()["removals_the_chain_kept"], 1)
+
+    def test_an_unconfirmed_add_stays_eligible_for_later_reconciliation(self):
+        entry = self.an_entry()
+        service = self.service(on_chain=False)
+
+        results = [service.reconcile_failed_adds() for _ in range(2)]
+        service.is_whitelisted.return_value = True
+        result = service.reconcile_failed_adds()
+
+        self.assertEqual([result["checked"] for result in results], [1, 1])
+        self.assertEqual(result["activated"], 1)
+        entry.refresh_from_db()
+        self.assertEqual(entry.status, WhitelistStatus.ACTIVE)
+
     def test_a_failed_add_after_an_earlier_successful_removal_is_still_reconciled(self):
         entry = self.an_entry(last_attempt=None)
         self.an_attempt(entry, TransactionType.WHITELIST_REMOVE)

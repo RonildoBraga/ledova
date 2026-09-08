@@ -296,13 +296,13 @@ class WhitelistService:
                 continue
 
             if not self._the_write_that_failed_was_an_add(entry):
-                entry.record_the_chain_still_lists_it()
-                result["removals_the_chain_kept"] += 1
                 result["left_failed"] += 1
-                logger.warning(
-                    f"{entry.wallet_address} is still whitelisted on chain and the write that failed was a "
-                    f"removal, so it stays failed for an operator to retry"
-                )
+                if entry.record_the_chain_still_lists_it():
+                    result["removals_the_chain_kept"] += 1
+                    logger.warning(
+                        f"{entry.wallet_address} is still whitelisted on chain and the write that failed was a "
+                        f"removal, so it stays failed for an operator to retry"
+                    )
                 continue
 
             entry.mark_active(entry.add_tx_hash)
