@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.db.models.functions import Concat
 from django.utils import timezone
 
 from shared.models import BaseModel
@@ -44,7 +45,13 @@ class ReviewableRequest(BaseModel):
         help_text="Staff member who reviewed the request",
     )
     reviewed_at = models.DateTimeField(blank=True, null=True, help_text="When the request was reviewed")
-    review_notes = models.TextField(blank=True, help_text="Notes from the reviewer")
+    review_notes = models.TextField(
+        blank=True, help_text="Reviewer notes; older entries may also contain historical execution messages"
+    )
+    execution_notes = models.TextField(
+        blank=True,
+        help_text="What each execution attempt did, in order. Written by the system; review_notes is the person's",
+    )
     rejection_reason = models.TextField(blank=True, help_text="Reason for rejection (if rejected)")
 
     executed_issuance = models.OneToOneField(
@@ -114,17 +121,25 @@ class ReviewableRequest(BaseModel):
         self.status = RequestStatus.EXECUTING
         self.updated_at = now
 
+    def _save_attempt(self, line: str, fields: list[str]) -> None:
+        stamped = f"{timezone.now().isoformat(timespec='seconds')} {line}"
+        self.execution_notes = models.Case(
+            models.When(execution_notes="", then=models.Value(stamped)),
+            default=Concat("execution_notes", models.Value(f"\n{stamped}")),
+            output_field=models.TextField(),
+        )
+        self.save(update_fields=[*fields, "execution_notes", "updated_at"])
+        self.refresh_from_db(fields=["execution_notes"])
+
     def mark_executed(self, issuance=None) -> None:
         self.status = RequestStatus.EXECUTED
         self.executed_issuance = issuance
         self.executed_at = timezone.now()
-        self.save(update_fields=["status", "executed_issuance", "executed_at", "updated_at"])
+        self._save_attempt("Executed", ["status", "executed_issuance", "executed_at"])
 
     def mark_refused(self, reason: str) -> None:
-        self.review_notes = f"Execution refused: {reason}"
-        self.save(update_fields=["review_notes", "updated_at"])
+        self._save_attempt(f"Refused: {reason}", [])
 
     def mark_failed(self, error: str) -> None:
         self.status = RequestStatus.FAILED
-        self.review_notes = f"Execution failed: {error}"
-        self.save(update_fields=["status", "review_notes", "updated_at"])
+        self._save_attempt(f"Failed: {error}", ["status"])

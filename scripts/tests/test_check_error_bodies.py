@@ -16,12 +16,24 @@ _spec.loader.exec_module(gate)
 SUBCLASSES = {"TransferPreparationException", "BlockchainAPIError"}
 
 
-def findings(source: str):
+NOTE_METHODS = {"mark_failed", "mark_refused"}
+
+
+def findings(source: str, notes=frozenset(), helpers=None):
     tree = ast.parse(source)
-    return gate.findings_in(tree, SUBCLASSES, Path("service.py"))
+    return gate.findings_in(tree, SUBCLASSES, set(notes), helpers or {}, Path("service.py"))
 
 
 class AnExceptionsTextReachingTheBody(unittest.TestCase):
+
+    def test_a_sanitised_fragment_does_not_hide_raw_exception_text_beside_it(self):
+        source = (
+            "try:\n    x()\nexcept Exception as e:\n"
+            "    raise TransferPreparationException(f\"{decode_exception_to_message(e, 'Failed')}: {e}\")\n"
+        )
+
+        self.assertEqual(len(findings(source)), 1)
+
 
     def test_the_bare_name(self):
         self.assertEqual(
@@ -90,6 +102,7 @@ class WhatIsNotAFinding(unittest.TestCase):
             ), []
         )
 
+
     def test_a_non_api_exception(self):
         self.assertEqual(
             findings('try:\n    x()\nexcept Exception as e:\n    raise ValueError(str(e))\n'), []
@@ -135,3 +148,195 @@ class TheRepositoryStaysClean(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AnExceptionsTextReachingAFieldAClientReads(unittest.TestCase):
+
+    def test_a_note_method_called_with_it_inside_the_handler(self):
+        found = findings(
+            "try:\n    x()\nexcept Exception as e:\n    request.mark_failed(str(e))\n", NOTE_METHODS
+        )
+
+        self.assertEqual(len(found), 1)
+        self.assertIn(gate.SERVES_EXCEPTION_TEXT_TO_A_FIELD, found[0])
+
+    def test_a_note_method_called_after_the_handler_with_a_name_that_outlived_it(self):
+        source = (
+            "def run():\n"
+            "    failure = None\n"
+            "    try:\n"
+            "        x()\n"
+            "    except Exception as e:\n"
+            "        failure = e\n"
+            "    if failure is not None:\n"
+            "        request.mark_failed(str(failure))\n"
+        )
+
+        found = findings(source, NOTE_METHODS)
+
+        self.assertEqual(len(found), 1)
+        self.assertIn(gate.SERVES_EXCEPTION_TEXT_TO_A_FIELD, found[0])
+
+    def test_a_fixed_note_is_not_a_finding(self):
+        source = (
+            "def run():\n"
+            "    try:\n"
+            "        x()\n"
+            "    except Exception as e:\n"
+            "        logger.error(e)\n"
+            "        request.mark_failed(EXECUTION_FAILED)\n"
+        )
+
+        self.assertEqual(findings(source, NOTE_METHODS), [])
+
+    def test_an_allowed_receiver_is_not_a_finding(self):
+        found = findings(
+            "try:\n    x()\nexcept Exception as e:\n    tx_record.mark_failed(str(e))\n", NOTE_METHODS
+        )
+
+        self.assertEqual(found, [])
+
+    def test_a_method_no_client_serializer_backs_is_not_a_finding(self):
+        found = findings(
+            "try:\n    x()\nexcept Exception as e:\n    audit.write_note(str(e))\n", NOTE_METHODS
+        )
+
+        self.assertEqual(found, [])
+
+    def test_the_same_call_is_reported_once_rather_than_twice(self):
+        source = (
+            "def run():\n"
+            "    try:\n"
+            "        x()\n"
+            "    except Exception as e:\n"
+            "        failure = e\n"
+            "        request.mark_failed(str(failure))\n"
+        )
+
+        self.assertEqual(len(findings(source, NOTE_METHODS)), 1)
+
+
+class TheMethodSetIsDerivedFromTheSourceRatherThanListed(unittest.TestCase):
+
+    def test_a_field_a_serializer_exposes_puts_its_writer_in_the_set(self):
+        self.assertIn("mark_failed", gate.note_methods_a_client_reads())
+
+    def test_a_model_whose_serializer_hides_the_field_is_matched_by_model_not_by_name(self):
+        exposed = gate.fields_each_model_exposes()
+
+        self.assertIn("execution_notes", exposed.get("CapitalIncreaseRequest", set()))
+        self.assertNotIn("review_notes", exposed.get("CapitalIncreaseRequest", set()))
+        self.assertNotIn("MintRequest", exposed)
+
+    def test_a_history_writer_inherited_from_an_abstract_model_is_covered_through_its_helper(self):
+        methods = gate.note_methods_a_client_reads({"CapitalIncreaseRequest": {"execution_notes"}})
+
+        self.assertTrue({"_save_attempt", "mark_failed", "mark_refused"}.issubset(methods), methods)
+        source = "try:\n    execute()\nexcept Exception as error:\n    request.mark_failed(str(error))\n"
+        self.assertEqual(len(findings(source, methods)), 1)
+
+
+class AnExceptionHandedToAHelperThatBuildsOne(unittest.TestCase):
+
+    # _refuse(tx_type, function_name, checksum_address, error), building its
+    # exception from `error` - the shape #390 measured after a rebase restored it.
+    HELPERS = {"_refuse": [(["tx_type", "function_name", "checksum_address", "error"], {"error"})]}
+    SAFE = {"_refuse": [(["tx_type", "function_name", "checksum_address", "error"], {"tx_type"})]}
+
+    def test_a_sanitised_fragment_does_not_hide_raw_text_passed_to_a_helper(self):
+        source = (
+            "try:\n    x()\nexcept Exception as e:\n"
+            "    raise self._refuse(kind, name, address, f\"{decode_exception_to_message(e, 'Failed')}: {e}\")\n"
+        )
+
+        self.assertEqual(len(findings(source, helpers=self.HELPERS)), 1)
+
+    def test_the_call_site_is_a_finding_even_though_the_callee_is_not_a_subclass(self):
+        found = findings(
+            "try:\n    x()\nexcept Exception as e:\n    raise self._refuse(kind, name, address, e) from e\n",
+            helpers=self.HELPERS,
+        )
+
+        self.assertEqual(len(found), 1)
+        self.assertIn(gate.SERVES_EXCEPTION_TEXT, found[0])
+
+    def test_a_plain_function_helper_counts_the_same_as_a_method(self):
+        found = findings(
+            "try:\n    x()\nexcept Exception as e:\n    raise _refuse(kind, name, address, e)\n",
+            helpers=self.HELPERS,
+        )
+
+        self.assertEqual(len(found), 1)
+
+    def test_a_helper_that_builds_from_a_safe_parameter_and_logs_the_exception_is_not_a_finding(self):
+        found = findings(
+            "try:\n    x()\nexcept Exception as e:\n    raise self._refuse(kind, name, address, e) from e\n",
+            helpers=self.SAFE,
+        )
+
+        self.assertEqual(found, [])
+
+    def test_the_same_call_flips_when_the_exception_reaches_the_message(self):
+        source = "try:\n    x()\nexcept Exception as e:\n    raise self._refuse(kind, name, address, e) from e\n"
+
+        self.assertEqual(findings(source, helpers=self.SAFE), [])
+        self.assertEqual(len(findings(source, helpers=self.HELPERS)), 1)
+
+    def test_a_keyword_landing_on_a_tainting_parameter_is_a_finding(self):
+        found = findings(
+            "try:\n    x()\nexcept Exception as e:\n    raise _refuse(kind, name, address, error=e)\n",
+            helpers=self.HELPERS,
+        )
+
+        self.assertEqual(len(found), 1)
+
+    def test_a_helper_called_with_nothing_caught_is_not_a_finding(self):
+        found = findings(
+            "try:\n    x()\nexcept Exception as e:\n    logger.error(e)\n    raise self._refuse(kind, name)\n",
+            helpers=self.HELPERS,
+        )
+
+        self.assertEqual(found, [])
+
+    def test_a_helper_reached_after_the_handler_through_a_name_that_outlived_it(self):
+        source = (
+            "def run():\n"
+            "    failure = None\n"
+            "    try:\n"
+            "        x()\n"
+            "    except Exception as e:\n"
+            "        failure = e\n"
+            "    if failure is not None:\n"
+            "        raise _refuse(kind, name, address, failure)\n"
+        )
+
+        self.assertEqual(len(findings(source, helpers=self.HELPERS)), 1)
+
+
+class TheHelperSetIsDerivedFromTheSourceRatherThanListed(unittest.TestCase):
+
+    def setUp(self):
+        self.helpers = gate.helpers_that_build_an_exception(gate.api_exception_names())
+
+    def test_a_helper_that_interpolates_a_parameter_into_an_exception_is_in_the_set(self):
+        self.assertIn("_require_status", self.helpers)
+
+    def test_the_set_records_which_parameters_reach_the_construction(self):
+        for ordered, tainting in self.helpers["_require_status"]:
+            self.assertTrue(tainting <= set(ordered))
+            self.assertTrue(tainting)
+
+    def test_a_sanitiser_is_not_a_helper_that_builds_one(self):
+        self.assertNotIn("decode_exception_to_message", self.helpers)
+
+
+class TheAllowlistChecksItsOwnClaims(unittest.TestCase):
+
+    def test_every_claim_on_the_tree_is_true(self):
+        self.assertEqual(gate.allowlist_claims_that_are_false(gate.fields_each_model_exposes()), [])
+
+    def test_a_claim_about_a_field_a_serializer_does_expose_is_reported(self):
+        false_claim = gate.allowlist_claims_that_are_false({"ShareIssuance": {"error_message"}})
+
+        self.assertEqual(len(false_claim), 2)
+        self.assertIn("claims ShareIssuance.error_message is not served", false_claim[0])

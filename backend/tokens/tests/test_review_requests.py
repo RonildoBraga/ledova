@@ -39,7 +39,9 @@ from tokens.services.capital_increase import submit_capital_increase
 from tokens.services.dilution import dilution_for
 from tokens.services.share_token_service import (
     CAP_NOT_RAISED,
+    CAPITAL_INCREASE_EXECUTION_FAILED,
     EXCEEDS_AUTHORIZED,
+    ISSUANCE_EXECUTION_FAILED,
     NOT_WHITELISTED,
     TOKEN_PAUSED,
     UNNAMED_MINT_GRACE,
@@ -97,7 +99,8 @@ class ReviewableRequestModelTest(TestCase):
         request.mark_executing()
         self.assertFalse(request.can_be_executed)
         request.mark_failed("boom")
-        self.assertEqual((request.status, request.review_notes), (RequestStatus.FAILED, "Execution failed: boom"))
+        self.assertEqual(request.status, RequestStatus.FAILED)
+        self.assertIn("Failed: boom", request.execution_notes)
         self.assertTrue(request.can_be_executed)
         with self.assertRaises(ValueError):
             request.reject(self.tenant.user, reason="too late")
@@ -237,7 +240,8 @@ class ExecuteRequestServiceTest(TestCase):
         self.token.refresh_from_db()
         self.assertEqual((request.status, request.executed_at), (RequestStatus.APPROVED, None))
         self.assertTrue(request.can_be_executed)
-        self.assertEqual(request.review_notes, f"Execution refused: {CAP_NOT_RAISED}")
+        self.assertIn(f"Refused: {CAP_NOT_RAISED}", request.execution_notes)
+        self.assertEqual(request.review_notes, "")
         self.assertEqual(self.token.total_supply, "1000")
 
         contract = self._set_authorized_contract()
@@ -352,9 +356,8 @@ class ExecuteRequestServiceTest(TestCase):
                 self.service.execute_request(request)
         mint.assert_not_called()
         request.refresh_from_db()
-        self.assertEqual(
-            (request.status, request.review_notes), (RequestStatus.APPROVED, f"Execution refused: {TOKEN_PAUSED}")
-        )
+        self.assertEqual(request.status, RequestStatus.APPROVED)
+        self.assertIn(f"Refused: {TOKEN_PAUSED}", request.execution_notes)
         self.assertFalse(ShareIssuance.objects.exists())
 
         increase = self._approved(self.tenant.capital_increase)
@@ -575,7 +578,8 @@ class ExecuteRequestServiceTest(TestCase):
         request.refresh_from_db()
         self.assertEqual(request.status, RequestStatus.APPROVED)
         self.assertTrue(request.can_be_executed)
-        self.assertEqual(request.review_notes, f"Execution refused: {NOT_WHITELISTED}")
+        self.assertIn(f"Refused: {NOT_WHITELISTED}", request.execution_notes)
+        self.assertEqual(request.review_notes, "")
         self.assertFalse(ShareIssuance.objects.exists())
 
     def test_amount_over_the_remaining_cap_is_refused_before_any_transaction(self):
@@ -595,7 +599,7 @@ class ExecuteRequestServiceTest(TestCase):
         request.refresh_from_db()
         exact.refresh_from_db()
         self.assertEqual((request.status, exact.status), (RequestStatus.APPROVED, RequestStatus.EXECUTED))
-        self.assertEqual(request.review_notes, f"Execution refused: {EXCEEDS_AUTHORIZED}")
+        self.assertIn(f"Refused: {EXCEEDS_AUTHORIZED}", request.execution_notes)
 
     def test_chain_failure_marks_request_and_issuance_failed_then_reraises(self):
         request = self._approved(issuance_request(self.token))
@@ -605,7 +609,10 @@ class ExecuteRequestServiceTest(TestCase):
 
         request.refresh_from_db()
         self.token.refresh_from_db()
-        self.assertEqual((request.status, request.review_notes), (RequestStatus.FAILED, "Execution failed: rpc down"))
+        self.assertEqual(request.status, RequestStatus.FAILED)
+        self.assertIn(f"Failed: {ISSUANCE_EXECUTION_FAILED}", request.execution_notes)
+        self.assertNotIn("rpc down", request.execution_notes)
+        self.assertEqual(request.review_notes, "")
         self.assertTrue(request.can_be_executed)
         self.assertEqual(self.token.total_supply, "1000")
         issuance = ShareIssuance.objects.get(token=self.token)
@@ -715,7 +722,7 @@ class ExecuteRequestServiceTest(TestCase):
         with self.assertRaises(InvalidTokenStateException):
             self.service.execute_request(undeployed)
         undeployed.refresh_from_db()
-        self.assertEqual(undeployed.review_notes, "Execution failed: Token is not deployed on blockchain")
+        self.assertIn("Failed: Token is not deployed on blockchain", undeployed.execution_notes)
 
         no_wallet = self._approved(self.tenant.capital_increase)
         with patch("tokens.services.share_token_service.primary_wallet_for", return_value=None):
@@ -723,7 +730,10 @@ class ExecuteRequestServiceTest(TestCase):
                 with self.assertRaisesMessage(RuntimeError, "revert"):
                     self.service.execute_request(no_wallet)
         no_wallet.refresh_from_db()
-        self.assertEqual((no_wallet.status, no_wallet.review_notes), (RequestStatus.FAILED, "Execution failed: revert"))
+        self.assertEqual(no_wallet.status, RequestStatus.FAILED)
+        self.assertIn(f"Failed: {CAPITAL_INCREASE_EXECUTION_FAILED}", no_wallet.execution_notes)
+        self.assertNotIn("revert", no_wallet.execution_notes)
+        self.assertEqual(no_wallet.review_notes, "")
         self.assertFalse(ShareIssuance.objects.exists())
 
 
@@ -831,9 +841,8 @@ class ExecutingIssuanceSweepTest(TestCase):
 
         request.refresh_from_db()
         issuance.refresh_from_db()
-        self.assertEqual(
-            (request.status, request.review_notes), ("failed", "Execution failed: Transaction reverted: 0xmint")
-        )
+        self.assertEqual(request.status, "failed")
+        self.assertIn("Failed: Transaction reverted: 0xmint", request.execution_notes)
         self.assertTrue(request.can_be_executed)
         self.assertEqual((issuance.status, issuance.tx_hash), (IssuanceStatus.FAILED, None))
         self.assertIsNone(request.executed_issuance)
@@ -921,9 +930,8 @@ class ExecutingIssuanceSweepTest(TestCase):
         request.refresh_from_db()
         record.refresh_from_db()
         self.token.refresh_from_db()
-        self.assertEqual(
-            (request.status, request.review_notes), ("failed", "Execution failed: Transaction reverted: 0xset")
-        )
+        self.assertEqual(request.status, "failed")
+        self.assertIn("Failed: Transaction reverted: 0xset", request.execution_notes)
         self.assertTrue(request.can_be_executed)
         self.assertEqual(record.status, TransactionStatus.REVERTED)
         self.assertEqual(self.token.total_supply, "1000")

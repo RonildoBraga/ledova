@@ -74,6 +74,14 @@ ANOTHER_INCREASE_IN_FLIGHT = (
     "{symbol} has another capital increase in flight ({status}), so this one cannot be executed yet. "
     "One share class raises its cap once at a time; resolve that one first."
 )
+ISSUANCE_EXECUTION_FAILED = (
+    "The share issuance could not be confirmed. An operator must check the request's transaction history "
+    "and on-chain state before deciding whether to retry."
+)
+CAPITAL_INCREASE_EXECUTION_FAILED = (
+    "The capital increase could not be confirmed. An operator must check the request's transaction history "
+    "and on-chain state before deciding whether to retry."
+)
 CAP_NOT_RAISED = (
     "Authorized shares are already at or above the requested total. "
     "Resubmit the capital increase against the current cap."
@@ -564,7 +572,7 @@ class ShareTokenService:
         except Exception as exc:
             logger.error(f"Issuance failed: {exc}")
             issuance.mark_failed(str(exc))
-            request.mark_failed(str(exc))
+            request.mark_failed(ISSUANCE_EXECUTION_FAILED)
             raise
 
         self._complete_issuance(request, issuance, result)
@@ -589,7 +597,7 @@ class ShareTokenService:
         except Exception as exc:
             logger.error(f"mint {tx_hash} for request {request.uuid} still unconfirmed: {exc}")
             issuance.mark_failed(str(exc))
-            request.mark_failed(str(exc))
+            request.mark_failed(ISSUANCE_EXECUTION_FAILED)
             raise
 
         logger.info(f"mint {tx_hash} for request {request.uuid} already mined; completing without sending")
@@ -739,7 +747,8 @@ class ShareTokenService:
                     except Exception as exc:
                         failure = exc
             if failure is not None:
-                request.mark_failed(str(failure))
+                logger.error(f"Capital increase {request.uuid} failed: {failure}")
+                request.mark_failed(CAPITAL_INCREASE_EXECUTION_FAILED)
             elif result is not None:
                 self._complete_capital_increase(request, result)
 
@@ -750,7 +759,6 @@ class ShareTokenService:
         if refused:
             raise IssuanceRefusedException(CAP_NOT_RAISED)
         if failure is not None:
-            logger.error(f"Capital increase failed: {failure}")
             raise failure
         return result
 

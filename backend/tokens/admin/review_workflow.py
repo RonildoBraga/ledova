@@ -4,6 +4,7 @@ from django.http import HttpResponseRedirect
 from django.shortcuts import render
 from django.urls import reverse
 
+from blockchain.models import BlockchainTransaction
 from shared.utils.admin_actions import admin_action_path
 from shared.utils.admin_display import action_buttons
 from tokens.models import RequestStatus, ShareIssuanceRequest
@@ -80,11 +81,25 @@ class ReviewWorkflowAdmin(admin.ModelAdmin):
     def detail_rows(self, obj) -> list[tuple[str, str]]:
         return []
 
+    def recorded_execution_error(self, obj) -> str:
+        return (
+            BlockchainTransaction.objects.filter(related_model=type(obj)._meta.label, related_uuid=obj.uuid)
+            .exclude(error_message="")
+            .order_by("-created_at")
+            .values_list("error_message", flat=True)
+            .first()
+            or ""
+        )
+
+    @admin.display(description="Last execution error")
+    def last_execution_error(self, obj) -> str:
+        return self.recorded_execution_error(obj) or "-"
+
     def execution_steps(self, obj) -> list[str]:
         return []
 
     def get_readonly_fields(self, request, obj=None):
-        return [field.name for field in self.opts.fields] + ["status_actions"]
+        return [field.name for field in self.opts.fields] + ["status_actions", "last_execution_error"]
 
     def get_fieldsets(self, request, obj=None):
         return [
@@ -93,9 +108,18 @@ class ReviewWorkflowAdmin(admin.ModelAdmin):
             ("Submission", {"fields": ["submitted_by", "submitted_at"]}),
             (
                 "Review",
-                {"fields": ["reviewed_by", "reviewed_at", "review_notes", "rejection_reason"], "classes": ["collapse"]},
+                {
+                    "fields": ["reviewed_by", "reviewed_at", "review_notes", "rejection_reason"],
+                    "classes": ["collapse"],
+                },
             ),
-            ("Execution", {"fields": ["executed_issuance", "executed_at"], "classes": ["collapse"]}),
+            (
+                "Execution",
+                {
+                    "fields": ["executed_issuance", "executed_at", "execution_notes", "last_execution_error"],
+                    "classes": ["collapse"],
+                },
+            ),
             ("Timestamps", {"fields": ["created_at", "updated_at"], "classes": ["collapse"]}),
         ]
 

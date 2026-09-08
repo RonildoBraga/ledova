@@ -250,6 +250,22 @@ them after `make build` and fails on any drift.
 9. Pause and unpause read `paused()` first and reconcile the database when the
    chain is already in the target state.
 
+Review and execution notes have separate ownership. Reviewers write
+`review_notes`; execution attempts append timestamped entries to
+`execution_notes` in the database, so an older request object cannot overwrite
+an intervening attempt. Successful execution adds its outcome after earlier
+refusals. The operator view places this history in the Execution section.
+Reviewer notes are internal operator audit text and are omitted from issuer
+serializers. Issuers receive execution notes and rejection or supersession
+reasons. Provider diagnostics remain in the operator records and logs; a failed
+execution asks an operator to check the chain before deciding whether to retry.
+
+The execution-history migration preserves every existing review note verbatim.
+It cannot establish authorship from phrases such as "Execution failed", which
+a reviewer could also have typed. It adds fixed context identifying old notes
+as historical and the request status as the current outcome. It does not
+reconstruct overwritten reviewer notes or infer missing execution events.
+
 ## Data flow of an offering
 
 1. The owner sets `Company.is_open_to_investors` from the dashboard through
@@ -1944,6 +1960,101 @@ own state — `f"Cannot execute request with status '{request.get_status_display
 extracts a hex blob, decodes a known revert reason and returns that or a stated
 default, never the exception's text. It is named in `SANITISERS`, and adding a
 name there is a claim about that function which has to be true.
+
+**The same rule one layer out: a field a client-facing serializer exposes.** An
+`APIException` is not the only way an exception's text reaches a caller. A model
+field assigned inside a handler and served later by a serializer carries it in a
+**200 body**, where the first rule cannot see it. #366 found
+`review_notes = f"Execution failed: {str(exc)}"` on a share issuance request and a
+capital increase, both exposed by the issuer's own serializers.
+Those serializers now omit internal reviewer text, including ambiguous legacy
+notes. The separate `execution_notes` field carries the safe execution messages.
+
+The gate's second rule refuses handing a caught exception's text to a model method
+that writes such a field. Both halves of it are derived from the source rather than
+listed:
+
+- **which fields a client reads**, from each serializer's `Meta.model` and
+  `Meta.fields` together — matched by model, so `SwapOrder.error_message` counts and
+  `MintRequest.error_message` does not, because `MintRequest` has no serializer at all
+- **which methods write them**, including fields and writers inherited from base
+  models, local aliases of their parameters, and calls through model helpers such
+  as `mark_failed` forwarding its message to `_save_attempt`
+
+**What it cannot decide is the receiver.** `ReviewableRequest.mark_failed` writes
+`execution_notes`, which two client serializers expose; `ShareIssuance`,
+`BlockchainTransaction` and `MintRequest` each have a `mark_failed` that writes
+`error_message`, which no serializer of theirs exposes. A call site gives the method
+name and not the model, so `ALLOWED_NOTE_RECEIVERS` names the receiver expressions
+that are the operator-facing ones. Each entry is a claim about that receiver, in the
+way `SANITISERS` is a claim about a function, and the claim has to be true. A
+sanitiser protects only the expression passed through it: a decoded fragment
+beside raw exception text in the same argument is still a finding.
+
+**Taint outlives the handler.** Python unbinds `as name` at handler exit, so the
+shape that escapes is a local assigned from it and used afterwards:
+
+```python
+        except Exception as exc:
+            failure = exc
+    if failure is not None:
+        request.mark_failed(str(failure))          # outside the handler
+```
+
+That is the capital-increase half of #366, and a handler-only scan does not see it —
+measured, because the first version of this rule did not. The scan taints names
+assigned from the caught exception and then reads the **enclosing function**, so a
+finding one statement later is still a finding.
+
+**An exception handed to a helper that builds one.** #390 measured the third way
+past both rules, and it is the one that has already nearly cost something: a
+rebase on #339 restored `f"{label} failed: {error}"` inside
+`whitelist/services/whitelist.py:_refuse`, and the gate exited 0 while one test
+caught it. Neither end is visible — at the call site the callee is
+`self._refuse`, not a subclass; inside the helper there is no handler for the
+taint to start from.
+
+The set is derived from the source too, and **it records which parameters reach
+the construction, not merely that some parameter does.** That distinction is the
+whole rule. `_refuse` builds its exception from `tx_type`, a safe enum, and logs
+`error` — so "does this function build an exception from a parameter" is true of
+it *either way*, and a rule asking only that fires on the correct file as loudly
+as on the broken one. The first version of this rule did exactly that, and
+produced identical output with and without the defect:
+
+```
+with the fixed message      exit 1, three findings
+with the leak restored      exit 1, the same three findings
+```
+
+Recording the parameter names and matching them to the call site's argument
+positions is what makes the two different:
+
+```
+#339's file with its fixed message          exit 0
+the same file with the interpolation back   exit 1
+  whitelist/services/whitelist.py:153 _refuse(e): serves-exception-text
+  whitelist/services/whitelist.py:159 _refuse(e): serves-exception-text
+  whitelist/services/whitelist.py:171 _refuse(e): serves-exception-text
+```
+
+So a finding means *the caught exception landed on a parameter that reaches the
+message*, not *the caught exception was handed to a function that builds
+exceptions*. `_refuse` as it stands is not a finding, and that is a useful thing
+for the gate to be able to say.
+
+**What none of the three rules covers.** A field written outside a handler from a
+value that travelled there in some other way; a serializer that builds a string in
+a `SerializerMethodField` rather than exposing a model field; API-exception
+helpers two calls deep or using indirect parameter aliases, since that rule
+checks one direct boundary. Model-note helpers are followed separately. Method
+names are conservative approximations; runtime receiver types and rebinding of
+allowlisted variable names still require review.
+
+**The allowlist checks its own claims.** Each entry names a model and a field, and
+the gate refuses when a serializer of that model does in fact expose it — so an
+entry cannot quietly become false as serializers change. This checks the named
+field's visibility, not the receiver's runtime identity.
 
 The subclass set is collected from the source, following `APIException` through
 subclassing, so a new exception module is covered without an edit. It is 70
