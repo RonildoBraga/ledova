@@ -19,9 +19,9 @@ SUBCLASSES = {"TransferPreparationException", "BlockchainAPIError"}
 NOTE_METHODS = {"mark_failed", "mark_refused"}
 
 
-def findings(source: str, notes=frozenset(), helpers=frozenset()):
+def findings(source: str, notes=frozenset(), helpers=None):
     tree = ast.parse(source)
-    return gate.findings_in(tree, SUBCLASSES, set(notes), set(helpers), Path("service.py"))
+    return gate.findings_in(tree, SUBCLASSES, set(notes), helpers or {}, Path("service.py"))
 
 
 class AnExceptionsTextReachingTheBody(unittest.TestCase):
@@ -220,7 +220,10 @@ class TheMethodSetIsDerivedFromTheSourceRatherThanListed(unittest.TestCase):
 
 class AnExceptionHandedToAHelperThatBuildsOne(unittest.TestCase):
 
-    HELPERS = {"_refuse"}
+    # _refuse(tx_type, function_name, checksum_address, error), building its
+    # exception from `error` - the shape #390 measured after a rebase restored it.
+    HELPERS = {"_refuse": [(["tx_type", "function_name", "checksum_address", "error"], {"error"})]}
+    SAFE = {"_refuse": [(["tx_type", "function_name", "checksum_address", "error"], {"tx_type"})]}
 
     def test_the_call_site_is_a_finding_even_though_the_callee_is_not_a_subclass(self):
         found = findings(
@@ -233,7 +236,29 @@ class AnExceptionHandedToAHelperThatBuildsOne(unittest.TestCase):
 
     def test_a_plain_function_helper_counts_the_same_as_a_method(self):
         found = findings(
-            "try:\n    x()\nexcept Exception as e:\n    raise _refuse(e)\n",
+            "try:\n    x()\nexcept Exception as e:\n    raise _refuse(kind, name, address, e)\n",
+            helpers=self.HELPERS,
+        )
+
+        self.assertEqual(len(found), 1)
+
+    def test_a_helper_that_builds_from_a_safe_parameter_and_logs_the_exception_is_not_a_finding(self):
+        found = findings(
+            "try:\n    x()\nexcept Exception as e:\n    raise self._refuse(kind, name, address, e) from e\n",
+            helpers=self.SAFE,
+        )
+
+        self.assertEqual(found, [])
+
+    def test_the_same_call_flips_when_the_exception_reaches_the_message(self):
+        source = "try:\n    x()\nexcept Exception as e:\n    raise self._refuse(kind, name, address, e) from e\n"
+
+        self.assertEqual(findings(source, helpers=self.SAFE), [])
+        self.assertEqual(len(findings(source, helpers=self.HELPERS)), 1)
+
+    def test_a_keyword_landing_on_a_tainting_parameter_is_a_finding(self):
+        found = findings(
+            "try:\n    x()\nexcept Exception as e:\n    raise _refuse(kind, name, address, error=e)\n",
             helpers=self.HELPERS,
         )
 
@@ -256,7 +281,7 @@ class AnExceptionHandedToAHelperThatBuildsOne(unittest.TestCase):
             "    except Exception as e:\n"
             "        failure = e\n"
             "    if failure is not None:\n"
-            "        raise _refuse(failure)\n"
+            "        raise _refuse(kind, name, address, failure)\n"
         )
 
         self.assertEqual(len(findings(source, helpers=self.HELPERS)), 1)
@@ -270,8 +295,22 @@ class TheHelperSetIsDerivedFromTheSourceRatherThanListed(unittest.TestCase):
     def test_a_helper_that_interpolates_a_parameter_into_an_exception_is_in_the_set(self):
         self.assertIn("_require_status", self.helpers)
 
-    def test_a_helper_that_logs_its_parameter_and_raises_a_fixed_message_is_not(self):
-        self.assertNotIn("_refuse", self.helpers)
+    def test_the_set_records_which_parameters_reach_the_construction(self):
+        for ordered, tainting in self.helpers["_require_status"]:
+            self.assertTrue(tainting <= set(ordered))
+            self.assertTrue(tainting)
 
     def test_a_sanitiser_is_not_a_helper_that_builds_one(self):
         self.assertNotIn("decode_exception_to_message", self.helpers)
+
+
+class TheAllowlistChecksItsOwnClaims(unittest.TestCase):
+
+    def test_every_claim_on_the_tree_is_true(self):
+        self.assertEqual(gate.allowlist_claims_that_are_false(gate.fields_each_model_exposes()), [])
+
+    def test_a_claim_about_a_field_a_serializer_does_expose_is_reported(self):
+        false_claim = gate.allowlist_claims_that_are_false({"ShareIssuance": {"error_message"}})
+
+        self.assertEqual(len(false_claim), 2)
+        self.assertIn("claims ShareIssuance.error_message is not served", false_claim[0])

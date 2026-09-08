@@ -1885,24 +1885,34 @@ caught it. Neither end is visible — at the call site the callee is
 `self._refuse`, not a subclass; inside the helper there is no handler for the
 taint to start from.
 
-The set of such helpers is derived from the source too: functions that construct
-an `APIException` subclass from one of their **own parameters**. A call to one
-with a caught-derived argument is a finding. Restoring that line makes the gate
-name all three call sites:
+The set is derived from the source too, and **it records which parameters reach
+the construction, not merely that some parameter does.** That distinction is the
+whole rule. `_refuse` builds its exception from `tx_type`, a safe enum, and logs
+`error` — so "does this function build an exception from a parameter" is true of
+it *either way*, and a rule asking only that fires on the correct file as loudly
+as on the broken one. The first version of this rule did exactly that, and
+produced identical output with and without the defect:
 
 ```
-backend/whitelist/services/whitelist.py:153 _refuse(e): serves-exception-text
-backend/whitelist/services/whitelist.py:159 _refuse(e): serves-exception-text
-backend/whitelist/services/whitelist.py:171 _refuse(e): serves-exception-text
+with the fixed message      exit 1, three findings
+with the leak restored      exit 1, the same three findings
 ```
 
-The set is broad — forty-seven functions, most of them interpolating a symbol or
-a status rather than an exception — and that is deliberate: **the call site is
-where the precision is.** Passing a caught exception into anything that
-interpolates its parameters into an exception is the dangerous act, whatever the
-parameter was meant to be. `_refuse` as it stands is *not* in the set, because it
-logs its parameter and builds a fixed message; that is what a helper of this
-shape should look like.
+Recording the parameter names and matching them to the call site's argument
+positions is what makes the two different:
+
+```
+#339's file with its fixed message          exit 0
+the same file with the interpolation back   exit 1
+  whitelist/services/whitelist.py:153 _refuse(e): serves-exception-text
+  whitelist/services/whitelist.py:159 _refuse(e): serves-exception-text
+  whitelist/services/whitelist.py:171 _refuse(e): serves-exception-text
+```
+
+So a finding means *the caught exception landed on a parameter that reaches the
+message*, not *the caught exception was handed to a function that builds
+exceptions*. `_refuse` as it stands is not a finding, and that is a useful thing
+for the gate to be able to say.
 
 **What none of the three rules covers.** A field written outside a handler from a
 value that travelled there in some other way; a serializer that builds a string in
@@ -1911,6 +1921,11 @@ deep, since the taint follows one boundary and not a chain; and any path where t
 receiver's model cannot be read from the call site and is not in the allowlist. The
 first three are decidable and unbuilt; the last is why the allowlist exists rather
 than being an oversight.
+
+**The allowlist checks its own claims.** Each entry names a model and a field, and
+the gate refuses when a serializer of that model does in fact expose it — so an
+entry cannot quietly become false as serializers change. A claim a gate cannot
+check is a comment.
 
 The subclass set is collected from the source, following `APIException` through
 subclassing, so a new exception module is covered without an edit. It is 70

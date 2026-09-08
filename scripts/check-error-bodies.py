@@ -68,13 +68,13 @@ RULES = {
 # client serializer exposes. Each entry is a claim that this receiver is one of the
 # operator-facing ones, and the claim has to be true.
 ALLOWED_NOTE_RECEIVERS = {
-    "issuance.mark_failed": "ShareIssuance.error_message; no client serializer exposes it",
-    "issuance.mark_reverted": "ShareIssuance.error_message; no client serializer exposes it",
-    "tx_record.mark_failed": "BlockchainTransaction.error_message; operator-facing",
-    "tx_record.mark_outcome_unknown": "BlockchainTransaction.error_message; operator-facing",
-    "tx_record.mark_reverted": "BlockchainTransaction.error_message; operator-facing",
-    "entry.mark_failed": "WhitelistEntry.notes; no client serializer exposes it",
-    "mint_request.mark_failed": "MintRequest has no serializer at all; it is reached through the admin",
+    "issuance.mark_failed": ("ShareIssuance", "error_message"),
+    "issuance.mark_reverted": ("ShareIssuance", "error_message"),
+    "tx_record.mark_failed": ("BlockchainTransaction", "error_message"),
+    "tx_record.mark_outcome_unknown": ("BlockchainTransaction", "error_message"),
+    "tx_record.mark_reverted": ("BlockchainTransaction", "error_message"),
+    "entry.mark_failed": ("WhitelistEntry", "notes"),
+    "mint_request.mark_failed": ("MintRequest", "error_message"),
 }
 
 # Deriving a caller-safe message from an exception is allowed, but only through a
@@ -123,8 +123,8 @@ def api_exception_names() -> set[str]:
     return found
 
 
-def helpers_that_build_an_exception(subclasses: set[str]) -> set[str]:
-    """Functions that construct an APIException subclass from one of their own parameters.
+def helpers_that_build_an_exception(subclasses: set[str]) -> dict[str, list[tuple[list[str], set[str]]]]:
+    """Functions that construct an APIException subclass, and which parameters reach it.
 
     A caught exception handed to one of these reaches a response body the same way
     it would from the handler, and the gate sees neither end: at the call site the
@@ -132,8 +132,20 @@ def helpers_that_build_an_exception(subclasses: set[str]) -> set[str]:
     `_derives_from` to be asked about. #390 measured that on
     `whitelist/services/whitelist.py:_refuse`, where a rebase had restored the leak
     and only a test noticed.
+
+    The parameter names are the whole of the precision, and the first version of
+    this rule did not have them. `_refuse` builds its exception from `tx_type`, a
+    safe enum, and logs `error` - so a bare "does this function build an exception
+    from a parameter" is true of it either way, and the call-site check fired on the
+    correct file as loudly as on the broken one. Omarch 5 measured that the output
+    was identical with and without the defect. Recording which parameters flow into
+    the construction is what makes the two different.
+
+    One entry per name, each a list of variants, because two functions can share a
+    name with different signatures. A call is a finding when the caught value lands
+    on a tainting parameter of any variant.
     """
-    helpers: set[str] = set()
+    helpers: dict[str, list[tuple[list[str], set[str]]]] = {}
     for path in sorted(BACKEND.rglob("*.py")):
         parts = path.relative_to(BACKEND).parts
         if "migrations" in parts or "tests" in parts:
@@ -145,22 +157,62 @@ def helpers_that_build_an_exception(subclasses: set[str]) -> set[str]:
         for node in ast.walk(tree):
             if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
-            parameters = {argument.arg for argument in node.args.args} - {"self", "cls"}
-            if not parameters:
+            ordered = [argument.arg for argument in node.args.args]
+            if ordered and ordered[0] in {"self", "cls"}:
+                ordered = ordered[1:]
+            ordered += [argument.arg for argument in node.args.kwonlyargs]
+            if not ordered:
                 continue
+            tainting: set[str] = set()
             for call in ast.walk(node):
                 if not (isinstance(call, ast.Call) and isinstance(call.func, ast.Name)):
                     continue
                 if call.func.id not in subclasses:
                     continue
-                arguments = list(call.args) + [k.value for k in call.keywords]
-                if any(
-                    isinstance(inner, ast.Name) and inner.id in parameters
-                    for argument in arguments
-                    for inner in ast.walk(argument)
-                ) and not any(_sanitised(inner) for argument in arguments for inner in ast.walk(argument)):
-                    helpers.add(node.name)
+                for argument in list(call.args) + [k.value for k in call.keywords]:
+                    if any(_sanitised(inner) for inner in ast.walk(argument)):
+                        continue
+                    tainting |= {
+                        inner.id
+                        for inner in ast.walk(argument)
+                        if isinstance(inner, ast.Name) and inner.id in ordered
+                    }
+            if tainting:
+                helpers.setdefault(node.name, []).append((ordered, tainting))
     return helpers
+
+
+def allowlist_claims_that_are_false(exposed: dict[str, set[str]]) -> list[str]:
+    """Each allowlist entry claims a model and a field no client serializer exposes.
+
+    Omarch 5's note on #391: the entries stated claims this module could check and
+    nothing did. A claim a gate cannot check is a comment, and this one is checkable
+    from the same map the second rule is built on.
+    """
+    return [
+        f"{receiver}: claims {model}.{field} is not served, and a serializer exposes it"
+        for receiver, (model, field) in sorted(ALLOWED_NOTE_RECEIVERS.items())
+        if field in exposed.get(model, set())
+    ]
+
+
+def _lands_on_a_tainting_parameter(statement: ast.Call, variants, caught: str, tainted: set[str]) -> bool:
+    for ordered, tainting in variants:
+        for index, argument in enumerate(statement.args):
+            if index >= len(ordered) or ordered[index] not in tainting:
+                continue
+            if _derives_from(argument, caught, tainted) and not any(
+                _sanitised(inner) for inner in ast.walk(argument)
+            ):
+                return True
+        for keyword in statement.keywords:
+            if keyword.arg not in tainting:
+                continue
+            if _derives_from(keyword.value, caught, tainted) and not any(
+                _sanitised(inner) for inner in ast.walk(keyword.value)
+            ):
+                return True
+    return False
 
 
 def fields_each_model_exposes() -> dict[str, set[str]]:
@@ -195,8 +247,8 @@ def fields_each_model_exposes() -> dict[str, set[str]]:
     return exposed
 
 
-def note_methods_a_client_reads() -> set[str]:
-    exposed = fields_each_model_exposes()
+def note_methods_a_client_reads(exposed=None) -> set[str]:
+    exposed = fields_each_model_exposes() if exposed is None else exposed
     methods: set[str] = set()
     for path in sorted(BACKEND.rglob("models/*.py")):
         try:
@@ -279,19 +331,20 @@ def _call_findings(scope, caught, tainted, subclasses, notes, helpers, relative)
         if not isinstance(statement, ast.Call):
             continue
         arguments = list(statement.args) + [k.value for k in statement.keywords]
-        if not any(
+        carries = any(
             _derives_from(argument, caught, tainted)
             and not any(_sanitised(inner) for inner in ast.walk(argument))
             for argument in arguments
-        ):
+        )
+        called = _called_name(statement.func)
+        if called in helpers and _lands_on_a_tainting_parameter(statement, helpers[called], caught, tainted):
+            findings.append(f"{relative}:{statement.lineno} {called}({caught}): {SERVES_EXCEPTION_TEXT}")
+            continue
+        if not carries:
             continue
         if isinstance(statement.func, ast.Name) and statement.func.id in subclasses:
             findings.append(
                 f"{relative}:{statement.lineno} {statement.func.id}({caught}): {SERVES_EXCEPTION_TEXT}"
-            )
-        elif _called_name(statement.func) in helpers:
-            findings.append(
-                f"{relative}:{statement.lineno} {_called_name(statement.func)}({caught}): {SERVES_EXCEPTION_TEXT}"
             )
         elif isinstance(statement.func, ast.Attribute) and statement.func.attr in notes:
             receiver = f"{ast.unparse(statement.func.value)}.{statement.func.attr}"
@@ -329,9 +382,10 @@ def findings_in(tree, subclasses, notes, helpers, relative) -> list[str]:
 
 def scan() -> tuple[list[str], int]:
     subclasses = api_exception_names()
-    notes = note_methods_a_client_reads()
+    exposed = fields_each_model_exposes()
+    notes = note_methods_a_client_reads(exposed)
     helpers = helpers_that_build_an_exception(subclasses)
-    findings: list[str] = []
+    findings: list[str] = list(allowlist_claims_that_are_false(exposed))
     checked = 0
 
     for path in sorted(BACKEND.rglob("*.py")):
