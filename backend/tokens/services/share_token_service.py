@@ -70,6 +70,16 @@ CLAIMED_BEFORE_RECORDED = (
 TOKEN_PAUSED = "Token is paused. Unpause it before executing."
 SHARE_ASSET_CHAIN = BLOCKCHAIN_BASE
 NOT_ATTESTED = "{symbol} at {address} is not the address the factory holds for {identifier}; left unverified"
+ISSUANCE_EXECUTION_FAILED = (
+    "The blockchain call did not complete. If a transaction reached the chain it is recorded against this "
+    "request, so executing it again reads that transaction rather than sending a second one, and shares "
+    "cannot be issued twice. An operator can execute it again once they have looked at it."
+)
+CAPITAL_INCREASE_EXECUTION_FAILED = (
+    "The blockchain call did not complete. If a transaction reached the chain it is recorded against this "
+    "request, so executing it again reads that transaction rather than sending a second one, and the cap "
+    "cannot be raised twice. An operator can execute it again once they have looked at it."
+)
 CAP_NOT_RAISED = (
     "Authorized shares are already at or above the requested total. "
     "Resubmit the capital increase against the current cap."
@@ -560,7 +570,7 @@ class ShareTokenService:
         except Exception as exc:
             logger.error(f"Issuance failed: {exc}")
             issuance.mark_failed(str(exc))
-            request.mark_failed(str(exc))
+            request.mark_failed(ISSUANCE_EXECUTION_FAILED)
             raise
 
         self._complete_issuance(request, issuance, result)
@@ -585,7 +595,7 @@ class ShareTokenService:
         except Exception as exc:
             logger.error(f"mint {tx_hash} for request {request.uuid} still unconfirmed: {exc}")
             issuance.mark_failed(str(exc))
-            request.mark_failed(str(exc))
+            request.mark_failed(ISSUANCE_EXECUTION_FAILED)
             raise
 
         logger.info(f"mint {tx_hash} for request {request.uuid} already mined; completing without sending")
@@ -721,7 +731,8 @@ class ShareTokenService:
                     except Exception as exc:
                         failure = exc
             if failure is not None:
-                request.mark_failed(str(failure))
+                logger.error(f"Capital increase {request.uuid} failed: {failure}")
+                request.mark_failed(CAPITAL_INCREASE_EXECUTION_FAILED)
             elif result is not None:
                 self._complete_capital_increase(request, result)
 

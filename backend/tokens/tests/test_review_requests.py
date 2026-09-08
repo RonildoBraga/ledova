@@ -39,7 +39,9 @@ from tokens.services.capital_increase import submit_capital_increase
 from tokens.services.dilution import dilution_for
 from tokens.services.share_token_service import (
     CAP_NOT_RAISED,
+    CAPITAL_INCREASE_EXECUTION_FAILED,
     EXCEEDS_AUTHORIZED,
+    ISSUANCE_EXECUTION_FAILED,
     NOT_WHITELISTED,
     TOKEN_PAUSED,
     UNNAMED_MINT_GRACE,
@@ -601,7 +603,9 @@ class ExecuteRequestServiceTest(TestCase):
 
         request.refresh_from_db()
         self.token.refresh_from_db()
-        self.assertEqual((request.status, request.review_notes), (RequestStatus.FAILED, "Execution failed: rpc down"))
+        self.assertEqual(request.status, RequestStatus.FAILED)
+        self.assertEqual(request.review_notes, f"Execution failed: {ISSUANCE_EXECUTION_FAILED}")
+        self.assertNotIn("rpc down", request.review_notes)
         self.assertTrue(request.can_be_executed)
         self.assertEqual(self.token.total_supply, "1000")
         issuance = ShareIssuance.objects.get(token=self.token)
@@ -719,7 +723,9 @@ class ExecuteRequestServiceTest(TestCase):
                 with self.assertRaisesMessage(RuntimeError, "revert"):
                     self.service.execute_request(no_wallet)
         no_wallet.refresh_from_db()
-        self.assertEqual((no_wallet.status, no_wallet.review_notes), (RequestStatus.FAILED, "Execution failed: revert"))
+        self.assertEqual(no_wallet.status, RequestStatus.FAILED)
+        self.assertEqual(no_wallet.review_notes, f"Execution failed: {CAPITAL_INCREASE_EXECUTION_FAILED}")
+        self.assertNotIn("revert", no_wallet.review_notes)
         self.assertFalse(ShareIssuance.objects.exists())
 
 
