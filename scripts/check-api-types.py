@@ -168,10 +168,14 @@ TYPE_DEBT: dict[str, tuple[int, str]] = {
         "fields the page reads; the remaining twelve want a narrower OfferingListItem type.",
     ),
     "Offering:OfferingWrite": (
-        38,
+        40,
         "POST and PATCH /api/v1/offerings/ answer with OfferingWriteSerializer while both services "
         "are typed apiClient.<verb><Offering>. The write shape is deliberately smaller; the type "
-        "claims the detail shape.",
+        "claims the detail shape. Twenty fields on each of the two endpoints: it was nineteen until "
+        "#364 added can_be_deleted to the read serializers and canBeDeleted to the interface, which "
+        "is what this gate would have said about that branch had it been on main. Nothing reads the "
+        "mutation result today - both call sites discard it and refetch - so it is a loaded type, "
+        "not a live undefined.",
     ),
     "SubscriptionDetail:SubscriptionCreate": (
         30,
