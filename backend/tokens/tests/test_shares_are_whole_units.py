@@ -1,7 +1,11 @@
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
+from django.test import TestCase
 from rest_framework.test import APITestCase
 
 from companies.models import Company, CompanyStatus, CompanyType
+from shared.tests.tenants import make_tenant
 from tokens.models import ShareToken, ShareTokenType
 from tokens.serializers.share_token import SHARES_ARE_WHOLE
 
@@ -46,3 +50,32 @@ class AShareClassRecordsWholeUnitsTest(APITestCase):
 
         self.assertEqual(response.status_code, 201)
         self.assertEqual(ShareToken.objects.get(symbol="ACM").decimals, 0)
+
+
+class ShareTokenDecimalsCannotBePersistedTest(TestCase):
+
+    def setUp(self):
+        self.token = make_tenant("whole-shares").token
+
+    def test_database_updates_cannot_make_a_share_fractional(self):
+        for decimals in (1, 6, 18):
+            with self.subTest(decimals=decimals):
+                with self.assertRaises(IntegrityError), transaction.atomic():
+                    ShareToken.objects.filter(pk=self.token.pk).update(decimals=decimals)
+                self.token.refresh_from_db()
+                self.assertEqual(self.token.decimals, 0)
+
+    def test_model_validation_refuses_nonzero_decimals_before_saving(self):
+        self.token.decimals = 1
+
+        with self.assertRaises(ValidationError) as caught:
+            self.token.full_clean()
+
+        self.assertIn("decimals", caught.exception.message_dict)
+
+    def test_zero_remains_valid_and_persistable(self):
+        self.token.full_clean()
+        ShareToken.objects.filter(pk=self.token.pk).update(decimals=0)
+        self.token.refresh_from_db()
+
+        self.assertEqual(self.token.decimals, 0)
