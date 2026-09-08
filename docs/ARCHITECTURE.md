@@ -2263,21 +2263,6 @@ read by someone checking that half. **When a number in one file only means what
 it says because of a number in another, say so where both can see it, or derive
 one from the other.**
 
-**A number that cannot be derived carries its source in its name, and says
-what kind of number it is.** `UNNAMED_MINT_GRACE` is derived — two broadcast
-budgets, from a round-trip count a test measures — and the ordering that makes
-the operator control reachable is asserted against `STALE_EXECUTION_AGE`. Not
-every bound can be got that way. `GETH_TXPOOL_LIFETIME` is three hours because
-that is geth's `txpool.lifetime` default, the window past which a node drops a
-pending transaction and it can no longer mine; the name carries the source
-because this repository refuses docstrings, so a name is the only place in the
-source a provenance can live. And it is a **cost control, not a correctness
-one**: `isWhitelisted` is right whenever it is asked, and the bound only
-decides how long the reconciler keeps asking, so an operator whose node holds
-transactions longer raises it and loses nothing but reads. Say which kind a
-number is; a bound that only costs money is a different object from one a
-guarantee rests on, and a reader who cannot tell will treat both as sacred.
-
 ### Measurement traps
 
 Not a test but the same family: a reading that looks like a finding and is

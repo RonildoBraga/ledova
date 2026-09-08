@@ -105,17 +105,28 @@ class WhitelistServiceTransactionTest(TransactionTestCase):
         self.assertIn("Error: boom", self.entry.notes)
 
     def test_a_send_whose_fate_is_unknown_is_not_called_failed(self):
-        service = self._service()
-        service.chain_client.send_raw_transaction.side_effect = BaseChainTransactionError("no response")
+        for operation, on_chain, status in (
+            ("add_to_whitelist", False, WhitelistStatus.PENDING),
+            ("add_to_whitelist", False, WhitelistStatus.FAILED),
+            ("add_to_whitelist", False, WhitelistStatus.REMOVED),
+            ("remove_from_whitelist", True, WhitelistStatus.ACTIVE),
+            ("remove_from_whitelist", True, WhitelistStatus.FAILED),
+        ):
+            with self.subTest(operation=operation, status=status):
+                BlockchainTransaction.objects.all().delete()
+                WhitelistEntry.objects.filter(pk=self.entry.pk).update(status=status, is_whitelisted=on_chain)
+                service = self._service(on_chain=on_chain)
+                service.chain_client.send_raw_transaction.side_effect = BaseChainTransactionError("no response")
 
-        with self.assertRaises(WhitelistOperationFailedException):
-            service.add_to_whitelist(self.wallet.address)
+                with self.assertRaises(WhitelistOperationFailedException):
+                    getattr(service, operation)(self.wallet.address)
 
-        record = BlockchainTransaction.objects.get()
-        self.assertEqual((record.status, record.tx_hash), (TransactionStatus.PENDING, None))
-        self.assertIn("no response", record.error_message)
-        self.entry.refresh_from_db()
-        self.assertEqual(self.entry.status, WhitelistStatus.PENDING)
+                record = BlockchainTransaction.objects.get()
+                self.assertEqual((record.status, record.tx_hash), (TransactionStatus.PENDING, None))
+                self.assertIn("no response", record.error_message)
+                self.entry.refresh_from_db()
+                self.assertEqual(self.entry.status, WhitelistStatus.PENDING)
+                self.assertEqual(self.entry.is_whitelisted, on_chain)
 
     def test_a_receipt_that_never_arrives_keeps_the_hash_and_leaves_the_entry_pending(self):
         service = self._service()

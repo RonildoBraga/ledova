@@ -115,6 +115,9 @@ class WhitelistService:
     @staticmethod
     @atomic(durable=True)
     def _record_attempt(tx_type, function_name, checksum_address, signer_address, contract_address, entry):
+        if entry and entry.status != WhitelistStatus.PENDING:
+            entry.status = WhitelistStatus.PENDING
+            entry.save(update_fields=["status", "updated_at"])
         return BlockchainTransaction.objects.create(
             tx_type=tx_type,
             status=TransactionStatus.PENDING,
@@ -128,11 +131,8 @@ class WhitelistService:
 
     @staticmethod
     @atomic(durable=True)
-    def _record_sent(tx_record, entry, tx_hash) -> None:
+    def _record_sent(tx_record, tx_hash) -> None:
         tx_record.mark_submitted(tx_hash)
-        if entry and entry.status != WhitelistStatus.PENDING:
-            entry.status = WhitelistStatus.PENDING
-            entry.save(update_fields=["status", "updated_at"])
 
     def _refuse(self, tx_type, function_name, checksum_address, error):
         logger.error(f"{function_name}({checksum_address}) failed: {error}")
@@ -158,7 +158,7 @@ class WhitelistService:
             tx_record.mark_outcome_unknown(str(e))
             raise self._refuse(tx_type, function_name, checksum_address, e) from e
 
-        self._record_sent(tx_record, entry, tx_hash)
+        self._record_sent(tx_record, tx_hash)
         logger.info(f"{function_name}({checksum_address}) sent (tx={tx_hash})")
 
         if not wait_for_receipt:
