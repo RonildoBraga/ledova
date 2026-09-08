@@ -76,6 +76,74 @@ export function describeFailure(error: unknown): string {
   return local.length > 0 ? local.join(': ') : 'unknown failure';
 }
 
+export interface ApiErrorReading {
+  generalError?: string;
+  fieldErrors?: Record<string, string[]>;
+}
+
+const ANNOUNCEMENT_KEYS = ['detail', 'error', 'message'] as const;
+
+const KEYS_BELONGING_TO_NO_FIELD = ['nonFieldErrors', 'non_field_errors'] as const;
+
+function sentenceListOf(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+  const sentences = value.filter((each): each is string => typeof each === 'string' && each.trim().length > 0);
+  return sentences.length > 0 ? sentences : null;
+}
+
+function announcementOf(value: unknown): string[] | null {
+  if (typeof value === 'string') return value.trim() ? [value] : null;
+  return sentenceListOf(value);
+}
+
+export interface ReadApiErrorOptions {
+  fallback: string;
+  displayedFields?: readonly string[];
+}
+
+export function readApiError(error: unknown, options: ReadApiErrorOptions): ApiErrorReading {
+  const { fallback, displayedFields } = options;
+  const response = (error as { response?: { status?: number; data?: unknown } })?.response;
+  if (!response || !('data' in response)) return { generalError: fallback };
+
+  const data = response.data;
+  const announcedByTheBody = announcementOf(data);
+  if (announcedByTheBody) return { generalError: announcedByTheBody.join(' ') };
+  if (!data || typeof data !== 'object') return { generalError: fallback };
+
+  const body = data as Record<string, unknown>;
+  const announced = ANNOUNCEMENT_KEYS.reduce<string[] | null>((found, key) => found ?? announcementOf(body[key]), null);
+
+  const toAnnounce: string[] = announced ? [...announced] : [];
+  const toMark: Record<string, string[]> = {};
+
+  for (const [key, value] of Object.entries(body)) {
+    if ((ANNOUNCEMENT_KEYS as readonly string[]).includes(key)) continue;
+    const sentences = sentenceListOf(value);
+    if (!sentences) continue;
+    const noFieldWillRenderIt =
+      (KEYS_BELONGING_TO_NO_FIELD as readonly string[]).includes(key) ||
+      (displayedFields !== undefined && !displayedFields.includes(key));
+    if (noFieldWillRenderIt) toAnnounce.push(...sentences);
+    else toMark[key] = sentences;
+  }
+
+  const reading: ApiErrorReading = {};
+  if (toAnnounce.length > 0) reading.generalError = toAnnounce.join(' ');
+  if (Object.keys(toMark).length > 0) reading.fieldErrors = toMark;
+  if (!reading.generalError && !reading.fieldErrors) reading.generalError = fallback;
+  return reading;
+}
+
+export function apiErrorSentence(error: unknown, fallback: string): string {
+  const reading = readApiError(error, { fallback });
+  const everythingItSaid: string[] = [];
+  if (reading.generalError) everythingItSaid.push(reading.generalError);
+  if (reading.fieldErrors)
+    for (const sentences of Object.values(reading.fieldErrors)) everythingItSaid.push(...sentences);
+  return everythingItSaid.length > 0 ? everythingItSaid.join(' ') : fallback;
+}
+
 export interface SignInErrorReading {
   generalError?: string;
   fieldErrors?: Record<string, string[]>;
@@ -112,32 +180,11 @@ function retryAfterOf(response: { headers?: unknown; data?: unknown }): number |
   return null;
 }
 
-function sentenceOf(value: unknown): string | null {
-  if (typeof value === 'string') return value.trim() ? value : null;
-  if (Array.isArray(value) && value.length > 0 && value.every((each) => typeof each === 'string')) {
-    const joined = value.join(' ').trim();
-    return joined ? joined : null;
-  }
-  return null;
-}
-
 export function readSignInError(error: unknown): SignInErrorReading {
   const response = (error as { response?: { status?: number; headers?: unknown; data?: unknown } })?.response;
   if (!response || !('data' in response)) return { generalError: UNRECOGNISED };
 
   if (response.status === 429) return { generalError: throttleMessage(retryAfterOf(response)) };
 
-  const data = response.data;
-  if (Array.isArray(data)) return { generalError: data.join(' ') };
-  if (typeof data === 'string') return { generalError: data };
-  if (!data || typeof data !== 'object') return { generalError: UNRECOGNISED };
-
-  const body = data as Record<string, unknown>;
-  const announced = sentenceOf(body.detail) ?? sentenceOf(body.error);
-  if (announced) return { generalError: announced };
-
-  const fieldErrors = Object.keys(body).some((key) => Array.isArray(body[key]));
-  if (fieldErrors) return { fieldErrors: body as Record<string, string[]> };
-
-  return { generalError: UNRECOGNISED };
+  return readApiError(error, { fallback: UNRECOGNISED });
 }
