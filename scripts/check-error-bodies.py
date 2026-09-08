@@ -46,6 +46,7 @@ ROOT = Path(__file__).resolve().parent.parent
 BACKEND = ROOT / "backend"
 
 SERVES_EXCEPTION_TEXT = "serves-exception-text"
+SERVES_EXCEPTION_TEXT_TO_A_FIELD = "serves-exception-text-to-a-field"
 
 RULES = {
     SERVES_EXCEPTION_TEXT: (
@@ -53,6 +54,27 @@ RULES = {
         "the underlying library chose to say. Raise the exception bare - it has a default_detail - "
         "and log the diagnostic instead."
     ),
+    SERVES_EXCEPTION_TEXT_TO_A_FIELD: (
+        "hands a caught exception's text to a model method that writes a field a client-facing "
+        "serializer exposes, so the response carries it in a 200 body rather than an error one. "
+        "Pass a fixed note and keep the diagnostic in the log and on the operator-facing record."
+    ),
+}
+
+# The same rule one layer out, and the receiver is how it is decided. A method name
+# alone cannot say which model it is on: ReviewRequest.mark_failed writes
+# review_notes, which two client serializers expose, while ShareIssuance and
+# BlockchainTransaction both have a mark_failed that writes error_message, which no
+# client serializer exposes. Each entry is a claim that this receiver is one of the
+# operator-facing ones, and the claim has to be true.
+ALLOWED_NOTE_RECEIVERS = {
+    "issuance.mark_failed": "ShareIssuance.error_message; no client serializer exposes it",
+    "issuance.mark_reverted": "ShareIssuance.error_message; no client serializer exposes it",
+    "tx_record.mark_failed": "BlockchainTransaction.error_message; operator-facing",
+    "tx_record.mark_outcome_unknown": "BlockchainTransaction.error_message; operator-facing",
+    "tx_record.mark_reverted": "BlockchainTransaction.error_message; operator-facing",
+    "entry.mark_failed": "WhitelistEntry.notes; no client serializer exposes it",
+    "mint_request.mark_failed": "MintRequest has no serializer at all; it is reached through the admin",
 }
 
 # Deriving a caller-safe message from an exception is allowed, but only through a
@@ -101,6 +123,74 @@ def api_exception_names() -> set[str]:
     return found
 
 
+def fields_each_model_exposes() -> dict[str, set[str]]:
+    exposed: dict[str, set[str]] = {}
+    for path in sorted(BACKEND.rglob("serializers/*.py")):
+        try:
+            tree = ast.parse(path.read_text())
+        except SyntaxError:
+            continue
+        for outer in ast.walk(tree):
+            if not isinstance(outer, ast.ClassDef):
+                continue
+            for meta in outer.body:
+                if not (isinstance(meta, ast.ClassDef) and meta.name == "Meta"):
+                    continue
+                model = None
+                named: set[str] = set()
+                for statement in meta.body:
+                    if not isinstance(statement, ast.Assign):
+                        continue
+                    targets = {t.id for t in statement.targets if isinstance(t, ast.Name)}
+                    if "model" in targets:
+                        model = ast.unparse(statement.value).split(".")[-1]
+                    if "fields" in targets:
+                        named |= {
+                            element.value
+                            for element in ast.walk(statement.value)
+                            if isinstance(element, ast.Constant) and isinstance(element.value, str)
+                        }
+                if model:
+                    exposed.setdefault(model, set()).update(named)
+    return exposed
+
+
+def note_methods_a_client_reads() -> set[str]:
+    exposed = fields_each_model_exposes()
+    methods: set[str] = set()
+    for path in sorted(BACKEND.rglob("models/*.py")):
+        try:
+            tree = ast.parse(path.read_text())
+        except SyntaxError:
+            continue
+        for model in [n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)]:
+            served = exposed.get(model.name, set())
+            if not served:
+                continue
+            for node in [n for n in ast.walk(model) if isinstance(n, ast.FunctionDef)]:
+                parameters = {argument.arg for argument in node.args.args} - {"self"}
+                if not parameters:
+                    continue
+                for statement in ast.walk(node):
+                    if not isinstance(statement, ast.Assign):
+                        continue
+                    written = {
+                        target.attr
+                        for target in statement.targets
+                        if isinstance(target, ast.Attribute)
+                        and isinstance(target.value, ast.Name)
+                        and target.value.id == "self"
+                    }
+                    if not written & served:
+                        continue
+                    if any(
+                        isinstance(inner, ast.Name) and inner.id in parameters
+                        for inner in ast.walk(statement.value)
+                    ):
+                        methods.add(node.name)
+    return methods
+
+
 def _derives_from(node: ast.AST, caught: str, tainted: set[str]) -> bool:
     """Whether this expression carries the caught exception's text."""
     for inner in ast.walk(node):
@@ -131,37 +221,63 @@ def _tainted_locals(handler: ast.ExceptHandler, caught: str) -> set[str]:
     return tainted
 
 
-def findings_in(tree: ast.AST, subclasses: set[str], relative: Path) -> list[str]:
+def _handlers_in(scope: ast.AST) -> list[ast.ExceptHandler]:
+    return [node for node in ast.walk(scope) if isinstance(node, ast.ExceptHandler) and node.name]
+
+
+def _call_findings(scope: ast.AST, caught: str, tainted: set[str], subclasses, notes, relative) -> list[str]:
     findings: list[str] = []
-
-    for handler in [n for n in ast.walk(tree) if isinstance(n, ast.ExceptHandler)]:
-        if not handler.name:
+    for statement in ast.walk(scope):
+        if not isinstance(statement, ast.Call):
             continue
-        caught = handler.name
-        tainted = _tainted_locals(handler, caught)
-
-        for statement in ast.walk(handler):
-            if not isinstance(statement, ast.Call):
-                continue
-            if not isinstance(statement.func, ast.Name):
-                continue
-            if statement.func.id not in subclasses:
-                continue
-            arguments = list(statement.args) + [k.value for k in statement.keywords]
-            if any(
-                _derives_from(argument, caught, tainted)
-                and not any(_sanitised(inner) for inner in ast.walk(argument))
-                for argument in arguments
-            ):
+        arguments = list(statement.args) + [k.value for k in statement.keywords]
+        if not any(
+            _derives_from(argument, caught, tainted)
+            and not any(_sanitised(inner) for inner in ast.walk(argument))
+            for argument in arguments
+        ):
+            continue
+        if isinstance(statement.func, ast.Name) and statement.func.id in subclasses:
+            findings.append(
+                f"{relative}:{statement.lineno} {statement.func.id}({caught}): {SERVES_EXCEPTION_TEXT}"
+            )
+        elif isinstance(statement.func, ast.Attribute) and statement.func.attr in notes:
+            receiver = f"{ast.unparse(statement.func.value)}.{statement.func.attr}"
+            if receiver not in ALLOWED_NOTE_RECEIVERS:
                 findings.append(
-                    f"{relative}:{statement.lineno} {statement.func.id}({caught}): "
-                    f"{SERVES_EXCEPTION_TEXT}"
+                    f"{relative}:{statement.lineno} {receiver}({caught}): {SERVES_EXCEPTION_TEXT_TO_A_FIELD}"
                 )
+    return findings
+
+
+def findings_in(tree: ast.AST, subclasses: set[str], notes: set[str], relative: Path) -> list[str]:
+    findings: list[str] = []
+    seen: set[str] = set()
+
+    scopes = [tree] + [node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
+    for scope in scopes:
+        for handler in _handlers_in(scope):
+            caught = handler.name
+            tainted = _tainted_locals(handler, caught)
+            # Inside the handler the caught name itself is live; the names assigned from
+            # it are the ones that outlive it, because Python unbinds `as name` on exit.
+            # A finding outside the handler is the same defect one statement later, and
+            # #366's capital-increase site was exactly that shape.
+            for finding in _call_findings(handler, caught, tainted, subclasses, notes, relative):
+                if finding not in seen:
+                    seen.add(finding)
+                    findings.append(finding)
+            if tainted and scope is not tree:
+                for finding in _call_findings(scope, caught, tainted, subclasses, notes, relative):
+                    if finding not in seen:
+                        seen.add(finding)
+                        findings.append(finding)
     return findings
 
 
 def scan() -> tuple[list[str], int]:
     subclasses = api_exception_names()
+    notes = note_methods_a_client_reads()
     findings: list[str] = []
     checked = 0
 
@@ -174,7 +290,7 @@ def scan() -> tuple[list[str], int]:
             tree = ast.parse(path.read_text())
         except SyntaxError:
             continue
-        findings += findings_in(tree, subclasses, path.relative_to(ROOT))
+        findings += findings_in(tree, subclasses, notes, path.relative_to(ROOT))
 
     return findings, checked
 
@@ -198,10 +314,12 @@ def main() -> int:
 
     if new:
         offenders = [f for f in findings if f.split(":")[0] in new]
-        print(f"API error bodies built from an exception's text ({len(offenders)}):\n", file=sys.stderr)
+        print(f"Caller-visible text built from an exception ({len(offenders)}):\n", file=sys.stderr)
         for finding in offenders:
             print(f"  {finding}", file=sys.stderr)
-        print(f"\n  {SERVES_EXCEPTION_TEXT}: {RULES[SERVES_EXCEPTION_TEXT]}", file=sys.stderr)
+        for rule, explanation in RULES.items():
+            if any(finding.endswith(rule) for finding in offenders):
+                print(f"\n  {rule}: {explanation}", file=sys.stderr)
         print(
             '\nThe rule and its scope are in docs/ARCHITECTURE.md, "The error body gate".',
             file=sys.stderr,
@@ -214,7 +332,7 @@ def main() -> int:
             print(f"  {key}: pinned {LEGACY[key]}, found {counts.get(key, 0)}", file=sys.stderr)
         return 1
 
-    print(f"No API error body carries an exception's text, in {checked} files.")
+    print(f"No API error body and no client-read field carries an exception's text, in {checked} files.")
     return 0
 
 

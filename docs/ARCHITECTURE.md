@@ -1957,6 +1957,54 @@ extracts a hex blob, decodes a known revert reason and returns that or a stated
 default, never the exception's text. It is named in `SANITISERS`, and adding a
 name there is a claim about that function which has to be true.
 
+**The same rule one layer out: a field a client-facing serializer exposes.** An
+`APIException` is not the only way an exception's text reaches a caller. A model
+field assigned inside a handler and served later by a serializer carries it in a
+**200 body**, where the first rule cannot see it. #366 found
+`review_notes = f"Execution failed: {str(exc)}"` on a share issuance request and a
+capital increase, both exposed by the issuer's own serializers.
+
+The gate's second rule refuses handing a caught exception's text to a model method
+that writes such a field. Both halves of it are derived from the source rather than
+listed:
+
+- **which fields a client reads**, from each serializer's `Meta.model` and
+  `Meta.fields` together — matched by model, so `SwapOrder.error_message` counts and
+  `MintRequest.error_message` does not, because `MintRequest` has no serializer at all
+- **which methods write them**, from model methods that assign such a field from one
+  of their own parameters — sixteen today, down from twenty-nine before the model
+  match was added
+
+**What it cannot decide is the receiver.** `ReviewRequest.mark_failed` writes
+`review_notes`, which two client serializers expose; `ShareIssuance`,
+`BlockchainTransaction` and `MintRequest` each have a `mark_failed` that writes
+`error_message`, which no serializer of theirs exposes. A call site gives the method
+name and not the model, so `ALLOWED_NOTE_RECEIVERS` names the receiver expressions
+that are the operator-facing ones. Each entry is a claim about that receiver, in the
+way `SANITISERS` is a claim about a function, and the claim has to be true.
+
+**Taint outlives the handler.** Python unbinds `as name` at handler exit, so the
+shape that escapes is a local assigned from it and used afterwards:
+
+```python
+        except Exception as exc:
+            failure = exc
+    if failure is not None:
+        request.mark_failed(str(failure))          # outside the handler
+```
+
+That is the capital-increase half of #366, and a handler-only scan does not see it —
+measured, because the first version of this rule did not. The scan taints names
+assigned from the caught exception and then reads the **enclosing function**, so a
+finding one statement later is still a finding.
+
+**What neither rule covers.** A field written outside a handler from a value that
+travelled there in some other way; a serializer that builds a string in a
+`SerializerMethodField` rather than exposing a model field; and any path where the
+receiver's model cannot be read from the call site and is not in the allowlist. The
+first two are decidable and unbuilt; the third is why the allowlist exists rather
+than being an oversight.
+
 The subclass set is collected from the source, following `APIException` through
 subclassing, so a new exception module is covered without an edit. It is 70
 classes today.

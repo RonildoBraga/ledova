@@ -16,9 +16,12 @@ _spec.loader.exec_module(gate)
 SUBCLASSES = {"TransferPreparationException", "BlockchainAPIError"}
 
 
-def findings(source: str):
+NOTE_METHODS = {"mark_failed", "mark_refused"}
+
+
+def findings(source: str, notes=frozenset()):
     tree = ast.parse(source)
-    return gate.findings_in(tree, SUBCLASSES, Path("service.py"))
+    return gate.findings_in(tree, SUBCLASSES, set(notes), Path("service.py"))
 
 
 class AnExceptionsTextReachingTheBody(unittest.TestCase):
@@ -135,3 +138,81 @@ class TheRepositoryStaysClean(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AnExceptionsTextReachingAFieldAClientReads(unittest.TestCase):
+
+    def test_a_note_method_called_with_it_inside_the_handler(self):
+        found = findings(
+            "try:\n    x()\nexcept Exception as e:\n    request.mark_failed(str(e))\n", NOTE_METHODS
+        )
+
+        self.assertEqual(len(found), 1)
+        self.assertIn(gate.SERVES_EXCEPTION_TEXT_TO_A_FIELD, found[0])
+
+    def test_a_note_method_called_after_the_handler_with_a_name_that_outlived_it(self):
+        source = (
+            "def run():\n"
+            "    failure = None\n"
+            "    try:\n"
+            "        x()\n"
+            "    except Exception as e:\n"
+            "        failure = e\n"
+            "    if failure is not None:\n"
+            "        request.mark_failed(str(failure))\n"
+        )
+
+        found = findings(source, NOTE_METHODS)
+
+        self.assertEqual(len(found), 1)
+        self.assertIn(gate.SERVES_EXCEPTION_TEXT_TO_A_FIELD, found[0])
+
+    def test_a_fixed_note_is_not_a_finding(self):
+        source = (
+            "def run():\n"
+            "    try:\n"
+            "        x()\n"
+            "    except Exception as e:\n"
+            "        logger.error(e)\n"
+            "        request.mark_failed(EXECUTION_FAILED)\n"
+        )
+
+        self.assertEqual(findings(source, NOTE_METHODS), [])
+
+    def test_an_allowed_receiver_is_not_a_finding(self):
+        found = findings(
+            "try:\n    x()\nexcept Exception as e:\n    tx_record.mark_failed(str(e))\n", NOTE_METHODS
+        )
+
+        self.assertEqual(found, [])
+
+    def test_a_method_no_client_serializer_backs_is_not_a_finding(self):
+        found = findings(
+            "try:\n    x()\nexcept Exception as e:\n    audit.write_note(str(e))\n", NOTE_METHODS
+        )
+
+        self.assertEqual(found, [])
+
+    def test_the_same_call_is_reported_once_rather_than_twice(self):
+        source = (
+            "def run():\n"
+            "    try:\n"
+            "        x()\n"
+            "    except Exception as e:\n"
+            "        failure = e\n"
+            "        request.mark_failed(str(failure))\n"
+        )
+
+        self.assertEqual(len(findings(source, NOTE_METHODS)), 1)
+
+
+class TheMethodSetIsDerivedFromTheSourceRatherThanListed(unittest.TestCase):
+
+    def test_a_field_a_serializer_exposes_puts_its_writer_in_the_set(self):
+        self.assertIn("mark_failed", gate.note_methods_a_client_reads())
+
+    def test_a_model_whose_serializer_hides_the_field_is_matched_by_model_not_by_name(self):
+        exposed = gate.fields_each_model_exposes()
+
+        self.assertIn("review_notes", exposed.get("CapitalIncreaseRequest", set()))
+        self.assertNotIn("MintRequest", exposed)
