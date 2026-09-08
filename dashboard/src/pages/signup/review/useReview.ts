@@ -10,6 +10,7 @@ import {
   describeFailure,
 } from '@ledova/shared';
 import { useAccountRole } from '@hooks/useAccountRole';
+import { AUTH_QUERY_KEY } from '@hooks/useAuth';
 import apiClient from '@services/apiClient';
 
 import type { ReviewData, Company } from '@ledova/shared';
@@ -81,9 +82,10 @@ export const useReview = (): ReviewHookReturn => {
 
       return profileUpdateResponse;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ['userProfiles'] });
       queryClient.invalidateQueries({ queryKey: ['userPreferences'] });
+      await queryClient.refetchQueries({ queryKey: AUTH_QUERY_KEY, exact: true });
       navigate(signupRole === 'company' ? '/company' : '/home');
     },
     onError: (error) => {
