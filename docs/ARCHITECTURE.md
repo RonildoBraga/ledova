@@ -2155,6 +2155,18 @@ POSTGRES_HOST=… POSTGRES_PORT=… POSTGRES_DB=… POSTGRES_USER=… POSTGRES_P
   CHAIN_TEST_SETTINGS=ledova_backend.settings.test_postgres
 ```
 
+**The count does not say which cases vanished; `-v 2` does.** `skipped=3` is a
+number, and a number cannot tell you that the three were the concurrency cases.
+Run the suite with `-v 2` and read the names and reasons:
+
+```
+test_two_workers_on_one_increase_send_one_transaction ... skipped 'select_for_update is a no-op on SQLite'
+test_a_real_deployment_bridges_a_verified_asset ...      skipped 'CHAIN_TEST_RPC_URL and the core contract addresses'
+```
+
+That turns "it passed" into "it passed without running these", which is the check
+this entry exists to make possible rather than merely to warn about.
+
 **And the reason the constraint was wrong is worth more than the invocation.** The
 claim was *submit is the only entry into the in-flight set, because approval and
 execution move the same row*. A partial index over statuses is entered by **every
