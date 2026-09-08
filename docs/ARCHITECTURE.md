@@ -1032,6 +1032,33 @@ runs. Both mechanisms hold at once on purpose:
   under a reverse. Reversing it with `remove` took a database from 80 policies,
   20 forced tables and 4 helpers to none of each, while `django_migrations`
   still said `0004` was applied.
+- **`check_rls_catalogue` is what makes that rule enforceable rather than
+  remembered.** It was the only rule here without a script, and it is the one
+  that is invisible when broken: both databases work, they are simply
+  different, and the difference surfaces weeks later as a defect on one
+  deployment and not another — #355 is the shape. The command reads what is
+  installed, then runs `policy_sql.install` itself inside a transaction it
+  rolls back and reads the result of that, and compares the two. Three things
+  about it are deliberate:
+  - **It compares `pg_get_expr` output against `pg_get_expr` output, never
+    against the text in `policies.py`.** PostgreSQL rewrites an expression when
+    it stores it — parenthesising, qualifying, making casts explicit, turning
+    an `IN` into `= ANY (ARRAY[...])` — so the catalogue string resembles
+    neither side. A gate comparing raw text would report formatting as drift,
+    get pinned, and then be ignored.
+  - **It runs the installer rather than reimplementing it.** Which expression
+    reaches which command is `policy_sql`'s business — `INSERTABLE` on `INSERT`
+    alone, `readable` on `SELECT` and the `USING` half of `UPDATE`. A gate that
+    restated that mapping would be a second source of truth for exactly the
+    thing it exists to keep singular.
+  - **The probe rolls back, and a test asserts the installed policies are
+    unchanged afterwards.** It takes the locks the migration takes, briefly, so
+    it belongs after `migrate` on the PostgreSQL job beside `check_rls_roles`,
+    and it is also the command an operator runs against an installation to ask
+    whether it is the one the code describes.
+
+  A catalogue that will not install is reported as a finding rather than
+  raised, because a fresh database could not be built from it either.
 
 **How R1 is proven, and where the proof deliberately diverges from
 production.** Three aliases are three *connections*, and Django's `TestCase`
