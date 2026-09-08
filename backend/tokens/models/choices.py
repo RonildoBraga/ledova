@@ -39,6 +39,7 @@ class RequestStatus(models.TextChoices):
     EXECUTING = "executing", "Executing"
     EXECUTED = "executed", "Executed"
     FAILED = "failed", "Failed"
+    SUPERSEDED = "superseded", "Superseded"
 
 
 IN_FLIGHT_STATUSES = (

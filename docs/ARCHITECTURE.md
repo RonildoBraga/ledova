@@ -241,6 +241,12 @@ them after `make build` and fails on any drift.
    lock, which is why CI runs the chain suite on PostgreSQL as well. The same
    `check_executing_issuance_requests` sweep resolves stale capital-increase
    rows, through `resolve_executing_capital_increase`.
+   A requested total at or below the stored cap becomes `superseded` before
+   resuming or sending. This is terminal: the saved reason names both totals
+   and the completed request that set the current cap when known, and asks for
+   a new request. Human review notes survive. The sweep rechecks the cap and
+   request status under the same lock after reading a receipt, so a delayed
+   result cannot overwrite a later cap or reopen a terminal request.
 9. Pause and unpause read `paused()` first and reconcile the database when the
    chain is already in the target state.
 

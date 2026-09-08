@@ -281,8 +281,10 @@ class ExecuteRequestServiceTest(TestCase):
         CapitalIncreaseRequest.objects.filter(pk=stale.pk).update(status=RequestStatus.APPROVED)
         stale.refresh_from_db()
         with patch(SUPPLY, return_value=(1100, 0)):
-            with self.assertRaisesMessage(IssuanceRefusedException, CAP_NOT_RAISED):
+            with self.assertRaisesMessage(IssuanceRefusedException, "does not exceed the current authorized total"):
                 self.service.execute_request(stale)
+        stale.refresh_from_db()
+        self.assertEqual(stale.status, RequestStatus.SUPERSEDED)
 
     def test_retry_resumes_on_a_confirmed_record_whose_completion_writes_were_lost(self):
         request = self._approved(self.tenant.capital_increase)
@@ -503,12 +505,14 @@ class ExecuteRequestServiceTest(TestCase):
         self.chain.get_transaction_receipt.return_value = {"status": 1, **RECEIPT}
         ShareToken.objects.filter(pk=self.token.pk).update(total_supply="1500")
 
-        self.assertEqual(self.service.execute_request(request)["tx_hash"], "0xold")
+        with self.assertRaisesMessage(IssuanceRefusedException, "current authorized total 1500"):
+            self.service.execute_request(request)
 
         self.chain.send_transaction.assert_not_called()
+        self.chain.get_transaction_receipt.assert_not_called()
         request.refresh_from_db()
         self.token.refresh_from_db()
-        self.assertEqual((request.status, self.token.total_supply), (RequestStatus.EXECUTED, "1500"))
+        self.assertEqual((request.status, self.token.total_supply), (RequestStatus.SUPERSEDED, "1500"))
 
     def test_a_stale_copy_of_an_executed_increase_is_refused_without_touching_its_notes(self):
         request = self._approved(self.tenant.capital_increase)

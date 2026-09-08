@@ -41,7 +41,6 @@ from tokens.services.register import (
     SOURCE_LABELS,
 )
 from tokens.services.share_token_service import (
-    CAP_NOT_RAISED,
     EXCEEDS_AUTHORIZED,
     NOT_WHITELISTED,
     TOKEN_PAUSED,
@@ -309,12 +308,16 @@ class ShareTokenChainTest(ChainTestMixin, APITestCase):
             status=RequestStatus.APPROVED,
         )
         blocks_before = self.w3.eth.block_number
-        self.assertEqual(self._execute(stale), {"success": False, "error": CAP_NOT_RAISED})
+        refusal = self._execute(stale)
+        self.assertFalse(refusal["success"])
+        for detail in (str(CAP + 10), str(CAP + 500), str(increase.uuid)):
+            self.assertIn(detail, refusal["error"])
         self.assertEqual(self.w3.eth.block_number, blocks_before)
         stale.refresh_from_db()
         self.token.refresh_from_db()
         self.assertEqual(
-            (stale.status, stale.review_notes), (RequestStatus.APPROVED, f"Execution refused: {CAP_NOT_RAISED}")
+            (stale.status, stale.review_notes, stale.rejection_reason),
+            (RequestStatus.SUPERSEDED, "", refusal["error"]),
         )
         self.assertEqual(self._contract().functions.authorizedShares().call(), CAP + 500)
         self.assertEqual(self.token.total_supply, str(CAP + 500))
@@ -669,11 +672,14 @@ class ShareTokenChainConcurrencyTest(ChainTestMixin, APITransactionTestCase):
         small = self._increase(50)
         result = self._execute(small)
 
-        self.assertEqual(result, {"success": False, "error": CAP_NOT_RAISED})
+        self.assertFalse(result["success"])
+        for detail in (str(CAP + 50), str(CAP + 1000), str(big.uuid)):
+            self.assertIn(detail, result["error"])
         small.refresh_from_db()
         self.token.refresh_from_db()
-        self.assertEqual(small.status, RequestStatus.APPROVED)
-        self.assertEqual(small.review_notes, f"Execution refused: {CAP_NOT_RAISED}")
+        self.assertEqual(small.status, RequestStatus.SUPERSEDED)
+        self.assertEqual(small.rejection_reason, result["error"])
+        self.assertEqual(small.review_notes, "")
         self.assertEqual(self._contract().functions.authorizedShares().call(), CAP + 1000)
         self.assertEqual(self.token.total_supply, str(CAP + 1000))
 

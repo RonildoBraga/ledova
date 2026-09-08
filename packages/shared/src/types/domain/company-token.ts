@@ -5,7 +5,7 @@ export type TokenType = 'ordinary' | 'preference' | 'redeemable';
 export type IssuanceStatus = 'pending' | 'processing' | 'completed' | 'failed';
 export type IssuanceType = 'initial' | 'additional' | 'bonus' | 'rights';
 export type CapitalIncreaseStatus =
-  'draft' | 'submitted' | 'under_review' | 'approved' | 'rejected' | 'executing' | 'executed' | 'failed';
+  'draft' | 'submitted' | 'under_review' | 'approved' | 'rejected' | 'executing' | 'executed' | 'failed' | 'superseded';
 export type TokenTabType = 'overview' | 'shares' | 'shareholders' | 'issuances' | 'capital-increases';
 
 export interface CompanyShareToken {

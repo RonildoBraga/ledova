@@ -123,6 +123,7 @@ const CAPITAL_INCREASE_STATUS_COLORS: Record<CapitalIncreaseStatus, string> = {
   executing: 'bg-info-light/20 text-info-light',
   executed: 'bg-success-light/20 text-success-light',
   failed: 'bg-error-light/20 text-error-light',
+  superseded: 'bg-surface-tertiary text-text-muted',
 };
 
 const INPUT_CLASS =
