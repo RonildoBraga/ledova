@@ -4,12 +4,12 @@ from datetime import timezone as dt_timezone
 from typing import Optional
 
 from django.conf import settings
-from django.db import transaction
 from django.utils import timezone
 from web3 import Web3
 
 from blockchain.models import BlockchainTransaction, TransactionStatus, TransactionType
 from integrations.base_chain import BaseChainClient, get_base_chain_client
+from shared.db import atomic
 from wallets.models import Wallet
 from whitelist.constants import (
     WHITELIST_STATUS_NOT_WHITELISTED,
@@ -113,7 +113,7 @@ class WhitelistService:
         return entry
 
     @staticmethod
-    @transaction.atomic(durable=True)
+    @atomic(durable=True)
     def _record_attempt(tx_type, function_name, checksum_address, signer_address, contract_address, entry):
         return BlockchainTransaction.objects.create(
             tx_type=tx_type,
@@ -127,7 +127,7 @@ class WhitelistService:
         )
 
     @staticmethod
-    @transaction.atomic(durable=True)
+    @atomic(durable=True)
     def _record_sent(tx_record, entry, tx_hash) -> None:
         tx_record.mark_submitted(tx_hash)
         if entry and entry.status != WhitelistStatus.PENDING:
@@ -136,7 +136,7 @@ class WhitelistService:
 
     def _refuse(self, tx_type, function_name, checksum_address, error):
         logger.error(f"{function_name}({checksum_address}) failed: {error}")
-        return WhitelistOperationFailedException(f"{TransactionType(tx_type).label} failed: {error}")
+        return WhitelistOperationFailedException(f"{TransactionType(tx_type).label} failed.")
 
     def _send_tx(self, tx_type, function_name, checksum_address, entry, wait_for_receipt):
         tx_record = self._record_attempt(
