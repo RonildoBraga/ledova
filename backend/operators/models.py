@@ -7,10 +7,10 @@ from web3 import Web3
 
 from assets.models import AssetType
 from shared.constants import BLOCKCHAIN_BASE, BLOCKCHAIN_ETHEREUM
+from shared.payment_references import MAX_PAYMENT_REFERENCE_PREFIX
 
 SINGLETON_PK = 1
 STABLECOIN_ONLY = {"asset_type": AssetType.STABLECOIN.value}
-MAX_PAYMENT_REFERENCE_PREFIX = 10
 NOT_A_STABLECOIN = "{symbol} is not a stablecoin asset."
 
 

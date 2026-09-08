@@ -6,9 +6,9 @@ from offerings.exceptions import SubscriptionRefusedException
 from offerings.models.subscription import MAX_REFERENCE_LENGTH, SettlementRail
 from operators.models import Operator
 from operators.settlement import require_deployment
+from shared.payment_references import REFERENCE_CODE_LENGTH
 
 CROCKFORD_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
-REFERENCE_CODE_LENGTH = 8
 REFERENCE_ATTEMPTS = 6
 CONFUSABLE = str.maketrans({"O": "0", "I": "1", "L": "1"})
 TX_HASH_PATTERN = re.compile(r"0x[0-9a-f]{64}")
@@ -16,6 +16,10 @@ TX_HASH_PATTERN = re.compile(r"0x[0-9a-f]{64}")
 NO_REFERENCE_PREFIX = (
     "The operator has no payment reference prefix configured, so a subscription reference cannot be issued. "
     "Set Operator.payment_reference_prefix first."
+)
+REFERENCE_PREFIX_TOO_LONG = (
+    "The payment reference prefix is too long to retain the complete random code. "
+    "Ask the operator to shorten the prefix to {maximum} characters."
 )
 REFERENCES_EXHAUSTED = "Could not find an unused payment reference after {attempts} attempts."
 BANK_NOT_CONFIGURED = (
@@ -56,8 +60,12 @@ def generate_reference(operator: Operator) -> str:
     prefix = normalize_reference(operator.payment_reference_prefix)
     if not prefix:
         raise SubscriptionRefusedException(NO_REFERENCE_PREFIX)
+    if len(prefix) + REFERENCE_CODE_LENGTH > MAX_REFERENCE_LENGTH:
+        raise SubscriptionRefusedException(
+            REFERENCE_PREFIX_TOO_LONG.format(maximum=MAX_REFERENCE_LENGTH - REFERENCE_CODE_LENGTH)
+        )
     for _ in range(REFERENCE_ATTEMPTS):
-        reference = f"{prefix}{_code()}"[:MAX_REFERENCE_LENGTH]
+        reference = f"{prefix}{_code()}"
         if not Subscription.objects.filter(reference=reference).exists():
             return reference
     raise SubscriptionRefusedException(REFERENCES_EXHAUSTED.format(attempts=REFERENCE_ATTEMPTS))

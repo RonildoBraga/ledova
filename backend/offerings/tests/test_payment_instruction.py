@@ -88,13 +88,26 @@ class GenerateReferenceTest(TestCase):
         )
 
     def test_the_reference_column_has_room_for_a_maximum_prefix_and_a_whole_code(self):
+        self.assertEqual(Subscription._meta.get_field("reference").max_length, MAX_REFERENCE_LENGTH)
         self.assertLessEqual(
             MAX_PAYMENT_REFERENCE_PREFIX + REFERENCE_CODE_LENGTH,
             MAX_REFERENCE_LENGTH,
             f"MAX_PAYMENT_REFERENCE_PREFIX ({MAX_PAYMENT_REFERENCE_PREFIX}) plus REFERENCE_CODE_LENGTH "
             f"({REFERENCE_CODE_LENGTH}) is wider than MAX_REFERENCE_LENGTH ({MAX_REFERENCE_LENGTH}), so "
-            f"generate_reference silently truncates the random half of every reference",
+            f"a maximum prefix leaves no room for the complete random code",
         )
+
+    def test_an_unvalidated_prefix_cannot_shorten_the_random_code(self):
+        for length in (11, 12, 16):
+            with self.subTest(length=length):
+                prefix = "A" * length
+                Operator.objects.update(payment_reference_prefix=prefix)
+                with patch("offerings.services.payments._code", return_value="23456789") as code:
+                    with self.assertRaises(SubscriptionRefusedException) as raised:
+                        generate_reference(Operator.get())
+                self.assertIn("shorten the prefix", str(raised.exception.detail))
+                code.assert_not_called()
+                self.assertEqual(Operator.get().payment_reference_prefix, prefix)
 
     def test_no_prefix_refuses_rather_than_issuing_a_bare_code(self):
         Operator.objects.update(payment_reference_prefix="")
@@ -120,6 +133,16 @@ class IssueInstructionTest(TestCase):
         submit(subscription, submitted_by=self.tenant.user)
         accept(subscription)
         return subscription
+
+    def test_an_overlong_prefix_leaves_the_accepted_subscription_without_an_instruction(self):
+        subscription = self._accepted()
+        Operator.objects.update(payment_reference_prefix="A" * 16)
+        with self.assertRaises(SubscriptionRefusedException):
+            issue_instruction(subscription, rail=SettlementRail.BANK_TRANSFER)
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.status, SubscriptionStatus.ACCEPTED)
+        self.assertEqual(subscription.reference, "")
+        self.assertIsNone(subscription.payment_instruction_issued_at)
 
     def test_a_colliding_code_is_retried_until_it_lands(self):
         taken = self._accepted()
