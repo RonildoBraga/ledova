@@ -903,11 +903,31 @@ runs. Both mechanisms hold at once on purpose:
   policy does not can be read and never locked, and `select_for_update().get()`
   turns that into `DoesNotExist` rather than a refusal. `USING` governs who may
   lock, `WITH CHECK` governs who may write, so all the narrowing lives in
-  `WITH CHECK`; `INSERT`'s `WITH CHECK` and `DELETE`'s `USING` stay owner-only.
-  A test reads `pg_policies` and requires the two `USING` expressions to be
-  textually equal. `SELECT` carries
-  the read scope and `INSERT`, `UPDATE` and `DELETE` carry the write scope, as
-  separate statements. `companies_company` is read at two scopes on purpose —
+  `WITH CHECK`; `DELETE`'s `USING` carries the same write scope, and a test reads
+  `pg_policies` and requires `UPDATE`'s `WITH CHECK` and `DELETE`'s `USING` to be
+  textually equal for **every** policied table, because both install from the
+  same term.
+- **`INSERT`'s `WITH CHECK` is the one command that may differ, and only where
+  the catalogue says so.** `INSERTABLE` names the tables where creating a row
+  and writing to an existing one are not the same permission, and the installer
+  applies it to `INSERT` alone. There is one today: a new user's first
+  `customer_accounts_account` cannot satisfy the member term at insert, because
+  `ensure_defaults` creates the row and adds the membership on the next line, so
+  the term is false for the statement that creates it and true for every
+  statement after. The director is known at insert, so `INSERT` admits it —
+  *you may create an account you direct, and write to accounts you are a member
+  of* — while `UPDATE` and `DELETE` do not, since widening deletion to a
+  director is a separate decision nobody has taken (R19). `INSERT_ONLY_REASONS`
+  carries that sentence beside the term and a test refuses a reason shorter than
+  200 characters. **The read term is not widened either**, so between the insert
+  and the membership the director holds a row it can neither see nor delete;
+  `ensure_defaults` carries `@atomic()` from `shared.db`, which opens on the
+  alias its queries go to and wraps the create and the membership together, so
+  there is no state where one exists without the other. R23 is why that
+  decorator is enough: a bare `@transaction.atomic` would have opened on
+  `default` while the router sent these writes elsewhere.
+- `SELECT` carries the read scope and `INSERT`, `UPDATE` and `DELETE` carry the
+  write scope, as separate statements. `companies_company` is read at two scopes on purpose —
   `visible_to_user` for issuer surfaces and `all()` for the market — and one
   `FOR ALL` policy under `FORCE` can only encode the stricter of the two.
 - **A table reached past a company carries the public-visibility term its own
@@ -939,6 +959,20 @@ runs. Both mechanisms hold at once on purpose:
   reason for carrying none, or a named R0 column it is still waiting for. The
   test compares it against `django.apps` in both directions, so a new model with
   no entry fails and an entry naming a dropped table fails.
+- **The migration reads the catalogue rather than carrying frozen SQL, so a
+  change to the catalogue needs its own migration.** `shared/0004` imports
+  `HELPERS` and `POLICIES` from `shared/db/policies.py`, which is why a fresh
+  database always gets whatever the module says today and re-running the
+  installer there is a no-op. The consequence is the part to remember: every
+  change to `policies.py` silently changes what `0004` installs on a **fresh**
+  database while every **existing** database keeps what it was given, so each
+  such change needs a migration re-running the installer or the two diverge.
+  `shared/0005` is the first instance, and its reverse is `noop` rather than
+  `remove` — it replaced policies rather than installing them, and a
+  replacement that cannot be undone should say so rather than do forward work
+  under a reverse. Reversing it with `remove` took a database from 80 policies,
+  20 forced tables and 4 helpers to none of each, while `django_migrations`
+  still said `0004` was applied.
 
 **How R1 is proven, and where the proof deliberately diverges from
 production.** Three aliases are three *connections*, and Django's `TestCase`
@@ -2165,6 +2199,41 @@ deleted as wrong; it was replaced rather than reworded. Before editing an
 expected string, ask what the assertion is *for*: if the answer is the
 behaviour that just changed, the test is **retiring**, not failing, and the
 replacement should assert the new property rather than the new wording.
+
+**A green suite can exit non-zero, and the failure text names a file that
+passed.** `AssetAllocationCard.test.tsx` reported 11 files and 48 tests with no
+assertion failure, and the job still failed: `ReferenceError: window is not
+defined`, raised by React's scheduler committing a re-render **after** vitest
+had torn the jsdom environment down. `beforeEach(cleanup)` unmounts the
+*previous* test and never the **last** one, so the final render was still
+mounted, with a live `useAuth` query underneath it, when the environment went
+away. **Read the exit code and the test count as two separate facts**: a
+suite whose assertions all pass has said nothing about what its teardown left
+running.
+Put `cleanup()` in `afterEach`, not `beforeEach`, and hoist any `QueryClient`
+out of the render call so it can be cleared.
+
+It is a **race**, so it is worse than a constant failure: it surfaces on
+whichever commit happens to be passing through, and it resisted 49 local runs
+including CPU-contended and interleaved ones. The habit that identified it in
+under a minute was **comparing the trees before attributing the failure** —
+`git rev-parse <sha>:dashboard` against the previous commit's, across each
+affected path, turned *"probably the backend commit sitting on it"* into
+*"cannot be that commit, no JS path differs"*. Do that before reading the log.
+
+**The worst version pins an outage, and the name reads like a specification.**
+`test_a_query_with_no_principal_raises_rather_than_returning_nothing` was
+written during R1 and asserted that a policied query on a connection with no
+principal **raises**, with a regex naming both of the two ways it can. That is
+the sign-in outage, recorded as the intended behaviour, in the suite whose job
+was to prove the policies. Nobody reviewing the file would have called it a
+defect: it looks like a deliberate fail-closed choice, and *raises* and
+*returns nothing* are both plausible readings of "fails closed" until you ask
+which one an unauthenticated request needs. **A policy that denies the table is
+not stricter than one that grants no rows; it is broken.** When a test's name
+states an outcome, check that the outcome is the one the product wants, not
+merely the one the code produces — the test was written by observing the code,
+which is exactly how it came to certify the defect.
 
 **Two independently reasonable constants, and nobody compared them.** Neither
 number is wrong where it is written, and the pair is the defect. `order_write`

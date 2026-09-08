@@ -1,4 +1,4 @@
-from shared.db.policies import HELPERS, POLICIES
+from shared.db.policies import HELPERS, INSERTABLE, POLICIES
 
 SUFFIXES = ("read", "insert", "update", "delete")
 
@@ -17,7 +17,8 @@ def install(schema_editor):
             for suffix in SUFFIXES:
                 cursor.execute(f"DROP POLICY IF EXISTS {table}_{suffix} ON {table}")
             cursor.execute(f"CREATE POLICY {table}_read ON {table} FOR SELECT USING ({readable})")
-            cursor.execute(f"CREATE POLICY {table}_insert ON {table} FOR INSERT WITH CHECK ({writable})")
+            insertable = INSERTABLE.get(table, writable)
+            cursor.execute(f"CREATE POLICY {table}_insert ON {table} FOR INSERT WITH CHECK ({insertable})")
             cursor.execute(
                 f"CREATE POLICY {table}_update ON {table} FOR UPDATE USING ({readable}) WITH CHECK ({writable})"
             )

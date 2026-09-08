@@ -9,6 +9,7 @@ from authentication.email import EmailError, normalize_email
 from authentication.managers.user import EmailLookupState
 from authentication.services.tokens import TokenService
 from shared.db import atomic
+from shared.db.principal import set_principal
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
@@ -40,6 +41,8 @@ class SessionService:
         if not user:
             raise serializers.ValidationError({"error": ["Invalid email or password."]})
 
+        set_principal(user.pk)
+
         if not user.is_active:
             raise serializers.ValidationError({"error": ["User account is disabled."]})
 
@@ -65,10 +68,13 @@ class SessionService:
         if lookup.state is EmailLookupState.AMBIGUOUS:
             raise serializers.ValidationError({"email": ["Email already registered"]})
         existing_user = lookup.user
+        if existing_user:
+            set_principal(existing_user.pk)
         if existing_user and hasattr(existing_user, "userprofile") and existing_user.userprofile.is_signup_completed:
             raise serializers.ValidationError({"email": ["Email already registered"]})
 
         user = existing_user or _create_signup_user(email, password)
+        set_principal(user.pk)
 
         from users.services.setup import ensure_defaults
 

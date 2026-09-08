@@ -43,6 +43,8 @@ HELPERS = {
 
 IDENTICAL_TODAY = (VISIBLE_COMPANIES, MANAGEABLE_COMPANIES)
 
+DIRECTS_THE_ACCOUNT = f"director_id IN (SELECT uuid FROM users_userprofile WHERE user_id = {PRINCIPAL})"
+
 LEAF_TABLES = ("companies_company", "users_userprofile", "customer_accounts_account_user_profiles")
 
 
@@ -241,6 +243,25 @@ PUBLIC_TERM = {
     "services/subscription.py re-read the offering under select_for_update, and an owner-only policy turns "
     "that into DoesNotExist on the subscribe path rather than a refusal.",
 }
+
+INSERTABLE = {
+    "customer_accounts_account": f"{_member('uuid')} OR {DIRECTS_THE_ACCOUNT}",
+}
+
+INSERT_ONLY_REASONS = {
+    "customer_accounts_account": (
+        "You may create an account you direct, and write to accounts you are a member of. A new user's "
+        "first account cannot satisfy the member term at insert: ensure_defaults creates the row and adds "
+        "the membership on the next line, so the member term is false for the statement that creates it "
+        "and true for every statement after. The director is known at insert, so INSERT WITH CHECK admits "
+        "it and UPDATE WITH CHECK and DELETE USING do not - widening deletion to a director is a separate "
+        "decision nobody has taken (R19). The read term is not widened either, so between the insert and "
+        "the membership a director holds a row it can neither see nor delete: ensure_defaults carries "
+        "@atomic() from shared.db, which opens on the alias its queries go to and wraps the create and "
+        "the membership together, so there is no state where one exists without the other."
+    ),
+}
+
 
 AWAITING_R0 = {
     "tokens_capitalincreaserequest": (
