@@ -63,7 +63,7 @@ RULES = {
 
 # The same rule one layer out, and the receiver is how it is decided. A method name
 # alone cannot say which model it is on: ReviewRequest.mark_failed writes
-# review_notes, which two client serializers expose, while ShareIssuance and
+# execution_notes, which two client serializers expose, while ShareIssuance and
 # BlockchainTransaction both have a mark_failed that writes error_message, which no
 # client serializer exposes. Each entry is a claim that this receiver is one of the
 # operator-facing ones, and the claim has to be true.
@@ -170,13 +170,7 @@ def helpers_that_build_an_exception(subclasses: set[str]) -> dict[str, list[tupl
                 if call.func.id not in subclasses:
                     continue
                 for argument in list(call.args) + [k.value for k in call.keywords]:
-                    if any(_sanitised(inner) for inner in ast.walk(argument)):
-                        continue
-                    tainting |= {
-                        inner.id
-                        for inner in ast.walk(argument)
-                        if isinstance(inner, ast.Name) and inner.id in ordered
-                    }
+                    tainting.update(parameter for parameter in ordered if _derives_from(argument, parameter, set()))
             if tainting:
                 helpers.setdefault(node.name, []).append((ordered, tainting))
     return helpers
@@ -201,16 +195,12 @@ def _lands_on_a_tainting_parameter(statement: ast.Call, variants, caught: str, t
         for index, argument in enumerate(statement.args):
             if index >= len(ordered) or ordered[index] not in tainting:
                 continue
-            if _derives_from(argument, caught, tainted) and not any(
-                _sanitised(inner) for inner in ast.walk(argument)
-            ):
+            if _derives_from(argument, caught, tainted):
                 return True
         for keyword in statement.keywords:
             if keyword.arg not in tainting:
                 continue
-            if _derives_from(keyword.value, caught, tainted) and not any(
-                _sanitised(inner) for inner in ast.walk(keyword.value)
-            ):
+            if _derives_from(keyword.value, caught, tainted):
                 return True
     return False
 
@@ -249,46 +239,80 @@ def fields_each_model_exposes() -> dict[str, set[str]]:
 
 def note_methods_a_client_reads(exposed=None) -> set[str]:
     exposed = fields_each_model_exposes() if exposed is None else exposed
-    methods: set[str] = set()
+    served = {name: set(fields) for name, fields in exposed.items()}
+    models: dict[str, ast.ClassDef] = {}
     for path in sorted(BACKEND.rglob("models/*.py")):
         try:
             tree = ast.parse(path.read_text())
         except SyntaxError:
             continue
-        for model in [n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)]:
-            served = exposed.get(model.name, set())
-            if not served:
+        models.update({node.name: node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)})
+
+    changed = True
+    while changed:
+        changed = False
+        for name, model in models.items():
+            for base in model.bases:
+                parent = ast.unparse(base).split(".")[-1]
+                added = served.get(name, set()) - served.get(parent, set())
+                if parent in models and added:
+                    served.setdefault(parent, set()).update(added)
+                    changed = True
+
+    methods: set[str] = set()
+    candidates = []
+    for name, model in models.items():
+        fields = served.get(name, set())
+        if not fields:
+            continue
+        for node in model.body:
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
-            for node in [n for n in ast.walk(model) if isinstance(n, ast.FunctionDef)]:
-                parameters = {argument.arg for argument in node.args.args} - {"self"}
-                if not parameters:
+            tainted = {arg.arg for arg in [*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs]} - {"self", "cls"}
+            if not tainted:
+                continue
+            assignments = [statement for statement in ast.walk(node) if isinstance(statement, ast.Assign)]
+            changed = True
+            while changed:
+                before = set(tainted)
+                for statement in assignments:
+                    if not _sanitised(statement.value) and _derives_from(statement.value, "", tainted):
+                        tainted.update(target.id for target in statement.targets if isinstance(target, ast.Name))
+                changed = tainted != before
+            candidates.append((node, tainted))
+            for statement in assignments:
+                written = {
+                    target.attr for target in statement.targets
+                    if isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name)
+                    and target.value.id == "self"
+                }
+                if written & fields and not _sanitised(statement.value) and _derives_from(statement.value, "", tainted):
+                    methods.add(node.name)
+
+    changed = True
+    while changed:
+        before = set(methods)
+        for node, tainted in candidates:
+            for call in ast.walk(node):
+                if not isinstance(call, ast.Call) or not isinstance(call.func, ast.Attribute):
                     continue
-                for statement in ast.walk(node):
-                    if not isinstance(statement, ast.Assign):
-                        continue
-                    written = {
-                        target.attr
-                        for target in statement.targets
-                        if isinstance(target, ast.Attribute)
-                        and isinstance(target.value, ast.Name)
-                        and target.value.id == "self"
-                    }
-                    if not written & served:
-                        continue
-                    if any(
-                        isinstance(inner, ast.Name) and inner.id in parameters
-                        for inner in ast.walk(statement.value)
-                    ):
-                        methods.add(node.name)
+                if not isinstance(call.func.value, ast.Name) or call.func.value.id not in {"self", "cls"}:
+                    continue
+                arguments = [*call.args, *(keyword.value for keyword in call.keywords)]
+                if call.func.attr in methods and any(
+                    not _sanitised(value) and _derives_from(value, "", tainted) for value in arguments
+                ):
+                    methods.add(node.name)
+        changed = methods != before
     return methods
 
 
 def _derives_from(node: ast.AST, caught: str, tainted: set[str]) -> bool:
-    """Whether this expression carries the caught exception's text."""
-    for inner in ast.walk(node):
-        if isinstance(inner, ast.Name) and inner.id in ({caught} | tainted):
-            return True
-    return False
+    if _sanitised(node):
+        return False
+    if isinstance(node, ast.Name):
+        return node.id in ({caught} | tainted)
+    return any(_derives_from(child, caught, tainted) for child in ast.iter_child_nodes(node))
 
 
 def _sanitised(value: ast.AST) -> bool:
@@ -331,11 +355,7 @@ def _call_findings(scope, caught, tainted, subclasses, notes, helpers, relative)
         if not isinstance(statement, ast.Call):
             continue
         arguments = list(statement.args) + [k.value for k in statement.keywords]
-        carries = any(
-            _derives_from(argument, caught, tainted)
-            and not any(_sanitised(inner) for inner in ast.walk(argument))
-            for argument in arguments
-        )
+        carries = any(_derives_from(argument, caught, tainted) for argument in arguments)
         called = _called_name(statement.func)
         if called in helpers and _lands_on_a_tainting_parameter(statement, helpers[called], caught, tainted):
             findings.append(f"{relative}:{statement.lineno} {called}({caught}): {SERVES_EXCEPTION_TEXT}")

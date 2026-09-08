@@ -255,6 +255,10 @@ Review and execution notes have separate ownership. Reviewers write
 `execution_notes` in the database, so an older request object cannot overwrite
 an intervening attempt. Successful execution adds its outcome after earlier
 refusals. The operator view places this history in the Execution section.
+Reviewer notes are internal operator audit text and are omitted from issuer
+serializers. Issuers receive execution notes and rejection or supersession
+reasons. Provider diagnostics remain in the operator records and logs; a failed
+execution asks an operator to check the chain before deciding whether to retry.
 
 The execution-history migration preserves every existing review note verbatim.
 It cannot establish authorship from phrases such as "Execution failed", which
@@ -1963,6 +1967,8 @@ field assigned inside a handler and served later by a serializer carries it in a
 **200 body**, where the first rule cannot see it. #366 found
 `review_notes = f"Execution failed: {str(exc)}"` on a share issuance request and a
 capital increase, both exposed by the issuer's own serializers.
+Those serializers now omit internal reviewer text, including ambiguous legacy
+notes. The separate `execution_notes` field carries the safe execution messages.
 
 The gate's second rule refuses handing a caught exception's text to a model method
 that writes such a field. Both halves of it are derived from the source rather than
@@ -1971,17 +1977,19 @@ listed:
 - **which fields a client reads**, from each serializer's `Meta.model` and
   `Meta.fields` together — matched by model, so `SwapOrder.error_message` counts and
   `MintRequest.error_message` does not, because `MintRequest` has no serializer at all
-- **which methods write them**, from model methods that assign such a field from one
-  of their own parameters — sixteen today, down from twenty-nine before the model
-  match was added
+- **which methods write them**, including fields and writers inherited from base
+  models, local aliases of their parameters, and calls through model helpers such
+  as `mark_failed` forwarding its message to `_save_attempt`
 
-**What it cannot decide is the receiver.** `ReviewRequest.mark_failed` writes
-`review_notes`, which two client serializers expose; `ShareIssuance`,
+**What it cannot decide is the receiver.** `ReviewableRequest.mark_failed` writes
+`execution_notes`, which two client serializers expose; `ShareIssuance`,
 `BlockchainTransaction` and `MintRequest` each have a `mark_failed` that writes
 `error_message`, which no serializer of theirs exposes. A call site gives the method
 name and not the model, so `ALLOWED_NOTE_RECEIVERS` names the receiver expressions
 that are the operator-facing ones. Each entry is a claim about that receiver, in the
-way `SANITISERS` is a claim about a function, and the claim has to be true.
+way `SANITISERS` is a claim about a function, and the claim has to be true. A
+sanitiser protects only the expression passed through it: a decoded fragment
+beside raw exception text in the same argument is still a finding.
 
 **Taint outlives the handler.** Python unbinds `as name` at handler exit, so the
 shape that escapes is a local assigned from it and used afterwards:
@@ -2037,16 +2045,16 @@ for the gate to be able to say.
 
 **What none of the three rules covers.** A field written outside a handler from a
 value that travelled there in some other way; a serializer that builds a string in
-a `SerializerMethodField` rather than exposing a model field; a helper two calls
-deep, since the taint follows one boundary and not a chain; and any path where the
-receiver's model cannot be read from the call site and is not in the allowlist. The
-first three are decidable and unbuilt; the last is why the allowlist exists rather
-than being an oversight.
+a `SerializerMethodField` rather than exposing a model field; API-exception
+helpers two calls deep or using indirect parameter aliases, since that rule
+checks one direct boundary. Model-note helpers are followed separately. Method
+names are conservative approximations; runtime receiver types and rebinding of
+allowlisted variable names still require review.
 
 **The allowlist checks its own claims.** Each entry names a model and a field, and
 the gate refuses when a serializer of that model does in fact expose it — so an
-entry cannot quietly become false as serializers change. A claim a gate cannot
-check is a comment.
+entry cannot quietly become false as serializers change. This checks the named
+field's visibility, not the receiver's runtime identity.
 
 The subclass set is collected from the source, following `APIException` through
 subclassing, so a new exception module is covered without an edit. It is 70

@@ -26,6 +26,15 @@ def findings(source: str, notes=frozenset(), helpers=None):
 
 class AnExceptionsTextReachingTheBody(unittest.TestCase):
 
+    def test_a_sanitised_fragment_does_not_hide_raw_exception_text_beside_it(self):
+        source = (
+            "try:\n    x()\nexcept Exception as e:\n"
+            "    raise TransferPreparationException(f\"{decode_exception_to_message(e, 'Failed')}: {e}\")\n"
+        )
+
+        self.assertEqual(len(findings(source)), 1)
+
+
     def test_the_bare_name(self):
         self.assertEqual(
             len(findings("try:\n    x()\nexcept Exception as e:\n    raise TransferPreparationException(e)\n")), 1
@@ -92,6 +101,7 @@ class WhatIsNotAFinding(unittest.TestCase):
                 '    raise TransferPreparationException(f"failed: {friendly}") from e\n'
             ), []
         )
+
 
     def test_a_non_api_exception(self):
         self.assertEqual(
@@ -214,8 +224,16 @@ class TheMethodSetIsDerivedFromTheSourceRatherThanListed(unittest.TestCase):
     def test_a_model_whose_serializer_hides_the_field_is_matched_by_model_not_by_name(self):
         exposed = gate.fields_each_model_exposes()
 
-        self.assertIn("review_notes", exposed.get("CapitalIncreaseRequest", set()))
+        self.assertIn("execution_notes", exposed.get("CapitalIncreaseRequest", set()))
+        self.assertNotIn("review_notes", exposed.get("CapitalIncreaseRequest", set()))
         self.assertNotIn("MintRequest", exposed)
+
+    def test_a_history_writer_inherited_from_an_abstract_model_is_covered_through_its_helper(self):
+        methods = gate.note_methods_a_client_reads({"CapitalIncreaseRequest": {"execution_notes"}})
+
+        self.assertTrue({"_save_attempt", "mark_failed", "mark_refused"}.issubset(methods), methods)
+        source = "try:\n    execute()\nexcept Exception as error:\n    request.mark_failed(str(error))\n"
+        self.assertEqual(len(findings(source, methods)), 1)
 
 
 class AnExceptionHandedToAHelperThatBuildsOne(unittest.TestCase):
@@ -224,6 +242,14 @@ class AnExceptionHandedToAHelperThatBuildsOne(unittest.TestCase):
     # exception from `error` - the shape #390 measured after a rebase restored it.
     HELPERS = {"_refuse": [(["tx_type", "function_name", "checksum_address", "error"], {"error"})]}
     SAFE = {"_refuse": [(["tx_type", "function_name", "checksum_address", "error"], {"tx_type"})]}
+
+    def test_a_sanitised_fragment_does_not_hide_raw_text_passed_to_a_helper(self):
+        source = (
+            "try:\n    x()\nexcept Exception as e:\n"
+            "    raise self._refuse(kind, name, address, f\"{decode_exception_to_message(e, 'Failed')}: {e}\")\n"
+        )
+
+        self.assertEqual(len(findings(source, helpers=self.HELPERS)), 1)
 
     def test_the_call_site_is_a_finding_even_though_the_callee_is_not_a_subclass(self):
         found = findings(

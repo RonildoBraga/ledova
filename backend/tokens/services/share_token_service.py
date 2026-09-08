@@ -75,14 +75,12 @@ ANOTHER_INCREASE_IN_FLIGHT = (
     "One share class raises its cap once at a time; resolve that one first."
 )
 ISSUANCE_EXECUTION_FAILED = (
-    "The blockchain call did not complete. If a transaction reached the chain it is recorded against this "
-    "request, so executing it again reads that transaction rather than sending a second one, and shares "
-    "cannot be issued twice. An operator can execute it again once they have looked at it."
+    "The share issuance could not be confirmed. An operator must check the request's transaction history "
+    "and on-chain state before deciding whether to retry."
 )
 CAPITAL_INCREASE_EXECUTION_FAILED = (
-    "The blockchain call did not complete. If a transaction reached the chain it is recorded against this "
-    "request, so executing it again reads that transaction rather than sending a second one, and the cap "
-    "cannot be raised twice. An operator can execute it again once they have looked at it."
+    "The capital increase could not be confirmed. An operator must check the request's transaction history "
+    "and on-chain state before deciding whether to retry."
 )
 CAP_NOT_RAISED = (
     "Authorized shares are already at or above the requested total. "

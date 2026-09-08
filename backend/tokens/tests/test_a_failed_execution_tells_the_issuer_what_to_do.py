@@ -96,12 +96,13 @@ class WhatTheIssuerReadsAfterAFailedExecutionTest(TestCase):
         self.assertNotIn("alchemy.com", served)
         self.assertIn(CAPITAL_INCREASE_EXECUTION_FAILED, served)
 
-    def test_the_note_says_what_a_retry_does_rather_than_only_that_it_failed(self):
+    def test_the_note_requires_an_operator_to_check_the_chain_before_retrying(self):
         request = self.a_failed_issuance()
 
-        self.assertIn("did not complete", request.review_notes)
-        self.assertIn("cannot be issued twice", request.review_notes)
-        self.assertIn("execute it again", request.review_notes)
+        self.assertIn("could not be confirmed", request.execution_notes)
+        self.assertIn("An operator must check", request.execution_notes)
+        self.assertIn("on-chain state before deciding whether to retry", request.execution_notes)
+        self.assertEqual(request.review_notes, "")
         self.assertTrue(request.can_be_executed)
 
     def test_the_operator_keeps_the_diagnostic_the_issuer_does_not_get(self):
@@ -180,6 +181,23 @@ class WhatTheIssuerReadsAfterAFailedExecutionTest(TestCase):
     def test_a_capital_increase_says_the_cap_rather_than_the_shares(self):
         request = self.a_failed_capital_increase()
 
-        self.assertIn("cannot be raised twice", request.review_notes)
-        self.assertNotIn("issued twice", request.review_notes)
+        self.assertIn("capital increase could not be confirmed", request.execution_notes)
+        self.assertEqual(request.review_notes, "")
         self.assertEqual(CapitalIncreaseRequest.objects.get(pk=request.pk).status, RequestStatus.FAILED)
+
+    def test_internal_and_legacy_review_notes_remain_available_only_to_the_operator(self):
+        for request, serializer in (
+            (self._approved(issuance_request(self.token)), ShareIssuanceRequestSerializer),
+            (self._approved(self.tenant.capital_increase), CapitalIncreaseDetailSerializer),
+        ):
+            with self.subTest(request=type(request).__name__):
+                for note in (f"Reviewer diagnostic: {PROVIDER_TEXT}", f"Execution failed: {PROVIDER_TEXT}"):
+                    request.review_notes = note
+                    request.save(update_fields=["review_notes"])
+
+                    served = serializer(request).data
+
+                    self.assertNotIn("review_notes", served)
+                    self.assertNotIn(KEY, str(served))
+                    request.refresh_from_db()
+                    self.assertEqual(request.review_notes, note)
