@@ -213,7 +213,7 @@ class TransactionConfirmationService:
             logger.warning(f"Transaction not found on {wallet.address}: {tx_hash}")
             return {"status": "not_found", "tx_hash": tx_hash}
 
-        with transaction.atomic():
+        with atomic():
             answer, refusal = act(tx)
 
         if refusal is not None:
