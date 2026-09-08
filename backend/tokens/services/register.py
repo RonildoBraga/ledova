@@ -50,6 +50,18 @@ def identity_source_label(source, stamped_at) -> str:
 ISSUED_SUPPLY_ROW = "Issued supply"
 LISTED_TOTAL_ROW = "Held by listed holders"
 DISCREPANCY_ROW = "Not held by any listed holder"
+FORMER_MEMBERS_HEADING = "Former members (retained under s169(3) of the Corporations Act)"
+FORMER_MEMBER_HEADERS = [
+    "Name",
+    "Residential address",
+    "Wallet address",
+    "Shares held on ceasing",
+    "Date ceased",
+    "Identity source",
+]
+AS_AT_ROW = "As at"
+NEVER_FOLDED = "never read"
+STALE = "stale"
 
 REGISTER_HEADERS = [
     "Name",
@@ -292,7 +304,32 @@ def export_rows(token, requested_by) -> list[list]:
             f"Register export of {token.symbol} for company {token.company_id} does not account for the whole "
             f"issued supply: {discrepancy} shares are held by nobody the register lists"
         )
-    return [_csv_row(row) for row in rows] + [[]] + _summary_rows(rows, discrepancy)
+    return [_csv_row(row) for row in rows] + [[]] + _summary_rows(rows, discrepancy) + former_member_rows(token)
+
+
+def former_member_rows(token) -> list[list]:
+    from tokens.services.former_holders import fold_is_stale, former_members_of
+
+    rows = [
+        [
+            csv_cell(row.name),
+            csv_cell(row.residential_address),
+            csv_cell(row.wallet_address),
+            csv_cell(str(row.shares_at_cessation)),
+            csv_cell(row.ceased_on.isoformat()),
+            csv_cell(IDENTITY_LABELS.get(row.identity_source, row.identity_source)),
+        ]
+        for row in former_members_of(token)
+    ]
+    return [[], [FORMER_MEMBERS_HEADING], FORMER_MEMBER_HEADERS, *rows, _as_at_row(token, fold_is_stale(token))]
+
+
+def _as_at_row(token, stale: bool) -> list:
+    if token.former_holders_folded_at is None:
+        return [AS_AT_ROW, NEVER_FOLDED, STALE]
+    reached = "" if token.former_holders_block is None else f"block {token.former_holders_block}"
+    read_at = token.former_holders_folded_at.isoformat()
+    return [AS_AT_ROW, read_at, reached, STALE] if stale else [AS_AT_ROW, read_at, reached]
 
 
 def _csv_row(row) -> list:

@@ -88,8 +88,9 @@ class TransferAcquiredHolderTest(RegisterTestBase):
         response = self.client.get(f"/api/v1/tokens/{self.token.uuid}/register/export/")
         rows = list(csv.reader(io.StringIO(response.content.decode())))
 
+        summary_starts = rows.index([]) + 1
         self.assertEqual(
-            rows[rows.index([]) + 1 :],
+            rows[summary_starts : rows.index([], summary_starts)],
             [
                 ["Issued supply", "12000"],
                 ["Held by listed holders", "11000"],

@@ -33,6 +33,17 @@ class ShareToken(DerivesOwnerFromCompany, BaseModel):
         ),
     )
 
+    former_holders_folded_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the former-members fold last succeeded for this share class",
+    )
+    former_holders_block = models.BigIntegerField(
+        null=True,
+        blank=True,
+        help_text="The block the former-members fold last read up to, which the export reports beside its date",
+    )
+
     name = models.CharField(max_length=100)
     symbol = models.CharField(max_length=10)
     token_type = models.CharField(

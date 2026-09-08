@@ -15,6 +15,12 @@ SYSTEM_WIDE = {
     "database, so it has to see both in full.",
     "tokens.tasks.deployment.check_pending_token_deployments": "Polls every deployment this operator started.",
     "tokens.tasks.review_request.check_executing_issuance_requests": "Polls every issuance the relayer claimed.",
+    "tokens.tasks.former_holders.fold_every_share_class": "Reads the Transfer log of every deployed "
+    "share class and writes the cessations it finds. It is the deployment's statutory register rather "
+    "than any owner's data, and R24 makes the table operator-written for that reason.",
+    "tokens.tasks.former_holders.purge_former_members_past_the_clock": "Deletes former-member records "
+    "seven years after the date they ceased, which is the only deletion anyone may perform on that "
+    "table - the app role's policy refuses all three write commands.",
     "tokens.tasks.signing_challenge.purge_signing_challenges": "Deletes expired challenges regardless of whose.",
     "tokens.tasks.swap_reconciler.resolve_executing_swaps": "Asks the chain about every swap left executing, "
     "and a swap has two parties, so neither one's principal would cover it.",

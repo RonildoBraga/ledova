@@ -262,6 +262,10 @@ class TheReverseRestoresTheFunctionItReplacedTest(TestCase):
         self.assertEqual(without.replace(guard, ""), with_it)
 
 
+def _owner_of(token):
+    return ShareToken.objects.filter(pk=token.pk).values_list("owner_id", flat=True).first()
+
+
 @skipUnless(connection.vendor == "postgresql", POSTGRES_ONLY)
 class TheHoleIsBackAfterTheReverseAndGoneAfterTheForwardTest(TransactionTestCase):
 
@@ -277,7 +281,7 @@ class TheHoleIsBackAfterTheReverseAndGoneAfterTheForwardTest(TransactionTestCase
 
         migrate_to(BEFORE_THE_REPARENT_REFUSAL)
         ShareToken.objects.filter(pk=token.pk).update(company=stranger.company)
-        self.assertEqual(ShareToken.objects.get(pk=token.pk).owner_id, stranger.company.owner_id)
+        self.assertEqual(_owner_of(token), stranger.company.owner_id)
 
         ShareToken.objects.filter(pk=token.pk).update(company=tenant.company)
         migrate_to(WITH_THE_REPARENT_REFUSAL)
@@ -287,4 +291,4 @@ class TheHoleIsBackAfterTheReverseAndGoneAfterTheForwardTest(TransactionTestCase
                 ShareToken.objects.filter(pk=token.pk).update(company=stranger.company)
 
         self.assertIn("cannot move this row to another owner", str(refusal.exception))
-        self.assertEqual(ShareToken.objects.get(pk=token.pk).owner_id, tenant.company.owner_id)
+        self.assertEqual(_owner_of(token), tenant.company.owner_id)

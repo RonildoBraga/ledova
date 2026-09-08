@@ -253,6 +253,23 @@ should not share a constant, or a change to one silently moves the other.
 The clock runs from `ceased_on`, not from when the row was written, because that is
 what the section measures.
 
+**The fold runs every six hours and the export says when it last succeeded.**
+`fold_every_share_class` reads each deployed share class's `Transfer` log from its
+deployment block, replays the running balances, and writes every nonzero→zero
+transition as a cessation; the uniqueness of `(token, wallet_address, ceased_at_block)`
+is what makes a re-read write nothing new. Each share class records
+`former_holders_folded_at` and the block it reached, and the register's **Former
+members** section carries both on its `As at` line — with the word **stale** beside
+them when the last success is more than 24 hours old, or when there has never been
+one.
+
+That is the case this design exists for. A fold that can no longer reach the
+deployment block — a pruned node, a provider that has changed its retention —
+stops updating that timestamp, and **the operator learns it from the document
+rather than from a row that is quietly missing.** The task logs which share classes
+it could not read and carries on with the rest, so one unreadable class does not
+stop the others.
+
 **Nobody deletes one of these rows through the API.** Under R24 the row-level
 policy for `tokens_formerholder` reads `("owner_id = <principal>", "false")`: the
 issuer that owns the share class can read its own former members and can insert,
