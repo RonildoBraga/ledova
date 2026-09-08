@@ -16,6 +16,9 @@ from wallets.constants import (
     TRANSACTION_STATUS_CONFIRMED,
     TRANSACTION_STATUS_FAILED,
     TRANSACTION_STATUS_PENDING,
+    TRANSACTION_STATUS_REORGED,
+    TRANSACTION_STATUS_REPLACED,
+    TRANSACTION_STATUSES_THAT_RETURN_THE_OPTIMISTIC_DEBIT,
 )
 from wallets.exceptions import InvalidTransactionException
 from wallets.models import Holding, HoldingSnapshot, Transaction, Wallet
@@ -162,6 +165,60 @@ class TransactionConfirmationService:
             "tx_hash": tx_hash,
             "reason": reason,
         }
+
+    @staticmethod
+    def mark_reorged(tx_hash: str, wallet: Wallet) -> Dict[str, Any]:
+        def reverse_once(tx):
+            if tx.status != TRANSACTION_STATUS_CONFIRMED:
+                return {"status": "not_confirmed", "tx_hash": tx_hash, "current_status": tx.status}, None
+
+            TransactionConfirmationService._settle_the_optimistic_debit(tx, TRANSACTION_STATUS_REORGED)
+            TransactionConfirmationService._notify_wallet_users(tx, "reorged")
+            logger.warning(f"Transaction dropped by a reorganisation: tx_hash={tx_hash}, block={tx.block_number}")
+            return {"status": TRANSACTION_STATUS_REORGED, "tx_hash": tx_hash}, None
+
+        return TransactionConfirmationService._on_this_wallets_row(tx_hash, wallet, reverse_once)
+
+    @staticmethod
+    def mark_replaced(tx_hash: str, wallet: Wallet, replacement_tx_hash: str) -> Dict[str, Any]:
+        def link_and_leave_the_holding(tx):
+            if tx.status != TRANSACTION_STATUS_PENDING:
+                return {"status": "not_pending", "tx_hash": tx_hash, "current_status": tx.status}, None
+
+            tx.replaced_by_tx_hash = replacement_tx_hash
+            TransactionConfirmationService._settle_the_optimistic_debit(
+                tx, TRANSACTION_STATUS_REPLACED, ["replaced_by_tx_hash"]
+            )
+            TransactionConfirmationService._notify_wallet_users(tx, "replaced")
+            logger.info(f"Transaction replaced: tx_hash={tx_hash} landed as {replacement_tx_hash}")
+            return {
+                "status": TRANSACTION_STATUS_REPLACED,
+                "tx_hash": tx_hash,
+                "replaced_by": replacement_tx_hash,
+            }, None
+
+        return TransactionConfirmationService._on_this_wallets_row(tx_hash, wallet, link_and_leave_the_holding)
+
+    @staticmethod
+    def _settle_the_optimistic_debit(tx: Transaction, status: str, extra_fields=None) -> None:
+        tx.status = status
+        tx.save(update_fields=["status", "updated_at", *(extra_fields or [])])
+        if status in TRANSACTION_STATUSES_THAT_RETURN_THE_OPTIMISTIC_DEBIT:
+            TransactionConfirmationService._revert_optimistic_holding(tx)
+
+    @staticmethod
+    def _on_this_wallets_row(tx_hash: str, wallet: Wallet, act) -> Dict[str, Any]:
+        tx = Transaction.objects.select_related("wallet", "asset").filter(tx_hash=tx_hash, wallet=wallet).first()
+        if tx is None:
+            logger.warning(f"Transaction not found on {wallet.address}: {tx_hash}")
+            return {"status": "not_found", "tx_hash": tx_hash}
+
+        with atomic():
+            answer, refusal = act(tx)
+
+        if refusal is not None:
+            raise refusal
+        return answer
 
     @staticmethod
     def _notify_wallet_users(tx: Transaction, event: str) -> None:
