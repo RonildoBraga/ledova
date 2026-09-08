@@ -681,21 +681,28 @@ class ShareTokenService:
     def _execute_capital_increase(self, request: CapitalIncreaseRequest) -> dict:
         token = request.token
         refused = False
+        superseded = ""
         crowded_by = ""
         failure = None
         result = None
         with atomic():
-            ShareToken.objects.select_for_update().get(pk=token.pk)
-            request.refresh_from_db(fields=["status"])
+            token = ShareToken.objects.select_for_update().get(pk=token.pk)
+            request.refresh_from_db(fields=["status", "new_authorized_total"])
+            request.token = token
             if not request.can_be_executed:
                 raise InvalidTokenStateException(f"Cannot execute request with status '{request.get_status_display()}'")
-            crowding = CapitalIncreaseRequest.objects.in_flight().filter(token=token).exclude(pk=request.pk).first()
+            superseded = self._supersede_capital_increase_if_overtaken(request)
+            crowding = (
+                None
+                if superseded
+                else CapitalIncreaseRequest.objects.in_flight().filter(token=token).exclude(pk=request.pk).first()
+            )
             if crowding is not None:
                 crowded_by = ANOTHER_INCREASE_IN_FLIGHT.format(
                     symbol=token.symbol, status=crowding.get_status_display().lower()
                 )
                 request.mark_refused(crowded_by)
-            tx_record = None if crowded_by else self._recorded_increase(request)
+            tx_record = None if crowded_by or superseded else self._recorded_increase(request)
             if tx_record is not None:
                 try:
                     result = self._resume_capital_increase(request, tx_record)
@@ -703,7 +710,7 @@ class ShareTokenService:
                     raise
                 except Exception as exc:
                     failure = exc
-            if failure is None and result is None and not crowded_by:
+            if failure is None and result is None and not crowded_by and not superseded:
                 authorized, _ = self.share_supply(token.contract_address)
                 token.refresh_from_db(fields=["total_supply"])
                 if authorized == request.new_authorized_total and int(token.total_supply) < authorized:
@@ -736,6 +743,8 @@ class ShareTokenService:
             elif result is not None:
                 self._complete_capital_increase(request, result)
 
+        if superseded:
+            raise IssuanceRefusedException(superseded)
         if crowded_by:
             raise IssuanceRefusedException(crowded_by)
         if refused:
@@ -744,6 +753,32 @@ class ShareTokenService:
             logger.error(f"Capital increase failed: {failure}")
             raise failure
         return result
+
+    @staticmethod
+    def _supersede_capital_increase_if_overtaken(request: CapitalIncreaseRequest) -> str:
+        current = int(request.token.total_supply)
+        if request.new_authorized_total > current:
+            return ""
+        overtaking = (
+            CapitalIncreaseRequest.objects.filter(
+                token=request.token, status=RequestStatus.EXECUTED, new_authorized_total=current
+            )
+            .exclude(pk=request.pk)
+            .order_by("-executed_at", "-created_at", "-uuid")
+            .first()
+        )
+        source = (
+            f"The current cap was recorded by capital-increase request {overtaking.uuid}."
+            if overtaking is not None
+            else "No completed request identifies the current cap."
+        )
+        reason = (
+            f"Requested total {request.new_authorized_total} does not exceed the current authorized total {current}. "
+            f"{source} Submit a new capital-increase request for a higher total."
+        )
+        request.mark_superseded(reason)
+        logger.warning(f"Capital increase {request.uuid} superseded: {reason}")
+        return reason
 
     @staticmethod
     def _recorded_increase(request: CapitalIncreaseRequest) -> Optional[BlockchainTransaction]:
@@ -792,12 +827,21 @@ class ShareTokenService:
     def _complete_capital_increase(request: CapitalIncreaseRequest, result: dict) -> None:
         token = request.token
         token.refresh_from_db(fields=["total_supply"])
-        token.total_supply = str(max(int(token.total_supply), request.new_authorized_total))
+        token.total_supply = str(request.new_authorized_total)
         token.save(update_fields=["total_supply", "updated_at"])
         request.mark_executed()
         logger.info(f"Capital increase executed for {token.symbol}: {result['tx_hash'] or 'adopted from chain'}")
 
     def resolve_executing_capital_increase(self, request: CapitalIncreaseRequest) -> Optional[str]:
+        with atomic():
+            token = ShareToken.objects.select_for_update().get(pk=request.token_id)
+            request.refresh_from_db(fields=["status", "new_authorized_total"])
+            request.token = token
+            if request.status != RequestStatus.EXECUTING:
+                logger.info(f"Request {request.uuid} was completed by another worker or is no longer executing")
+                return None
+            if self._supersede_capital_increase_if_overtaken(request):
+                return "superseded"
         tx_record = self._recorded_increase(request)
         if tx_record is None:
             logger.warning(
@@ -808,24 +852,26 @@ class ShareTokenService:
         receipt = self.chain_client.get_transaction_receipt(tx_hash)
         if receipt is None:
             return None
-        if receipt["status"] != 1:
-            logger.warning(
-                f"setAuthorizedShares {tx_hash} for request {request.uuid} reverted; the request can be retried"
-            )
-            tx_record.mark_reverted(f"Transaction reverted: {tx_hash}")
-            request.mark_failed(f"Transaction reverted: {tx_hash}")
-            return "reverted"
-        logger.info(
-            f"setAuthorizedShares {tx_hash} for request {request.uuid} mined while the worker was gone; completing"
-        )
         result = {**self._tx_result(tx_hash, receipt), "new_authorized_total": request.new_authorized_total}
         with atomic():
-            ShareToken.objects.select_for_update().get(pk=request.token.pk)
-            request.refresh_from_db(fields=["status"])
-            if request.status == RequestStatus.EXECUTED:
-                logger.info(f"Request {request.uuid} was completed by another worker while the sweep read the chain")
+            token = ShareToken.objects.select_for_update().get(pk=request.token_id)
+            request.refresh_from_db(fields=["status", "new_authorized_total"])
+            request.token = token
+            if request.status != RequestStatus.EXECUTING:
+                logger.info(f"Request {request.uuid} was completed by another worker or is no longer executing")
                 return None
+            if receipt["status"] != 1:
+                tx_record.mark_reverted(f"Transaction reverted: {tx_hash}")
+                if self._supersede_capital_increase_if_overtaken(request):
+                    return "superseded"
+                request.mark_failed(f"Transaction reverted: {tx_hash}")
+                return "reverted"
             self._confirm_record(tx_record, receipt)
+            if self._supersede_capital_increase_if_overtaken(request):
+                return "superseded"
+            logger.info(
+                f"setAuthorizedShares {tx_hash} for request {request.uuid} mined while the worker was gone; completing"
+            )
             self._complete_capital_increase(request, result)
         return "executed"
 

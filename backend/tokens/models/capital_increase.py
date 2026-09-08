@@ -69,6 +69,11 @@ class CapitalIncreaseRequest(DerivesCompanyFromToken, ReviewableRequest):
 
     can_be_submitted = can_be_edited
 
+    def mark_superseded(self, reason: str) -> None:
+        self.status = RequestStatus.SUPERSEDED
+        self.rejection_reason = reason
+        self.save(update_fields=["status", "rejection_reason", "updated_at"])
+
     def submit(self, user, dilution_percentage) -> None:
         if not self.can_be_submitted:
             raise InvalidTokenStateException(f"Cannot submit request with status '{self.get_status_display()}'.")

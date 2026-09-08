@@ -80,6 +80,7 @@ const CAPITAL_INCREASE_STATUS_LABELS: Record<CapitalIncreaseStatus, string> = {
   executing: 'Executing',
   executed: 'Executed',
   failed: 'Failed',
+  superseded: 'Superseded',
 };
 
 function formatNumber(value: string | number): string {
@@ -700,6 +701,9 @@ function CapitalIncreaseRow({
         {request.dilutionPercentage !== null ? ` · Dilution: ${request.dilutionPercentage}%` : ''}
       </Text>
       <Text style={styles.capitalDate}>{new Date(request.createdAt).toLocaleDateString()}</Text>
+      {request.status === 'superseded' && request.rejectionReason ? (
+        <Text style={styles.capitalMeta}>{request.rejectionReason}</Text>
+      ) : null}
     </View>
   );
 }
@@ -725,6 +729,8 @@ function getCapitalIncreaseStatusColor(
   theme: ReturnType<typeof useAppTheme>,
 ): { bg: string; text: string } {
   switch (status) {
+    case 'superseded':
+      return { bg: theme.colors.border.default, text: theme.colors.text.muted };
     case 'executed':
     case 'approved':
       return { bg: theme.colors.success.default + '26', text: theme.colors.success.light };

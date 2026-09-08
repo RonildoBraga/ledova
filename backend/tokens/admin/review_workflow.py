@@ -21,6 +21,7 @@ STATUS_COLORS = {
     RequestStatus.EXECUTING: "#fd7e14",
     RequestStatus.EXECUTED: "#20c997",
     RequestStatus.FAILED: "#dc3545",
+    RequestStatus.SUPERSEDED: "#6c757d",
 }
 APPROVE = ("Approve", "approve", "#28a745")
 REJECT = ("Reject", "reject", "#dc3545")
@@ -33,6 +34,7 @@ STATUS_ACTIONS = {
     RequestStatus.EXECUTING: [("Executing...", None, "#fd7e14")],
     RequestStatus.EXECUTED: [("Executed", None, "#20c997")],
     RequestStatus.REJECTED: [("Request Rejected", None, "#e9ecef", "#6c757d")],
+    RequestStatus.SUPERSEDED: [("Superseded", None, "#e9ecef", "#6c757d")],
 }
 
 
