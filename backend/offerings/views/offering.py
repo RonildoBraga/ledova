@@ -1,4 +1,4 @@
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
@@ -18,6 +18,11 @@ MANAGE_ACTIONS = ("create", "update", "partial_update", "destroy", "submit", "wi
 NOT_DELETABLE = "Only a draft offering can be deleted."
 
 
+@extend_schema_view(
+    create=extend_schema(responses=OfferingDetailSerializer),
+    update=extend_schema(responses=OfferingDetailSerializer),
+    partial_update=extend_schema(responses=OfferingDetailSerializer),
+)
 class OfferingViewSet(AuthenticatedModelViewSet):
     ordering = ["-created_at"]
     ordering_fields = ["created_at", "status", "opens_at"]
