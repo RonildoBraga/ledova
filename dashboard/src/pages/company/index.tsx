@@ -28,6 +28,7 @@ import {
   getBlockExplorerAddressUrl,
   getBlockExplorerTxUrl,
   getErrorMessage,
+  apiErrorSentence,
 } from '@ledova/shared';
 import { useCompany } from './hooks/useCompany';
 import { useTokensList, useTokenDetail } from './hooks/useTokens';
@@ -203,11 +204,7 @@ export default function CompanyPage() {
   };
 
   const createErrorMessage = tokensList.createError
-    ? (tokensList.createError as { response?: { data?: { detail?: string; error?: string } } })?.response?.data
-        ?.detail ||
-      (tokensList.createError as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-      (tokensList.createError as { message?: string })?.message ||
-      'Failed to create token. Please try again.'
+    ? apiErrorSentence(tokensList.createError, 'Failed to create token. Please try again.')
     : null;
 
   const isCreateValid =

@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getUserProfiles, registerCompany, getCompanies, updateCompany } from '@ledova/shared';
+import { getUserProfiles, registerCompany, getCompanies, updateCompany, readApiError } from '@ledova/shared';
 import type { CompanyRegistration, CompanyType } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 
@@ -14,6 +14,8 @@ interface CompanyFormData {
 
 type FormErrors = Record<string, string[]>;
 
+const COULD_NOT_SAVE = 'We could not save your company details. Please try again.';
+
 const initialFormData: CompanyFormData = {
   name: '',
   tradingName: '',
@@ -21,6 +23,8 @@ const initialFormData: CompanyFormData = {
   acn: '',
   abn: '',
 };
+
+export const DISPLAYED_FIELDS = Object.keys(initialFormData) as (keyof CompanyFormData)[];
 
 export function useSignupCompanyRegistration() {
   const queryClient = useQueryClient();
@@ -170,18 +174,9 @@ export function useSignupCompanyRegistration() {
 
         onSuccess();
       } catch (err: unknown) {
-        const error = err as { response?: { data?: Record<string, unknown> } };
-        const data = error?.response?.data;
-        if (data) {
-          const detail = (data.detail as string) || (data.error as string) || (data.message as string);
-          if (detail) {
-            setGeneralError(detail);
-          } else {
-            setGeneralError('An error occurred. Please try again.');
-          }
-        } else {
-          setGeneralError('An error occurred. Please try again.');
-        }
+        const reading = readApiError(err, { fallback: COULD_NOT_SAVE, displayedFields: DISPLAYED_FIELDS });
+        setGeneralError(reading.generalError ?? '');
+        setErrors(reading.fieldErrors ?? {});
       }
     },
     [form, userProfile, existingCompany, validateForm, registerMutation, updateMutation],

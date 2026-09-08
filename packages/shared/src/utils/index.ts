@@ -47,7 +47,9 @@ export {
   hasServiceErrorDetail,
   describeFailure,
   readSignInError,
+  readApiError,
+  apiErrorSentence,
 } from './errors';
-export type { SignInErrorReading } from './errors';
+export type { SignInErrorReading, ApiErrorReading, ReadApiErrorOptions } from './errors';
 export { calculateHoldingsSummary, calculateAssetAllocation } from './holdings';
 export { calculateWalletTotals, filterWalletsByChain } from './wallet';
