@@ -16,8 +16,6 @@ type FormErrors = Record<string, string[]>;
 
 const COULD_NOT_SAVE = 'We could not save your company details. Please try again.';
 
-export const DISPLAYED_FIELDS = ['name', 'tradingName', 'companyType', 'acn', 'abn'] as const;
-
 const initialFormData: CompanyFormData = {
   name: '',
   tradingName: '',
@@ -25,6 +23,8 @@ const initialFormData: CompanyFormData = {
   acn: '',
   abn: '',
 };
+
+export const DISPLAYED_FIELDS = Object.keys(initialFormData) as (keyof CompanyFormData)[];
 
 export function useSignupCompanyRegistration() {
   const queryClient = useQueryClient();
