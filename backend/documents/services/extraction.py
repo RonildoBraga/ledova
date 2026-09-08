@@ -20,6 +20,8 @@ from integrations.llm_extract.prompts import PROMPT_BY_TYPE
 
 logger = logging.getLogger(__name__)
 
+TRANSIENT_EXTRACTION_FAILURES = (LlmExtractError,)
+
 
 class ExtractionService:
 
@@ -96,6 +98,8 @@ class ExtractionService:
             extraction.finished_at = timezone.now()
             extraction.save()
             logger.warning("documents.extraction: doc=%s failed: %s", document.uuid, e.detail)
+            if isinstance(e, TRANSIENT_EXTRACTION_FAILURES):
+                raise
             return extraction
 
         except Exception as e:
