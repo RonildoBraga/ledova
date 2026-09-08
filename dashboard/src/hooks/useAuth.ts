@@ -18,6 +18,7 @@ export const useAuth = () => {
   return {
     isAuthenticated: query.isSuccess && (query.data?.data?.valid ?? false),
     isLoading: query.isLoading,
+    isFetching: query.isFetching,
     refetch: query.refetch,
   };
 };

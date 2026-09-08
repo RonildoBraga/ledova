@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { useAuth, useFeatureFlags } from '@hooks';
 import NotFoundPage from '@pages/NotFound';
 import { RootRedirect } from './routes/RootRedirect';
+import { ProtectedRoute } from './routes/ProtectedRoute';
 import HomePage from '@pages/home';
 
 import SignInPage from '@pages/signin';
@@ -42,20 +43,6 @@ function LoadingSpinner() {
 
 interface RouteGuardProps {
   children: ReactNode;
-}
-
-function ProtectedRoute({ children }: RouteGuardProps) {
-  const { isAuthenticated, isLoading } = useAuth();
-
-  if (isLoading) {
-    return <LoadingSpinner />;
-  }
-
-  if (!isAuthenticated) {
-    return <Navigate to="/signin" replace />;
-  }
-
-  return <>{children}</>;
 }
 
 function TradingRoute() {
