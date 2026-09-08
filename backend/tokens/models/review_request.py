@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.db.models.functions import Concat
 from django.utils import timezone
 
 from shared.models import BaseModel
@@ -118,22 +119,25 @@ class ReviewableRequest(BaseModel):
         self.status = RequestStatus.EXECUTING
         self.updated_at = now
 
-    def _record_attempt(self, line: str) -> None:
+    def _save_attempt(self, line: str, fields: list[str]) -> None:
         stamped = f"{timezone.now().isoformat(timespec='seconds')} {line}"
-        self.execution_notes = f"{self.execution_notes}\n{stamped}".strip() if self.execution_notes else stamped
+        self.execution_notes = models.Case(
+            models.When(execution_notes="", then=models.Value(stamped)),
+            default=Concat("execution_notes", models.Value(f"\n{stamped}")),
+            output_field=models.TextField(),
+        )
+        self.save(update_fields=[*fields, "execution_notes", "updated_at"])
+        self.refresh_from_db(fields=["execution_notes"])
 
     def mark_executed(self, issuance=None) -> None:
         self.status = RequestStatus.EXECUTED
         self.executed_issuance = issuance
         self.executed_at = timezone.now()
-        self._record_attempt("Executed")
-        self.save(update_fields=["status", "executed_issuance", "executed_at", "execution_notes", "updated_at"])
+        self._save_attempt("Executed", ["status", "executed_issuance", "executed_at"])
 
     def mark_refused(self, reason: str) -> None:
-        self._record_attempt(f"Refused: {reason}")
-        self.save(update_fields=["execution_notes", "updated_at"])
+        self._save_attempt(f"Refused: {reason}", [])
 
     def mark_failed(self, error: str) -> None:
         self.status = RequestStatus.FAILED
-        self._record_attempt(f"Failed: {error}")
-        self.save(update_fields=["status", "execution_notes", "updated_at"])
+        self._save_attempt(f"Failed: {error}", ["status"])

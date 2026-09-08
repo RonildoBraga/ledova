@@ -160,7 +160,8 @@ class ResumingAFailedRaiseWaitsForTheOneInFlightTest(TestCase):
             self.service._execute_capital_increase(self.stalled)
 
         self.stalled.refresh_from_db()
-        self.assertIn("has another capital increase in flight", self.stalled.review_notes)
+        self.assertIn("has another capital increase in flight", self.stalled.execution_notes)
+        self.assertEqual(self.stalled.review_notes, "")
 
     def test_the_one_in_flight_is_not_the_one_refused(self):
         with self.assertRaises(IssuanceRefusedException):

@@ -1,11 +1,14 @@
 from importlib import import_module
 from types import SimpleNamespace
+from unittest import skipUnless
 
 from django.apps import apps
-from django.test import TestCase
+from django.conf import settings
+from django.test import TestCase, TransactionTestCase
 
+from shared.tests.schema import migrate_to, restore_every_migration
 from shared.tests.tenants import make_tenant
-from tokens.models import RequestStatus, ShareIssuanceRequest
+from tokens.models import CapitalIncreaseRequest, RequestStatus, ShareIssuanceRequest
 
 _MIGRATION = import_module("tokens.migrations.0029_execution_notes")
 MOVE = _MIGRATION.move_what_the_system_wrote
@@ -103,6 +106,19 @@ class AnExecutedRequestDoesNotSayItWasRefusedTest(TestCase):
         stamp = self.request.execution_notes.split(" ")[0]
         self.assertRegex(stamp, r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}")
 
+    def test_a_later_attempt_keeps_history_written_since_the_request_was_loaded(self):
+        self._approved()
+        stale_request = ShareIssuanceRequest.objects.get(pk=self.request.pk)
+        self.request.mark_refused(NOT_WHITELISTED)
+
+        stale_request.mark_executed()
+
+        self.request.refresh_from_db()
+        self.assertEqual(self.request.review_notes, REVIEWER_WROTE)
+        self.assertEqual(len(self.request.execution_notes.splitlines()), 2)
+        self.assertIn(NOT_WHITELISTED, self.request.execution_notes)
+        self.assertTrue(self.request.execution_notes.endswith("Executed"))
+
     def test_a_request_nobody_reviewed_still_records_its_attempt(self):
         self.request.status = RequestStatus.APPROVED
         self.request.save(update_fields=["status"])
@@ -197,3 +213,55 @@ class TheMigrationMovesOnlyWhatTheSystemWroteTest(TestCase):
         request.refresh_from_db()
         self.assertEqual(request.execution_notes, written_by_the_new_code)
         self.assertEqual(request.review_notes, "")
+
+
+_migration_modules = getattr(settings, "MIGRATION_MODULES", {})
+MIGRATIONS_ENABLED = not ("tokens" in _migration_modules and _migration_modules["tokens"] is None)
+
+
+@skipUnless(MIGRATIONS_ENABLED, "Requires actual token migrations")
+class ExecutionNotesMigrationRoundTripTest(TransactionTestCase):
+
+    def test_both_request_tables_preserve_review_and_machine_notes_through_a_round_trip(self):
+        self.addCleanup(restore_every_migration)
+        tenant = make_tenant("issuer")
+        cases = []
+        for model, fields in (
+            (ShareIssuanceRequest, {"recipient_address": "0x" + "c" * 40, "amount": 10, "reason": "Allocation"}),
+            (
+                CapitalIncreaseRequest,
+                {
+                    "additional_shares": 10,
+                    "new_authorized_total": 1010,
+                    "purpose": "Growth",
+                    "board_resolution_reference": "Board 1",
+                },
+            ),
+        ):
+            for notes in (
+                REVIEWER_WROTE,
+                f"Execution refused: {NOT_WHITELISTED}",
+                "Execution failed: the node timed out",
+            ):
+                request = model.objects.create(
+                    token=tenant.deployed_token,
+                    submitted_by=tenant.user,
+                    status=RequestStatus.EXECUTED,
+                    review_notes=notes,
+                    **fields,
+                )
+                cases.append((model.__name__, request.pk, notes))
+
+        before = [("tokens", "0030_superseded_capital_increase")]
+        after = [("tokens", "0029_execution_notes")]
+        migrate_to(before)
+        migrated = migrate_to(after)
+        for name, pk, notes in cases:
+            request = migrated.get_model("tokens", name).objects.get(pk=pk)
+            machine = notes.startswith(_MIGRATION.MACHINE_PREFIXES)
+            self.assertEqual(request.review_notes, "" if machine else notes)
+            self.assertEqual(request.execution_notes, notes if machine else "")
+
+        reversed_apps = migrate_to(before)
+        for name, pk, notes in cases:
+            self.assertEqual(reversed_apps.get_model("tokens", name).objects.get(pk=pk).review_notes, notes)

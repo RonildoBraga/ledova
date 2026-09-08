@@ -34,7 +34,7 @@ def put_it_back_where_it_was(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("tokens", "0025_a_token_cannot_change_company"),
+        ("tokens", "0030_superseded_capital_increase"),
     ]
 
     operations = [
