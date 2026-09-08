@@ -2,9 +2,14 @@
 
 import { cleanup, render as renderComponent, screen } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { afterEach, describe, expect, it } from 'vitest';
+import apiClient from '@services/apiClient';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { ApiClientProvider } from '@ledova/shared';
 
 import { BrandingPanel } from './BrandingPanel';
+
+vi.mock('@services/apiClient', () => ({ default: { get: vi.fn(async () => ({ data: { valid: false } })) } }));
 
 const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
@@ -16,7 +21,9 @@ afterEach(() => {
 function render() {
   return renderComponent(
     <QueryClientProvider client={client}>
-      <BrandingPanel />
+      <ApiClientProvider client={apiClient}>
+        <BrandingPanel />
+      </ApiClientProvider>
     </QueryClientProvider>,
   );
 }

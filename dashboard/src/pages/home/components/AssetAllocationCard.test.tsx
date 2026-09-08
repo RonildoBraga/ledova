@@ -2,8 +2,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { cleanup, fireEvent, render } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { calculateAssetAllocation } from '@ledova/shared';
+import apiClient from '@services/apiClient';
+import { ApiClientProvider, calculateAssetAllocation } from '@ledova/shared';
 import type { HoldingWithWallet, HoldingsSummary } from '@ledova/shared';
+
+vi.mock('@services/apiClient', () => ({ default: { get: vi.fn(async () => ({ data: { valid: false } })) } }));
 
 const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
@@ -45,14 +48,16 @@ function draw(holdings: HoldingWithWallet[], totalValue: number) {
   } satisfies HoldingsSummary;
   const view = render(
     <QueryClientProvider client={client}>
-      <AssetAllocationCard
-        assetAllocation={calculateAssetAllocation(holdings, totalValue)}
-        totalValue={totalValue}
-        summary={summary}
-        isLoading={false}
-        hasError={false}
-        onAssetClick={() => {}}
-      />
+      <ApiClientProvider client={apiClient}>
+        <AssetAllocationCard
+          assetAllocation={calculateAssetAllocation(holdings, totalValue)}
+          totalValue={totalValue}
+          summary={summary}
+          isLoading={false}
+          hasError={false}
+          onAssetClick={() => {}}
+        />
+      </ApiClientProvider>
     </QueryClientProvider>,
   );
   return { ...drawn[drawn.length - 1], view };
