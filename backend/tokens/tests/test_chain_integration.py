@@ -209,7 +209,8 @@ class ShareTokenChainTest(ChainTestMixin, APITestCase):
         self.assertEqual(self.w3.eth.block_number, blocks_before)
         not_whitelisted.refresh_from_db()
         self.assertEqual(not_whitelisted.status, RequestStatus.APPROVED)
-        self.assertEqual(not_whitelisted.review_notes, f"Execution refused: {NOT_WHITELISTED}")
+        self.assertIn(f"Refused: {NOT_WHITELISTED}", not_whitelisted.execution_notes)
+        self.assertNotIn("Refused", not_whitelisted.review_notes)
 
         whitelist = WhitelistService()
         tx_hash, entry = whitelist.add_to_whitelist(self.investor)
@@ -224,7 +225,8 @@ class ShareTokenChainTest(ChainTestMixin, APITestCase):
         self.assertEqual(self.w3.eth.block_number, blocks_before)
         too_many.refresh_from_db()
         self.assertEqual(too_many.status, RequestStatus.APPROVED)
-        self.assertEqual(too_many.review_notes, f"Execution refused: {EXCEEDS_AUTHORIZED}")
+        self.assertIn(f"Refused: {EXCEEDS_AUTHORIZED}", too_many.execution_notes)
+        self.assertNotIn("Refused", too_many.review_notes)
         self.assertFalse(ShareIssuance.objects.filter(token=self.token).exists())
 
         executed = self._execute(not_whitelisted)
@@ -331,10 +333,9 @@ class ShareTokenChainTest(ChainTestMixin, APITestCase):
         self.assertEqual(self._execute(while_paused), {"success": False, "error": TOKEN_PAUSED})
         self.assertEqual(self.w3.eth.block_number, blocks_before)
         while_paused.refresh_from_db()
-        self.assertEqual(
-            (while_paused.status, while_paused.review_notes),
-            (RequestStatus.APPROVED, f"Execution refused: {TOKEN_PAUSED}"),
-        )
+        self.assertEqual(while_paused.status, RequestStatus.APPROVED)
+        self.assertIn(f"Refused: {TOKEN_PAUSED}", while_paused.execution_notes)
+        self.assertNotIn("Refused", while_paused.review_notes)
         self.assertEqual(ShareIssuance.objects.filter(token=self.token).count(), 1)
         self.service.unpause(self.token)
         self.token.refresh_from_db()
