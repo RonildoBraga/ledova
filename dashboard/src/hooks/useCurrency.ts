@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { getCurrentUserPreferences, getExchangeRate, CACHE_TIMING, formatCurrency } from '@ledova/shared';
+import { useUserPreferences, getExchangeRate, CACHE_TIMING, formatCurrency } from '@ledova/shared';
 import type { DisplayCurrency } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 import { useAuth } from './useAuth';
@@ -7,15 +7,8 @@ import { useAuth } from './useAuth';
 export function useCurrency() {
   const { isAuthenticated } = useAuth();
 
-  const preferencesQuery = useQuery({
-    queryKey: ['userPreferences'],
-    queryFn: () => getCurrentUserPreferences(apiClient),
-    enabled: isAuthenticated,
-    staleTime: CACHE_TIMING.DEFAULT_STALE_TIME,
-    gcTime: CACHE_TIMING.EXTRA_LONG_GC_TIME,
-  });
-
-  const displayCurrency: DisplayCurrency = preferencesQuery.data?.data?.displayCurrency ?? 'AUD';
+  const { preferences } = useUserPreferences();
+  const displayCurrency: DisplayCurrency = preferences?.displayCurrency ?? 'AUD';
 
   const exchangeRateQuery = useQuery({
     queryKey: ['exchangeRate', displayCurrency],
