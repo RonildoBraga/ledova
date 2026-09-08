@@ -9,10 +9,7 @@ from web3 import Web3
 
 from blockchain.models import BlockchainTransaction, TransactionStatus, TransactionType
 from integrations.base_chain import BaseChainClient, get_base_chain_client
-from integrations.base_chain.exceptions import (
-    BaseChainContractError,
-    BaseChainTransactionError,
-)
+from shared.db import atomic
 from wallets.models import Wallet
 from whitelist.constants import (
     WHITELIST_STATUS_NOT_WHITELISTED,
@@ -29,6 +26,14 @@ from whitelist.exceptions import (
 from whitelist.models import WhitelistEntry, WhitelistStatus
 
 logger = logging.getLogger(__name__)
+
+WHITELIST_ENTRY_LABEL = "whitelist.WhitelistEntry"
+
+
+RECORD_A_REVERTED_WRITE = {
+    TransactionType.WHITELIST_ADD: WhitelistEntry.mark_add_failed,
+    TransactionType.WHITELIST_REMOVE: WhitelistEntry.mark_remove_failed,
+}
 
 
 def unique_wallet_uuid_for(address: str):
@@ -107,39 +112,75 @@ class WhitelistService:
         entry, _ = WhitelistEntry.objects.get_or_create(wallet=wallet, defaults={"status": WhitelistStatus.PENDING})
         return entry
 
-    def _send_tx(self, tx_type, function_name, checksum_address, entry, wait_for_receipt):
-        tx_record = BlockchainTransaction.objects.create(
+    @staticmethod
+    @atomic(durable=True)
+    def _record_attempt(tx_type, function_name, checksum_address, signer_address, contract_address, entry):
+        if entry and entry.status != WhitelistStatus.PENDING:
+            entry.status = WhitelistStatus.PENDING
+            entry.save(update_fields=["status", "updated_at"])
+        return BlockchainTransaction.objects.create(
             tx_type=tx_type,
             status=TransactionStatus.PENDING,
-            from_address=self.signer_address,
-            to_address=self.contract_address,
+            from_address=signer_address,
+            to_address=contract_address,
             function_name=function_name,
             function_args={"investor": checksum_address},
-            related_model="whitelist.WhitelistEntry" if entry else None,
+            related_model=WHITELIST_ENTRY_LABEL if entry else None,
             related_uuid=entry.uuid if entry else None,
+        )
+
+    @staticmethod
+    @atomic(durable=True)
+    def _record_sent(tx_record, tx_hash) -> None:
+        tx_record.mark_submitted(tx_hash)
+
+    def _refuse(self, tx_type, function_name, checksum_address, error):
+        logger.error(f"{function_name}({checksum_address}) failed: {error}")
+        return WhitelistOperationFailedException(f"{TransactionType(tx_type).label} failed.")
+
+    def _send_tx(self, tx_type, function_name, checksum_address, entry, wait_for_receipt):
+        tx_record = self._record_attempt(
+            tx_type, function_name, checksum_address, self.signer_address, self.contract_address, entry
         )
         try:
             contract_function = getattr(self.contract.functions, function_name)(checksum_address)
-            tx_hash, receipt = self.chain_client.send_transaction(
-                contract_function,
-                self.signer_key,
-                wait_for_receipt=wait_for_receipt,
-            )
-        except (BaseChainTransactionError, BaseChainContractError) as e:
+            tx = self.chain_client.build_transaction(contract_function, from_address=self.signer_address)
+            signed = self.chain_client.sign_transaction(tx, self.signer_key)
+        except Exception as e:
             tx_record.mark_failed(str(e))
             if entry:
                 entry.mark_failed(str(e))
-            logger.error(f"{function_name}({checksum_address}) failed: {e}")
-            raise WhitelistOperationFailedException(f"{TransactionType(tx_type).label} failed.") from e
+            raise self._refuse(tx_type, function_name, checksum_address, e) from e
 
-        tx_record.mark_submitted(tx_hash)
-        if receipt:
-            tx_record.mark_confirmed(
-                block_number=receipt["blockNumber"],
-                block_hash=Web3.to_hex(receipt["blockHash"]),
-                gas_used=receipt["gasUsed"],
-            )
+        try:
+            tx_hash = self.chain_client.send_raw_transaction(signed)
+        except Exception as e:
+            tx_record.mark_outcome_unknown(str(e))
+            raise self._refuse(tx_type, function_name, checksum_address, e) from e
+
+        self._record_sent(tx_record, tx_hash)
         logger.info(f"{function_name}({checksum_address}) sent (tx={tx_hash})")
+
+        if not wait_for_receipt:
+            return tx_hash, None
+
+        try:
+            receipt = self.chain_client.receipt_even_if_reverted(tx_hash)
+        except Exception as e:
+            tx_record.mark_outcome_unknown(str(e))
+            raise self._refuse(tx_type, function_name, checksum_address, e) from e
+
+        if receipt["status"] != 1:
+            tx_record.mark_reverted(f"{function_name} reverted on chain ({tx_hash})")
+            if entry:
+                RECORD_A_REVERTED_WRITE[tx_type](entry, f"{function_name} reverted on chain", tx_hash)
+            raise self._refuse(tx_type, function_name, checksum_address, f"reverted on chain ({tx_hash})")
+
+        tx_record.mark_confirmed(
+            block_number=receipt["blockNumber"],
+            block_hash=Web3.to_hex(receipt["blockHash"]),
+            gas_used=receipt["gasUsed"],
+        )
         return tx_hash, receipt
 
     def add_to_whitelist(
@@ -229,6 +270,49 @@ class WhitelistService:
         result = self.sync_entries(entries)
         logger.info(f"Synced {result['synced']} entries")
         return result["synced"]
+
+    @staticmethod
+    def _the_write_that_failed_was_an_add(entry) -> bool:
+        latest = (
+            BlockchainTransaction.objects.filter(related_model=WHITELIST_ENTRY_LABEL, related_uuid=entry.uuid)
+            .order_by("-created_at")
+            .values_list("tx_type", flat=True)
+            .first()
+        )
+        return latest == TransactionType.WHITELIST_ADD
+
+    def reconcile_failed_adds(self) -> dict:
+        result = {"checked": 0, "activated": 0, "left_failed": 0, "removals_the_chain_kept": 0, "errors": []}
+
+        for entry in WhitelistEntry.objects.failed_with_a_sent_add():
+            result["checked"] += 1
+            try:
+                if not self.is_whitelisted(entry.wallet_address):
+                    result["left_failed"] += 1
+                    continue
+            except Exception as exc:
+                result["errors"].append(f"Could not read {entry.wallet_address}: {exc}")
+                logger.error(f"Whitelist reconciliation could not read {entry.wallet_address}: {exc}")
+                continue
+
+            if not self._the_write_that_failed_was_an_add(entry):
+                entry.record_the_chain_still_lists_it()
+                result["removals_the_chain_kept"] += 1
+                result["left_failed"] += 1
+                logger.warning(
+                    f"{entry.wallet_address} is still whitelisted on chain and the write that failed was a "
+                    f"removal, so it stays failed for an operator to retry"
+                )
+                continue
+
+            entry.mark_active(entry.add_tx_hash)
+            result["activated"] += 1
+            logger.warning(
+                f"{entry.wallet_address} was recorded failed but the chain says it is whitelisted; "
+                f"reconciled to active on {entry.add_tx_hash}"
+            )
+
+        return result
 
     def ensure_whitelisted(self, entries: list[WhitelistEntry]) -> dict:
         result = {"added": 0, "synced": 0, "skipped": 0, "errors": []}

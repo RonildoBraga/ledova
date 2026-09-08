@@ -91,8 +91,23 @@ class WhitelistEntry(BaseModel):
             ]
         )
 
+    def record_the_chain_still_lists_it(self) -> None:
+        self.is_whitelisted = True
+        self.save(update_fields=["is_whitelisted", "updated_at"])
+
     def mark_failed(self, error: str = "") -> None:
+        self._record_failure(error, [])
+
+    def mark_add_failed(self, error: str, tx_hash: str) -> None:
+        self.add_tx_hash = tx_hash
+        self._record_failure(error, ["add_tx_hash"])
+
+    def mark_remove_failed(self, error: str, tx_hash: str) -> None:
+        self.remove_tx_hash = tx_hash
+        self._record_failure(error, ["remove_tx_hash"])
+
+    def _record_failure(self, error: str, extra_fields: list[str]) -> None:
         self.status = WhitelistStatus.FAILED
         if error:
             self.notes = f"Error: {error}\n{self.notes}"
-        self.save(update_fields=["status", "notes", "updated_at"])
+        self.save(update_fields=["status", "notes", "updated_at", *extra_fields])

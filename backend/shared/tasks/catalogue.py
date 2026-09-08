@@ -25,6 +25,9 @@ SYSTEM_WIDE = {
     "wallets.tasks.confirmation.cleanup_stale_pending_transactions": "Retires stale rows across all accounts.",
     "whitelist.tasks.sync.sync_all_entries": "Reconciles the on-chain whitelist, which is one list for the "
     "whole deployment and is staff-only in the API for the same reason.",
+    "whitelist.tasks.sync.reconcile_failed_adds": "Asks the chain about every entry recorded failed with a hash "
+    "it sent, which is a question about the deployment's one whitelist rather than about whoever owns any "
+    "wallet on it.",
     "procrastinate.builtin_tasks.remove_old_jobs": "Procrastinate's own queue maintenance.",
     "builtin:procrastinate.builtin_tasks.remove_old_jobs": "The same task under its builtin alias.",
 }

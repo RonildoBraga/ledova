@@ -16,7 +16,7 @@ from whitelist.services import WhitelistService
 User = get_user_model()
 TREASURY = "0x" + "ab" * 20
 TREASURY_CHECKSUM = "0xABaBaBaBABabABabAbAbABAbABabababaBaBABaB"
-RECEIPT = {"blockNumber": 7, "blockHash": bytes.fromhex("ab" * 32), "gasUsed": 21000}
+RECEIPT = {"status": 1, "blockNumber": 7, "blockHash": bytes.fromhex("ab" * 32), "gasUsed": 21000}
 TEST_STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
@@ -60,7 +60,10 @@ class TreasuryEntryServiceTest(TestCase):
         service.chain_client = Mock()
         service.chain_client.to_checksum_address.side_effect = lambda address: address
         service.chain_client.account_from_key.return_value.address = "0x" + "f" * 40
-        service.chain_client.send_transaction.return_value = ("0xhash", RECEIPT)
+        service.chain_client.build_transaction.return_value = {}
+        service.chain_client.sign_transaction.return_value = b"signed"
+        service.chain_client.send_raw_transaction.return_value = "0xhash"
+        service.chain_client.receipt_even_if_reverted.return_value = RECEIPT
         service.signer_key = "0xoperator"
         service.contract_address = "0x" + "d" * 40
         service._contract = Mock()
