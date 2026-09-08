@@ -1,8 +1,9 @@
 from importlib import import_module
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from django.apps import apps
-from django.db import IntegrityError, connection, transaction
+from django.db import DatabaseError, IntegrityError, connection, transaction
 from django.test import TestCase, TransactionTestCase
 
 from shared.tests.tenants import make_tenant
@@ -260,3 +261,29 @@ class TheMigrationGuardRefusesRatherThanChoosingTest(TransactionTestCase):
         )
 
         self.assertIsNone(self.run_the_guard())
+
+
+class SubmissionReadsThePersistedDraftTest(TestCase):
+    def test_a_stale_draft_cannot_submit_the_same_request_again(self):
+        tenant = make_tenant("stale-submit")
+        stale = CapitalIncreaseRequest.objects.get(pk=tenant.capital_increase.pk)
+        submit_capital_increase(tenant.capital_increase, tenant.user)
+        before = CapitalIncreaseRequest.objects.filter(pk=stale.pk).values().get()
+
+        with self.assertRaises(InvalidTokenStateException):
+            submit_capital_increase(stale, tenant.user)
+
+        self.assertEqual(CapitalIncreaseRequest.objects.filter(pk=stale.pk).values().get(), before)
+
+    def test_an_unrelated_database_failure_is_not_called_competition(self):
+        tenant = make_tenant("submit-db-error")
+        request = tenant.capital_increase
+        before = CapitalIncreaseRequest.objects.filter(pk=request.pk).values().get()
+        failure = DatabaseError("unrelated failure")
+
+        with patch("tokens.services.capital_increase.dilution_for", side_effect=failure):
+            with self.assertRaises(DatabaseError) as raised:
+                submit_capital_increase(request, tenant.user)
+
+        self.assertIs(raised.exception, failure)
+        self.assertEqual(CapitalIncreaseRequest.objects.filter(pk=request.pk).values().get(), before)

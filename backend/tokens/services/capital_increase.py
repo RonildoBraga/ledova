@@ -1,5 +1,6 @@
+from shared.db import atomic
 from tokens.exceptions import InvalidTokenStateException
-from tokens.models import CapitalIncreaseRequest
+from tokens.models import CapitalIncreaseRequest, ShareToken
 from tokens.services.dilution import dilution_for
 
 ALREADY_IN_FLIGHT = (
@@ -8,7 +9,10 @@ ALREADY_IN_FLIGHT = (
 )
 
 
+@atomic()
 def submit_capital_increase(capital_increase: CapitalIncreaseRequest, user) -> CapitalIncreaseRequest:
+    ShareToken.objects.select_for_update().get(pk=capital_increase.token_id)
+    capital_increase.refresh_from_db()
     in_flight = (
         CapitalIncreaseRequest.objects.filter(token=capital_increase.token)
         .exclude(pk=capital_increase.pk)
