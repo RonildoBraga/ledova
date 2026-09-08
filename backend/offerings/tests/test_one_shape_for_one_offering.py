@@ -47,8 +47,15 @@ class AMutationAnswersWithTheShapeTheTypePromisesTest(APITestCase):
         self.assertEqual(response.status_code, 200, response.content)
         self.assertEqual(PROMISED_BY_THE_CLIENT_TYPE - set(response.json()), set())
 
-    def test_the_two_mutations_answer_in_the_same_shape_as_the_read(self):
+    def test_all_three_mutations_answer_in_the_same_shape_as_the_read(self):
         created = self.client.post(BASE, {"token": str(self.tenant.token.uuid), **PAYLOAD}, format="json")
-        read = self.client.get(f"{BASE}{created.json()['uuid']}/")
+        self.assertEqual(created.status_code, 201, created.content)
+        detail = f"{BASE}{created.json()['uuid']}/"
+        read = self.client.get(detail)
 
         self.assertEqual(set(created.json()), set(read.json()))
+        for method in (self.client.put, self.client.patch):
+            with self.subTest(method=method.__name__):
+                response = method(detail, {"token": str(self.tenant.token.uuid), **PAYLOAD}, format="json")
+                self.assertEqual(response.status_code, 200, response.content)
+                self.assertEqual(set(response.json()), set(self.client.get(detail).json()))
