@@ -5,9 +5,12 @@ import {
   getIdentityVerificationStatus,
   CACHE_TIMING,
   describeFailure,
+  apiErrorSentence,
 } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 import snsWebSdk from '@sumsub/websdk';
+
+const START_FAILURE = 'Failed to start verification. Please try again.';
 
 export function useIdentityVerification() {
   const queryClient = useQueryClient();
@@ -130,8 +133,7 @@ export function useIdentityVerification() {
         setSdkActive(true);
       } catch (error: unknown) {
         console.error(`Failed to launch verification: ${describeFailure(error)}`);
-        const errorMessage = error instanceof Error ? error.message : 'Failed to start verification';
-        setSdkError(errorMessage);
+        setSdkError(apiErrorSentence(error, START_FAILURE));
       } finally {
         setIsLaunching(false);
       }
@@ -173,9 +175,8 @@ export function useIdentityVerification() {
     formUrl,
 
     justSubmitted,
-    sdkError,
+    verificationError: sdkError || (tokenMutation.error ? apiErrorSentence(tokenMutation.error, START_FAILURE) : null),
     isLaunching,
-    tokenError: tokenMutation.error,
 
     resetState,
   };

@@ -32,8 +32,7 @@ export function SignupIdentityVerification() {
     launchVerification,
     formUrl,
     sdkActive,
-    sdkError,
-    tokenError,
+    verificationError,
     isLaunching,
   } = useIdentityVerification();
 
@@ -151,7 +150,7 @@ export function SignupIdentityVerification() {
             </div>
           )}
 
-          {(sdkError || tokenError) && (
+          {verificationError && (
             <div className="bg-error/10 border border-error/20 rounded-lg p-4 mb-6">
               <div className="flex items-start">
                 <div className="flex-shrink-0">
@@ -159,7 +158,7 @@ export function SignupIdentityVerification() {
                 </div>
                 <div className="ml-3">
                   <p className="text-sm text-error-light" role="alert">
-                    {sdkError || (tokenError as Error)?.message || 'An error occurred'}
+                    {verificationError}
                   </p>
                 </div>
               </div>

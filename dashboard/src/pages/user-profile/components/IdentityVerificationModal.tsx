@@ -35,8 +35,7 @@ export function IdentityVerificationModal({ isOpen, onClose }: IdentityVerificat
     formUrl,
     sdkActive,
     justSubmitted,
-    sdkError,
-    tokenError,
+    verificationError,
     isLaunching,
     resetState,
   } = useIdentityVerification();
@@ -141,7 +140,7 @@ export function IdentityVerificationModal({ isOpen, onClose }: IdentityVerificat
           </div>
         )}
 
-        {(sdkError || tokenError) && (
+        {verificationError && (
           <div className="bg-error/10 border border-error/20 rounded-lg p-4">
             <div className="flex items-start">
               <div className="flex-shrink-0">
@@ -149,7 +148,7 @@ export function IdentityVerificationModal({ isOpen, onClose }: IdentityVerificat
               </div>
               <div className="ml-3">
                 <p className="text-sm text-error-light" role="alert">
-                  {sdkError || (tokenError as Error)?.message || 'An error occurred'}
+                  {verificationError}
                 </p>
               </div>
             </div>
