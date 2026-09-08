@@ -739,7 +739,6 @@ class ShareTokenService:
         if refused:
             raise IssuanceRefusedException(CAP_NOT_RAISED)
         if failure is not None:
-            logger.error(f"Capital increase failed: {failure}")
             raise failure
         return result
 

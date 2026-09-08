@@ -1,10 +1,14 @@
-from unittest.mock import patch
+from unittest.mock import PropertyMock, patch
 
+from django.contrib import admin
 from django.test import TestCase
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from web3 import Web3
 
+from blockchain.models import BlockchainTransaction
 from shared.tests.tenants import make_tenant
+from tokens.admin.capital_increase import CapitalIncreaseAdmin
+from tokens.exceptions import TokenDeploymentFailedException
 from tokens.models import CapitalIncreaseRequest, RequestStatus, ShareIssuance
 from tokens.serializers import CapitalIncreaseDetailSerializer
 from tokens.serializers.share_issuance_request import ShareIssuanceRequestSerializer
@@ -24,12 +28,14 @@ from tokens.tests.test_review_requests import (
 KEY = "pR3t3nd1ngT0B3aReAlK3y"
 RPC_URL = f"https://base-sepolia.g.alchemy.com/v2/{KEY}"
 PROVIDER_TEXT = f"Max retries exceeded with url: {RPC_URL}"
+SIGNER_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
 
 
 class WhatTheIssuerReadsAfterAFailedExecutionTest(TestCase):
 
     def setUp(self):
         chain = patch(CHAIN_CLIENT).start().return_value
+        self.chain = chain
         chain.is_valid_address.return_value = True
         chain.to_checksum_address.side_effect = Web3.to_checksum_address
         chain.get_address_from_private_key.return_value = SIGNER
@@ -98,6 +104,46 @@ class WhatTheIssuerReadsAfterAFailedExecutionTest(TestCase):
         issuance = ShareIssuance.objects.get(token=self.token)
 
         self.assertIn(KEY, issuance.error_message)
+
+    def a_capital_increase_that_reached_the_node(self):
+        request = self._approved(self.tenant.capital_increase)
+        self.chain.send_transaction.side_effect = RequestsConnectionError(PROVIDER_TEXT)
+        with patch.object(ShareTokenService, "signer_key", new_callable=PropertyMock, return_value=SIGNER_KEY):
+            with patch("tokens.services.share_token_service.primary_wallet_for", return_value=None):
+                with self.assertRaises(TokenDeploymentFailedException):
+                    self.service.execute_request(request)
+        request.refresh_from_db()
+        return request
+
+    def test_the_operator_keeps_the_capital_increase_diagnostic_the_issuer_does_not_get(self):
+        request = self.a_capital_increase_that_reached_the_node()
+
+        recorded = BlockchainTransaction.objects.get(
+            related_model=CapitalIncreaseRequest._meta.label, related_uuid=request.uuid
+        )
+
+        self.assertIn(KEY, recorded.error_message)
+        self.assertNotIn(KEY, str(CapitalIncreaseDetailSerializer(request).data))
+
+    def test_the_admin_puts_that_diagnostic_in_front_of_the_operator(self):
+        request = self.a_capital_increase_that_reached_the_node()
+        shown = CapitalIncreaseAdmin(CapitalIncreaseRequest, admin.site).last_execution_error(request)
+
+        self.assertIn(KEY, shown)
+
+    def test_a_request_that_never_failed_shows_no_error_row(self):
+        request = self._approved(self.tenant.capital_increase)
+
+        shown = CapitalIncreaseAdmin(CapitalIncreaseRequest, admin.site).last_execution_error(request)
+
+        self.assertEqual(shown, "-")
+
+    def test_one_capital_increase_failure_is_logged_once(self):
+        with self.assertLogs("tokens.services.share_token_service", level="ERROR") as logged:
+            self.a_failed_capital_increase()
+
+        about_this_failure = [line for line in logged.output if "Capital increase" in line]
+        self.assertEqual(len(about_this_failure), 1, about_this_failure)
 
     def test_a_capital_increase_says_the_cap_rather_than_the_shares(self):
         request = self.a_failed_capital_increase()
