@@ -1050,7 +1050,13 @@ runs. Both mechanisms hold at once on purpose:
     reaches which command is `policy_sql`'s business — `INSERTABLE` on `INSERT`
     alone, `readable` on `SELECT` and the `USING` half of `UPDATE`. A gate that
     restated that mapping would be a second source of truth for exactly the
-    thing it exists to keep singular.
+    thing it exists to keep singular. Before rendering, the probe drops every
+    policy on the catalogued tables inside its rollback transaction. Extra
+    permissive grants therefore cannot survive into the expected policy set.
+    It compares policy roles and permissiveness as well as command and clauses.
+    Helper comparison includes the zero-argument function's body, language,
+    volatility, security mode, strictness, parallel and leakproof flags,
+    configuration and return type.
   - **The probe rolls back, and a test asserts the installed policies are
     unchanged afterwards.** It takes the locks the migration takes, briefly, so
     it belongs after `migrate` on the PostgreSQL job beside `check_rls_roles`,
@@ -1059,6 +1065,19 @@ runs. Both mechanisms hold at once on purpose:
 
   A catalogue that will not install is reported as a finding rather than
   raised, because a fresh database could not be built from it either.
+  Run this privileged command after migration when validating a deployment.
+  The app does not maintain a separate startup hash or run a DDL probe on its
+  scoped connection.
+
+  Capital-increase and issuance requests have company policies installed by
+  `shared/0007`. A subscriber can also read the issuance request linked to their
+  subscription, so withdrawal still reports a claimed issuance as a business
+  refusal; only the issuer can change or delete the request. Their R0 columns
+  already exist when `shared/0004` first reads
+  the catalogue on a fresh database. `AWAITING_R0` entries explicitly name their
+  missing columns, and the command fails when one is already `NOT NULL` in the
+  migrated schema. Swap wallet columns are also complete; `AWAITING_RLS` records
+  their remaining trading-policy work instead of claiming that R0 is unfinished.
 
 **How R1 is proven, and where the proof deliberately diverges from
 production.** Three aliases are three *connections*, and Django's `TestCase`

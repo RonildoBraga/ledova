@@ -1,3 +1,11 @@
+from typing import NamedTuple
+
+
+class MissingOwnerColumns(NamedTuple):
+    columns: tuple[str, ...]
+    reason: str
+
+
 PRINCIPAL = "NULLIF(current_setting('app.user_id', true), '')::bigint"
 
 MEMBER_ACCOUNTS = "app_member_account_ids"
@@ -109,6 +117,15 @@ POLICIES = {
         f"owner_id = {PRINCIPAL} OR ({ON_THE_MARKET})",
         _company("company_id", MANAGEABLE_COMPANIES),
     ),
+    "tokens_capitalincreaserequest": (
+        _company("company_id", VISIBLE_COMPANIES),
+        _company("company_id", MANAGEABLE_COMPANIES),
+    ),
+    "tokens_shareissuancerequest": (
+        f"{_company('company_id', VISIBLE_COMPANIES)} OR uuid IN "
+        f"(SELECT issuance_request_id FROM offerings_subscription WHERE {_member('user_account_id')})",
+        _company("company_id", MANAGEABLE_COMPANIES),
+    ),
 }
 
 LOCKING_IS_READING = (
@@ -130,6 +147,12 @@ DERIVED_FROM_A_MUTABLE_ATTRIBUTE = {
 }
 
 BYPASSES_VISIBLE_TO_USER = {
+    "ShareIssuanceRequest on subscription reads and withdrawal": (
+        "offerings/querysets/subscription.py with_relations and offerings/services/subscription.py _linked_request",
+        "tokens_shareissuancerequest: the request linked to a subscription of this principal's member account. "
+        "Reading that request preserves the withdrawal refusal once issuance is claimed; writes remain issuer-only",
+        "shared/tests/test_review_request_policies.py - subscriber read, write refusal and withdrawal controls",
+    ),
     "Subscription.for_issuer": (
         "offerings/views/offering.py subscriptions",
         "offerings_subscription: the issuer term, offering_id in the offerings this principal's companies own",
@@ -263,18 +286,13 @@ INSERT_ONLY_REASONS = {
 }
 
 
-AWAITING_R0 = {
-    "tokens_capitalincreaserequest": (
-        "Reaches its company through token -> company and has no company_id yet. The tokens R0 lane "
-        "adds the column; until it lands there is nothing for a policy to compare."
-    ),
-    "tokens_shareissuancerequest": (
-        "Reaches its company through token -> company and has no company_id yet. Same lane, same column, "
-        "and the same reason it cannot be written early."
-    ),
+AWAITING_R0: dict[str, MissingOwnerColumns] = {}
+
+AWAITING_RLS = {
     "tokens_swaporder": (
-        "Needs seller_wallet_id and buyer_wallet_id rather than account ids, because only a VERIFIED "
-        "wallet confers sight of a swap and verification changes after the row is written."
+        "The seller_wallet_id and buyer_wallet_id columns are populated and NOT NULL. Trading still needs "
+        "per-command RLS that follows current wallet verification and participant access; the order/swap "
+        "work in #5 and #115 owns that conversion."
     ),
 }
 
@@ -344,4 +362,4 @@ NOT_TENANCY = {
     "and revealing nothing that reading both of those tables would not.",
 }
 
-UNSCOPED = {**FRAMEWORK, **OPERATOR_ONLY, **NOT_TENANCY}
+UNSCOPED = {**FRAMEWORK, **OPERATOR_ONLY, **NOT_TENANCY, **AWAITING_RLS}

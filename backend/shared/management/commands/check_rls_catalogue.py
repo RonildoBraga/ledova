@@ -2,13 +2,17 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import DatabaseError, connections
 
 from shared.db import MIGRATE_ALIAS, atomic
-from shared.db.policies import HELPERS, POLICIES
+from shared.db.policies import AWAITING_R0, HELPERS, POLICIES
 from shared.db.policy_sql import install
 
 POLICY_STATE = """
     SELECT c.relname, p.polname, p.polcmd,
            coalesce(pg_get_expr(p.polqual, p.polrelid), ''),
-           coalesce(pg_get_expr(p.polwithcheck, p.polrelid), '')
+           coalesce(pg_get_expr(p.polwithcheck, p.polrelid), ''),
+           ARRAY(SELECT CASE WHEN role_oid = 0 THEN 'PUBLIC'
+                             ELSE pg_get_userbyid(role_oid)::text END
+                   FROM unnest(p.polroles) role_oid ORDER BY 1),
+           CASE WHEN p.polpermissive THEN 'PERMISSIVE' ELSE 'RESTRICTIVE' END
       FROM pg_policy p
       JOIN pg_class c ON c.oid = p.polrelid
      WHERE c.relnamespace = 'public'::regnamespace AND c.relname = ANY(%s)
@@ -21,9 +25,32 @@ RELATION_STATE = """
 """
 
 HELPER_STATE = """
-    SELECT proname, prosrc
-      FROM pg_proc
-     WHERE pronamespace = 'public'::regnamespace AND proname = ANY(%s)
+    SELECT p.proname, p.prosrc, l.lanname, p.provolatile, p.prosecdef,
+           p.proisstrict, p.proparallel, p.proleakproof, p.proconfig,
+           pg_get_function_result(p.oid)
+      FROM pg_proc p
+      JOIN pg_language l ON l.oid = p.prolang
+     WHERE p.pronamespace = 'public'::regnamespace AND p.proname = ANY(%s) AND p.pronargs = 0
+"""
+
+HELPER_CLAUSES = (
+    "body",
+    "language",
+    "volatility",
+    "security",
+    "strictness",
+    "parallel",
+    "leakproof",
+    "configuration",
+    "result",
+)
+
+REQUIRED_COLUMNS = """
+    SELECT a.attname
+      FROM pg_attribute a
+      JOIN pg_class c ON c.oid = a.attrelid
+     WHERE c.relnamespace = 'public'::regnamespace AND c.relname = %s
+       AND a.attname = ANY(%s) AND a.attnotnull AND NOT a.attisdropped AND a.attnum > 0
 """
 
 NOT_POSTGRES = (
@@ -41,7 +68,7 @@ WILL_NOT_INSTALL = (
     "it either, and there is nothing to compare:\n      {error}"
 )
 HELPER_MISSING = "{helper}: the catalogue defines it, and public has no such function"
-HELPER_DIFFERS = "{helper}: the body differs\n      database:  {installed}\n      catalogue: {rendered}"
+HELPER_DIFFERS = "{helper}: the {clause} differs\n      database:  {installed}\n      catalogue: {rendered}"
 
 DRIFTED = (
     "The database has policies the catalogue no longer describes ({count}):\n\n  {findings}\n\n"
@@ -67,17 +94,24 @@ class Rolled(Exception):
 
 def state_of(cursor, tables, helpers):
     cursor.execute(POLICY_STATE, [tables])
-    policies = {(table, name): (command, using, check) for table, name, command, using, check in cursor.fetchall()}
+    policies = {(table, name): tuple(attributes) for table, name, *attributes in cursor.fetchall()}
     cursor.execute(RELATION_STATE, [tables])
     relations = {table: (enabled, forced) for table, enabled, forced in cursor.fetchall()}
     cursor.execute(HELPER_STATE, [helpers])
-    functions = dict(cursor.fetchall())
+    functions = {name: tuple(attributes) for name, *attributes in cursor.fetchall()}
     return policies, relations, functions
 
 
 def would_be_installed(owner, tables, helpers):
     try:
         with atomic(owner.alias):
+            with owner.cursor() as cursor:
+                cursor.execute("SET LOCAL search_path = public, pg_catalog")
+                cursor.execute(POLICY_STATE, [tables])
+                existing = cursor.fetchall()
+                quote = owner.ops.quote_name
+                for table, name, *_ in existing:
+                    cursor.execute(f"DROP POLICY {quote(name)} ON {quote('public')}.{quote(table)}")
             with owner.schema_editor(atomic=False) as editor:
                 install(editor)
             with owner.cursor() as cursor:
@@ -98,7 +132,7 @@ def policy_findings(installed, rendered):
         findings.append(POLICY_EXTRA.format(table=key[0], policy=key[1]))
     for key in sorted(installed.keys() & rendered.keys()):
         was, now = installed[key], rendered[key]
-        for index, clause in enumerate(("FOR", "USING", "WITH CHECK")):
+        for index, clause in enumerate(("FOR", "USING", "WITH CHECK", "TO", "AS")):
             if was[index] != now[index]:
                 findings.append(
                     POLICY_DIFFERS.format(
@@ -127,13 +161,32 @@ def helper_findings(installed, rendered):
     for helper in sorted(rendered):
         if helper not in installed:
             findings.append(HELPER_MISSING.format(helper=helper))
-        elif installed[helper] != rendered[helper]:
-            findings.append(
-                HELPER_DIFFERS.format(
-                    helper=helper,
-                    installed=" ".join(installed[helper].split()),
-                    rendered=" ".join(rendered[helper].split()),
+            continue
+        for index, clause in enumerate(HELPER_CLAUSES):
+            was, now = installed[helper][index], rendered[helper][index]
+            if was != now:
+                findings.append(
+                    HELPER_DIFFERS.format(
+                        helper=helper,
+                        clause=clause,
+                        installed=" ".join(str(was).split()),
+                        rendered=" ".join(str(now).split()),
+                    )
                 )
+    return findings
+
+
+def ownership_wait_findings(cursor, waiting):
+    findings = []
+    for table, prerequisite in sorted(waiting.items()):
+        if not prerequisite.columns:
+            findings.append(f"{table}: AWAITING_R0 must name the ownership columns that are still missing")
+            continue
+        cursor.execute(REQUIRED_COLUMNS, [table, list(prerequisite.columns)])
+        for (column,) in cursor.fetchall():
+            findings.append(
+                f"{table}.{column} is already NOT NULL; remove the stale AWAITING_R0 prerequisite "
+                "and install the policy or record the actual remaining work"
             )
     return findings
 
@@ -149,10 +202,12 @@ class Command(BaseCommand):
         tables, helpers = sorted(POLICIES), sorted(HELPERS)
         with owner.cursor() as cursor:
             installed, relations, functions = state_of(cursor, tables, helpers)
+            ownership_waits = ownership_wait_findings(cursor, AWAITING_R0)
         rendered, _, would_be = would_be_installed(owner, tables, helpers)
 
         findings = (
-            relation_findings(relations, tables)
+            ownership_waits
+            + relation_findings(relations, tables)
             + policy_findings(installed, rendered)
             + helper_findings(functions, would_be)
         )
