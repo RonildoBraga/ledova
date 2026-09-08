@@ -789,16 +789,71 @@ and a policy on every tenant table. Four things about running that deployment:
    `sync_procedure_templates` and `asset_sync --seed-only`. On the settlement
    fold release, read Migration notes first: dry-run the migration against a
    restored copy, and queue `sync_all_wallets` afterwards.
-7. Open `/admin/operators/operator/` and complete identity, deployment mode and
+7. **If the database predates the upload allowlist**, run the stored mime
+   types over the three surfaces that serve a file inline, and read the answer
+   before serving any of it with this code:
+
+   ```sql
+   SELECT 'documents' AS source, mime_type, COUNT(*) AS rows,
+          MIN(created_at) AS first_seen, MAX(created_at) AS last_seen
+   FROM documents GROUP BY mime_type
+   UNION ALL
+   SELECT 'companies_companydocument', mime_type, COUNT(*),
+          MIN(created_at), MAX(created_at)
+   FROM companies_companydocument GROUP BY mime_type
+   UNION ALL
+   SELECT 'users_investorclassification', evidence_mime_type, COUNT(*),
+          MIN(created_at), MAX(created_at)
+   FROM users_investorclassification GROUP BY evidence_mime_type
+   ORDER BY source, rows DESC;
+   ```
+
+   **The expected answer is only `application/pdf`, `image/png` and
+   `image/jpeg`** — `ALLOWED_UPLOAD_MIME_TYPES` in `shared/uploads.py`, which
+   every one of the three write paths goes through. Anything else is a row the
+   current validation could not have produced.
+
+   The empty string counts as an answer. `Document.mime_type` and
+   `evidence_mime_type` are `blank=True`, so `''` is a legal stored value;
+   `CompanyDocument.mime_type` is not, so an empty string there is a different
+   kind of surprise. It is what the blank row looks like — this is a local
+   development database, and every row in it was written through the
+   allowlist:
+
+   ```
+   source                       | mime_type       | rows
+   companies_companydocument    | application/pdf |    9
+   documents                    | application/pdf |    4
+   users_investorclassification |                 |    1
+   users_investorclassification | application/pdf |    1
+   ```
+
+   **`MIN`/`MAX(created_at)` is the part that answers the question.** If the
+   out-of-allowlist values stop at a date, they are rows from before the
+   validation and a one-off normalisation clears them. If they run to today,
+   something is still writing them and that write path is what needs finding,
+   before anything else.
+
+   **A foreign row is already served as an attachment and never inline**, so
+   this check is about the write path rather than the read: `stream_stored_file`
+   sets `as_attachment` for any content type outside `INLINE_MIME_TYPES`, and an
+   empty type falls back to `application/octet-stream`, which is outside it too.
+   Do not relax that for a legacy row; normalise the row instead.
+
+   **There is no production database today.** Every database the project has
+   run against is local, and mainnet deployment configuration is deliberately
+   absent from this repository. This step exists for the first deployment that
+   restores or carries data written before the allowlist.
+8. Open `/admin/operators/operator/` and complete identity, deployment mode and
    payment rails before inviting anyone; the console's health strip must be all
    green before an offering opens. Enter the changelist, not
    `/admin/operators/operator/1/change/`: only `OperatorAdmin.changelist_view`
    seeds the row, so on a fresh install the change URL redirects to `/admin/`.
-8. Confirm a worker is running; check the deployment, issuance and confirmation
+9. Confirm a worker is running; check the deployment, issuance and confirmation
    sweeps appear in its log.
-9. Confirm `GET /health/` answers 200 and `GET /api/operator/` returns 401
+10. Confirm `GET /health/` answers 200 and `GET /api/operator/` returns 401
    anonymously.
-10. Leave the `trading_enabled` feature flag off; while it is off the
+11. Leave the `trading_enabled` feature flag off; while it is off the
     middleware refuses with 403 any request, of any method, whose path starts
     with one of five prefixes
     (`/api/v1/trading/{orders,wallets,transfers,swaps,events}/`). The read-only
