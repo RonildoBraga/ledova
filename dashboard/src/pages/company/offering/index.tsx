@@ -15,7 +15,7 @@ import type { IssuerSubscription, Offering, OfferingExemption, OfferingInput } f
 import apiClient from '@services/apiClient';
 import { PageWrapper } from '../components/PageWrapper';
 import { useCompany } from '../hooks/useCompany';
-import { useOfferingActions, useOfferings, useOfferingSubscriptions } from './useOffering';
+import { useOfferingActions, useOfferingUnderEdit, useOfferings, useOfferingSubscriptions } from './useOffering';
 import { OfferingForm } from './OfferingForm';
 
 const ACTION_ERROR_FALLBACK = 'The request was refused. Please try again.';
@@ -23,12 +23,14 @@ const ACTION_ERROR_FALLBACK = 'The request was refused. Please try again.';
 function OfferingRow({
   offering,
   onSubmit,
+  onEdit,
   onWithdraw,
   onDelete,
   busy,
 }: {
   offering: Offering;
   onSubmit: () => void;
+  onEdit: () => void;
   onWithdraw: () => void;
   onDelete: () => void;
   busy: boolean;
@@ -52,7 +54,7 @@ function OfferingRow({
         <p className="text-xs text-text-muted">
           {OFFERING_EXEMPTION_LABELS[offering.exemption as OfferingExemption] ?? offering.exemptionDisplay}
         </p>
-        {offering.rejectionReason && (
+        {offering.status === 'rejected' && offering.rejectionReason && (
           <p className="text-xs text-error-light mt-1">Rejected: {offering.rejectionReason}</p>
         )}
         {offering.closeReason && <p className="text-xs text-text-muted mt-1">Closed: {offering.closeReason}</p>}
@@ -64,7 +66,16 @@ function OfferingRow({
             disabled={busy}
             className="rounded-lg bg-brand-mid hover:bg-brand disabled:bg-surface-disabled px-4 py-2 text-sm font-semibold text-white transition-colors"
           >
-            Submit for review
+            {offering.status === 'rejected' ? 'Submit again' : 'Submit for review'}
+          </button>
+        )}
+        {offering.canBeEdited && (
+          <button
+            onClick={onEdit}
+            disabled={busy}
+            className="text-sm font-medium text-text-muted hover:text-text-primary disabled:opacity-50 transition-colors"
+          >
+            Edit
           </button>
         )}
         {canWithdraw && (
@@ -76,7 +87,7 @@ function OfferingRow({
             Withdraw
           </button>
         )}
-        {offering.canBeEdited && (
+        {offering.canBeDeleted && (
           <button
             onClick={onDelete}
             disabled={busy}
@@ -161,9 +172,12 @@ export default function OfferingPage() {
   const { company, companyUuid, isLoading: isLoadingCompany } = useCompany();
   const { offerings, tokens, settlementAssets, isLoading: isLoadingOfferings, refresh } = useOfferings();
   const [actionError, setActionError] = useState<string | null>(null);
+  const [editingUuid, setEditingUuid] = useState<string | null>(null);
+  const { offering: editing, isLoading: isLoadingEditing } = useOfferingUnderEdit(editingUuid ?? undefined);
 
   const settle = () => {
     setActionError(null);
+    setEditingUuid(null);
     refresh();
   };
   const surfaceError = (error: unknown) => setActionError(getErrorMessage(error, ACTION_ERROR_FALLBACK));
@@ -195,12 +209,18 @@ export default function OfferingPage() {
 
   const busy =
     actions.create.isPending ||
+    actions.update.isPending ||
     actions.submit.isPending ||
     actions.withdraw.isPending ||
     actions.remove.isPending ||
     listingMutation.isPending;
 
   const handleCreate = (input: OfferingInput) => run(actions.create.mutateAsync(input));
+  const handleUpdate = (input: OfferingInput) => run(actions.update.mutateAsync({ uuid: editingUuid!, data: input }));
+  const startEditing = (uuid: string) => {
+    setActionError(null);
+    setEditingUuid(uuid);
+  };
 
   return (
     <PageWrapper>
@@ -249,6 +269,7 @@ export default function OfferingPage() {
                 offering={offering}
                 busy={busy}
                 onSubmit={() => run(actions.submit.mutateAsync(offering.uuid))}
+                onEdit={() => startEditing(offering.uuid)}
                 onWithdraw={() =>
                   run(actions.withdraw.mutateAsync({ uuid: offering.uuid, reason: 'Withdrawn by the issuer' }))
                 }
@@ -261,7 +282,22 @@ export default function OfferingPage() {
 
       <SubscriptionsPanel offerings={offerings} />
 
-      <OfferingForm tokens={tokens} busy={busy} settlementAssets={settlementAssets} onCreate={handleCreate} />
+      {editingUuid && isLoadingEditing ? (
+        <Panel title="Edit offering">
+          <div className="px-2 py-6 text-sm text-text-muted">Loading the offering&rsquo;s current values&hellip;</div>
+        </Panel>
+      ) : (
+        <OfferingForm
+          key={editing?.uuid ?? 'new'}
+          tokens={tokens}
+          busy={busy}
+          settlementAssets={settlementAssets}
+          onCreate={handleCreate}
+          editing={editing}
+          onUpdate={handleUpdate}
+          onCancelEdit={() => setEditingUuid(null)}
+        />
+      )}
 
       <Panel title="What Happens Next" icon={<InfoIcon size={20} />}>
         <div className="px-2 py-2">

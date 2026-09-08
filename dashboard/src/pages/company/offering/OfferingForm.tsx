@@ -1,7 +1,13 @@
 import { useState } from 'react';
 import { Panel } from '@components/Panel';
 import { OFFERING_EXEMPTION_LABELS } from '@ledova/shared';
-import type { CompanyShareToken, OfferingExemption, OfferingInput, OperatorSettlementAsset } from '@ledova/shared';
+import type {
+  CompanyShareToken,
+  Offering,
+  OfferingExemption,
+  OfferingInput,
+  OperatorSettlementAsset,
+} from '@ledova/shared';
 
 const EXEMPTIONS = Object.entries(OFFERING_EXEMPTION_LABELS) as [OfferingExemption, string][];
 
@@ -14,6 +20,17 @@ interface OfferingFormProps {
   busy: boolean;
   settlementAssets: OperatorSettlementAsset[];
   onCreate: (input: OfferingInput) => void;
+  editing?: Offering;
+  onUpdate?: (input: OfferingInput) => void;
+  onCancelEdit?: () => void;
+}
+
+function localInput(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return '';
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}T${pad(at.getHours())}:${pad(at.getMinutes())}`;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -25,19 +42,27 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-export function OfferingForm({ tokens, busy, settlementAssets, onCreate }: OfferingFormProps) {
-  const [token, setToken] = useState('');
-  const [exemption, setExemption] = useState<OfferingExemption>('s708_11_professional');
-  const [pricePerShare, setPricePerShare] = useState('');
-  const [minimumShares, setMinimumShares] = useState('');
-  const [targetShares, setTargetShares] = useState('');
-  const [capShares, setCapShares] = useState('');
-  const [opensAt, setOpensAt] = useState('');
-  const [closesAt, setClosesAt] = useState('');
-  const [summary, setSummary] = useState('');
-  const [useOfProceeds, setUseOfProceeds] = useState('');
-  const [acceptsBankTransfer, setAcceptsBankTransfer] = useState(true);
-  const [chosenAssets, setChosenAssets] = useState<string[]>([]);
+export function OfferingForm({
+  tokens,
+  busy,
+  settlementAssets,
+  onCreate,
+  editing,
+  onUpdate,
+  onCancelEdit,
+}: OfferingFormProps) {
+  const [token, setToken] = useState(editing?.tokenUuid ?? '');
+  const [exemption, setExemption] = useState<OfferingExemption>(editing?.exemption ?? 's708_11_professional');
+  const [pricePerShare, setPricePerShare] = useState(editing?.pricePerShare ?? '');
+  const [minimumShares, setMinimumShares] = useState(editing ? String(editing.minimumShares) : '');
+  const [targetShares, setTargetShares] = useState(editing ? String(editing.targetShares) : '');
+  const [capShares, setCapShares] = useState(editing ? String(editing.capShares) : '');
+  const [opensAt, setOpensAt] = useState(localInput(editing?.opensAt));
+  const [closesAt, setClosesAt] = useState(localInput(editing?.closesAt));
+  const [summary, setSummary] = useState(editing?.summary ?? '');
+  const [useOfProceeds, setUseOfProceeds] = useState(editing?.useOfProceeds ?? '');
+  const [acceptsBankTransfer, setAcceptsBankTransfer] = useState(editing?.acceptsBankTransfer ?? true);
+  const [chosenAssets, setChosenAssets] = useState<string[]>(editing?.settlementAssets ?? []);
 
   const chosenToken = token || tokens[0]?.uuid || '';
   const hasARail = acceptsBankTransfer || chosenAssets.length > 0;
@@ -48,8 +73,8 @@ export function OfferingForm({ tokens, busy, settlementAssets, onCreate }: Offer
   const toggleAsset = (uuid: string) =>
     setChosenAssets((chosen) => (chosen.includes(uuid) ? chosen.filter((each) => each !== uuid) : [...chosen, uuid]));
 
-  const handleCreate = () => {
-    onCreate({
+  const handleSubmit = () => {
+    const input: OfferingInput = {
       token: chosenToken,
       exemption,
       pricePerShare,
@@ -62,10 +87,15 @@ export function OfferingForm({ tokens, busy, settlementAssets, onCreate }: Offer
       closesAt: closesAt ? new Date(closesAt).toISOString() : null,
       summary,
       useOfProceeds,
-    });
+    };
+    if (editing && onUpdate) {
+      onUpdate(input);
+      return;
+    }
+    onCreate(input);
   };
 
-  if (tokens.length === 0) {
+  if (!editing && tokens.length === 0) {
     return (
       <Panel title="New Offering">
         <div className="px-2 py-6 text-sm text-text-muted">
@@ -77,7 +107,7 @@ export function OfferingForm({ tokens, busy, settlementAssets, onCreate }: Offer
   }
 
   return (
-    <Panel title="New Offering">
+    <Panel title={editing ? `Edit ${editing.tokenSymbol} offering` : 'New Offering'}>
       <div className="px-2 py-2 grid gap-4 sm:grid-cols-2">
         <Field label="Share class">
           <select value={chosenToken} onChange={(e) => setToken(e.target.value)} className={FIELD_CLASS}>
@@ -223,13 +253,29 @@ export function OfferingForm({ tokens, busy, settlementAssets, onCreate }: Offer
           )}
         </div>
 
-        <div className="sm:col-span-2 flex justify-end">
+        <div className="sm:col-span-2 flex items-center justify-end gap-4">
+          {editing && (
+            <>
+              <p className="mr-auto text-sm text-text-muted">
+                {editing.status === 'rejected'
+                  ? 'Rejected offerings are editable. Submitting it again sends it back for review.'
+                  : 'Draft offerings are editable. Submitting it for review locks it.'}
+              </p>
+              <button
+                onClick={onCancelEdit}
+                disabled={busy}
+                className="text-sm font-medium text-text-muted hover:text-text-primary disabled:opacity-50 transition-colors"
+              >
+                Cancel
+              </button>
+            </>
+          )}
           <button
-            onClick={handleCreate}
+            onClick={handleSubmit}
             disabled={!isComplete || busy}
             className="rounded-lg bg-brand-mid hover:bg-brand disabled:bg-surface-disabled disabled:cursor-not-allowed px-6 py-2.5 text-sm font-semibold text-white transition-colors"
           >
-            Create draft offering
+            {editing ? 'Save changes' : 'Create draft offering'}
           </button>
         </div>
       </div>

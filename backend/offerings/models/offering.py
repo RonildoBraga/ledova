@@ -24,6 +24,8 @@ class OfferingStatus(models.TextChoices):
 
 
 LIVE_OFFERING_STATUSES = [OfferingStatus.SUBMITTED, OfferingStatus.UNDER_REVIEW, OfferingStatus.APPROVED]
+EDITABLE_OFFERING_STATUSES = [OfferingStatus.DRAFT, OfferingStatus.REJECTED]
+SUBMITTABLE_OFFERING_STATUSES = [OfferingStatus.DRAFT, OfferingStatus.REJECTED]
 
 
 class OfferingExemption(models.TextChoices):
@@ -132,6 +134,10 @@ class Offering(DerivesCompanyFromToken, BaseModel):
 
     @property
     def can_be_edited(self) -> bool:
+        return self.status in EDITABLE_OFFERING_STATUSES
+
+    @property
+    def can_be_deleted(self) -> bool:
         return self.status == OfferingStatus.DRAFT
 
     def _require_status(self, allowed, to_status):
@@ -139,7 +145,7 @@ class Offering(DerivesCompanyFromToken, BaseModel):
             raise InvalidOfferingTransitionException(from_status=self.get_status_display(), to_status=to_status.label)
 
     def submit(self, submitted_by=None):
-        self._require_status([OfferingStatus.DRAFT], OfferingStatus.SUBMITTED)
+        self._require_status(SUBMITTABLE_OFFERING_STATUSES, OfferingStatus.SUBMITTED)
         self.status = OfferingStatus.SUBMITTED
         self.submitted_at = timezone.now()
         self.submitted_by = submitted_by

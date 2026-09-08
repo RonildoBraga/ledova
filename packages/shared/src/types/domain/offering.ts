@@ -55,6 +55,7 @@ export interface Offering {
   closedAt: string | null;
   closeReason: string;
   canBeEdited: boolean;
+  canBeDeleted: boolean;
   updatedAt: string;
 }
 

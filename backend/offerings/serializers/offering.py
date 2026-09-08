@@ -24,7 +24,7 @@ WRITABLE_FIELDS = [
     "documents",
 ]
 
-NOT_EDITABLE = "Only a draft offering can be edited."
+NOT_EDITABLE = "An offering can be edited while it is a draft and after it is rejected. This one is {status}."
 BOUNDS_ORDER = "Order the bounds minimum <= target <= cap."
 WINDOW_ORDER = "An offering must close after it opens."
 MAXIMUM_ORDER = "The maximum per investor must be at least the minimum."
@@ -59,6 +59,7 @@ class OfferingListSerializer(serializers.ModelSerializer):
             "closes_at",
             "is_open",
             "can_be_edited",
+            "can_be_deleted",
             "rejection_reason",
             "close_reason",
             "created_at",
@@ -73,6 +74,7 @@ class OfferingDetailSerializer(OfferingListSerializer):
     submitted_by_email = serializers.EmailField(source="submitted_by.email", read_only=True, allow_null=True)
     reviewed_by_email = serializers.EmailField(source="reviewed_by.email", read_only=True, allow_null=True)
     can_be_edited = serializers.BooleanField(read_only=True)
+    can_be_deleted = serializers.BooleanField(read_only=True)
 
     class Meta(OfferingListSerializer.Meta):
         fields = OfferingListSerializer.Meta.fields + [
@@ -90,6 +92,7 @@ class OfferingDetailSerializer(OfferingListSerializer):
             "closed_at",
             "close_reason",
             "can_be_edited",
+            "can_be_deleted",
             "updated_at",
         ]
         read_only_fields = fields
@@ -124,7 +127,7 @@ class OfferingWriteSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         if self.instance is not None and not self.instance.can_be_edited:
-            raise serializers.ValidationError(NOT_EDITABLE)
+            raise serializers.ValidationError(NOT_EDITABLE.format(status=self.instance.get_status_display().lower()))
         minimum = self._value(attrs, "minimum_shares")
         target = self._value(attrs, "target_shares")
         cap = self._value(attrs, "cap_shares")
