@@ -29,7 +29,7 @@ from offerings.tests.factories import (
     open_offering,
 )
 from operators.exceptions import SettlementAssetNotDeployedException
-from operators.models import Operator
+from operators.models import MAX_PAYMENT_REFERENCE_PREFIX, Operator
 from operators.settlement import NOT_DEPLOYED
 from shared.tests.tenants import make_tenant
 
@@ -73,6 +73,28 @@ class GenerateReferenceTest(TestCase):
     def test_a_long_prefix_still_fits_the_lodgement_limit(self):
         configure_operator(payment_reference_prefix="ABCDEFGHJK")
         self.assertEqual(len(generate_reference(Operator.get())), MAX_REFERENCE_LENGTH)
+
+    def test_a_prefix_at_the_configured_maximum_keeps_the_whole_random_code(self):
+        prefix = CROCKFORD_ALPHABET[10:][:MAX_PAYMENT_REFERENCE_PREFIX]
+        self.assertEqual(len(prefix), MAX_PAYMENT_REFERENCE_PREFIX, "the test prefix is shorter than the maximum")
+        configure_operator(payment_reference_prefix=prefix)
+        reference = generate_reference(Operator.get())
+        self.assertEqual(reference[: len(prefix)], prefix)
+        self.assertEqual(
+            len(reference) - len(prefix),
+            REFERENCE_CODE_LENGTH,
+            f"a {len(prefix)}-character prefix left {len(reference) - len(prefix)} random characters, "
+            f"not {REFERENCE_CODE_LENGTH}",
+        )
+
+    def test_the_reference_column_has_room_for_a_maximum_prefix_and_a_whole_code(self):
+        self.assertLessEqual(
+            MAX_PAYMENT_REFERENCE_PREFIX + REFERENCE_CODE_LENGTH,
+            MAX_REFERENCE_LENGTH,
+            f"MAX_PAYMENT_REFERENCE_PREFIX ({MAX_PAYMENT_REFERENCE_PREFIX}) plus REFERENCE_CODE_LENGTH "
+            f"({REFERENCE_CODE_LENGTH}) is wider than MAX_REFERENCE_LENGTH ({MAX_REFERENCE_LENGTH}), so "
+            f"generate_reference silently truncates the random half of every reference",
+        )
 
     def test_no_prefix_refuses_rather_than_issuing_a_bare_code(self):
         Operator.objects.update(payment_reference_prefix="")
