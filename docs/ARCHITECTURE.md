@@ -678,6 +678,24 @@ Transaction hashes are stored 0x-prefixed. `is_transferable` and
   verification and resend are throttled per address.
 - The Django admin is the operator's console and uses ordinary Django sessions.
 
+### Client session queries
+
+`packages/shared/src/hooks/useAuth.ts` owns the authentication query and exports
+`AUTH_QUERY_KEY`. Each client supplies its API instance through
+`ApiClientProvider`; focus and reconnect behavior comes from that client's
+`QueryClient`. The dashboard uses focus and reconnect revalidation. Mobile
+keeps focus revalidation disabled and rechecks on reconnect. Authentication
+does not automatically retry a failed request, but a later mount may recheck a
+previous failure; the dashboard's former `retryOnMount: false` no longer keeps
+that failed answer in place.
+
+The hook exposes fetching separately from initial loading. The dashboard's
+protected route waits while a cached negative is being rechecked, keeps
+protected content hidden until a positive answer, and redirects after a
+negative answer or failure. Signup completion still awaits its explicit auth
+refresh before navigating. `packages/shared/tests/hooks/useAuth.test.tsx` and
+the dashboard's `ProtectedRoute.test.tsx` cover these policies.
+
 ## Tenancy model
 
 There is one database and one operator per deployment. Isolation is enforced in

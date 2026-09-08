@@ -3,16 +3,14 @@
 import type { PropsWithChildren } from 'react';
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { verifyAuth } from '@ledova/shared';
+import { ApiClientProvider } from '@ledova/shared';
+import apiClient from '@services/apiClient';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useAuth } from './useAuth';
 
-vi.mock('@ledova/shared', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@ledova/shared')>()),
-  verifyAuth: vi.fn(),
-}));
+vi.mock('@services/apiClient', () => ({ default: { get: vi.fn() } }));
 
-const verifyAuthMock = vi.mocked(verifyAuth);
+const verifyAuthMock = vi.mocked(apiClient.get);
 let queryClient: QueryClient | undefined;
 
 const createWrapper = () => {
@@ -25,7 +23,9 @@ const createWrapper = () => {
   queryClient = client;
 
   const Wrapper = ({ children }: PropsWithChildren) => (
-    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    <QueryClientProvider client={client}>
+      <ApiClientProvider client={apiClient}>{children}</ApiClientProvider>
+    </QueryClientProvider>
   );
 
   return Wrapper;

@@ -4,7 +4,7 @@ import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CACHE_TIMING } from '@ledova/shared';
+import { ApiClientProvider, CACHE_TIMING } from '@ledova/shared';
 
 import { AUTH_QUERY_KEY } from '@hooks/useAuth';
 import apiClient from '@services/apiClient';
@@ -24,19 +24,21 @@ function renderGuard(valid: boolean, stale = true) {
   );
   render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={['/protected']}>
-        <Routes>
-          <Route
-            path="/protected"
-            element={
-              <ProtectedRoute>
-                <p>Protected content</p>
-              </ProtectedRoute>
-            }
-          />
-          <Route path="/signin" element={<p>Sign in</p>} />
-        </Routes>
-      </MemoryRouter>
+      <ApiClientProvider client={apiClient}>
+        <MemoryRouter initialEntries={['/protected']}>
+          <Routes>
+            <Route
+              path="/protected"
+              element={
+                <ProtectedRoute>
+                  <p>Protected content</p>
+                </ProtectedRoute>
+              }
+            />
+            <Route path="/signin" element={<p>Sign in</p>} />
+          </Routes>
+        </MemoryRouter>
+      </ApiClientProvider>
     </QueryClientProvider>,
   );
 }

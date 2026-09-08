@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import apiClient from '@services/apiClient';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Wallet } from '@ledova/shared';
@@ -34,12 +35,14 @@ const getWalletHoldings = vi.fn(() =>
   }),
 );
 
-vi.mock('@services/apiClient', () => ({ default: {} }));
+vi.mock('@services/apiClient', () => ({ default: { get: vi.fn(async () => ({ data: { valid: false } })) } }));
 
 vi.mock('@ledova/shared', async () => {
   const actual = await vi.importActual<typeof import('@ledova/shared')>('@ledova/shared');
   return { ...actual, getWhitelistStatus, getWalletHoldings };
 });
+
+const { ApiClientProvider } = await import('@ledova/shared');
 
 const { useTransferFlow } = await import('../hooks/useTransferFlow');
 const { SendFormModal } = await import('./SendFormModal');
@@ -79,7 +82,9 @@ function renderFlow(from?: Wallet) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <Harness from={from} />
+      <ApiClientProvider client={apiClient}>
+        <Harness from={from} />
+      </ApiClientProvider>
     </QueryClientProvider>,
   );
 }
