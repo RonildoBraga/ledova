@@ -29,14 +29,17 @@ if (!Array.isArray(jestConfig.testMatch) || jestConfig.testMatch.length === 0) {
   process.exit(1);
 }
 
+const ANY_DEPTH = '\uE000';
+
 const TEST_FILE = new RegExp(
   jestConfig.testMatch
     .map((pattern) =>
       pattern
         .replace('<rootDir>/', '')
         .replace(/[.+^${}()|[\]\\]/g, String.raw`\$&`)
-        .replace(/\*\*\//g, '(?:.*/)?')
-        .replace(/\*/g, '[^/]*'),
+        .replace(/\*\*\//g, ANY_DEPTH)
+        .replace(/\*/g, '[^/]*')
+        .replaceAll(ANY_DEPTH, '(?:.*/)?'),
     )
     .map((pattern) => `^${pattern}$`)
     .join('|'),

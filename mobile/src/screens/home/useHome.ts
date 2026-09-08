@@ -30,17 +30,6 @@ export const useHome = () => {
 
   const holdings = usePortfolio();
 
-  const assetQuantities = useMemo(() => {
-    const quantities: Record<string, number> = {};
-    holdings.holdings.forEach((holding) => {
-      const symbol = holding.assetSymbol || holding.asset?.symbol;
-      if (symbol) {
-        quantities[symbol] = (quantities[symbol] || 0) + parseFloat(holding.quantity || '0');
-      }
-    });
-    return quantities;
-  }, [holdings.holdings]);
-
   const assetQuery = useQuery({
     queryKey: ['asset', selectedAssetUuid],
     queryFn: () => getAssetByUuid(apiClient, selectedAssetUuid!),
@@ -165,7 +154,6 @@ export const useHome = () => {
     performanceChartData: portfolioSnapshotsQuery.data || null,
     timeRanges: TIME_RANGES,
     holdings,
-    assetQuantities,
     selectedAsset: assetQuery.data?.data || null,
     setSelectedAssetUuid,
     wallets: {

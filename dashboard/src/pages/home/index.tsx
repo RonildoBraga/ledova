@@ -61,7 +61,6 @@ export function HomePage() {
               assetAllocation={holdings.assetAllocation}
               totalValue={holdings.summary.totalValue}
               summary={holdings.summary}
-              assetQuantities={holdings.assetQuantities}
               isLoading={holdings.isLoading}
               hasError={holdings.hasError}
               onAssetClick={handleAssetClick}

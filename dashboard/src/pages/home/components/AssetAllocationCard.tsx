@@ -1,4 +1,5 @@
-import { WalletIcon } from '@phosphor-icons/react';
+import { useState } from 'react';
+import { CaretDownIcon, CaretRightIcon, WalletIcon } from '@phosphor-icons/react';
 import { DESIGN_TOKENS, formatPercentage } from '@ledova/shared';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
@@ -15,7 +16,6 @@ interface AssetAllocationCardProps {
   assetAllocation: AssetAllocationItem[];
   totalValue: number;
   summary: HoldingsSummary;
-  assetQuantities: Record<string, number>;
   isLoading: boolean;
   hasError: boolean;
   onAssetClick: (assetUuid: string) => void;
@@ -25,11 +25,11 @@ export function AssetAllocationCard({
   assetAllocation,
   totalValue,
   summary,
-  assetQuantities,
   isLoading,
   hasError,
   onAssetClick,
 }: AssetAllocationCardProps) {
+  const [expanded, setExpanded] = useState<string | null>(null);
   const { formatDisplayCurrency } = useCurrency();
   const colors = useColors();
   const TOOLTIP = colors.chartUI.tooltip;
@@ -151,37 +151,74 @@ export function AssetAllocationCard({
 
         <div className="space-y-0.5 px-2">
           {assetAllocation.map((item) => {
-            const quantity = assetQuantities[item.symbol];
-            const hasQuantity = quantity !== undefined && quantity > 0;
+            const quantity = item.totalQuantity;
+            const hasQuantity = quantity > 0;
             const showQuantity =
               hasQuantity && !(item.totalValue > 0 && Math.abs(quantity / item.totalValue - 1) < 0.05);
+            const heldOnSeveralChains = item.perChain.length > 1;
+            const isExpanded = expanded === item.assetUuid;
 
             return (
-              <button
-                key={item.assetUuid}
-                type="button"
-                onClick={() => onAssetClick(item.assetUuid)}
-                className="w-full flex items-center gap-2 py-1.5 rounded-lg hover:bg-surface-tertiary/50 transition-colors text-left"
-              >
-                <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
-
-                <div className="flex flex-col">
-                  <span className="text-sm font-semibold text-text-primary">{item.name}</span>
-                  {item.isYieldToken && item.navPerToken && (
-                    <span className="text-xs text-text-subtle">NAV: ${parseFloat(item.navPerToken).toFixed(6)}</span>
+              <div key={item.assetUuid}>
+                <div className="w-full flex items-center gap-2 py-1.5 rounded-lg hover:bg-surface-tertiary/50 transition-colors">
+                  {heldOnSeveralChains ? (
+                    <button
+                      type="button"
+                      aria-label={isExpanded ? `Hide ${item.symbol} by chain` : `Show ${item.symbol} by chain`}
+                      aria-expanded={isExpanded}
+                      onClick={() => setExpanded(isExpanded ? null : item.assetUuid)}
+                      className="flex-shrink-0 text-text-muted hover:text-text-primary transition-colors"
+                    >
+                      {isExpanded ? <CaretDownIcon size={12} /> : <CaretRightIcon size={12} />}
+                    </button>
+                  ) : (
+                    <span className="w-3 flex-shrink-0" />
                   )}
+
+                  <button
+                    type="button"
+                    onClick={() => onAssetClick(item.assetUuid)}
+                    className="flex-1 flex items-center gap-2 text-left"
+                  >
+                    <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: item.color }} />
+
+                    <div className="flex flex-col">
+                      <span className="text-sm font-semibold text-text-primary">{item.name}</span>
+                      {item.isYieldToken && item.navPerToken && (
+                        <span className="text-xs text-text-subtle">
+                          NAV: ${parseFloat(item.navPerToken).toFixed(6)}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex-1 flex items-baseline justify-end gap-2">
+                      {showQuantity && <span className="text-xs text-text-muted">{formatQuantity(quantity)}</span>}
+                      <span className="text-xs text-text-muted">
+                        {item.basis === 'value' ? formatDisplayCurrency(item.totalValue) : 'unpriced'}
+                      </span>
+                      <span className="text-sm font-semibold text-text-primary min-w-[36px] text-right">
+                        {item.basis === 'unpriced' ? '—' : formatPercentage(item.percentage, 1)}
+                      </span>
+                    </div>
+                  </button>
                 </div>
 
-                <div className="flex-1 flex items-baseline justify-end gap-2">
-                  {showQuantity && <span className="text-xs text-text-muted">{formatQuantity(quantity)}</span>}
-                  <span className="text-xs text-text-muted">
-                    {item.basis === 'value' ? formatDisplayCurrency(item.totalValue) : 'unpriced'}
-                  </span>
-                  <span className="text-sm font-semibold text-text-primary min-w-[36px] text-right">
-                    {item.basis === 'unpriced' ? '—' : formatPercentage(item.percentage, 1)}
-                  </span>
-                </div>
-              </button>
+                {heldOnSeveralChains && isExpanded && (
+                  <div className="pl-7 pb-1 space-y-0.5">
+                    {item.perChain.map((slice) => (
+                      <div key={slice.chain} className="flex items-baseline gap-2 text-xs">
+                        <span className="text-text-secondary capitalize">{slice.chain || 'unknown chain'}</span>
+                        <div className="flex-1 flex items-baseline justify-end gap-2">
+                          <span className="text-text-muted">{formatQuantity(slice.quantity)}</span>
+                          <span className="text-text-muted min-w-[64px] text-right">
+                            {slice.priced ? formatDisplayCurrency(slice.totalValue) : 'unpriced'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>

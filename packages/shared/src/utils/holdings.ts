@@ -2,6 +2,7 @@ import { getHoldingAssetTypeLabel, HOLDING_ASSET_TYPE, getChartColor } from '../
 import type {
   AllocationBasis,
   AssetAllocationItem,
+  AssetChainSlice,
   AssetTypeSummary,
   HoldingsSummary,
   HoldingWithWallet,
@@ -9,6 +10,14 @@ import type {
 
 function priceCameBack(holding: HoldingWithWallet): boolean {
   return holding.marketValue !== null && holding.marketValue !== undefined && holding.marketValue !== '';
+}
+
+function chainOf(holding: HoldingWithWallet): string {
+  return holding.chain || holding.walletInfo?.chain || '';
+}
+
+function foldedByChain(chains: Map<string, AssetChainSlice>): AssetChainSlice[] {
+  return Array.from(chains.values()).sort((a, b) => b.totalValue - a.totalValue || b.quantity - a.quantity);
 }
 
 export function calculateHoldingsSummary(holdings: HoldingWithWallet[], walletsCount: number): HoldingsSummary {
@@ -54,6 +63,7 @@ export function calculateAssetAllocation(holdings: HoldingWithWallet[], totalVal
       totalValue: number;
       totalQuantity: number;
       priced: boolean;
+      chains: Map<string, AssetChainSlice>;
       navPerToken?: string | null;
       isYieldToken?: boolean;
     }
@@ -63,22 +73,35 @@ export function calculateAssetAllocation(holdings: HoldingWithWallet[], totalVal
     const assetUuid = holding.asset?.uuid || holding.assetSymbol;
     const value = parseFloat(holding.marketValue ?? '') || 0;
     const quantity = parseFloat(holding.quantity) || 0;
+    const priced = priceCameBack(holding);
 
-    const existing = assetMap.get(assetUuid);
+    let existing = assetMap.get(assetUuid);
     if (existing) {
       existing.totalValue += value;
       existing.totalQuantity += quantity;
-      existing.priced = existing.priced && priceCameBack(holding);
+      existing.priced = existing.priced && priced;
     } else {
-      assetMap.set(assetUuid, {
+      existing = {
         symbol: holding.assetSymbol || holding.asset?.symbol || 'Unknown',
         name: holding.assetName || holding.asset?.name || 'Unknown Asset',
         totalValue: value,
         totalQuantity: quantity,
-        priced: priceCameBack(holding),
+        priced,
+        chains: new Map<string, AssetChainSlice>(),
         navPerToken: holding.asset?.navPerToken,
         isYieldToken: holding.asset?.isYieldToken,
-      });
+      };
+      assetMap.set(assetUuid, existing);
+    }
+
+    const chain = chainOf(holding);
+    const slice = existing.chains.get(chain);
+    if (slice) {
+      slice.quantity += quantity;
+      slice.totalValue += value;
+      slice.priced = slice.priced && priced;
+    } else {
+      existing.chains.set(chain, { chain, quantity, totalValue: value, priced });
     }
   }
 
@@ -97,6 +120,8 @@ export function calculateAssetAllocation(holdings: HoldingWithWallet[], totalVal
       percentage: ((weighByQuantity ? data.totalQuantity : data.totalValue) / basisTotal) * 100,
       basis: (weighByQuantity ? 'quantity' : data.priced ? 'value' : 'unpriced') as AllocationBasis,
       color: getChartColor(index),
+      totalQuantity: data.totalQuantity,
+      perChain: foldedByChain(data.chains),
       navPerToken: data.navPerToken,
       isYieldToken: data.isYieldToken,
     }))

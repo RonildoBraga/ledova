@@ -49,10 +49,19 @@ export default tseslint.config(
     },
   },
   {
-    files: ['babel.config.js', 'jest.config.js'],
+    files: ['babel.config.js', 'jest.config.js', 'jest.setup.js'],
     languageOptions: {
       sourceType: 'commonjs',
-      globals: { module: 'writable', require: 'readonly', process: 'readonly', __dirname: 'readonly' },
+      globals: {
+        module: 'writable',
+        require: 'readonly',
+        process: 'readonly',
+        __dirname: 'readonly',
+        jest: 'readonly',
+      },
+    },
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
     },
   },
   {
