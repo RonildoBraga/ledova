@@ -29,6 +29,7 @@ class WhitelistEntry(BaseModel):
 
     on_chain_timestamp = models.DateTimeField(null=True, blank=True)
     last_synced_at = models.DateTimeField(null=True, blank=True)
+    failure_reconciled_at = models.DateTimeField(null=True, blank=True, editable=False)
     add_tx_hash = models.CharField(max_length=66, null=True, blank=True)
     remove_tx_hash = models.CharField(max_length=66, null=True, blank=True)
 
@@ -91,9 +92,23 @@ class WhitelistEntry(BaseModel):
             ]
         )
 
-    def record_the_chain_still_lists_it(self) -> None:
-        self.is_whitelisted = True
-        self.save(update_fields=["is_whitelisted", "updated_at"])
+    def record_the_chain_still_lists_it(self) -> bool:
+        moment = timezone.now()
+        changed = (
+            type(self)
+            .objects.filter(
+                pk=self.pk,
+                status=WhitelistStatus.FAILED,
+                failure_reconciled_at__isnull=True,
+                updated_at=self.updated_at,
+            )
+            .update(is_whitelisted=True, failure_reconciled_at=moment, updated_at=moment)
+        )
+        if changed:
+            self.is_whitelisted = True
+            self.failure_reconciled_at = moment
+            self.updated_at = moment
+        return bool(changed)
 
     def mark_failed(self, error: str = "") -> None:
         self._record_failure(error, [])
@@ -108,6 +123,7 @@ class WhitelistEntry(BaseModel):
 
     def _record_failure(self, error: str, extra_fields: list[str]) -> None:
         self.status = WhitelistStatus.FAILED
+        self.failure_reconciled_at = None
         if error:
             self.notes = f"Error: {error}\n{self.notes}"
-        self.save(update_fields=["status", "notes", "updated_at", *extra_fields])
+        self.save(update_fields=["status", "notes", "failure_reconciled_at", "updated_at", *extra_fields])

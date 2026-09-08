@@ -48,4 +48,6 @@ class WhitelistEntryQuerySet(QuerySet):
     def failed_with_a_sent_add(self):
         from whitelist.models import WhitelistStatus
 
-        return self.filter(status=WhitelistStatus.FAILED).exclude(add_tx_hash__isnull=True)
+        return self.filter(status=WhitelistStatus.FAILED, failure_reconciled_at__isnull=True).exclude(
+            add_tx_hash__isnull=True
+        )
