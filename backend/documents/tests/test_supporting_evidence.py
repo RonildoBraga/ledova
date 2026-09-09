@@ -22,10 +22,11 @@ from operators.admin import OperatorForm
 from operators.models import Operator
 from shared.db import atomic
 from shared.services.orphaned_files import orphaned_files
+from shared.tests.upload_fixtures import StubUploadDependencies, pdf_bytes
 from users.models import InvestorClassification, UserAccount, UserProfile
 from users.models.investor_classification import RETENTION_CLOCK
 
-PDF = b"%PDF-1.4 synthetic supporting evidence"
+PDF = pdf_bytes()
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "private": {"BACKEND": "shared.storage.PrivateMediaStorage"},
@@ -41,7 +42,7 @@ def evidence_owner(label):
     return SimpleNamespace(user=user, profile=profile, account=account)
 
 
-class EvidenceCase:
+class EvidenceCase(StubUploadDependencies):
     def setUp(self):
         super().setUp()
         directory = tempfile.TemporaryDirectory()

@@ -27,6 +27,7 @@ from shared.tests.tenants import (
     route_context,
     snapshot,
 )
+from shared.tests.upload_fixtures import StubUploadDependencies, pdf_bytes
 from tokens.models import (
     CapitalIncreaseRequest,
     ShareIssuance,
@@ -46,7 +47,7 @@ def _classification_payload():
         "category": "product_value",
         "declaration_accepted": True,
         "declared_basis": "Holdings above the threshold.",
-        "evidence_file": SimpleUploadedFile("evidence.pdf", b"%PDF-1.4 minimal", content_type="application/pdf"),
+        "evidence_file": SimpleUploadedFile("evidence.pdf", pdf_bytes(), content_type="application/pdf"),
     }
 
 
@@ -462,7 +463,7 @@ def _fill(value, context):
     return value
 
 
-class CrossTenantRouteMatrixTest(APITransactionTestCase):
+class CrossTenantRouteMatrixTest(StubUploadDependencies, APITransactionTestCase):
 
     @staticmethod
     def routes():

@@ -9,14 +9,15 @@ from rest_framework.test import APITransactionTestCase
 
 from documents.models import Document, DocumentType
 from documents.services.document import create_document
+from shared.tests.upload_fixtures import StubUploadDependencies, pdf_bytes
 
 User = get_user_model()
 
-PDF_BYTES = b"%PDF-1.4 minimal"
+PDF_BYTES = pdf_bytes()
 UPLOAD_URL = "/api/v1/documents/"
 
 
-class DocumentCreateAtomicityTest(APITransactionTestCase):
+class DocumentCreateAtomicityTest(StubUploadDependencies, APITransactionTestCase):
     def setUp(self):
         self.media_directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.media_directory.cleanup)

@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-import io
 import logging
 from typing import Type
 
-import fitz
 from django.utils import timezone
-from PIL import Image
 from pydantic import BaseModel
 
 from documents.models import Document, DocumentExtraction, ExtractionStatus
@@ -20,6 +17,9 @@ from integrations.llm_extract import (
 )
 from integrations.llm_extract.prompts import PROMPT_BY_TYPE
 from shared.db import atomic
+from shared.upload_processing import process_upload
+from shared.upload_scanner import scan_upload
+from shared.uploads import read_bounded
 
 logger = logging.getLogger(__name__)
 
@@ -28,25 +28,8 @@ class ExtractionService:
 
     @staticmethod
     def render_first_page(document: Document, raw: bytes) -> bytes:
-        if document.mime_type == "application/pdf" or document.original_filename.lower().endswith(".pdf"):
-            doc = fitz.open(stream=raw, filetype="pdf")
-            try:
-                pix = doc[0].get_pixmap(matrix=fitz.Matrix(2, 2))
-                return pix.tobytes("png")
-            finally:
-                doc.close()
-
-        img = Image.open(io.BytesIO(raw)).convert("RGB")
-        max_side = 1600
-        if max(img.size) > max_side:
-            ratio = max_side / max(img.size)
-            img = img.resize(
-                (int(img.size[0] * ratio), int(img.size[1] * ratio)),
-                Image.LANCZOS,
-            )
-        buf = io.BytesIO()
-        img.save(buf, format="PNG")
-        return buf.getvalue()
+        scan_upload(raw)
+        return process_upload(raw, mode="render")
 
     @classmethod
     def run(cls, document: Document) -> DocumentExtraction | None:
@@ -126,7 +109,7 @@ class ExtractionService:
         if document is None or not document.content_available or not documents_enabled():
             return None
         with document.file.open("rb") as stream:
-            return stream.read()
+            return read_bounded(stream)
 
     @staticmethod
     @atomic()

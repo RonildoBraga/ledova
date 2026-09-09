@@ -8,9 +8,10 @@ from companies.filters import CompanyDocumentFilter
 from companies.models import Company, CompanyDocument
 from companies.serializers import CompanyDocumentSerializer
 from shared.views import AuthenticatedModelViewSet, stream_stored_file
+from shared.views.uploads import UploadProtectedView
 
 
-class DocumentViewSet(AuthenticatedModelViewSet):
+class DocumentViewSet(UploadProtectedView, AuthenticatedModelViewSet):
     serializer_class = CompanyDocumentSerializer
     filterset_class = CompanyDocumentFilter
     parser_classes = [MultiPartParser, FormParser, JSONParser]

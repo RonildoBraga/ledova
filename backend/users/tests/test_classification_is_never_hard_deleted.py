@@ -10,6 +10,7 @@ from django.test import RequestFactory, TestCase, override_settings
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
+from shared.tests.upload_fixtures import StubUploadDependencies, pdf_bytes
 from users.admin.investor_classification import InvestorClassificationAdmin
 from users.exceptions import InvalidClassificationTransitionException
 from users.models import UserAccount, UserProfile
@@ -23,11 +24,11 @@ from users.services.investor_classification import purge_expired_evidence
 
 User = get_user_model()
 
-PDF = b"%PDF-1.4 evidence"
+PDF = pdf_bytes()
 DETAIL = "/api/investor-classifications/{}/"
 
 
-class _EvidenceCase:
+class _EvidenceCase(StubUploadDependencies):
     def setUp(self):
         self.root = tempfile.TemporaryDirectory()
         self.addCleanup(self.root.cleanup)

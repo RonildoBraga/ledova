@@ -1304,17 +1304,38 @@ and the operator form refuses conversion while unpurged payslips remain.
   previously open every one of these routes. Before deploying, grant
   `documents.view_document`, `companies.view_companydocument` and
   `users.view_investorclassification` to the operators who need them.
-- **Uploads are allowlisted at the serializer, not at the reader.**
-  `shared.uploads.validate_upload` caps the size and admits only
-  `application/pdf`, `image/png` and `image/jpeg` by both content type and
-  extension; every upload serializer calls it, including
-  `DocumentUploadSerializer`. The stored `mime_type` is the value it returned,
-  never `upload.content_type` read straight off the request, because that
-  column is echoed back as the `Content-Type` of the streamed response. An
+- **Uploads are checked before permanent storage.** All three writable file
+  serializers call `shared.uploads.validate_upload`. It reads at most the byte
+  limit plus one control byte, requires a clean ClamAV INSTREAM verdict, and
+  probes the actual PDF, PNG or JPEG in a resource-limited child process. The
+  detected type must match both MIME metadata and extension. The original
+  evidence bytes remain unchanged; the stored size and MIME come from the
+  checked bytes. Encrypted/repaired PDFs, truncated files, animated images and
+  documents over the page, pixel or decoded-byte bounds are refused. A refused
+  upload creates no permanent file, row or extraction task. An
   admin file route streams with `Content-Disposition: attachment` so a row that
   predates the allowlist downloads instead of rendering script on the `/admin/`
   origin; the owner-scoped API route stays `inline`, since it only ever hands a
   caller their own bytes.
+- `UploadProtectedView` installs a counting upload handler before authentication
+  can trigger multipart parsing. The ASGI entrypoint bounds actual request bytes
+  and body arrival time before Django spools them; the WSGI entrypoint bounds
+  reads and declared size. Each authenticated create attempt and its actual file
+  chunks consume shared Redis rolling quotas before scanning or saving. Bytes
+  parsed during successful cookie CSRF authentication are charged afterward.
+  Requests refused before authentication completes still have ingress limits;
+  they have no authenticated user quota. Scanner/cache failures return 503;
+  quota denial returns 429 with `Retry-After`. See
+  [upload operations and limits](OPERATIONS.md#upload-validation-and-resource-limits).
+- Extraction rereads stored files with the same byte cap, rescans them, and
+  renders only the first page in the bounded decoder child. Limits apply before
+  rasterization; the result is a bounded PNG without the original metadata.
+  The child has address-space, CPU, wall-time and output limits. It is not a
+  security sandbox: it runs as the backend/worker OS user, so decoder patching
+  and deployment isolation still matter. A scan or decoding failure leaves the
+  retained original intact and marks extraction failed; an operator can rerun it
+  after fixing the dependency. These checks do not retroactively certify files
+  already stored or change their authenticated download and retention rules.
 - Moving a field onto private storage is one migration per model, shaped like
   `companies/migrations/0006_company_document_private_storage.py`:
   1. `RunPython(move_uploads(..., to_private=True), move_uploads(..., to_private=False))`

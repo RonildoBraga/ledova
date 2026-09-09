@@ -149,6 +149,36 @@ jobs:
         run: >-
           python manage.py test authentication.tests.redis_throttle
           --settings=ledova_backend.settings.test --noinput
+      - name: Shared upload quotas (real Redis, expiry and concurrent processes)
+        env:
+          UPLOAD_TEST_REDIS_URL: redis://127.0.0.1:6379/0
+        run: >-
+          python manage.py test shared.tests.redis_uploads
+          --settings=ledova_backend.settings.test --noinput
+      - name: Start isolated upload scanner
+        run: |
+          docker run -d --name ledova-upload-clamav --memory 4g --cpus 2 --pids-limit 128 \
+            --health-cmd 'clamdscan --ping=1 --config-file=/etc/clamav/clamd.conf' \
+            --health-interval 5s --health-timeout 3s --health-retries 60 \
+            -v "$GITHUB_WORKSPACE/backend/clamav/clamd.conf:/etc/clamav/clamd.conf:ro" \
+            clamav/clamav:1.5.4
+          deadline=$((SECONDS + 300))
+          until [ "$(docker inspect -f '{{.State.Health.Status}}' ledova-upload-clamav)" = healthy ]; do
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              docker logs ledova-upload-clamav
+              exit 1
+            fi
+            sleep 2
+          done
+          scanner_host=$(docker inspect -f '{{.NetworkSettings.IPAddress}}' ledova-upload-clamav)
+          echo "UPLOAD_TEST_CLAMAV_HOST=$scanner_host" >> "$GITHUB_ENV"
+      - name: Upload scanning (real signatures, clean documents and EICAR)
+        run: >-
+          python manage.py test shared.tests.clamav_uploads
+          --settings=ledova_backend.settings.test --noinput
+      - name: Remove isolated upload scanner
+        if: always()
+        run: docker rm -f -v ledova-upload-clamav || true
       - name: API type drift gate
         env:
           POSTGRES_HOST: 127.0.0.1

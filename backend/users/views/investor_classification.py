@@ -6,6 +6,7 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 
 from shared.views import AuthenticatedModelViewSet, stream_stored_file
+from shared.views.uploads import UploadProtectedView
 from users.models.investor_classification import InvestorClassification
 from users.serializers.investor_classification import (
     InvestorClassificationSerializer,
@@ -14,7 +15,8 @@ from users.serializers.investor_classification import (
 from users.services.eligibility import investor_eligibility
 
 
-class InvestorClassificationViewSet(AuthenticatedModelViewSet):
+class InvestorClassificationViewSet(UploadProtectedView, AuthenticatedModelViewSet):
+    upload_field = "evidence_file"
     serializer_class = InvestorClassificationSerializer
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     http_method_names = ["get", "post", "delete", "head", "options"]

@@ -22,6 +22,7 @@ from shared.services import act_under_row_lock
 from shared.tests.scoped import RunsOnTheScopedConnection
 from shared.tests.tenants import make_tenant
 from shared.tests.test_cross_tenant_routes_under_rls import locking_request_views
+from shared.tests.upload_fixtures import StubUploadDependencies, pdf_bytes
 from tokens.exceptions import OrderCancellationException
 from users.models import UserAccount, UserProfile
 from users.services.setup import ensure_defaults
@@ -105,7 +106,7 @@ class AuthRequestsUseTheAppRoleTest(RunsOnTheScopedConnection, APITransactionTes
         self.assertIn(principal_of(APP_ALIAS), (None, ""))
 
 
-class RequestTransactionsUseTheAppRoleTest(RunsOnTheScopedConnection, APITransactionTestCase):
+class RequestTransactionsUseTheAppRoleTest(StubUploadDependencies, RunsOnTheScopedConnection, APITransactionTestCase):
     def setUp(self):
         with use_operator():
             self.user = User.objects.create_user(email="atomic-scoped@example.test", password=PASSWORD, is_active=True)
@@ -118,7 +119,7 @@ class RequestTransactionsUseTheAppRoleTest(RunsOnTheScopedConnection, APITransac
             "/api/v1/documents/",
             {
                 "documentType": DocumentType.PAYSLIP,
-                "file": SimpleUploadedFile("scoped.pdf", b"%PDF-1.4 scoped", content_type="application/pdf"),
+                "file": SimpleUploadedFile("scoped.pdf", pdf_bytes(), content_type="application/pdf"),
             },
             format="multipart",
         )

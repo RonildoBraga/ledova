@@ -3,12 +3,14 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework.test import APITestCase
 
 from companies.models import Company, CompanyDocument, CompanyType, DocumentType
+from shared.tests.upload_fixtures import StubUploadDependencies, image_bytes, pdf_bytes
 from shared.uploads import MAX_UPLOAD_SIZE
 
 User = get_user_model()
+PDF = pdf_bytes()
 
 
-class CompanyDocumentUploadValidationTest(APITestCase):
+class CompanyDocumentUploadValidationTest(StubUploadDependencies, APITestCase):
 
     def setUp(self):
         self.user = User.objects.create_user(email="doc-owner@example.test", password="pw-12345678")
@@ -26,17 +28,19 @@ class CompanyDocumentUploadValidationTest(APITestCase):
         )
 
     def test_a_pdf_within_the_cap_is_accepted_and_its_size_and_mime_are_captured(self):
-        response = self._post(SimpleUploadedFile("extract.pdf", b"%PDF-1.4 body", content_type="application/pdf"))
+        response = self._post(SimpleUploadedFile("extract.pdf", PDF, content_type="application/pdf"))
 
         self.assertEqual(response.status_code, 201, response.content)
         document = CompanyDocument.objects.get(uuid=response.json()["uuid"])
-        self.assertEqual(document.file_size, len(b"%PDF-1.4 body"))
+        self.assertEqual(document.file_size, len(PDF))
         self.assertEqual(document.mime_type, "application/pdf")
 
     def test_png_and_jpeg_are_accepted(self):
         for name, mime in (("scan.png", "image/png"), ("scan.jpg", "image/jpeg")):
             with self.subTest(mime=mime):
-                response = self._post(SimpleUploadedFile(name, b"bytes", content_type=mime))
+                response = self._post(
+                    SimpleUploadedFile(name, image_bytes("PNG" if mime == "image/png" else "JPEG"), content_type=mime)
+                )
                 self.assertEqual(response.status_code, 201, response.content)
 
     def test_a_file_over_ten_megabytes_is_refused(self):
