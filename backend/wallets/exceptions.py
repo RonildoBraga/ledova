@@ -26,6 +26,12 @@ class VerificationChallengeNotFoundException(APIException):
     default_code = "verification_challenge_not_found"
 
 
+class VerificationChallengeExpiredException(APIException):
+    status_code = status.HTTP_400_BAD_REQUEST
+    default_detail = "This verification challenge has expired. Please request a new challenge and sign it again."
+    default_code = "verification_challenge_expired"
+
+
 class InsufficientBalanceException(APIException):
     status_code = status.HTTP_400_BAD_REQUEST
     default_detail = "Insufficient balance to complete this transaction."

@@ -15,9 +15,11 @@ from web3 import Web3
 logger = logging.getLogger(__name__)
 
 
-def generate_verification_challenge(wallet_address: str) -> str:
+def generate_verification_challenge(wallet_address: str, issued_at=None) -> str:
     nonce = secrets.token_hex(16)
-    timestamp = int(timezone.now().timestamp())
+    timestamp = int((issued_at or timezone.now()).timestamp())
+    minutes = settings.WALLET_VERIFICATION_CHALLENGE_MINUTES
+    duration = f"{minutes} minute{'s' if minutes != 1 else ''}"
 
     challenge = (
         f"Ledova Wallet Verification\n\n"
@@ -25,7 +27,7 @@ def generate_verification_challenge(wallet_address: str) -> str:
         f"Timestamp: {timestamp}\n"
         f"Nonce: {nonce}\n\n"
         f"Please sign this message to verify wallet ownership.\n"
-        "This request will expire in 5 minutes."
+        f"This request will expire in {duration}."
     )
 
     return challenge

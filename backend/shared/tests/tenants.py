@@ -145,6 +145,7 @@ def make_tenant(label, *, staff=False, superuser=False):
         chain="base",
         verification_status=WALLET_VERIFICATION_STATUS_VERIFIED,
         verification_challenge=f"challenge-{label}",
+        verification_challenge_issued_at=timezone.now(),
         verified_at=timezone.now(),
     )
     spare_wallet = Wallet.objects.create(user_account=account, address=_hex40("b", number), chain="ethereum")
