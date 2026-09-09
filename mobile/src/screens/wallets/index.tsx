@@ -93,7 +93,7 @@ export function WalletsScreen() {
     wallets,
     isLoading: isLoadingWallets,
     syncWallet: syncWalletById,
-    syncingWalletId,
+    syncingWalletIds,
     deleteWallet,
   } = useWalletsCrud();
   const hasNoWallets = wallets.length === 0;
@@ -186,7 +186,7 @@ export function WalletsScreen() {
               void syncWalletById(wallet.uuid).catch(() => undefined);
             }}
             onDeleteWallet={(wallet) => setDeletingWallet(wallet)}
-            syncingWalletId={syncingWalletId}
+            syncingWalletIds={syncingWalletIds}
             chainFilter={chainFilter}
             isLoading={isLoadingWallets}
             onRefresh={handleManualRefresh}

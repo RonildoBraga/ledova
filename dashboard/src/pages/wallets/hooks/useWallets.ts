@@ -162,6 +162,7 @@ export function useWallets() {
     isUpdating: updateMutation.isPending,
     isSyncing: syncMutation.isPending,
     syncError: getErrorMessage(syncMutation.error, 'Wallet sync could not finish. Please try again later.'),
+    syncErrorWalletUuid: syncMutation.variables,
     handleCreateWallet,
     handleBatchCreateWallets,
     handleUpdateWalletName,

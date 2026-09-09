@@ -40,6 +40,28 @@ afterEach(() => {
 });
 
 describe('wallet sync feedback through the real service and mutation', () => {
+  it('keeps an error attached to the failed wallet when the selection changes', async () => {
+    const other = { ...wallet, uuid: 'wallet-2', name: 'Other wallet', chain: 'ethereum' };
+    api.get.mockResolvedValue({ data: { results: [wallet, other], count: 2, next: null, previous: null } });
+    const error = 'Some wallet balances could not be refreshed. Please try again later.';
+    api.post.mockResolvedValueOnce({ data: { success: false, wallet, syncResult: { status: 'error', error } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <WalletsPage />
+      </QueryClientProvider>,
+    );
+    fireEvent.click(await screen.findByText('Sync wallet'));
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Sync' }).find((button) => !button.hasAttribute('disabled'))!,
+    );
+    expect((await screen.findByRole('alert')).textContent).toBe(error);
+    fireEvent.click(screen.getByText('Other wallet'));
+    expect(screen.queryByRole('alert')).toBeNull();
+    fireEvent.click(screen.getByText('Sync wallet'));
+    expect(screen.getByRole('alert').textContent).toBe(error);
+    expect(api.post).toHaveBeenCalledTimes(1);
+  });
+
   it.each([
     ['skipped', 'Verify this wallet before syncing it.'],
     ['error', 'Some wallet balances could not be refreshed. Please try again later.'],

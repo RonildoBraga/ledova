@@ -23,6 +23,19 @@ describe('wallet sync outcomes', () => {
     await expect(syncWallet(client, 'wallet')).rejects.toMatchObject({ message: error, isUserFriendly: true });
   });
 
+  it.each([false, true])('does not display raw provider errors from an older server (success: %s)', async (success) => {
+    post.mockResolvedValue({
+      data: {
+        success,
+        syncResult: { status: 'error', error: 'Provider failed: https://rpc.example/v2/private-api-key?token=secret' },
+      },
+    });
+    await expect(syncWallet(client, 'wallet')).rejects.toMatchObject({
+      message: 'Wallet sync could not finish. Please try again later.',
+      isUserFriendly: true,
+    });
+  });
+
   it('keeps HTTP failures available to the clients error handler', async () => {
     const failure = { response: { status: 503, data: { detail: 'The service is unavailable.' } } };
     post.mockRejectedValue(failure);

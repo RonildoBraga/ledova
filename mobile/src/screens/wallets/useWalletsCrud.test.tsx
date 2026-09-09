@@ -15,6 +15,7 @@ let client: QueryClient;
 const post = apiClient.post as jest.Mock;
 
 beforeEach(() => {
+  post.mockReset();
   client = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false, gcTime: 0 } },
   });
@@ -43,7 +44,7 @@ describe('wallet sync feedback through the shared service', () => {
     });
     await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith('Wallet not synced', error));
     expect(result.current?.isSyncing).toBe(false);
-    expect(result.current?.syncingWalletId).toBeUndefined();
+    expect(result.current?.syncingWalletIds.size).toBe(0);
   });
 
   it('refreshes a successful sync without an error alert', async () => {
@@ -54,5 +55,54 @@ describe('wallet sync feedback through the shared service', () => {
       await result.current!.syncWallet('wallet-1');
     });
     expect(Alert.alert).not.toHaveBeenCalled();
+  });
+
+  it('tracks concurrent wallets independently and reuses an already pending request', async () => {
+    let finishFirst!: (response: unknown) => void;
+    let finishSecond!: (response: unknown) => void;
+    const firstResponse = new Promise((resolve) => {
+      finishFirst = resolve;
+    });
+    const secondResponse = new Promise((resolve) => {
+      finishSecond = resolve;
+    });
+    post.mockImplementation((url: string) => (url.includes('wallet-1') ? firstResponse : secondResponse));
+    const { result } = await renderHook(() => useWalletsCrud(), { wrapper });
+    await waitFor(() => expect(result.current?.isLoading).toBe(false));
+    let first!: Promise<unknown>;
+    let duplicate!: Promise<unknown>;
+    let second!: Promise<unknown>;
+    await act(async () => {
+      first = result.current!.syncWallet('wallet-1');
+      second = result.current!.syncWallet('wallet-2');
+      duplicate = result.current!.syncWallet('wallet-1');
+    });
+    try {
+      expect(duplicate).toBe(first);
+      expect(post).toHaveBeenCalledTimes(2);
+      expect(result.current?.syncingWalletIds).toEqual(new Set(['wallet-1', 'wallet-2']));
+      await act(async () => {
+        finishFirst({ data: { success: true, syncResult: { status: 'success' } } });
+        await first;
+      });
+      expect(result.current?.syncingWalletIds).toEqual(new Set(['wallet-2']));
+      expect(result.current?.isSyncing).toBe(true);
+      const error = 'Wallet sync could not finish. Please try again later.';
+      await act(async () => {
+        const rejected = expect(second).rejects.toMatchObject({ message: error });
+        finishSecond({ data: { success: false, syncResult: { status: 'error', error } } });
+        await rejected;
+      });
+      expect(Alert.alert).toHaveBeenCalledTimes(1);
+      expect(Alert.alert).toHaveBeenCalledWith('Wallet not synced', error);
+      expect(result.current?.syncingWalletIds.size).toBe(0);
+      expect(result.current?.isSyncing).toBe(false);
+    } finally {
+      await act(async () => {
+        finishFirst({ data: { success: true, syncResult: { status: 'success' } } });
+        finishSecond({ data: { success: true, syncResult: { status: 'success' } } });
+        await Promise.allSettled([first, duplicate, second]);
+      });
+    }
   });
 });

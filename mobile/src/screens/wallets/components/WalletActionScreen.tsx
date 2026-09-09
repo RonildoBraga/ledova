@@ -293,7 +293,7 @@ export function WalletActionScreen() {
     );
   };
 
-  const isSyncingThis = crud.syncingWalletId === wallet.uuid;
+  const isSyncingThis = crud.syncingWalletIds.has(wallet.uuid);
 
   const handleSync = () => {
     void crud.syncWallet(wallet.uuid).catch(() => undefined);
