@@ -17,6 +17,7 @@ import {
   WALLET_VERIFICATION_STATUS,
   BLOCKCHAIN,
   getErrorMessage,
+  getHoldingTokenDeployment,
 } from '@ledova/shared';
 import { apiClient } from '../../services/apiClient';
 import { useUserPreferences } from '../../hooks/useUserPreferences';
@@ -69,7 +70,8 @@ function buildTransferableAssets(wallet: Wallet, holdings: WalletHolding[]): Tra
   if (isEthereumChain(chainShortCode) || chain === BLOCKCHAIN.BASE) {
     for (const holding of holdings) {
       const balance = parseFloat(holding.quantity) || 0;
-      if (balance > 0 && holding.asset?.contractAddress) {
+      const deployment = getHoldingTokenDeployment(holding, wallet);
+      if (balance > 0 && deployment?.contractAddress) {
         assets.push({
           uuid: holding.uuid,
           symbol: holding.assetSymbol,
@@ -77,8 +79,8 @@ function buildTransferableAssets(wallet: Wallet, holdings: WalletHolding[]): Tra
           balance: holding.quantity,
           marketValue: holding.marketValue,
           isNative: false,
-          contractAddress: holding.asset.contractAddress,
-          decimals: holding.asset.decimals || 18,
+          contractAddress: deployment.contractAddress,
+          decimals: deployment.decimals,
           chain,
         });
       }

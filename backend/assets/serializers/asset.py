@@ -31,12 +31,17 @@ class AssetSerializer(serializers.ModelSerializer):
     )
 
     def get_chain(self, obj):
-        dep = obj.chain_deployments.first()
+        dep = self._single_active_deployment(obj)
         return dep.chain if dep else None
 
     def get_contract_address(self, obj):
-        dep = obj.chain_deployments.first()
+        dep = self._single_active_deployment(obj)
         return dep.contract_address if dep else None
+
+    @staticmethod
+    def _single_active_deployment(obj):
+        deployments = [row for row in obj.chain_deployments.all() if row.is_active]
+        return deployments[0] if len(deployments) == 1 else None
 
     def get_asset_type_display(self, obj):
         type_mapping = {

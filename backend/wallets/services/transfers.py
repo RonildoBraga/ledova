@@ -13,6 +13,7 @@ from shared.constants import (
     normalize_chain,
 )
 from shared.utils.blockchain import decode_exception_to_message
+from shared.utils.token_amounts import token_base_units
 from wallets.exceptions import (
     BlockchainAPIError,
     InsufficientBalanceException,
@@ -20,6 +21,7 @@ from wallets.exceptions import (
     NativeAssetUnavailableException,
     UnsupportedChainException,
 )
+from wallets.services.chain import token_deployment_decimals
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +118,7 @@ class TransferService:
             eth_balance=eth_balance,
             contract_address=token_contract,
             token_symbol=token_asset.symbol,
-            token_decimals=token_asset.decimals or 18,
+            token_decimals=token_deployment_decimals(token_asset, chain, token_contract),
         )
 
     @staticmethod
@@ -383,8 +385,15 @@ def prepare_erc20_transaction(
         if not from_address or not to_address:
             raise InvalidTransactionException("Invalid sender or recipient address")
 
-        if amount <= 0:
+        if not amount.is_finite() or amount <= 0:
             raise InvalidTransactionException("Transfer amount must be greater than zero")
+
+        try:
+            token_base_units(amount, token_decimals)
+        except ValueError:
+            raise InvalidTransactionException(
+                f"Amount is too large or uses more than {token_decimals} decimal places on this network."
+            ) from None
 
         if token_balance < amount:
             logger.warning(
