@@ -76,7 +76,7 @@ DRIFTED = (
     "database gets while every existing database keeps what it was given. Both work; they are "
     "simply different, and the difference surfaces as a defect on one deployment and not another.\n"
     "Add a migration that re-runs shared.db.policy_sql.install, then run this again.\n"
-    'The rule is in docs/ARCHITECTURE.md, "The catalogue is read at migration time".'
+    'The rule is in docs/ARCHITECTURE.md, "Tenancy model".'
 )
 
 AGREES = (

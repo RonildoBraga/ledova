@@ -1,14 +1,18 @@
+import re
+from pathlib import Path
 from unittest import skipUnless
 from unittest.mock import patch
 
+from django.conf import settings
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import connections
 from django.db.migrations.executor import MigrationExecutor
-from django.test import TestCase, TransactionTestCase
+from django.test import SimpleTestCase, TestCase, TransactionTestCase
 
 from shared.db import MIGRATE_ALIAS
 from shared.db.policies import HELPERS, POLICIES, MissingOwnerColumns
+from shared.management.commands.check_rls_catalogue import DRIFTED
 
 POSTGRES = connections[MIGRATE_ALIAS].vendor == "postgresql"
 REASON = (
@@ -34,6 +38,19 @@ def what_is_installed(policy):
     with connections[MIGRATE_ALIAS].cursor() as cursor:
         cursor.execute(INSTALLED, [policy])
         return cursor.fetchone()
+
+
+class CatalogueDriftDocumentationTest(SimpleTestCase):
+
+    def test_the_drift_error_points_to_an_existing_document_heading(self):
+        message = DRIFTED.format(count=1, findings="companies_company: missing read policy")
+        reference = re.search(r'The rule is in (docs/[^,\s]+), "([^"]+)"\.', message)
+
+        self.assertIsNotNone(reference, message)
+        document, heading = reference.groups()
+        text = (Path(settings.BASE_DIR).parent / document).read_text()
+
+        self.assertIn(heading, re.findall(r"^#{1,6} (.+)$", text, re.MULTILINE), document)
 
 
 @skipUnless(POSTGRES, REASON)
