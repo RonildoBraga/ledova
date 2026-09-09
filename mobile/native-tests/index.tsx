@@ -13,15 +13,16 @@ import { getApiBaseUrl, getTradingEventsUrl } from '../src/config/networkPolicy'
 import { verifyMessage } from 'ethers';
 import { deriveAccountsFromMnemonic } from '../src/utils/softwareWallet/seedDerivation';
 import { signEthereumMessage } from '../src/utils/softwareWallet/localSigner';
+import { failureCategory, NativeProbeAssertion } from './diagnostics';
 
-type Check = { name: string; passed: boolean };
+type Check = { name: string; passed: boolean; failure?: { category: string; stage: string } };
 const pair = { accessToken: 'synthetic-access', refreshToken: 'synthetic-refresh' };
 const target = process.env.EXPO_PUBLIC_NATIVE_PROBE_TARGET || '';
 const cleartext = process.env.EXPO_PUBLIC_NATIVE_PROBE_HTTP || '';
 const untrusted = process.env.EXPO_PUBLIC_NATIVE_PROBE_UNTRUSTED || '';
 
 function requireTrue(value: unknown): asserts value {
-  if (!value) throw new Error('Native probe assertion failed.');
+  if (!value) throw new NativeProbeAssertion();
 }
 
 function request(url: string, method = 'GET', body?: string): Promise<XMLHttpRequest> {
@@ -40,12 +41,15 @@ function request(url: string, method = 'GET', body?: string): Promise<XMLHttpReq
 
 async function run(): Promise<Check[]> {
   const checks: Check[] = [];
-  async function check(name: string, action: () => Promise<void> | void) {
+  async function check(name: string, action: (stage: (name: string) => void) => Promise<void> | void) {
+    let stage = 'check';
     try {
-      await action();
+      await action((name) => {
+        stage = name;
+      });
       checks.push({ name, passed: true });
-    } catch {
-      checks.push({ name, passed: false });
+    } catch (error) {
+      checks.push({ name, passed: false, failure: { category: failureCategory(error), stage } });
     }
   }
 
@@ -72,15 +76,24 @@ async function run(): Promise<Check[]> {
     requireTrue(verifyMessage(message, signature) === address);
     requireTrue(verifyMessage('different synthetic message', signature) !== address);
   });
-  await check('legacy session migration and ordinary storage', async () => {
+  await check('legacy session migration and ordinary storage', async (stage) => {
+    stage('initial-sign-out');
     await clearTokens();
+    stage('retired-marker-removal');
     await SecureStore.deleteItemAsync('session.retired.v1');
+    stage('legacy-access-write');
     await SecureStore.setItemAsync('accessToken', pair.accessToken);
+    stage('legacy-refresh-write');
     await SecureStore.setItemAsync('refreshToken', pair.refreshToken);
+    stage('migrated-access-read');
     requireTrue((await getAccessToken()) === pair.accessToken);
+    stage('migrated-refresh-read');
     requireTrue((await getRefreshToken()) === pair.refreshToken);
+    stage('legacy-access-removal');
     requireTrue((await SecureStore.getItemAsync('accessToken')) === null);
+    stage('legacy-refresh-removal');
     requireTrue((await SecureStore.getItemAsync('refreshToken')) === null);
+    stage('ordinary-session-write');
     await storeTokens(pair);
   });
   if (Platform.OS === 'android') {
@@ -100,12 +113,16 @@ async function run(): Promise<Check[]> {
       await SecureStore.deleteItemAsync('wallet.seed.synthetic-probe');
     });
   }
-  await check('direct authenticated API and refresh', async () => {
+  await check('direct authenticated API and refresh', async (stage) => {
+    stage('authenticated-request');
     const { data } = await apiClient.post<{ authenticated: boolean; bodyReceived: boolean }>('/direct', {
       secret: 'synthetic-sign-in',
     });
+    stage('authenticated-response');
     requireTrue(data.authenticated && data.bodyReceived);
+    stage('session-rotation');
     await rotateRefreshToken(pair.refreshToken);
+    stage('rotated-refresh-read');
     requireTrue((await getRefreshToken()) === pair.refreshToken);
   });
   await check('redirect target reachability', async () => {
@@ -222,8 +239,10 @@ async function run(): Promise<Check[]> {
       xhr.send();
     });
   });
-  await check('sign-out removes the native session', async () => {
+  await check('sign-out removes the native session', async (stage) => {
+    stage('sign-out');
     await clearTokens();
+    stage('signed-out-session-read');
     requireTrue((await getAccessToken()) === null && (await getRefreshToken()) === null);
   });
   await apiClient.post('/report', { checks });

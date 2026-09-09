@@ -116,7 +116,7 @@ consume the shared package by design and a fix there fixes both.
   mobile config does catch it: `no-floating-promises` runs type-aware over
   `**/*.test.{ts,tsx}`, so lint is the check, not review.
 - Mobile Jest checks establish JavaScript behavior. The isolated Android emulator
-  and unsigned iOS simulator procedure in [MOBILE.md](MOBILE.md) establish native
+  and ad hoc signed iOS simulator procedure in [MOBILE.md](MOBILE.md) establish native
   build/runtime behavior only when their recorded runs pass. Simulator evidence
   does not establish physical biometric, backup-transfer or OEM behavior.
 - A shared type that declares **required** a field the API never sends is drift;

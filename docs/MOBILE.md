@@ -122,7 +122,7 @@ project for build diagnosis.
 | Node / npm | 22.15.1 / 11.5.2 |
 | Android | JDK 17, SDK/target 36, minimum API 24, Build Tools 36.0.0 |
 | Android native toolchain | NDK 27.1.12297006, CMake 3.22.1, Gradle 8.14.3, Kotlin 2.1.20 |
-| iOS | Xcode 16.4, minimum deployment target 15.1, unsigned simulator Release |
+| iOS | Xcode 16.4, minimum deployment target 15.1, ad hoc signed simulator Release |
 | Runtime probes | Android API 36 x86_64 emulator; iOS 18.5 simulator |
 
 These minimum platform versions follow [Expo SDK 54](https://docs.expo.dev/versions/v54.0.0/).
@@ -160,9 +160,16 @@ IOS_SIMULATOR_UDID=your-owned-simulator-uuid npm run test:native -- ios /absolut
 ```
 
 The output directory must not already exist. The runner builds and launches the
-ordinary Release app, preserves that artifact and checks its release policy. It
-gives each build phase its own temporary/cache directory so Expo's CI cache
-cannot retain a previous phase's API destination. The probe checks the compiled
+ordinary Release app, preserves that artifact and checks its release policy.
+iOS uses Xcode's normal ad hoc simulator signing without an Apple account or
+signing certificate. Before each ordinary/probe installation, it checks both built
+architectures' `__TEXT,__entitlements` sections for the app identity and preserves
+their public entitlements. Simulator entitlements are distinct from the code
+signature's entitlements; disabling signing can omit the former and break Keychain
+controls despite successful compilation and launch. Existing app capabilities
+remain in the generated entitlements. Each build phase gets its own
+temporary/cache directory so Expo's CI cache cannot retain a previous phase's API
+destination. The probe checks the compiled
 API client and policy destinations against its isolated server.
 Server startup has a 120-second deadline and each certificate tool call has a
 30-second timeout. Certificate generation uses its own OpenSSL configuration and
@@ -172,8 +179,10 @@ endpoints, an independently trusted leaf and wrong-CA refusals. Top-level eviden
 includes the selected tool path/version, configuration hash and public certificate
 diagnostics; private keys are not uploaded. Named stages, including each probe
 reset, and separate primary/cleanup errors identify
-infrastructure failures without recording request credentials or bodies. Xcode
-commands have a 45-minute deadline; other asynchronous commands retain their
+infrastructure failures without recording request credentials or bodies. Native
+probe failures also carry a fixed error category and operation stage, never raw
+error messages, stacks or values. Categories do not establish a Keychain OSStatus.
+Xcode commands have a 45-minute deadline; other asynchronous commands retain their
 30-minute limit, and the iOS CI job remains bounded to 90 minutes. A timeout
 terminates the owned command group and is reported separately from an exit code
 or signal. The runner

@@ -56,7 +56,7 @@ function fixture(context, behavior, check) {
   const script = `#!/usr/bin/env node
 const fs = require('node:fs');
 const { spawn } = require('node:child_process');
-fs.writeFileSync('command.json', JSON.stringify({ pid: process.pid, started: Date.now() }));
+fs.writeFileSync('command.json', JSON.stringify({ pid: process.pid, started: Date.now(), args: process.argv.slice(2) }));
 ${behavior}
 `;
   fs.writeFileSync(path.join(root, 'bin/xcodebuild'), script, { mode: 0o700 });
@@ -104,11 +104,15 @@ setInterval(() => {}, 1000);`,
   );
 });
 
-test('an Xcode command can succeed past the former deadline', (context) => {
-  fixture(context, 'setTimeout(() => process.exit(0), 3500);', ({ output, result }) => {
+test('an Xcode command keeps ad hoc simulator signing and can succeed past the former deadline', (context) => {
+  fixture(context, 'setTimeout(() => process.exit(0), 3500);', ({ output, result, command }) => {
     assert.ok(fs.existsSync(path.join(output, 'build-resolved')), result.stderr);
     assert.match(result.stderr, /Synthetic post-build boundary/);
     assert.doesNotMatch(result.stderr, /timed out/);
+    assert.ok(command.args.includes('CODE_SIGNING_ALLOWED=YES'));
+    assert.ok(command.args.includes('CODE_SIGN_IDENTITY=-'));
+    assert.ok(!command.args.includes('CODE_SIGNING_ALLOWED=NO'));
+    assert.equal(command.args[command.args.indexOf('-sdk') + 1], 'iphonesimulator');
   });
 });
 

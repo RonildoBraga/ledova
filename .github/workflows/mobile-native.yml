@@ -89,7 +89,7 @@ jobs:
           avdmanager delete avd --name ledova_native || true
 
   ios:
-    name: iOS unsigned Release and native probe
+    name: iOS ad hoc simulator Release and native probe
     runs-on: macos-15
     timeout-minutes: 90
     env:
@@ -113,7 +113,8 @@ jobs:
       - name: Generate native projects and resolve Pods
         working-directory: mobile
         run: |
-          node --test scripts/tests/ios-codegen.test.mjs
+          node --test scripts/tests/ios-codegen.test.mjs scripts/tests/ios-simulator-identity.test.mjs
+          npx jest --runInBand --testMatch '<rootDir>/native-tests/diagnostics.test.ts'
           npx expo prebuild --clean --no-install --platform all
           node scripts/check-native-projects.mjs
           cd ios
@@ -127,7 +128,7 @@ jobs:
       - name: Build and run the ordinary app and native red/green probe
         working-directory: mobile
         run: node scripts/native-smoke.mjs ios "$RUNNER_TEMP/ledova-native-ios"
-      - name: Preserve native evidence and the unsigned ordinary simulator app
+      - name: Preserve native evidence and the ad hoc signed ordinary simulator app
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:

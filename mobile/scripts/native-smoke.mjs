@@ -241,7 +241,8 @@ async function build(name, environment) {
         derived,
         '-jobs',
         '2',
-        'CODE_SIGNING_ALLOWED=NO',
+        'CODE_SIGNING_ALLOWED=YES',
+        'CODE_SIGN_IDENTITY=-',
         'build',
       ],
       name,
@@ -260,6 +261,16 @@ async function launch(name) {
       `${name}-launch`,
     );
   } else {
+    await command(
+      process.execPath,
+      [
+        path.join(mobile, 'scripts/check-ios-simulator-identity.mjs'),
+        path.join(appPath, config.name),
+        config.ios.bundleIdentifier,
+        path.join(directory, `${name}-simulator-identity.json`),
+      ],
+      `${name}-simulator-identity`,
+    );
     await command('xcrun', ['simctl', 'install', device, appPath], `${name}-install`);
     spawnSync('xcrun', ['simctl', 'terminate', device, config.ios.bundleIdentifier], {
       stdio: 'ignore',
