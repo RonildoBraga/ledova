@@ -1,4 +1,4 @@
-.PHONY: help install start ios android typecheck lint doctor
+.PHONY: help install start ios android typecheck lint doctor native-check
 
 help:
 	@echo "Ledova mobile app (local development only)"
@@ -8,6 +8,8 @@ help:
 	@echo "  make android        Run the Android development build"
 	@echo "  make typecheck      Check TypeScript"
 	@echo "  make lint           Check source lint"
+	@echo "  make native-check   Regenerate and check native Debug/Release policy"
+	@echo "  Native build/probe procedure: ../docs/MOBILE.md"
 
 install:
 	npm ci
@@ -29,5 +31,9 @@ lint:
 
 doctor:
 	npx expo-doctor
+
+native-check:
+	npm run native:prebuild
+	npm run check:native
 
 .DEFAULT_GOAL := help

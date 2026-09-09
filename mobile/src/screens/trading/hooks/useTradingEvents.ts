@@ -5,6 +5,7 @@ import EventSource from 'react-native-sse';
 import { TRADING_ENDPOINTS, TRADING_CONFIG, TRADING_EVENT_INVALIDATION_MAP } from '@ledova/shared';
 import type { TradingEventType } from '@ledova/shared';
 import { getAccessToken } from '../../../services/tokenStorage';
+import { getTradingEventsUrl } from '../../../config/networkPolicy';
 
 type SSEEventTypes = TradingEventType | 'connected';
 
@@ -20,11 +21,14 @@ export function useTradingEvents(tokenUuid: string | null | undefined) {
 
       esRef.current?.close();
 
+      let url: string;
+      try {
+        url = getTradingEventsUrl(TRADING_ENDPOINTS.EVENTS.STREAM, tokenUuid);
+      } catch {
+        return;
+      }
       const accessToken = await getAccessToken();
       if (!accessToken) return;
-
-      const baseUrl = (process.env.EXPO_PUBLIC_API_URL || '').replace(/\/$/, '');
-      const url = `${baseUrl}${TRADING_ENDPOINTS.EVENTS.STREAM}?token=${tokenUuid}`;
 
       const es = new EventSource<SSEEventTypes>(url, {
         headers: { Authorization: `Bearer ${accessToken}` },

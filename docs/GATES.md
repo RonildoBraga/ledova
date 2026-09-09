@@ -181,12 +181,14 @@ would.
 What it covers, by extension: `.py` and `.css` under `backend/`; `.ts`, `.tsx`,
 `.js`, `.jsx`, `.mjs` and `.cjs` in the client, shared, mobile-script and
 contract-script trees, plus `.css` in `dashboard/src` and `marketing/src`;
-`.sol` under `contracts/contracts`. The build configuration at the root of
+`.sol` under `contracts/contracts`; `.py` in `mobile/scripts`; and `.m`/`.mm`
+native templates in `mobile/plugins`. Native preprocessor directives are code;
+ordinary native line/block comments are refused. The build configuration at the root of
 `dashboard/`, `marketing/`, `mobile/` and `contracts/` is covered too, but only
 at that root, not recursively.
 
 The trees are, in full: `backend`, `dashboard/src`, `mobile/src`,
-`mobile/scripts`, `mobile`, `packages/shared`, `packages/scripts`,
+`mobile/scripts`, `mobile/native-tests`, `mobile/plugins`, `mobile`, `packages/shared`, `packages/scripts`,
 `marketing/src`, `dashboard`, `marketing`, `contracts`, `contracts/contracts`,
 `contracts/scripts`, `contracts/test`.
 

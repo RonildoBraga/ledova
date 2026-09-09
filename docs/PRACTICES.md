@@ -115,8 +115,10 @@ consume the shared package by design and a fix there fixes both.
   forgotten `await` on a press before an **absence** assertion passes wrongly. The
   mobile config does catch it: `no-floating-promises` runs type-aware over
   `**/*.test.{ts,tsx}`, so lint is the check, not review.
-- Nothing in this repository's development environment can render mobile. Mobile
-  claims are data-path claims unless a person confirms on a device.
+- Mobile Jest checks establish JavaScript behavior. The isolated Android emulator
+  and ad hoc signed iOS simulator procedure in [MOBILE.md](MOBILE.md) establish native
+  build/runtime behavior only when their recorded runs pass. Simulator evidence
+  does not establish physical biometric, backup-transfer or OEM behavior.
 - A shared type that declares **required** a field the API never sends is drift;
   the reverse is deliberately not, and the type gate says so.
 - The backend's own message reaches the person. Field errors arrive as

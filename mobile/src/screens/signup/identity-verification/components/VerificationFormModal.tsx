@@ -6,6 +6,7 @@ import { XIcon } from 'phosphor-react-native';
 import { overlayColors } from '../../../../contexts';
 import { useAppTheme, useThemedStyles } from '../../../../contexts';
 import { MARKETING_URL } from '../../../../config/publicLinks';
+import { allowWebNavigation } from '../../../../config/networkPolicy';
 
 interface VerificationFormModalProps {
   visible: boolean;
@@ -240,7 +241,7 @@ export function VerificationFormModal({
             </View>
 
             <View style={styles.webviewContainer}>
-              {accessToken ? (
+              {accessToken && allowWebNavigation(MARKETING_URL) ? (
                 <WebView
                   source={{
                     html: buildSumsubHtml(accessToken, {
@@ -258,11 +259,15 @@ export function VerificationFormModal({
                   mediaCapturePermissionGrantType="grant"
                   allowsInlineMediaPlayback
                   originWhitelist={['*']}
-                  mixedContentMode="compatibility"
+                  onShouldStartLoadWithRequest={({ url }) => allowWebNavigation(url)}
+                  mixedContentMode="never"
                 />
-              ) : formUrl ? (
+              ) : formUrl && allowWebNavigation(formUrl) ? (
                 <WebView
                   source={{ uri: formUrl }}
+                  originWhitelist={['*']}
+                  onShouldStartLoadWithRequest={({ url }) => allowWebNavigation(url)}
+                  mixedContentMode="never"
                   style={styles.webview}
                   injectedJavaScript={KYCAID_INJECTED_JS}
                   onMessage={handleMessage}

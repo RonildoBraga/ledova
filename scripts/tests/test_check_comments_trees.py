@@ -51,6 +51,16 @@ class DocumentedTreesMatchTheGate(unittest.TestCase):
 
 class EverySourceFileIsReachedByATree(unittest.TestCase):
 
+    def test_native_templates_are_scanned_and_do_not_treat_urls_as_comments(self):
+        source = ROOT / "mobile/plugins/native/LedovaHTTPRequestHandler.m"
+        scanned = {
+            path.resolve() for tree, extensions, recurse in gate.TREES for path in gate.files_in(tree, extensions, recurse)
+        }
+        self.assertIn(source, scanned)
+        scanner = gate.FINDERS[source.suffix]
+        self.assertEqual(scanner('#import <React/RCTHTTPRequestHandler.h>\n#if DEBUG\nNSString *url = @"http://localhost/";\n#endif\n'), [])
+        self.assertEqual(scanner('NSString *url = @"https://localhost/"; // forbidden\n'), [(1, '// forbidden', False)])
+
     def test_nothing_is_outside_the_trees_without_a_stated_reason(self):
         scanned = {
             path.resolve() for tree, extensions, recurse in gate.TREES for path in gate.files_in(tree, extensions, recurse)

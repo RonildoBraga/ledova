@@ -118,6 +118,10 @@ re-exports four sub-barrels: `constants`, `types`, `services`, `utils`.
   follows the symlink into `../packages`, which stays in `watchFolders`, and
   `tsc --noEmit` resolves it with `preserveSymlinks`.
 
+Mobile transport, device-only session/seed storage and generated native build
+policy are described in [MOBILE.md](MOBILE.md). The native probe uses a separate
+entry and isolated synthetic servers; it is not part of the application flow.
+
 Mobile resolves from `mobile/node_modules` and `../packages`, and from nothing
 else. `make install` runs the root `npm ci` before mobile's, so the repository
 root holds a `node_modules` that Metro's `watchFolders` deliberately excludes —
