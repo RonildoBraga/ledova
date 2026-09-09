@@ -76,9 +76,9 @@ rule was not enough.
 ## Building
 
 One issue, implemented, with a pull request. Scope stays at the issue: a defect
-found on the way is filed, not folded in. Who may merge it, and which paths the
-owner reserves, is policy rather than method and belongs in
-[CONTRIBUTING.md](../CONTRIBUTING.md).
+found on the way is filed, not folded in. Who may review and merge it, and which
+paths the owner reserves, is policy rather than method and is stated under
+**Review and merge** in [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 The body states what was measured, what could not be reproduced, and what was
 deliberately not done. A body that only says what works is half a report.
