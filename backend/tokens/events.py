@@ -8,6 +8,7 @@ from shared.db import on_commit
 
 logger = logging.getLogger(__name__)
 
+CONNECTED_EVENT = "connected"
 TRADING_EVENTS_CHANNEL = "trading:events"
 TRADING_EVENT_TYPES = frozenset(
     {

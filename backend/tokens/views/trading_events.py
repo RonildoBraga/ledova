@@ -8,7 +8,7 @@ from django.http import HttpResponse, StreamingHttpResponse
 
 from authentication.classes import HybridJWTAuthentication
 from shared.views.principal import set_principal_for_async_view, sets_the_principal
-from tokens.events import TRADING_EVENT_TYPES, TRADING_EVENTS_CHANNEL
+from tokens import events
 from tokens.services.trading_events import resolve_streamable_token_uuid
 
 HEARTBEAT_INTERVAL = 30
@@ -42,7 +42,7 @@ def _format_public_trading_event(event, token_uuid: str):
         return None
 
     event_type = event.get("event")
-    if not isinstance(event_type, str) or event_type not in TRADING_EVENT_TYPES:
+    if not isinstance(event_type, str) or event_type not in events.TRADING_EVENT_TYPES:
         return None
 
     return _format_sse(event_type, {})
@@ -54,9 +54,9 @@ async def _event_stream(token_uuid: str):
     subscribed = False
 
     try:
-        await pubsub.subscribe(TRADING_EVENTS_CHANNEL)
+        await pubsub.subscribe(events.TRADING_EVENTS_CHANNEL)
         subscribed = True
-        yield _format_sse("connected", {"status": "ok"})
+        yield _format_sse(events.CONNECTED_EVENT, {"status": "ok"})
 
         last_heartbeat = asyncio.get_event_loop().time()
 
@@ -89,7 +89,7 @@ async def _event_stream(token_uuid: str):
     finally:
         try:
             if subscribed:
-                await pubsub.unsubscribe(TRADING_EVENTS_CHANNEL)
+                await pubsub.unsubscribe(events.TRADING_EVENTS_CHANNEL)
         finally:
             try:
                 await pubsub.aclose()

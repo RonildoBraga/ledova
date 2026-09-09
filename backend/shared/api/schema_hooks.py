@@ -1,8 +1,7 @@
-from tokens.events import TRADING_EVENT_TYPES
+from tokens import events
 
 TRADING_EVENTS_PATH = "/api/v1/trading/events/stream/"
 
-CONNECTED_EVENT = "connected"
 
 STREAM_DESCRIPTION = (
     "Server-sent events for one deployed share class. The connection opens with a `connected` event "
@@ -21,7 +20,7 @@ NOT_A_DRF_VIEW = (
 
 
 def event_names():
-    return [CONNECTED_EVENT, *sorted(TRADING_EVENT_TYPES)]
+    return [events.CONNECTED_EVENT, *sorted(events.TRADING_EVENT_TYPES)]
 
 
 def _stream_response():
@@ -33,6 +32,7 @@ def _stream_response():
                     "type": "string",
                     "description": STREAM_DESCRIPTION,
                     "x-sse-events": event_names(),
+                    "x-sse-connection-event": events.CONNECTED_EVENT,
                 }
             }
         },

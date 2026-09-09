@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Fail when a shared TypeScript type requires a field the API never sends.
+"""Fail when shared response fields or trading event names drift from the API.
 
 The rule and its scope are stated in docs/ARCHITECTURE.md under "The API type
 drift gate". This script is the mechanical half of that rule; keep the two in
 step.
 
-One direction only. A field an endpoint sends that no type models is dead
+Response fields are checked in one direction. A field an endpoint sends that no type models is dead
 weight: TypeScript never surfaces it, so nothing reads it and nothing breaks.
 A field a type declares *required* that the endpoint never sends is different
 in kind -- every read of it type-checks and every read of it is undefined at
@@ -21,6 +21,9 @@ reports drift that does not exist and misses drift that does. So the gate reads
 the URL each service function actually calls, finds the operation the schema
 declares at that path and verb, and compares the TypeScript generic against
 *that operation's 2xx response schema*.
+
+Trading event names are compared in both directions against the generated stream
+metadata. The separately declared connection event needs no invalidation listener.
 
 Field names are compared with separators removed and case folded, because the
 wire is camelCase (djangorestframework-camel-case renders it) while a schema
@@ -530,6 +533,50 @@ def scan(schema_path: Path):
     return findings, matched, sorted(set(unmatched))
 
 
+def trading_event_drift(document: dict) -> list[str]:
+    path = declared_endpoints().get("TRADING_ENDPOINTS.EVENTS.STREAM")
+    if not path:
+        raise Unresolvable("The trading stream endpoint constant is not resolvable.")
+    try:
+        stream = document["paths"][path]["get"]["responses"]["200"]["content"]["text/event-stream"]["schema"]
+        events = stream["x-sse-events"]
+        connection_event = stream["x-sse-connection-event"]
+    except (KeyError, TypeError) as error:
+        raise Unresolvable("The trading stream schema must declare its events and connection event.") from error
+    if (
+        not isinstance(events, list)
+        or not events
+        or any(not isinstance(event, str) or not event for event in events)
+        or len(set(events)) != len(events)
+        or not isinstance(connection_event, str)
+        or connection_event not in events
+    ):
+        raise Unresolvable("The trading stream events must be unique strings including the connection event.")
+
+    declarations = []
+    for source in sorted((SHARED / "constants").rglob("*.ts")):
+        text = NONCODE.sub(
+            lambda match: " " if match.group().startswith(("//", "/*")) else match.group(), source.read_text()
+        )
+        masked = mask_noncode(text)
+        for match in re.finditer(r"\bexport\s+type\s+TradingEventType\s*=([^;]*);", masked):
+            declarations.append(text[match.start(1) : match.end(1)].strip())
+    if len(declarations) != 1:
+        raise Unresolvable("Declare exactly one shared TradingEventType string-literal union.")
+    body = declarations[0]
+    literal = r'''(?:'[^'\\\n]+'|"[^"\\\n]+")'''
+    if not re.fullmatch(rf"\|?\s*{literal}(?:\s*\|\s*{literal})*\s*", body):
+        raise Unresolvable("TradingEventType must be an inspectable string-literal union.")
+    client = {match[1:-1] for match in re.findall(literal, body)}
+    server = set(events) - {connection_event}
+    errors = []
+    if server - client:
+        errors.append("No client invalidation for server events: " + ", ".join(sorted(server - client)))
+    if client - server:
+        errors.append("Client listens for events the server never sends: " + ", ".join(sorted(client - server)))
+    return errors
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--schema", required=True, type=Path)
@@ -542,12 +589,19 @@ def main() -> int:
 
     try:
         findings, matched, unmatched = scan(arguments.schema)
+        event_errors = trading_event_drift(yaml.safe_load(arguments.schema.read_text()))
     except Unresolvable as error:
         print(f"{error}\n", file=sys.stderr)
         print(
             "Use resolvable endpoint constants and concrete shared response types, or extend the gate's parser.",
             file=sys.stderr,
         )
+        return 1
+
+    if event_errors:
+        print("Trading event names differ between the server and client:\n", file=sys.stderr)
+        for error in event_errors:
+            print(f"  {error}", file=sys.stderr)
         return 1
 
     counts: dict[str, int] = {}
@@ -593,6 +647,7 @@ def main() -> int:
         f"{sum(pinned_counts[k] for k in SCHEMA_DEBT)} awaiting the schema fixes in #211; "
         f"{len(unmatched)} reaching no operation the schema declares)."
     )
+    print("TradingEventType matches every invalidating event in the stream schema in both directions.")
     return 0
 
 

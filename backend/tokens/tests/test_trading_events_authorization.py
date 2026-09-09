@@ -8,6 +8,7 @@ from django.test import TestCase
 from authentication.services.tokens import TokenService
 from companies.models import Company
 from feature_flags.models import FeatureFlag
+from shared.api.schema_hooks import _stream_response
 from shared.tests.tenants import make_eligible, make_tenant
 from tokens.events import (
     TRADING_EVENT_TYPES,
@@ -164,6 +165,22 @@ class TradingEventDisclosureTest(TestCase):
         self.assertEqual(pubsub.subscribed_to, TRADING_EVENTS_CHANNEL)
         self.assertEqual(pubsub.unsubscribed_from, TRADING_EVENTS_CHANNEL)
         self.assertTrue(pubsub.closed)
+        self.assertTrue(client.closed)
+
+    async def test_a_renamed_connection_event_is_shared_by_the_schema_and_emitter(self):
+        client = _FakeRedis(_FakePubSub([]))
+        with (
+            patch("tokens.events.CONNECTED_EVENT", "ready"),
+            patch("tokens.views.trading_events.aioredis.from_url", return_value=client),
+        ):
+            declared = _stream_response()["content"]["text/event-stream"]["schema"]["x-sse-connection-event"]
+            stream = _event_stream(str(uuid4()))
+            try:
+                first = await anext(stream)
+            finally:
+                await stream.aclose()
+        self.assertEqual(declared, "ready")
+        self.assertEqual(first, 'event: ready\ndata: {"status": "ok"}\n\n')
         self.assertTrue(client.closed)
 
     async def test_subscribe_failure_closes_pubsub_and_client(self):
