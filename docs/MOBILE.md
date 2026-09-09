@@ -107,6 +107,14 @@ APK is checked for both ZIP alignment and every native library's ELF load-segmen
 alignment at 16 KiB. [RN 0.81's compatibility statement](https://reactnative.dev/blog/2025/08/12/react-native-0.81)
 does not replace checking third-party binaries.
 
+RN 0.81.5 can turn an empty app spec search into a codegen dependency on the
+entire iOS project directory, creating a cycle with Expo's generated provider.
+The plugin's CocoaPods post-install helper removes only the exact
+`${PODS_ROOT}/..` input from ReactCodegen's Generate Specs phase. Real spec inputs,
+generation commands and handler registration remain intact. iOS CI checks this
+with a genuine native spec control and preserves the generated Podspec and Pods
+project for build diagnosis.
+
 ## Local build and probe
 
 | Component | Build baseline |

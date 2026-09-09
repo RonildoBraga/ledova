@@ -109,6 +109,7 @@ jobs:
       - name: Generate native projects and resolve Pods
         working-directory: mobile
         run: |
+          node --test scripts/tests/ios-codegen.test.mjs
           npx expo prebuild --clean --no-install --platform all
           node scripts/check-native-projects.mjs
           cd ios
@@ -136,6 +137,8 @@ jobs:
             ${{ runner.temp }}/ledova-native-ios/ordinary-release.app
             mobile/ios/Podfile.lock
             mobile/ios/Podfile
+            mobile/ios/Pods/Pods.xcodeproj/project.pbxproj
+            mobile/ios/build/generated/ios/ReactCodegen.podspec
             mobile/ios/build/generated/ios/RCTModulesConformingToProtocolsProvider.mm
       - name: Remove the owned simulator and its test CA
         if: always()
