@@ -1,9 +1,9 @@
 import { AxiosInstance } from 'axios';
-import { getChainName } from '../constants';
-import type { WalletHolding, PaginatedResponse, BatchBalanceResponse } from '../types';
+import { getChainName, WALLET_ENDPOINTS } from '../constants';
+import type { WalletHolding, BatchBalanceResponse } from '../types';
 
 export const getWalletHoldings = (apiClient: AxiosInstance, uuid: string) =>
-  apiClient.get<PaginatedResponse<WalletHolding>>(`/api/wallets/${uuid}/holdings/`);
+  apiClient.get<WalletHolding[]>(WALLET_ENDPOINTS.HOLDINGS(uuid));
 
 export const fetchBatchBalances = async (
   apiClient: AxiosInstance,
@@ -14,7 +14,7 @@ export const fetchBatchBalances = async (
     throw new Error('Maximum 20 addresses allowed per request');
   }
 
-  const response = await apiClient.post<BatchBalanceResponse>('/api/wallets/batch-check-balances/', {
+  const response = await apiClient.post<BatchBalanceResponse>(WALLET_ENDPOINTS.BATCH_BALANCES, {
     addresses,
     chain: getChainName(chain),
   });

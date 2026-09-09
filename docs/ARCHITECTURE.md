@@ -142,32 +142,23 @@ effects rather than imported from the entry. For a gate, prefer the failure that
 shouts. The same rule decides everything else here: an empty `testMatch` makes
 the script refuse to run rather than treat every file as a test.
 
-**The script also holds one rule that is not about mobile.** A workspace package
-may not import itself by name: `packages/shared` reaching for `@ledova/shared`,
-or a subpath of it, is refused. Before the `extraNodeModules` map added in #216
-that import failed loudly, because it is exactly the specifier Metro could not
-resolve from inside `packages/shared/src`; with the map it resolves back into the
-package and makes a cycle instead, so the fix for one silent failure turned a
-loud failure into a quiet one. The rule is derived rather than named: each
-directory under `packages/` with a `package.json` contributes its own `name`, so
-renaming a package moves the rule with it. It walks the whole package rather than
-`packages/*/src`, because a self-import in `tests` is a cycle at test time as
-surely as one in `src` is at bundle time.
+The workspace-wide self-import rule lives in `scripts/check-self-imports.mjs`,
+run by `make check-self-imports`, `make check` and its own CI step. Each
+package manifest under `packages/` supplies its name. The whole package,
+including tests, is checked for imports of that name or its subpaths. Those
+imports can resolve back through Metro's aliases and create a cycle in either
+client; use a relative path within the package.
 
-That rule breaks the dashboard's Vite build as readily as the mobile bundle, so
-it belongs in `scripts/` beside the other gates rather than under `mobile/`. It
-is here because this script already walks `packages/` and CI already runs it, and
-moving it needs an edit to `.github/workflows` that no session can currently
-make. **The filename is narrower than what the file does, and that is recorded
-rather than accepted.**
+Both this rule and mobile resolution read source imports through the TypeScript
+parser in `scripts/source-imports.mjs`. Import declarations, re-exports,
+`require`, dynamic imports and import types count. Quoted examples, comments,
+regular expressions and JSX text do not. The shared parser uses the compiler
+already declared by each consuming workspace. The self-import gate no longer
+lives inside the mobile resolution script.
 
-Its extension list matches the one `scripts/check-comments.py` uses for the
-client trees, so the two gates agree on what counts as mobile source. And because
-an unrecognised specifier now fails rather than being skipped, the precision of
-the specifier pattern became a correctness property: a false positive used to be
-swallowed, and now stops the build. It still has some — a package name quoted
-inside a string after the word `from` reads as an import — so widen that pattern
-with care.
+The extension list matches the comment gate's client-source extensions. The
+resolution check still scans bundled entry files and workspace source; tests
+are included in the separate self-import check.
 
 A specifier whose package is not in `dependencies` **fails**, rather than being
 skipped. Skipping it was the second hole: a package that exists only in the
@@ -264,6 +255,16 @@ Reviewer notes are internal operator audit text and are omitted from issuer
 serializers. Issuers receive execution notes and rejection or supersession
 reasons. Provider diagnostics remain in the operator records and logs; a failed
 execution asks an operator to check the chain before deciding whether to retry.
+
+Issuers read their requests through `GET /api/v1/tokens/issuance-requests/`,
+filtered by token, company or status. List and detail reads retain company
+ownership checks even when the database allows a subscriber to read the linked
+request for withdrawal checks. The endpoint is read-only. The dashboard token
+modal refreshes this history after a successful submission, pages through older
+requests and offers retry on loading errors. Execution notes remain visible;
+private review notes are absent from both the API and its client type.
+Submitting an approval request writes database state without opening a chain
+connection; chain checks belong to execution of an approved request.
 
 The execution-history migration preserves every existing review note verbatim.
 It cannot establish authorship from phrases such as "Execution failed", which
@@ -1972,6 +1973,22 @@ closed as invalid) on exactly that collision. So the gate resolves each
 at that path and verb, and compares the type argument against **that operation's
 2xx response schema**. The test suite pins the collision case.
 
+Every HTTP call in a shared service must pass a resolvable endpoint constant,
+including wallet transfer helpers and calls with no response type argument.
+Literal URLs, computed URL parameters, unresolved constants and uninspectable
+response types fail the gate;
+there is no unchecked-call allowlist. Nested interface members stay under their
+object rather than becoming required root fields. Response unions are expanded
+so the EVM and Bitcoin preparation types are checked against their respective
+response shapes. The wallet action schema describes the actual challenge,
+verification, sync, preparation, broadcast and batch-balance replies.
+
+Wallet holdings are an array and identify their wallet with `walletUuid`. Asset
+snapshots do not supply calculated chart changes; clients derive those from
+prices. Transactions expose `createdAt` but do not promise `updatedAt`. Sync
+responses contain `syncResult`, rather than an asynchronous task identifier.
+The outcome-reporting behavior remains tracked by #237.
+
 Field names are compared with separators removed and case folded, because the
 wire is camelCase - `djangorestframework-camel-case` renders it - while a schema
 component may carry either form. `address_line_1` and `addressLine1` are one
@@ -2248,8 +2265,11 @@ The gate only recognises calls on those three names, so a module binding its
 logger to anything else is not scanned at all, and nothing would say so. That
 is the failure this document argues against under "Clients and the shared
 package": *for a gate, prefer the failure that shouts.* Binding
-`audit = logging.getLogger("audit")` is now a finding naming the binding, and
-the fix is a rename. `SumSubService.get_applicant_data` and
+`audit = logging.getLogger("audit")` is a finding naming the binding. The same
+rule covers subscripts, annotated assignments, assignment expressions and
+chained targets. Tuple and list assignments pair targets with values, including
+nested pairs. An uninspectable mapping or container cannot silently hide a
+logger: bind it directly to a scanned name instead. `SumSubService.get_applicant_data` and
 `get_applicant_status` log the applicant id and the review answer, which is
 what `IdentityVerificationService.get_verification_status` polls them for;
 `ExpoPushClient` logs the Expo error code rather than the ticket, whose
@@ -2422,6 +2442,15 @@ deleted as wrong; it was replaced rather than reworded. Before editing an
 expected string, ask what the assertion is *for*: if the answer is the
 behaviour that just changed, the test is **retiring**, not failing, and the
 replacement should assert the new property rather than the new wording.
+
+React Native Testing Library 14's `render` and event helpers return promises.
+Mobile test files use the workspace TypeScript project with
+`@typescript-eslint/no-floating-promises` enabled. An unawaited closing press
+can otherwise let an absence assertion run before the event. The real-config
+control in `make check-mobile-test-awaits` removes the await from the allocation
+card's closing press and requires a lint error at that line; it also checks the
+unchanged test. CI runs this control alongside lint. The existing toggle test
+awaits both opening and closing presses.
 
 **A green suite can exit non-zero, and the failure text names a file that
 passed.** `AssetAllocationCard.test.tsx` reported 11 files and 48 tests with no

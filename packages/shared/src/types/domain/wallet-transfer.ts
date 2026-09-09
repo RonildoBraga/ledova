@@ -37,7 +37,11 @@ export interface PrepareTransferResponse {
     maxFeePerGas?: number;
     maxPriorityFeePerGas?: number;
   };
-  amountEth: string;
+  amountEth?: string;
+  amountToken?: string;
+  tokenSymbol?: string;
+  tokenDecimals?: number;
+  tokenContract?: string;
   gasPriceWei: string;
   gasPriceGwei: string;
   maxFeePerGasWei?: string;
@@ -48,7 +52,7 @@ export interface PrepareTransferResponse {
   baseFeePerGasGwei?: string;
   gasLimit: number;
   gasCostEth: string;
-  totalCostEth: string;
+  totalCostEth?: string;
   fromAddress: string;
   toAddress: string;
 }
@@ -82,10 +86,10 @@ export interface BroadcastTransferResponse {
   status: 'pending' | 'confirmed' | 'failed' | 'reorged' | 'replaced';
   message: string;
   pendingTransaction?: {
-    uuid: string;
+    transactionId: string;
     txHash: string;
     status: string;
-    optimisticHoldingUpdated: boolean;
+    holdingQuantity: string;
   } | null;
 }
 

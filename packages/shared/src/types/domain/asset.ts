@@ -53,11 +53,8 @@ export interface AssetQueryParams extends BaseQueryParams {
 export interface AssetSnapshot {
   uuid: string;
   asset: string;
-  assetName: string;
   assetSymbol: string;
   price: string;
-  change: string;
-  changePercent: string;
   sourceTimestamp: string;
 }
 

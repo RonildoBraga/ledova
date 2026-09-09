@@ -44,6 +44,7 @@ import type {
   HolderType,
   TokenIssuance,
   CapitalIncreaseRequest,
+  ShareIssuanceRequest,
   CapitalIncreaseStatus,
 } from '@ledova/shared';
 import apiClient from '@services/apiClient';
@@ -115,7 +116,7 @@ const TOKEN_TYPE_LABELS: Record<TokenType, string> = {
   redeemable: 'Redeemable',
 };
 
-const CAPITAL_INCREASE_STATUS_COLORS: Record<CapitalIncreaseStatus, string> = {
+const REQUEST_STATUS_COLORS: Record<CapitalIncreaseStatus, string> = {
   draft: 'bg-surface-tertiary text-text-muted',
   submitted: 'bg-info-light/20 text-info-light',
   under_review: 'bg-info-light/20 text-info-light',
@@ -459,7 +460,7 @@ export default function CompanyPage() {
 
 const ACTION_ERROR_FALLBACK = 'The request was refused. Please try again.';
 
-function TokenDetailModal({
+export function TokenDetailModal({
   uuid,
   companyStatus,
   onClose,
@@ -480,6 +481,14 @@ function TokenDetailModal({
     isLoadingIssuances,
     capitalIncreases,
     capitalIncreaseCount,
+    issuanceRequests,
+    issuanceRequestCount,
+    isLoadingIssuanceRequests,
+    issuanceRequestsError,
+    retryIssuanceRequests,
+    hasMoreIssuanceRequests,
+    loadMoreIssuanceRequests,
+    isLoadingMoreIssuanceRequests,
     isLoadingCapitalIncreases,
     showCapitalIncreaseForm,
     setShowCapitalIncreaseForm,
@@ -1081,7 +1090,7 @@ function TokenDetailModal({
                       </button>
                     )}
                     <span
-                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${CAPITAL_INCREASE_STATUS_COLORS[request.status] || CAPITAL_INCREASE_STATUS_COLORS.draft}`}
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${REQUEST_STATUS_COLORS[request.status] || REQUEST_STATUS_COLORS.draft}`}
                     >
                       {request.statusDisplay}
                     </span>
@@ -1092,6 +1101,75 @@ function TokenDetailModal({
               <div className="bg-surface-tertiary/30 rounded-lg border border-border-subtle py-4 text-center">
                 <p className="text-sm text-text-muted">No capital increase requests yet.</p>
               </div>
+            )}
+          </div>
+        )}
+
+        {(isDeployed || isPaused || issuanceRequestCount > 0 || issuanceRequestsError) && (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-semibold text-text-primary flex items-center gap-1.5">
+                <CoinIcon size={ICON_SM} className="text-text-muted" />
+                Issuance Requests
+                <span className="text-text-muted font-normal">({issuanceRequestCount})</span>
+              </h3>
+            </div>
+            {isLoadingIssuanceRequests ? (
+              <div className="py-4 text-center">
+                <div className="h-5 w-5 border-2 border-brand-subtle border-t-brand rounded-full animate-spin mx-auto" />
+              </div>
+            ) : issuanceRequests.length > 0 ? (
+              <div className="bg-surface-tertiary/50 rounded-lg border border-border divide-y divide-border-subtle">
+                {issuanceRequests.map((request: ShareIssuanceRequest) => (
+                  <div key={request.uuid} className="flex items-center gap-3 px-3 py-2.5">
+                    <span className="text-xs text-text-muted w-20 flex-shrink-0">
+                      {new Date(request.createdAt).toLocaleDateString()}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-text-primary truncate">
+                        {request.amount.toLocaleString()} {request.tokenSymbol} to {request.recipientAddress}
+                      </p>
+                      <p className="text-xs text-text-muted">
+                        {request.reason || request.issuanceTypeDisplay}
+                        {request.rejectionReason ? ` · ${request.rejectionReason}` : ''}
+                      </p>
+                      {request.executionNotes && (
+                        <details className="text-xs text-text-muted mt-1">
+                          <summary className="cursor-pointer">Execution history</summary>
+                          <p className="whitespace-pre-wrap mt-1">{request.executionNotes}</p>
+                        </details>
+                      )}
+                    </div>
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${REQUEST_STATUS_COLORS[request.status] || REQUEST_STATUS_COLORS.draft}`}
+                    >
+                      {request.statusDisplay}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : !issuanceRequestsError ? (
+              <div className="bg-surface-tertiary/30 rounded-lg border border-border-subtle py-4 text-center">
+                <p className="text-sm text-text-muted">No issuance requests yet.</p>
+              </div>
+            ) : null}
+            {issuanceRequestsError && (
+              <div role="alert" className="mt-2 text-sm text-error-light">
+                <p>{getErrorMessage(issuanceRequestsError, 'Unable to load issuance requests. Please try again.')}</p>
+                <button type="button" onClick={() => void retryIssuanceRequests()} className="underline mt-1">
+                  Retry issuance requests
+                </button>
+              </div>
+            )}
+            {hasMoreIssuanceRequests && (
+              <button
+                type="button"
+                onClick={() => void loadMoreIssuanceRequests()}
+                disabled={isLoadingMoreIssuanceRequests}
+                className="mt-2 text-sm text-brand-light disabled:opacity-50"
+              >
+                {isLoadingMoreIssuanceRequests ? 'Loading requests...' : 'Load more issuance requests'}
+              </button>
             )}
           </div>
         )}

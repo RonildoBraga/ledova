@@ -121,6 +121,12 @@ def _create_issuance_request(token, recipient, amount, user, reason="", issuance
     )
 
 
+def _an_issuance_request(tenant):
+    return _create_issuance_request(
+        tenant.deployed_token, "0x" + "c" * 40, 10, tenant.user, reason="Founder allocation"
+    )
+
+
 Route = namedtuple(
     "Route",
     "method path payload foreign prepare rejects content_type",
@@ -263,6 +269,7 @@ ROUTES = (
     Route("delete", "/api/v1/tokens/capital-increases/{capital_increase}/"),
     Route("post", "/api/v1/tokens/capital-increases/{capital_increase}/submit/", {}),
     Route("post", "/api/v1/tokens/capital-increases/", {"token": "{deployed_token}", **CAPITAL_INCREASE}),
+    Route("get", "/api/v1/tokens/issuance-requests/{issuance_request}/"),
     Route("get", "/api/v1/offerings/{offering}/"),
     Route("put", "/api/v1/offerings/{offering}/", {"token": "{deployed_token}", **OFFERING}),
     Route("patch", "/api/v1/offerings/{offering}/", {"summary": "Changed"}),
@@ -408,6 +415,7 @@ LIST_ROUTES = (
     ("/api/v1/companies/{company}/documents/", ("company_document",)),
     ("/api/v1/tokens/", ("token", "deployed_token")),
     ("/api/v1/tokens/capital-increases/", ("capital_increase",)),
+    ("/api/v1/tokens/issuance-requests/", ("issuance_request",)),
     ("/api/v1/offerings/", ("offering",)),
     ("/api/v1/subscriptions/", ("subscription",)),
     ("/api/v1/trading/orders/", ("order", "counter_order")),
@@ -460,7 +468,7 @@ class CrossTenantRouteMatrixTest(APITestCase):
         self._service("companies.services.company.send_push_notification")
         self._service("offerings.services.offering.send_push_notification")
         self._service("tokens.tasks.deploy_share_token_task")
-        share_tokens = self._service("tokens.views.share_token.ShareTokenService").return_value
+        share_tokens = self._service("tokens.views.share_token.ShareTokenService")
         share_tokens.create_issuance_request.side_effect = _create_issuance_request
         balances_need_a_readable_chain = self._service("tokens.views.trading_wallet.ShareTokenService").return_value
         balances_need_a_readable_chain.get_wallet_token_balances.return_value = {"balances": []}
@@ -495,6 +503,8 @@ class CrossTenantRouteMatrixTest(APITestCase):
 
         self.actors = (make_tenant("alice"), make_tenant("staff", staff=True), make_tenant("root", superuser=True))
         self.other = make_tenant("bob")
+        for tenant in (*self.actors, self.other):
+            tenant.issuance_request = _an_issuance_request(tenant)
 
     def _patch(self, target, **kwargs):
         patcher = patch(target, **kwargs)

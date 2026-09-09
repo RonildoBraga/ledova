@@ -1,4 +1,5 @@
 import type { HolderType } from '../../constants';
+import type { BaseQueryParams } from '../api';
 
 export type TokenStatus = 'draft' | 'deploying' | 'deployed' | 'paused';
 export type TokenType = 'ordinary' | 'preference' | 'redeemable';
@@ -134,4 +135,44 @@ export interface CapitalIncreaseResponse {
   count: number;
   page?: number;
   pageSize?: number;
+}
+
+export interface ShareIssuanceRequest {
+  uuid: string;
+  token: string;
+  tokenSymbol: string;
+  tokenName: string;
+  recipientAddress: string;
+  recipientName?: string;
+  amount: number;
+  issuanceType: string;
+  issuanceTypeDisplay: string;
+  reason: string;
+  status: CapitalIncreaseStatus;
+  statusDisplay: string;
+  dilutionPercentage: number | null;
+  submittedBy: string | null;
+  submittedByEmail: string | null;
+  submittedAt: string | null;
+  reviewedBy?: string | null;
+  reviewedByEmail?: string | null;
+  reviewedAt?: string | null;
+  executionNotes?: string;
+  rejectionReason?: string;
+  executedIssuance?: string | null;
+  executedAt?: string | null;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface ShareIssuanceRequestQueryParams extends BaseQueryParams {
+  token?: string;
+  company?: string;
+  status?: CapitalIncreaseStatus;
+}
+
+export interface ShareIssuanceSubmission {
+  message: string;
+  token: CompanyShareToken;
+  issuanceRequest: ShareIssuanceRequest;
 }

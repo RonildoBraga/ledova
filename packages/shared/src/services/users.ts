@@ -9,10 +9,10 @@ import type {
 } from '../types';
 
 export const updateUserProfile = (apiClient: AxiosInstance, uuid: string, data: UpdateUserProfile) =>
-  apiClient.patch<UserProfile>(`${USER_PROFILE_ENDPOINTS.BASE}${uuid}/`, data);
+  apiClient.patch<UserProfile>(USER_PROFILE_ENDPOINTS.DETAIL(uuid), data);
 
 export const updateUserProfileCompletion = (apiClient: AxiosInstance, uuid: string, data: CompleteUserProfile) =>
-  apiClient.patch<UserProfile>(`${USER_PROFILE_ENDPOINTS.BASE}${uuid}/`, data);
+  apiClient.patch<UserProfile>(USER_PROFILE_ENDPOINTS.DETAIL(uuid), data);
 
 export const getUserProfiles = (apiClient: AxiosInstance) =>
   apiClient.get<PaginatedResponse<UserProfile>>(USER_PROFILE_ENDPOINTS.BASE);

@@ -108,21 +108,24 @@ class ShareTokenViewSet(AuthenticatedModelViewSet):
         return Response({"message": "Token unpaused successfully.", "token": ShareTokenDetailSerializer(token).data})
 
     @extend_schema(
-        responses=inline_serializer(
-            name="ShareIssuanceRequested",
-            fields={
-                "message": serializers.CharField(),
-                "token": ShareTokenDetailSerializer(),
-                "issuance_request": ShareIssuanceRequestSerializer(),
-            },
-        )
+        request=ShareIssuanceCreateSerializer,
+        responses={
+            201: inline_serializer(
+                name="ShareIssuanceRequested",
+                fields={
+                    "message": serializers.CharField(),
+                    "token": ShareTokenDetailSerializer(),
+                    "issuance_request": ShareIssuanceRequestSerializer(),
+                },
+            )
+        },
     )
     @action(detail=True, methods=["post"])
     def issue(self, request, uuid=None):
         token = self.get_object()
         serializer = ShareIssuanceCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        issuance_request = ShareTokenService().create_issuance_request(
+        issuance_request = ShareTokenService.create_issuance_request(
             token=token, user=request.user, **serializer.validated_data
         )
         return Response(

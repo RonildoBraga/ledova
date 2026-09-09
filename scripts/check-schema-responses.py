@@ -78,7 +78,6 @@ LEGACY: dict[str, int] = {
     "backend/tokens/views/trading_transfer.py:undeclared-action": 2,
     "backend/users/views/notification.py:undeclared-action": 2,
     "backend/users/views/user_profile.py:undeclared-action": 1,
-    "backend/wallets/views/wallet.py:undeclared-action": 3,
 }
 
 

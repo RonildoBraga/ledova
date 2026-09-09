@@ -119,8 +119,7 @@ export function useTransfers() {
         setState((prev) => ({ ...prev, selectedAsset: assets[0] }));
       }
     } else if (state.wallet && holdingsQuery.data?.data) {
-      const holdings = holdingsQuery.data.data.results || holdingsQuery.data.data || [];
-      const assets = buildTransferableAssets(state.wallet, holdings as WalletHolding[]);
+      const assets = buildTransferableAssets(state.wallet, holdingsQuery.data.data);
       setTransferableAssets(assets);
       if (assets.length > 0) {
         setState((prev) => ({ ...prev, selectedAsset: assets[0] }));

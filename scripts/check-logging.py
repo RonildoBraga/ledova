@@ -460,17 +460,43 @@ def scopes_of(tree: ast.AST):
             yield node
 
 
-def alias_findings(tree: ast.AST) -> list[tuple[int, str, str]]:
+def logger_bindings(target: ast.expr, value: ast.expr):
+    if (
+        isinstance(target, (ast.Tuple, ast.List))
+        and isinstance(value, (ast.Tuple, ast.List))
+        and len(target.elts) == len(value.elts)
+        and not any(isinstance(element, ast.Starred) for element in (*target.elts, *value.elts))
+    ):
+        for member, expression in zip(target.elts, value.elts):
+            yield from logger_bindings(member, expression)
+        return
+
+    for call in ast.walk(value):
+        if isinstance(call, ast.Call) and dotted_name(call.func) == "logging.getLogger":
+            yield target, call is value
+
+
+def alias_findings(tree: ast.AST, source: str) -> list[tuple[int, str, str]]:
     findings: list[tuple[int, str, str]] = []
     for node in ast.walk(tree):
-        if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Call):
+        if isinstance(node, ast.Assign):
+            targets = node.targets
+        elif isinstance(node, (ast.AnnAssign, ast.NamedExpr)):
+            targets = [node.target]
+        else:
             continue
-        if dotted_name(node.value.func) != "logging.getLogger":
+        if node.value is None:
             continue
-        for target in node.targets:
-            name = dotted_name(target)
-            if name and not is_scanned_logger(name):
-                findings.append((node.lineno, LOG_ALIAS, f"{name} = logging.getLogger(...)"))
+        for target in targets:
+            for binding, direct in logger_bindings(target, node.value):
+                name = dotted_name(binding)
+                if direct and name and is_scanned_logger(name):
+                    continue
+                label = name or ast.get_source_segment(source, binding) or ast.unparse(binding)
+                description = f"{label} = logging.getLogger(...)"
+                if not direct:
+                    description = f"{label} receives logging.getLogger(...) through an uninspectable value"
+                findings.append((binding.lineno, LOG_ALIAS, description))
     return findings
 
 
@@ -480,7 +506,7 @@ def python_findings(text: str) -> list[tuple[int, str, str]]:
     except SyntaxError as error:
         return [(0, LOG_PRIVATE, f"could not parse: {error}")]
 
-    findings: list[tuple[int, str, str]] = alias_findings(tree)
+    findings: list[tuple[int, str, str]] = alias_findings(tree, text)
 
     for scope in scopes_of(tree):
         bindings = single_bindings(scope)

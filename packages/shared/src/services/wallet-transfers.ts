@@ -1,3 +1,4 @@
+import { WALLET_ENDPOINTS } from '../constants';
 import { AxiosInstance } from 'axios';
 import type {
   PrepareTransferRequest,
@@ -8,27 +9,16 @@ import type {
   BroadcastTransferResponse,
 } from '../types';
 
-const postWalletTransfer = <T>(
-  apiClient: AxiosInstance,
-  url: string,
-  data: PrepareTransferRequest | PrepareBitcoinTransferRequest | BroadcastTransferRequest,
-  userAccountUuid?: string,
-) =>
-  userAccountUuid
-    ? apiClient.post<T>(url, data, { params: { user_account: userAccountUuid } })
-    : apiClient.post<T>(url, data);
-
 export const prepareTransfer = (
   apiClient: AxiosInstance,
   uuid: string,
   data: PrepareTransferRequest,
   userAccountUuid?: string,
 ) =>
-  postWalletTransfer<PrepareTransferResponse>(
-    apiClient,
-    `/api/wallets/${uuid}/prepare-transfer/`,
+  apiClient.post<PrepareTransferResponse>(
+    WALLET_ENDPOINTS.PREPARE_TRANSFER(uuid),
     data,
-    userAccountUuid,
+    userAccountUuid ? { params: { user_account: userAccountUuid } } : undefined,
   );
 
 export const prepareBitcoinTransfer = (
@@ -37,11 +27,10 @@ export const prepareBitcoinTransfer = (
   data: PrepareBitcoinTransferRequest,
   userAccountUuid?: string,
 ) =>
-  postWalletTransfer<PrepareBitcoinTransferResponse>(
-    apiClient,
-    `/api/wallets/${uuid}/prepare-transfer/`,
+  apiClient.post<PrepareBitcoinTransferResponse>(
+    WALLET_ENDPOINTS.PREPARE_TRANSFER(uuid),
     data,
-    userAccountUuid,
+    userAccountUuid ? { params: { user_account: userAccountUuid } } : undefined,
   );
 
 export const broadcastTransfer = (
@@ -50,9 +39,8 @@ export const broadcastTransfer = (
   data: BroadcastTransferRequest,
   userAccountUuid?: string,
 ) =>
-  postWalletTransfer<BroadcastTransferResponse>(
-    apiClient,
-    `/api/wallets/${uuid}/broadcast-transfer/`,
+  apiClient.post<BroadcastTransferResponse>(
+    WALLET_ENDPOINTS.BROADCAST_TRANSFER(uuid),
     data,
-    userAccountUuid,
+    userAccountUuid ? { params: { user_account: userAccountUuid } } : undefined,
   );

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   getCompanyTokens,
   getCompanyToken,
@@ -10,6 +10,8 @@ import {
   downloadTokenRegister,
   getCompanyTokenIssuances,
   getCapitalIncreases,
+  getShareIssuanceRequests,
+  getNextPageParam,
   createCompanyToken,
   createCapitalIncrease,
   submitCapitalIncrease,
@@ -112,6 +114,14 @@ export function useTokenDetail(uuid: string) {
     enabled: !!uuid,
   });
 
+  const issuanceRequestsQuery = useInfiniteQuery({
+    queryKey: ['token', uuid, 'issuance-requests'],
+    queryFn: ({ pageParam }) => getShareIssuanceRequests(apiClient, { token: uuid, page: pageParam }),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => getNextPageParam(lastPage.data),
+    enabled: !!uuid,
+  });
+
   const invalidateToken = () => {
     queryClient.invalidateQueries({ queryKey: ['token', uuid] });
     queryClient.invalidateQueries({ queryKey: ['tokens'] });
@@ -171,6 +181,14 @@ export function useTokenDetail(uuid: string) {
     isLoadingIssuances,
     capitalIncreases: capitalIncreases?.results || [],
     capitalIncreaseCount: capitalIncreases?.count || 0,
+    issuanceRequests: issuanceRequestsQuery.data?.pages.flatMap((page) => page.data.results) || [],
+    issuanceRequestCount: issuanceRequestsQuery.data?.pages[0]?.data.count || 0,
+    isLoadingIssuanceRequests: issuanceRequestsQuery.isLoading,
+    issuanceRequestsError: issuanceRequestsQuery.error,
+    retryIssuanceRequests: issuanceRequestsQuery.refetch,
+    hasMoreIssuanceRequests: issuanceRequestsQuery.hasNextPage,
+    loadMoreIssuanceRequests: issuanceRequestsQuery.fetchNextPage,
+    isLoadingMoreIssuanceRequests: issuanceRequestsQuery.isFetchingNextPage,
     isLoadingCapitalIncreases,
     showCapitalIncreaseForm,
     setShowCapitalIncreaseForm,

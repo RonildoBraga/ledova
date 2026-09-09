@@ -31,7 +31,7 @@ class AssetViewSet(AuthenticatedReadOnlyViewSet):
         return queryset
 
     @extend_schema(responses=AssetSnapshotSerializer(many=True))
-    @action(detail=True, methods=["get"], url_path="snapshots")
+    @action(detail=True, methods=["get"], url_path="snapshots", pagination_class=None)
     def snapshots(self, request, **kwargs):
         asset = self.get_object()
 

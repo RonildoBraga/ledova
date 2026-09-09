@@ -45,9 +45,16 @@ export type CreateWallet = {
   parentDerivationPath?: string;
 };
 
+export interface WalletSyncResult {
+  status: 'success' | 'skipped' | 'error';
+  transactions?: number;
+  snapshots?: number;
+  holdings?: number;
+  error?: string;
+}
+
 export interface SyncWalletResponse {
   success: boolean;
-  message: string;
-  taskId: string;
   wallet: Wallet;
+  syncResult: WalletSyncResult;
 }

@@ -6,6 +6,7 @@ app_name = "tokens"
 
 router = DefaultRouter()
 router.register(r"capital-increases", views.CapitalIncreaseViewSet, basename="capital-increases")
+router.register(r"issuance-requests", views.ShareIssuanceRequestViewSet, basename="issuance-requests")
 router.register(r"", views.ShareTokenViewSet, basename="tokens")
 
 urlpatterns = router.urls

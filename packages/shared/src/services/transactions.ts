@@ -1,9 +1,10 @@
+import { TRANSACTION_ENDPOINTS } from '../constants';
 import { AxiosInstance, AxiosResponse } from 'axios';
 import type { Transaction, TransactionQueryParams, PaginatedResponse } from '../types';
 import { getNextPageParam } from '../utils';
 
 export const getTransactions = (apiClient: AxiosInstance, params?: TransactionQueryParams) =>
-  apiClient.get<PaginatedResponse<Transaction>>('/api/transactions/', { params });
+  apiClient.get<PaginatedResponse<Transaction>>(TRANSACTION_ENDPOINTS.BASE, { params });
 
 export const getTransactionsNextPage = (lastPage: AxiosResponse<PaginatedResponse<Transaction>>): number | undefined =>
   getNextPageParam(lastPage.data);

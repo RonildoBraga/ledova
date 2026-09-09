@@ -22,7 +22,7 @@ function onChain(chain: string, quantity: string, marketValue: string | null, ov
     uuid: `holding-${chain}-${quantity}`,
     createdAt: '2026-09-01T00:00:00Z',
     updatedAt: '2026-09-01T00:00:00Z',
-    wallet: `wallet-${chain}`,
+    walletUuid: `wallet-${chain}`,
     walletAddress: `0x${'a'.repeat(40)}`,
     chain,
     asset: USDC,

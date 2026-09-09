@@ -113,7 +113,6 @@ export const generateMockTransactionsData = (pageSize = 20, page = 1): MockTrans
       wallet: `wallet-${(i % 4) + 1}`,
       walletAddress,
       createdAt: generateBlockTimestamp(daysAgo),
-      updatedAt: generateBlockTimestamp(daysAgo),
     });
   }
 

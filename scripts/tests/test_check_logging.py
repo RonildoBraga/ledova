@@ -290,6 +290,60 @@ class LoggerAliasRule(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertEqual(self.rules(f"{name} = logging.getLogger(__name__)"), [])
 
+    def test_a_subscript_registry_is_refused_and_the_target_is_named(self):
+        source = 'LOGGERS["audit"] = logging.getLogger("audit")\nLOGGERS["audit"].info(f"{response}")'
+        findings = gate.python_findings(source)
+        self.assertEqual([rule for _, rule, _ in findings], [gate.LOG_ALIAS])
+        self.assertIn('LOGGERS["audit"]', findings[0][2])
+
+    def test_tuple_and_list_bindings_are_paired_with_their_values(self):
+        for source in (
+            'audit, other = logging.getLogger("a"), 1',
+            '[other, audit] = [1, logging.getLogger("a")]',
+            '(other, (audit, logger)) = (1, (logging.getLogger("a"), logging.getLogger("b")))',
+        ):
+            with self.subTest(source=source):
+                findings = gate.python_findings(source)
+                self.assertEqual([rule for _, rule, _ in findings], [gate.LOG_ALIAS])
+                self.assertIn('audit = logging.getLogger', findings[0][2])
+
+    def test_scanned_loggers_in_unpacking_still_have_their_calls_checked(self):
+        for source in (
+            '(logger, other) = (logging.getLogger(), 1)',
+            '[other, self.log] = [1, logging.getLogger()]',
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(self.rules(source), [])
+        self.assertEqual(
+            self.rules('(logger, other) = (logging.getLogger(), 1)\nlogger.info(f"{response}")'),
+            [gate.LOG_BODY],
+        )
+
+    def test_an_unknown_mapping_cannot_silently_hide_a_logger(self):
+        for source in (
+            'logger, *others = [logging.getLogger(), 1, 2]',
+            'logger = {"audit": logging.getLogger()}',
+            'audit, other = wrap(logging.getLogger())',
+            'logger = [value for value in [logging.getLogger()]]',
+        ):
+            with self.subTest(source=source):
+                self.assertIn(gate.LOG_ALIAS, self.rules(source))
+
+    def test_annotated_and_expression_bindings_cannot_bypass_the_rule(self):
+        for source in ('audit: logging.Logger = logging.getLogger()', 'if audit := logging.getLogger():\n    pass'):
+            with self.subTest(source=source):
+                self.assertEqual(self.rules(source), [gate.LOG_ALIAS])
+        self.assertEqual(self.rules('logger: logging.Logger = logging.getLogger()'), [])
+        self.assertEqual(self.rules('logger: logging.Logger'), [])
+
+    def test_every_target_in_a_chained_binding_is_checked(self):
+        findings = gate.python_findings('audit = LOGGERS["b"] = logger = logging.getLogger()')
+        self.assertEqual([rule for _, rule, _ in findings], [gate.LOG_ALIAS, gate.LOG_ALIAS])
+        self.assertEqual(
+            {description for _, _, description in findings},
+            {'audit = logging.getLogger(...)', 'LOGGERS["b"] = logging.getLogger(...)'},
+        )
+
     def test_the_finding_names_the_binding(self):
         source = "import logging\naudit = logging.getLogger('audit')\n"
         self.assertEqual(
