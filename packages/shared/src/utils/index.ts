@@ -53,5 +53,6 @@ export {
 export type { SignInErrorReading, ApiErrorReading, ReadApiErrorOptions } from './errors';
 export { calculateHoldingsSummary, calculateAssetAllocation } from './holdings';
 export { getHoldingTokenDeployment } from './asset-deployment';
+export { importAddressKey, importOnEvmNetwork, importedParentKey, canDeriveNextWalletAddress } from './wallet-import';
 export { calculateWalletTotals, filterWalletsByChain } from './wallet';
 export { parseFiatValue } from './valuation';

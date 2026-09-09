@@ -1,48 +1,35 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { apiClient } from '../services/apiClient';
-import { fetchBatchBalances, isEthereumChain, isBitcoinChain } from '@ledova/shared';
+import { fetchImportBalances } from '@ledova/shared';
 import type { DerivedAddress } from '@ledova/shared';
 
-export function useFetchBalances() {
+export function useFetchBalances(userAccountUuid: string | undefined) {
   const [balances, setBalances] = useState<Map<string, string>>(new Map());
   const [isLoadingBalances, setIsLoadingBalances] = useState(false);
+  const generation = useRef(0);
 
-  const fetchBalances = useCallback(async (addressList: DerivedAddress[]) => {
-    setIsLoadingBalances(true);
-    const ethAddresses = addressList.filter((a) => isEthereumChain(a.networkType));
-    const btcAddresses = addressList.filter((a) => isBitcoinChain(a.networkType));
-
-    const newBalances = new Map<string, string>();
-
-    if (ethAddresses.length > 0) {
-      try {
-        const ethAddrs = ethAddresses.map((a) => a.address);
-        const ethResponse = await fetchBatchBalances(apiClient, ethAddrs, 'ETH');
-        ethAddresses.forEach((addr) => {
-          const balance = ethResponse.balances[addr.address] || '0';
-          newBalances.set(addr.address, `${balance} ETH`);
-        });
-      } catch {
-        ethAddresses.forEach((addr) => newBalances.set(addr.address, '0 ETH'));
-      }
-    }
-
-    if (btcAddresses.length > 0) {
-      try {
-        const btcAddrs = btcAddresses.map((a) => a.address);
-        const btcResponse = await fetchBatchBalances(apiClient, btcAddrs, 'BTC');
-        btcAddresses.forEach((addr) => {
-          const balance = btcResponse.balances[addr.address] || '0';
-          newBalances.set(addr.address, `${balance} BTC`);
-        });
-      } catch {
-        btcAddresses.forEach((addr) => newBalances.set(addr.address, '0 BTC'));
-      }
-    }
-
-    setBalances(newBalances);
+  useEffect(() => {
+    generation.current += 1;
+    setBalances(new Map());
     setIsLoadingBalances(false);
-  }, []);
+    return () => {
+      generation.current += 1;
+    };
+  }, [userAccountUuid]);
+
+  const fetchBalances = useCallback(
+    async (addressList: DerivedAddress[]) => {
+      const current = ++generation.current;
+      setBalances(new Map());
+      setIsLoadingBalances(true);
+      const result = await fetchImportBalances(apiClient, addressList, userAccountUuid);
+      if (current === generation.current) {
+        setBalances(result);
+        setIsLoadingBalances(false);
+      }
+    },
+    [userAccountUuid],
+  );
 
   return { balances, isLoadingBalances, fetchBalances };
 }

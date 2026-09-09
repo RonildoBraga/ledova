@@ -98,10 +98,13 @@ class BroadcastTransferResponseSerializer(serializers.Serializer):
 
 
 class BatchBalanceResponseSerializer(serializers.Serializer):
-    balances = serializers.DictField(child=serializers.CharField())
+    user_account = serializers.UUIDField()
+    chain = serializers.ChoiceField(choices=sorted(SUPPORTED_CHAINS))
+    balances = serializers.DictField(child=serializers.CharField(allow_null=True))
     errors = serializers.ListField(child=serializers.CharField(), required=False)
 
 
 class BatchBalanceRequestSerializer(serializers.Serializer):
-    addresses = serializers.ListField(child=serializers.CharField(), min_length=1, max_length=20)
-    chain = serializers.ChoiceField(choices=sorted(SUPPORTED_CHAINS), default="ethereum")
+    user_account = serializers.UUIDField()
+    addresses = serializers.ListField(child=serializers.CharField(max_length=100), min_length=1, max_length=20)
+    chain = serializers.ChoiceField(choices=sorted(SUPPORTED_CHAINS))

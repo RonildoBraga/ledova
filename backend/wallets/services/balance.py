@@ -1,7 +1,13 @@
-from typing import Any, Dict, List
+from decimal import Decimal, InvalidOperation
+
+from django.conf import settings
+from rest_framework.exceptions import NotFound
+from web3 import Web3
 
 from integrations.blockchain import get_blockchain_client
-from shared.constants import SUPPORTED_CHAINS
+from integrations.blockchain.bitcoin import is_bitcoin_address_valid
+from shared.constants import BLOCKCHAIN_BITCOIN, SUPPORTED_CHAINS
+from users.models import UserAccount
 from wallets.exceptions import InvalidTransactionException
 
 
@@ -9,42 +15,38 @@ class BalanceService:
     MAX_ADDRESSES_PER_REQUEST = 20
 
     @staticmethod
-    def batch_check_balances(
-        addresses: List[str],
-        chain: str = "ethereum",
-    ) -> Dict[str, Any]:
-        if not addresses:
-            raise InvalidTransactionException("'addresses' is required and must be a non-empty list.")
-
-        if not isinstance(addresses, list):
-            raise InvalidTransactionException("'addresses' must be a list.")
-
-        if len(addresses) > BalanceService.MAX_ADDRESSES_PER_REQUEST:
-            raise InvalidTransactionException(
-                f"Maximum {BalanceService.MAX_ADDRESSES_PER_REQUEST} addresses allowed per request."
-            )
-
-        chain_lower = chain.lower()
-        if chain_lower not in SUPPORTED_CHAINS:
-            raise InvalidTransactionException(f"Unsupported chain: {chain}. Only ethereum and bitcoin are supported.")
-
-        balances = {}
-        errors = []
-
+    def batch_check_balances(user, *, user_account, addresses, chain):
+        if not UserAccount.objects.visible_to_user(user).filter(pk=user_account).exists():
+            raise NotFound("Account not found.")
+        if chain not in SUPPORTED_CHAINS:
+            raise InvalidTransactionException("Select a supported wallet network.")
+        if not isinstance(addresses, list) or not 1 <= len(addresses) <= BalanceService.MAX_ADDRESSES_PER_REQUEST:
+            raise InvalidTransactionException("Provide between 1 and 20 wallet addresses.")
         for address in addresses:
-            try:
-                client = get_blockchain_client(chain_lower)
-                balance = client.get_native_balance(address)
-                balances[address] = str(balance)
-            except NotImplementedError:
-                errors.append(f"{chain_lower} balance queries require external block explorer APIs")
-                break
-            except Exception:
-                balances[address] = "0"
-                errors.append(f"Failed to fetch balance for {address[:8]}...")
+            valid = isinstance(address, str) and (
+                is_bitcoin_address_valid(address, settings.BITCOIN_NETWORK)
+                if chain == BLOCKCHAIN_BITCOIN
+                else Web3.is_address(address)
+            )
+            if not valid:
+                raise InvalidTransactionException("Every address must belong to the selected test network.")
 
-        result = {"balances": balances}
+        balances = dict.fromkeys(addresses)
+        errors = []
+        try:
+            client = get_blockchain_client(chain)
+        except Exception:
+            errors.append("Balance provider unavailable. Try again later.")
+        else:
+            for address in balances:
+                try:
+                    balance = Decimal(client.get_native_balance(address))
+                    if not balance.is_finite() or balance < 0:
+                        raise InvalidOperation
+                    balances[address] = str(balance)
+                except Exception:
+                    errors.append("A balance could not be read. Try again later.")
+        result = {"user_account": str(user_account), "chain": chain, "balances": balances}
         if errors:
-            result["errors"] = errors
-
+            result["errors"] = list(dict.fromkeys(errors))
         return result

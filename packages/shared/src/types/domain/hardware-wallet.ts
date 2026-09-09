@@ -1,4 +1,4 @@
-export type HardwareWalletNetworkType = 'ETH' | 'BTC';
+export type HardwareWalletNetworkType = 'ETH' | 'BASE' | 'BTC';
 
 export interface DerivedAddress {
   address: string;

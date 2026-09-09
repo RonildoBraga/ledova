@@ -56,7 +56,6 @@ STAFF_UNSCOPED = (
     "for its administrative actions, so an operator reaches every company by design."
 )
 STAFF_WHITELIST = "Staff-only whitelist administration: the operator acts across every tenant by design."
-BODY_IDENTIFIED = "Identifies its subject in the request body rather than the path, so the matrix cannot template it."
 CHAIN_ADDRESS_READ = "Reads the chain for a bare address, which belongs to no tenant row."
 
 EXEMPT = {
@@ -109,7 +108,6 @@ EXEMPT = {
     ("post", "/api/v1/whitelist/batch-add/"): STAFF_WHITELIST,
     ("post", "/api/v1/whitelist/remove/"): STAFF_WHITELIST,
     ("post", "/api/v1/whitelist/sync/{}/"): STAFF_WHITELIST,
-    ("post", "/api/wallets/batch-check-balances/"): BODY_IDENTIFIED,
     ("get", "/api/v1/trading/whitelist/{}/status/"): CHAIN_ADDRESS_READ,
 }
 

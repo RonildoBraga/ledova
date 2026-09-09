@@ -325,6 +325,17 @@ known holding cannot be refreshed. Both clients display that reason. A partial
 refresh keeps any balances it did read, and leaves the wallet's last successful
 sync time unchanged.
 
+Wallet import previews use `POST /api/wallets/batch-check-balances/` with an
+explicit `userAccount`, `chain` (`ethereum`, `base`, or `bitcoin`) and 1–20
+addresses. The account must still belong to the signed-in user; staff status
+does not bypass membership. Addresses need not be registered yet. The response
+repeats the account and network and returns `balances[address]` as a decimal
+string or `null` when the provider cannot supply a valid balance. A confirmed
+zero remains `"0"`. Preview reads do not create or update wallets or holdings.
+Both clients display failed reads as **Unavailable** and discard pending
+responses when the selected account or network changes. Hardware and software
+import screens let the user choose Ethereum or Base for their EVM addresses.
+
 Alchemy transfer history follows each direction's `pageKey` through the final
 page, with an explicit newest-first order. Pagination finishes before receipt
 lookups, because Alchemy cursors expire after ten minutes. A repeated cursor,

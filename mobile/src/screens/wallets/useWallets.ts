@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import type { CreateWallet, DerivedAddress, HardwareWalletImport } from '@ledova/shared';
-import { getChainByShortName } from '@ledova/shared';
+import { getChainByShortName, importedParentKey } from '@ledova/shared';
 import { useWalletsCrud } from './useWalletsCrud';
 import type { SoftwareWalletImport } from '../../utils/softwareWallet';
 
@@ -32,9 +32,7 @@ export function useWallets() {
   const handleBatchCreateWallets = useCallback(
     (addresses: DerivedAddress[], importData: HardwareWalletImport) => {
       addresses.forEach((derivedAddress) => {
-        const parentKey = importData.parentKeys.find((pk) =>
-          derivedAddress.derivationPath.startsWith(pk.parentDerivationPath),
-        );
+        const parentKey = importedParentKey(derivedAddress, importData);
 
         const chain = getChainByShortName(derivedAddress.networkType);
         if (!chain) return;
@@ -61,9 +59,7 @@ export function useWallets() {
   const handleSoftwareWalletCreate = useCallback(
     (addresses: DerivedAddress[], importData: SoftwareWalletImport) => {
       addresses.forEach((derivedAddress) => {
-        const parentKey = importData.parentKeys.find((pk) =>
-          derivedAddress.derivationPath.startsWith(pk.parentDerivationPath),
-        );
+        const parentKey = importedParentKey(derivedAddress, importData);
 
         const chain = getChainByShortName(derivedAddress.networkType);
         if (!chain) return;

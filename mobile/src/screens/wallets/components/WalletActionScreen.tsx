@@ -24,7 +24,7 @@ import {
   WALLET_VERIFICATION_STATUS,
   WALLET_SIGNING_PREFERENCE,
   getWalletSigningPreferenceLabel,
-  getChainByShortName,
+  canDeriveNextWalletAddress,
   getChainShortCode,
   isBitcoinChain,
   formatDate,
@@ -38,21 +38,6 @@ import { DeleteWalletModal } from './DeleteWalletModal';
 import { DeriveAddressModal } from './DeriveAddressModal';
 import { useWalletsCrud } from '../useWalletsCrud';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
-
-function canDerive(wallet: Wallet, allWallets: Wallet[]): boolean {
-  if (!wallet.parentPublicKey || !wallet.parentChainCode || !wallet.parentDerivationPath) return false;
-
-  const nextIndex = (wallet.addressIndex ?? 0) + 1;
-  const parentKey = `${wallet.masterFingerprint}:${wallet.parentDerivationPath}`;
-
-  const nextExists = allWallets.some((w) => {
-    if (!w.masterFingerprint || !w.parentDerivationPath) return false;
-    const key = `${w.masterFingerprint}:${w.parentDerivationPath}`;
-    return key === parentKey && w.addressIndex === nextIndex;
-  });
-
-  return !nextExists;
-}
 
 export function WalletActionScreen() {
   const theme = useAppTheme();
@@ -256,7 +241,7 @@ export function WalletActionScreen() {
     }
   };
 
-  const canDeriveAddress = isVerified && canDerive(wallet, crud.wallets);
+  const canDeriveAddress = isVerified && canDeriveNextWalletAddress(wallet, crud.wallets);
 
   const handleVerify = () => navigation.navigate('WalletVerification', { wallet });
   const handleDerive = () => setDerivingFromWallet(wallet);
@@ -272,14 +257,11 @@ export function WalletActionScreen() {
   };
 
   const handleDeriveConfirm = (derivedAddress: DerivedAddress) => {
-    const chain = getChainByShortName(derivedAddress.networkType);
-    if (!chain) return;
-
     crud.createWallet(
       {
         userAccount: crud.userAccountUuid!,
         address: derivedAddress.address,
-        chain: chain.code,
+        chain: wallet.chain,
         signingPreference: wallet.signingPreference ?? undefined,
         derivationPath: derivedAddress.derivationPath,
         masterFingerprint: wallet.masterFingerprint,

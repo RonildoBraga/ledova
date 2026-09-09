@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getBlockchainDisplayName } from '@ledova/shared';
+import { getBlockchainDisplayName, getChainShortCode } from '@ledova/shared';
 import type { Wallet, DerivedAddress } from '@ledova/shared';
 import { Modal } from '@components/Modal';
 import { deriveAddressFromParentKey } from '@utils/keystone/bcurDecoder';
@@ -52,7 +52,7 @@ export function DeriveAddressModal({
 
   if (!wallet) return null;
 
-  const networkName = getBlockchainDisplayName(derivedAddress?.networkType || 'ETH');
+  const networkName = getBlockchainDisplayName(getChainShortCode(wallet.chain));
 
   return (
     <Modal
