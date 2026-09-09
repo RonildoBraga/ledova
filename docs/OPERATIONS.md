@@ -234,15 +234,14 @@ Compose sets `POSTGRES_HOST` to `postgres`, `REDIS_URL` to
 the `migrate`, `backend` and `worker` services, from one `x-backend-environment`
 anchor so the three cannot drift. These are `environment:` entries, so they win
 over `backend/.env`: a `STORAGE_BACKEND=s3`, a `DEBUG=false` or a custom
-`REDIS_URL` in that file is silently ignored inside the local stack. `DEBUG` is
-forced alongside the storage backend because local storage is only servable
-while `DEBUG` is true — see Media storage — so the pair is set together rather
-than left half in a file this compose file declares optional.
+`REDIS_URL` in that file is silently ignored inside the local stack. The local
+stack explicitly selects debug mode; uploaded evidence uses private storage
+and authenticated routes in both debug modes.
 
 `backend/.env` is still needed: `SECRET_KEY` and `POSTGRES_PASSWORD` come only
 from it, and no committed file can supply them. Without it `postgres` refuses to
 initialise and `migrate` dies on `KeyError: 'SECRET_KEY'` before anything
-reaches the media guard. Run `make init-local` first; `make dev-up` checks.
+serves requests. Run `make init-local` first; `make dev-up` checks.
 
 ### Blockchain
 
@@ -289,8 +288,10 @@ Uploaded evidence uses private storage and authenticated streaming endpoints.
 No upload is served by `/media/`, including in debug mode. Local evidence lives
 under `PRIVATE_MEDIA_ROOT`; cloud evidence uses private S3/GCS objects. See the
 [storage and retention architecture](ARCHITECTURE.md#uploaded-files).
-ASGI/WSGI startup rejects `DEBUG=false` with `STORAGE_BACKEND=local`; choose
-`s3` or `gcs` for deployments using that startup policy.
+Local private storage also works with `DEBUG=false`. The obsolete startup guard
+that required a public `/media/` route has been removed. Both entrypoints still
+require the scoped request connection, and authenticated file reads retain the
+same owner and staff permissions.
 
 ### Upload validation and resource limits
 

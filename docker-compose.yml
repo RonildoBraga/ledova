@@ -1,9 +1,7 @@
 name: ledova
 
-# Every service built from ./backend gets the same forced settings. STORAGE_BACKEND=local is only
-# servable while DEBUG is true -- ledova_backend/environment.py refuses that pair at the ASGI/WSGI
-# import -- so the two are set together here instead of being left to ./backend/.env, which this
-# file declares optional. These are `environment:` entries, so they also win over that file.
+# Every service built from ./backend gets the same local development settings.
+# These environment entries override the optional ./backend/.env file.
 x-backend-environment: &backend-environment
   POSTGRES_HOST: postgres
   REDIS_URL: redis://redis:6379/0

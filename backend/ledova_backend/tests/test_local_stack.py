@@ -3,13 +3,10 @@ import io
 import socket
 from contextlib import redirect_stderr
 from pathlib import Path
-from unittest.mock import patch
 
 import yaml
 from django.conf import settings
 from django.test import SimpleTestCase
-
-from ledova_backend.environment import assert_media_storage_is_servable, read_bool
 
 REPO_ROOT = Path(settings.BASE_DIR).parent
 COMPOSE_FILE = REPO_ROOT / "docker-compose.yml"
@@ -40,21 +37,6 @@ def port_guard():
 class ComposeStackTests(SimpleTestCase):
     def setUp(self):
         self.services = compose_services()
-
-    def test_every_service_that_forces_local_storage_satisfies_the_startup_guard(self):
-        forcing = {
-            name: declared_env(service)
-            for name, service in self.services.items()
-            if declared_env(service).get("STORAGE_BACKEND") == "local"
-        }
-
-        self.assertEqual(sorted(forcing), ["backend", "migrate", "worker"])
-        for name, environment in forcing.items():
-            with self.subTest(service=name):
-                self.assertIn("DEBUG", environment)
-                with patch.dict("os.environ", {"DEBUG": environment["DEBUG"]}):
-                    debug = read_bool("DEBUG", default=False)
-                assert_media_storage_is_servable(debug=debug, storage_backend=environment["STORAGE_BACKEND"])
 
     def test_every_service_built_from_the_backend_image_carries_the_forced_environment(self):
         built = [
