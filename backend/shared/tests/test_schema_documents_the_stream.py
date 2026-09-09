@@ -1,10 +1,12 @@
+from unittest.mock import patch
+
 from django.conf import settings
 from django.test import TestCase
 from django.urls import reverse
 from drf_spectacular.generators import SchemaGenerator
 
-from shared.api.schema_hooks import CONNECTED_EVENT, TRADING_EVENTS_PATH, event_names
-from tokens.events import TRADING_EVENT_TYPES
+from shared.api.schema_hooks import TRADING_EVENTS_PATH, event_names
+from tokens.events import CONNECTED_EVENT, TRADING_EVENT_TYPES
 
 HOOK = "shared.api.schema_hooks.document_trading_events_stream"
 
@@ -43,21 +45,9 @@ class TheStreamIsInTheSchemaTest(TestCase):
         self.assertEqual(stream["content"]["text/event-stream"]["schema"]["x-sse-connection-event"], CONNECTED_EVENT)
 
     def test_a_new_trading_event_type_reaches_the_schema_without_an_edit(self):
-        with self.settings():
-            extended = frozenset(TRADING_EVENT_TYPES | {"order_expired"})
-            import shared.api.schema_hooks as hooks
-            import tokens.events as events
-
-            original = events.TRADING_EVENT_TYPES
-            events.TRADING_EVENT_TYPES = extended
-            hooks.TRADING_EVENT_TYPES = extended
-            try:
-                self.assertIn(
-                    "order_expired",
-                    schema()["paths"][TRADING_EVENTS_PATH]["get"]["responses"]["200"]["content"]["text/event-stream"][
-                        "schema"
-                    ]["x-sse-events"],
-                )
-            finally:
-                events.TRADING_EVENT_TYPES = original
-                hooks.TRADING_EVENT_TYPES = original
+        extended = frozenset(TRADING_EVENT_TYPES | {"order_expired"})
+        with patch("tokens.events.TRADING_EVENT_TYPES", extended):
+            documented = schema()["paths"][TRADING_EVENTS_PATH]["get"]["responses"]["200"]["content"][
+                "text/event-stream"
+            ]["schema"]["x-sse-events"]
+            self.assertIn("order_expired", documented)
