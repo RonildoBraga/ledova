@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { Animated, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Animated, Text, TouchableOpacity, View } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { WalletIcon, CheckCircleIcon, ClockIcon, ArrowsClockwiseIcon, TrashIcon } from 'phosphor-react-native';
 
@@ -103,6 +103,7 @@ export function WalletItem({ wallet, onPress, onSync, onDelete, isSyncing }: Wal
         {onSync && (
           <TouchableOpacity
             style={[styles.swipeAction, styles.swipeSync]}
+            disabled={isSyncing}
             onPress={() => {
               swipeableRef.current?.close();
               onSync();
@@ -110,7 +111,7 @@ export function WalletItem({ wallet, onPress, onSync, onDelete, isSyncing }: Wal
             activeOpacity={0.7}
           >
             <ArrowsClockwiseIcon size={theme.icon.sizes.md} color={theme.colors.utility.white} weight="bold" />
-            <Text style={styles.swipeActionLabel}>Sync</Text>
+            <Text style={styles.swipeActionLabel}>{isSyncing ? 'Syncing' : 'Sync'}</Text>
           </TouchableOpacity>
         )}
         {onDelete && (
@@ -158,6 +159,10 @@ export function WalletItem({ wallet, onPress, onSync, onDelete, isSyncing }: Wal
       <Text style={styles.label} numberOfLines={1}>
         {walletName}
       </Text>
+
+      {isSyncing && (
+        <ActivityIndicator accessibilityLabel="Syncing wallet" size="small" color={theme.colors.text.muted} />
+      )}
 
       <View style={styles.spacer} />
 
