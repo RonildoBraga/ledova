@@ -296,7 +296,7 @@ export function WalletActionScreen() {
   const isSyncingThis = crud.syncingWalletId === wallet.uuid;
 
   const handleSync = () => {
-    crud.syncWallet(wallet.uuid);
+    void crud.syncWallet(wallet.uuid).catch(() => undefined);
   };
 
   const canSave = hasNameChanged && isVerified && !crud.isUpdating;

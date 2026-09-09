@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Alert } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   getWallets,
@@ -10,6 +11,7 @@ import {
   BLOCKCHAIN,
   calculateWalletTotals,
   filterWalletsByChain,
+  getErrorMessage,
 } from '@ledova/shared';
 import type { CreateWallet } from '@ledova/shared';
 import { apiClient } from '../../services/apiClient';
@@ -62,13 +64,18 @@ export function useWalletsCrud() {
     onMutate: (uuid: string) => {
       setSyncingWalletId(uuid);
     },
-    onSuccess: () => {
+    onSettled: () => {
       queryClient.refetchQueries({ queryKey: ['wallets'] });
       queryClient.refetchQueries({ queryKey: ['transactions'] });
       invalidateHome();
-    },
-    onSettled: () => {
       setSyncingWalletId(undefined);
+    },
+    onError: (error) => {
+      Alert.alert(
+        'Wallet not synced',
+        getErrorMessage(error, 'Wallet sync could not finish. Please try again later.') ||
+          'Wallet sync could not finish. Please try again later.',
+      );
     },
   });
 
@@ -108,7 +115,7 @@ export function useWalletsCrud() {
       deleteWallet: (_uuid: string, options?: { onSuccess?: () => void }) => {
         options?.onSuccess?.();
       },
-      syncWallet: () => {},
+      syncWallet: async (_uuid: string) => undefined,
       refetch: async () => ({ data: undefined, error: null }),
     };
   }

@@ -16,6 +16,8 @@ logger = logging.getLogger(__name__)
 
 class EthereumClient(BlockchainClient):
 
+    HISTORY_PAGE_LIMIT = 100
+
     ERC20_ABI = [
         {
             "constant": True,
@@ -265,8 +267,8 @@ class EthereumClient(BlockchainClient):
         try:
             checksum_address = Web3.to_checksum_address(address)
 
-            from_block_hex = hex(from_block) if from_block else "0x0"
-            to_block_param = hex(to_block) if to_block else "latest"
+            from_block_hex = hex(from_block) if from_block is not None else "0x0"
+            to_block_param = hex(to_block) if to_block is not None else "latest"
 
             logger.debug(f"Fetching history for {checksum_address}")
 
@@ -305,39 +307,22 @@ class EthereumClient(BlockchainClient):
         to_block: str = "latest",
     ) -> List[Dict[str, Any]]:
         try:
-            payload = {
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "alchemy_getAssetTransfers",
-                "params": [
-                    {
-                        "fromBlock": from_block,
-                        "toBlock": to_block,
-                        "category": ["external", "internal", "erc20", "erc721", "erc1155"],
-                        "withMetadata": True,
-                        "excludeZeroValue": True,
-                        "maxCount": "0x3e8",
-                    }
-                ],
+            params = {
+                "fromBlock": from_block,
+                "toBlock": to_block,
+                "category": ["external", "internal", "erc20", "erc721", "erc1155"],
+                "withMetadata": True,
+                "excludeZeroValue": True,
+                "maxCount": "0x3e8",
+                "order": "desc",
             }
 
             if from_address:
-                payload["params"][0]["fromAddress"] = from_address
+                params["fromAddress"] = from_address
             if to_address:
-                payload["params"][0]["toAddress"] = to_address
+                params["toAddress"] = to_address
 
-            response = requests.post(
-                self.rpc_url, json=payload, headers={"Content-Type": "application/json"}, timeout=30
-            )
-            response.raise_for_status()
-
-            data = response.json()
-
-            if "error" in data:
-                raise Exception(f"Alchemy API error: {data['error']}")
-
-            transfers = data.get("result", {}).get("transfers", [])
-
+            transfers = self._fetch_transfer_pages(params)
             standardized_transfers = []
             for transfer in transfers:
                 tx_hash = transfer.get("hash", "")
@@ -382,6 +367,33 @@ class EthereumClient(BlockchainClient):
 
             return standardized_transfers
 
-        except Exception as e:
-            logger.error(f"Error fetching asset transfers: {str(e)}")
-            return []
+        except Exception as error:
+            logger.warning("Could not fetch complete transfer history (%s)", type(error).__name__)
+            raise RuntimeError("Complete wallet transaction history is unavailable. Please try again later.") from error
+
+    def _fetch_transfer_pages(self, params: Dict[str, Any]) -> List[Dict[str, Any]]:
+        transfers = []
+        seen_pages = set()
+        for _ in range(self.HISTORY_PAGE_LIMIT):
+            response = requests.post(
+                self.rpc_url,
+                json={"jsonrpc": "2.0", "id": 1, "method": "alchemy_getAssetTransfers", "params": [dict(params)]},
+                headers={"Content-Type": "application/json"},
+                timeout=30,
+            )
+            response.raise_for_status()
+            data = response.json()
+            if not isinstance(data, dict) or "error" in data:
+                raise RuntimeError("The transfer history provider refused the request")
+            result = data.get("result")
+            if not isinstance(result, dict) or not isinstance(result.get("transfers"), list):
+                raise RuntimeError("The transfer history provider returned an unreadable page")
+            transfers.extend(result["transfers"])
+            page = result.get("pageKey")
+            if not page:
+                return transfers
+            if not isinstance(page, str) or page in seen_pages:
+                raise RuntimeError("The transfer history provider returned an invalid pagination cursor")
+            seen_pages.add(page)
+            params["pageKey"] = page
+        raise RuntimeError("The transfer history exceeds the supported page limit")

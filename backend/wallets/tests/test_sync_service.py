@@ -59,7 +59,7 @@ class WalletSyncServiceTest(TestCase):
         with patch("wallets.services.sync.get_blockchain_client", side_effect=RuntimeError("boom")):
             result = WalletSyncService.sync_wallet(self.wallet)
 
-        self.assertEqual(result, {"status": "error", "error": "RuntimeError: boom"})
+        self.assertEqual(result, {"status": "error", "error": "Wallet sync could not finish. Please try again later."})
         self.assertFalse(Transaction.objects.filter(wallet=self.wallet).exists())
 
     def test_holding_snapshot_reasons_are_the_two_the_code_writes(self):

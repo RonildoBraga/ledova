@@ -106,7 +106,11 @@ class WalletViewSet(AuthenticatedModelViewSet):
         sync_data = WalletSyncService.sync_wallet(wallet)
         wallet.refresh_from_db()
         return Response(
-            {"success": True, "wallet": self.get_serializer(wallet).data, "sync_result": sync_data},
+            {
+                "success": sync_data["status"] == "success",
+                "wallet": self.get_serializer(wallet).data,
+                "sync_result": sync_data,
+            },
             status=status.HTTP_200_OK,
         )
 

@@ -38,6 +38,7 @@ export function WalletsPage() {
     isCreating,
     isUpdating,
     isSyncing,
+    syncError,
   } = useWallets();
 
   const [showAddModal, setShowAddModal] = useState(false);
@@ -159,6 +160,11 @@ export function WalletsPage() {
               onEditWallet={(wallet) => setEditingWallet(wallet)}
             />
             <WalletActionBar {...buildActionBarProps(chain)} />
+            {syncError && selectedWallet?.chain === chain && (
+              <p role="alert" className="mt-3 text-sm text-error-light">
+                {syncError}
+              </p>
+            )}
           </>
         )}
       </Panel>

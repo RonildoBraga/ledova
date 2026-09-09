@@ -115,7 +115,7 @@ export function WalletsScreen() {
   const handleManualRefresh = useCallback(async () => {
     setIsManualRefreshing(true);
     try {
-      await Promise.all(wallets.map((w: Wallet) => syncWalletById(w.uuid)));
+      await Promise.allSettled(wallets.map((w: Wallet) => syncWalletById(w.uuid)));
     } finally {
       setIsManualRefreshing(false);
     }
@@ -182,7 +182,9 @@ export function WalletsScreen() {
           <WalletList
             wallets={sortedWallets}
             onWalletAction={(wallet) => navigation.navigate('WalletAction', { wallet })}
-            onSyncWallet={(wallet) => syncWalletById(wallet.uuid)}
+            onSyncWallet={(wallet) => {
+              void syncWalletById(wallet.uuid).catch(() => undefined);
+            }}
             onDeleteWallet={(wallet) => setDeletingWallet(wallet)}
             syncingWalletId={syncingWalletId}
             chainFilter={chainFilter}

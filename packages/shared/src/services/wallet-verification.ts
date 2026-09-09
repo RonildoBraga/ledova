@@ -1,5 +1,6 @@
 import { WALLET_ENDPOINTS } from '../constants';
 import { AxiosInstance } from 'axios';
+import { createUserFriendlyError } from '../utils/errors';
 import type {
   RequestVerificationChallengeResponse,
   VerifyWalletRequest,
@@ -26,9 +27,16 @@ export const verifyWalletSignature = (
     userAccountUuid ? { params: { user_account: userAccountUuid } } : undefined,
   );
 
-export const syncWallet = (apiClient: AxiosInstance, uuid: string, userAccountUuid?: string) =>
-  apiClient.post<SyncWalletResponse>(
+export const syncWallet = async (apiClient: AxiosInstance, uuid: string, userAccountUuid?: string) => {
+  const response = await apiClient.post<SyncWalletResponse>(
     WALLET_ENDPOINTS.SYNC(uuid),
     {},
     userAccountUuid ? { params: { user_account: userAccountUuid } } : undefined,
   );
+  if (!response.data.success || response.data.syncResult.status !== 'success') {
+    throw createUserFriendlyError(
+      response.data.syncResult.error || 'Wallet sync could not finish. Please try again later.',
+    );
+  }
+  return response;
+};

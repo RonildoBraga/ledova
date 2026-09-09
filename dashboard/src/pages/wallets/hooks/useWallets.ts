@@ -8,6 +8,7 @@ import {
   syncWallet,
   CACHE_TIMING,
   getChainByShortName,
+  getErrorMessage,
 } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 import { useSelectedPortfolio } from '@hooks/useSelectedPortfolio';
@@ -95,7 +96,7 @@ export function useWallets() {
 
   const syncMutation = useMutation({
     mutationFn: (uuid: string) => syncWallet(apiClient, uuid),
-    onSuccess: () => {
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['wallets'] });
     },
   });
@@ -160,6 +161,7 @@ export function useWallets() {
     isCreating: createMutation.isPending,
     isUpdating: updateMutation.isPending,
     isSyncing: syncMutation.isPending,
+    syncError: getErrorMessage(syncMutation.error, 'Wallet sync could not finish. Please try again later.'),
     handleCreateWallet,
     handleBatchCreateWallets,
     handleUpdateWalletName,
