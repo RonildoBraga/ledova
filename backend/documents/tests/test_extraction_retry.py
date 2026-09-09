@@ -2,6 +2,7 @@ from unittest import skipUnless
 from unittest.mock import Mock, patch
 
 from django.contrib.auth import get_user_model
+from django.core.files.base import ContentFile
 from django.db import connection
 from django.test import TestCase, TransactionTestCase
 from procrastinate.jobs import Job
@@ -46,6 +47,7 @@ class ExtractionFailureReachesTheWorkerTest(TestCase):
             document_type=DocumentType.PAYSLIP,
             original_filename="payslip.pdf",
             mime_type="application/pdf",
+            file=ContentFile(b"%PDF-1.4 synthetic payslip", name="payslip.pdf"),
         )
         render = patch.object(ExtractionService, "render_first_page", return_value=PAGE)
         render.start()
@@ -145,6 +147,7 @@ class ExtractionWorkerRetryTest(TransactionTestCase):
             document_type=DocumentType.PAYSLIP,
             original_filename="synthetic-payslip.pdf",
             mime_type="application/pdf",
+            file=ContentFile(b"%PDF-1.4 synthetic payslip", name="synthetic-payslip.pdf"),
         )
 
     def run_worker(self, effects):

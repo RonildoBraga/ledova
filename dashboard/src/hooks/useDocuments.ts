@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { getInvestorClassifications, getOperator } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 import {
+  attachDocument,
   deleteDocument,
   getDocument,
   listDocuments,
@@ -11,6 +13,18 @@ import type { Document } from '../types/document';
 
 const DOCUMENTS_KEY = ['documents'] as const;
 const documentKey = (uuid: string) => ['document', uuid] as const;
+
+export function useDocumentsEnabled() {
+  const operator = useQuery({ queryKey: ['operator'], queryFn: () => getOperator(apiClient) });
+  return !operator.isError && operator.data?.data?.deploymentMode === 'registry';
+}
+
+export function useDocumentClaims() {
+  return useQuery({
+    queryKey: ['investor-classifications'],
+    queryFn: () => getInvestorClassifications(apiClient),
+  });
+}
 
 export function useDocuments() {
   return useQuery({
@@ -52,6 +66,19 @@ export function useDeleteDocument() {
     onSuccess: (_data, uuid) => {
       queryClient.removeQueries({ queryKey: documentKey(uuid) });
       queryClient.invalidateQueries({ queryKey: DOCUMENTS_KEY });
+    },
+  });
+}
+
+export function useAttachDocument() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ uuid, classification }: { uuid: string; classification: string }) =>
+      attachDocument(apiClient, uuid, classification).then((r) => r.data),
+    onSuccess: (doc) => {
+      queryClient.setQueryData(documentKey(doc.uuid), doc);
+      queryClient.invalidateQueries({ queryKey: DOCUMENTS_KEY });
+      queryClient.invalidateQueries({ queryKey: ['investor-classifications'] });
     },
   });
 }

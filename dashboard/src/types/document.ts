@@ -40,6 +40,10 @@ export interface Document {
   originalFilename: string;
   mimeType: string;
   note: string;
+  classification: string | null;
+  attachedAt: string | null;
+  retentionUntil: string | null;
+  purgedAt: string | null;
   fileUrl: string | null;
   latestExtraction: DocumentExtraction | null;
   createdAt: string;

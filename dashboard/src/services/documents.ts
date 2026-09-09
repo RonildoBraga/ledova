@@ -17,6 +17,7 @@ export interface UploadDocumentInput {
   file: File;
   documentType: DocumentType;
   note?: string;
+  classification?: string;
 }
 
 export const uploadDocument = (apiClient: AxiosInstance, input: UploadDocumentInput) => {
@@ -24,6 +25,7 @@ export const uploadDocument = (apiClient: AxiosInstance, input: UploadDocumentIn
   form.append('file', input.file);
   form.append('document_type', input.documentType);
   if (input.note) form.append('note', input.note);
+  if (input.classification) form.append('classification', input.classification);
 
   return apiClient.post<Document>('/api/v1/documents/', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
@@ -32,3 +34,6 @@ export const uploadDocument = (apiClient: AxiosInstance, input: UploadDocumentIn
 
 export const deleteDocument = (apiClient: AxiosInstance, uuid: string) =>
   apiClient.delete(`/api/v1/documents/${uuid}/`);
+
+export const attachDocument = (apiClient: AxiosInstance, uuid: string, classification: string) =>
+  apiClient.post<Document>(`/api/v1/documents/${uuid}/attach/`, { classification });

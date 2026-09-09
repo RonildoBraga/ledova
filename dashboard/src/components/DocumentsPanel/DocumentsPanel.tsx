@@ -9,9 +9,17 @@ import {
   TrashIcon,
 } from '@phosphor-icons/react';
 
-import { DESIGN_TOKENS } from '@ledova/shared';
+import { DESIGN_TOKENS, apiErrorSentence, type InvestorClassification } from '@ledova/shared';
 
-import { useDeleteDocument, useDocument, useDocuments, useUploadDocument } from '@hooks/useDocuments';
+import {
+  useAttachDocument,
+  useDeleteDocument,
+  useDocument,
+  useDocumentClaims,
+  useDocuments,
+  useDocumentsEnabled,
+  useUploadDocument,
+} from '@hooks/useDocuments';
 import type { Document, DocumentType, ExtractionStatus, PayslipExtraction } from '../../types/document';
 
 const ICON_SM = DESIGN_TOKENS.icon.sizes.sm;
@@ -113,11 +121,44 @@ function PayslipResult({ data, durationMs }: { data: PayslipExtraction; duration
   );
 }
 
-function DocumentCard({ initialDoc }: { initialDoc: Document }) {
+function ClaimSelector({
+  claims,
+  value,
+  onChange,
+  disabled,
+}: {
+  claims: InvestorClassification[];
+  value: string;
+  onChange: (value: string) => void;
+  disabled: boolean;
+}) {
+  return (
+    <select
+      aria-label="Classification claim"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      disabled={disabled}
+      className="w-full bg-surface-secondary border border-border-subtle rounded px-3 py-2 text-sm text-text-primary"
+    >
+      <option value="">Keep unattached</option>
+      {claims
+        .filter((claim) => claim.status === 'submitted')
+        .map((claim) => (
+          <option key={claim.uuid} value={claim.uuid}>
+            {claim.categoryDisplay} · {claim.uuid.slice(0, 8)}
+          </option>
+        ))}
+    </select>
+  );
+}
+
+function DocumentCard({ initialDoc, claims }: { initialDoc: Document; claims: InvestorClassification[] }) {
   const liveQuery = useDocument(initialDoc.uuid);
   const doc = liveQuery.data ?? initialDoc;
   const extraction = doc.latestExtraction;
   const del = useDeleteDocument();
+  const attach = useAttachDocument();
+  const [classification, setClassification] = useState('');
 
   const handleDelete = () => {
     if (!window.confirm(`Delete "${doc.originalFilename}"? This cannot be undone.`)) return;
@@ -135,16 +176,51 @@ function DocumentCard({ initialDoc }: { initialDoc: Document }) {
           </p>
         </div>
         <StatusPill status={extraction?.status} />
-        <button
-          type="button"
-          onClick={handleDelete}
-          disabled={del.isPending}
-          title="Delete document"
-          className="p-1.5 text-text-muted hover:text-red-400 transition-colors disabled:opacity-50 flex-shrink-0"
-        >
-          <TrashIcon size={ICON_SM} weight="regular" />
-        </button>
+        {!doc.classification && (
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={del.isPending}
+            title="Delete document"
+            className="p-1.5 text-text-muted hover:text-red-400 transition-colors disabled:opacity-50 flex-shrink-0"
+          >
+            <TrashIcon size={ICON_SM} weight="regular" />
+          </button>
+        )}
       </div>
+
+      {doc.classification ? (
+        <p className="mt-3 text-xs text-text-muted">
+          Attached to claim {doc.classification.slice(0, 8)}. Retained{' '}
+          {doc.retentionUntil ? `until ${formatDate(doc.retentionUntil)}` : 'with the claim'}.
+        </p>
+      ) : (
+        <div className="mt-3 space-y-2">
+          <ClaimSelector
+            claims={claims}
+            value={classification}
+            onChange={setClassification}
+            disabled={attach.isPending}
+          />
+          <button
+            type="button"
+            disabled={!classification || attach.isPending}
+            onClick={() => attach.mutate({ uuid: doc.uuid, classification })}
+            className="px-3 py-2 rounded bg-brand text-white text-sm disabled:opacity-50"
+          >
+            Attach to claim
+          </button>
+          <p className="text-xs text-text-muted">
+            Unattached payslips are removed{' '}
+            {doc.retentionUntil ? `on ${formatDate(doc.retentionUntil)}` : 'according to the retention policy'}.
+          </p>
+        </div>
+      )}
+      {(attach.error || del.error) && (
+        <p role="alert" className="mt-2 text-sm text-red-400">
+          {apiErrorSentence(attach.error || del.error, 'The document could not be updated.')}
+        </p>
+      )}
 
       {extraction?.status === 'succeeded' && extraction.parsedJson && (
         <PayslipResult data={extraction.parsedJson as PayslipExtraction} durationMs={extraction.durationMs} />
@@ -157,10 +233,11 @@ function DocumentCard({ initialDoc }: { initialDoc: Document }) {
   );
 }
 
-function UploadCard() {
+function UploadCard({ claims }: { claims: InvestorClassification[] }) {
   const [file, setFile] = useState<File | null>(null);
   const [documentType, setDocumentType] = useState<DocumentType>('payslip');
   const [note, setNote] = useState('');
+  const [classification, setClassification] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const upload = useUploadDocument();
 
@@ -170,11 +247,17 @@ function UploadCard() {
       alert(`File too large. Max ${MAX_FILE_MB} MB.`);
       return;
     }
-    await upload.mutateAsync({ file, documentType, note });
-
-    setFile(null);
-    setNote('');
-    if (fileInputRef.current) fileInputRef.current.value = '';
+    upload.mutate(
+      { file, documentType, note, classification: classification || undefined },
+      {
+        onSuccess: () => {
+          setFile(null);
+          setNote('');
+          setClassification('');
+          if (fileInputRef.current) fileInputRef.current.value = '';
+        },
+      },
+    );
   };
 
   return (
@@ -233,6 +316,12 @@ function UploadCard() {
             />
           </div>
 
+          <ClaimSelector
+            claims={claims}
+            value={classification}
+            onChange={setClassification}
+            disabled={upload.isPending}
+          />
           <button
             type="button"
             onClick={handleSubmit}
@@ -251,17 +340,36 @@ function UploadCard() {
         onChange={(e) => setFile(e.target.files?.[0] ?? null)}
         className="hidden"
       />
+      {upload.error && (
+        <p role="alert" className="text-sm text-red-400">
+          {apiErrorSentence(upload.error, 'The payslip could not be uploaded.')}
+        </p>
+      )}
     </div>
   );
 }
 
-export function DocumentsPanel() {
+function AvailableDocumentsPanel() {
   const docs = useDocuments();
+  const claimsQuery = useDocumentClaims();
+  const claims = claimsQuery.data?.data?.results ?? [];
   const list = docs.data?.results ?? [];
 
   return (
     <div className="space-y-3">
-      <UploadCard />
+      <p className="text-sm text-text-muted">
+        Attach a payslip to an existing classification claim for human review. Uploading or extracting a payslip does
+        not establish eligibility.
+      </p>
+      <p className="text-sm text-text-muted">
+        Your payslips are private to you and permitted platform operations staff. Issuers cannot review them.
+      </p>
+      <UploadCard claims={claims} />
+      {!claims.some((claim) => claim.status === 'submitted') && (
+        <a href="/investor-eligibility" className="text-sm text-brand-light">
+          Submit a classification claim to attach supporting evidence.
+        </a>
+      )}
 
       {docs.isLoading && <p className="text-sm text-text-muted">Loading…</p>}
 
@@ -270,8 +378,13 @@ export function DocumentsPanel() {
       )}
 
       {list.map((doc) => (
-        <DocumentCard key={doc.uuid} initialDoc={doc} />
+        <DocumentCard key={doc.uuid} initialDoc={doc} claims={claims} />
       ))}
     </div>
   );
+}
+
+export function DocumentsPanel() {
+  const enabled = useDocumentsEnabled();
+  return enabled ? <AvailableDocumentsPanel /> : null;
 }

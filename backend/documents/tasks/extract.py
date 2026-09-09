@@ -20,6 +20,8 @@ def extract_document(document_uuid: str) -> Dict[str, Any]:
         return {"status": "error", "error": "document_not_found"}
 
     extraction = ExtractionService.run(document)
+    if extraction is None:
+        return {"status": "skipped", "reason": "document_unavailable"}
     return {
         "status": extraction.status,
         "extraction_uuid": str(extraction.uuid),

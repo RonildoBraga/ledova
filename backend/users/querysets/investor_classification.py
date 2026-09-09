@@ -26,7 +26,7 @@ class InvestorClassificationQuerySet(QuerySet):
             Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())
         )
 
-    def evidence_purgeable(self, moment):
+    def past_evidence_horizon(self, moment):
         from django.conf import settings
 
         from users.models.investor_classification import RETENTION_CLOCK
@@ -38,9 +38,12 @@ class InvestorClassificationQuerySet(QuerySet):
         cutoff = moment - timedelta(days=retention_days)
         past_horizon = Q()
         for status, clock in RETENTION_CLOCK.items():
-            past_horizon |= Q(status=status, **{f"{clock}__isnull": False, f"{clock}__lt": cutoff})
+            past_horizon |= Q(status=status, **{f"{clock}__isnull": False, f"{clock}__lte": cutoff})
 
-        return self.filter(past_horizon).exclude(evidence_file="").exclude(evidence_file__isnull=True)
+        return self.filter(past_horizon)
+
+    def evidence_purgeable(self, moment):
+        return self.past_evidence_horizon(moment).exclude(evidence_file="").exclude(evidence_file__isnull=True)
 
     def for_company(self, company):
         from users.models.investor_classification import InvestorCategory

@@ -4,6 +4,7 @@ from django.core.exceptions import ValidationError
 from django.shortcuts import render
 from django.urls import reverse
 
+from documents.services.access import deployment_mode_error
 from operators.models import Operator
 from operators.services import (
     REGISTRANT_NOTE,
@@ -21,6 +22,9 @@ class OperatorForm(forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
+        mode_error = deployment_mode_error(cleaned.get("deployment_mode"))
+        if mode_error:
+            self.add_error("deployment_mode", mode_error)
         chain = cleaned.get("receiving_wallet_chain")
         if not chain:
             return cleaned

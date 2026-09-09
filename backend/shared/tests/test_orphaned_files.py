@@ -16,6 +16,7 @@ from companies.models import Company, CompanyDocument
 from documents.models import Document, DocumentType
 from shared.services.orphaned_files import GRACE, orphaned_files, sweep_orphaned_files
 from shared.storage import (
+    CONDITIONALLY_RETAINED,
     RETAINED_AFTER_ROW_DELETE,
     RETAINED_STORAGE_PREFIXES,
     SWEPT_STORAGE_PREFIXES,
@@ -47,7 +48,7 @@ class PrivateFileFieldCoverageTest(TestCase):
 
         for label, reason in RETAINED_AFTER_ROW_DELETE.items():
             with self.subTest(label=label):
-                self.assertNotIn(label, swept_labels)
+                self.assertEqual(label in swept_labels, label in CONDITIONALLY_RETAINED)
                 self.assertGreater(len(reason), 40)
 
     def test_the_swept_and_retained_prefixes_do_not_overlap(self):
@@ -86,6 +87,15 @@ class PrivateFileFieldCoverageTest(TestCase):
                 retained = model._meta.label in RETAINED_AFTER_ROW_DELETE
                 self.assertEqual(prefix in RETAINED_STORAGE_PREFIXES, retained)
                 self.assertEqual(prefix in SWEPT_STORAGE_PREFIXES, not retained)
+
+    def test_conditionally_retained_files_use_a_swept_prefix_while_unattached(self):
+        for model, field_name in private_file_fields():
+            condition = CONDITIONALLY_RETAINED.get(model._meta.label)
+            if condition:
+                instance = self._unsaved_probe(model)
+                setattr(instance, condition, None)
+                prefix = model._meta.get_field(field_name).generate_filename(instance, "probe.pdf").split("/", 1)[0]
+                self.assertIn(prefix, SWEPT_STORAGE_PREFIXES)
 
     def test_the_receivers_are_connected_for_every_swept_field(self):
         connected = {lookup[0] for lookup, *_rest in post_delete.receivers}

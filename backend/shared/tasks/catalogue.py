@@ -25,6 +25,8 @@ SYSTEM_WIDE = {
     "tokens.tasks.swap_reconciler.resolve_executing_swaps": "Asks the chain about every swap left executing, "
     "and a swap has two parties, so neither one's principal would cover it.",
     "users.tasks.retention.purge_classification_evidence": "Applies the retention clock across every account.",
+    "documents.tasks.retention.purge_document_evidence": "Purges expired supporting and unattached payslips "
+    "across all uploaders on the operator connection, without a requesting user.",
     "wallets.tasks.sync.sync_all_wallets": "Fans out over every wallet; the per-wallet task it defers is the "
     "one that acts for somebody.",
     "wallets.tasks.confirmation.check_all_pending_transactions": "Fans out over every pending transaction.",

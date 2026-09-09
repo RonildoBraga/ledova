@@ -128,7 +128,12 @@ new deployment is therefore two things: filling them in on the operator row, and
 having verified investor classifications for the people who need to read them.
 
 The two eligibility switches are configuration for a later phase. No gate reads
-them yet, and `deployment_mode` does not change any isolation rule.
+them yet. `single_issuer` disables the supporting-payslip store: its profile
+panel, every document API and admin read, uploads and extraction. Classification
+claims keep their existing evidence upload and human review. The operator form
+refuses a switch to single issuer while unpurged payslips exist; retained content
+must first be handled under its retention policy. A missing operator row uses
+the existing registry default; document permission checks do not create it.
 
 ## Environment variables
 
@@ -260,13 +265,16 @@ reaches the media guard. Run `make init-local` first; `make dev-up` checks.
 | Variable | Default | Required |
 | --- | --- | --- |
 | `CLASSIFICATION_EVIDENCE_RETENTION_DAYS` | `2557` | No; `0` retains indefinitely and purges nothing |
+| `UNATTACHED_DOCUMENT_RETENTION_DAYS` | `30` | No; lifetime of an unattached payslip from upload; `0` retains indefinitely |
 
 Days an investor classification's evidence file is kept after the claim is
 rejected, revoked or expires. The default is a **placeholder pending counsel,
 not advice**: 2557 days is seven calendar years including two leap days.
 Australian financial-record and AML/CTF customer-identification obligations are
 the constraints to confirm it against. Set `0` while the period is undecided —
-serving and purging both stop, and nothing is deleted.
+the retention deadline remains unset and nothing is deleted. Attached payslips
+inherit this same claim clock; unattached uploads use their separate, shorter
+lifetime. Neither setting changes an eligibility decision.
 
 ### Media storage
 
@@ -759,6 +767,43 @@ record-keeping obligation exists. The period itself is the part that needs
 counsel.
 
 `GET /health/` is answered by middleware before any database access.
+
+### Supporting payslips
+
+Migration `documents/0003` preserves existing uploads as unattached documents
+and creates an empty **Document operations** group with document, extraction
+and classification view permissions. Assign the group only to the platform
+staff who need to review this evidence. It grants no classification verification
+or editing permission and assigns no users automatically. Staff must be active;
+company owners and accounts with a company role cannot use the cross-customer
+document review paths, even if granted a document permission. Registry platform
+superusers retain the same read access; single-issuer mode disables it.
+
+On Profile, an investor can choose an existing submitted classification claim
+when uploading a payslip, or attach an existing unattached payslip afterward.
+Attachment is final and is refused once a human has reviewed or the investor
+has withdrawn the claim. The claim's admin page links the retained supporting
+payslips for permitted reviewers. The document page links its original file
+and extraction history, including the raw output. Extraction is material for a
+human to check; it neither verifies the claim nor replaces its required evidence.
+
+Every operations read of a document page, file, extraction page or corresponding
+changelist writes a `DocumentRead` with reader ID, document and claim UUIDs, read
+kind and time. A failed audit write prevents delivery. These records omit file
+names and extracted figures, remain after content purge, and are read-only in
+admin; reading the audit itself additionally requires `view_documentread`.
+
+`purge_document_evidence` runs daily at 03:15 UTC in batches of 200. Attached
+payslips use the claim's `evidence_horizon`: `reviewed_at` for rejected, revoked
+or withdrawn claims, and `expires_at` for verified claims. Submitted claims and
+claims without a clock retain their supporting evidence. The task deletes the
+file and every extraction, including `raw_output`, and clears filenames and
+notes while retaining the claim link and read audit. Storage failures retain the
+reference for a later retry. File and extraction serving stop at the horizon
+without waiting for the sweep, and a late extraction cannot recreate purged
+content. Unattached documents retain the ordinary user-delete and orphan-file
+cleanup behavior. Attached files live under `users/supporting-documents/`, and
+neither row cascades nor the generic orphan sweep can delete them early.
 
 ## Notifications and push
 

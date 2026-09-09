@@ -1,5 +1,5 @@
 from django.apps import AppConfig
-from django.db.models.signals import post_delete
+from django.db.models.signals import post_delete, pre_delete
 
 
 class SharedConfig(AppConfig):
@@ -8,9 +8,18 @@ class SharedConfig(AppConfig):
     verbose_name = "Shared"
 
     def ready(self):
-        from shared.storage import delete_file_when_the_row_is_gone, swept_file_fields
+        from shared.storage import (
+            CONDITIONALLY_RETAINED,
+            delete_file_when_the_row_is_gone,
+            protect_retained_file,
+            swept_file_fields,
+        )
 
         for model, field_name in swept_file_fields():
+            if model._meta.label in CONDITIONALLY_RETAINED:
+                pre_delete.connect(
+                    protect_retained_file, sender=model, dispatch_uid=f"shared.storage.protect:{model._meta.label}"
+                )
             post_delete.connect(
                 delete_file_when_the_row_is_gone(field_name),
                 sender=model,

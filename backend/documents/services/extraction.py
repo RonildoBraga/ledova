@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from documents.models import Document, DocumentExtraction, ExtractionStatus
 from documents.schemas import SCHEMA_BY_TYPE
+from documents.services.access import documents_enabled
 from integrations.llm_extract import (
     LlmExtractClient,
     LlmExtractError,
@@ -18,6 +19,7 @@ from integrations.llm_extract import (
     LlmExtractValidationError,
 )
 from integrations.llm_extract.prompts import PROMPT_BY_TYPE
+from shared.db import atomic
 
 logger = logging.getLogger(__name__)
 
@@ -25,10 +27,7 @@ logger = logging.getLogger(__name__)
 class ExtractionService:
 
     @staticmethod
-    def render_first_page(document: Document) -> bytes:
-        with document.file.open("rb") as fh:
-            raw = fh.read()
-
+    def render_first_page(document: Document, raw: bytes) -> bytes:
         if document.mime_type == "application/pdf" or document.original_filename.lower().endswith(".pdf"):
             doc = fitz.open(stream=raw, filetype="pdf")
             try:
@@ -50,12 +49,16 @@ class ExtractionService:
         return buf.getvalue()
 
     @classmethod
-    def run(cls, document: Document) -> DocumentExtraction:
-        extraction = DocumentExtraction.objects.create(
-            document=document,
-            status=ExtractionStatus.RUNNING,
-            started_at=timezone.now(),
-        )
+    def run(cls, document: Document) -> DocumentExtraction | None:
+        with atomic():
+            document = Document.objects.select_for_update().filter(pk=document.pk).first()
+            if document is None or not document.content_available or not documents_enabled():
+                return None
+            extraction = DocumentExtraction.objects.create(
+                document=document,
+                status=ExtractionStatus.RUNNING,
+                started_at=timezone.now(),
+            )
 
         try:
             doc_type = document.document_type
@@ -64,7 +67,11 @@ class ExtractionService:
 
             prompt = PROMPT_BY_TYPE[doc_type]
             schema: Type[BaseModel] = SCHEMA_BY_TYPE[doc_type]
-            image_bytes = cls.render_first_page(document)
+            raw = cls._read_available_bytes(document)
+            if raw is None:
+                DocumentExtraction.objects.filter(pk=extraction.pk).delete()
+                return None
+            image_bytes = cls.render_first_page(document, raw)
 
             client = LlmExtractClient()
             result = client.extract(
@@ -82,7 +89,8 @@ class ExtractionService:
             extraction.duration_ms = result.duration_ms
             extraction.model_name = result.model_used
             extraction.finished_at = timezone.now()
-            extraction.save()
+            if not cls._save_if_retained(extraction):
+                return None
             logger.info(
                 "documents.extraction: doc=%s succeeded in %dms confidence=%s",
                 document.uuid,
@@ -95,7 +103,8 @@ class ExtractionService:
             extraction.status = ExtractionStatus.FAILED
             extraction.error = f"{type(e).__name__}: {e.detail}"
             extraction.finished_at = timezone.now()
-            extraction.save()
+            if not cls._save_if_retained(extraction):
+                return None
             logger.warning("documents.extraction: doc=%s failed: %s", document.uuid, e.detail)
             if isinstance(e, LlmExtractTransientError):
                 raise
@@ -105,6 +114,26 @@ class ExtractionService:
             extraction.status = ExtractionStatus.FAILED
             extraction.error = f"{type(e).__name__}: {e}"
             extraction.finished_at = timezone.now()
-            extraction.save()
+            if not cls._save_if_retained(extraction):
+                return None
             logger.exception("documents.extraction: doc=%s unexpected error", document.uuid)
             return extraction
+
+    @staticmethod
+    @atomic()
+    def _read_available_bytes(document):
+        document = Document.objects.select_for_update().filter(pk=document.pk).first()
+        if document is None or not document.content_available or not documents_enabled():
+            return None
+        with document.file.open("rb") as stream:
+            return stream.read()
+
+    @staticmethod
+    @atomic()
+    def _save_if_retained(extraction):
+        document = Document.objects.select_for_update().filter(pk=extraction.document_id).first()
+        if document is None or not document.content_available or not documents_enabled():
+            DocumentExtraction.objects.filter(pk=extraction.pk).delete()
+            return False
+        extraction.save()
+        return True
