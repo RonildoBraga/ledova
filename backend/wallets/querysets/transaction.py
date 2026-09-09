@@ -1,12 +1,16 @@
 from django.db.models import F, Q, QuerySet
 from django.db.models.functions import Lower
 
+from shared.constants import EVM_BLOCKCHAINS, normalize_chain
+
 
 class TransactionQuerySet(QuerySet):
-    def filter_by_address(self, address):
-        if address:
-            return self.filter(Q(from_address__iexact=address) | Q(to_address__iexact=address))
-        return self
+    def filter_by_address(self, address, *, chain):
+        chain = normalize_chain(chain)
+        suffix = "__iexact" if chain in EVM_BLOCKCHAINS else ""
+        return self.filter(chain=chain).filter(
+            Q(**{"from_address" + suffix: address}) | Q(**{"to_address" + suffix: address})
+        )
 
     def filter_by_direction(self, direction, wallet_uuid=None):
         if direction not in ("incoming", "outgoing"):

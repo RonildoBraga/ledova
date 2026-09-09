@@ -148,7 +148,7 @@ class ShareTokenService:
         primary_wallet = primary_wallet_for(token.company)
         if primary_wallet is None:
             raise CompanyNotReadyException(
-                "Company must have an operator wallet or verified ETH wallet before deploying tokens."
+                "Company must have an operator wallet or verified owner wallet on Base before deploying tokens."
             )
         return primary_wallet
 
@@ -320,7 +320,7 @@ class ShareTokenService:
         issuer_wallet = primary_wallet_for(token.company)
         if issuer_wallet is None:
             self._abandon_unless_sent(token)
-            raise CompanyNotReadyException("Company has no operator wallet or verified ETH wallet")
+            raise CompanyNotReadyException("Company has no operator wallet or verified owner wallet on Base")
 
         authorized_shares = int(token.total_supply)
         tx_record = None
@@ -573,7 +573,7 @@ class ShareTokenService:
 
         self._start_execution(request)
         if issuance is None:
-            stamped = identity_at_allotment(recipient)
+            stamped = identity_at_allotment(recipient, chain=SHARE_ASSET_CHAIN)
             issuance = ShareIssuance.objects.create(
                 token=token,
                 recipient_address=recipient,
@@ -647,7 +647,12 @@ class ShareTokenService:
         from whitelist.models import WhitelistEntry
 
         try:
-            entry = WhitelistEntry.objects.filter_by_address(recipient_address).select_related("wallet").first()
+            matches = list(
+                WhitelistEntry.objects.filter_by_address(recipient_address)
+                .select_related("wallet")
+                .order_by("uuid")[:2]
+            )
+            entry = matches[0] if len(matches) == 1 else None
             if entry is None or entry.wallet is None:
                 logger.info(f"{recipient_address} is not an investor wallet; no {token.symbol} holding written")
                 return

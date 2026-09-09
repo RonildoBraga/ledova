@@ -24,6 +24,7 @@ from tokens.models.choices import ShareTokenStatus
 from tokens.services.share_token_service import ShareTokenService
 from users.services.eligibility import investor_eligibility
 from wallets.constants import WALLET_VERIFICATION_STATUS_VERIFIED
+from wallets.models import Wallet
 from whitelist.models import WhitelistEntry, WhitelistStatus
 
 User = get_user_model()
@@ -80,6 +81,16 @@ class SeedDemoCommandTest(APITestCase):
         self.assertEqual(token.status, ShareTokenStatus.DRAFT)
         self.assertIsNone(token.contract_address)
         self.assertEqual(ShareTokenService.require_deployable(token), token.company.operator_wallet)
+
+    def test_rerunning_the_seed_keeps_the_base_wallet_when_ethereum_has_the_same_address(self):
+        company = Company.objects.get(acn=DEMO_ACN)
+        original = company.operator_wallet
+        ethereum = Wallet.objects.create(user_account=original.user_account, address=original.address, chain="ethereum")
+        run()
+        company.refresh_from_db()
+        ethereum.refresh_from_db()
+        self.assertEqual(company.operator_wallet_id, original.pk)
+        self.assertEqual((ethereum.chain, ethereum.verification_status), ("ethereum", "PENDING"))
 
     def test_the_investor_can_sign_in_and_is_eligible(self):
         response = signin(self.client, DEMO_INVESTOR_EMAIL)

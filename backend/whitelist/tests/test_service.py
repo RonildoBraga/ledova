@@ -76,7 +76,7 @@ class WhitelistServiceTransactionTest(TransactionTestCase):
         self.assertEqual(entry.status, WhitelistStatus.ACTIVE)
 
     def test_add_uses_the_given_wallet_when_the_address_is_duplicated(self):
-        Wallet.objects.create(user_account=UserAccount.objects.create(), address=self.wallet.address, chain="ethereum")
+        Wallet.objects.create(user_account=UserAccount.objects.create(), address=self.wallet.address, chain="base")
 
         _, entry = self._service().add_to_whitelist(self.wallet.address, wallet_uuid=self.wallet.uuid)
 
@@ -219,6 +219,21 @@ class WhitelistServiceTransactionTest(TransactionTestCase):
         self.assertEqual((tx_hash, entry), ("0xhash", None))
         record = BlockchainTransaction.objects.get()
         self.assertEqual((record.related_model, record.related_uuid), (None, None))
+
+    def test_remove_refuses_to_attribute_an_ambiguous_address_to_the_first_account(self):
+        another_wallet = Wallet.objects.create(
+            user_account=UserAccount.objects.create(), address=self.wallet.address, chain="base"
+        )
+        another_entry = WhitelistEntry.objects.create(wallet=another_wallet)
+        self.entry.mark_active("0xearlier")
+        another_entry.mark_active("0xearlier")
+        service = self._service(on_chain=True)
+        with self.assertRaises(WalletNotRegisteredException):
+            service.remove_from_whitelist(self.wallet.address)
+        service.chain_client.build_transaction.assert_not_called()
+        service.chain_client.send_raw_transaction.assert_not_called()
+        self.assertFalse(BlockchainTransaction.objects.exists())
+        self.assertEqual(WhitelistEntry.objects.filter(is_whitelisted=True).count(), 2)
 
     def test_remove_refuses_an_address_not_on_chain(self):
         with self.assertRaises(AddressNotWhitelistedException):

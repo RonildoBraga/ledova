@@ -9,6 +9,7 @@ from web3 import Web3
 
 from blockchain.models import BlockchainTransaction, TransactionStatus, TransactionType
 from integrations.base_chain import BaseChainClient, get_base_chain_client
+from shared.constants import BLOCKCHAIN_BASE
 from shared.db import atomic
 from wallets.models import Wallet
 from whitelist.constants import (
@@ -37,7 +38,11 @@ RECORD_A_REVERTED_WRITE = {
 
 
 def unique_wallet_uuid_for(address: str):
-    wallet_ids = list(Wallet.objects.filter_by_address(address).order_by("uuid").values_list("uuid", flat=True)[:2])
+    wallet_ids = list(
+        Wallet.objects.filter_by_address(address, chain=BLOCKCHAIN_BASE)
+        .order_by("uuid")
+        .values_list("uuid", flat=True)[:2]
+    )
     if len(wallet_ids) != 1:
         raise WalletNotRegisteredException()
 
@@ -92,7 +97,7 @@ class WhitelistService:
 
     @staticmethod
     def _resolve_wallet(checksum_address: str, wallet_uuid=None) -> Wallet:
-        wallets = Wallet.objects.filter_by_address(checksum_address).order_by("uuid")
+        wallets = Wallet.objects.filter_by_address(checksum_address, chain=BLOCKCHAIN_BASE).order_by("uuid")
         if wallet_uuid is not None:
             wallet = wallets.filter(uuid=wallet_uuid).first()
         else:
@@ -207,10 +212,13 @@ class WhitelistService:
         wait_for_receipt: bool = True,
     ) -> tuple[str, Optional[WhitelistEntry]]:
         checksum_address = self.chain_client.to_checksum_address(address)
+        entries = list(WhitelistEntry.objects.filter_by_address(checksum_address).order_by("uuid")[:2])
+        if len(entries) > 1:
+            raise WalletNotRegisteredException()
+        entry = entries[0] if entries else None
         if not self.is_whitelisted(checksum_address):
             raise AddressNotWhitelistedException(f"Address {address} is not whitelisted")
 
-        entry = WhitelistEntry.objects.filter_by_address(checksum_address).first()
         tx_hash, receipt = self._send_tx(
             TransactionType.WHITELIST_REMOVE, "removeFromWhitelist", checksum_address, entry, wait_for_receipt
         )

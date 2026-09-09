@@ -47,14 +47,14 @@ class CompanyPrimaryWalletTest(TestCase):
             verification_status=WALLET_VERIFICATION_STATUS_VERIFIED if verified else WALLET_VERIFICATION_STATUS_PENDING,
         )
 
-    def test_operator_wallet_wins_and_verified_owner_wallets_fall_back_to_ethereum(self):
+    def test_primary_wallets_are_selected_only_on_the_requested_network(self):
         self.assertIsNone(primary_wallet_for(self.company))
 
         self._wallet("base", "0", verified=False)
         self.assertIsNone(primary_wallet_for(self.company))
 
         ethereum = self._wallet("ethereum", "1")
-        self.assertEqual(primary_wallet_for(self.company), ethereum)
+        self.assertIsNone(primary_wallet_for(self.company))
 
         base = self._wallet("base", "2")
         self.assertEqual(primary_wallet_for(self.company), base)
@@ -65,7 +65,7 @@ class CompanyPrimaryWalletTest(TestCase):
         self.company.operator_wallet = operator
         self.company.save(update_fields=["operator_wallet"])
         self.assertEqual(primary_wallet_for(self.company), operator)
-        self.assertEqual(primary_wallet_for(self.company, "ethereum"), operator)
+        self.assertIsNone(primary_wallet_for(self.company, "ethereum"))
 
     def test_wallets_of_other_users_are_never_primary(self):
         stranger = User.objects.create_user(email="stranger@example.test", password="pw-12345678")

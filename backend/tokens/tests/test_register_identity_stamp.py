@@ -83,12 +83,12 @@ class IdentitySurvivesAWalletDeletionTest(TestCase):
         return next(row for row in rows if row["address"].lower() == HOLDER)
 
     def test_the_stamp_resolves_the_holders_identity_at_allotment(self):
-        stamped = identity_at_allotment(HOLDER)
+        stamped = identity_at_allotment(HOLDER, chain="base")
 
         self.assertEqual((stamped.name, stamped.residential_address), ("Ada Lovelace", "1 Analytical Way"))
 
     def test_an_unknown_address_stamps_nothing(self):
-        stamped = identity_at_allotment("0x" + "cd" * 20)
+        stamped = identity_at_allotment("0x" + "cd" * 20, chain="base")
 
         self.assertFalse(stamped)
 

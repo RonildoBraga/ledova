@@ -23,14 +23,14 @@ class WhitelistEntryScopingTest(APITestCase):
         self.wallet = Wallet.objects.create(
             user_account=account,
             address="0x" + "a" * 40,
-            chain="ethereum",
+            chain="base",
         )
         self.entry = WhitelistEntry.objects.create(wallet=self.wallet)
         foreign_account = UserAccount.objects.create()
         self.foreign_wallet = Wallet.objects.create(
             user_account=foreign_account,
             address="0x" + "b" * 40,
-            chain="ethereum",
+            chain="base",
         )
         self.foreign_entry = WhitelistEntry.objects.create(
             wallet=self.foreign_wallet,
@@ -307,7 +307,7 @@ class WhitelistEntryScopingTest(APITestCase):
         with self.assertRaises(WalletNotRegisteredException):
             self._service_with_mocked_chain().add_to_whitelist(unknown)
 
-        self.assertFalse(Wallet.objects.filter_by_address(unknown).exists())
+        self.assertFalse(Wallet.objects.filter_by_address(unknown, chain="base").exists())
         self.assertFalse(WhitelistEntry.objects.filter(wallet__address__iexact=unknown).exists())
         self.assertFalse(BlockchainTransaction.objects.exists())
 

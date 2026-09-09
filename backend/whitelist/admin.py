@@ -7,6 +7,7 @@ from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 from web3 import Web3
 
+from shared.constants import BLOCKCHAIN_BASE
 from shared.utils.admin_actions import admin_action_path
 from users.services.eligibility import account_eligibility
 from wallets.models import Wallet
@@ -55,7 +56,12 @@ class WhitelistEntryAddForm(forms.ModelForm):
         if WhitelistEntry.objects.filter_by_address(address).exists():
             raise forms.ValidationError(f"Address '{address}' already has a whitelist entry.")
 
-        self._wallet = Wallet.objects.filter_by_address(address).first()
+        wallets = list(Wallet.objects.filter_by_address(address, chain=BLOCKCHAIN_BASE).order_by("uuid")[:2])
+        if len(wallets) > 1:
+            raise forms.ValidationError(
+                "This address is registered to multiple accounts on Base. Resolve the ownership ambiguity first."
+            )
+        self._wallet = wallets[0] if wallets else None
         return address
 
     def clean(self):

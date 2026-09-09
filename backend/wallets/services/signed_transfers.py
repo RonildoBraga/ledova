@@ -97,7 +97,9 @@ def _evm_plan(wallet, signed_transaction: str) -> SignedTransferPlan:
     if decoded.to is None:
         raise InvalidTransactionException(CONTRACT_CREATION)
 
-    share_token = ShareToken.objects.filter(contract_address__iexact=decoded.to).first()
+    share_token = ShareToken.objects.filter(
+        chain__iexact=normalize_chain(wallet.chain), contract_address__iexact=decoded.to
+    ).first()
     if share_token is not None:
         raise InvalidTransactionException(NOT_TRANSFERABLE.format(symbol=share_token.symbol))
 

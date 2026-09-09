@@ -2,7 +2,12 @@ from django.db.models import DecimalField, F, Q, QuerySet, Sum, Value
 from django.db.models.functions import Coalesce
 
 from assets.choices import PriceSource
-from shared.constants import BLOCKCHAIN_BASE, BLOCKCHAIN_ETHEREUM
+from shared.constants import (
+    BLOCKCHAIN_BASE,
+    BLOCKCHAIN_ETHEREUM,
+    EVM_BLOCKCHAINS,
+    normalize_chain,
+)
 from wallets.constants import WALLET_VERIFICATION_STATUS_VERIFIED
 
 _MONEY = DecimalField(max_digits=40, decimal_places=18)
@@ -43,14 +48,14 @@ class WalletQuerySet(QuerySet):
             ),
         )
 
-    def filter_by_address(self, address):
-        return self.filter(address__iexact=address)
+    def filter_by_address(self, address, *, chain):
+        chain = normalize_chain(chain)
+        lookup = "address__iexact" if chain in EVM_BLOCKCHAINS else "address"
+        return self.filter(chain=chain, **{lookup: address})
 
-    def for_chain_with_l2_fallback(self, chain):
-        from wallets.models.wallet import Blockchain
-
-        verified = self.filter(verification_status=WALLET_VERIFICATION_STATUS_VERIFIED)
-        wallet = verified.filter(chain=chain).order_by("-created_at").first()
-        if not wallet and chain == Blockchain.BASE.value:
-            wallet = verified.filter(chain=Blockchain.ETHEREUM.value).order_by("-created_at").first()
-        return wallet
+    def verified_for_chain(self, chain):
+        return (
+            self.filter(verification_status=WALLET_VERIFICATION_STATUS_VERIFIED, chain=normalize_chain(chain))
+            .order_by("-created_at")
+            .first()
+        )

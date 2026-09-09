@@ -56,7 +56,7 @@ no model, no URL namespace and no `AdminSite` subclass: it is
 - **The two register queues are the operator's only sight of a holder who
   cannot be named.** "Allotment addresses with two wallets, so no member can be
   named" is the `ambiguous` holder type: two `WhitelistEntry` rows on one
-  address, which only the operator can resolve, since
+  address on the registry network, which only the operator can resolve, since
   `WhitelistService._resolve_wallet` refuses to act on it. "Allotment
   addresses with no member behind them" is `unidentified`: no whitelist entry
   at all, or an entry whose wallet carries no named profile. Both are red,
@@ -308,6 +308,16 @@ any deployment.
 | `COINGECKO_TIMEOUT` | `10` seconds | No |
 | `BLOCKSTREAM_API_URL` | `https://blockstream.info/testnet/api` | No |
 | `BLOCKSTREAM_TIMEOUT` | `30` seconds | No |
+
+Alchemy wallet webhooks must include `event.network`, as supplied by the
+[Address Activity payload](https://www.alchemy.com/docs/reference/address-activity-webhook).
+`BASE_SEPOLIA` is accepted only with `BLOCKCHAIN_CHAIN_ID=84532`, and
+`ETH_SEPOLIA` only with `ETHEREUM_CHAIN_ID=11155111`. Missing, unknown, mainnet,
+or locally mismatched networks receive HTTP 400 after signature verification.
+Accepted events enqueue each matching wallet on that network, including both
+transfer participants and separate accounts sharing an address. Receipt workers
+fetch chain state themselves; webhook balances and block numbers are not settlement
+evidence.
 
 Manual wallet sync returns `success: false` with an actionable `syncResult.error`
 when verification is missing, the provider fails, history cannot be read or a
@@ -728,6 +738,32 @@ server use the same `WALLET_VERIFICATION_CHALLENGE_MINUTES` setting and stored
 issue time. Migration `wallets/0011` adds that internal timestamp. Outstanding
 challenges issued before the migration have no trustworthy issue time and must
 be requested and signed again. Existing verified wallets keep their status.
+
+Wallet identity is `(account, network, address)`. An account can register the
+same EVM address on Ethereum and Base, each with its own UUID, verification,
+holdings and transactions. EVM address case variants are the same identity
+within that account and network; Bitcoin addresses retain their case.
+Migration `wallets/0014` adds both database constraints and preserves existing
+wallet UUIDs and financial references. It stops if old EVM records differ only
+in address case within one account and network. Review those conflicting records
+and their references before retrying; the migration does not merge or delete
+them. Reversal also refuses if the old account/address constraint cannot
+represent wallets registered on two networks.
+
+Wallet and transaction address filters require an explicit `chain`. A
+transaction query may instead supply a visible `wallet` UUID, from which the
+network is derived. Queries without an address filter can still list multiple
+networks. Chain filters accept the supported network names and aliases.
+
+Share-token and whitelist operations use the application's Base registry
+network; `receiving_wallet_chain` selects the payment network and does not
+retarget that registry. Address-based registry identity, issuance holdings and
+admin wallet selection therefore use Base wallets. Multiple accounts with the
+same Base address remain ambiguous. A company needs its selected operator
+wallet, or a verified owner wallet, on the requested network. Ethereum wallets
+no longer stand in for Base wallets. Historical whitelist rows linked to another
+network remain visible to operations for review and are excluded from registry
+address resolution; their wallet ownership is not rewritten automatically.
 
 ## Background jobs
 

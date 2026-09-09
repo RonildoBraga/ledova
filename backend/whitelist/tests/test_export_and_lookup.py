@@ -72,7 +72,7 @@ class UniqueWalletUuidForTest(TestCase):
 
     def test_two_wallets_at_one_address_are_refused_rather_than_guessed_between(self):
         self._wallet(chain="base")
-        self._wallet(chain="ethereum")
+        self._wallet(chain="base")
 
         with self.assertRaises(WalletNotRegisteredException):
             unique_wallet_uuid_for(self.address)

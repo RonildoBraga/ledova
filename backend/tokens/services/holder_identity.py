@@ -11,8 +11,8 @@ class StampedIdentity:
         return bool(self.name or self.residential_address)
 
 
-def identity_at_allotment(address: str) -> StampedIdentity:
-    wallets = list(Wallet.objects.filter_by_address(address).order_by("uuid")[:2])
+def identity_at_allotment(address: str, *, chain: str) -> StampedIdentity:
+    wallets = list(Wallet.objects.filter_by_address(address, chain=chain).order_by("uuid")[:2])
     if len(wallets) != 1 or wallets[0].user_account_id is None:
         return StampedIdentity()
 
