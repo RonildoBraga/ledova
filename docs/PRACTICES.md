@@ -20,8 +20,11 @@ mechanically. This is the part that cannot be: how to establish that a change do
 what it claims. Every rule here was bought by a specific failure, and that
 document's **Test traps** and **Measurement traps** hold the individual cases.
 
-**Red-prove the claim.** Revert the fix, watch a *named* test fail, restore it,
-watch it pass, and put both directions in the body. A test written after a fix and
+**Red-prove the claim, and if it will not go red, say why in the body.** Revert
+the fix, watch a *named* test fail, restore it, watch it pass, and put both
+directions in the body. Where a meaningful failure genuinely cannot be
+demonstrated, that is a sentence you owe a reader, not a step to skip. A test
+written after a fix and
 never seen to fail describes the code rather than checking it. Seventeen tests in
 one file once asserted that a provider's error text reached the caller: they
 pinned the leak they existed to prevent, and only rewriting them exposed it.
@@ -72,9 +75,10 @@ rule was not enough.
 
 ## Building
 
-One issue, implemented, with a pull request. Not merged by whoever built it where
-the merge classes in [CONTRIBUTING.md](../CONTRIBUTING.md) say otherwise. Scope
-stays at the issue: a defect found on the way is filed, not folded in.
+One issue, implemented, with a pull request. Scope stays at the issue: a defect
+found on the way is filed, not folded in. Who may merge it, and which paths the
+owner reserves, is policy rather than method and belongs in
+[CONTRIBUTING.md](../CONTRIBUTING.md).
 
 The body states what was measured, what could not be reproduced, and what was
 deliberately not done. A body that only says what works is half a report.
@@ -83,9 +87,11 @@ deliberately not done. A body that only says what works is half a report.
 
 Django, DRF, PostgreSQL, Procrastinate, and the chain integration.
 
-- A migration number is claimed in a comment on the plan issue **before** it is
-  pushed. Two migrations have claimed the same number here. Where two fork off one
-  parent, the second to land re-points one dependency line in its rebase.
+- Where anyone else is working, a migration number is claimed in a comment on the
+  plan issue **before** it is pushed: two migrations have claimed the same number
+  here. Working alone the claim is noise, but the graph still is not: where two
+  migrations fork off one parent, the second to land re-points one dependency
+  line in its rebase.
 - Transactions open with `shared.db.atomic`, never bare `transaction.atomic`, and
   never through the bare `connection` proxy, which is the bypassing role. The
   connection-binding gate refuses both, including the import forms.
@@ -106,8 +112,9 @@ consume the shared package by design and a fix there fixes both.
 - The dashboard is a **built image with no volumes**. `docker compose restart`
   serves stale code; only `docker compose build` changes it.
 - React Native Testing Library v14 made `render` and the event helpers async. A
-  forgotten `await` on a press before an **absence** assertion passes wrongly, and
-  nothing catches it: the mobile workspace has no type-aware linting.
+  forgotten `await` on a press before an **absence** assertion passes wrongly. The
+  mobile config does catch it: `no-floating-promises` runs type-aware over
+  `**/*.test.{ts,tsx}`, so lint is the check, not review.
 - Nothing in this repository's development environment can render mobile. Mobile
   claims are data-path claims unless a person confirms on a device.
 - A shared type that declares **required** a field the API never sends is drift;
