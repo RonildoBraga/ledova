@@ -13,8 +13,8 @@ from offerings.models.owner_column import DerivesCompanyFromOffering
 from offerings.querysets.subscription import SubscriptionQuerySet
 from operators.models import STABLECOIN_ONLY
 from shared.models import BaseModel
+from shared.payment_references import MAX_REFERENCE_LENGTH
 
-MAX_REFERENCE_LENGTH = 18
 ZERO = Decimal("0.00")
 CENTS = Decimal("0.01")
 RAIL_ASSET_PAIRING_ERROR = "A bank transfer carries no settlement asset, and a stablecoin settlement must name one."

@@ -349,6 +349,10 @@ reconstruct overwritten reviewer notes or infer missing execution events.
    `offerings.services.payments.generate_reference` builds
    `Operator.payment_reference_prefix` plus an eight-character Crockford base32
    code, retried on `IntegrityError` against the partial unique index.
+   `shared.payment_references` derives the prefix ceiling from the 18-character
+   field budget minus the eight-character code. Generation refuses an overlong
+   normalized prefix even when a write bypassed model validation; it never
+   truncates the random code. Existing references and field widths are unchanged.
    `normalize_reference` is applied on generation and on admin lookup, so a
    mangled bank narrative still matches. `build_instruction` returns the
    rail-dependent payload — the operator's bank fields, or the receiving wallet
