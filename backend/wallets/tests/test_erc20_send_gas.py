@@ -6,6 +6,8 @@ from django.test import SimpleTestCase
 
 from integrations.base_chain.exceptions import GasEstimationError
 from integrations.blockchain.ethereum import EthereumClient
+from shared.api.exceptions import custom_exception_handler
+from shared.tests.reverts import RPC_HOST, RPC_KEY, actionable_reverts, provider_revert
 from wallets.exceptions import BlockchainAPIError
 from wallets.services.transfers import prepare_erc20_transaction
 
@@ -99,3 +101,22 @@ class ASendIsNotQuotedFromAGuessedGasLimitTest(SimpleTestCase):
 
         self.assertEqual(prepared["gas_limit"], 78_000)
         self.assertEqual(prepared["gas_cost_eth"], "0.000078")
+
+    def test_each_estimate_refusal_survives_the_real_wrapper_and_served_error_without_credentials(self, get_client):
+        for payload, expected in actionable_reverts():
+            with self.subTest(expected=expected):
+                get_client.return_value = ethereum_client(Mock(side_effect=provider_revert(payload)))
+                with self.assertRaises(BlockchainAPIError) as refusal:
+                    self.prepare()
+                with self.assertLogs("shared.api.exceptions", level="ERROR"):
+                    response = custom_exception_handler(refusal.exception, {})
+                self.assertEqual(response.status_code, 502)
+                self.assertEqual(response.data["detail"], expected)
+                self.assertNotIn(RPC_HOST, str(response.data))
+                self.assertNotIn(RPC_KEY, str(response.data))
+
+    def test_the_real_sanitized_wrapper_keeps_the_generic_default_for_an_unknown_revert(self, get_client):
+        get_client.return_value = ethereum_client(Mock(side_effect=provider_revert("0xdeadbeef")))
+        with self.assertRaises(BlockchainAPIError) as refusal:
+            self.prepare()
+        self.assertEqual(str(refusal.exception.detail), "Failed to prepare the ERC-20 transaction.")

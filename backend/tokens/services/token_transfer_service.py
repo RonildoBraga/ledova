@@ -9,6 +9,7 @@ from integrations.base_chain.exceptions import (
 )
 from operators.settlement import deployment_for
 from shared.db import atomic
+from shared.utils.blockchain import decode_exception_to_message
 from tokens.exceptions import (
     InsufficientBalanceException,
     InvalidRecipientAddressException,
@@ -129,7 +130,7 @@ class TokenTransferService:
             raise
         except Exception as e:
             logger.error(f"Preparation failed: {e}")
-            raise TransferPreparationException("Transfer preparation failed.") from e
+            raise TransferPreparationException(decode_exception_to_message(e, "Transfer preparation failed.")) from e
 
     def broadcast_transfer(self, signed_tx: str) -> tuple[str, dict]:
         try:

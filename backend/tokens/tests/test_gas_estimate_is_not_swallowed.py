@@ -5,6 +5,8 @@ from django.test import SimpleTestCase, TestCase
 
 from integrations.base_chain.client import BaseChainClient
 from integrations.base_chain.exceptions import GasEstimationError
+from shared.api.exceptions import custom_exception_handler
+from shared.tests.reverts import RPC_HOST, RPC_KEY, actionable_reverts, provider_revert
 from shared.tests.tenants import make_tenant
 from tokens.exceptions import TransferPreparationException
 from tokens.services.token_transfer_service import TokenTransferService
@@ -96,3 +98,26 @@ class PreparingATransferAsksBeforeItGuessesTest(TestCase):
         prepared = service.prepare_transfer(self.token, SENDER, RECIPIENT, 5)
 
         self.assertEqual(prepared["gas"], 96_000)
+
+    @patch.object(TokenTransferService, "validate_transfer")
+    def test_each_estimate_refusal_survives_the_real_wrapper_and_served_error_without_credentials(self, _validate):
+        for payload, expected in actionable_reverts():
+            with self.subTest(expected=expected):
+                client = client_whose_estimate(Mock(side_effect=provider_revert(payload)))
+                service = self.service(client.estimate_gas)
+                with self.assertRaises(TransferPreparationException) as refusal:
+                    service.prepare_transfer(self.token, SENDER, RECIPIENT, 5)
+                with self.assertLogs("shared.api.exceptions", level="ERROR"):
+                    response = custom_exception_handler(refusal.exception, {})
+                self.assertEqual(response.status_code, 500)
+                self.assertEqual(response.data["detail"], expected)
+                self.assertNotIn(RPC_HOST, str(response.data))
+                self.assertNotIn(RPC_KEY, str(response.data))
+
+    @patch.object(TokenTransferService, "validate_transfer")
+    def test_an_unknown_estimate_refusal_still_has_a_fixed_default(self, _validate):
+        client = client_whose_estimate(Mock(side_effect=provider_revert("0xdeadbeef")))
+        service = self.service(client.estimate_gas)
+        with self.assertRaises(TransferPreparationException) as refusal:
+            service.prepare_transfer(self.token, SENDER, RECIPIENT, 5)
+        self.assertEqual(str(refusal.exception.detail), "Transfer preparation failed.")

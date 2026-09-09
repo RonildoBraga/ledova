@@ -27,7 +27,7 @@ class DecodeRevertReasonTests(SimpleTestCase):
         self.assertEqual(params, {"address": "0x" + address, "balance": 5, "needed": 10})
         self.assertEqual(
             decode_exception_to_message(Exception(f"execution reverted: {payload}")),
-            "Insufficient balance: you have 5 tokens but need 10",
+            "Insufficient balance: you have 5 base units but need 10",
         )
 
     def test_an_exception_with_no_hex_falls_back(self):

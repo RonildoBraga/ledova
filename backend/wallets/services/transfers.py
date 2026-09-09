@@ -12,6 +12,7 @@ from shared.constants import (
     SUPPORTED_CHAINS,
     normalize_chain,
 )
+from shared.utils.blockchain import decode_exception_to_message
 from wallets.exceptions import (
     BlockchainAPIError,
     InsufficientBalanceException,
@@ -456,4 +457,4 @@ def prepare_erc20_transaction(
         raise
     except Exception as e:
         logger.error(f"Error preparing ERC-20 transaction: {str(e)}", exc_info=True)
-        raise BlockchainAPIError("Failed to prepare the ERC-20 transaction.") from e
+        raise BlockchainAPIError(decode_exception_to_message(e, "Failed to prepare the ERC-20 transaction.")) from e
