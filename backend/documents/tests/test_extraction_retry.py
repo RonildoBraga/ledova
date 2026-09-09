@@ -148,12 +148,18 @@ class ExtractionWorkerRetryTest(TransactionTestCase):
         )
 
     def run_worker(self, effects):
+        app.perform_import_paths()
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT id FROM procrastinate_jobs")
+            existing = {row[0] for row in cursor.fetchall()}
         queue = f"doc-{self.document.uuid.hex}"
         job_id = extract_document.configure(queue=queue).defer(document_uuid=str(self.document.uuid))
+        self.addCleanup(self.remove_worker_job, job_id)
         with (
             patch.object(ExtractionService, "render_first_page", return_value=PAGE),
             patch("documents.services.extraction.LlmExtractClient") as client,
             patch.object(extract_document.retry_strategy, "wait", 0),
+            patch.dict(app.periodic_registry.periodic_tasks, {}, clear=True),
             app.replace_connector(app.connector.get_worker_connector()),
         ):
             client.return_value.extract.side_effect = effects
@@ -167,7 +173,13 @@ class ExtractionWorkerRetryTest(TransactionTestCase):
         with connection.cursor() as cursor:
             cursor.execute("SELECT status, attempts FROM procrastinate_jobs WHERE id = %s", [job_id])
             status, attempts = cursor.fetchone()
+            cursor.execute("SELECT id FROM procrastinate_jobs")
+            self.assertEqual({row[0] for row in cursor.fetchall()} - existing, {job_id})
         return {"status": status, "attempts": attempts}
+
+    def remove_worker_job(self, job_id):
+        with connection.cursor() as cursor:
+            cursor.execute("DELETE FROM procrastinate_jobs WHERE id = %s", [job_id])
 
     def test_a_transient_failure_is_retried_until_the_third_attempt_then_fails(self):
         job = self.run_worker(LlmExtractTransientError())
