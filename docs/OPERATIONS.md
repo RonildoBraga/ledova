@@ -491,6 +491,38 @@ reviewer, review time, notes and rejection reason. A withdrawn row remains
 visible as a record, including its previous rejection, and offers no further
 edit, resubmit or delete action.
 
+### Company registry verification
+
+`ABR_AUTH_GUID` is blank by default. Obtain the free authentication GUID through
+[ABR Web Services](https://abr.business.gov.au/Tools/WebServices) and configure it
+server-side. With no GUID, review records a pending, unconfigured attempt without
+contacting ABR. All test and development inputs must remain synthetic.
+
+The operator's Start Review and Retry Registry Check actions record each ABR
+attempt, its input, time and selected entity response. Lookup uses the application
+ABN, or its ACN when ABN is blank. A discovered ABN is recorded in the attempt;
+it does not replace the application identifier. Registered company names must
+match after Unicode, case and whitespace normalization. Trading names and fuzzy
+matches do not establish identity. Suppressed or unknown responses, missing
+records, mismatches, cancelled registrations and provider failures cannot pass.
+
+Approval requires a named officeholder declaration, board-resolution reference
+and explicit operator attestation. Only operator review pages expose these
+details and attempt history. ABR checks the entity's ABN registration; the
+officeholder declaration is separate. Correct a registered name during DRAFT or
+after Request Information, then resubmit for review. ACN, ABN and company type
+remain editable only in DRAFT.
+
+Activate, Resolve Warning and Reinstate each run a fresh lookup outside database
+transactions and require a matching pass. Failure retains the attempt and leaves
+the prior company status in place; retry the action after resolving the cause.
+Legacy APPROVED, WARNING and SUSPENDED companies without an attestation receive
+the declaration fields on the same action form. The staff status API accepts
+`declarant_name`, `board_resolution_reference` and `attest_officeholder` for
+approval and this recovery. Existing ACTIVE companies retain their status when
+the migration runs, and a registry retry does not automatically suspend them.
+There is no manual registry override or stale-pass fallback.
+
 ### KYC providers
 
 Disabled until configured. With `KYC_PROVIDER` blank the integration answers

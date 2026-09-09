@@ -109,6 +109,7 @@ POLICIES = {
         _company("company_id", VISIBLE_COMPANIES),
         _company("company_id", MANAGEABLE_COMPANIES),
     ),
+    "companies_companyregistrycheck": ("false", "false"),
     "offerings_offering": (
         _company_or_public("company_id"),
         _company("company_id", MANAGEABLE_COMPANIES),

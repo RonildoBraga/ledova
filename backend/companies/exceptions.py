@@ -2,6 +2,22 @@ from rest_framework import status
 from rest_framework.exceptions import APIException
 
 
+class RegistryVerificationRequiredException(APIException):
+    status_code = status.HTTP_400_BAD_REQUEST
+    default_detail = (
+        "A current matching ABR check must pass before this company can become active. Retry the registry check."
+    )
+    default_code = "registry_verification_required"
+
+
+class OfficeholderAttestationRequiredException(APIException):
+    status_code = status.HTTP_400_BAD_REQUEST
+    default_detail = (
+        "Record the named officeholder declaration and board-resolution reference, and explicitly attest them."
+    )
+    default_code = "officeholder_attestation_required"
+
+
 class MissingRequiredDocumentsException(APIException):
 
     status_code = status.HTTP_400_BAD_REQUEST

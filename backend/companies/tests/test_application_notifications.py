@@ -18,6 +18,7 @@ from companies.models import (
     CompanyStatus,
 )
 from companies.services import APPLICANT_NOTIFICATIONS, transition_company
+from companies.tests.registry_fixtures import DECLARATION, matching_observation
 from users.models import Notification
 from users.tasks.notifications import send_push_notification as run_task
 
@@ -86,8 +87,10 @@ def upload_required_documents(company):
 class ApplicationNotificationProducerTest(TestCase):
     def setUp(self):
         self.owner = User.objects.create_user(email="owner@example.test", password="pw-12345678")
+        self.reviewer = User.objects.create_user(email="reviewer@example.test", is_staff=True)
         self.bystander = User.objects.create_user(email="bystander@example.test", password="pw-12345678")
         self.company = Company.objects.create(owner=self.owner, name="Acme Pty Ltd", acn="123456789")
+        patch("companies.services.registry.lookup_company", return_value=matching_observation(self.company)).start()
         self.task = patch(TASK).start()
         self.task.defer.side_effect = run_task
         self.addCleanup(patch.stopall)
@@ -109,7 +112,9 @@ class ApplicationNotificationProducerTest(TestCase):
                 self.task.defer.reset_mock()
                 Notification.objects.all().delete()
 
-                transition_company(self.company, method, **kwargs)
+                self.company = transition_company(
+                    self.company, method, actor=self.reviewer, declaration=DECLARATION, **kwargs
+                )
 
                 self.task.defer.assert_called_once_with(
                     user_id=str(self.owner.pk),
@@ -131,7 +136,9 @@ class ApplicationNotificationProducerTest(TestCase):
         for method, start, kwargs in SILENT:
             with self.subTest(method=method):
                 self._set_status(start)
-                transition_company(self.company, method, **kwargs)
+                self.company = transition_company(
+                    self.company, method, actor=self.reviewer, declaration=DECLARATION, **kwargs
+                )
         self.task.defer.assert_not_called()
         self.assertFalse(Notification.objects.exists())
 
@@ -139,7 +146,7 @@ class ApplicationNotificationProducerTest(TestCase):
         from companies.exceptions import InvalidStatusTransitionException
 
         with self.assertRaises(InvalidStatusTransitionException):
-            transition_company(self.company, "approve")
+            transition_company(self.company, "approve", actor=self.reviewer, declaration=DECLARATION)
         self.task.defer.assert_not_called()
 
     def test_a_job_that_cannot_be_deferred_rolls_the_transition_back(self):
@@ -147,7 +154,7 @@ class ApplicationNotificationProducerTest(TestCase):
         self.task.defer.side_effect = RuntimeError("queue down")
 
         with self.assertRaises(RuntimeError):
-            transition_company(self.company, "approve", approved_by=self.owner)
+            transition_company(self.company, "approve", approved_by=self.reviewer, declaration=DECLARATION)
 
         self.company.refresh_from_db()
         self.assertEqual((self.company.status, self.company.approved_at), (CompanyStatus.REVIEW, None))
@@ -158,8 +165,10 @@ class ApplicationNotificationEntryPointsTest(APITestCase):
 
     def setUp(self):
         self.owner = User.objects.create_user(email="owner@example.test", password="pw-12345678")
+        self.reviewer = User.objects.create_user(email="reviewer@example.test", is_staff=True)
         self.staff = User.objects.create_superuser(email="staff@example.test", password="pw-12345678")
         self.company = Company.objects.create(owner=self.owner, name="Acme Pty Ltd", acn="123456789")
+        patch("companies.services.registry.lookup_company", return_value=matching_observation(self.company)).start()
         self.task = patch(TASK).start()
         self.task.defer.side_effect = run_task
         self.addCleanup(patch.stopall)
@@ -182,16 +191,17 @@ class ApplicationNotificationEntryPointsTest(APITestCase):
         self.assertEqual(self._titles(), ["More information requested"])
         self.assertEqual(Notification.objects.get().body, "More information requested: Share register")
 
-    def test_admin_bulk_approve_action(self):
+    def test_admin_bulk_start_review_action(self):
         self._set_status(CompanyStatus.REVIEW)
         draft = Company.objects.create(owner=self.owner, name="Still draft", acn="333333333")
         admin = CompanyAdmin(Company, AdminSite())
         admin.message_user = lambda *args, **kwargs: None
 
-        admin.approve_action(SimpleNamespace(user=self.staff), Company.objects.all())
+        self._set_status(CompanyStatus.SUBMITTED)
+        admin.start_review_action(SimpleNamespace(user=self.staff), Company.objects.all())
 
         self.task.defer.assert_called_once()
-        self.assertEqual(self._titles(), ["Application approved"])
+        self.assertEqual(self._titles(), ["Review started"])
         draft.refresh_from_db()
         self.assertEqual(draft.status, CompanyStatus.DRAFT)
 
@@ -226,6 +236,7 @@ class ApplicationNotificationJobRowTest(TestCase):
 
     def setUp(self):
         self.owner = User.objects.create_user(email="owner@example.test", password="pw-12345678")
+        self.reviewer = User.objects.create_user(email="reviewer@example.test", is_staff=True)
         self.company = Company.objects.create(
             owner=self.owner, name="Acme Pty Ltd", acn="123456789", status=CompanyStatus.REVIEW
         )
@@ -234,7 +245,7 @@ class ApplicationNotificationJobRowTest(TestCase):
         return ProcrastinateJob.objects.filter(task_name=run_task.name)
 
     def test_approval_writes_one_todo_job_for_the_owner(self):
-        transition_company(self.company, "approve", approved_by=self.owner)
+        transition_company(self.company, "approve", approved_by=self.reviewer, declaration=DECLARATION)
 
         row = self.job_rows().get()
         self.assertEqual(row.status, "todo")
@@ -243,7 +254,7 @@ class ApplicationNotificationJobRowTest(TestCase):
     def test_a_failure_after_the_defer_rolls_the_job_row_back_with_the_status(self):
         with self.assertRaises(RuntimeError):
             with transaction.atomic():
-                transition_company(self.company, "approve", approved_by=self.owner)
+                transition_company(self.company, "approve", approved_by=self.reviewer, declaration=DECLARATION)
                 self.assertEqual(self.job_rows().count(), 1)
                 raise RuntimeError("after the defer")
 

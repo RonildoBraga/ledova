@@ -13,6 +13,7 @@ from companies.models import (
     CompanyDocument,
     CompanyStatus,
 )
+from companies.tests.registry_fixtures import DECLARATION, matching_observation
 from users.models import UserProfile
 
 User = get_user_model()
@@ -27,6 +28,7 @@ class ApplicationLifecycleTest(APITestCase):
         self.other = User.objects.create_user(email="other@example.test", password="pw-12345678")
         self.staff = User.objects.create_user(email="staff@example.test", password="pw-12345678", is_staff=True)
         self.company = Company.objects.create(owner=self.owner, name="Draft Pty Ltd", acn="123456780")
+        patch("companies.services.registry.lookup_company", return_value=matching_observation(self.company)).start()
         self.url = f"/api/v1/companies/{self.company.uuid}/"
 
     def upload_required_documents(self, company=None):
@@ -43,7 +45,9 @@ class ApplicationLifecycleTest(APITestCase):
 
     def set_status(self, new_status, reason="", expect=200):
         self.client.force_authenticate(self.staff)
-        response = self.client.post(f"{self.url}status/", {"status": new_status, "reason": reason}, format="json")
+        response = self.client.post(
+            f"{self.url}status/", {"status": new_status, "reason": reason, **DECLARATION}, format="json"
+        )
         self.assertEqual(response.status_code, expect, response.data)
         self.company.refresh_from_db()
         return response
@@ -276,21 +280,19 @@ class ApplicationLifecycleTest(APITestCase):
         self.company.refresh_from_db()
         self.assertEqual(self.company.status, CompanyStatus.DRAFT)
 
-    def test_admin_bulk_actions_call_the_model_transitions(self):
-        self.company.status = CompanyStatus.REVIEW
+    def test_bulk_review_preserves_drafts_and_approval_requires_a_per_company_action(self):
+        self.company.status = CompanyStatus.SUBMITTED
         self.company.save(update_fields=["status"])
         draft = Company.objects.create(owner=self.owner, name="Still draft", acn="333333332")
         admin = CompanyAdmin(Company, AdminSite())
         admin.message_user = lambda *args, **kwargs: None
         request = SimpleNamespace(user=self.staff)
 
-        admin.approve_action(request, Company.objects.all())
+        admin.start_review_action(request, Company.objects.all())
         self.company.refresh_from_db()
         draft.refresh_from_db()
-        self.assertEqual(self.company.status, CompanyStatus.APPROVED)
-        self.assertEqual(self.company.approved_by, self.staff)
+        self.assertEqual(self.company.status, CompanyStatus.REVIEW)
         self.assertEqual(draft.status, CompanyStatus.DRAFT)
 
-        admin.activate_action(request, Company.objects.all())
-        self.company.refresh_from_db()
-        self.assertEqual(self.company.status, CompanyStatus.ACTIVE)
+        self.assertNotIn("approve_action", admin.actions)
+        self.assertNotIn("activate_action", admin.actions)

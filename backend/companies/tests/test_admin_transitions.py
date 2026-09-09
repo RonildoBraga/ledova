@@ -6,6 +6,7 @@ from django.urls import reverse
 
 from companies.admin.company import STATUS_BUTTONS, TRANSITIONS
 from companies.models import Company, CompanyStatus
+from companies.tests.registry_fixtures import DECLARATION, matching_observation
 
 User = get_user_model()
 
@@ -16,6 +17,7 @@ TEST_STORAGES = {
 REASON_FIELDS = ("info_request_reason", "rejection_reason", "warning_reason", "suspension_reason", "delisting_reason")
 
 CASES = [
+    ("retry-registry", CompanyStatus.REVIEW, CompanyStatus.REVIEW),
     ("start-review", CompanyStatus.SUBMITTED, CompanyStatus.REVIEW),
     ("request-info", CompanyStatus.REVIEW, CompanyStatus.INFO_REQUIRED),
     ("approve", CompanyStatus.REVIEW, CompanyStatus.APPROVED),
@@ -38,6 +40,7 @@ class CompanyAdminTransitionTest(TestCase):
         self.client.force_login(self.admin)
         owner = User.objects.create_user(email="owner-companies@example.test", password="pw-12345678")
         self.company = Company.objects.create(owner=owner, name="Transit Pty Ltd", acn="111222333")
+        patch("companies.services.registry.lookup_company", return_value=matching_observation(self.company)).start()
         self.change_url = reverse("admin:companies_company_change", args=[self.company.pk])
 
     def _url(self, action):
@@ -72,7 +75,11 @@ class CompanyAdminTransitionTest(TestCase):
                     self.assertContains(page, f"(ACN: {self.company.acn})" if "{acn}" in spec["intro"] else "Pty Ltd")
                     response = self.client.post(self._url(action), {"reason": f"because {action}"})
                 else:
-                    response = self.client.get(self._url(action))
+                    page = self.client.get(self._url(action))
+                    self.assertEqual(page.status_code, 200)
+                    self.company.refresh_from_db()
+                    self.assertEqual(self.company.status, start)
+                    response = self.client.post(self._url(action), {"confirm": True, **DECLARATION})
 
                 messages = self._follow(response)
                 self.company.refresh_from_db()
@@ -84,7 +91,7 @@ class CompanyAdminTransitionTest(TestCase):
 
     def test_acting_staff_user_is_recorded(self):
         self._set_status(CompanyStatus.REVIEW)
-        self.client.get(self._url("approve"))
+        self.client.post(self._url("approve"), {"confirm": True, **DECLARATION})
         self.company.refresh_from_db()
         self.assertEqual(self.company.approved_by, self.admin)
 
@@ -100,7 +107,7 @@ class CompanyAdminTransitionTest(TestCase):
                 if "label" in TRANSITIONS[action]:
                     response = self.client.post(self._url(action), {"reason": "x"})
                 else:
-                    response = self.client.get(self._url(action))
+                    response = self.client.post(self._url(action), {"confirm": True, **DECLARATION})
 
                 (message,) = self._follow(response)
                 self.company.refresh_from_db()

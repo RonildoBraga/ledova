@@ -6,6 +6,8 @@ from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import transaction
+from django.test import override_settings
+from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APITransactionTestCase
 
@@ -13,9 +15,12 @@ from companies.models import (
     LISTING_REQUIRED_DOCUMENTS,
     Company,
     CompanyDocument,
+    CompanyRegistryCheck,
     CompanyStatus,
 )
+from companies.tests.registry_fixtures import DECLARATION
 from feature_flags.models import FeatureFlag
+from integrations.abr.client import RegistryObservation
 from offerings.models import Offering, OfferingStatus, Subscription
 from operators.models import Operator
 from shared.db import atomic, current_alias
@@ -408,6 +413,15 @@ OPERATOR_ROUTES = (
     ),
 )
 
+REGISTRY_ADMIN_ROUTES = (
+    ("start-review", CompanyStatus.SUBMITTED, CompanyStatus.REVIEW),
+    ("retry-registry", CompanyStatus.REVIEW, CompanyStatus.REVIEW),
+    ("approve", CompanyStatus.REVIEW, CompanyStatus.APPROVED),
+    ("activate", CompanyStatus.APPROVED, CompanyStatus.APPROVED),
+    ("resolve-warning", CompanyStatus.WARNING, CompanyStatus.WARNING),
+    ("reinstate", CompanyStatus.SUSPENDED, CompanyStatus.SUSPENDED),
+)
+
 
 LIST_ROUTES = (
     ("/api/user-profiles/", ("profile",)),
@@ -733,3 +747,39 @@ class CrossTenantRouteMatrixTest(StubUploadDependencies, APITransactionTestCase)
         with self.committed_where_a_request_on_another_connection_can_read_it():
             make_eligible(alice)
         self.assertEqual(self.client.get(GLOBAL_ROUTES[0]).json()["paymentInstructions"], RAILS)
+
+    @override_settings(
+        STORAGES={
+            "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+            "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+        }
+    )
+    def test_registry_admin_actions_refuse_tenant_and_unprivileged_staff_and_admit_the_operator(self):
+        self.client.force_authenticate(None)
+        with patch(
+            "companies.services.registry.lookup_company", return_value=RegistryObservation(reason="unconfigured")
+        ) as provider:
+            for actor, expected in zip(self.actors, (302, 403, 200)):
+                self.client.force_login(actor.user)
+                for action, predecessor, successor in REGISTRY_ADMIN_ROUTES:
+                    with self.subTest(actor=actor.label, action=action):
+                        with self.as_an_operator_would():
+                            Company.objects.filter(pk=self.other.company.pk).update(status=predecessor)
+                            before = CompanyRegistryCheck.objects.count()
+                        path = reverse("admin:companies_company_transition", args=[self.other.company.pk, action])
+                        page = self.client.get(path)
+                        self.assertEqual(page.status_code, expected)
+                        with self.as_an_operator_would():
+                            self.assertEqual(Company.objects.get(pk=self.other.company.pk).status, predecessor)
+                            self.assertEqual(CompanyRegistryCheck.objects.count(), before)
+                        response = self.client.post(path, {"confirm": True, **DECLARATION})
+                        self.assertEqual(response.status_code, 302 if expected == 200 else expected)
+                        with self.as_an_operator_would():
+                            current = Company.objects.get(pk=self.other.company.pk)
+                            self.assertEqual(current.status, successor if expected == 200 else predecessor)
+                            if expected == 200 and action != "approve":
+                                self.assertEqual(CompanyRegistryCheck.objects.count(), before + 1)
+                            else:
+                                self.assertEqual(CompanyRegistryCheck.objects.count(), before)
+                self.client.logout()
+            self.assertEqual(provider.call_count, len(REGISTRY_ADMIN_ROUTES) - 1)

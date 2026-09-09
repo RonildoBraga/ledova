@@ -4,6 +4,11 @@ from companies.models.document import (
     CompanyDocument,
     DocumentType,
 )
+from companies.models.registry_check import (
+    CompanyRegistryCheck,
+    RegistryCheckPurpose,
+    RegistryCheckStatus,
+)
 
 __all__ = [
     "Company",
@@ -12,4 +17,7 @@ __all__ = [
     "CompanyDocument",
     "DocumentType",
     "LISTING_REQUIRED_DOCUMENTS",
+    "CompanyRegistryCheck",
+    "RegistryCheckPurpose",
+    "RegistryCheckStatus",
 ]

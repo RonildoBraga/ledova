@@ -49,24 +49,46 @@
         </div>
     </div>
 
+    <div class="admin-card">
+        <div class="admin-card-header">Registry and officeholder review</div>
+        <div class="admin-card-body">
+            <p>ABR check: {{ company.get_registry_status_display }} ({{ company.registry_reason|default:"Not checked" }}).</p>
+            <p>ABR verifies the registered entity. The officeholder declaration and board resolution are attested separately.</p>
+            <p>Attested by: {{ company.officeholder_attested_by|default:"Not yet attested" }} {{ company.officeholder_attested_at|default:"" }}</p>
+            <table class="admin-table">
+                <thead><tr><th>Started</th><th>Reviewer</th><th>Purpose</th><th>Requested identity</th><th>Result</th><th>Registry entity</th></tr></thead>
+                <tbody>
+                {% for check in registry_checks %}
+                <tr><td>{{ check.started_at }}</td><td>{{ check.initiated_by }}</td><td>{{ check.get_purpose_display }}</td><td>{{ check.requested_name }} / {{ check.requested_acn }} / {{ check.requested_abn }}</td><td>{{ check.get_status_display }}: {{ check.reason }} {{ check.completed_at|default:"" }}</td><td>{{ check.entity_name }} / {{ check.entity_status }}</td></tr>
+                {% empty %}
+                <tr><td colspan="6">No registry attempts recorded.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
     <form method="post" class="admin-form">
         {% csrf_token %}
         <fieldset>
             <legend>{{ transition.legend }}</legend>
+            {{ form.non_field_errors }}
+            {% for field in form %}
             <div class="form-group">
-                <label for="id_reason" class="required">{{ form.reason.label }}</label>
-                {{ form.reason }}
-                {% if form.reason.help_text %}
-                <p class="help-text">{{ form.reason.help_text }}</p>
+                <label for="{{ field.id_for_label }}" class="required">{{ field.label }}</label>
+                {{ field }}
+                {% if field.help_text %}
+                <p class="help-text">{{ field.help_text }}</p>
                 {% endif %}
-                {% if form.reason.errors %}
+                {% if field.errors %}
                 <ul class="errorlist">
-                    {% for error in form.reason.errors %}
+                    {% for error in field.errors %}
                     <li>{{ error }}</li>
                     {% endfor %}
                 </ul>
                 {% endif %}
             </div>
+            {% endfor %}
         </fieldset>
 
         <div class="action-row">

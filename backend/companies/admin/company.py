@@ -4,10 +4,16 @@ from django.http import HttpResponseRedirect
 from django.shortcuts import render
 from django.urls import reverse
 from django.utils.html import format_html
+from rest_framework.exceptions import APIException
 
-from companies.exceptions import InvalidStatusTransitionException
-from companies.models import Company, CompanyDocument, CompanyStatus
+from companies.models import (
+    Company,
+    CompanyDocument,
+    CompanyRegistryCheck,
+    CompanyStatus,
+)
 from companies.services import transition_company
+from companies.services.editing import EDITABLE_FIELDS, update_company
 from shared.utils.admin_actions import admin_action_re_path
 from shared.utils.admin_display import action_buttons
 from tokens.admin._helpers import status_badge
@@ -36,6 +42,7 @@ TRANSITIONS = {
     "activate": dict(method="activate", done="Company '{name}' is now active on the platform."),
     "resolve-warning": dict(method="resolve_warning", done="Warning resolved for '{name}'. Company is now active."),
     "reinstate": dict(method="reinstate", done="Company '{name}' has been reinstated and is now active."),
+    "retry-registry": dict(method="retry_registry", done="Registry check recorded for '{name}'."),
     "request-info": dict(
         method="request_info",
         title="Request Information",
@@ -118,6 +125,15 @@ TRANSITIONS = {
     ),
 }
 
+for action, spec in TRANSITIONS.items():
+    title = action.replace("-", " ").title()
+    spec.setdefault("title", title)
+    spec.setdefault("alert", "info")
+    spec.setdefault("heading", title)
+    spec.setdefault("intro", "Confirm this action for {name} (ACN: {acn}).")
+    spec.setdefault("legend", "Review confirmation")
+    spec.setdefault("button", (title, "btn-primary"))
+
 REJECT = ("✗ Reject", "reject", "#dc3545")
 SUSPEND = ("⏸ Suspend", "suspend", "#dc3545")
 DELIST = ("✗ Delist", "delist", "#343a40")
@@ -134,6 +150,49 @@ STATUS_BUTTONS = {
     CompanyStatus.WITHDRAWN: [("Application Withdrawn", None, "#e9ecef", "#6c757d")],
     CompanyStatus.DELISTED: [("Permanently Delisted", None, "#e9ecef", "#6c757d")],
 }
+
+for review_status in (
+    CompanyStatus.REVIEW,
+    CompanyStatus.APPROVED,
+    CompanyStatus.ACTIVE,
+    CompanyStatus.WARNING,
+    CompanyStatus.SUSPENDED,
+):
+    STATUS_BUTTONS[review_status].append(("Retry Registry Check", "retry-registry", "#007bff"))
+
+
+class CompanyRegistryCheckInline(admin.TabularInline):
+    model = CompanyRegistryCheck
+    fk_name = "company"
+    extra = 0
+    fields = (
+        "started_at",
+        "completed_at",
+        "initiated_by",
+        "purpose",
+        "requested_name",
+        "requested_acn",
+        "requested_abn",
+        "status",
+        "reason",
+        "entity_name",
+        "entity_status",
+        "registry_acn",
+        "registry_abn",
+    )
+    readonly_fields = fields
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.has_perm("companies.view_company")
 
 
 class CompanyDocumentInline(admin.TabularInline):
@@ -153,13 +212,29 @@ class CompanyDocumentInline(admin.TabularInline):
     file_link.short_description = "File"
 
 
-class ReasonForm(forms.Form):
+class TransitionForm(forms.Form):
+    confirm = forms.BooleanField(label="Confirm this company action")
+    declarant_name = forms.CharField(max_length=255, label="Named officeholder making the declaration")
+    board_resolution_reference = forms.CharField(max_length=255, label="Board-resolution reference")
+    attest_officeholder = forms.BooleanField(
+        label=(
+            "I attest that the named declarant is an officeholder and has a board resolution "
+            "authorising this application."
+        )
+    )
     reason = forms.CharField(widget=forms.Textarea(attrs={"rows": 4, "cols": 60}))
 
-    def __init__(self, *args, label, help_text, **kwargs):
+    def __init__(self, *args, spec, attestation_required, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["reason"].label = label
-        self.fields["reason"].help_text = help_text
+        if "label" in spec:
+            self.fields["reason"].label = spec["label"]
+            self.fields["reason"].help_text = spec["help"]
+            self.fields.pop("confirm")
+        else:
+            self.fields.pop("reason")
+        if not attestation_required:
+            for field in ("declarant_name", "board_resolution_reference", "attest_officeholder"):
+                self.fields.pop(field)
 
 
 @admin.register(Company)
@@ -178,6 +253,21 @@ class CompanyAdmin(admin.ModelAdmin):
     list_filter = ["status", "is_open_to_investors", "company_type", "state", "created_at"]
     search_fields = ["name", "trading_name", "acn", "abn", "owner__email"]
     readonly_fields = [
+        "status",
+        "registry_status",
+        "registry_reason",
+        "registry_checked_at",
+        "registry_entity_name",
+        "registry_entity_status",
+        "officeholder_attested_by",
+        "officeholder_attested_at",
+        "officeholder_attestation",
+        "info_request_reason",
+        "rejection_reason",
+        "warning_reason",
+        "suspension_reason",
+        "delisting_reason",
+        "withdrawal_reason",
         "uuid",
         "api_key",
         "api_key_created_at",
@@ -226,6 +316,23 @@ class CompanyAdmin(admin.ModelAdmin):
                     "The owner opts a company into the investor directory; clearing this box takes it out "
                     "again and no company is listed until its owner opts in."
                 ),
+            },
+        ),
+        (
+            "Registry and officeholder review",
+            {
+                "fields": [
+                    "registry_status",
+                    "registry_reason",
+                    "registry_checked_at",
+                    "registry_entity_name",
+                    "registry_entity_status",
+                    "declarant_name",
+                    "board_resolution_reference",
+                    "officeholder_attested_by",
+                    "officeholder_attested_at",
+                    "officeholder_attestation",
+                ]
             },
         ),
         (
@@ -326,9 +433,9 @@ class CompanyAdmin(admin.ModelAdmin):
         ),
     ]
 
-    inlines = [CompanyDocumentInline]
+    inlines = [CompanyDocumentInline, CompanyRegistryCheckInline]
 
-    actions = ["start_review_action", "approve_action", "activate_action"]
+    actions = ["start_review_action"]
 
     status_badge = status_badge(STATUS_COLORS)
 
@@ -351,7 +458,24 @@ class CompanyAdmin(admin.ModelAdmin):
         readonly.append("owner")
         if obj.status != CompanyStatus.DRAFT:
             readonly.extend(IMMUTABLE_AFTER_DRAFT)
+        if obj.status not in (CompanyStatus.DRAFT, CompanyStatus.INFO_REQUIRED):
+            readonly.extend(["name", "declarant_name", "board_resolution_reference"])
         return readonly
+
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        match = getattr(request, "resolver_match", None)
+        if request.method == "POST" and match and match.url_name == "companies_company_change":
+            return queryset.select_for_update()
+        return queryset
+
+    def save_model(self, request, obj, form, change):
+        if not change:
+            return super().save_model(request, obj, form, change)
+        update_company(
+            obj, {field: form.cleaned_data[field] for field in form.changed_data if field in EDITABLE_FIELDS}
+        )
+        obj.refresh_from_db()
 
     def get_form(self, request, obj=None, **kwargs):
         request._operator_wallet_owner = obj.owner if obj is not None else None
@@ -388,27 +512,43 @@ class CompanyAdmin(admin.ModelAdmin):
     def transition_view(self, request, company, action):
         spec = TRANSITIONS[action]
         change_url = reverse("admin:companies_company_change", args=[company.pk])
+        attestation_required = action == "approve" or (
+            action in ("activate", "resolve-warning", "reinstate") and not company.has_officeholder_attestation
+        )
+        form = TransitionForm(
+            request.POST if request.method == "POST" else None,
+            spec=spec,
+            attestation_required=attestation_required,
+            initial={
+                "declarant_name": company.declarant_name,
+                "board_resolution_reference": company.board_resolution_reference,
+            },
+        )
+        if request.method != "POST" or not form.is_valid():
+            context = {
+                **self.admin_site.each_context(request),
+                "title": f"{spec['title']}: {company.name}",
+                "subtitle": None,
+                "opts": self.opts,
+                "company": company,
+                "form": form,
+                "transition": spec,
+                "intro": spec["intro"].format(name=company.name, acn=company.acn),
+                "registry_checks": company.registry_checks.all(),
+            }
+            return render(request, "admin/companies/company/transition_form.html", context)
         kwargs = {spec["actor"]: request.user} if "actor" in spec else {}
-
-        if "label" in spec:
-            form = ReasonForm(request.POST or None, label=spec["label"], help_text=spec["help"])
-            if request.method != "POST" or not form.is_valid():
-                context = {
-                    **self.admin_site.each_context(request),
-                    "title": f"{spec['title']}: {company.name}",
-                    "subtitle": None,
-                    "opts": self.opts,
-                    "company": company,
-                    "form": form,
-                    "transition": spec,
-                    "intro": spec["intro"].format(name=company.name, acn=company.acn),
-                }
-                return render(request, "admin/companies/company/transition_form.html", context)
+        if "reason" in form.cleaned_data:
             kwargs["reason"] = form.cleaned_data["reason"]
+        declaration = {
+            key: form.cleaned_data[key]
+            for key in ("declarant_name", "board_resolution_reference", "attest_officeholder")
+            if key in form.cleaned_data
+        }
 
         try:
-            transition_company(company, spec["method"], **kwargs)
-        except InvalidStatusTransitionException as exc:
+            company = transition_company(company, spec["method"], actor=request.user, declaration=declaration, **kwargs)
+        except APIException as exc:
             messages.error(request, str(exc.detail))
         else:
             messages.add_message(request, spec.get("level", messages.SUCCESS), spec["done"].format(name=company.name))
@@ -418,22 +558,6 @@ class CompanyAdmin(admin.ModelAdmin):
     def start_review_action(self, request, queryset):
         count = 0
         for company in queryset.filter(status=CompanyStatus.SUBMITTED):
-            transition_company(company, "start_review")
+            transition_company(company, "start_review", actor=request.user)
             count += 1
         self.message_user(request, f"Review started for {count} applications.")
-
-    @admin.action(description="Approve selected applications under review")
-    def approve_action(self, request, queryset):
-        count = 0
-        for company in queryset.filter(status=CompanyStatus.REVIEW):
-            transition_company(company, "approve", approved_by=request.user)
-            count += 1
-        self.message_user(request, f"{count} applications approved.")
-
-    @admin.action(description="Activate selected approved companies")
-    def activate_action(self, request, queryset):
-        count = 0
-        for company in queryset.filter(status=CompanyStatus.APPROVED):
-            transition_company(company, "activate")
-            count += 1
-        self.message_user(request, f"{count} companies activated.")
