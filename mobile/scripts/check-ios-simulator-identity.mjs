@@ -41,7 +41,7 @@ export function simulatorIdentity(binary, headers, bundleIdentifier) {
 }
 
 function tool(args) {
-  return execFileSync('xcrun', args, { encoding: 'utf8', timeout: 10000, killSignal: 'SIGKILL' });
+  return execFileSync('xcrun', args, { encoding: 'utf8', timeout: 30000, killSignal: 'SIGKILL' });
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

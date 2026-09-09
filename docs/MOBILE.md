@@ -171,9 +171,9 @@ remain in the generated entitlements. Each build phase gets its own
 temporary/cache directory so Expo's CI cache cannot retain a previous phase's API
 destination. The probe checks the compiled
 API client and policy destinations against its isolated server.
-Server startup has a 120-second deadline and each certificate tool call has a
-30-second timeout. Certificate generation uses its own OpenSSL configuration and
-explicit CA/leaf extensions, avoiding duplicate extensions from older tools'
+Server startup has a 120-second deadline. Each certificate or simulator inspection
+tool call has a 30-second timeout. Certificate generation uses its own OpenSSL
+configuration and explicit CA/leaf extensions, avoiding duplicate extensions from older tools'
 ambient defaults. Before building, strict host requests check both CA-signed
 endpoints, an independently trusted leaf and wrong-CA refusals. Top-level evidence
 includes the selected tool path/version, configuration hash and public certificate
