@@ -54,6 +54,8 @@ jobs:
             mobile/package-lock.json
       - name: Install dependencies
         run: make install
+      - name: Workspace packages do not import themselves
+        run: make check-self-imports
       - name: Build dashboard, marketing, contracts
         run: make build
       - name: Design tokens match packages/shared
@@ -68,7 +70,9 @@ jobs:
         run: npm --prefix mobile run check:resolution
 
       - name: Lint workspaces
-        run: make lint
+        run: |
+          make lint
+          make check-mobile-test-awaits
 
       - name: Production dependency advisories
         run: |

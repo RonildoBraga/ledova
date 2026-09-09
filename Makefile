@@ -12,7 +12,7 @@ PYTHON ?= python3
 SCHEMA ?= /tmp/ledova-schema.yml
 
 .PHONY: help install install-backend install-node-if-missing init-local check-local-env build generate-tokens check check-comments check-layers \
-	check-logging check-schema-responses check-test-shadowing check-api-types test-gates audit test \
+	check-logging check-schema-responses check-test-shadowing check-api-types check-self-imports check-mobile-test-awaits test-gates audit test \
 	dev-up dev-down dev-logs contracts-compile contracts-test contracts-deploy-local \
 	contracts-deploy-testnet chain-test smoke lint check-type-check
 
@@ -41,6 +41,7 @@ help:
 	@echo "  make build                    Build dashboard, marketing, and contracts"
 	@echo "  make generate-tokens          Regenerate the CSS design tokens from packages/shared"
 	@echo "  make check                    Run static checks, including mobile and Django"
+	@echo "  make check-self-imports       Check workspace package imports after installing Node dependencies"
 	@echo "  make lint                     Run ESLint and solhint across every workspace"
 	@echo "  make check-comments           Fail on any comment or docstring in source"
 	@echo "  make check-layers             Fail on a new backend layer violation"
@@ -94,8 +95,10 @@ generate-tokens:
 	$(NPM) exec -- tsx packages/scripts/generate-css-tokens.mjs
 
 check: check-comments check-layers check-logging check-connection-binding check-error-bodies check-type-check check-schema-responses check-test-shadowing install-backend install-node-if-missing
+	$(MAKE) check-self-imports
 	$(NPM) run typecheck
 	$(NPM) --prefix mobile run check:resolution
+	$(MAKE) check-mobile-test-awaits
 	cd backend && SECRET_KEY="$$( $(PYTHON) -c 'import secrets; print(secrets.token_urlsafe(32))')" STORAGE_BACKEND=local $(PYTHON) manage.py check
 
 lint:
@@ -133,6 +136,13 @@ check-api-types:
 
 check-logging:
 	$(PYTHON) scripts/check-logging.py
+
+check-self-imports:
+	node scripts/check-self-imports.mjs
+	node --test scripts/tests/check-self-imports.test.mjs
+
+check-mobile-test-awaits:
+	node --test scripts/tests/check-mobile-test-awaits.test.mjs
 
 test-gates:
 	$(PYTHON) -m unittest discover --start-directory scripts/tests --top-level-directory scripts/tests

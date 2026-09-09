@@ -3,6 +3,8 @@ import { readdir, readFile } from 'node:fs/promises';
 import { createRequire, isBuiltin } from 'node:module';
 import path from 'node:path';
 import process from 'node:process';
+import ts from 'typescript';
+import { sourceImports } from '../../scripts/source-imports.mjs';
 
 const MOBILE = path.resolve(import.meta.dirname, '..');
 const REPO = path.resolve(MOBILE, '..');
@@ -10,9 +12,6 @@ const WORKSPACE = path.join(REPO, 'packages');
 const resolver = createRequire(path.join(MOBILE, 'index.ts'));
 
 const SOURCE_FILE = /\.(tsx?|jsx?|mjs|cjs)$/;
-
-const SPECIFIER =
-  /(?<!['"`\w$])(?:from|import)\s+['"]([^'"\n]+)['"]|(?<!['"`\w$])(?:import|require)\s*\(\s*['"]([^'"\n]+)['"]/g;
 
 const manifest = JSON.parse(await readFile(path.join(MOBILE, 'package.json'), 'utf8'));
 const runtime = new Set(Object.keys(manifest.dependencies ?? {}));
@@ -53,30 +52,6 @@ async function* sourceFiles(dir) {
   }
 }
 
-const NOT_SOURCE = new Set(['node_modules', 'dist', 'build', 'coverage', '.turbo']);
-
-async function* packageDirectories() {
-  for (const entry of await readdir(WORKSPACE, { withFileTypes: true })) {
-    if (!entry.isDirectory() || NOT_SOURCE.has(entry.name)) continue;
-    const directory = path.join(WORKSPACE, entry.name);
-    try {
-      const manifest = JSON.parse(await readFile(path.join(directory, 'package.json'), 'utf8'));
-      if (manifest.name) yield [directory, manifest.name];
-    } catch (error) {
-      if (error.code !== 'ENOENT') throw error;
-    }
-  }
-}
-
-async function* everyFileIn(directory) {
-  for (const entry of await readdir(directory, { withFileTypes: true })) {
-    if (NOT_SOURCE.has(entry.name)) continue;
-    const full = path.join(directory, entry.name);
-    if (entry.isDirectory()) yield* everyFileIn(full);
-    else if (SOURCE_FILE.test(entry.name)) yield full;
-  }
-}
-
 async function* workspaceFiles() {
   for (const entry of await readdir(WORKSPACE, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
@@ -103,21 +78,16 @@ function packageOf(specifier) {
   return specifier.startsWith('@') ? segments.slice(0, 2).join('/') : segments[0];
 }
 
-function lineOf(text, index) {
-  return text.slice(0, index).split('\n').length;
-}
-
 const sites = new Map();
 
 for await (const file of bundledFiles()) {
   const text = await readFile(file, 'utf8');
   const isTest = TEST_FILE.test(path.relative(MOBILE, file));
-  for (const match of text.matchAll(SPECIFIER)) {
-    const specifier = match[1] ?? match[2];
+  for (const { specifier, line } of sourceImports(ts, text, file)) {
     if (specifier.startsWith('.') || specifier.startsWith('/')) continue;
     if (isTest && development.has(packageOf(specifier))) continue;
     if (!sites.has(specifier)) {
-      sites.set(specifier, `${path.relative(REPO, file)}:${lineOf(text, match.index)}`);
+      sites.set(specifier, `${path.relative(REPO, file)}:${line}`);
     }
   }
 }
@@ -156,33 +126,14 @@ for (const [specifier, site] of [...sites].sort()) {
   }
 }
 
-let selfImportScanned = 0;
-
-for await (const [directory, name] of packageDirectories()) {
-  for await (const file of everyFileIn(directory)) {
-    selfImportScanned += 1;
-    const text = await readFile(file, 'utf8');
-    for (const match of text.matchAll(SPECIFIER)) {
-      const specifier = match[1] ?? match[2];
-      if (specifier !== name && !specifier.startsWith(`${name}/`)) continue;
-      failures.push(
-        `${path.relative(REPO, file)}:${lineOf(text, match.index)}: '${specifier}' imports its own package by ` +
-          `name. extraNodeModules resolves it back into ${path.relative(REPO, directory)} and makes a cycle ` +
-          'instead of failing, so use a relative path.',
-      );
-    }
-  }
-}
-
 const workspaceSites = new Map();
 
 for await (const file of workspaceFiles()) {
   const text = await readFile(file, 'utf8');
-  for (const match of text.matchAll(SPECIFIER)) {
-    const specifier = match[1] ?? match[2];
+  for (const { specifier, line } of sourceImports(ts, text, file)) {
     if (specifier.startsWith('.') || specifier.startsWith('/')) continue;
     if (!workspaceSites.has(specifier)) {
-      workspaceSites.set(specifier, `${path.relative(REPO, file)}:${lineOf(text, match.index)}`);
+      workspaceSites.set(specifier, `${path.relative(REPO, file)}:${line}`);
     }
   }
 }
@@ -218,6 +169,5 @@ if (failures.length > 0) {
 
 console.log(
   `Mobile resolution clean: ${sites.size} runtime specifiers from mobile/, ` +
-    `${workspaceSites.size} from packages/, all reaching mobile/node_modules. ` +
-    `No package imports itself by name in ${selfImportScanned} workspace files.`,
+    `${workspaceSites.size} from packages/, all reaching mobile/node_modules.`,
 );
