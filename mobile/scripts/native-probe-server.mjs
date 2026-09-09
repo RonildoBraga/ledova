@@ -3,6 +3,7 @@ import path from 'node:path';
 import http from 'node:http';
 import https from 'node:https';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { Buffer } from 'node:buffer';
 import { URL } from 'node:url';
 import { setTimeout, clearTimeout, setInterval, clearInterval } from 'node:timers';
@@ -10,13 +11,23 @@ import { setTimeout, clearTimeout, setInterval, clearInterval } from 'node:timer
 const directory = path.resolve(process.argv[2]);
 const host = process.argv[3] === 'ios' ? 'localhost' : '10.0.2.2';
 fs.mkdirSync(directory, { recursive: true });
+const executable = fs.realpathSync(
+  execFileSync('sh', ['-c', 'command -v openssl'], {
+    encoding: 'utf8',
+    timeout: 5000,
+    killSignal: 'SIGKILL',
+  }).trim(),
+);
+const configuration = path.join(directory, 'openssl.cnf');
+fs.writeFileSync(configuration, '[req]\ndistinguished_name=probe_name\n[probe_name]\n');
 
 function openssl(stage, args) {
   console.log(stage);
   try {
-    execFileSync('openssl', args, {
+    return execFileSync(executable, args, {
       cwd: directory,
-      stdio: ['ignore', 'ignore', 'pipe'],
+      env: { ...process.env, OPENSSL_CONF: configuration },
+      stdio: ['ignore', 'pipe', 'pipe'],
       timeout: 30000,
       killSignal: 'SIGKILL',
     });
@@ -25,12 +36,26 @@ function openssl(stage, args) {
   }
 }
 
+fs.writeFileSync(
+  path.join(directory, 'certificate-tool.json'),
+  JSON.stringify(
+    {
+      executable,
+      version: openssl('certificate-tool-version', ['version', '-a']).toString(),
+      configuration,
+      configurationSha256: createHash('sha256').update(fs.readFileSync(configuration)).digest('hex'),
+    },
+    null,
+    2,
+  ),
+);
 openssl('generate-probe-ca', [
   'req',
   '-x509',
   '-newkey',
   'rsa:2048',
   '-nodes',
+  '-sha256',
   '-days',
   '2',
   '-keyout',
@@ -41,6 +66,12 @@ openssl('generate-probe-ca', [
   '/CN=Ledova synthetic native probe CA',
   '-addext',
   'basicConstraints=critical,CA:TRUE',
+  '-addext',
+  'keyUsage=critical,keyCertSign,cRLSign',
+  '-addext',
+  'subjectKeyIdentifier=hash',
+  '-addext',
+  'authorityKeyIdentifier=keyid:always',
 ]);
 openssl('generate-server-request', [
   'req',
@@ -56,7 +87,7 @@ openssl('generate-server-request', [
 ]);
 fs.writeFileSync(
   path.join(directory, 'server.ext'),
-  'subjectAltName=DNS:localhost,IP:127.0.0.1,IP:10.0.2.2\nbasicConstraints=CA:FALSE\nextendedKeyUsage=serverAuth\nkeyUsage=digitalSignature,keyEncipherment\n',
+  'subjectAltName=DNS:localhost,IP:127.0.0.1,IP:10.0.2.2\nbasicConstraints=critical,CA:FALSE\nextendedKeyUsage=serverAuth\nkeyUsage=critical,digitalSignature,keyEncipherment\nsubjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid:always\n',
 );
 openssl('sign-server-certificate', [
   'x509',
@@ -70,6 +101,7 @@ openssl('sign-server-certificate', [
   '-CAcreateserial',
   '-days',
   '2',
+  '-sha256',
   '-out',
   'server.pem',
   '-extfile',
@@ -81,6 +113,7 @@ openssl('generate-untrusted-certificate', [
   '-newkey',
   'rsa:2048',
   '-nodes',
+  '-sha256',
   '-days',
   '2',
   '-keyout',
@@ -91,8 +124,28 @@ openssl('generate-untrusted-certificate', [
   '/CN=localhost',
   '-addext',
   'subjectAltName=DNS:localhost,IP:127.0.0.1,IP:10.0.2.2',
+  '-addext',
+  'basicConstraints=critical,CA:FALSE',
+  '-addext',
+  'extendedKeyUsage=serverAuth',
+  '-addext',
+  'keyUsage=critical,digitalSignature,keyEncipherment',
 ]);
 for (const key of ['ca.key', 'server.key', 'untrusted.key']) fs.chmodSync(path.join(directory, key), 0o600);
+for (const name of ['ca', 'server', 'untrusted']) {
+  fs.writeFileSync(
+    path.join(directory, `${name}.public.txt`),
+    openssl(`inspect-${name}-certificate`, [
+      'x509',
+      '-in',
+      `${name}.pem`,
+      '-noout',
+      '-text',
+      '-fingerprint',
+      '-sha256',
+    ]),
+  );
+}
 
 const counts = {
   direct: 0,

@@ -344,10 +344,39 @@ let failure;
 try {
   const endpoints = await waitFor(path.join(directory, 'server/config.json'), 120000, server);
   const ca = fs.readFileSync(path.join(directory, 'server/ca.pem'));
+  const untrusted = fs.readFileSync(path.join(directory, 'server/untrusted.pem'));
+  for (const filename of ['certificate-tool.json', 'ca.public.txt', 'server.public.txt', 'untrusted.public.txt'])
+    fs.copyFileSync(path.join(directory, 'server', filename), path.join(directory, filename));
+  const controls = [];
   markStage('probe-server-http-control');
   await localRequest(endpoints.httpUrl, '/direct');
-  markStage('probe-server-certificate-control');
-  await localRequest(endpoints.untrustedUrl, '/direct', fs.readFileSync(path.join(directory, 'server/untrusted.pem')));
+  controls.push(currentStage);
+  for (const [name, url, trust] of [
+    ['untrusted-leaf-control', endpoints.untrustedUrl, untrusted],
+    ['api-ca-control', endpoints.apiUrl, ca],
+    ['target-ca-control', endpoints.targetUrl, ca],
+  ]) {
+    markStage(`probe-server-${name}`);
+    await localRequest(url, '/direct', trust);
+    controls.push(currentStage);
+  }
+  for (const [name, url, trust] of [
+    ['api-wrong-ca-refusal', endpoints.apiUrl, untrusted],
+    ['target-wrong-ca-refusal', endpoints.targetUrl, untrusted],
+    ['untrusted-ca-refusal', endpoints.untrustedUrl, ca],
+  ]) {
+    markStage(`probe-server-${name}`);
+    await assert.rejects(localRequest(url, '/direct', trust), (error) =>
+      [
+        'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+        'DEPTH_ZERO_SELF_SIGNED_CERT',
+        'SELF_SIGNED_CERT_IN_CHAIN',
+        'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
+      ].includes(error.code),
+    );
+    controls.push(currentStage);
+  }
+  fs.writeFileSync(path.join(directory, 'host-tls-controls.json'), JSON.stringify({ controls }, null, 2));
   await build('ordinary-release-build', { ENTRY_FILE: 'index.ts' });
   const artifact = path.join(directory, platform === 'android' ? 'ordinary-release.apk' : 'ordinary-release.app');
   fs.cpSync(appPath, artifact, { recursive: true });
@@ -442,6 +471,7 @@ try {
     ['green', correct],
   ]) {
     fs.writeFileSync(nativeSource, source);
+    markStage(`probe-${name}-reset`);
     await localRequest(endpoints.apiUrl, '/reset', ca);
     await build(`probe-${name}-build`, environment);
     await launch(`probe-${name}`);
