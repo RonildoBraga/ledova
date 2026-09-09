@@ -6,6 +6,10 @@ import apiClient from '@services/apiClient';
 import { ApiClientProvider, calculateAssetAllocation } from '@ledova/shared';
 import type { HoldingWithWallet, HoldingsSummary } from '@ledova/shared';
 
+vi.mock('@hooks/useCurrency', () => ({
+  useCurrency: () => ({ formatDisplayCurrency: (value: number, decimals = 2) => `$${value.toFixed(decimals)}` }),
+}));
+
 vi.mock('@services/apiClient', () => ({ default: { get: vi.fn(async () => ({ data: { valid: false } })) } }));
 
 const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -32,6 +36,7 @@ function holding(symbol: string, quantity: string, marketValue: string | null, c
     assetName: `${symbol} Asset`,
     quantity,
     marketValue,
+    valueSource: marketValue == null ? 'unpriced' : 'market',
     chain,
     asset: { uuid: `asset-${symbol}`, symbol, name: `${symbol} Asset` },
     walletInfo: { uuid: `wallet-${chain}`, name: 'Wallet', address: '0x0', chain },
@@ -94,7 +99,7 @@ describe('what the dashboard ring is handed, not what the function returns', () 
   it('names the basis in the tooltip rather than dividing by a total of zero', () => {
     const { options } = draw(UNPRICED, 0);
 
-    expect(options.plugins.tooltip.callbacks.label({ dataIndex: 0 })).toBe('AAA: unpriced (75.0% by quantity)');
+    expect(options.plugins.tooltip.callbacks.label({ dataIndex: 0 })).toBe('AAA: Unpriced (75.0% by quantity)');
   });
 
   it('draws the priced share of a mixed portfolio and leaves the 0% slice out of the ring', () => {
@@ -114,15 +119,15 @@ describe('what the dashboard ring is handed, not what the function returns', () 
   it('prints no percentage beside unpriced, so the label has no number arguing with it', () => {
     const { view } = draw(MIXED, 12);
 
-    expect(view.container.textContent).toContain('SHARES Asset10,000unpriced—');
+    expect(view.container.textContent).toContain('SHARES AssetUnpriced10,000unpriced—');
     expect(view.container.textContent).not.toContain('unpriced0.0%');
   });
 
   it('keeps the percentage when the whole page is weighed by quantity, since then it means something', () => {
     const { view } = draw(UNPRICED, 0);
 
-    expect(view.container.textContent).toContain('AAA Asset30unpriced75.0%');
-    expect(view.container.textContent).toContain('BBB Asset10unpriced25.0%');
+    expect(view.container.textContent).toContain('AAA AssetUnpriced30unpriced75.0%');
+    expect(view.container.textContent).toContain('BBB AssetUnpriced10unpriced25.0%');
   });
 });
 
@@ -142,7 +147,7 @@ describe('one coin held on two chains, which the ring draws as one', () => {
 
     const { view } = draw(priced, 800);
 
-    expect(view.container.textContent).toContain('SHR Asset400');
+    expect(view.container.textContent).toContain('SHR AssetMarket price400');
   });
 
   it('offers the split, and does not open it until it is asked to', () => {
@@ -187,5 +192,26 @@ describe('a coin held on one chain', () => {
 
     expect(view.queryByLabelText('Show USDC by chain')).toBeNull();
     expect(view.container.textContent).not.toContain('base');
+  });
+});
+
+describe('the source of each displayed valuation', () => {
+  it.each([
+    ['market', 'Market price'],
+    ['nav', 'NAV'],
+    ['par', 'Par value'],
+  ] as const)('shows %s in the list and the actual chart tooltip', (source, label) => {
+    const { options, view, data } = draw([{ ...holding('TOKEN', '4', '5'), valueSource: source }], 5);
+    expect(view.getByText(label)).toBeTruthy();
+    expect(view.getAllByText('$5.00').length).toBeGreaterThan(0);
+    expect(data.datasets[0].data).toEqual([100]);
+    expect(options.plugins.tooltip.callbacks.label({ dataIndex: 0 })).toBe(`TOKEN: $5.00 (100.0%; ${label})`);
+  });
+
+  it('calls an incomplete value slice incomplete rather than claiming quantity weighting', () => {
+    const { options } = draw([holding('USDC', '3', '3', 'ethereum'), holding('USDC', '1', null, 'base')], 3);
+    expect(options.plugins.tooltip.callbacks.label({ dataIndex: 0 })).toBe(
+      'USDC: $3.00 (100.0%; Unpriced, incomplete valuation)',
+    );
   });
 });

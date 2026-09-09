@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { View, Text } from 'react-native';
 import { PieChart } from 'react-native-gifted-charts';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
 import { useCurrency } from '../../../hooks/useCurrency';
 import type { AssetAllocationItem } from '@ledova/shared';
+import { formatPercentage, VALUE_SOURCE_LABELS } from '@ledova/shared';
 
 interface AllocationPieChartProps {
   data: AssetAllocationItem[];
@@ -11,6 +13,7 @@ interface AllocationPieChartProps {
 }
 
 export function AllocationPieChart({ data, totalValue, isLoading }: AllocationPieChartProps) {
+  const [selectedUuid, setSelectedUuid] = useState<string | null>(null);
   const theme = useAppTheme();
   const { formatDisplayCurrency } = useCurrency();
   const styles = useThemedStyles((theme) => ({
@@ -71,17 +74,20 @@ export function AllocationPieChart({ data, totalValue, isLoading }: AllocationPi
 
   const unpricedCount = data.filter((item) => item.basis === 'unpriced').length;
 
-  const chartData = data
-    .filter((item) => item.percentage != null && item.color && item.percentage > 0)
-    .map((item) => ({
-      value: item.percentage,
-      color: item.color,
-      text: item.symbol || '',
-    }));
+  const drawn = data.filter((item) => item.percentage != null && item.color && item.percentage > 0);
+  const selected = drawn.find((item) => item.assetUuid === selectedUuid);
+  const sourceDescription = (item: AssetAllocationItem) =>
+    `${item.symbol}: ${VALUE_SOURCE_LABELS[item.source]}, ${formatPercentage(item.percentage, 1)}${item.basis === 'quantity' ? ' by quantity' : item.basis === 'unpriced' ? ', incomplete valuation' : ' by value'}`;
+  const chartData = drawn.map((item) => ({
+    value: item.percentage,
+    color: item.color,
+    text: item.symbol || '',
+    onPress: () => setSelectedUuid((previous) => (previous === item.assetUuid ? null : item.assetUuid)),
+  }));
 
   return (
     <View style={styles.container}>
-      <View style={styles.chartWrapper}>
+      <View style={styles.chartWrapper} accessible accessibilityLabel={drawn.map(sourceDescription).join('. ')}>
         <PieChart
           data={chartData}
           donut
@@ -90,9 +96,15 @@ export function AllocationPieChart({ data, totalValue, isLoading }: AllocationPi
           innerCircleColor={theme.colors.surface.base}
           centerLabelComponent={() => (
             <View style={styles.centerLabel}>
-              <Text style={styles.totalValue}>{formatDisplayCurrency(totalValue)}</Text>
-              <Text style={styles.totalLabel}>Total</Text>
-              {unpricedCount > 0 && <Text style={styles.unpricedNote}>excludes {unpricedCount} unpriced</Text>}
+              <Text style={styles.totalValue}>{selected ? selected.symbol : formatDisplayCurrency(totalValue)}</Text>
+              <Text style={styles.totalLabel}>{selected ? VALUE_SOURCE_LABELS[selected.source] : 'Total'}</Text>
+              {selected ? (
+                <Text style={styles.unpricedNote}>
+                  {formatPercentage(selected.percentage, 1)} by {selected.basis === 'quantity' ? 'quantity' : 'value'}
+                </Text>
+              ) : (
+                unpricedCount > 0 && <Text style={styles.unpricedNote}>excludes {unpricedCount} unpriced</Text>
+              )}
             </View>
           )}
         />

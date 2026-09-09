@@ -36,6 +36,9 @@ class Holding(BaseModel):
 
     @property
     def market_value(self):
-        if self.asset.current_price:
-            return self.quantity * self.asset.current_price
-        return None
+        price = self.asset.valuation_price
+        return self.quantity * price if price is not None else None
+
+    @property
+    def value_source(self):
+        return self.asset.value_source

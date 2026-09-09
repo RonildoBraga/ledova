@@ -11,6 +11,7 @@ const USDC: Asset = {
   contractAddress: `0x${'5e'.repeat(20)}`,
   decimals: 6,
   currentPrice: '1.00',
+  valueSource: 'market',
   priceCurrency: 'USD',
   isActive: true,
   createdAt: '2026-09-01T00:00:00Z',
@@ -30,6 +31,7 @@ function onChain(chain: string, quantity: string, marketValue: string | null, ov
     assetName: 'USD Coin',
     quantity,
     marketValue,
+    valueSource: marketValue == null ? 'unpriced' : 'market',
     lastSyncedAt: '2026-09-01T00:00:00Z',
     walletInfo: { uuid: `wallet-${chain}`, name: undefined, address: `0x${'a'.repeat(40)}`, chain },
     ...overrides,
@@ -114,5 +116,30 @@ describe('a holding whose chain the serializer did not send', () => {
     const allocation = calculateAssetAllocation([{ ...noChain, chain: '' } as HoldingWithWallet], 100);
 
     expect(onlyLine(allocation).perChain).toEqual([{ chain: 'base', quantity: 100, totalValue: 100, priced: true }]);
+  });
+});
+
+describe('provenance across wallets and chains', () => {
+  it('keeps NAV when both chains were valued by the same NAV', () => {
+    const holdings = [
+      onChain('base', '1', '2', { valueSource: 'nav' }),
+      onChain('ethereum', '3', '6', { valueSource: 'nav' }),
+    ];
+    expect(onlyLine(calculateAssetAllocation(holdings, 8))).toMatchObject({
+      source: 'nav',
+      basis: 'value',
+      totalValue: 8,
+    });
+  });
+
+  it('does not label an incomplete or conflicting aggregate as a single known source', () => {
+    for (const otherSource of ['market', 'unpriced']) {
+      const holdings = [
+        onChain('base', '1', '2', { valueSource: 'nav' }),
+        onChain('ethereum', '3', '6', { valueSource: otherSource }),
+      ];
+      const line = onlyLine(calculateAssetAllocation(holdings, otherSource === 'market' ? 8 : 2));
+      expect(line).toMatchObject({ source: 'unpriced', basis: 'unpriced', percentage: 100 });
+    }
   });
 });

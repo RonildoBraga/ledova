@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { CaretDownIcon, CaretRightIcon, WalletIcon } from '@phosphor-icons/react';
-import { DESIGN_TOKENS, formatPercentage } from '@ledova/shared';
+import { DESIGN_TOKENS, formatPercentage, VALUE_SOURCE_LABELS } from '@ledova/shared';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
 import { useCurrency } from '@hooks/useCurrency';
@@ -121,9 +121,10 @@ export function AssetAllocationCard({
           label: (context: { dataIndex: number }) => {
             const item = drawn[context.dataIndex];
             const share = formatPercentage(item.percentage, 1);
-            return item.basis === 'value'
-              ? `${item.symbol}: ${formatDisplayCurrency(item.totalValue)} (${share})`
-              : `${item.symbol}: unpriced (${share} by quantity)`;
+            const source = VALUE_SOURCE_LABELS[item.source];
+            return item.basis === 'quantity'
+              ? `${item.symbol}: ${source} (${share} by quantity)`
+              : `${item.symbol}: ${formatDisplayCurrency(item.totalValue)} (${share}; ${source}${item.basis === 'unpriced' ? ', incomplete valuation' : ''})`;
           },
         },
       },
@@ -184,9 +185,10 @@ export function AssetAllocationCard({
 
                     <div className="flex flex-col">
                       <span className="text-sm font-semibold text-text-primary">{item.name}</span>
-                      {item.isYieldToken && item.navPerToken && (
+                      <span className="text-xs text-text-subtle">{VALUE_SOURCE_LABELS[item.source]}</span>
+                      {item.source === 'nav' && item.navPerToken && (
                         <span className="text-xs text-text-subtle">
-                          NAV: ${parseFloat(item.navPerToken).toFixed(6)}
+                          {formatDisplayCurrency(Number(item.navPerToken), 6)} per token
                         </span>
                       )}
                     </div>

@@ -6,7 +6,7 @@ from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
-from assets.models import Asset, AssetChainDeployment, AssetSnapshot
+from assets.models import Asset, AssetChainDeployment, AssetSnapshot, ExchangeRate
 from assets.services.identity import quarantine_unknown_token
 from assets.services.sync import SUPPORTED_ASSETS, AssetSyncService
 from assets.tasks import sync_all_assets
@@ -23,6 +23,9 @@ class UpdatePriceTests(TestCase):
         self.today_midnight = midnight(timezone.now())
 
     def test_manual_prices_share_one_midnight_row_per_day(self):
+        ExchangeRate.objects.update_or_create(
+            base_currency="USD", target_currency="AUD", defaults={"rate": Decimal("1.5")}
+        )
         first = AssetSyncService.update_price(self.asset, Decimal("1.50"), source="manual", currency="USD")
         second = AssetSyncService.update_price(self.asset, Decimal("2.25"), source="coingecko", currency="AUD")
 
@@ -30,12 +33,12 @@ class UpdatePriceTests(TestCase):
         self.assertEqual(first.pk, second.pk)
         second.refresh_from_db()
         self.assertEqual(second.source_timestamp, self.today_midnight)
-        self.assertEqual(second.price, Decimal("2.25"))
-        self.assertEqual(second.price_currency, "AUD")
+        self.assertEqual(second.price, Decimal("1.50"))
+        self.assertEqual(second.price_currency, "USD")
         self.assertEqual(second.data_source, "coingecko")
         self.asset.refresh_from_db()
-        self.assertEqual(self.asset.current_price, Decimal("2.25"))
-        self.assertEqual(self.asset.price_currency, "AUD")
+        self.assertEqual(self.asset.current_price, Decimal("1.50"))
+        self.assertEqual(self.asset.price_currency, "USD")
 
     def test_existing_market_data_survives_a_manual_price(self):
         AssetSnapshot.objects.create(
@@ -131,6 +134,9 @@ class AudyDeploymentTests(TestCase):
 
 class SyncCurrentPricesTests(TestCase):
     def setUp(self):
+        ExchangeRate.objects.update_or_create(
+            base_currency="USD", target_currency="AUD", defaults={"rate": Decimal("2")}
+        )
         AssetSyncService.ensure_supported_assets()
         Asset.objects.create(symbol="AAPL.t", name="Apple", asset_type="tokenized_security")
         YieldToken.objects.create(
@@ -160,7 +166,7 @@ class SyncCurrentPricesTests(TestCase):
             {
                 "BTC": (Decimal("60000"), "coingecko"),
                 "ETH": (Decimal("3000.5"), "coingecko"),
-                "AUDY": (Decimal("1.00"), "fixed_peg"),
+                "AUDY": (Decimal("0.50"), "par_reference"),
                 "AUSG": (Decimal("1.02"), "nav_update"),
             },
         )

@@ -7,7 +7,9 @@ from typing import Any, Dict, Optional, Tuple
 from django.conf import settings
 from django.utils import timezone
 
+from assets.choices import PriceSource
 from assets.models import Asset, AssetChainDeployment, AssetSnapshot, AssetType
+from assets.services.exchange_rate import ExchangeRateService
 from integrations.coingecko import SYMBOL_TO_COINGECKO_ID, CoinGeckoClient
 from shared.db import atomic
 
@@ -48,7 +50,8 @@ SUPPORTED_ASSETS = {
         "type": AssetType.STABLECOIN,
         "chain": "base",
         "decimals": 2,
-        "fixed_price": Decimal("1.00"),
+        "par_value": Decimal("1.00"),
+        "par_currency": "AUD",
         "contract_address_setting": "STABLECOIN_CONTRACT_ADDRESS",
     },
     "AUSG": {
@@ -122,13 +125,25 @@ class AssetSyncService:
         currency: str = "USD",
         create_snapshot: bool = True,
     ) -> Optional[AssetSnapshot]:
-        if price <= 0:
+        if not price.is_finite() or price <= 0:
             raise ValueError(f"Price must be positive, got {price}")
+
+        currency = currency.upper()
+        if currency != "USD":
+            rate = ExchangeRateService.get_rate("USD", currency)
+            if rate is None or not rate.is_finite() or rate <= 0:
+                raise ValueError(f"No positive USD/{currency} exchange rate is available.")
+            price /= rate
+        price_source = {
+            "nav_update": PriceSource.NAV,
+            "par_reference": PriceSource.PAR,
+        }.get(source, PriceSource.MARKET)
 
         with atomic():
             asset.current_price = price
-            asset.price_currency = currency
-            asset.save(update_fields=["current_price", "price_currency", "updated_at"])
+            asset.price_currency = "USD"
+            asset.price_source = price_source
+            asset.save(update_fields=["current_price", "price_currency", "price_source", "updated_at"])
 
             snapshot = None
             if create_snapshot:
@@ -136,7 +151,7 @@ class AssetSyncService:
                 snapshot, _ = AssetSnapshot.objects.update_or_create(
                     asset=asset,
                     source_timestamp=_midnight(timezone.now()),
-                    defaults={"price": price, "price_currency": currency, "data_source": source},
+                    defaults={"price": price, "price_currency": "USD", "data_source": source},
                 )
 
             return snapshot
@@ -147,8 +162,10 @@ class AssetSyncService:
 
         prices: Dict[str, Tuple[Decimal, str]] = {}
         for symbol, meta in SUPPORTED_ASSETS.items():
-            if meta.get("fixed_price"):
-                prices[symbol] = (meta["fixed_price"], "fixed_peg")
+            if meta.get("par_value"):
+                rate = ExchangeRateService.get_rate("USD", meta["par_currency"])
+                if rate is not None and rate.is_finite() and rate > 0:
+                    prices[symbol] = (meta["par_value"] / rate, "par_reference")
             elif meta.get("nav_price"):
                 nav = YieldToken.objects.filter(symbol=symbol, is_active=True).values_list("nav_per_token", flat=True)
                 if nav and nav[0]:

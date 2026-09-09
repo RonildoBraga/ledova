@@ -539,6 +539,24 @@ thresholds and evasion-sensitive rules belong outside this repository.
 `base` from `STABLECOIN_CONTRACT_ADDRESS`. An empty setting leaves any address
 already recorded untouched.
 
+### Valuation sources
+
+Portfolio values and new asset snapshots use USD. Asset price writes record
+`market` for provider/manual quotes, `nav` for NAV updates, or `par` for the
+configured par reference. AUDY uses one AUD per token divided by the stored
+USD/AUD exchange rate; seed-only does not create an FX quote. Sync exchange
+rates before refreshing asset prices. Without a positive finite rate, a new
+AUDY holding remains unpriced. A later provider outage preserves the last
+valid cached quote, as it does for market prices; this is not live pricing.
+Manual quotes in another currency also require a stored conversion rate.
+
+Migration `assets/0013` preserves existing cached prices but leaves their
+provenance unknown. Until a producer refresh or the admin **Update prices**
+action records their source, the API returns a null current price and excludes
+them from current valuations. Direct price, currency and source fields are
+read-only in the admin. Historical snapshots remain unchanged; no FX history
+or source is guessed for old records.
+
 ### Demo data
 
 `python manage.py seed_demo` creates a browser-ready local demo in one run: the

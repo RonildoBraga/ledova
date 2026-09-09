@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from assets.choices import VALUE_SOURCE_CHOICES
 from assets.models import (
     Asset,
     AssetChainDeployment,
@@ -24,6 +25,10 @@ class AssetSerializer(serializers.ModelSerializer):
     nav_per_token = serializers.SerializerMethodField()
     last_nav_update = serializers.SerializerMethodField()
     is_yield_token = serializers.SerializerMethodField()
+    value_source = serializers.ChoiceField(choices=VALUE_SOURCE_CHOICES, read_only=True)
+    current_price = serializers.DecimalField(
+        source="valuation_price", max_digits=40, decimal_places=18, allow_null=True, read_only=True
+    )
 
     def get_chain(self, obj):
         dep = obj.chain_deployments.first()
@@ -79,6 +84,7 @@ class AssetSerializer(serializers.ModelSerializer):
             "is_yield_token",
             "current_price",
             "price_currency",
+            "value_source",
             "is_active",
             "created_at",
             "updated_at",

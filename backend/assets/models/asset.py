@@ -1,7 +1,10 @@
+from decimal import Decimal
 from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
 from django.db import models
+
+from assets.choices import PriceSource
 
 if TYPE_CHECKING:
     from assets.models.asset_chain_deployment import AssetChainDeployment
@@ -35,6 +38,7 @@ class Asset(BaseModel):
 
     current_price = models.DecimalField(max_digits=40, decimal_places=18, null=True, blank=True)
     price_currency = models.CharField(max_length=16, default="USD")
+    price_source = models.CharField(max_length=12, choices=PriceSource.choices, default=PriceSource.MARKET, null=True)
 
     is_active = models.BooleanField(default=True)
     is_verified = models.BooleanField(default=False)
@@ -55,6 +59,17 @@ class Asset(BaseModel):
 
     def __repr__(self):
         return f"<Asset: {self.symbol} ({self.asset_type})>"
+
+    @property
+    def valuation_price(self):
+        if self.price_source in PriceSource.values and self.price_currency == "USD" and self.current_price is not None:
+            price = Decimal(self.current_price)
+            return price if price.is_finite() and price > 0 else None
+        return None
+
+    @property
+    def value_source(self):
+        return self.price_source if self.valuation_price is not None else "unpriced"
 
     def get_deployment_for_chain(self, chain: str) -> Optional["AssetChainDeployment"]:
         return self.chain_deployments.filter(chain=chain, is_active=True).first()

@@ -24,6 +24,7 @@ function item(overrides: Partial<AssetAllocationItem> = {}): AssetAllocationItem
     totalValue: 400,
     percentage: 100,
     basis: 'value',
+    source: 'market',
     color: '#112233',
     totalQuantity: 400,
     perChain: [
@@ -101,5 +102,24 @@ describe('a coin held on one chain, on the mobile card', () => {
 
     expect(view.queryByLabelText('Show USDC by chain')).toBeNull();
     expect(view.queryByText('base')).toBeNull();
+  });
+});
+
+describe('the source of each mobile list valuation', () => {
+  it.each([
+    ['market', 'Market price'],
+    ['nav', 'NAV'],
+    ['par', 'Par value'],
+  ] as const)('shows %s with its actual value', async (source, label) => {
+    const view = await show([item({ source })]);
+    expect(view.getByText(label)).toBeTruthy();
+    expect(view.getByText('$400.00')).toBeTruthy();
+  });
+
+  it('shows unpriced provenance beside a real quantity percentage', async () => {
+    const view = await show([item({ source: 'unpriced', basis: 'quantity', totalValue: 0 })]);
+    expect(view.getByText('Unpriced')).toBeTruthy();
+    expect(view.getByText('100.0%')).toBeTruthy();
+    expect(view.queryByText('$0.00')).toBeNull();
   });
 });

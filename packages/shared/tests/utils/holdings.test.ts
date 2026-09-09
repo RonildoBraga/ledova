@@ -12,6 +12,7 @@ function asset(overrides: Partial<Asset>): Asset {
     contractAddress: `0x${'5e'.repeat(20)}`,
     decimals: 0,
     currentPrice: null,
+    valueSource: overrides.currentPrice == null ? 'unpriced' : 'market',
     priceCurrency: 'USD',
     isActive: true,
     createdAt: '2026-09-01T00:00:00Z',
@@ -33,6 +34,7 @@ function holding(overrides: Partial<HoldingWithWallet> = {}): HoldingWithWallet 
     assetName: 'Acme Ordinary',
     quantity: '250.000000000000000000',
     marketValue: null,
+    valueSource: overrides.marketValue == null ? 'unpriced' : 'market',
     lastSyncedAt: '2026-09-01T00:00:00Z',
     walletInfo: { uuid: 'wallet-uuid', name: undefined, address: `0x${'a'.repeat(40)}`, chain: 'base' },
     ...overrides,
@@ -148,5 +150,47 @@ describe('a slice says what its share is a share of', () => {
       ['USDC', 'value'],
       ['ORD', 'value'],
     ]);
+  });
+});
+
+describe('valuation provenance beside the percentage basis', () => {
+  it('values market, NAV and par together while leaving the unknown holding out', () => {
+    const holdings = [
+      holding({ asset: asset({ uuid: 'eth' }), assetSymbol: 'ETH', marketValue: '20', valueSource: 'market' }),
+      holding({ asset: asset({ uuid: 'nav' }), assetSymbol: 'AUSG', marketValue: '5', valueSource: 'nav' }),
+      holding({ asset: asset({ uuid: 'par' }), assetSymbol: 'AUDY', marketValue: '5', valueSource: 'par' }),
+      holding(),
+    ];
+    const summary = calculateHoldingsSummary(holdings, 1);
+    const allocation = calculateAssetAllocation(holdings, summary.totalValue);
+    expect(summary.totalValue).toBe(30);
+    expect(allocation.map(({ symbol, totalValue, source, basis }) => ({ symbol, totalValue, source, basis }))).toEqual([
+      { symbol: 'ETH', totalValue: 20, source: 'market', basis: 'value' },
+      { symbol: 'AUSG', totalValue: 5, source: 'nav', basis: 'value' },
+      { symbol: 'AUDY', totalValue: 5, source: 'par', basis: 'value' },
+      { symbol: 'ORD', totalValue: 0, source: 'unpriced', basis: 'unpriced' },
+    ]);
+    expect(allocation[1]?.percentage).toBeCloseTo(100 / 6);
+  });
+
+  it('retains unpriced provenance when the whole chart weighs by quantity', () => {
+    const allocation = calculateAssetAllocation([holding()], 0);
+    expect(allocation[0]).toMatchObject({ source: 'unpriced', basis: 'quantity', percentage: 100 });
+  });
+
+  it.each([null, '', 'NaN', 'Infinity', '-1'])('does not use a NAV marker to invent a value for %s', (marketValue) => {
+    const holdings = [holding({ marketValue, valueSource: 'nav' })];
+    expect(calculateHoldingsSummary(holdings, 1).totalValue).toBe(0);
+    expect(calculateAssetAllocation(holdings, 0)[0]?.source).toBe('unpriced');
+  });
+
+  it('does not mistake an untagged cached amount for a market quote', () => {
+    const holdings = [holding({ marketValue: '99', valueSource: 'unpriced' })];
+    expect(calculateHoldingsSummary(holdings, 1).totalValue).toBe(0);
+    expect(calculateAssetAllocation(holdings, 0)[0]).toMatchObject({
+      source: 'unpriced',
+      totalValue: 0,
+      basis: 'quantity',
+    });
   });
 });

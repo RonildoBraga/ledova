@@ -6,10 +6,18 @@ import type {
   AssetTypeSummary,
   HoldingsSummary,
   HoldingWithWallet,
+  ValueSource,
 } from '../types';
 
-function priceCameBack(holding: HoldingWithWallet): boolean {
-  return holding.marketValue !== null && holding.marketValue !== undefined && holding.marketValue !== '';
+function valueSourceOf(holding: HoldingWithWallet): ValueSource {
+  const value = Number(holding.marketValue);
+  if (holding.marketValue == null || holding.marketValue.trim() === '' || !Number.isFinite(value) || value < 0)
+    return 'unpriced';
+  return ['market', 'nav', 'par'].includes(holding.valueSource) ? holding.valueSource : 'unpriced';
+}
+
+function holdingValue(holding: HoldingWithWallet): number {
+  return valueSourceOf(holding) === 'unpriced' ? 0 : Number(holding.marketValue);
 }
 
 function chainOf(holding: HoldingWithWallet): string {
@@ -25,7 +33,7 @@ export function calculateHoldingsSummary(holdings: HoldingWithWallet[], walletsC
   let totalValue = 0;
 
   for (const holding of holdings) {
-    const value = parseFloat(holding.marketValue ?? '') || 0;
+    const value = holdingValue(holding);
     const assetType = holding.asset?.assetType || HOLDING_ASSET_TYPE.ERC20_TOKEN;
 
     totalValue += value;
@@ -63,23 +71,25 @@ export function calculateAssetAllocation(holdings: HoldingWithWallet[], totalVal
       totalValue: number;
       totalQuantity: number;
       priced: boolean;
+      source: ValueSource;
       chains: Map<string, AssetChainSlice>;
       navPerToken?: string | null;
-      isYieldToken?: boolean;
     }
   >();
 
   for (const holding of holdings) {
     const assetUuid = holding.asset?.uuid || holding.assetSymbol;
-    const value = parseFloat(holding.marketValue ?? '') || 0;
+    const value = holdingValue(holding);
     const quantity = parseFloat(holding.quantity) || 0;
-    const priced = priceCameBack(holding);
+    const source = valueSourceOf(holding);
+    const priced = source !== 'unpriced';
 
     let existing = assetMap.get(assetUuid);
     if (existing) {
       existing.totalValue += value;
       existing.totalQuantity += quantity;
-      existing.priced = existing.priced && priced;
+      existing.source = existing.source === source ? source : 'unpriced';
+      existing.priced = existing.priced && priced && existing.source !== 'unpriced';
     } else {
       existing = {
         symbol: holding.assetSymbol || holding.asset?.symbol || 'Unknown',
@@ -87,9 +97,9 @@ export function calculateAssetAllocation(holdings: HoldingWithWallet[], totalVal
         totalValue: value,
         totalQuantity: quantity,
         priced,
+        source,
         chains: new Map<string, AssetChainSlice>(),
         navPerToken: holding.asset?.navPerToken,
-        isYieldToken: holding.asset?.isYieldToken,
       };
       assetMap.set(assetUuid, existing);
     }
@@ -119,11 +129,11 @@ export function calculateAssetAllocation(holdings: HoldingWithWallet[], totalVal
       totalValue: data.totalValue,
       percentage: ((weighByQuantity ? data.totalQuantity : data.totalValue) / basisTotal) * 100,
       basis: (weighByQuantity ? 'quantity' : data.priced ? 'value' : 'unpriced') as AllocationBasis,
+      source: data.source,
       color: getChartColor(index),
       totalQuantity: data.totalQuantity,
       perChain: foldedByChain(data.chains),
       navPerToken: data.navPerToken,
-      isYieldToken: data.isYieldToken,
     }))
     .sort((a, b) => b.percentage - a.percentage)
     .map((item, index) => ({

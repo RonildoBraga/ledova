@@ -1999,6 +1999,20 @@ so the EVM and Bitcoin preparation types are checked against their respective
 response shapes. The wallet action schema describes the actual challenge,
 verification, sync, preparation, broadcast and batch-balance replies.
 
+Asset and holding responses carry `valueSource`: `market`, `nav`, `par` or
+`unpriced`. The price writer records provenance atomically with the USD quote.
+Holding values and wallet totals use the same positive USD quote with known
+provenance; raw legacy prices are retained but are not valuations. NAV updates
+and the configured AUDY par producer both use this writer.
+
+Allocation items keep `source` beside `basis`: source describes the valuation,
+while basis describes the percentage denominator. Both clients label the list
+and chart; mobile arc selection reveals the source and can be tapped again to
+restore the total. An entirely unpriced portfolio still draws quantity shares.
+Partial or conflicting cross-wallet valuations retain known amounts but mark
+the aggregate unpriced instead of inventing one source; the chart identifies
+an incomplete valuation and the list preserves its unpriced percentage dash.
+
 Wallet holdings are an array and identify their wallet with `walletUuid`. Asset
 snapshots do not supply calculated chart changes; clients derive those from
 prices. Transactions expose `createdAt` but do not promise `updatedAt`. Sync
