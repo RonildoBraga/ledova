@@ -80,7 +80,7 @@ class EnsureSupportedAssetsTests(TestCase):
         )
         self.assertEqual(
             list(eth.chain_deployments.values_list("chain", "contract_address", "is_active")),
-            [("ethereum", None, True)],
+            [("base", None, True), ("ethereum", None, True)],
         )
         self.assertEqual(Asset.objects.native_for_chain("ethereum"), eth)
 
@@ -98,7 +98,7 @@ class EnsureSupportedAssetsTests(TestCase):
         )
         deployment = usdc.chain_deployments.get(chain="ethereum")
         self.assertEqual(
-            (deployment.contract_address, deployment.decimals, deployment.is_active), ("0x" + "c" * 40, 6, True)
+            (deployment.contract_address, deployment.decimals, deployment.is_active), ("0x" + "c" * 40, 6, False)
         )
 
 

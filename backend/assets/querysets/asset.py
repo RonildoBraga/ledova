@@ -1,5 +1,11 @@
 from django.db.models import Q, QuerySet
 
+from shared.constants import (
+    CHAIN_TO_NATIVE_ASSET,
+    NATIVE_ASSET_DECIMALS,
+    normalize_chain,
+)
+
 
 class AssetQuerySet(QuerySet):
     def filter_by_chain(self, chain):
@@ -22,10 +28,17 @@ class AssetQuerySet(QuerySet):
         return self.exclude(asset_type="tokenized_security")
 
     def native_for_chain(self, chain):
+        chain = normalize_chain(chain)
+        symbol = CHAIN_TO_NATIVE_ASSET.get(chain)
+        if symbol is None:
+            return None
         return self.filter(
+            symbol=symbol,
             asset_type="native_crypto",
+            is_active=True,
             chain_deployments__chain=chain,
             chain_deployments__contract_address__isnull=True,
+            chain_deployments__decimals=NATIVE_ASSET_DECIMALS[symbol],
             chain_deployments__is_active=True,
         ).first()
 

@@ -6,9 +6,12 @@ from uuid import uuid4
 from django.utils import timezone
 
 from assets.models import Asset, AssetType
-from assets.services.identity import native_asset_for_chain
+from assets.services.identity import (
+    native_asset_for_chain,
+    recorded_native_asset_for_chain,
+)
 from compliance.services.transaction_monitoring import TransactionMonitoringService
-from shared.constants import normalize_chain
+from shared.constants import get_native_asset_symbol, normalize_chain
 from shared.db import atomic
 from users.services.accounts import account_members
 from users.tasks.notifications import send_transaction_notification
@@ -215,7 +218,7 @@ class TransactionConfirmationService:
 
     @staticmethod
     def _invalidate_balance_reads(tx: Transaction) -> None:
-        native = native_asset_for_chain(tx.wallet.chain)
+        native = recorded_native_asset_for_chain(tx.wallet.chain)
         Holding.objects.filter(wallet=tx.wallet, asset__in=[tx.asset, native]).update(balance_version=uuid4())
 
     @staticmethod
@@ -285,7 +288,9 @@ class TransactionConfirmationService:
     @staticmethod
     def _verify_holding_balance(wallet: Wallet, asset: Asset) -> bool:
         holding = sync_holding(wallet, asset)
-        native = native_asset_for_chain(wallet.chain)
+        native = recorded_native_asset_for_chain(wallet.chain)
+        if native is None:
+            return False
         if asset != native:
             native_holding = sync_holding(wallet, native)
             return holding is not None and native_holding is not None
@@ -324,11 +329,11 @@ class TransactionConfirmationService:
 
     @staticmethod
     def _return_outstanding_deductions(tx: Transaction, *, clear_superseded=True) -> None:
-        native = native_asset_for_chain(tx.wallet.chain)
+        native = recorded_native_asset_for_chain(tx.wallet.chain)
         amount, fee = TransactionConfirmationService._deductions_to_reverse(tx, native)
         if clear_superseded or amount:
             tx.deducted_amount = Decimal("0")
-        if clear_superseded or fee:
+        if native is not None and (clear_superseded or fee):
             tx.deducted_fee = Decimal("0")
         tx.save(update_fields=["deducted_amount", "deducted_fee"])
         if not amount and not fee:
@@ -338,7 +343,8 @@ class TransactionConfirmationService:
             TransactionConfirmationService._move_holding(tx, native, fee)
 
         logger.info(
-            f"Reverted optimistic holding: +{amount} {tx.asset.symbol} and +{fee} {native.symbol}, "
+            f"Reverted optimistic holding: +{amount} {tx.asset.symbol} "
+            f"and +{fee} {get_native_asset_symbol(tx.wallet.chain)}, "
             f"new_balance={holding.quantity}"
         )
 

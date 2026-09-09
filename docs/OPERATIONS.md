@@ -531,8 +531,8 @@ Consequences of skipping them:
 - Without `sync_monitoring_rules` and `sync_procedure_templates` no monitoring
   rule exists, so no compliance alert is ever raised.
 - Without `asset_sync --seed-only` there are no verified rows for the supported
-  native assets and no `AssetChainDeployment` for them, so chain sync has
-  nothing to attach balances to. The seed does not change the suffixed-symbol
+  native assets. Native transfer discovery can create the coin and its
+  deployment, but does not verify or price the asset. The seed does not change the suffixed-symbol
   quarantine either way: `RESERVED_SYMBOLS` in `assets/services/identity.py` is
   a module constant built from `SUPPORTED_ASSETS`, so a token declaring a
   supported symbol is quarantined whether or not the seed ran.
@@ -546,6 +546,20 @@ thresholds and evasion-sensitive rules belong outside this repository.
 `asset_sync --seed-only` also writes the `AUDY` `AssetChainDeployment` on
 `base` from `STABLECOIN_CONTRACT_ADDRESS`. An empty setting leaves any address
 already recorded untouched.
+
+Native coins have one asset row and a contract-less deployment on each supported
+network: ETH on Ethereum and Base, BTC on Bitcoin. Migration `assets/0014`
+adds missing deployments for existing native rows without changing holdings,
+prices, wallet identity, or existing deployment settings. Reversing this data
+migration preserves those deployments because they may already be in use.
+Seeding preserves disabled deployments and existing native contract/decimal
+settings. A native deployment with a contract address or incorrect decimals is
+unavailable until an operator repairs its configuration. Transfer preparation
+returns a service error for missing or unavailable native configuration instead
+of reporting a zero balance. An operator-disabled coin stays unavailable.
+Already-recorded transfers can still confirm, fail or be reversed using their
+existing asset identity and debit records. Unavailable chain reads leave balance
+reconciliation pending; they do not recreate a removed deployment.
 
 ### Valuation sources
 

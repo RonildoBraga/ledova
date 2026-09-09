@@ -17,6 +17,7 @@ from wallets.exceptions import (
     BlockchainAPIError,
     InsufficientBalanceException,
     InvalidTransactionException,
+    NativeAssetUnavailableException,
     UnsupportedChainException,
 )
 
@@ -200,6 +201,8 @@ class TransferService:
         from wallets.models import Holding
 
         native_asset = Asset.objects.native_for_chain(wallet.chain)
+        if native_asset is None:
+            raise NativeAssetUnavailableException()
         quantity = Holding.objects.filter(wallet=wallet, asset=native_asset).values_list("quantity", flat=True).first()
         return quantity or Decimal("0")
 
