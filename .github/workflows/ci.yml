@@ -177,11 +177,9 @@ jobs:
           POSTGRES_PORT: '5432'
           POSTGRES_DB: ledova
           POSTGRES_USER: ledova
-        run: |
-          python manage.py test shared.tests.test_scoped_harness \
-            --settings=ledova_backend.settings.test_scoped --noinput
-          python manage.py test users.tests.test_account_type_under_the_app_role \
-            --settings=ledova_backend.settings.test_scoped --noinput
+        run: >-
+          python manage.py test --settings=ledova_backend.settings.test_scoped
+          --require-scoped-coverage --noinput
       - name: Row-level-security roles and catalogue (the half no test can see)
         env:
           POSTGRES_HOST: 127.0.0.1

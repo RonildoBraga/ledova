@@ -11,7 +11,9 @@ def register_account(account, profile):
     account.user_profiles.add(profile)
     if account.account_type == USER_ACCOUNT_TYPE_INDIVIDUAL:
         account.director = profile
-        account.save(update_fields=["director"])
+    else:
+        account.director = None
+    account.save(update_fields=["director"])
     RiskAssessmentService.create_pending_assessment(user_account=account)
     return account
 
