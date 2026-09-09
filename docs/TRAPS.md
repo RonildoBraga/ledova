@@ -321,6 +321,38 @@ learn what the application requests, clear the capture, touch only the UI, and
 read it before probing anything. An absence is the strong result here — a probe
 can manufacture a request in the log but cannot manufacture zero.
 
+**A mutation you cannot see applied is not a mutation.** A red proof works by
+breaking the code and watching the test go red; if the edit silently matches
+nothing, the tool exits cleanly, the suite passes, and the run is
+indistinguishable from a passing suite that proves the test is worthless. Three
+sessions lost time to this in one evening. One matched on JSX that Prettier had
+reflowed, so the replacement found nothing and two tests were nearly written up
+as red-proved without ever having been tested. One replaced a string that had
+already been edited, so the "before" state was the after state. And one was not
+a mutation at all but the same shape in shipped code: a glob translation whose
+`**/` became `(?:.*/)?`, after which the `*` pass matched the `*` inside the
+group it had just inserted and left `(?:.[^/]*/)?` — exactly one directory
+level. Nothing failed. The tool succeeded twice.
+
+**Confirm the edit landed; the pass count only tells you where to look.** What
+establishes that a mutation applied is looking at the file: a diff of the
+mutated tree, or the assertions below. An unchanged pass count is a clue on top
+of that, not a substitute for it — a real change to load-bearing code usually
+breaks something, so a count identical to the clean run is a reason to go and
+check. It is only a reason. A mutation can land in a branch no test reaches and
+leave the count alone honestly, and a mutation that never landed can sit beside
+a count that moved for an unrelated reason. Read the number, then read the
+diff.
+
+**Assert on both sides.** Before: that the anchor exists, so a replacement
+cannot silently match nothing — `assert old in text` is one line and it is the
+difference between a red proof and a story about one. After: that the file
+actually changed, because an anchor that exists can still be replaced with
+itself. Editing by line number rather than by content trades one failure mode
+for another; if you do, assert the line reads what you think it reads first.
+A red proof that reports the clean count and a mutation that never landed look
+identical, and they mean opposite things.
+
 **`makemigrations --check` under the test settings cannot fail.**
 `ledova_backend/settings/test.py` ends with a `MIGRATION_MODULES` mapping that
 claims every app and returns `None` for each, so every app is declared
