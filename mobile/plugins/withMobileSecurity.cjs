@@ -8,10 +8,10 @@ const {
   withInfoPlist,
   withPodfile,
   withFinalizedMod,
+  CodeGenerator,
   IOSConfig,
 } = require('expo/config-plugins');
 const plist = require('@expo/plist').default;
-const { mergeContents } = require('@expo/config-plugins/build/utils/generateCode');
 
 function developmentHosts() {
   const hosts = ['localhost', '127.0.0.1', '::1', '10.0.2.2'];
@@ -102,7 +102,7 @@ module.exports = function withMobileSecurity(config) {
     if (hooks.length !== 1)
       throw new Error('Cannot install the iOS codegen correction: expected one post_install hook.');
     const indent = `${hooks[0][0].match(/^[ \t]*/)[0]}  `;
-    config.modResults.contents = mergeContents({
+    config.modResults.contents = CodeGenerator.mergeContents({
       src: source,
       newSrc: `${indent}require_relative '../plugins/native/codegen-inputs'\n${indent}LedovaCodegen.remove_directory_input(installer)`,
       tag: 'ledova-codegen-inputs',
