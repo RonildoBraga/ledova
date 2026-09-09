@@ -24,7 +24,12 @@ from offerings.services.payments import (
 )
 from operators.models import Operator
 from shared.db import atomic
-from tokens.models import IssuanceType, RequestStatus, ShareIssuanceRequest
+from tokens.models import (
+    IssuanceType,
+    RequestStatus,
+    ShareIssuance,
+    ShareIssuanceRequest,
+)
 from tokens.services import ShareTokenService
 from users.services.eligibility import require_subscription_eligibility
 
@@ -91,6 +96,10 @@ MINT_BROADCAST = (
     "Issuance request {uuid} broadcast mint {tx_hash} and never confirmed it, so those shares may be out. "
     "{verb} is refused until that mint is resolved: the executing sweep completes it if it was mined and "
     "clears the hash if it reverted, and only then is the money free to move."
+)
+UNIDENTIFIED_LEGACY_MINT = (
+    "Issuance request {uuid} has an unidentified legacy mint. "
+    "{verb} is refused until an operator identifies and resolves that mint."
 )
 
 
@@ -339,6 +348,10 @@ def _refuse_the_issuance(subscription: Subscription, verb: str) -> None:
     if request is None:
         return
     _refuse_if_the_mint_is_out(request, verb)
+    if ShareIssuance.objects.filter(
+        idempotency_key=ShareTokenService.issuance_key(request), mint_journal__isnull=True
+    ).exists():
+        raise SubscriptionRefusedException(UNIDENTIFIED_LEGACY_MINT.format(uuid=request.uuid, verb=verb))
     if request.status == RequestStatus.REJECTED:
         return
     now = timezone.now()

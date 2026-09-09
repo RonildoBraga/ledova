@@ -73,7 +73,13 @@ class ShareIssuance(BaseModel):
         max_length=66,
         blank=True,
         null=True,
-        help_text="Transaction hash of the issuance (legacy field)",
+        help_text="Fixed mint transaction hash, recorded before submission for journaled issuances",
+    )
+    mint_journal = models.JSONField(
+        null=True,
+        blank=True,
+        editable=False,
+        help_text="Signed mint attempts retained for replay; null identifies a legacy issuance without a journal",
     )
     block_number = models.PositiveBigIntegerField(
         blank=True,

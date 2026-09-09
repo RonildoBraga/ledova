@@ -48,6 +48,11 @@ from tokens.services.share_token_service import (
 )
 from tokens.tasks import check_executing_issuance_requests, execute_review_request_task
 from tokens.tasks.review_request import STALE_EXECUTION_AGE
+from tokens.tests.mint_results import (
+    MINT_HASH,
+    recorded_mint_result,
+    signed_mint_transaction,
+)
 
 RECIPIENT = "0x" + "a" * 40
 SIGNER = "0x" + "e" * 40
@@ -332,7 +337,8 @@ class ExecuteRequestServiceTest(TestCase):
     def test_a_stale_copy_of_an_executed_request_completes_without_touching_the_chain(self):
         request = self._approved(issuance_request(self.token, amount=10))
         stale = ShareIssuanceRequest.objects.get(pk=request.pk)
-        self.chain.send_transaction.return_value = ("0xmint", None)
+
+        self.chain.send_transaction.side_effect = signed_mint_transaction
         self.chain.wait_for_receipt.return_value = RECEIPT
         first = self.service.execute_request(request)
         request.refresh_from_db()
@@ -539,7 +545,7 @@ class ExecuteRequestServiceTest(TestCase):
         request = self._approved(issuance_request(self.token, amount=10, reviewed_by=self.tenant.user))
         staff = make_tenant("staff", staff=True).user
         chain_result = {"tx_hash": "0xmint", "block_number": 7, "gas_used": 21000}
-        with patch.object(ShareTokenService, "_mint_to", return_value=chain_result) as mint:
+        with patch.object(ShareTokenService, "_mint_to", side_effect=recorded_mint_result(chain_result)) as mint:
             self.assertEqual(self.service.execute_request(request, executed_by=staff), chain_result)
 
         mint.assert_called_once()
@@ -561,7 +567,9 @@ class ExecuteRequestServiceTest(TestCase):
     def test_issuance_without_an_executing_user_credits_the_reviewer(self):
         request = self._approved(issuance_request(self.token, amount=10, reviewed_by=self.tenant.user))
         with patch.object(
-            ShareTokenService, "_mint_to", return_value={"tx_hash": "0x1", "block_number": 1, "gas_used": 1}
+            ShareTokenService,
+            "_mint_to",
+            side_effect=recorded_mint_result({"tx_hash": "0x1", "block_number": 1, "gas_used": 1}),
         ):
             self.service.execute_request(request)
         request.refresh_from_db()
@@ -592,7 +600,9 @@ class ExecuteRequestServiceTest(TestCase):
 
             exact = self._approved(issuance_request(self.token, amount=100))
             with patch.object(
-                ShareTokenService, "_mint_to", return_value={"tx_hash": "0x1", "block_number": 1, "gas_used": 1}
+                ShareTokenService,
+                "_mint_to",
+                side_effect=recorded_mint_result({"tx_hash": "0x1", "block_number": 1, "gas_used": 1}),
             ):
                 self.service.execute_request(exact)
 
@@ -622,7 +632,8 @@ class ExecuteRequestServiceTest(TestCase):
 
     def _mint_contract(self):
         contract = self.chain.load_contract.return_value
-        self.chain.send_transaction.return_value = ("0xmint", None)
+
+        self.chain.send_transaction.side_effect = signed_mint_transaction
         self.chain.wait_for_receipt.return_value = RECEIPT
         self.chain.get_transaction_receipt.return_value = None
         return contract
@@ -645,12 +656,15 @@ class ExecuteRequestServiceTest(TestCase):
             self.service.execute_request(request)
 
         self.chain.send_transaction.assert_called_once_with(
-            contract.functions.mint.return_value, "0xkey", wait_for_receipt=False
+            contract.functions.mint.return_value,
+            "0xkey",
+            wait_for_receipt=False,
+            on_signed=self.chain.send_transaction.call_args.kwargs["on_signed"],
         )
         request.refresh_from_db()
         issuance = ShareIssuance.objects.get(token=self.token)
         self.assertEqual(request.status, RequestStatus.FAILED)
-        self.assertEqual((issuance.status, issuance.tx_hash), (IssuanceStatus.FAILED, "0xmint"))
+        self.assertEqual((issuance.status, issuance.tx_hash), (IssuanceStatus.FAILED, MINT_HASH))
         self.assertEqual(issuance.error_message, "rpc timed out after the mint mined")
 
         self.chain.send_transaction.reset_mock()
@@ -659,14 +673,14 @@ class ExecuteRequestServiceTest(TestCase):
         with patch(SUPPLY, return_value=(1000, 1000)):
             result = self.service.execute_request(request)
 
-        self.assertEqual(result, {"tx_hash": "0xmint", "block_number": 9, "gas_used": 1_000_000})
-        self.chain.get_transaction_receipt.assert_called_once_with("0xmint")
+        self.assertEqual(result, {"tx_hash": MINT_HASH, "block_number": 9, "gas_used": 1_000_000})
+        self.chain.get_transaction_receipt.assert_called_once_with(MINT_HASH)
         self.chain.send_transaction.assert_not_called()
         self.chain.wait_for_receipt.assert_not_called()
         request.refresh_from_db()
         issuance.refresh_from_db()
         self.assertEqual(ShareIssuance.objects.filter(token=self.token).count(), 1)
-        self.assertEqual((issuance.status, issuance.tx_hash, issuance.block_number), ("completed", "0xmint", 9))
+        self.assertEqual((issuance.status, issuance.tx_hash, issuance.block_number), ("completed", MINT_HASH, 9))
         self.assertEqual((request.status, request.executed_issuance), (RequestStatus.EXECUTED, issuance))
         self.assertEqual(ShareIssuance.objects.completed_supply(self.token), 10)
 
@@ -679,12 +693,12 @@ class ExecuteRequestServiceTest(TestCase):
 
         result = self.service.execute_request(request)
 
-        self.assertEqual(result["tx_hash"], "0xmint")
+        self.assertEqual(result["tx_hash"], MINT_HASH)
         self.chain.send_transaction.assert_called_once()
         request.refresh_from_db()
         issuance.refresh_from_db()
         self.assertEqual(ShareIssuance.objects.filter(token=self.token).count(), 1)
-        self.assertEqual((issuance.status, issuance.tx_hash), (IssuanceStatus.COMPLETED, "0xmint"))
+        self.assertEqual((issuance.status, issuance.tx_hash), (IssuanceStatus.COMPLETED, MINT_HASH))
         self.assertEqual((request.status, request.executed_issuance), (RequestStatus.EXECUTED, issuance))
 
     def test_retry_on_an_unconfirmed_recorded_mint_waits_on_it_instead_of_sending(self):
@@ -1112,26 +1126,11 @@ class AnUnnamedMintReachesAnOperatorTest(TestCase):
         self.assertEqual(request.status, RequestStatus.EXECUTING)
         self.assertIsNone(ShareTokenService.unnamed_mint(request))
 
-    def test_releasing_the_claim_makes_the_request_retryable(self):
-        request, issuance = self._claimed()
-
-        self.service.release_unnamed_claim(request)
-
-        request.refresh_from_db()
-        issuance.refresh_from_db()
-        self.assertEqual(request.status, RequestStatus.FAILED)
-        self.assertTrue(request.can_be_executed)
-        self.assertEqual(issuance.status, IssuanceStatus.FAILED)
-
-    def test_neither_operator_action_touches_a_request_that_named_its_mint(self):
+    def test_naming_cannot_replace_an_identified_mint(self):
         request, _ = self._claimed(tx_hash="0xmint")
 
-        for act in (
-            lambda: self.service.name_the_mint(request, "0x" + "cd" * 32),
-            lambda: self.service.release_unnamed_claim(request),
-        ):
-            with self.assertRaises(InvalidTokenStateException):
-                act()
+        with self.assertRaises(InvalidTokenStateException):
+            self.service.name_the_mint(request, "0x" + "cd" * 32)
 
         request.refresh_from_db()
         self.assertEqual(request.status, RequestStatus.EXECUTING)

@@ -16,6 +16,9 @@
     {% if action == "approve" %}
     <div class="alert alert-success">
         <strong>Approve {{ label }} Request</strong>
+    {% elif action == "name mint" %}
+    <div class="alert alert-warning">
+        <strong>Identify Legacy Mint</strong>
     {% elif action == "reject" %}
     <div class="alert alert-danger">
         <strong>Reject {{ label }} Request</strong>
@@ -120,6 +123,16 @@
                 <strong>Note:</strong> After approval, you will need to execute the request to perform the on-chain operations.
             </p>
         </div>
+        {% elif action == "name mint" %}
+        <fieldset>
+            <legend>Mint Transaction</legend>
+            <div class="form-group">
+                {{ form.tx_hash.label_tag }}
+                {{ form.tx_hash }}
+                {{ form.tx_hash.errors }}
+            </div>
+            <p>Identify this request's mint from the operator's transaction history. A missing transaction or receipt does not prove that nothing was sent.</p>
+        </fieldset>
         {% elif action == "reject" %}
         <fieldset>
             <legend>Rejection Reason (Required)</legend>
@@ -142,6 +155,8 @@
         <div class="action-row mt-0">
             {% if action == "approve" %}
             <button type="submit" class="btn btn-success">Approve Request</button>
+            {% elif action == "name mint" %}
+            <button type="submit" class="btn btn-warning">Record Transaction Hash</button>
             {% elif action == "reject" %}
             <button type="submit" class="btn btn-danger">Reject Request</button>
             {% else %}

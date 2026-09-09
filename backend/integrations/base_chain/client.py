@@ -1,5 +1,6 @@
 import json
 import logging
+from collections.abc import Callable
 from decimal import Decimal
 from functools import lru_cache
 from pathlib import Path
@@ -251,6 +252,7 @@ class BaseChainClient:
         value: Wei = Wei(0),
         gas: Optional[int] = None,
         wait_for_receipt: bool = True,
+        on_signed: Callable[[str, bytes], None] | None = None,
     ) -> tuple[str, Optional[TxReceipt]]:
         account = self.account_from_key(private_key)
 
@@ -262,6 +264,8 @@ class BaseChainClient:
         )
 
         signed_tx = self.sign_transaction(tx, private_key)
+        if on_signed is not None:
+            on_signed(Web3.to_hex(Web3.keccak(signed_tx)), signed_tx)
         tx_hash = self.send_raw_transaction(signed_tx)
 
         logger.info(f"{LOG_PREFIX} Transaction sent: {tx_hash}")

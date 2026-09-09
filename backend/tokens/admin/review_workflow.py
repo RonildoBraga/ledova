@@ -1,3 +1,5 @@
+from string import hexdigits
+
 from django import forms
 from django.contrib import admin, messages
 from django.http import HttpResponseRedirect
@@ -40,8 +42,7 @@ STATUS_ACTIONS = {
 
 
 UNNAMED_MINT_ACTIONS = [
-    ("Record transaction hash", "name_mint", "#007bff"),
-    ("Release claim", "release_claim", "#dc3545"),
+    ("Record legacy transaction hash", "name_mint", "#007bff"),
 ]
 
 
@@ -54,7 +55,7 @@ class NameMintForm(forms.Form):
 
     def clean_tx_hash(self):
         value = self.cleaned_data["tx_hash"].strip()
-        if not value.startswith("0x") or len(value) != 66:
+        if not value.startswith("0x") or len(value) != 66 or any(character not in hexdigits for character in value[2:]):
             raise forms.ValidationError("A transaction hash is 0x followed by 64 hexadecimal characters.")
         return value
 
@@ -130,7 +131,6 @@ class ReviewWorkflowAdmin(admin.ModelAdmin):
             ("reject", "reject", self.reject_view),
             ("execute", "execute", self.execute_view),
             ("name-mint", "name_mint", self.name_mint_view),
-            ("release-claim", "release_claim", self.release_claim_view),
         ]
         custom = [
             admin_action_path(self, f"<uuid:uuid>/{slug}/", self._url_name(action), view)
@@ -224,7 +224,9 @@ class ReviewWorkflowAdmin(admin.ModelAdmin):
 
     @staticmethod
     def _has_an_unnamed_mint(obj):
-        if obj.status != RequestStatus.EXECUTING or not isinstance(obj, ShareIssuanceRequest):
+        if obj.status not in (RequestStatus.EXECUTING, RequestStatus.FAILED) or not isinstance(
+            obj, ShareIssuanceRequest
+        ):
             return False
         return ShareTokenService.unnamed_mint(obj) is not None
 
@@ -241,19 +243,6 @@ class ReviewWorkflowAdmin(admin.ModelAdmin):
             )
             return HttpResponseRedirect(self._change_url(obj))
         return self._render(request, obj, "name mint", form)
-
-    def release_claim_view(self, request, obj):
-        if not self._has_an_unnamed_mint(obj):
-            return self._refuse(request, obj, "release the claim on")
-        if request.method == "POST":
-            ShareTokenService().release_unnamed_claim(obj)
-            messages.warning(
-                request,
-                f"Released the claim on {obj.token.symbol}. Retrying will mint afresh, so do this only "
-                "after checking the chain shows no mint for this request.",
-            )
-            return HttpResponseRedirect(self._change_url(obj))
-        return self._render(request, obj, "release claim", None)
 
     def execute_view(self, request, obj):
         if not obj.can_be_executed:
