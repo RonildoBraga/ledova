@@ -165,8 +165,13 @@ with successful direct bearer/body, API refresh, native entropy and signing,
 file upload/download, streaming and cancellation controls. Numeric HTTP requests
 must fail, including repeated refusal/cancellation. An unenrolled Android
 emulator additionally checks gated-wallet refusal while preserving a legacy
-recovery copy. Generated files are restored in `finally`; remove only the owned
-emulator/simulator afterward. Deleting the iOS simulator also removes its test CA.
+recovery copy. SIGINT/SIGTERM cancel the runner, terminate its owned
+command/server groups
+(with forced termination after a two-second grace period), reap direct children,
+and restore generated files. Short synchronous tool calls have timeouts.
+An uncatchable kill or host loss requires a fresh prebuild before using the
+generated project. Remove only the owned emulator/simulator afterward. Deleting
+the iOS simulator also removes its test CA.
 Do not distribute the probe artifact.
 
 Jest and native probe outcomes are recorded separately. A simulator does not

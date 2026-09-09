@@ -36,41 +36,133 @@ const baseEnvironment = {
   EXPO_PUBLIC_MARKETING_URL: 'https://example.test',
 };
 
+const cancellation = new globalThis.AbortController();
+const activeChildren = new Map();
+const stoppingChildren = new Map();
+const signals = { SIGINT: 130, SIGTERM: 143 };
+function interrupt(signal) {
+  if (cancellation.signal.aborted) return;
+  process.exitCode = signals[signal];
+  cancellation.abort(new Error(`Native validation interrupted by ${signal}.`));
+}
+const signalHandlers = Object.fromEntries(Object.keys(signals).map((signal) => [signal, () => interrupt(signal)]));
+for (const [signal, handler] of Object.entries(signalHandlers)) process.on(signal, handler);
+
+function processTable() {
+  return execFileSync('ps', ['-axo', 'pid=,ppid=,pgid=,stat='], {
+    encoding: 'utf8',
+    timeout: 5000,
+    killSignal: 'SIGKILL',
+  })
+    .trim()
+    .split('\n')
+    .map((row) => {
+      const [pid, parent, group, state] = row.trim().split(/\s+/);
+      return { pid: Number(pid), parent: Number(parent), group: Number(group), state };
+    });
+}
+
+function ownedSpawn(file, args, options) {
+  cancellation.signal.throwIfAborted();
+  const child = spawn(file, args, { ...options, detached: true });
+  activeChildren.set(child, new Promise((resolve) => child.once('close', resolve)));
+  return child;
+}
+
+function stopOwned(child) {
+  if (stoppingChildren.has(child)) return stoppingChildren.get(child);
+  const stopping = (async () => {
+    if (!child.pid) return;
+    const rows = processTable();
+    const owned = new Set([child.pid]);
+    let previous = 0;
+    while (previous !== owned.size) {
+      previous = owned.size;
+      for (const row of rows) if (owned.has(row.parent)) owned.add(row.pid);
+    }
+    const groups = new Set([child.pid, ...rows.filter((row) => owned.has(row.pid)).map((row) => row.group)]);
+    assert.ok(!groups.has(rows.find((row) => row.pid === process.pid)?.group), 'Refusing to stop the runner group.');
+    function remaining() {
+      return processTable().some((row) => groups.has(row.group) && !row.state.startsWith('Z'));
+    }
+    function kill(signal) {
+      for (const group of groups) {
+        try {
+          process.kill(-group, signal);
+        } catch (error) {
+          if (error.code !== 'ESRCH') throw error;
+        }
+      }
+    }
+    kill('SIGTERM');
+    const graceful = Date.now() + 2000;
+    while (remaining() && Date.now() < graceful) await delay(50);
+    if (remaining()) kill('SIGKILL');
+    const forced = Date.now() + 2000;
+    while (remaining() && Date.now() < forced) await delay(50);
+    assert.ok(!remaining(), 'An owned native process group did not stop.');
+    await Promise.race([
+      activeChildren.get(child),
+      delay(2000, undefined, { ref: false }).then(() => {
+        throw new Error('An owned child was not reaped.');
+      }),
+    ]);
+  })();
+  stoppingChildren.set(child, stopping);
+  return stopping;
+}
+
 async function command(file, args, name, extraEnvironment = {}, cwd = mobile) {
+  cancellation.signal.throwIfAborted();
   console.log(name);
   const log = fs.openSync(path.join(directory, `${name}.log`), 'w');
+  let child;
+  let timedOut = false;
   try {
     await new Promise((resolve, reject) => {
-      const child = spawn(file, args, {
+      child = ownedSpawn(file, args, {
         cwd,
         env: { ...baseEnvironment, ...extraEnvironment },
         stdio: ['ignore', log, log],
-        detached: true,
       });
       const timeout = setTimeout(
         () => {
-          process.kill(-child.pid, 'SIGTERM');
+          timedOut = true;
+          stopOwned(child).catch(reject);
         },
         30 * 60 * 1000,
       );
+      const abort = () => {
+        stopOwned(child).catch(reject);
+      };
+      cancellation.signal.addEventListener('abort', abort, { once: true });
       child.once('error', (error) => {
         clearTimeout(timeout);
+        cancellation.signal.removeEventListener('abort', abort);
         reject(error);
       });
       child.once('exit', (code) => {
         clearTimeout(timeout);
-        if (code === 0) resolve();
+        cancellation.signal.removeEventListener('abort', abort);
+        if (code === 0 && !timedOut) resolve();
         else reject(new Error(`${name} failed (${code}); read its log.`));
       });
     });
+    cancellation.signal.throwIfAborted();
   } finally {
-    fs.closeSync(log);
+    try {
+      if (child && (cancellation.signal.aborted || timedOut)) await stopOwned(child);
+    } finally {
+      if (child) activeChildren.delete(child);
+      fs.closeSync(log);
+    }
   }
 }
 
 async function waitFor(filename, milliseconds) {
   const deadline = Date.now() + milliseconds;
   while (!fs.existsSync(filename)) {
+    cancellation.signal.throwIfAborted();
     assert.ok(Date.now() < deadline, `Timed out waiting for ${path.basename(filename)}.`);
     await delay(250);
   }
@@ -83,7 +175,7 @@ async function localRequest(url, route, ca) {
   target.pathname = route;
   return new Promise((resolve, reject) => {
     const client = target.protocol === 'http:' ? http : https;
-    const request = client.get(target, { ca, timeout: 5000 }, (response) => {
+    const request = client.get(target, { ca, timeout: 5000, signal: cancellation.signal }, (response) => {
       response.resume();
       response.on('end', () =>
         response.statusCode === 200 ? resolve() : reject(new Error('Probe server control failed.')),
@@ -153,7 +245,11 @@ async function launch(name) {
     );
   } else {
     await command('xcrun', ['simctl', 'install', device, appPath], `${name}-install`);
-    spawnSync('xcrun', ['simctl', 'terminate', device, config.ios.bundleIdentifier], { stdio: 'ignore' });
+    spawnSync('xcrun', ['simctl', 'terminate', device, config.ios.bundleIdentifier], {
+      stdio: 'ignore',
+      timeout: 10000,
+      killSignal: 'SIGKILL',
+    });
     await command('xcrun', ['simctl', 'launch', device, config.ios.bundleIdentifier], `${name}-launch`);
   }
 }
@@ -162,7 +258,7 @@ async function screenshot(name) {
   if (platform === 'android') {
     fs.writeFileSync(
       path.join(directory, `${name}.png`),
-      execFileSync(adb, [...adbArgs, 'exec-out', 'screencap', '-p']),
+      execFileSync(adb, [...adbArgs, 'exec-out', 'screencap', '-p'], { timeout: 10000, killSignal: 'SIGKILL' }),
     );
   } else {
     await command(
@@ -178,9 +274,13 @@ function checkAndroidArtifact(artifact) {
   const resources = execFileSync(aapt, ['dump', 'resources', artifact], {
     encoding: 'utf8',
     maxBuffer: 8 * 1024 * 1024,
+    timeout: 10000,
+    killSignal: 'SIGKILL',
   });
   const manifest = execFileSync(aapt, ['dump', 'xmltree', artifact, '--file', 'AndroidManifest.xml'], {
     encoding: 'utf8',
+    timeout: 10000,
+    killSignal: 'SIGKILL',
   });
   assert.match(manifest, /usesCleartextTraffic\([^\n]+\)=false/);
   assert.doesNotMatch(manifest, /debuggable\([^\n]+\)=true/);
@@ -192,7 +292,11 @@ function checkAndroidArtifact(artifact) {
   ]) {
     const match = resources.match(new RegExp(`xml/${resource}\\n[^\\n]+\\(file\\) ([^ ]+)`));
     assert.ok(match, `Packaged ${resource} is missing.`);
-    const xml = execFileSync(aapt, ['dump', 'xmltree', artifact, '--file', match[1]], { encoding: 'utf8' });
+    const xml = execFileSync(aapt, ['dump', 'xmltree', artifact, '--file', match[1]], {
+      encoding: 'utf8',
+      timeout: 10000,
+      killSignal: 'SIGKILL',
+    });
     fs.writeFileSync(path.join(directory, `${resource}.txt`), xml);
     if (resource === 'ledova_network_security_config') {
       assert.match(xml, /cleartextTrafficPermitted=false/);
@@ -202,11 +306,14 @@ function checkAndroidArtifact(artifact) {
       assert.match(xml, /path="SecureStore"/);
     }
   }
-  execFileSync(path.join(sdk, 'build-tools/36.0.0/zipalign'), ['-c', '-P', '16', '4', artifact]);
+  execFileSync(path.join(sdk, 'build-tools/36.0.0/zipalign'), ['-c', '-P', '16', '4', artifact], {
+    timeout: 10000,
+    killSignal: 'SIGKILL',
+  });
 }
 
 const serverLog = fs.openSync(path.join(directory, 'server.log'), 'w');
-const server = spawn(
+ownedSpawn(
   process.execPath,
   [path.join(mobile, 'scripts/native-probe-server.mjs'), path.join(directory, 'server'), platform],
   { stdio: ['ignore', serverLog, serverLog] },
@@ -226,7 +333,11 @@ try {
   if (platform === 'android') checkAndroidArtifact(artifact);
   else {
     const plist = JSON.parse(
-      execFileSync('plutil', ['-convert', 'json', '-o', '-', path.join(artifact, 'Info.plist')], { encoding: 'utf8' }),
+      execFileSync('plutil', ['-convert', 'json', '-o', '-', path.join(artifact, 'Info.plist')], {
+        encoding: 'utf8',
+        timeout: 10000,
+        killSignal: 'SIGKILL',
+      }),
     );
     assert.equal(plist.NSAppTransportSecurity.NSAllowsArbitraryLoads, false);
     assert.equal(plist.NSAppTransportSecurity.NSAllowsLocalNetworking, false);
@@ -238,11 +349,15 @@ try {
     `${createHash('sha256').update(fs.readFileSync(binary)).digest('hex')}  ${path.basename(binary)}\n`,
   );
   if (platform === 'android') {
-    const inventory = execFileSync(process.env.PYTHON || 'python3', [
-      path.join(mobile, 'scripts/check-android-binary.py'),
-      artifact,
-      process.env.NATIVE_ANDROID_ABIS || 'x86_64,arm64-v8a',
-    ]);
+    const inventory = execFileSync(
+      process.env.PYTHON || 'python3',
+      [
+        path.join(mobile, 'scripts/check-android-binary.py'),
+        artifact,
+        process.env.NATIVE_ANDROID_ABIS || 'x86_64,arm64-v8a',
+      ],
+      { timeout: 10000, killSignal: 'SIGKILL' },
+    );
     fs.writeFileSync(path.join(directory, 'native-library-alignment.json'), inventory);
     await command(
       './gradlew',
@@ -325,11 +440,18 @@ try {
     for (const count of ['http', 'untrusted']) assert.equal(result.counts[count], 0);
   }
   console.log('Native Release probe passed with observed redirect failures before the fix.');
+} catch (error) {
+  if (!cancellation.signal.aborted) throw error;
+  console.error(cancellation.signal.reason.message);
 } finally {
-  for (const [filename, contents] of restored) {
-    if (contents === null) fs.rmSync(filename, { force: true });
-    else fs.writeFileSync(filename, contents);
+  try {
+    await Promise.all([...activeChildren.keys()].map(stopOwned));
+  } finally {
+    for (const [filename, contents] of restored) {
+      if (contents === null) fs.rmSync(filename, { force: true });
+      else fs.writeFileSync(filename, contents);
+    }
+    fs.closeSync(serverLog);
+    for (const [signal, handler] of Object.entries(signalHandlers)) process.off(signal, handler);
   }
-  server.kill('SIGTERM');
-  fs.closeSync(serverLog);
 }
