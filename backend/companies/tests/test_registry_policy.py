@@ -1,10 +1,12 @@
 from contextlib import contextmanager
 from unittest import skipUnless
+from unittest.mock import patch
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import ProgrammingError, connections
 from django.test import TestCase
+from rest_framework.test import APITransactionTestCase
 
 from companies.identity import company_identity
 from companies.models import (
@@ -13,8 +15,12 @@ from companies.models import (
     CompanyStatus,
     RegistryCheckPurpose,
 )
-from shared.db import atomic, current_alias
+from companies.services import transition_company
+from companies.tests.registry_fixtures import matching_observation
+from shared.db import atomic, current_alias, use_operator
 from shared.db.principal import PRINCIPAL_SETTING
+from shared.tests.scoped import RunsOnTheScopedConnection
+from tokens.models import ShareToken
 
 
 @skipUnless(connections[current_alias()].vendor == "postgresql", "Registry history RLS requires PostgreSQL")
@@ -74,3 +80,65 @@ class RegistryHistoryIsOperatorOnlyTest(TestCase):
         self.check.refresh_from_db()
         self.assertEqual(self.check.status, "pending")
         self.assertEqual(CompanyRegistryCheck.objects.filter(pk=self.check.pk).update(status="passed"), 1)
+
+
+class ReviewedCompanyDeletionOnScopedConnectionTest(RunsOnTheScopedConnection, APITransactionTestCase):
+    def setUp(self):
+        with use_operator():
+            User = get_user_model()
+            self.owner = User.objects.create_user(email="registry-delete-owner@example.test")
+            self.other = User.objects.create_user(email="registry-delete-other@example.test")
+            reviewer = User.objects.create_user(email="registry-delete-reviewer@example.test", is_staff=True)
+            self.control = Company.objects.create(
+                owner=self.owner,
+                name="No History Pty Ltd",
+                acn="100000682",
+                status=CompanyStatus.REVIEW,
+            )
+            self.company = Company.objects.create(
+                owner=self.owner,
+                name="Reviewed Pty Ltd",
+                acn="100001492",
+                status=CompanyStatus.SUBMITTED,
+            )
+            with patch(
+                "companies.services.registry.lookup_company", return_value=matching_observation(self.company)
+            ), patch("companies.services.company.send_push_notification"):
+                self.company = transition_company(self.company, "start_review", actor=reviewer)
+            self.check_id = self.company.registry_check_id
+
+    def test_an_owner_can_delete_a_reviewed_company_without_shares_and_its_hidden_history(self):
+        self.signed_in_as(self.owner)
+        control = self.client.delete(f"/api/v1/companies/{self.control.pk}/")
+        self.assertEqual(control.status_code, 204, control.content)
+        with use_operator():
+            self.assertFalse(Company.objects.filter(pk=self.control.pk).exists())
+            self.assertTrue(CompanyRegistryCheck.objects.filter(pk=self.check_id).exists())
+        self.assertFalse(CompanyRegistryCheck.objects.filter(pk=self.check_id).exists())
+
+        self.signed_in_as(self.other)
+        refused = self.client.delete(f"/api/v1/companies/{self.company.pk}/")
+        self.assertEqual(refused.status_code, 404, refused.content)
+        with use_operator():
+            self.assertTrue(Company.objects.filter(pk=self.company.pk).exists())
+            self.assertTrue(CompanyRegistryCheck.objects.filter(pk=self.check_id).exists())
+
+        self.signed_in_as(self.owner)
+        response = self.client.delete(f"/api/v1/companies/{self.company.pk}/")
+        self.assertEqual(response.status_code, 204, response.content)
+        with use_operator():
+            self.assertFalse(Company.objects.filter(pk=self.company.pk).exists())
+            self.assertFalse(CompanyRegistryCheck.objects.filter(pk=self.check_id).exists())
+
+    def test_a_reviewed_company_with_a_share_class_still_refuses_deletion(self):
+        with use_operator():
+            token = ShareToken.objects.create(company=self.company, name="Ordinary", symbol="REG")
+        self.signed_in_as(self.owner)
+
+        response = self.client.delete(f"/api/v1/companies/{self.company.pk}/")
+
+        self.assertEqual(response.status_code, 409, response.content)
+        with use_operator():
+            self.assertTrue(Company.objects.filter(pk=self.company.pk).exists())
+            self.assertTrue(ShareToken.objects.filter(pk=token.pk).exists())
+            self.assertTrue(CompanyRegistryCheck.objects.filter(pk=self.check_id).exists())

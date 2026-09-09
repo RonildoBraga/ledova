@@ -10,6 +10,21 @@ from shared.db.policy_sql import install_tables
 
 def registry_policy(apps, schema_editor):
     install_tables(schema_editor, ["companies_companyregistrycheck"])
+    if schema_editor.connection.vendor != "postgresql":
+        return
+    table = "companies_companyregistrycheck"
+    with schema_editor.connection.cursor() as cursor:
+        constraints = schema_editor.connection.introspection.get_constraints(cursor, table)
+    (constraint,) = [
+        name for name, attributes in constraints.items() if attributes["foreign_key"] == ("companies_company", "uuid")
+    ]
+    quote = schema_editor.quote_name
+    schema_editor.execute(f"ALTER TABLE {quote(table)} DROP CONSTRAINT {quote(constraint)}")
+    schema_editor.execute(
+        f"ALTER TABLE {quote(table)} ADD CONSTRAINT {quote(constraint)} "
+        'FOREIGN KEY ("company_id") REFERENCES "companies_company" ("uuid") '
+        "ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED"
+    )
 
 
 class Migration(migrations.Migration):

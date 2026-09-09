@@ -604,10 +604,14 @@ would delete and take it. A swap is the row that says shares actually changed
 hands; it protects the class itself rather than inheriting protection from its
 two orders.
 
-Two edges below the company are deliberately left `CASCADE`.
+The application evidence edges below the company remain `CASCADE`.
 `CompanyDocument.company` carries listing evidence the issuer already creates
 and deletes through `DELETE /api/v1/companies/{uuid}/documents/{uuid}/`, so it
-is not a register row. `OrderModificationLog.order` and
+is not a register row. `CompanyRegistryCheck.company` carries the review's ABR
+attempts and is removed when a company with no share classes is deleted. Its
+PostgreSQL foreign key cascades in the database because the application's role
+cannot read operator-only history for Django's deletion collector. This does
+not grant that role access to registry attempts. `OrderModificationLog.order` and
 `SwapOrder.sell_order`/`.buy_order` are subordinate to an order that can now
 only be deleted deliberately, never by deleting the share class above it.
 
