@@ -9,6 +9,7 @@ from .choices import (
     TransferOrderStatus,
     TransferOrderType,
 )
+from .former_holder import FormerHolder
 from .mint_request import MintRequest, MintRequestStatus
 from .nav_update import NAVUpdate
 from .order_modification_log import OrderModificationLog
@@ -35,6 +36,7 @@ __all__ = [
     "SigningChallenge",
     "SigningChallengePurpose",
     "ShareTokenStatus",
+    "FormerHolder",
     "ShareTokenType",
     "SwapOrder",
     "SwapOrderStatus",
