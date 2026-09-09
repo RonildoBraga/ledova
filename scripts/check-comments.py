@@ -24,13 +24,16 @@ PY = (".py",)
 TS = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
 CSS = (".css",)
 SOL = (".sol",)
+NATIVE = (".m", ".mm")
 
 # (path relative to the repository root, extensions checked, recurse into subdirectories)
 TREES = (
     ("backend", PY + CSS, True),
     ("dashboard/src", TS + CSS, True),
     ("mobile/src", TS, True),
-    ("mobile/scripts", TS, True),
+    ("mobile/scripts", TS + PY, True),
+    ("mobile/native-tests", TS, True),
+    ("mobile/plugins", TS + NATIVE, True),
     ("mobile", TS, False),
     ("packages/shared", TS, True),
     ("packages/scripts", TS, True),
@@ -74,7 +77,7 @@ def _exempt(relative: str) -> bool:
 
 
 def unscanned_source_files(scanned: set) -> list[str]:
-    known = set(PY + TS + CSS + SOL)
+    known = set(PY + TS + CSS + SOL + NATIVE)
     missing = []
 
     for path in tracked_files():
@@ -397,10 +400,19 @@ def css_findings(text: str) -> list[tuple[int, str, bool]]:
     ]
 
 
+def native_findings(text: str) -> list[tuple[int, str, bool]]:
+    return [
+        (line, render(raw), False)
+        for line, raw in scan_c_like(text, line_comments=True, templates=False, regexes=False)
+    ]
+
+
 FINDERS = {
     ".py": python_findings,
     ".css": css_findings,
     ".sol": solidity_findings,
+    ".m": native_findings,
+    ".mm": native_findings,
 }
 
 

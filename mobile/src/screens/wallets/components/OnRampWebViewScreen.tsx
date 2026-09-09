@@ -8,6 +8,7 @@ import WebView from 'react-native-webview';
 import type { WebViewMessageEvent } from 'react-native-webview';
 import { GradientBackground } from '../../../components/GradientBackground';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
+import { allowWebNavigation } from '../../../config/networkPolicy';
 
 export interface OnRampWebViewParams {
   url: string;
@@ -57,6 +58,7 @@ export function OnRampWebViewScreen() {
   const route = useRoute<RouteProp<{ OnRampWebView: OnRampWebViewParams }, 'OnRampWebView'>>();
   const queryClient = useQueryClient();
   const { url } = route.params;
+  const safeUrl = allowWebNavigation(url) ? url : null;
 
   const handleComplete = () => {
     queryClient.invalidateQueries({ queryKey: ['wallets'] });
@@ -82,19 +84,26 @@ export function OnRampWebViewScreen() {
   return (
     <GradientBackground>
       <View style={styles.container}>
-        <WebView
-          source={{ uri: url }}
-          style={styles.webview}
-          injectedJavaScript={INJECTED_JS}
-          onMessage={handleMessage}
-          startInLoadingState
-          renderLoading={() => (
-            <View style={styles.loading}>
-              <ActivityIndicator size="large" color={theme.colors.interactive.active} />
-              <Text style={styles.loadingText}>Loading...</Text>
-            </View>
-          )}
-        />
+        {!safeUrl ? (
+          <Text>Unable to open an insecure provider URL.</Text>
+        ) : (
+          <WebView
+            source={{ uri: safeUrl }}
+            originWhitelist={['*']}
+            onShouldStartLoadWithRequest={({ url }) => allowWebNavigation(url)}
+            mixedContentMode="never"
+            style={styles.webview}
+            injectedJavaScript={INJECTED_JS}
+            onMessage={handleMessage}
+            startInLoadingState
+            renderLoading={() => (
+              <View style={styles.loading}>
+                <ActivityIndicator size="large" color={theme.colors.interactive.active} />
+                <Text style={styles.loadingText}>Loading...</Text>
+              </View>
+            )}
+          />
+        )}
       </View>
     </GradientBackground>
   );

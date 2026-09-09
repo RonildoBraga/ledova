@@ -41,7 +41,7 @@ In short:
 | Dashboard and shared package | `npm ci && npm run dev:dashboard` (the dashboard compiles `packages/shared` from source; there is no build step) |
 | Backend outside Docker | `cd backend && make install && make run`, with a `.env` present |
 | Contracts | `cd contracts && npm ci && npx hardhat compile && npx hardhat test` |
-| Mobile | `cd mobile && make install && make start` |
+| Mobile | `cd mobile && make install && make start`; native builds/probes: [docs/MOBILE.md](docs/MOBILE.md) |
 
 Local compilation and the contract tests need no credentials.
 [docs/OPERATIONS.md](docs/OPERATIONS.md) documents every environment variable.

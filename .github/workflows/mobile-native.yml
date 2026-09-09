@@ -1,0 +1,138 @@
+name: Mobile native
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-native-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    name: Android Release and native probe
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      CI: '1'
+      EXPO_NO_DOTENV: '1'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_DEV_API_HOST: '192.168.50.10'
+      ANDROID_USER_HOME: ${{ runner.temp }}/ledova-android-user
+      ANDROID_EMULATOR_HOME: ${{ runner.temp }}/ledova-android-user
+      ANDROID_AVD_HOME: ${{ runner.temp }}/ledova-avd
+      GRADLE_USER_HOME: ${{ runner.temp }}/ledova-gradle
+      ANDROID_SERIAL: emulator-5556
+      NATIVE_ANDROID_ABIS: x86_64,arm64-v8a
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.15.1
+      - name: Install locked JavaScript dependencies without package scripts
+        run: |
+          npm install --global npm@11.5.2
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm --prefix mobile ci --ignore-scripts --no-audit --no-fund
+      - name: Install native tools and prepare the emulator
+        run: |
+          export JAVA_HOME="$JAVA_HOME_21_X64"
+          sdkmanager 'platform-tools' 'platforms;android-36' 'build-tools;36.0.0' 'ndk;27.1.12297006' 'cmake;3.22.1' 'emulator' 'system-images;android-36;google_apis;x86_64'
+          mkdir -p "$ANDROID_AVD_HOME" "$ANDROID_USER_HOME"
+          printf 'no\n' | avdmanager create avd --name ledova_native --package 'system-images;android-36;google_apis;x86_64' --device pixel_6
+          sudo chmod a+rw /dev/kvm
+          "$ANDROID_HOME/emulator/emulator" -avd ledova_native -port 5556 -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader -cores 2 -memory 2048 -no-metrics > "$RUNNER_TEMP/ledova-emulator.log" 2>&1 &
+          echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+          timeout 180 adb -s "$ANDROID_SERIAL" wait-for-device
+          timeout 180 bash -c 'until [ "$(adb -s "$ANDROID_SERIAL" shell getprop sys.boot_completed | tr -d "\r")" = 1 ]; do sleep 1; done'
+      - name: Generate and check Debug and Release policy
+        working-directory: mobile
+        run: |
+          npx expo prebuild --clean --no-install --platform all
+          node scripts/check-native-projects.mjs
+      - name: Build and run the ordinary app and native red/green probe
+        working-directory: mobile
+        run: node scripts/native-smoke.mjs android "$RUNNER_TEMP/ledova-native-android"
+      - name: Preserve native evidence and the ordinary test-signed Release APK
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: android-native-evidence
+          retention-days: 7
+          path: |
+            ${{ runner.temp }}/ledova-native-android/*.log
+            ${{ runner.temp }}/ledova-native-android/*.json
+            ${{ runner.temp }}/ledova-native-android/*.txt
+            ${{ runner.temp }}/ledova-native-android/*.png
+            ${{ runner.temp }}/ledova-native-android/ordinary-release.apk
+            ${{ runner.temp }}/ledova-emulator.log
+      - name: Remove the owned emulator
+        if: always()
+        run: |
+          adb -s "$ANDROID_SERIAL" emu kill || true
+          export JAVA_HOME="$JAVA_HOME_21_X64"
+          avdmanager delete avd --name ledova_native || true
+
+  ios:
+    name: iOS unsigned Release and native probe
+    runs-on: macos-15
+    timeout-minutes: 90
+    env:
+      CI: '1'
+      EXPO_NO_DOTENV: '1'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_DEV_API_HOST: '192.168.50.10'
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.15.1
+      - name: Install locked JavaScript dependencies without package scripts
+        run: |
+          npm install --global npm@11.5.2
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm --prefix mobile ci --ignore-scripts --no-audit --no-fund
+      - name: Generate native projects and resolve Pods
+        working-directory: mobile
+        run: |
+          npx expo prebuild --clean --no-install --platform all
+          node scripts/check-native-projects.mjs
+          cd ios
+          pod install
+      - name: Create an owned iOS 18.5 simulator
+        run: |
+          native_udid=$(xcrun simctl create LedovaNative com.apple.CoreSimulator.SimDeviceType.iPhone-16 com.apple.CoreSimulator.SimRuntime.iOS-18-5)
+          echo "IOS_SIMULATOR_UDID=$native_udid" >> "$GITHUB_ENV"
+          xcrun simctl boot "$native_udid"
+          xcrun simctl bootstatus "$native_udid" -b
+      - name: Build and run the ordinary app and native red/green probe
+        working-directory: mobile
+        run: node scripts/native-smoke.mjs ios "$RUNNER_TEMP/ledova-native-ios"
+      - name: Preserve native evidence and the unsigned ordinary simulator app
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ios-native-evidence
+          retention-days: 7
+          path: |
+            ${{ runner.temp }}/ledova-native-ios/*.log
+            ${{ runner.temp }}/ledova-native-ios/*.json
+            ${{ runner.temp }}/ledova-native-ios/*.txt
+            ${{ runner.temp }}/ledova-native-ios/*.png
+            ${{ runner.temp }}/ledova-native-ios/ordinary-release.app
+            mobile/ios/Podfile.lock
+            mobile/ios/Podfile
+            mobile/ios/build/generated/ios/RCTModulesConformingToProtocolsProvider.mm
+      - name: Remove the owned simulator and its test CA
+        if: always()
+        run: |
+          if [ -n "$IOS_SIMULATOR_UDID" ]; then
+            xcrun simctl shutdown "$IOS_SIMULATOR_UDID" || true
+            xcrun simctl delete "$IOS_SIMULATOR_UDID"
+          fi

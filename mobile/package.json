@@ -20,7 +20,10 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "type-check": "tsc --noEmit",
-    "check:resolution": "node scripts/check-resolution.mjs"
+    "check:resolution": "node scripts/check-resolution.mjs",
+    "native:prebuild": "expo prebuild --clean --no-install --platform all",
+    "check:native": "node scripts/check-native-projects.mjs",
+    "test:native": "node scripts/native-smoke.mjs"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",
@@ -72,7 +75,6 @@
     "react-native": "0.81.5",
     "react-native-element-dropdown": "^2.12.4",
     "react-native-gesture-handler": "~2.28.0",
-    "react-native-get-random-values": "~1.11.0",
     "react-native-gifted-charts": "^1.4.70",
     "react-native-qrcode-svg": "^6.3.20",
     "react-native-safe-area-context": "5.6.2",
@@ -87,6 +89,7 @@
   "devDependencies": {
     "@babel/core": "^7.28.5",
     "@eslint/js": "^9.39.0",
+    "@expo/plist": "0.4.9",
     "@testing-library/react-native": "^14.0.1",
     "@types/jest": "^30.0.0",
     "@types/react": "~19.1.10",
@@ -111,5 +114,17 @@
     "ws@6": "^6.2.6",
     "ws@7": "^7.5.13",
     "ws@8": "^8.20.1"
+  },
+  "codegenConfig": {
+    "name": "LedovaNative",
+    "type": "modules",
+    "jsSrcsDir": "src",
+    "ios": {
+      "modulesConformingToProtocol": {
+        "RCTURLRequestHandler": [
+          "LedovaHTTPRequestHandler"
+        ]
+      }
+    }
   }
 }

@@ -1,6 +1,19 @@
 /* eslint-disable @typescript-eslint/no-require-imports, no-undef */
 
-import 'react-native-get-random-values';
+const { getRandomValues } = require('expo-crypto');
+
+global.crypto ??= {};
+global.crypto.getRandomValues = (bytes) => {
+  if (
+    ![Int8Array, Uint8Array, Uint8ClampedArray, Int16Array, Uint16Array, Int32Array, Uint32Array].some(
+      (type) => bytes instanceof type,
+    )
+  ) {
+    throw new TypeError('Random values require an integer typed array.');
+  }
+  if (bytes.byteLength > 65536) throw new RangeError('Random values are limited to 65536 bytes.');
+  return getRandomValues(bytes);
+};
 
 const { Buffer } = require('buffer');
 global.Buffer = Buffer;

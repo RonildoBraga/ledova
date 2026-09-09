@@ -636,7 +636,17 @@ bundle and must never hold a secret.
 | --- | --- |
 | `dashboard/.env` | `VITE_API_URL`, `VITE_LEDOVA_URL`, `VITE_MARKETING_URL`, `VITE_HOST`, `VITE_PORT`, `VITE_ALLOWED_HOSTS` |
 | `marketing/.env` | `VITE_LEDOVA_URL`, `VITE_MARKETING_URL`, `VITE_HOST`, `VITE_PORT`, `VITE_ALLOWED_HOSTS` |
-| `mobile/.env` | `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_USE_MOCK_DATA`, `EXPO_PUBLIC_MARKETING_URL`, `EXPO_PUBLIC_SUPPORT_EMAIL`, `EXPO_PUBLIC_APP_STORE_URL` |
+| `mobile/.env` | `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_DEV_API_HOST`, `EXPO_PUBLIC_USE_MOCK_DATA`, `EXPO_PUBLIC_MARKETING_URL`, `EXPO_PUBLIC_SUPPORT_EMAIL`, `EXPO_PUBLIC_APP_STORE_URL` |
+
+Mobile Release builds require HTTPS. Native Debug accepts loopback, the Android
+emulator host, and one private LAN IPv4 explicitly selected with
+`EXPO_PUBLIC_DEV_API_HOST` before prebuild. Set the API/marketing URLs to that
+same address when using it; a native rebuild is required to change the allowance.
+Bearer requests, including absolute download URLs, must remain on the configured
+API origin. API servers must serve requests directly: native API/SSE redirects
+are refused, including 307/308 responses. Provider WebView navigation remains
+independent and disallows insecure mixed content. [Mobile build and security
+guidance](MOBILE.md) describes native validation and storage behavior.
 
 ### Contracts
 

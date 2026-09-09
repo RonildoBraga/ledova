@@ -6,7 +6,8 @@ import {
   createUserFriendlyError,
   hasServiceErrorDetail,
 } from '@ledova/shared';
-import { clearTokens, getAccessToken, getRefreshToken, storeTokens } from './tokenStorage';
+import { captureRefreshSession, clearTokens, getAccessToken, getRefreshToken, storeTokens } from './tokenStorage';
+import { getApiBaseUrl, validateApiDestination } from '../config/networkPolicy';
 
 export type { UserFriendlyError } from '@ledova/shared';
 
@@ -23,20 +24,26 @@ const apiClient = axios.create({
 });
 
 apiClient.interceptors.request.use(async (config) => {
+  config.baseURL = config.baseURL ?? getApiBaseUrl();
+  validateApiDestination(apiClient.getUri(config));
+  if (config.auth) throw new Error('The mobile API uses the stored bearer session.');
   const accessToken = await getAccessToken();
   if (accessToken) {
     config.headers.Authorization = `Bearer ${accessToken}`;
+  } else {
+    config.headers.delete('Authorization');
   }
   return config;
 });
 
 export async function rotateRefreshToken(refresh: string): Promise<void> {
+  const generation = await captureRefreshSession(refresh);
   try {
     const { data } = await requestTokenRefresh(apiClient, { refresh });
-    await storeTokens({ accessToken: data.access, refreshToken: data.refresh });
+    await storeTokens({ accessToken: data.access, refreshToken: data.refresh }, generation);
   } catch (error) {
     if (axios.isAxiosError(error) && error.response) {
-      await clearTokens();
+      await clearTokens(generation);
     }
     throw error;
   }
