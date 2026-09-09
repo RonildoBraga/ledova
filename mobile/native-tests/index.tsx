@@ -30,6 +30,7 @@ function request(url: string, method = 'GET', body?: string): Promise<XMLHttpReq
     xhr.open(method, url);
     xhr.timeout = 10000;
     xhr.setRequestHeader('Authorization', 'Bearer synthetic-access');
+    if (body !== undefined) xhr.setRequestHeader('Content-Type', 'text/plain');
     xhr.onload = () => resolve(xhr);
     xhr.onerror = () => reject(new Error('Native request refused.'));
     xhr.ontimeout = () => reject(new Error('Native request timed out.'));
@@ -142,6 +143,7 @@ async function run(): Promise<Check[]> {
         };
         xhr.open('POST', `${cleartext}/direct`);
         xhr.setRequestHeader('Authorization', 'Bearer synthetic-access');
+        xhr.setRequestHeader('Content-Type', 'text/plain');
         xhr.onerror = complete;
         xhr.onabort = complete;
         xhr.onload = () => {
@@ -209,6 +211,7 @@ async function run(): Promise<Check[]> {
     await new Promise<void>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open('GET', `${process.env.EXPO_PUBLIC_API_URL}/slow`);
+      xhr.responseType = 'arraybuffer';
       xhr.timeout = 10000;
       xhr.onprogress = (event) => {
         if (event.loaded > 0) xhr.abort();

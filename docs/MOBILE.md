@@ -153,6 +153,12 @@ IOS_SIMULATOR_UDID=your-owned-simulator-uuid npm run test:native -- ios /absolut
 
 The output directory must not already exist. The runner builds and launches the
 ordinary Release app, preserves that artifact and checks its release policy. It
+gives each build phase its own temporary/cache directory so Expo's CI cache
+cannot retain a previous phase's API destination. The probe checks the compiled
+API client and policy destinations against its isolated server.
+Server startup has a 120-second deadline and each certificate tool call has a
+30-second timeout. Named stages and separate primary/cleanup errors identify
+infrastructure failures without recording request credentials or bodies. The runner
 then builds a separate test entry against loopback TLS servers with a generated
 CA. Android receives a temporary test-only trust resource; iOS receives the CA
 only in the owned simulator keychain. The ordinary artifact retains its normal

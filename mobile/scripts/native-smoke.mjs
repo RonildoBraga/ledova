@@ -39,6 +39,12 @@ const baseEnvironment = {
 const cancellation = new globalThis.AbortController();
 const activeChildren = new Map();
 const stoppingChildren = new Map();
+const spawnFailures = new WeakMap();
+let currentStage = 'initialization';
+function markStage(name) {
+  currentStage = name;
+  console.log(name);
+}
 const signals = { SIGINT: 130, SIGTERM: 143 };
 function interrupt(signal) {
   if (cancellation.signal.aborted) return;
@@ -51,7 +57,7 @@ for (const [signal, handler] of Object.entries(signalHandlers)) process.on(signa
 function processTable() {
   return execFileSync('ps', ['-axo', 'pid=,ppid=,pgid=,stat='], {
     encoding: 'utf8',
-    timeout: 5000,
+    timeout: 15000,
     killSignal: 'SIGKILL',
   })
     .trim()
@@ -65,6 +71,7 @@ function processTable() {
 function ownedSpawn(file, args, options) {
   cancellation.signal.throwIfAborted();
   const child = spawn(file, args, { ...options, detached: true });
+  child.once('error', (error) => spawnFailures.set(child, error));
   activeChildren.set(child, new Promise((resolve) => child.once('close', resolve)));
   return child;
 }
@@ -114,7 +121,7 @@ function stopOwned(child) {
 
 async function command(file, args, name, extraEnvironment = {}, cwd = mobile) {
   cancellation.signal.throwIfAborted();
-  console.log(name);
+  markStage(name);
   const log = fs.openSync(path.join(directory, `${name}.log`), 'w');
   let child;
   let timedOut = false;
@@ -159,10 +166,17 @@ async function command(file, args, name, extraEnvironment = {}, cwd = mobile) {
   }
 }
 
-async function waitFor(filename, milliseconds) {
+async function waitFor(filename, milliseconds, child) {
   const deadline = Date.now() + milliseconds;
   while (!fs.existsSync(filename)) {
     cancellation.signal.throwIfAborted();
+    if (child) {
+      if (spawnFailures.has(child)) throw spawnFailures.get(child);
+      assert.ok(
+        child.exitCode === null && child.signalCode === null,
+        `Probe server exited (${child.exitCode ?? child.signalCode}); read server.log.`,
+      );
+    }
     assert.ok(Date.now() < deadline, `Timed out waiting for ${path.basename(filename)}.`);
     await delay(250);
   }
@@ -316,7 +330,8 @@ function checkAndroidArtifact(artifact) {
 }
 
 const serverLog = fs.openSync(path.join(directory, 'server.log'), 'w');
-ownedSpawn(
+markStage('probe-server-start');
+const server = ownedSpawn(
   process.execPath,
   [path.join(mobile, 'scripts/native-probe-server.mjs'), path.join(directory, 'server'), platform],
   { stdio: ['ignore', serverLog, serverLog] },
@@ -325,10 +340,13 @@ const restored = new Map();
 function preserve(filename) {
   restored.set(filename, fs.existsSync(filename) ? fs.readFileSync(filename) : null);
 }
+let failure;
 try {
-  const endpoints = await waitFor(path.join(directory, 'server/config.json'), 15000);
+  const endpoints = await waitFor(path.join(directory, 'server/config.json'), 120000, server);
   const ca = fs.readFileSync(path.join(directory, 'server/ca.pem'));
+  markStage('probe-server-http-control');
   await localRequest(endpoints.httpUrl, '/direct');
+  markStage('probe-server-certificate-control');
   await localRequest(endpoints.untrustedUrl, '/direct', fs.readFileSync(path.join(directory, 'server/untrusted.pem')));
   await build('ordinary-release-build', { ENTRY_FILE: 'index.ts' });
   const artifact = path.join(directory, platform === 'android' ? 'ordinary-release.apk' : 'ordinary-release.app');
@@ -427,6 +445,7 @@ try {
     await localRequest(endpoints.apiUrl, '/reset', ca);
     await build(`probe-${name}-build`, environment);
     await launch(`probe-${name}`);
+    markStage(`probe-${name}-report`);
     const result = await waitFor(path.join(directory, 'server/result.json'), 120000);
     fs.writeFileSync(path.join(directory, `native-${name}.json`), JSON.stringify(result, null, 2));
     await delay(500);
@@ -438,23 +457,35 @@ try {
     assert.ok(result.checks.length >= 12);
     assert.deepEqual(failed, name === 'red' ? ['native 307 refusal', 'native 308 refusal'] : []);
     assert.equal(result.counts.redirectTarget, name === 'red' ? 2 : 0);
+    assert.equal(result.counts.redirectBody, name === 'red' ? 2 : 0);
+    if (name === 'green') assert.equal(result.counts.redirectBearer, 0);
     for (const count of ['direct', 'targetControl', 'upload', 'download', 'stream', 'cancelled'])
       assert.ok(result.counts[count] > 0, `${count} needs a positive control.`);
     for (const count of ['http', 'untrusted']) assert.equal(result.counts[count], 0);
   }
   console.log('Native Release probe passed with observed redirect failures before the fix.');
 } catch (error) {
-  if (!cancellation.signal.aborted) throw error;
-  console.error(cancellation.signal.reason.message);
+  failure = error;
+  console.error(`Native validation failed during ${currentStage}: ${error.message}`);
 } finally {
-  try {
-    await Promise.all([...activeChildren.keys()].map(stopOwned));
-  } finally {
-    for (const [filename, contents] of restored) {
+  const cleanup = await Promise.allSettled([...activeChildren.keys()].map(stopOwned));
+  const cleanupErrors = cleanup.filter((result) => result.status === 'rejected').map((result) => result.reason);
+  for (const [filename, contents] of restored) {
+    try {
       if (contents === null) fs.rmSync(filename, { force: true });
       else fs.writeFileSync(filename, contents);
+    } catch (error) {
+      cleanupErrors.push(error);
     }
-    fs.closeSync(serverLog);
-    for (const [signal, handler] of Object.entries(signalHandlers)) process.off(signal, handler);
   }
+  try {
+    fs.closeSync(serverLog);
+  } catch (error) {
+    cleanupErrors.push(error);
+  }
+  for (const [signal, handler] of Object.entries(signalHandlers)) process.off(signal, handler);
+  for (const error of cleanupErrors) console.error(`Native cleanup failed: ${error.message}`);
+  if (!failure && cleanupErrors.length) failure = new AggregateError(cleanupErrors, 'Native cleanup failed.');
 }
+if (cancellation.signal.aborted) console.error(cancellation.signal.reason.message);
+else if (failure) throw failure;

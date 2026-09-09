@@ -11,11 +11,21 @@ const directory = path.resolve(process.argv[2]);
 const host = process.argv[3] === 'ios' ? 'localhost' : '10.0.2.2';
 fs.mkdirSync(directory, { recursive: true });
 
-function openssl(args) {
-  execFileSync('openssl', args, { cwd: directory, stdio: ['ignore', 'ignore', 'pipe'] });
+function openssl(stage, args) {
+  console.log(stage);
+  try {
+    execFileSync('openssl', args, {
+      cwd: directory,
+      stdio: ['ignore', 'ignore', 'pipe'],
+      timeout: 30000,
+      killSignal: 'SIGKILL',
+    });
+  } catch (error) {
+    throw new Error(`Probe certificate tool failed during ${stage} (${error.code ?? error.status}).`);
+  }
 }
 
-openssl([
+openssl('generate-probe-ca', [
   'req',
   '-x509',
   '-newkey',
@@ -32,7 +42,7 @@ openssl([
   '-addext',
   'basicConstraints=critical,CA:TRUE',
 ]);
-openssl([
+openssl('generate-server-request', [
   'req',
   '-newkey',
   'rsa:2048',
@@ -48,7 +58,7 @@ fs.writeFileSync(
   path.join(directory, 'server.ext'),
   'subjectAltName=DNS:localhost,IP:127.0.0.1,IP:10.0.2.2\nbasicConstraints=CA:FALSE\nextendedKeyUsage=serverAuth\nkeyUsage=digitalSignature,keyEncipherment\n',
 );
-openssl([
+openssl('sign-server-certificate', [
   'x509',
   '-req',
   '-in',
@@ -65,7 +75,7 @@ openssl([
   '-extfile',
   'server.ext',
 ]);
-openssl([
+openssl('generate-untrusted-certificate', [
   'req',
   '-x509',
   '-newkey',
@@ -88,6 +98,8 @@ const counts = {
   direct: 0,
   targetControl: 0,
   redirectTarget: 0,
+  redirectBody: 0,
+  redirectBearer: 0,
   http: 0,
   upload: 0,
   download: 0,
@@ -143,6 +155,10 @@ function handler(kind) {
     });
     request.on('end', () => {
       const body = Buffer.concat(chunks).toString();
+      if (route === '/target') {
+        if (body.includes('synthetic-refresh-and-sign-in')) counts.redirectBody++;
+        if (request.headers.authorization === 'Bearer synthetic-access') counts.redirectBearer++;
+      }
       response.setHeader('Content-Type', 'application/json');
       if (route === '/redirect307' || route === '/redirect308') {
         response.writeHead(route === '/redirect307' ? 307 : 308, { Location: `${destination}/target` });
@@ -195,6 +211,7 @@ const servers = [
     handler('untrusted'),
   ),
 ];
+console.log('listen-probe-services');
 await Promise.all(servers.map((server) => new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))));
 const ports = servers.map((server) => server.address().port);
 destination = `https://${host}:${ports[1]}`;
@@ -211,6 +228,7 @@ fs.writeFileSync(
     2,
   ),
 );
+console.log('probe-services-ready');
 
 process.on('SIGTERM', () => {
   for (const server of servers) {
