@@ -33,6 +33,7 @@ def _stream_response():
                     "type": "string",
                     "description": STREAM_DESCRIPTION,
                     "x-sse-events": event_names(),
+                    "x-sse-connection-event": CONNECTED_EVENT,
                 }
             }
         },

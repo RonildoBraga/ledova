@@ -3,7 +3,7 @@ from django.test import TestCase
 from django.urls import reverse
 from drf_spectacular.generators import SchemaGenerator
 
-from shared.api.schema_hooks import TRADING_EVENTS_PATH, event_names
+from shared.api.schema_hooks import CONNECTED_EVENT, TRADING_EVENTS_PATH, event_names
 from tokens.events import TRADING_EVENT_TYPES
 
 HOOK = "shared.api.schema_hooks.document_trading_events_stream"
@@ -40,6 +40,7 @@ class TheStreamIsInTheSchemaTest(TestCase):
 
         self.assertEqual(documented, ["connected", *sorted(TRADING_EVENT_TYPES)])
         self.assertEqual(documented, event_names())
+        self.assertEqual(stream["content"]["text/event-stream"]["schema"]["x-sse-connection-event"], CONNECTED_EVENT)
 
     def test_a_new_trading_event_type_reaches_the_schema_without_an_edit(self):
         with self.settings():

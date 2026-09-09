@@ -1970,6 +1970,14 @@ type declares required that the endpoint never sends is different in kind - ever
 read of it type-checks and every read of it is `undefined` at run time, and no
 care at the call site can catch that, because the type is the thing being trusted.
 
+Trading SSE event names are checked in both directions. The gate resolves
+`TRADING_ENDPOINTS.EVENTS.STREAM` and compares its generated `x-sse-events` with
+the shared `TradingEventType` union, which keys the invalidation map. The schema
+marks the connection-only event separately through `x-sse-connection-event`,
+derived from the server's `CONNECTED_EVENT`; that event has no invalidation
+listener. Missing metadata, an uninspectable union, a server-only event or a
+client-only event fails the same CI gate. These names have no debt allowlist.
+
 **Matching goes through `paths`, never through names.** drf-spectacular names its
 components after serializer classes, so a component and an interface can share a
 word and describe unrelated endpoints: this repository has `documents.Document`
