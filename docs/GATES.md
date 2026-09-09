@@ -352,7 +352,8 @@ relation where it is meant not to hold — `offerings/views/offering.py`'s
 `visible_to_user`, and `Subscription.objects.for_issuer(offering)` would return
 every investor's subscriptions. It is correct today only because
 `Company.visible_to_user` and `Company.manageable_by_user` have identical bodies,
-and the tenancy section below describes deliberate pressure to widen the first.
+and the [tenancy model](ARCHITECTURE.md#tenancy-model) describes deliberate
+pressure to widen the first.
 Loosening the rule would have removed the standing warning from the one line that
 says so. Those four are pinned with counts instead.
 
@@ -413,6 +414,61 @@ LEGACY entry: no gate flags them, converting them in a batch would conflict with
 everything in flight, and every service written since is already plain functions.
 They convert when one is next edited for another reason. Recorded here so the
 absence of a gate for them reads as a decision rather than an oversight.
+
+## The connection-binding gate
+
+**A transaction and its queries must use the same connection.** Use
+`shared.db.atomic` and `shared.db.on_commit`; their implementation is
+`backend/shared/db/transactions.py`. Unless an explicit `using` is supplied,
+`atomic` resolves `current_alias()` at `__enter__`, including each invocation of
+a decorated function, and `on_commit` resolves it on each callback-registration
+call. A transaction on `default` cannot roll back writes the router sends to
+another alias. `django.db.connection` also always reaches `default`, whose R1
+role bypasses row-level security, so a raw cursor through that proxy can bypass
+the caller's scope. Raw access names its connection with `connections[alias]`,
+usually `connections[current_alias()]`. This is the R23 rule; the role model is
+in [Tenancy model](ARCHITECTURE.md#tenancy-model).
+
+`scripts/check-connection-binding.py` is its static gate.
+`make check-connection-binding` runs it, `make check` includes it, and CI runs it
+alongside the other source gates. Python 3 and a checkout are enough. It parses
+every `.py` file under `backend/`, excluding any path containing `tests`,
+`migrations`, `__pycache__`, `.git` or `node_modules` as a path component.
+
+It refuses the literal attribute paths `transaction.atomic`,
+`transaction.on_commit` and `connection.cursor`, both as calls and as attribute
+references. That includes a bare `@transaction.atomic` decorator or an assignment
+that saves the method for later. Naming `using` explicitly on
+`transaction.atomic` does not exempt it: application code uses the shared helper.
+
+The import check refuses these forms even before a call appears:
+
+- `from django.db import transaction` and `from django.db import connection`.
+- Any `from django.db.transaction import ...`, including direct imports of
+  `atomic` and `on_commit`.
+- `import django.db.transaction`, or a module name beginning with that path.
+
+Each form is recognised with or without an `as` alias, because the check reads
+the imported name. `from django.db import connections` and imports from
+`shared.db` are allowed.
+
+`ALLOWED` exempts three whole files: `backend/shared/db/transactions.py`
+implements the helpers; `backend/shared/db/principal.py` binds its local
+`connection` through `connections[alias or current_alias()]`; and
+`backend/shared/management/commands/check_rls_roles.py` deliberately asks each
+alias by name. The gate fails if an allowed file disappears.
+`scripts/tests/test_check_connection_binding.py` also requires every allowance
+to state a reason and still produce a finding without its exemption.
+
+**It reads syntax, not resolved symbols or runtime routing.** It does not follow
+re-exports, assignments, dynamic imports or `getattr`. For example,
+`import django.db` followed by `django.db.transaction.atomic()` is not recognised.
+The refused imports above catch aliases of those imports; there is no general
+alias analysis. Code outside the scanned files and code inside an allowed file
+are unchecked, and choosing `connections[alias]` is not proof that the alias is
+the right one. The gate cannot establish which role a live connection uses or
+whether a transaction really rolls back its queries; the scoped-connection tests
+described in [Test traps](TRAPS.md#test-traps) exercise that boundary.
 
 ## The schema response gate
 
