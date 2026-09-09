@@ -114,15 +114,17 @@ class SwapWorkersUseOneCurrentClaimTest(TransactionTestCase):
         deadline = time.monotonic() + 10
         while time.monotonic() < deadline:
             with connection.cursor() as cursor:
+                cursor.execute("SELECT pg_stat_clear_snapshot()")
                 cursor.execute(
-                    "SELECT query, COALESCE(%s, pg_backend_pid()) = ANY(pg_blocking_pids(pid)) "
+                    "SELECT query, COALESCE(%s, pg_backend_pid()) = ANY(pg_blocking_pids(pid)), wait_event_type "
                     "FROM pg_stat_activity WHERE pid = %s",
                     [blocker_pid, child.database_pid],
                 )
                 observed = cursor.fetchone()
             if observed and observed[1]:
                 self.assertIn(table, observed[0])
-                self.assertIn("FOR UPDATE", observed[0])
+                self.assertTrue(observed[0].startswith("SELECT "), observed[0])
+                self.assertEqual(observed[2], "Lock", observed)
                 return
             time.sleep(0.01)
         self.fail(f"Worker never waited for the held {table} row: {observed}")
