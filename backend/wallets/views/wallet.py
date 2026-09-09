@@ -156,9 +156,8 @@ class WalletViewSet(AuthenticatedModelViewSet):
     @extend_schema(request=BatchBalanceRequestSerializer, responses=BatchBalanceResponseSerializer)
     @action(detail=False, methods=["post"], url_path="batch-check-balances", url_name="batch-check-balances")
     def batch_check_balances(self, request):
-        result = BalanceService.batch_check_balances(
-            addresses=request.data.get("addresses", []),
-            chain=request.data.get("chain", "ethereum"),
-        )
+        serializer = BatchBalanceRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = BalanceService.batch_check_balances(request.user, **serializer.validated_data)
 
         return Response(result, status=status.HTTP_200_OK)

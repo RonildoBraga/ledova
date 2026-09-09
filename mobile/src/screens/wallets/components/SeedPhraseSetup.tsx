@@ -9,9 +9,10 @@ import {
   storeSeedPhrase,
 } from '../../../services/secureKeyStorage';
 import { deriveAccountsFromMnemonic } from '../../../utils/softwareWallet';
+import { importOnEvmNetwork, importAddressKey } from '@ledova/shared';
 import type { DerivedAddress } from '@ledova/shared';
 import type { SoftwareWalletImport } from '../../../utils/softwareWallet';
-import { useFetchBalances } from '../../../hooks';
+import { useFetchBalances } from '../../../hooks/useFetchBalances';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { CustomModal } from '../../../components/modal';
 import { SeedPhraseGenerate } from './SeedPhraseGenerate';
@@ -30,12 +31,13 @@ type InputMode = 'create' | 'import';
 
 interface SeedPhraseSetupProps {
   visible: boolean;
+  userAccountUuid: string | undefined;
   onClose: () => void;
   onComplete: (addresses: DerivedAddress[], importData: SoftwareWalletImport) => void;
   onCancel: () => void;
 }
 
-export function SeedPhraseSetup({ visible, onClose, onComplete, onCancel }: SeedPhraseSetupProps) {
+export function SeedPhraseSetup({ visible, userAccountUuid, onClose, onComplete, onCancel }: SeedPhraseSetupProps) {
   const theme = useAppTheme();
   const styles = useThemedStyles((theme) => ({
     storingContainer: {
@@ -61,9 +63,20 @@ export function SeedPhraseSetup({ visible, onClose, onComplete, onCancel }: Seed
 
   const [derivedData, setDerivedData] = useState<SoftwareWalletImport | null>(null);
   const [selectedAddresses, setSelectedAddresses] = useState<Set<string>>(new Set());
-  const { balances, fetchBalances } = useFetchBalances();
+  const { balances, fetchBalances } = useFetchBalances(userAccountUuid);
 
   const [storeError, setStoreError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (derivedData && visible) void fetchBalances(derivedData.addresses);
+  }, [derivedData, visible, fetchBalances]);
+
+  const selectEvmNetwork = (network: string) => {
+    if (!derivedData) return;
+    const next = importOnEvmNetwork(derivedData, network === 'base' ? 'BASE' : 'ETH');
+    setDerivedData(next);
+    setSelectedAddresses(new Set(next.addresses.map(importAddressKey)));
+  };
 
   useEffect(() => {
     if (!visible) {
@@ -111,16 +124,12 @@ export function SeedPhraseSetup({ visible, onClose, onComplete, onCancel }: Seed
     setImportError(null);
   }, []);
 
-  const deriveAndShowAccounts = useCallback(
-    (mnemonicPhrase: string) => {
-      const data = deriveAccountsFromMnemonic(mnemonicPhrase);
-      setDerivedData(data);
-      setSelectedAddresses(new Set(data.addresses.map((a) => a.address)));
-      setStep(SEED_STEP.SELECT_ACCOUNTS);
-      fetchBalances(data.addresses);
-    },
-    [fetchBalances],
-  );
+  const deriveAndShowAccounts = useCallback((mnemonicPhrase: string) => {
+    const data = deriveAccountsFromMnemonic(mnemonicPhrase);
+    setDerivedData(data);
+    setSelectedAddresses(new Set(data.addresses.map(importAddressKey)));
+    setStep(SEED_STEP.SELECT_ACCOUNTS);
+  }, []);
 
   const handleProceedFromGenerate = useCallback(() => {
     if (inputMode === 'import') {
@@ -166,7 +175,7 @@ export function SeedPhraseSetup({ visible, onClose, onComplete, onCancel }: Seed
   }, []);
 
   const handleStoreAndCreate = useCallback(async () => {
-    if (!derivedData || selectedAddresses.size === 0) return;
+    if (!userAccountUuid || !derivedData || selectedAddresses.size === 0) return;
 
     setStep(SEED_STEP.STORING);
     setStoreError(null);
@@ -186,13 +195,13 @@ export function SeedPhraseSetup({ visible, onClose, onComplete, onCancel }: Seed
       const seedId = computeSeedIdentifier(mnemonic);
       await storeSeedPhrase(seedId, mnemonic);
 
-      const selected = derivedData.addresses.filter((a) => selectedAddresses.has(a.address));
+      const selected = derivedData.addresses.filter((a) => selectedAddresses.has(importAddressKey(a)));
       onComplete(selected, derivedData);
     } catch (err) {
       setStoreError(err instanceof Error ? err.message : 'Failed to store recovery phrase');
       setStep(SEED_STEP.SELECT_ACCOUNTS);
     }
-  }, [derivedData, selectedAddresses, mnemonic, onComplete]);
+  }, [derivedData, selectedAddresses, mnemonic, onComplete, userAccountUuid]);
 
   const getFooterProps = () => {
     switch (step) {
@@ -247,6 +256,8 @@ export function SeedPhraseSetup({ visible, onClose, onComplete, onCancel }: Seed
         if (!derivedData) return null;
         return (
           <SeedAccountSelector
+            userAccountUuid={userAccountUuid}
+            onNetworkChange={selectEvmNetwork}
             addresses={derivedData.addresses}
             selectedAddresses={selectedAddresses}
             balances={balances}

@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import {
   getPortfolioSnapshotsTimeSeries,
+  portfolioSnapshotPoints,
   getWallets,
   getTransactions,
   getTransactionsNextPage,
@@ -16,7 +17,7 @@ import {
   calculateWalletTotals,
   filterWalletsByChain,
 } from '@ledova/shared';
-import type { FavouriteAsset, PortfolioSnapshot } from '@ledova/shared';
+import type { FavouriteAsset } from '@ledova/shared';
 import { apiClient } from '../../services/apiClient';
 import { useUserPreferences } from '../../hooks/useUserPreferences';
 import { usePortfolio } from '../portfolio/usePortfolio';
@@ -104,32 +105,7 @@ export const useHome = () => {
     enabled: !!selectedPortfolio?.uuid,
     staleTime: CACHE_TIMING.DEFAULT_STALE_TIME,
     gcTime: CACHE_TIMING.EXTRA_LONG_GC_TIME,
-    select: (response) => {
-      const snapshots = (response.data || []) as PortfolioSnapshot[];
-      return snapshots.map((snapshot, index) => {
-        const holdingsData = snapshot.holdingsData || {};
-        const snapshotQuantities: Record<string, number> = {};
-        const assetValues: Record<string, number> = {};
-        let totalMarketValue = snapshot.totalMarketValue ? parseFloat(snapshot.totalMarketValue) : 0;
-
-        Object.entries(holdingsData).forEach(([symbol, holding]) => {
-          if (!holding) return;
-          snapshotQuantities[symbol] = parseFloat(holding.quantity || '0');
-          const marketValue = parseFloat(holding.marketValue || '0');
-          assetValues[symbol] = marketValue;
-          if (!snapshot.totalMarketValue) totalMarketValue += marketValue;
-        });
-
-        return {
-          dayIndex: index,
-          date: snapshot.snapshotDate,
-          totalMarketValue,
-          assetValues,
-          assetQuantities: snapshotQuantities,
-          assetSymbols: Object.keys(holdingsData),
-        };
-      });
-    },
+    select: (response) => portfolioSnapshotPoints(response.data || []),
   });
 
   const isHomeLoading = preferencesLoading || portfolioSnapshotsQuery.isLoading;

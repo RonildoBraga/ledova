@@ -98,7 +98,7 @@ export function useWalletForm({ userAccountUuid, onSubmit, onBatchSubmit, presel
         const detectedShortName = detectChainFromAddress(text);
         if (detectedShortName) {
           const chain = getChainByShortName(detectedShortName);
-          if (chain && chain.code !== selectedChain) {
+          if (chain && chain.code !== selectedChain && !(detectedShortName === 'ETH' && selectedChain === 'base')) {
             setSelectedChain(chain.code);
           }
         }
@@ -159,7 +159,7 @@ export function useWalletForm({ userAccountUuid, onSubmit, onBatchSubmit, presel
       const detectedShortName = detectChainFromAddress(data);
       if (detectedShortName) {
         const chain = getChainByShortName(detectedShortName);
-        if (chain) {
+        if (chain && !(detectedShortName === 'ETH' && selectedChain === 'base')) {
           setSelectedChain(chain.code);
         }
       }
@@ -168,7 +168,7 @@ export function useWalletForm({ userAccountUuid, onSubmit, onBatchSubmit, presel
         setErrors((prev) => ({ ...prev, address: undefined }));
       }
     },
-    [errors.address],
+    [errors.address, selectedChain],
   );
 
   const stopScanner = useCallback(() => {
@@ -270,6 +270,7 @@ export function useWalletForm({ userAccountUuid, onSubmit, onBatchSubmit, presel
     isSelectingAddresses: step === 'selectAddresses' && !!scannedURString,
 
     setName,
+    setSelectedChain,
 
     reset,
     handleAddressChange,

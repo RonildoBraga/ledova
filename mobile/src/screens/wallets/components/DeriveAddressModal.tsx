@@ -3,7 +3,7 @@ import { View, Text, ActivityIndicator } from 'react-native';
 import { KeyIcon, CheckCircleIcon } from 'phosphor-react-native';
 import { CustomModal } from '../../../components/modal';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
-import { getBlockchainDisplayName } from '@ledova/shared';
+import { getBlockchainDisplayName, getChainShortCode } from '@ledova/shared';
 import type { Wallet, DerivedAddress } from '@ledova/shared';
 import { deriveAddressFromParentKey } from '../../../utils/keystone/bcurDecoder';
 
@@ -153,7 +153,7 @@ export function DeriveAddressModal({
 
   if (!wallet) return null;
 
-  const networkName = getBlockchainDisplayName(derivedAddress?.networkType || 'ETH');
+  const networkName = getBlockchainDisplayName(getChainShortCode(wallet.chain));
 
   return (
     <CustomModal

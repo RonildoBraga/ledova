@@ -155,11 +155,6 @@ class TakesNoIdentifierReasonsTest(SimpleTestCase):
             with self.subTest(route=(method, path)):
                 self.assertNotIn("{}", path)
 
-    def test_a_body_identified_route_takes_no_path_identifier(self):
-        for method, path in routes_for("BODY_IDENTIFIED"):
-            with self.subTest(route=(method, path)):
-                self.assertNotIn("{}", path)
-
     def test_the_signed_relay_takes_no_path_identifier(self):
         for method, path in routes_for("SIGNED_RELAY"):
             with self.subTest(route=(method, path)):

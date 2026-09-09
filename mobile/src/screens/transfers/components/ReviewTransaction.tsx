@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, ScrollView } from 'react-native';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
-import { formatWalletAddressMedium, isEthereumChain } from '@ledova/shared';
+import { formatWalletAddressMedium, getNativeAssetSymbol, isSupportedEvmChain } from '@ledova/shared';
 import type { TransactionData } from '@ledova/shared';
 
 interface ReviewTransactionProps {
@@ -89,7 +89,8 @@ export function ReviewTransaction({ transactionData, chainShortName }: ReviewTra
       color: theme.colors.text.primary,
     },
   }));
-  const isEthereum = isEthereumChain(chainShortName);
+  const nativeSymbol = getNativeAssetSymbol(chainShortName);
+  const isEvm = isSupportedEvmChain(chainShortName);
 
   return (
     <ScrollView
@@ -117,7 +118,7 @@ export function ReviewTransaction({ transactionData, chainShortName }: ReviewTra
           <Text style={styles.amountValue}>
             {transactionData.amountToken
               ? `${transactionData.amountToken} ${transactionData.tokenSymbol}`
-              : `${transactionData.amountEth || transactionData.amountBtc} ${chainShortName}`}
+              : `${transactionData.amountEth || transactionData.amountBtc} ${nativeSymbol}`}
           </Text>
         </View>
       </View>
@@ -126,7 +127,7 @@ export function ReviewTransaction({ transactionData, chainShortName }: ReviewTra
         <Text style={styles.sectionTitle}>Transaction Fee</Text>
         <View style={styles.valueCard}>
           <Text style={styles.feeValue}>
-            {transactionData.gasCostEth || transactionData.feeBtc} {chainShortName}
+            {transactionData.gasCostEth || transactionData.feeBtc} {nativeSymbol}
           </Text>
         </View>
       </View>
@@ -143,13 +144,13 @@ export function ReviewTransaction({ transactionData, chainShortName }: ReviewTra
             </>
           ) : (
             <Text style={styles.totalValue}>
-              {transactionData.totalCostEth || transactionData.totalCostBtc} {chainShortName}
+              {transactionData.totalCostEth || transactionData.totalCostBtc} {nativeSymbol}
             </Text>
           )}
         </View>
       </View>
 
-      {isEthereum && (
+      {isEvm && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Chain Details</Text>
           <View style={styles.chainDetailsCard}>

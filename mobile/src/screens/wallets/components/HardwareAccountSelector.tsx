@@ -5,16 +5,23 @@ import { PrimaryButton, SecondaryButton } from '../../../components/buttons';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
 import type { DerivedAddress, HardwareWalletImport } from '@ledova/shared';
 import { extractFromKeystoneQR } from '../../../utils/keystone/bcurDecoder';
-import { getBlockchainDisplayName, describeFailure } from '@ledova/shared';
-import { useFetchBalances } from '../../../hooks';
+import { getBlockchainDisplayName, describeFailure, importOnEvmNetwork, importAddressKey } from '@ledova/shared';
+import { useFetchBalances } from '../../../hooks/useFetchBalances';
+import { WalletNetworkSelector } from './WalletNetworkSelector';
 
 interface HardwareAccountSelectorProps {
   urString: string;
+  userAccountUuid: string | undefined;
   onSelectAccounts: (addresses: DerivedAddress[], importData: HardwareWalletImport) => void;
   onCancel: () => void;
 }
 
-export function HardwareAccountSelector({ urString, onSelectAccounts, onCancel }: HardwareAccountSelectorProps) {
+export function HardwareAccountSelector({
+  urString,
+  userAccountUuid,
+  onSelectAccounts,
+  onCancel,
+}: HardwareAccountSelectorProps) {
   const theme = useAppTheme();
   const styles = useThemedStyles((theme) => ({
     container: {
@@ -102,20 +109,22 @@ export function HardwareAccountSelector({ urString, onSelectAccounts, onCancel }
       flex: 1,
     },
   }));
+  const [evmNetwork, setEvmNetwork] = useState<'ETH' | 'BASE'>('ETH');
   const [selectedAddresses, setSelectedAddresses] = useState<Set<string>>(new Set());
   const [addresses, setAddresses] = useState<DerivedAddress[]>([]);
   const [importData, setImportData] = useState<HardwareWalletImport | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const { balances, fetchBalances } = useFetchBalances();
+  const { balances, fetchBalances } = useFetchBalances(userAccountUuid);
 
   useEffect(() => {
     setIsLoading(true);
     try {
-      const result = extractFromKeystoneQR(urString);
-      if (result) {
+      const decoded = extractFromKeystoneQR(urString);
+      if (decoded) {
+        const result = importOnEvmNetwork(decoded, evmNetwork);
         setAddresses(result.addresses);
         setImportData(result);
-        setSelectedAddresses(new Set(result.addresses.map((a) => a.address)));
+        setSelectedAddresses(new Set(result.addresses.map(importAddressKey)));
         fetchBalances(result.addresses);
       }
     } catch (error) {
@@ -123,7 +132,7 @@ export function HardwareAccountSelector({ urString, onSelectAccounts, onCancel }
     } finally {
       setIsLoading(false);
     }
-  }, [urString]);
+  }, [urString, evmNetwork, fetchBalances]);
 
   const toggleSelection = (address: string) => {
     const newSelected = new Set(selectedAddresses);
@@ -137,7 +146,7 @@ export function HardwareAccountSelector({ urString, onSelectAccounts, onCancel }
 
   const handleImport = () => {
     if (!importData) return;
-    const selected = addresses.filter((addr) => selectedAddresses.has(addr.address));
+    const selected = addresses.filter((addr) => selectedAddresses.has(importAddressKey(addr)));
     onSelectAccounts(selected, importData);
   };
 
@@ -160,15 +169,15 @@ export function HardwareAccountSelector({ urString, onSelectAccounts, onCancel }
   }
 
   const renderAddressItem = (derivedAddress: DerivedAddress) => {
-    const isSelected = selectedAddresses.has(derivedAddress.address);
-    const balance = balances.get(derivedAddress.address) || 'Loading...';
+    const isSelected = selectedAddresses.has(importAddressKey(derivedAddress));
+    const balance = balances.get(importAddressKey(derivedAddress)) || 'Loading...';
     const networkName = getBlockchainDisplayName(derivedAddress.networkType);
 
     return (
       <TouchableOpacity
-        key={derivedAddress.address}
+        key={importAddressKey(derivedAddress)}
         style={[styles.addressItem, isSelected && styles.addressItemSelected]}
-        onPress={() => toggleSelection(derivedAddress.address)}
+        onPress={() => toggleSelection(importAddressKey(derivedAddress))}
       >
         <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
           {isSelected && (
@@ -200,6 +209,14 @@ export function HardwareAccountSelector({ urString, onSelectAccounts, onCancel }
         <Text style={styles.heroSubtitle}>Review the accounts to import</Text>
       </View>
 
+      {addresses.some((item) => item.networkType !== 'BTC') && (
+        <WalletNetworkSelector
+          evmOnly
+          network={evmNetwork === 'BASE' ? 'base' : 'ethereum'}
+          onChange={(network) => setEvmNetwork(network === 'base' ? 'BASE' : 'ETH')}
+        />
+      )}
+      {!userAccountUuid && <Text style={styles.heroSubtitle}>Select an account to import wallets.</Text>}
       <ScrollView style={styles.addressList} showsVerticalScrollIndicator={false}>
         {addresses.map(renderAddressItem)}
       </ScrollView>
@@ -208,7 +225,11 @@ export function HardwareAccountSelector({ urString, onSelectAccounts, onCancel }
         <SecondaryButton onPress={onCancel} style={styles.actionButton}>
           Cancel
         </SecondaryButton>
-        <PrimaryButton onPress={handleImport} disabled={selectedAddresses.size === 0} style={styles.actionButton}>
+        <PrimaryButton
+          onPress={handleImport}
+          disabled={!userAccountUuid || selectedAddresses.size === 0}
+          style={styles.actionButton}
+        >
           Import Wallet
         </PrimaryButton>
       </View>

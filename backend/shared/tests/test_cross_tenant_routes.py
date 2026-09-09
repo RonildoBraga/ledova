@@ -1,6 +1,7 @@
 from collections import namedtuple
 from contextlib import contextmanager
 from datetime import timedelta
+from decimal import Decimal
 from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -183,6 +184,11 @@ ROUTES = (
     Route("delete", "/api/investor-classifications/{investor_classification}/"),
     Route("patch", "/api/notification-preferences/{notification_preferences}/", {"marketing": True}),
     Route("get", "/api/wallets/{wallet}/"),
+    Route(
+        "post",
+        "/api/wallets/batch-check-balances/",
+        {"userAccount": "{account}", "chain": "base", "addresses": [NEW_WALLET_ADDRESS]},
+    ),
     Route(
         "put",
         "/api/wallets/{wallet}/",
@@ -490,6 +496,9 @@ class CrossTenantRouteMatrixTest(APITransactionTestCase):
         wallet_transfer = self._service("wallets.views.wallet.TransferService")
         wallet_transfer.prepare_transfer.return_value = {"transaction": {}}
         wallet_transfer.broadcast_transfer.return_value = {"success": True}
+        self._service("wallets.services.balance.get_blockchain_client").return_value.get_native_balance.return_value = (
+            Decimal("0")
+        )
         self._service("wallets.services.verification.verify_wallet_signature", return_value=True)
         self._service("wallets.tasks.sync_wallet").defer.return_value = "job"
         self._service("wallets.views.fiat_purchase.generate_transak_widget_url", return_value="https://widget.test")

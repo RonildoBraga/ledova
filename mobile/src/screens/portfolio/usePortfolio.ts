@@ -4,6 +4,7 @@ import {
   getWalletHoldings,
   getWallets,
   getPortfolioSnapshotsTimeSeries,
+  portfolioSnapshotPoints,
   CACHE_TIMING,
   TimeRange,
   TIME_RANGES,
@@ -13,7 +14,7 @@ import {
   calculateAssetAllocation,
 } from '@ledova/shared';
 import { apiClient } from '../../services/apiClient';
-import type { HoldingWithWallet, PortfolioSnapshot, Wallet, WalletHolding } from '@ledova/shared';
+import type { HoldingWithWallet, Wallet, WalletHolding } from '@ledova/shared';
 import { generateMockHoldingsData, generateMockPortfolioChartData } from './_mock/mock';
 import { useUserPreferences } from '../../hooks/useUserPreferences';
 import { mockDataEnabled } from '../../_mock/mockDataEnabled';
@@ -57,32 +58,7 @@ export function usePortfolio() {
     enabled: !!selectedPortfolio?.uuid && !USE_MOCK_DATA,
     staleTime: CACHE_TIMING.DEFAULT_STALE_TIME,
     gcTime: CACHE_TIMING.EXTRA_LONG_GC_TIME,
-    select: (response) => {
-      const snapshots = (response.data || []) as PortfolioSnapshot[];
-      return snapshots.map((snapshot, index) => {
-        const holdingsData = snapshot.holdingsData || {};
-        const assetQuantities: Record<string, number> = {};
-        const assetValues: Record<string, number> = {};
-        let totalMarketValue = snapshot.totalMarketValue ? parseFloat(snapshot.totalMarketValue) : 0;
-
-        Object.entries(holdingsData).forEach(([symbol, holding]) => {
-          if (!holding) return;
-          assetQuantities[symbol] = parseFloat(holding.quantity || '0');
-          const marketValue = parseFloat(holding.marketValue || '0');
-          assetValues[symbol] = marketValue;
-          if (!snapshot.totalMarketValue) totalMarketValue += marketValue;
-        });
-
-        return {
-          dayIndex: index,
-          date: snapshot.snapshotDate,
-          totalMarketValue,
-          assetValues,
-          assetQuantities,
-          assetSymbols: Object.keys(holdingsData),
-        };
-      });
-    },
+    select: (response) => portfolioSnapshotPoints(response.data || []),
   });
 
   if (USE_MOCK_DATA) {

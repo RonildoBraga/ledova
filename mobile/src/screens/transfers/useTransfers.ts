@@ -11,11 +11,11 @@ import {
   CACHE_TIMING,
   getBlockchainDisplayName,
   getChainShortCode,
+  getNativeAssetSymbol,
   getEstimatedFee,
   isBitcoinChain,
-  isEthereumChain,
+  isSupportedEvmChain,
   WALLET_VERIFICATION_STATUS,
-  BLOCKCHAIN,
   getErrorMessage,
   getHoldingTokenDeployment,
 } from '@ledova/shared';
@@ -57,8 +57,8 @@ function buildTransferableAssets(wallet: Wallet, holdings: WalletHolding[]): Tra
   if (nativeBalance > 0) {
     assets.push({
       uuid: `native-${wallet.uuid}`,
-      symbol: chainShortCode,
-      name: getBlockchainDisplayName(chainShortCode),
+      symbol: getNativeAssetSymbol(chain),
+      name: isSupportedEvmChain(chainShortCode) ? 'Ether' : getBlockchainDisplayName(chainShortCode),
       balance: wallet.nativeBalance,
       marketValue: wallet.nativeMarketValue,
       isNative: true,
@@ -67,7 +67,7 @@ function buildTransferableAssets(wallet: Wallet, holdings: WalletHolding[]): Tra
     });
   }
 
-  if (isEthereumChain(chainShortCode) || chain === BLOCKCHAIN.BASE) {
+  if (isSupportedEvmChain(chain)) {
     for (const holding of holdings) {
       const balance = parseFloat(holding.quantity) || 0;
       const deployment = getHoldingTokenDeployment(holding, wallet);
@@ -130,8 +130,8 @@ export function useTransfers() {
       const chainShortCode = getChainShortCode(state.wallet.chain);
       const nativeAsset: TransferableAsset = {
         uuid: `native-${state.wallet.uuid}`,
-        symbol: chainShortCode,
-        name: getBlockchainDisplayName(chainShortCode),
+        symbol: getNativeAssetSymbol(state.wallet.chain),
+        name: isSupportedEvmChain(chainShortCode) ? 'Ether' : getBlockchainDisplayName(chainShortCode),
         balance: state.wallet.nativeBalance,
         marketValue: state.wallet.nativeMarketValue,
         isNative: true,

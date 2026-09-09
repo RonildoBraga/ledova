@@ -9,6 +9,8 @@ import {
   CACHE_TIMING,
   getChainByShortName,
   getErrorMessage,
+  importedParentKey,
+  canDeriveNextWalletAddress,
 } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 import { useSelectedPortfolio } from '@hooks/useSelectedPortfolio';
@@ -59,9 +61,8 @@ export function useWallets() {
     async (addresses: DerivedAddress[], importData: HardwareWalletImport) => {
       if (!portfolio?.userAccount) return;
 
-      for (let i = 0; i < addresses.length; i++) {
-        const addr = addresses[i];
-        const parentKey = importData.parentKeys[i];
+      for (const addr of addresses) {
+        const parentKey = importedParentKey(addr, importData);
 
         const chain = getChainByShortName(addr.networkType);
         if (!chain) continue;
@@ -141,14 +142,7 @@ export function useWallets() {
 
   const canDeriveAddress = useCallback(
     (wallet: Wallet): boolean => {
-      if (!wallet.parentPublicKey || !wallet.parentChainCode || !wallet.parentDerivationPath) return false;
-      const nextIndex = (wallet.addressIndex ?? 0) + 1;
-      const parentKey = `${wallet.masterFingerprint}:${wallet.parentDerivationPath}`;
-      const nextExists = wallets.some((w) => {
-        if (!w.masterFingerprint || !w.parentDerivationPath) return false;
-        return `${w.masterFingerprint}:${w.parentDerivationPath}` === parentKey && w.addressIndex === nextIndex;
-      });
-      return !nextExists;
+      return canDeriveNextWalletAddress(wallet, wallets);
     },
     [wallets],
   );

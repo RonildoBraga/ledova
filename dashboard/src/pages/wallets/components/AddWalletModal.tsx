@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import { QrCodeIcon, CheckIcon, WalletIcon, HardDrivesIcon } from '@phosphor-icons/react';
 import {
   getBlockchainDisplayName,
-  isEthereumChain,
-  isBitcoinChain,
+  getActiveChains,
+  importAddressKey,
+  importOnEvmNetwork,
   DESIGN_TOKENS,
-  fetchBatchBalances,
+  fetchImportBalances,
   describeFailure,
 } from '@ledova/shared';
 
@@ -58,6 +59,7 @@ export function AddWalletModal({
       <Modal isOpen={isOpen} onClose={handleClose} showFooter={false}>
         <AccountSelector
           urString={form.scannedURString}
+          userAccountUuid={userAccountUuid}
           onSelectAccounts={form.handleAddressSelection}
           onCancel={form.handleBackToInput}
           isLoading={isLoading}
@@ -137,6 +139,23 @@ export function AddWalletModal({
         </div>
 
         {!form.showScanner && (
+          <label className="block space-y-1 text-sm text-text-muted">
+            <span>Wallet network</span>
+            <select
+              aria-label="Wallet network"
+              value={form.selectedChain ?? ''}
+              onChange={(event) => form.setSelectedChain(event.target.value)}
+              className="w-full rounded-lg border border-border bg-surface-tertiary p-2 text-text-primary"
+            >
+              {getActiveChains().map((chain) => (
+                <option key={chain.code} value={chain.code}>
+                  {chain.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {!form.showScanner && (
           <div className="space-y-2">
             <label className="text-xs text-text-muted">Wallet Name (Optional)</label>
             <input
@@ -161,12 +180,20 @@ export function AddWalletModal({
 
 interface AccountSelectorProps {
   urString: string;
+  userAccountUuid: string | undefined;
   onSelectAccounts: (addresses: DerivedAddress[], importData: HardwareWalletImport) => void;
   onCancel: () => void;
   isLoading: boolean;
 }
 
-function AccountSelector({ urString, onSelectAccounts, onCancel, isLoading: isImporting }: AccountSelectorProps) {
+export function AccountSelector({
+  urString,
+  userAccountUuid,
+  onSelectAccounts,
+  onCancel,
+  isLoading: isImporting,
+}: AccountSelectorProps) {
+  const [evmNetwork, setEvmNetwork] = useState<'ETH' | 'BASE'>('ETH');
   const [selectedAddresses, setSelectedAddresses] = useState<Set<string>>(new Set());
   const [addresses, setAddresses] = useState<DerivedAddress[]>([]);
   const [importData, setImportData] = useState<HardwareWalletImport | null>(null);
@@ -174,56 +201,29 @@ function AccountSelector({ urString, onSelectAccounts, onCancel, isLoading: isIm
   const [balances, setBalances] = useState<Map<string, string>>(new Map());
 
   useEffect(() => {
+    let active = true;
     setIsLoading(true);
+    setBalances(new Map());
     try {
-      const result = extractFromKeystoneQR(urString);
-      if (result) {
+      const decoded = extractFromKeystoneQR(urString);
+      if (decoded) {
+        const result = importOnEvmNetwork(decoded, evmNetwork);
         setAddresses(result.addresses);
         setImportData(result);
-        setSelectedAddresses(new Set(result.addresses.map((a) => a.address)));
-        fetchBalances(result.addresses);
+        setSelectedAddresses(new Set(result.addresses.map(importAddressKey)));
+        void fetchImportBalances(apiClient, result.addresses, userAccountUuid).then((next) => {
+          if (active) setBalances(next);
+        });
       }
     } catch (error) {
       console.error(`Failed to extract QR data: ${describeFailure(error)}`);
     } finally {
       setIsLoading(false);
     }
-  }, [urString]);
-
-  const fetchBalances = async (addressList: DerivedAddress[]) => {
-    const ethAddresses = addressList.filter((a) => isEthereumChain(a.networkType));
-    const btcAddresses = addressList.filter((a) => isBitcoinChain(a.networkType));
-
-    const newBalances = new Map<string, string>();
-
-    if (ethAddresses.length > 0) {
-      try {
-        const ethAddrs = ethAddresses.map((a) => a.address);
-        const ethResponse = await fetchBatchBalances(apiClient, ethAddrs, 'ETH');
-        ethAddresses.forEach((addr) => {
-          const balance = ethResponse.balances[addr.address] || '0';
-          newBalances.set(addr.address, `${balance} ETH`);
-        });
-      } catch {
-        ethAddresses.forEach((addr) => newBalances.set(addr.address, '0 ETH'));
-      }
-    }
-
-    if (btcAddresses.length > 0) {
-      try {
-        const btcAddrs = btcAddresses.map((a) => a.address);
-        const btcResponse = await fetchBatchBalances(apiClient, btcAddrs, 'BTC');
-        btcAddresses.forEach((addr) => {
-          const balance = btcResponse.balances[addr.address] || '0';
-          newBalances.set(addr.address, `${balance} BTC`);
-        });
-      } catch {
-        btcAddresses.forEach((addr) => newBalances.set(addr.address, '0 BTC'));
-      }
-    }
-
-    setBalances(newBalances);
-  };
+    return () => {
+      active = false;
+    };
+  }, [urString, userAccountUuid, evmNetwork]);
 
   const toggleSelection = (address: string) => {
     const newSelected = new Set(selectedAddresses);
@@ -237,7 +237,7 @@ function AccountSelector({ urString, onSelectAccounts, onCancel, isLoading: isIm
 
   const handleImport = () => {
     if (!importData) return;
-    const selected = addresses.filter((addr) => selectedAddresses.has(addr.address));
+    const selected = addresses.filter((addr) => selectedAddresses.has(importAddressKey(addr)));
     onSelectAccounts(selected, importData);
   };
 
@@ -257,17 +257,32 @@ function AccountSelector({ urString, onSelectAccounts, onCancel, isLoading: isIm
         <p className="text-sm text-text-muted text-center">Review the accounts to import</p>
       </div>
 
+      {addresses.some((item) => item.networkType !== 'BTC') && (
+        <label className="block space-y-1 text-sm text-text-muted">
+          <span>EVM network</span>
+          <select
+            aria-label="Import EVM network"
+            value={evmNetwork}
+            onChange={(event) => setEvmNetwork(event.target.value as 'ETH' | 'BASE')}
+            className="w-full rounded-lg border border-border bg-surface-tertiary p-2 text-text-primary"
+          >
+            <option value="ETH">Ethereum</option>
+            <option value="BASE">Base</option>
+          </select>
+        </label>
+      )}
+      {!userAccountUuid && <p className="text-sm text-error-light">Select an account to import wallets.</p>}
       <div className="space-y-2 max-h-[300px] overflow-y-auto">
         {addresses.map((derivedAddress) => {
-          const isSelected = selectedAddresses.has(derivedAddress.address);
-          const balance = balances.get(derivedAddress.address) || 'Loading...';
+          const isSelected = selectedAddresses.has(importAddressKey(derivedAddress));
+          const balance = balances.get(importAddressKey(derivedAddress)) || 'Loading...';
           const networkName = getBlockchainDisplayName(derivedAddress.networkType);
 
           return (
             <button
-              key={derivedAddress.address}
+              key={importAddressKey(derivedAddress)}
               type="button"
-              onClick={() => toggleSelection(derivedAddress.address)}
+              onClick={() => toggleSelection(importAddressKey(derivedAddress))}
               className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-colors text-left ${
                 isSelected
                   ? 'border-brand-mid bg-brand-mid/5'
@@ -307,7 +322,7 @@ function AccountSelector({ urString, onSelectAccounts, onCancel, isLoading: isIm
         <button
           type="button"
           onClick={handleImport}
-          disabled={selectedAddresses.size === 0 || isImporting}
+          disabled={!userAccountUuid || selectedAddresses.size === 0 || isImporting}
           className="flex-1 px-4 py-2.5 bg-brand-mid text-white rounded-lg text-sm font-medium hover:bg-brand transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isImporting

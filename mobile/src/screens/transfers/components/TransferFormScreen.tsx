@@ -9,7 +9,7 @@ import { useAppTheme, useThemedStyles } from '../../../contexts';
 import {
   getChainShortCode,
   isBitcoinChain,
-  isEthereumChain,
+  isSupportedEvmChain,
   normalizeBitcoinRawTransactionHex,
   WALLET_SIGNING_PREFERENCE,
 } from '@ledova/shared';
@@ -119,12 +119,12 @@ export function TransferFormScreen({ route, navigation }: Props) {
   }, [routeWallet, selectWallet]);
 
   const chainShortName = wallet ? getChainShortCode(wallet.chain) : 'ETH';
-  const isEthereum = isEthereumChain(chainShortName);
+  const isEvm = isSupportedEvmChain(chainShortName);
   const isBitcoin = isBitcoinChain(chainShortName);
   const canSubmit = !!toAddress && !!amount && !!selectedAsset && !isPreparing;
 
   const urEncodedTransaction = useMemo(() => {
-    if (!transactionData || !wallet || !isEthereum) return null;
+    if (!transactionData || !wallet || !isEvm) return null;
 
     try {
       const encoded = encodeEthereumTransaction(
@@ -137,7 +137,7 @@ export function TransferFormScreen({ route, navigation }: Props) {
     } catch {
       return null;
     }
-  }, [transactionData, wallet, isEthereum]);
+  }, [transactionData, wallet, isEvm]);
 
   const handleOpenAddressScanner = useCallback(() => {
     setShowAddressScanner(true);

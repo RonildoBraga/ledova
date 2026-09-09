@@ -11,21 +11,29 @@ export interface Portfolio extends BaseEntity {
 
 export type PortfolioSnapshotReason = 'DAILY';
 
+export interface PortfolioSnapshotChain {
+  chain: string;
+  quantity: string;
+  wallets: string[];
+  marketValue?: string;
+}
+
+export interface PortfolioSnapshotHolding {
+  assetUuid: string;
+  quantity: string;
+  price?: string;
+  marketValue?: string;
+  wallets: string[];
+  perChain?: PortfolioSnapshotChain[];
+}
+
 export interface PortfolioSnapshot extends BaseEntity {
   portfolio: string;
   portfolioName?: string;
   accountId?: string;
-  holdingsData: Record<
-    string,
-    {
-      symbol: string;
-      quantity: string;
-      price?: string;
-      marketValue?: string;
-      wallets?: Array<{ walletUuid: string; quantity: string }>;
-    }
-  >;
-  totalMarketValue?: string;
+  holdingsData: Record<string, PortfolioSnapshotHolding>;
+  totalMarketValue?: string | null;
+  hasValueData?: boolean;
   snapshotDate: string;
   snapshotReason: PortfolioSnapshotReason;
 }
@@ -41,6 +49,6 @@ export interface PortfolioSnapshotDataPoint {
   date: string;
   totalMarketValue: number;
   assetValues: Record<string, number>;
-  assetQuantities: Record<string, number>;
+  assetHoldings: Record<string, PortfolioSnapshotHolding>;
   assetSymbols: string[];
 }

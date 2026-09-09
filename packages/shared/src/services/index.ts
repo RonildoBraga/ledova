@@ -24,7 +24,7 @@ export { getCurrentUserPreferences, upsertCurrentUserPreferences } from './userP
 export { getWallets, createWallet, updateWallet, deleteWallet } from './wallets';
 export { requestVerificationChallenge, verifyWalletSignature, syncWallet } from './wallet-verification';
 export { prepareTransfer, prepareBitcoinTransfer, broadcastTransfer } from './wallet-transfers';
-export { getWalletHoldings, fetchBatchBalances } from './wallet-balances';
+export { getWalletHoldings, fetchBatchBalances, fetchImportBalances } from './wallet-balances';
 export { getTransactions, getTransactionsNextPage } from './transactions';
 export { getOnRampWidgetUrl } from './onramp';
 export { getFavouriteAssets, addFavouriteAsset, removeFavouriteAsset } from './favouriteAssets';

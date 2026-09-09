@@ -6,6 +6,7 @@ import {
   CACHE_TIMING,
   BLOCKCHAIN,
   getChainShortCode,
+  getNativeAssetSymbol,
   getBlockchainDisplayName,
   formatCryptoBalance,
   getHoldingTokenDeployment,
@@ -78,14 +79,15 @@ export function useTransferFlow(selectedWallet: Wallet | null) {
 
     const assetList: UnifiedAsset[] = [];
     const chainShortCode = getChainShortCode(selectedWallet.chain);
+    const nativeSymbol = getNativeAssetSymbol(selectedWallet.chain);
 
     assetList.push({
       id: `native-${selectedWallet.chain}`,
       type: 'crypto',
-      symbol: chainShortCode,
-      name: getBlockchainDisplayName(chainShortCode),
+      symbol: nativeSymbol,
+      name: isEvmWallet ? 'Ether' : getBlockchainDisplayName(chainShortCode),
       balance: selectedWallet.nativeBalance,
-      displayBalance: formatCryptoBalance(selectedWallet.nativeBalance, chainShortCode),
+      displayBalance: formatCryptoBalance(selectedWallet.nativeBalance, nativeSymbol),
       marketValue: selectedWallet.nativeMarketValue,
       decimals: isEvmWallet ? 18 : 8,
     });

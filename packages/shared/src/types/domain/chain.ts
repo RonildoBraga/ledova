@@ -1,4 +1,8 @@
+export type WalletPreviewChain = 'ethereum' | 'base' | 'bitcoin';
+
 export interface BatchBalanceResponse {
-  balances: Record<string, string>;
+  userAccount: string;
+  chain: WalletPreviewChain;
+  balances: Record<string, string | null>;
   errors?: string[];
 }

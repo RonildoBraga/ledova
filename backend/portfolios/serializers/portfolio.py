@@ -43,13 +43,29 @@ class PortfolioSerializer(serializers.ModelSerializer):
         )
 
 
+class PortfolioChainValueSerializer(serializers.Serializer):
+    chain = serializers.CharField()
+    quantity = serializers.CharField()
+    wallets = serializers.ListField(child=serializers.UUIDField())
+    market_value = serializers.CharField(required=False)
+
+
+class PortfolioHoldingValueSerializer(serializers.Serializer):
+    asset_uuid = serializers.UUIDField()
+    quantity = serializers.CharField()
+    wallets = serializers.ListField(child=serializers.UUIDField())
+    price = serializers.CharField(required=False)
+    market_value = serializers.CharField(required=False)
+    per_chain = PortfolioChainValueSerializer(many=True)
+
+
 class PortfolioValuePointSerializer(serializers.Serializer):
 
     uuid = serializers.CharField()
     portfolio = serializers.UUIDField()
     portfolio_name = serializers.CharField()
     account_id = serializers.CharField()
-    holdings_data = serializers.DictField()
+    holdings_data = serializers.DictField(child=PortfolioHoldingValueSerializer())
     total_market_value = serializers.DecimalField(max_digits=40, decimal_places=18, allow_null=True)
     has_value_data = serializers.BooleanField()
     snapshot_date = serializers.DateField()

@@ -134,7 +134,9 @@ class WalletActionContractTest(APITestCase):
     def test_batch_balances_document_the_success_and_partial_failure_shapes(self, get_client):
         get_client.return_value.get_native_balance.side_effect = [Decimal("5"), RuntimeError("Synthetic failure")]
         result = self.post_action(
-            "batch-check-balances", {"addresses": [SIGNER.address, RECIPIENT], "chain": "base"}, detail=False
+            "batch-check-balances",
+            {"userAccount": str(self.account.pk), "addresses": [SIGNER.address, RECIPIENT], "chain": "base"},
+            detail=False,
         )
         self.assertIn("balances", result)
         self.assertIn("errors", result)

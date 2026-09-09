@@ -1,12 +1,15 @@
+import { WalletNetworkSelector } from './WalletNetworkSelector';
 import React from 'react';
 import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { WalletIcon, CheckIcon } from 'phosphor-react-native';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
 import { PrimaryButton, SecondaryButton } from '../../../components/buttons';
 import type { DerivedAddress } from '@ledova/shared';
-import { getBlockchainDisplayName } from '@ledova/shared';
+import { getBlockchainDisplayName, importAddressKey } from '@ledova/shared';
 
 interface SeedAccountSelectorProps {
+  userAccountUuid: string | undefined;
+  onNetworkChange: (network: string) => void;
   addresses: DerivedAddress[];
   selectedAddresses: Set<string>;
   balances: Map<string, string>;
@@ -17,6 +20,8 @@ interface SeedAccountSelectorProps {
 }
 
 export function SeedAccountSelector({
+  userAccountUuid,
+  onNetworkChange,
   addresses,
   selectedAddresses,
   balances,
@@ -123,17 +128,25 @@ export function SeedAccountSelector({
         <Text style={styles.heroSubtitle}>Choose which accounts to add to your wallet</Text>
       </View>
 
+      <WalletNetworkSelector
+        evmOnly
+        network={
+          addresses.find((address) => address.networkType !== 'BTC')?.networkType === 'BASE' ? 'base' : 'ethereum'
+        }
+        onChange={onNetworkChange}
+      />
+      {!userAccountUuid && <Text style={styles.errorText}>Select an account to import wallets.</Text>}
       <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView}>
         {addresses.map((addr) => {
-          const isSelected = selectedAddresses.has(addr.address);
-          const balance = balances.get(addr.address) || 'Loading...';
+          const isSelected = selectedAddresses.has(importAddressKey(addr));
+          const balance = balances.get(importAddressKey(addr)) || 'Loading...';
           const networkName = getBlockchainDisplayName(addr.networkType);
 
           return (
             <TouchableOpacity
-              key={addr.address}
+              key={importAddressKey(addr)}
               style={[styles.accountItem, isSelected && styles.accountItemSelected]}
-              onPress={() => onToggleAddress(addr.address)}
+              onPress={() => onToggleAddress(importAddressKey(addr))}
             >
               <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
                 {isSelected && (
@@ -160,7 +173,11 @@ export function SeedAccountSelector({
         <SecondaryButton onPress={onBack} style={styles.actionButton}>
           Back
         </SecondaryButton>
-        <PrimaryButton onPress={onConfirm} disabled={selectedAddresses.size === 0} style={styles.actionButton}>
+        <PrimaryButton
+          onPress={onConfirm}
+          disabled={!userAccountUuid || selectedAddresses.size === 0}
+          style={styles.actionButton}
+        >
           Create Wallet
         </PrimaryButton>
       </View>

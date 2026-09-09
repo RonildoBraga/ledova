@@ -14,7 +14,7 @@ import {
   BLOCKCHAIN,
   DESIGN_TOKENS,
   getBlockExplorerTxUrl,
-  getChainShortCode,
+  getNativeAssetSymbol,
 } from '@ledova/shared';
 import { useQRScanner, QRScannerView } from '@components/qr';
 
@@ -124,7 +124,7 @@ export function TransferSigningFlow({
   const [signedTransaction, setSignedTransaction] = useState('');
 
   const isBitcoin = wallet.chain === BLOCKCHAIN.BITCOIN;
-  const nativeSymbol = getChainShortCode(wallet.chain);
+  const nativeSymbol = getNativeAssetSymbol(wallet.chain);
 
   const hasPreparedRef = useRef(false);
   const onPrepareRef = useRef(onPrepare);

@@ -73,6 +73,10 @@ describe('mobile token deployment selection', () => {
       contractAddress: contract,
       decimals: 0,
     });
+    expect(result.current!.transferableAssets.find((row) => row.isNative)).toMatchObject({
+      symbol: 'ETH',
+      chain: 'base',
+    });
   });
   it.each(['disabled', 'different-wallet'])('does not offer a %s holding', async (reason) => {
     active = reason !== 'disabled';

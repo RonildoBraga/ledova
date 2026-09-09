@@ -4,22 +4,13 @@ import { useCurrency } from '@hooks/useCurrency';
 import { Panel } from '@components/Panel';
 import { PortfolioValueChart } from './performance/PortfolioValueChart';
 import { HoldingsChart } from './performance/HoldingsChart';
-import type { TimeRange } from '@ledova/shared';
-import { TIME_RANGES } from '@ledova/shared';
+import type { TimeRange, PortfolioSnapshotDataPoint } from '@ledova/shared';
+import { TIME_RANGES, formatCryptoBalance } from '@ledova/shared';
 
 type ViewMode = 'total' | 'by-asset';
 
-interface SnapshotPoint {
-  dayIndex: number;
-  date: string;
-  totalMarketValue: number;
-  assetValues: Record<string, number>;
-  assetQuantities: Record<string, number>;
-  assetSymbols: string[];
-}
-
 interface PerformanceSectionProps {
-  snapshotData: SnapshotPoint[] | null;
+  snapshotData: PortfolioSnapshotDataPoint[] | null;
   timeRanges: typeof TIME_RANGES;
   selectedTimeRange: TimeRange;
   onTimeRangeChange: (timeRange: TimeRange) => void;
@@ -39,6 +30,7 @@ export function PerformanceSection({
   const colors = useColors();
   const [viewMode, setViewMode] = useState<ViewMode>('total');
   const [activePointIndex, setActivePointIndex] = useState<number | null>(null);
+  const [expandedAsset, setExpandedAsset] = useState<string | null>(null);
 
   useEffect(() => {
     if (snapshotData && snapshotData.length > 0) {
@@ -172,13 +164,50 @@ export function PerformanceSection({
           <span className="text-sm font-semibold text-text-primary">{scrubbedDateLabel}</span>
           <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 mt-1">
             {instrumentData.yKeys.map((symbol, index) => {
-              const value = activeSnapshot.assetValues[symbol] || 0;
+              const holding = activeSnapshot.assetHoldings[symbol];
+              const perChain = holding?.perChain || [];
+              const expanded = perChain.length > 1 && expandedAsset === holding?.assetUuid;
               const color = colors.chart[index % colors.chart.length];
               return (
-                <span key={symbol} className="flex items-center gap-1 text-xs text-text-secondary">
-                  <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
-                  {symbol}: ${value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                </span>
+                <div key={symbol} className="flex flex-col gap-1 text-xs text-text-secondary">
+                  <div className="flex items-center gap-1">
+                    <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
+                    <span>
+                      {symbol}:{' '}
+                      {holding?.marketValue !== undefined
+                        ? formatDisplayCurrency(Number(holding.marketValue))
+                        : holding
+                          ? 'Unpriced'
+                          : '—'}
+                    </span>
+                    {perChain.length > 1 && (
+                      <button
+                        type="button"
+                        aria-expanded={expanded}
+                        aria-label={`${expanded ? 'Hide' : 'Show'} ${symbol} by network`}
+                        onClick={() => setExpandedAsset(expanded ? null : holding.assetUuid)}
+                        className="px-1 text-text-muted hover:text-text-primary"
+                      >
+                        Networks {expanded ? '▴' : '▾'}
+                      </button>
+                    )}
+                  </div>
+                  {expanded && (
+                    <div className="space-y-1 rounded bg-surface-tertiary p-2">
+                      {perChain.map((slice) => (
+                        <div key={slice.chain} className="flex justify-between gap-3">
+                          <span>{slice.chain}</span>
+                          <span>{formatCryptoBalance(slice.quantity, symbol)}</span>
+                          <span>
+                            {slice.marketValue === undefined
+                              ? 'Unpriced'
+                              : formatDisplayCurrency(Number(slice.marketValue))}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>

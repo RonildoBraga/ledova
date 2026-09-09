@@ -6,6 +6,7 @@ import { ErrorBoundary } from '../../../components/ErrorBoundary';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
 import { useCurrency } from '../../../hooks/useCurrency';
 import type { TimeRange, PortfolioSnapshotDataPoint } from '@ledova/shared';
+import { formatCryptoBalance } from '@ledova/shared';
 
 interface PerformanceCardProps {
   chartData: PortfolioSnapshotDataPoint[] | null;
@@ -128,6 +129,17 @@ export function PerformanceCard({
       alignItems: 'center',
       gap: theme.spacing.xs,
     },
+    networkBreakdown: {
+      gap: theme.spacing.xs,
+      padding: theme.spacing.sm,
+      borderRadius: theme.borderRadius.sm,
+      backgroundColor: theme.colors.surface.tertiary,
+    },
+    networkRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      gap: theme.spacing.sm,
+    },
     assetDot: {
       width: theme.spacing.sm,
       height: theme.spacing.sm,
@@ -219,6 +231,7 @@ export function PerformanceCard({
   const [chartTab, setChartTab] = useState<'total' | 'by-asset'>('total');
   const [totalActiveIndex, setTotalActiveIndex] = useState<number | null>(null);
   const [assetActiveIndex, setAssetActiveIndex] = useState<number | null>(null);
+  const [expandedAsset, setExpandedAsset] = useState<string | null>(null);
 
   const handleTotalPointChange = useCallback((index: number) => {
     setTotalActiveIndex(index);
@@ -233,6 +246,7 @@ export function PerformanceCard({
   const hasActivePoint = activePoint != null;
 
   const latestSnapshot = chartData?.[chartData.length - 1];
+  const selectedSnapshot = activePoint ?? latestSnapshot;
   const defaultValue = latestSnapshot?.totalMarketValue ?? totalValue ?? 0;
 
   const displayLabel = hasActivePoint
@@ -250,21 +264,53 @@ export function PerformanceCard({
         {chartTab === 'by-asset' && (hasActivePoint || latestSnapshot) ? (
           <>
             <View style={styles.assetBreakdownRow}>
-              {(hasActivePoint ? activePoint.assetSymbols : latestSnapshot!.assetSymbols).map((symbol) => (
-                <View key={symbol} style={styles.assetBreakdownItem}>
-                  <View
-                    style={[styles.assetDot, { backgroundColor: assetColorMap[symbol] || theme.colors.text.muted }]}
-                  />
-                  <Text style={styles.assetBreakdownText}>
-                    {symbol}{' '}
-                    {formatDisplayCurrency(
-                      hasActivePoint
-                        ? activePoint.assetValues?.[symbol] || 0
-                        : latestSnapshot!.assetValues?.[symbol] || 0,
+              {selectedSnapshot!.assetSymbols.map((symbol) => {
+                const holding = selectedSnapshot!.assetHoldings[symbol];
+                const perChain = holding?.perChain || [];
+                const expanded = perChain.length > 1 && expandedAsset === holding?.assetUuid;
+                return (
+                  <View key={symbol}>
+                    <View style={styles.assetBreakdownItem}>
+                      <View
+                        style={[styles.assetDot, { backgroundColor: assetColorMap[symbol] || theme.colors.text.muted }]}
+                      />
+                      <Text style={styles.assetBreakdownText}>
+                        {symbol}{' '}
+                        {holding?.marketValue !== undefined
+                          ? formatDisplayCurrency(Number(holding.marketValue))
+                          : holding
+                            ? 'Unpriced'
+                            : '—'}
+                      </Text>
+                      {perChain.length > 1 && (
+                        <TouchableOpacity
+                          accessibilityRole="button"
+                          accessibilityLabel={`${expanded ? 'Hide' : 'Show'} ${symbol} by network`}
+                          accessibilityState={{ expanded }}
+                          onPress={() => setExpandedAsset(expanded ? null : holding.assetUuid)}
+                        >
+                          <Text style={styles.assetBreakdownText}>Networks {expanded ? '▴' : '▾'}</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                    {expanded && (
+                      <View style={styles.networkBreakdown}>
+                        {perChain.map((slice) => (
+                          <View key={slice.chain} style={styles.networkRow}>
+                            <Text style={styles.assetBreakdownText}>{slice.chain}</Text>
+                            <Text style={styles.assetBreakdownText}>{formatCryptoBalance(slice.quantity, symbol)}</Text>
+                            <Text style={styles.assetBreakdownText}>
+                              {slice.marketValue === undefined
+                                ? 'Unpriced'
+                                : formatDisplayCurrency(Number(slice.marketValue))}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
                     )}
-                  </Text>
-                </View>
-              ))}
+                  </View>
+                );
+              })}
             </View>
             <Text style={styles.headerLabel}>{displayLabel}</Text>
           </>

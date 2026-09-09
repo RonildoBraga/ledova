@@ -99,7 +99,7 @@ export function useAddWalletForm({
         const detectedShortName = detectChainFromAddress(text);
         if (detectedShortName) {
           const chain = getChainByShortName(detectedShortName);
-          if (chain && chain.code !== selectedChain) {
+          if (chain && chain.code !== selectedChain && !(detectedShortName === 'ETH' && selectedChain === 'base')) {
             setSelectedChain(chain.code);
           }
         }
@@ -130,7 +130,7 @@ export function useAddWalletForm({
       const detectedShortName = detectChainFromAddress(data);
       if (detectedShortName) {
         const chain = getChainByShortName(detectedShortName);
-        if (chain) {
+        if (chain && !(detectedShortName === 'ETH' && selectedChain === 'base')) {
           setSelectedChain(chain.code);
         }
       }
@@ -139,7 +139,7 @@ export function useAddWalletForm({
         setErrors((prev) => ({ ...prev, address: undefined }));
       }
     },
-    [errors.address],
+    [errors.address, selectedChain],
   );
 
   const handleAddressSelection = useCallback(
@@ -188,6 +188,7 @@ export function useAddWalletForm({
     isSelectingAddresses: step === FORM_STEPS.SELECT_ADDRESSES && !!scannedURString,
 
     setName,
+    setSelectedChain,
     setStep,
     setWalletSigningPreference,
     setShowScannerDirect,
