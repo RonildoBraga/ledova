@@ -1,4 +1,5 @@
 import type { HolderType } from '../../constants';
+import type { BaseQueryParams } from '../api';
 
 export type TokenStatus = 'draft' | 'deploying' | 'deployed' | 'paused';
 export type TokenType = 'ordinary' | 'preference' | 'redeemable';
@@ -156,7 +157,6 @@ export interface ShareIssuanceRequest {
   reviewedBy?: string | null;
   reviewedByEmail?: string | null;
   reviewedAt?: string | null;
-  reviewNotes?: string;
   executionNotes?: string;
   rejectionReason?: string;
   executedIssuance?: string | null;
@@ -165,9 +165,14 @@ export interface ShareIssuanceRequest {
   updatedAt?: string;
 }
 
-export interface ShareIssuanceRequestResponse {
-  results: ShareIssuanceRequest[];
-  count: number;
-  page?: number;
-  pageSize?: number;
+export interface ShareIssuanceRequestQueryParams extends BaseQueryParams {
+  token?: string;
+  company?: string;
+  status?: CapitalIncreaseStatus;
+}
+
+export interface ShareIssuanceSubmission {
+  message: string;
+  token: CompanyShareToken;
+  issuanceRequest: ShareIssuanceRequest;
 }

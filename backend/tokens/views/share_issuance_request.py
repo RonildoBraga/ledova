@@ -7,7 +7,7 @@ from tokens.serializers import ShareIssuanceRequestSerializer
 class ShareIssuanceRequestViewSet(AuthenticatedReadOnlyViewSet):
     serializer_class = ShareIssuanceRequestSerializer
     filterset_class = ShareIssuanceRequestFilter
-    ordering = ["-created_at"]
+    ordering = ["-created_at", "-uuid"]
     ordering_fields = ["created_at", "status", "amount"]
 
     def get_queryset(self):

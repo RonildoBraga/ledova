@@ -1,18 +1,12 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { COMPANY_TOKEN_ENDPOINTS } from '@ledova/shared';
 
-const useTokenDetail = vi.fn();
-
-vi.mock('./hooks/useTokens', () => ({
-  useTokensList: vi.fn(),
-  useTokenDetail: (uuid: string) => useTokenDetail(uuid),
-}));
-vi.mock('@tanstack/react-query', () => ({
-  useMutation: () => ({ mutate: vi.fn(), isPending: false }),
-  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
-}));
+const api = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }));
+vi.mock('@services/apiClient', () => ({ default: api }));
 
 import { TokenDetailModal } from './index';
 
@@ -46,88 +40,136 @@ const REQUEST = {
   createdAt: '2026-09-07T00:00:00Z',
 };
 
-function aTokenWhose(issuanceRequests: unknown[], status = 'deployed') {
-  useTokenDetail.mockReturnValue({
-    token: { ...TOKEN, status },
-    isLoading: false,
-    holders: [],
-    totalHolders: 0,
-    isLoadingHolders: false,
-    issuances: [],
-    issuanceCount: 0,
-    isLoadingIssuances: false,
-    capitalIncreases: [],
-    capitalIncreaseCount: 0,
-    issuanceRequests,
-    issuanceRequestCount: issuanceRequests.length,
-    isLoadingIssuanceRequests: false,
-    isLoadingCapitalIncreases: false,
-    showCapitalIncreaseForm: false,
-    setShowCapitalIncreaseForm: vi.fn(),
-    deploy: vi.fn(),
-    isDeploying: false,
-    pause: vi.fn(),
-    isPausing: false,
-    unpause: vi.fn(),
-    isUnpausing: false,
-    downloadRegister: vi.fn(),
-    isDownloadingRegister: false,
-    registerError: null,
-    createCapitalIncrease: vi.fn(),
-    isCreatingCapitalIncrease: false,
-    submitCapitalIncrease: vi.fn(),
-    isSubmittingCapitalIncrease: false,
-  });
+let requests: Array<typeof REQUEST & { executionNotes?: string }>;
+let tokenStatus: string;
+let refuseRequests: boolean;
+let queryClient: QueryClient;
+
+function showHistory() {
+  render(
+    <QueryClientProvider client={queryClient}>
+      <TokenDetailModal uuid="token-1" companyStatus="active" onClose={vi.fn()} />
+    </QueryClientProvider>,
+  );
 }
 
-describe('the token modal Issuance Requests section', () => {
-  afterEach(cleanup);
+beforeEach(() => {
+  requests = [];
+  tokenStatus = 'deployed';
+  refuseRequests = false;
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  api.get.mockReset();
+  api.post.mockReset();
+  api.get.mockImplementation(async (url: string, config?: { params?: { page?: number } }) => {
+    if (url === COMPANY_TOKEN_ENDPOINTS.DETAIL('token-1')) return { data: { ...TOKEN, status: tokenStatus } };
+    if (url === COMPANY_TOKEN_ENDPOINTS.HOLDERS('token-1')) return { data: { holders: [], totalHolders: 0 } };
+    if (url === COMPANY_TOKEN_ENDPOINTS.ISSUANCES('token-1') || url === COMPANY_TOKEN_ENDPOINTS.CAPITAL_INCREASES) {
+      return { data: { results: [], count: 0, next: null, previous: null } };
+    }
+    if (url === COMPANY_TOKEN_ENDPOINTS.ISSUANCE_REQUESTS) {
+      if (refuseRequests) throw new Error('Network unavailable');
+      const page = config?.params?.page ?? 1;
+      return {
+        data: {
+          results: requests.slice((page - 1) * 25, page * 25),
+          count: requests.length,
+          previous: null,
+          next:
+            requests.length > page * 25
+              ? `https://example.test/api/v1/tokens/issuance-requests/?page=${page + 1}`
+              : null,
+        },
+      };
+    }
+    throw new Error(`Unexpected GET ${url}`);
+  });
+});
 
-  it('shows the issuer the request it made and the status it is waiting on', () => {
-    aTokenWhose([REQUEST]);
+afterEach(() => {
+  cleanup();
+  queryClient.clear();
+});
 
-    render(<TokenDetailModal uuid="token-1" companyStatus="active" onClose={vi.fn()} />);
+describe('the issuer request history through real query and service hooks', () => {
+  it('refreshes the history after a submitted request receives 201', async () => {
+    api.post.mockImplementation(async (url: string, data: { recipient: string; amount: number; reason: string }) => {
+      expect(url).toBe(COMPANY_TOKEN_ENDPOINTS.ISSUE('token-1'));
+      requests = [{ ...REQUEST, recipientAddress: data.recipient, amount: data.amount, reason: data.reason }];
+      return { status: 201, data: { message: 'Submitted', token: TOKEN, issuanceRequest: requests[0] } };
+    });
+    showHistory();
+    await screen.findByText('No issuance requests yet.');
+    fireEvent.click(screen.getByRole('button', { name: 'Request Issuance' }));
+    fireEvent.change(screen.getByLabelText('Recipient Address'), { target: { value: REQUEST.recipientAddress } });
+    fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '10000' } });
+    fireEvent.change(screen.getByLabelText('Reason (optional)'), { target: { value: 'Founder allocation' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Request Issuance' }));
 
-    expect(screen.getByText('Issuance Requests')).toBeDefined();
+    await screen.findByText('Submitted');
+    expect(screen.getByText(/10,000 QAT to/)).toBeDefined();
     expect(screen.getByText('(1)')).toBeDefined();
-    expect(screen.getByText(/10,000 QAT to/)).toBeDefined();
-    expect(screen.getByText('Submitted')).toBeDefined();
+    expect(api.post).toHaveBeenCalledExactlyOnceWith(COMPANY_TOKEN_ENDPOINTS.ISSUE('token-1'), {
+      recipient: REQUEST.recipientAddress,
+      amount: 10000,
+      reason: 'Founder allocation',
+    });
   });
 
-  it('is not offered on a draft token, which can have no issuance requests to show', () => {
-    aTokenWhose([], 'draft');
+  it('keeps the whole page visible and can load older requests', async () => {
+    requests = Array.from({ length: 26 }, (_, index) => ({
+      ...REQUEST,
+      uuid: `request-${index}`,
+      reason: `Allocation ${index}`,
+    }));
+    showHistory();
+    await screen.findByText('Allocation 24');
+    expect(screen.queryByText('Allocation 25')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Load more issuance requests' }));
+    await screen.findByText('Allocation 25');
+    expect(screen.getByText('Allocation 0')).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'Load more issuance requests' })).toBeNull();
+    expect(api.get).toHaveBeenCalledWith(COMPANY_TOKEN_ENDPOINTS.ISSUANCE_REQUESTS, {
+      params: { token: 'token-1', page: 2 },
+    });
+  });
 
-    render(<TokenDetailModal uuid="token-1" companyStatus="active" onClose={vi.fn()} />);
-
-    expect(screen.queryByText('Issuance Requests')).toBeNull();
+  it('reports a failed history load and retries without claiming it is empty', async () => {
+    refuseRequests = true;
+    showHistory();
+    await screen.findByRole('alert');
     expect(screen.queryByText('No issuance requests yet.')).toBeNull();
+    refuseRequests = false;
+    requests = [REQUEST];
+    fireEvent.click(screen.getByRole('button', { name: 'Retry issuance requests' }));
+    await screen.findByText('Submitted');
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
   });
 
-  it('is offered on a token that is no longer deployed but has requests behind it', () => {
-    aTokenWhose([REQUEST], 'draft');
-
-    render(<TokenDetailModal uuid="token-1" companyStatus="active" onClose={vi.fn()} />);
-
-    expect(screen.getByText('Issuance Requests')).toBeDefined();
-    expect(screen.getByText(/10,000 QAT to/)).toBeDefined();
-  });
-
-  it('colours the status chip rather than rendering every outcome the same grey', () => {
-    aTokenWhose([
-      { ...REQUEST, status: 'approved', statusDisplay: 'Approved' },
+  it('shows safe execution history and distinguishes approved and rejected requests', async () => {
+    requests = [
+      {
+        ...REQUEST,
+        status: 'approved',
+        statusDisplay: 'Approved',
+        executionNotes: 'Execution failed. Operations review is required.',
+      },
       { ...REQUEST, uuid: 'request-2', status: 'rejected', statusDisplay: 'Rejected' },
-    ]);
-
-    render(<TokenDetailModal uuid="token-1" companyStatus="active" onClose={vi.fn()} />);
-
+    ];
+    showHistory();
+    await screen.findByText('Approved');
     expect(screen.getByText('Approved').className).not.toEqual(screen.getByText('Rejected').className);
+    expect(screen.getByText('Execution history')).toBeDefined();
+    expect(screen.getByText('Execution failed. Operations review is required.')).toBeDefined();
   });
 
-  it('says none when the issuer has made none', () => {
-    aTokenWhose([]);
-
-    render(<TokenDetailModal uuid="token-1" companyStatus="active" onClose={vi.fn()} />);
-
-    expect(screen.getByText('No issuance requests yet.')).toBeDefined();
+  it('hides empty history on a draft token but preserves any existing requests', async () => {
+    tokenStatus = 'draft';
+    showHistory();
+    await screen.findByText('Deploy Token');
+    expect(screen.queryByText('Issuance Requests')).toBeNull();
+    requests = [REQUEST];
+    await queryClient.invalidateQueries({ queryKey: ['token', 'token-1', 'issuance-requests'] });
+    await screen.findByText('Submitted');
+    expect(screen.getByText('Issuance Requests')).toBeDefined();
   });
 });

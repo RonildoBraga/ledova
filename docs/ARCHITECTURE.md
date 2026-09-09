@@ -265,6 +265,14 @@ serializers. Issuers receive execution notes and rejection or supersession
 reasons. Provider diagnostics remain in the operator records and logs; a failed
 execution asks an operator to check the chain before deciding whether to retry.
 
+Issuers read their requests through `GET /api/v1/tokens/issuance-requests/`,
+filtered by token, company or status. List and detail reads retain company
+ownership checks even when the database allows a subscriber to read the linked
+request for withdrawal checks. The endpoint is read-only. The dashboard token
+modal refreshes this history after a successful submission, pages through older
+requests and offers retry on loading errors. Execution notes remain visible;
+private review notes are absent from both the API and its client type.
+
 The execution-history migration preserves every existing review note verbatim.
 It cannot establish authorship from phrases such as "Execution failed", which
 a reviewer could also have typed. It adds fixed context identifying old notes

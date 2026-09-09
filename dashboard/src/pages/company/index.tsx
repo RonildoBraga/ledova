@@ -484,6 +484,11 @@ export function TokenDetailModal({
     issuanceRequests,
     issuanceRequestCount,
     isLoadingIssuanceRequests,
+    issuanceRequestsError,
+    retryIssuanceRequests,
+    hasMoreIssuanceRequests,
+    loadMoreIssuanceRequests,
+    isLoadingMoreIssuanceRequests,
     isLoadingCapitalIncreases,
     showCapitalIncreaseForm,
     setShowCapitalIncreaseForm,
@@ -1100,7 +1105,7 @@ export function TokenDetailModal({
           </div>
         )}
 
-        {(isDeployed || isPaused || issuanceRequestCount > 0) && (
+        {(isDeployed || isPaused || issuanceRequestCount > 0 || issuanceRequestsError) && (
           <div>
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-sm font-semibold text-text-primary flex items-center gap-1.5">
@@ -1115,7 +1120,7 @@ export function TokenDetailModal({
               </div>
             ) : issuanceRequests.length > 0 ? (
               <div className="bg-surface-tertiary/50 rounded-lg border border-border divide-y divide-border-subtle">
-                {issuanceRequests.slice(0, 5).map((request: ShareIssuanceRequest) => (
+                {issuanceRequests.map((request: ShareIssuanceRequest) => (
                   <div key={request.uuid} className="flex items-center gap-3 px-3 py-2.5">
                     <span className="text-xs text-text-muted w-20 flex-shrink-0">
                       {new Date(request.createdAt).toLocaleDateString()}
@@ -1128,6 +1133,12 @@ export function TokenDetailModal({
                         {request.reason || request.issuanceTypeDisplay}
                         {request.rejectionReason ? ` · ${request.rejectionReason}` : ''}
                       </p>
+                      {request.executionNotes && (
+                        <details className="text-xs text-text-muted mt-1">
+                          <summary className="cursor-pointer">Execution history</summary>
+                          <p className="whitespace-pre-wrap mt-1">{request.executionNotes}</p>
+                        </details>
+                      )}
                     </div>
                     <span
                       className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${REQUEST_STATUS_COLORS[request.status] || REQUEST_STATUS_COLORS.draft}`}
@@ -1137,10 +1148,28 @@ export function TokenDetailModal({
                   </div>
                 ))}
               </div>
-            ) : (
+            ) : !issuanceRequestsError ? (
               <div className="bg-surface-tertiary/30 rounded-lg border border-border-subtle py-4 text-center">
                 <p className="text-sm text-text-muted">No issuance requests yet.</p>
               </div>
+            ) : null}
+            {issuanceRequestsError && (
+              <div role="alert" className="mt-2 text-sm text-error-light">
+                <p>{getErrorMessage(issuanceRequestsError, 'Unable to load issuance requests. Please try again.')}</p>
+                <button type="button" onClick={() => void retryIssuanceRequests()} className="underline mt-1">
+                  Retry issuance requests
+                </button>
+              </div>
+            )}
+            {hasMoreIssuanceRequests && (
+              <button
+                type="button"
+                onClick={() => void loadMoreIssuanceRequests()}
+                disabled={isLoadingMoreIssuanceRequests}
+                className="mt-2 text-sm text-brand-light disabled:opacity-50"
+              >
+                {isLoadingMoreIssuanceRequests ? 'Loading requests...' : 'Load more issuance requests'}
+              </button>
             )}
           </div>
         )}

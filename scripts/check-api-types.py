@@ -91,13 +91,6 @@ TYPE_DEBT: dict[str, tuple[int, str]] = {
         "clients invalidate rather than read the body today, so nothing is broken - the type is "
         "simply not what the endpoint sends. Fix by typing the envelope, not by pinning.",
     ),
-    "CompanyShareToken:ShareIssuanceRequested": (
-        16,
-        "The action returns {'message': ..., 'token': ...}, declared as ShareIssuanceRequested. The service "
-        "is typed as the inner object, so every field of it is absent from the envelope. The "
-        "clients invalidate rather than read the body today, so nothing is broken - the type is "
-        "simply not what the endpoint sends. Fix by typing the envelope, not by pinning.",
-    ),
     "CapitalIncreaseRequest:CapitalIncreaseSubmitted": (
         15,
         "The action returns {'message': ..., 'request': ...}, declared as CapitalIncreaseSubmitted. The service "

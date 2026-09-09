@@ -9,7 +9,9 @@ import type {
   CapitalIncreaseRequest,
   CapitalIncreaseResponse,
   PaginatedResponse,
-  ShareIssuanceRequestResponse,
+  ShareIssuanceRequest,
+  ShareIssuanceRequestQueryParams,
+  ShareIssuanceSubmission,
 } from '../types';
 
 export const getCompanyTokens = (
@@ -48,7 +50,7 @@ export const issueCompanyShares = (
   apiClient: AxiosInstance,
   tokenUuid: string,
   data: { recipient: string; amount: number; reason?: string },
-) => apiClient.post<CompanyShareToken>(COMPANY_TOKEN_ENDPOINTS.ISSUE(tokenUuid), data);
+) => apiClient.post<ShareIssuanceSubmission>(COMPANY_TOKEN_ENDPOINTS.ISSUE(tokenUuid), data);
 
 export const getCapitalIncreases = (
   apiClient: AxiosInstance,
@@ -63,7 +65,5 @@ export const submitCapitalIncrease = (apiClient: AxiosInstance, uuid: string) =>
     COMPANY_TOKEN_ENDPOINTS.CAPITAL_INCREASE_SUBMIT(uuid),
   );
 
-export const getShareIssuanceRequests = (
-  apiClient: AxiosInstance,
-  params?: { token?: string; status?: string; page?: number; page_size?: number },
-) => apiClient.get<ShareIssuanceRequestResponse>(COMPANY_TOKEN_ENDPOINTS.ISSUANCE_REQUESTS, { params });
+export const getShareIssuanceRequests = (apiClient: AxiosInstance, params?: ShareIssuanceRequestQueryParams) =>
+  apiClient.get<PaginatedResponse<ShareIssuanceRequest>>(COMPANY_TOKEN_ENDPOINTS.ISSUANCE_REQUESTS, { params });
