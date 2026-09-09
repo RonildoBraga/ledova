@@ -131,6 +131,9 @@ POLICIES = {
     "blockchain_outgoingoperation": ("false", "false"),
     "blockchain_signingaccount": ("false", "false"),
     "blockchain_signedattempt": ("false", "false"),
+    "blockchain_outgoinghistorycapture": ("false", "false"),
+    "blockchain_outgoinghistoryevidence": ("false", "false"),
+    "blockchain_outgoingcutoverhold": ("false", "false"),
 }
 
 LOCKING_IS_READING = (

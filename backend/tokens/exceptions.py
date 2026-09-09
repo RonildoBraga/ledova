@@ -192,12 +192,6 @@ class StablecoinMintFailedException(APIException):
     default_code = "stablecoin_mint_failed"
 
 
-class StablecoinBurnFailedException(APIException):
-    status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
-    default_detail = "Stablecoin burning failed."
-    default_code = "stablecoin_burn_failed"
-
-
 class YieldTokenContractNotConfiguredException(APIException):
     status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
     default_detail = "Yield token contract is not configured."
