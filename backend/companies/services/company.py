@@ -6,6 +6,7 @@ from companies.exceptions import (
     MissingRequiredDocumentsException,
 )
 from companies.models import LISTING_REQUIRED_DOCUMENTS, Company, DocumentType
+from shared.constants import normalize_chain
 from shared.db import atomic
 from users.models import UserProfile
 from users.tasks.notifications import send_push_notification
@@ -28,10 +29,11 @@ APPLICANT_NOTIFICATIONS = {
 
 
 def primary_wallet_for(company: Company, chain: str | None = None):
+    chain = normalize_chain(chain or Blockchain.BASE.value)
     if company.operator_wallet:
-        return company.operator_wallet
+        return company.operator_wallet if company.operator_wallet.chain == chain else None
 
-    return Wallet.objects.visible_to_user(company.owner).for_chain_with_l2_fallback(chain or Blockchain.BASE.value)
+    return Wallet.objects.visible_to_user(company.owner).verified_for_chain(chain)
 
 
 def register_company(owner, name: str, acn: str, primary_contact_data: dict, **kwargs) -> Company:

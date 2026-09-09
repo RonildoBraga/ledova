@@ -147,10 +147,10 @@ class Command(BaseCommand):
         return account
 
     def _seed_wallet(self, account, address):
-        wallet, created = Wallet.objects.get_or_create(
+        wallet, created = Wallet.objects.filter_by_address(address, chain=Blockchain.BASE.value).get_or_create(
             user_account=account,
-            address=address,
             defaults={
+                "address": address,
                 "chain": Blockchain.BASE.value,
                 "verification_status": WALLET_VERIFICATION_STATUS_VERIFIED,
                 "verified_at": timezone.now(),

@@ -1,7 +1,9 @@
 from enum import Enum
 
 from django.db import models
+from django.db.models.functions import Lower
 
+from shared.constants import EVM_BLOCKCHAINS
 from shared.models import BaseModel
 from users.models import UserAccount
 from wallets.constants import (
@@ -101,7 +103,16 @@ class Wallet(BaseModel):
     class Meta:
         db_table = "wallets"
         ordering = ["-created_at"]
-        unique_together = [["user_account", "address"]]
+        constraints = [
+            models.UniqueConstraint(fields=["user_account", "chain", "address"], name="unique_wallet_network_address"),
+            models.UniqueConstraint(
+                Lower("address"),
+                models.F("user_account"),
+                models.F("chain"),
+                condition=models.Q(chain__in=sorted(EVM_BLOCKCHAINS)),
+                name="unique_evm_wallet_network_address",
+            ),
+        ]
         indexes = [
             models.Index(fields=["user_account", "verification_status"]),
             models.Index(fields=["chain"]),

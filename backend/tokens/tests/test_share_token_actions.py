@@ -107,7 +107,7 @@ class ShareTokenActionTest(APITestCase):
         self.assertEqual(no_wallet.status_code, 400)
         self.assertEqual(
             no_wallet.json()["detail"],
-            "Company must have an operator wallet or verified ETH wallet before deploying tokens.",
+            "Company must have an operator wallet or verified owner wallet on Base before deploying tokens.",
         )
 
         already_deployed = self.client.post(f"/api/v1/tokens/{self.tenant.deployed_token.uuid}/deploy/")

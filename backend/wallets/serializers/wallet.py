@@ -13,6 +13,7 @@ from users.models import UserAccount
 from wallets.constants import WALLET_VERIFICATION_STATUS_VERIFIED
 from wallets.models import Wallet
 from wallets.models.wallet import WalletSigningPreference
+from wallets.services.registration import DUPLICATE_WALLET, update_wallet
 
 
 class WalletSerializer(serializers.ModelSerializer):
@@ -139,13 +140,14 @@ class WalletSerializer(serializers.ModelSerializer):
         if address and chain == BLOCKCHAIN_BITCOIN and not is_bitcoin_address_valid(address, settings.BITCOIN_NETWORK):
             raise serializers.ValidationError({"address": "Enter an address for the configured Bitcoin test network."})
 
-        if address and user_account:
-            duplicate_wallets = Wallet.objects.filter(address=address, user_account=user_account)
+        if address and chain and user_account:
+            duplicate_wallets = Wallet.objects.filter_by_address(address, chain=chain).filter(user_account=user_account)
             if self.instance:
                 duplicate_wallets = duplicate_wallets.exclude(pk=self.instance.pk)
             if duplicate_wallets.exists():
-                raise serializers.ValidationError(
-                    {"address": "This wallet address has already been added to your account."}
-                )
+                raise serializers.ValidationError({"address": DUPLICATE_WALLET})
 
         return data
+
+    def update(self, instance, validated_data):
+        return update_wallet(instance, validated_data)

@@ -153,9 +153,7 @@ class TheSitesThatCauseNoUserSayNoUserTest(TestCase):
         self._pending_transaction("0xwebhook")
 
         with patch("integrations.alchemy.webhook.confirm_pending_transaction.defer") as deferred:
-            AlchemyWebhookView()._process_transaction_confirmation(
-                tx_hash="0xwebhook", wallet=self.tenant.wallet, block_number=1
-            )
+            AlchemyWebhookView()._process_transaction_confirmation(tx_hash="0xwebhook", wallet=self.tenant.wallet)
 
         self.assertEqual([call.kwargs["principal_id"] for call in deferred.call_args_list], [None])
 
@@ -165,9 +163,7 @@ class TheSitesThatCauseNoUserSayNoUserTest(TestCase):
         with patch("wallets.tasks.confirmation.confirm_pending_transaction.defer") as swept:
             check_all_pending_transactions.func(timestamp=0)
         with patch("integrations.alchemy.webhook.confirm_pending_transaction.defer") as hooked:
-            AlchemyWebhookView()._process_transaction_confirmation(
-                tx_hash="0xreached", wallet=self.tenant.wallet, block_number=1
-            )
+            AlchemyWebhookView()._process_transaction_confirmation(tx_hash="0xreached", wallet=self.tenant.wallet)
 
         self.assertEqual(swept.call_count, 1)
         self.assertEqual(hooked.call_count, 1)

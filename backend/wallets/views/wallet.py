@@ -5,7 +5,6 @@ from rest_framework.response import Response
 
 from shared.db import atomic
 from shared.views.base import AuthenticatedModelViewSet
-from wallets.constants import WALLET_VERIFICATION_STATUS_PENDING
 from wallets.filters import WalletFilter
 from wallets.models import Wallet
 from wallets.serializers import (
@@ -31,6 +30,7 @@ from wallets.services import (
     complete_wallet_verification,
     start_wallet_verification,
 )
+from wallets.services.registration import register_wallet
 from wallets.services.sync import WalletSyncService
 
 
@@ -62,13 +62,8 @@ class WalletViewSet(AuthenticatedModelViewSet):
         serializer.instance = self._with_market_value(serializer.save())
 
     def perform_create(self, serializer):
-        wallet = serializer.save(verification_status=WALLET_VERIFICATION_STATUS_PENDING)
+        wallet = register_wallet(self.request.user, **serializer.validated_data)
         serializer.instance = self._with_market_value(wallet)
-
-        preferences = getattr(getattr(self.request.user, "userprofile", None), "preferences", None)
-        portfolio = preferences.selected_portfolio if preferences else None
-        if portfolio and portfolio.user_account_id == wallet.user_account_id:
-            portfolio.wallets.add(wallet)
 
     @extend_schema(request=None, responses=WalletVerificationChallengeSerializer)
     @action(detail=True, methods=["post"], url_path="request-verification", url_name="request-verification")

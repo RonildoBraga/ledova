@@ -1,31 +1,28 @@
 from django.db.models import Q, QuerySet
-from web3 import Web3
+from django.db.models.functions import Lower
 
-
-def address_variants(addresses) -> list:
-    variants = set()
-    for address in addresses:
-        candidate = (address or "").strip()
-        if not candidate:
-            continue
-        variants.update({candidate, candidate.lower()})
-        if Web3.is_address(candidate):
-            variants.add(Web3.to_checksum_address(candidate))
-    return sorted(variants)
+from shared.constants import BLOCKCHAIN_BASE
 
 
 class WhitelistEntryQuerySet(QuerySet):
 
+    def for_registry(self):
+        return self.filter(Q(wallet__chain=BLOCKCHAIN_BASE) | Q(wallet__isnull=True))
+
     def filter_by_address(self, address):
         if address:
-            return self.filter(Q(wallet__address__iexact=address) | Q(address__iexact=address))
-        return self
+            return self.for_registry().filter(Q(wallet__address__iexact=address) | Q(address__iexact=address))
+        return self.none()
 
     def for_addresses(self, addresses):
-        variants = address_variants(addresses)
-        if not variants:
+        keys = sorted({(address or "").strip().lower() for address in addresses} - {""})
+        if not keys:
             return self.none()
-        return self.filter(Q(wallet__address__in=variants) | Q(address__in=variants))
+        return (
+            self.for_registry()
+            .annotate(registry_wallet_address=Lower("wallet__address"), registry_address=Lower("address"))
+            .filter(Q(registry_wallet_address__in=keys) | Q(registry_address__in=keys))
+        )
 
     def with_holder_identity(self):
         return self.select_related("wallet__user_account").prefetch_related("wallet__user_account__user_profiles__user")
