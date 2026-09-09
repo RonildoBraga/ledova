@@ -648,7 +648,7 @@ decision below). Mainnet deployment configuration is deliberately absent.
   setting. The period's value is still open and needs counsel; the shape is not.
 - **No comments and no docstrings in source.** Settled, and now mechanically
   gated by `make check-comments` rather than held by review alone. See the
-  coding rules in [ARCHITECTURE.md](ARCHITECTURE.md#coding-rules).
+  coding rules in [GATES.md](GATES.md#the-rules).
 - **One portfolio line per asset, summed across chains.** The owner has decided
   the portfolio shows one line and one ring slice per asset, summing the
   `Holding` rows across every chain it is held on, with the per-chain split

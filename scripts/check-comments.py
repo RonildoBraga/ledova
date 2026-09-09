@@ -2,7 +2,7 @@
 """Fail on any comment or docstring in the source trees that carry none.
 
 The rule, its scope and the list of permitted functional directives are stated
-in docs/ARCHITECTURE.md under "Coding rules". This script is the mechanical
+in docs/GATES.md under "The rules". This script is the mechanical
 half of that rule; keep the two in step.
 """
 
@@ -467,7 +467,7 @@ def main() -> int:
         print(
             "\nNames and tests carry the meaning: rename the thing, or add a test."
             "\nThe rule, its scope and the permitted functional directives are in"
-            '\ndocs/ARCHITECTURE.md, "Coding rules".',
+            '\ndocs/GATES.md, "The rules".',
             file=sys.stderr,
         )
         return 1

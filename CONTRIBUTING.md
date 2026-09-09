@@ -54,7 +54,7 @@ Local compilation and the contract tests need no credentials.
    come with a regression test. A new detail route or custom action also needs a
    cross-tenant row in `backend/shared/tests/test_cross_tenant_routes.py`.
 4. Follow the coding rules in
-   [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#coding-rules). The one that
+   [docs/GATES.md](docs/GATES.md#the-rules). The one that
    surprises people most: **source carries no comments and no docstrings**. Only
    functional directives the tooling reads (`# noqa`, `eslint-disable`,
    `// SPDX-License-Identifier` and the rest of the list) are allowed, and that

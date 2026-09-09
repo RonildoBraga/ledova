@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fail when a test helper shadows a TestCase method the assertions depend on.
 
-The rule and its scope are stated in docs/ARCHITECTURE.md under "The test
+The rule and its scope are stated in docs/GATES.md under "The test
 shadowing gate". This script is the mechanical half of that rule; keep the two
 in step.
 
@@ -127,7 +127,7 @@ def main() -> int:
             "\nset or string, and assertIn, assertIsNone, assertIsInstance, assertGreater among"
             "\nothers. A helper of the same name replaces it, so those assertions stop checking"
             "\nand keep passing. Rename the helper."
-            '\n\nThe rule and its scope are in docs/ARCHITECTURE.md, "The test shadowing gate".',
+            '\n\nThe rule and its scope are in docs/GATES.md, "The test shadowing gate".',
             file=sys.stderr,
         )
         return 1

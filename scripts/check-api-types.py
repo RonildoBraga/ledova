@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fail when shared response fields or trading event names drift from the API.
 
-The rule and its scope are stated in docs/ARCHITECTURE.md under "The API type
+The rule and its scope are stated in docs/GATES.md under "The API type
 drift gate". This script is the mechanical half of that rule; keep the two in
 step.
 
@@ -625,7 +625,7 @@ def main() -> int:
         print(
             "Every read of such a field type-checks and is undefined at run time.\n"
             "Mark it optional, remove it, or make the serializer send it.\n"
-            'The rule is in docs/ARCHITECTURE.md, "The API type drift gate".',
+            'The rule is in docs/GATES.md, "The API type drift gate".',
             file=sys.stderr,
         )
         return 1
