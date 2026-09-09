@@ -34,6 +34,9 @@ class AReplacedTransactionKeepsTheHoldingItSpentTest(TestCase):
         Holding.objects.create(wallet=self.wallet, asset=self.asset, quantity=HELD)
 
     def a_transaction(self, tx_hash=ORIGINAL, status=TRANSACTION_STATUS_PENDING, wallet=None, nonce=7):
+        holding, _ = Holding.objects.get_or_create(
+            wallet=wallet or self.wallet, asset=self.asset, defaults={"quantity": HELD}
+        )
         return Transaction.objects.create(
             tx_hash=tx_hash,
             chain=self.wallet.chain,
@@ -44,6 +47,7 @@ class AReplacedTransactionKeepsTheHoldingItSpentTest(TestCase):
             status=status,
             nonce=nonce,
             deducted_amount=SENT,
+            deducted_amount_sync_version=holding.sync_version,
             wallet=wallet or self.wallet,
         )
 
@@ -143,7 +147,7 @@ class TheTupleIsTheOnlyPlaceTheRuleIsWrittenTest(TestCase):
         self.asset = native_asset_for_chain(self.wallet.chain)
 
     def a_pending_row(self, tx_hash):
-        Holding.objects.update_or_create(wallet=self.wallet, asset=self.asset, defaults={"quantity": HELD})
+        holding, _ = Holding.objects.update_or_create(wallet=self.wallet, asset=self.asset, defaults={"quantity": HELD})
         return Transaction.objects.create(
             tx_hash=tx_hash,
             chain=self.wallet.chain,
@@ -153,6 +157,7 @@ class TheTupleIsTheOnlyPlaceTheRuleIsWrittenTest(TestCase):
             amount=SENT,
             status=TRANSACTION_STATUS_PENDING,
             deducted_amount=SENT,
+            deducted_amount_sync_version=holding.sync_version,
             wallet=self.wallet,
         )
 
@@ -169,7 +174,12 @@ class TheTupleIsTheOnlyPlaceTheRuleIsWrittenTest(TestCase):
     def test_the_statuses_that_return_the_debit_are_exactly_the_ones_the_tuple_names(self):
         returned = set()
         outcomes = (
-            (TRANSACTION_STATUS_FAILED, "0xf", lambda h: TransactionConfirmationService.fail_transaction(h), False),
+            (
+                TRANSACTION_STATUS_FAILED,
+                "0xf",
+                lambda h: TransactionConfirmationService.fail_transaction(h, wallet=self.wallet),
+                False,
+            ),
             (
                 TRANSACTION_STATUS_REORGED,
                 "0xr",
@@ -185,7 +195,7 @@ class TheTupleIsTheOnlyPlaceTheRuleIsWrittenTest(TestCase):
             (
                 TRANSACTION_STATUS_CONFIRMED,
                 "0xc",
-                lambda h: TransactionConfirmationService.confirm_transaction(h, block_number=7),
+                lambda h: TransactionConfirmationService.confirm_transaction(h, block_number=7, wallet=self.wallet),
                 False,
             ),
         )

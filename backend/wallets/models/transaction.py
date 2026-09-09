@@ -71,6 +71,9 @@ class Transaction(DerivesAccountFromWallet, BaseModel):
             "Null when the asset is itself native, and for rows written before the deduction was recorded."
         ),
     )
+    deducted_amount_sync_version = models.UUIDField(null=True, blank=True, editable=False)
+    deducted_fee_sync_version = models.UUIDField(null=True, blank=True, editable=False)
+    balance_reconciliation_token = models.UUIDField(null=True, blank=True, editable=False)
     wallet = models.ForeignKey(Wallet, on_delete=models.CASCADE, related_name="transactions")
 
     user_account = models.ForeignKey(

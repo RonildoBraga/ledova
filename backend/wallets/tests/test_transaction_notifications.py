@@ -28,7 +28,9 @@ class TransactionNotificationProducerTest(TestCase):
     def test_confirmation_creates_the_row_and_defers_one_job_per_member(self):
         with patch(TASK) as task:
             task.defer.side_effect = run_task
-            result = TransactionConfirmationService.confirm_transaction(self.tx.tx_hash, block_number=7)
+            result = TransactionConfirmationService.confirm_transaction(
+                self.tx.tx_hash, block_number=7, wallet=self.tx.wallet
+            )
 
         self.assertEqual(result["status"], "confirmed")
         task.defer.assert_called_once_with(
@@ -41,14 +43,17 @@ class TransactionNotificationProducerTest(TestCase):
 
         with patch(TASK) as task:
             self.assertEqual(
-                TransactionConfirmationService.confirm_transaction(self.tx.tx_hash)["status"], "already_confirmed"
+                TransactionConfirmationService.confirm_transaction(self.tx.tx_hash, wallet=self.tx.wallet)["status"],
+                "already_confirmed",
             )
         task.defer.assert_not_called()
 
     def test_failure_creates_the_row_and_defers_one_job_per_member(self):
         with patch(TASK) as task:
             task.defer.side_effect = run_task
-            result = TransactionConfirmationService.fail_transaction(self.tx.tx_hash, reason="reverted")
+            result = TransactionConfirmationService.fail_transaction(
+                self.tx.tx_hash, reason="reverted", wallet=self.tx.wallet
+            )
 
         self.assertEqual(result["status"], "failed")
         task.defer.assert_called_once_with(
@@ -61,7 +66,7 @@ class TransactionNotificationProducerTest(TestCase):
         with patch(TASK) as task:
             task.defer.side_effect = RuntimeError("queue down")
             with self.assertRaises(RuntimeError):
-                TransactionConfirmationService.confirm_transaction(self.tx.tx_hash)
+                TransactionConfirmationService.confirm_transaction(self.tx.tx_hash, wallet=self.tx.wallet)
 
         self.tx.refresh_from_db()
         self.assertNotEqual(self.tx.status, TRANSACTION_STATUS_CONFIRMED)
@@ -80,7 +85,10 @@ class TransactionNotificationJobRowTest(TestCase):
         return ProcrastinateJob.objects.filter(task_name=run_task.name)
 
     def test_confirmation_writes_one_todo_job_per_account_member(self):
-        self.assertEqual(TransactionConfirmationService.confirm_transaction(self.tx.tx_hash)["status"], "confirmed")
+        self.assertEqual(
+            TransactionConfirmationService.confirm_transaction(self.tx.tx_hash, wallet=self.tx.wallet)["status"],
+            "confirmed",
+        )
 
         rows = list(self.job_rows())
         members = self.tenant.account.user_profiles.values_list("user_id", flat=True)
@@ -98,7 +106,9 @@ class TransactionNotificationJobRowTest(TestCase):
 
         with patch.object(TransactionConfirmationService, "_notify_wallet_users", side_effect=notify_then_fail):
             with self.assertRaises(RuntimeError):
-                TransactionConfirmationService.confirm_transaction(self.tx.tx_hash, block_number=9)
+                TransactionConfirmationService.confirm_transaction(
+                    self.tx.tx_hash, block_number=9, wallet=self.tx.wallet
+                )
 
         self.assertEqual(self.job_rows().count(), 0)
         self.tx.refresh_from_db()

@@ -53,7 +53,7 @@ class ReversingOnlyWhatWasDeductedTest(BroadcastTransferGuardTestCase):
 
     def fail_transfer(self, tx_hash):
         with patch.object(TransactionConfirmationService, "_notify_wallet_users"):
-            return TransactionConfirmationService.fail_transaction(tx_hash, reason="reverted")
+            return TransactionConfirmationService.fail_transaction(tx_hash, reason="reverted", wallet=self.wallet)
 
     def test_a_wallet_with_no_native_holding_is_not_given_one_by_a_failed_transfer(self, get_client, schedule):
         self.hold(self.token, "100")
@@ -126,12 +126,13 @@ class ReversingOnlyWhatWasDeductedTest(BroadcastTransferGuardTestCase):
         self.assertEqual(tx.deducted_amount, Decimal("0.252"))
         self.assertIsNone(tx.deducted_fee)
 
-    def test_a_row_that_predates_the_record_reverses_the_way_it_always_did(self, get_client, schedule):
+    def test_a_row_without_a_record_cannot_guess_a_refund_during_a_provider_outage(self, get_client, schedule):
         self.hold(self.token, "100")
         self.hold(self.native, "5")
         self.send_token(get_client, "0xlegacy")
         Transaction.objects.filter(tx_hash="0xlegacy").update(deducted_amount=None, deducted_fee=None)
 
-        self.fail_transfer("0xlegacy")
+        with patch("wallets.services.holdings.fetch_chain_balance", return_value=None):
+            self.fail_transfer("0xlegacy")
 
-        self.assertEqual((self.quantity(self.token), self.quantity(self.native)), (Decimal("100"), Decimal("5")))
+        self.assertEqual((self.quantity(self.token), self.quantity(self.native)), (Decimal("98.5"), Decimal("4.998")))

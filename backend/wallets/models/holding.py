@@ -1,3 +1,5 @@
+from uuid import uuid4
+
 from django.db import models
 
 from shared.models import BaseModel
@@ -10,6 +12,8 @@ class Holding(BaseModel):
     asset = models.ForeignKey("assets.Asset", on_delete=models.CASCADE, related_name="holdings")
     quantity = models.DecimalField(max_digits=40, decimal_places=18)
     last_synced_at = models.DateTimeField(null=True, blank=True)
+    balance_version = models.UUIDField(default=uuid4, editable=False)
+    sync_version = models.UUIDField(default=uuid4, editable=False)
 
     objects = HoldingQuerySet.as_manager()
 
