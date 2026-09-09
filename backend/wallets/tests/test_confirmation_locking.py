@@ -1,0 +1,285 @@
+from concurrent.futures import ThreadPoolExecutor
+from decimal import Decimal
+from threading import Event
+from unittest import skipUnless
+from unittest.mock import patch
+
+from django.db import connections
+from rest_framework.test import APITransactionTestCase
+
+from assets.models import Asset, AssetChainDeployment
+from assets.services.identity import native_asset_for_chain
+from shared.db import APP_ALIAS, acting_for, current_alias, use_operator
+from shared.db.aliases import configured
+from shared.tests.scoped import RunsOnTheScopedConnection
+from shared.tests.tenants import make_tenant
+from wallets.models import Holding, Transaction, Wallet
+from wallets.services.holdings import sync_holding
+from wallets.services.transaction_confirmation import TransactionConfirmationService
+
+
+class ConfirmationChecks:
+    def setUp(self):
+        super().setUp()
+        with use_operator():
+            self.tenant = make_tenant("confirmation-lock")
+            self.wallet = Wallet.objects.create(
+                user_account=self.tenant.account, address="0x" + "51" * 20, chain="base", verification_status="VERIFIED"
+            )
+            self.asset = Asset.objects.create(
+                symbol="REFUND", name="Synthetic refund token", asset_type="erc20_token", is_verified=True
+            )
+            self.contract = "0x" + "52" * 20
+            AssetChainDeployment.objects.create(asset=self.asset, chain="base", contract_address=self.contract)
+            self.native = native_asset_for_chain("base")
+            Holding.objects.create(wallet=self.wallet, asset=self.asset, quantity=100)
+            Holding.objects.create(wallet=self.wallet, asset=self.native, quantity=5)
+        notification = patch("wallets.services.transaction_confirmation.send_transaction_notification.defer")
+        self.addCleanup(notification.stop)
+        self.notification = notification.start()
+        self.balance_observations = []
+        self.chain_available = False
+        self.token_balance = Decimal("100")
+        self.native_balance = Decimal("5")
+        balance = patch("wallets.services.holdings.fetch_chain_balance", side_effect=self.read_balance)
+        self.addCleanup(balance.stop)
+        balance.start()
+
+    def read_balance(self, wallet, asset):
+        alias = current_alias()
+        self.balance_observations.append((alias, connections[alias].in_atomic_block))
+        if not self.chain_available:
+            return None
+        return self.token_balance if asset == self.asset else self.native_balance
+
+    def pending(self, tx_hash="0x" + "53" * 32):
+        with acting_for(self.tenant.user.pk):
+            TransactionConfirmationService.create_pending_transaction(
+                self.wallet,
+                tx_hash,
+                "0x" + "54" * 20,
+                Decimal("1.5"),
+                transaction_fee=Decimal("0.002"),
+                token_contract=self.contract,
+            )
+            return Transaction.objects.get(tx_hash=tx_hash, wallet=self.wallet)
+
+    def quantities(self):
+        with use_operator():
+            return (
+                Holding.objects.get(wallet=self.wallet, asset=self.asset).quantity,
+                Holding.objects.get(wallet=self.wallet, asset=self.native).quantity,
+            )
+
+    def send_in_another_connection(self):
+        def send():
+            try:
+                return self.pending()
+            finally:
+                connections.close_all()
+
+        with ThreadPoolExecutor(max_workers=1) as worker:
+            return worker.submit(send).result(timeout=8)
+
+    def test_two_reversals_using_stale_instances_restore_only_the_outstanding_debit(self):
+        tx = self.pending()
+        with acting_for(self.tenant.user.pk):
+            stale = Transaction.objects.get(pk=tx.pk)
+            TransactionConfirmationService._revert_optimistic_holding(tx)
+            TransactionConfirmationService._revert_optimistic_holding(stale)
+        self.assertEqual(self.quantities(), (Decimal("100"), Decimal("5")))
+        with use_operator():
+            tx.refresh_from_db()
+            self.assertEqual((tx.deducted_amount, tx.deducted_fee), (Decimal("0"), Decimal("0")))
+
+    def test_failure_refreshes_chain_truth_after_a_sync_superseded_the_deduction(self):
+        tx = self.pending()
+        self.chain_available = True
+        with acting_for(self.tenant.user.pk):
+            sync_holding(self.wallet, self.asset)
+            sync_holding(self.wallet, self.native)
+            self.balance_observations.clear()
+            result = TransactionConfirmationService.fail_transaction(tx.tx_hash, wallet=self.wallet)
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(self.quantities(), (Decimal("100"), Decimal("5")))
+        self.assertEqual(self.balance_observations, [(configured(APP_ALIAS), False)] * 2)
+
+    def test_confirmation_reads_balances_after_releasing_the_transaction(self):
+        tx = self.pending()
+        self.chain_available = True
+        self.token_balance = Decimal("98.5")
+        self.native_balance = Decimal("4.999")
+        with acting_for(self.tenant.user.pk):
+            result = TransactionConfirmationService.confirm_transaction(
+                tx.tx_hash, actual_fee=Decimal("0.001"), wallet=self.wallet
+            )
+        self.assertEqual(result["status"], "confirmed")
+        self.assertEqual(self.quantities(), (self.token_balance, self.native_balance))
+        self.assertEqual(self.balance_observations, [(configured(APP_ALIAS), False)] * 2)
+
+    def duplicate_jobs(self, method, tx):
+        first_is_waiting = Event()
+        second_is_writing = Event()
+        release_first = Event()
+
+        def hold_first_commit(**kwargs):
+            if not first_is_waiting.is_set():
+                first_is_waiting.set()
+                if not release_first.wait(10):
+                    raise AssertionError("The duplicate job did not reach its database write")
+
+        self.notification.side_effect = hold_first_commit
+
+        def run(second=False):
+            try:
+                with acting_for(self.tenant.user.pk):
+                    connection = connections[current_alias()]
+                    with connection.cursor() as cursor:
+                        cursor.execute("SET lock_timeout = '8s'")
+
+                    def observe(execute, sql, params, many, context):
+                        if second and ("FOR UPDATE" in sql or sql.lstrip().startswith('UPDATE "transactions"')):
+                            second_is_writing.set()
+                        return execute(sql, params, many, context)
+
+                    with connection.execute_wrapper(observe):
+                        return method(tx.tx_hash, wallet=self.wallet)
+            finally:
+                connections.close_all()
+
+        with ThreadPoolExecutor(max_workers=2) as workers:
+            first = workers.submit(run)
+            try:
+                self.assertTrue(first_is_waiting.wait(8), "The first job never reached its commit boundary")
+                second = workers.submit(run, True)
+                self.assertTrue(second_is_writing.wait(5), "The duplicate job never reached the contested write")
+            finally:
+                release_first.set()
+            return [first.result(timeout=10), second.result(timeout=10)]
+
+    @skipUnless(connections[configured(APP_ALIAS)].vendor == "postgresql", "Concurrent row locks need PostgreSQL")
+    def test_duplicate_failure_jobs_return_the_debit_and_notify_once(self):
+        tx = self.pending()
+        results = self.duplicate_jobs(TransactionConfirmationService.fail_transaction, tx)
+        self.assertEqual(sorted(result["status"] for result in results), ["failed", "not_pending"])
+        self.assertEqual(self.quantities(), (Decimal("100"), Decimal("5")))
+        self.notification.assert_called_once()
+
+    @skipUnless(connections[configured(APP_ALIAS)].vendor == "postgresql", "Concurrent row locks need PostgreSQL")
+    def test_duplicate_confirmation_jobs_commit_and_notify_once(self):
+        tx = self.pending()
+        results = self.duplicate_jobs(TransactionConfirmationService.confirm_transaction, tx)
+        self.assertEqual(sorted(result["status"] for result in results), ["already_confirmed", "confirmed"])
+        self.notification.assert_called_once()
+
+    def test_the_same_hash_on_another_wallet_keeps_its_own_status_and_holding(self):
+        tx = self.pending()
+        with use_operator():
+            other = Wallet.objects.create(
+                user_account=self.tenant.account, address="0x" + "55" * 20, chain="base", verification_status="VERIFIED"
+            )
+            theirs = Transaction.objects.create(
+                wallet=other,
+                tx_hash=tx.tx_hash,
+                chain="base",
+                from_address=self.wallet.address,
+                to_address=other.address,
+                asset=self.asset,
+                amount=tx.amount,
+            )
+        with acting_for(self.tenant.user.pk):
+            result = TransactionConfirmationService.confirm_transaction(tx.tx_hash, wallet=self.wallet)
+        self.assertEqual(result["status"], "confirmed")
+        with use_operator():
+            theirs.refresh_from_db()
+            self.assertEqual(theirs.status, "pending")
+            self.assertFalse(Holding.objects.filter(wallet=other).exists())
+        self.notification.assert_called_once()
+
+    def test_failure_still_restores_an_outstanding_debit_when_the_provider_is_unavailable(self):
+        tx = self.pending()
+        with acting_for(self.tenant.user.pk):
+            result = TransactionConfirmationService.fail_transaction(tx.tx_hash, wallet=self.wallet)
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(self.quantities(), (Decimal("100"), Decimal("5")))
+        self.assertEqual(self.balance_observations, [(configured(APP_ALIAS), False)] * 2)
+
+    def test_a_sync_then_a_provider_outage_cannot_turn_a_reversal_into_income(self):
+        tx = self.pending()
+        self.chain_available = True
+        with acting_for(self.tenant.user.pk):
+            sync_holding(self.wallet, self.asset)
+            sync_holding(self.wallet, self.native)
+            self.chain_available = False
+            result = TransactionConfirmationService.fail_transaction(tx.tx_hash, wallet=self.wallet)
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(self.quantities(), (Decimal("100"), Decimal("5")))
+
+    def test_a_token_sync_does_not_discard_the_still_outstanding_native_fee(self):
+        tx = self.pending()
+        self.chain_available = True
+        with acting_for(self.tenant.user.pk):
+            sync_holding(self.wallet, self.asset)
+            self.chain_available = False
+            TransactionConfirmationService.fail_transaction(tx.tx_hash, wallet=self.wallet)
+        self.assertEqual(self.quantities(), (Decimal("100"), Decimal("5")))
+
+    def test_two_pending_debits_in_the_same_generation_can_each_be_returned_once(self):
+        first = self.pending()
+        second = self.pending("0x" + "56" * 32)
+        self.assertEqual(self.quantities(), (Decimal("97"), Decimal("4.996")))
+        with acting_for(self.tenant.user.pk):
+            TransactionConfirmationService.fail_transaction(first.tx_hash, wallet=self.wallet)
+            TransactionConfirmationService.fail_transaction(second.tx_hash, wallet=self.wallet)
+            TransactionConfirmationService.fail_transaction(first.tx_hash, wallet=self.wallet)
+        self.assertEqual(self.quantities(), (Decimal("100"), Decimal("5")))
+
+    def test_a_balance_read_cannot_overwrite_a_debit_made_while_the_provider_was_answering(self):
+        def send_during_read(wallet, asset):
+            self.send_in_another_connection()
+            return Decimal("100")
+
+        with acting_for(self.tenant.user.pk):
+            with patch("wallets.services.holdings.fetch_chain_balance", side_effect=send_during_read):
+                result = sync_holding(self.wallet, self.asset)
+        self.assertIsNone(result)
+        self.assertEqual(self.quantities(), (Decimal("98.5"), Decimal("4.998")))
+
+    def test_a_balance_read_cannot_overwrite_a_holding_created_while_the_provider_was_answering(self):
+        with use_operator():
+            Holding.objects.filter(wallet=self.wallet, asset=self.asset).delete()
+
+        def send_during_read(wallet, asset):
+            self.send_in_another_connection()
+            return Decimal("100")
+
+        with acting_for(self.tenant.user.pk):
+            with patch("wallets.services.holdings.fetch_chain_balance", side_effect=send_during_read):
+                result = sync_holding(self.wallet, self.asset)
+        self.assertIsNone(result)
+        self.assertEqual(self.quantities(), (Decimal("0"), Decimal("4.998")))
+
+    def test_a_legacy_row_waits_for_chain_truth_instead_of_guessing_a_refund(self):
+        tx = self.pending()
+        with acting_for(self.tenant.user.pk):
+            Transaction.objects.filter(pk=tx.pk).update(
+                deducted_amount_sync_version=None, deducted_fee_sync_version=None
+            )
+            result = TransactionConfirmationService.fail_transaction(tx.tx_hash, wallet=self.wallet)
+            tx.refresh_from_db()
+            self.assertEqual((tx.deducted_amount, tx.deducted_fee), (Decimal("0"), Decimal("0")))
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(self.quantities(), (Decimal("98.5"), Decimal("4.998")))
+        self.chain_available = True
+        with acting_for(self.tenant.user.pk):
+            sync_holding(self.wallet, self.asset)
+            sync_holding(self.wallet, self.native)
+        self.assertEqual(self.quantities(), (Decimal("100"), Decimal("5")))
+
+
+class ConfirmationLockingTest(ConfirmationChecks, APITransactionTestCase):
+    pass
+
+
+class ScopedConfirmationLockingTest(RunsOnTheScopedConnection, ConfirmationChecks, APITransactionTestCase):
+    pass

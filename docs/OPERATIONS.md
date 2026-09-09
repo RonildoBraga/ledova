@@ -314,6 +314,20 @@ unreadable response or continuation beyond 100 pages per direction fails the
 sync rather than presenting a truncated history as complete. See the
 [Alchemy pagination contract](https://www.alchemy.com/docs/reference/transfers-api-quickstart).
 
+Pending-transfer deductions record the holding generation they changed. A failure
+returns each recorded deduction once, and only while that generation is still
+current. An authoritative chain refresh supersedes that deduction; a later
+provider outage cannot turn its reversal into an extra balance. Token and native
+fee deductions are checked independently. Balance reads run outside row locks,
+and observations made across a concurrent holding change are discarded for retry.
+
+Migration `wallets.0012_balance_versions` preserves existing quantities and
+recorded deductions. Existing transactions have no provable generation: if such
+a transfer fails during a provider outage, its cached balance stays unchanged
+until a successful chain refresh. The migration never guesses a refund from an
+old declared amount or fee estimate. Optimistic changes do not advance the last
+successful chain-sync timestamp.
+
 ### KYC providers
 
 Disabled until configured. With `KYC_PROVIDER` blank the integration answers

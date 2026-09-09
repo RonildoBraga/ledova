@@ -151,6 +151,7 @@ def _confirm_pending_transaction(tx_hash: str, wallet_uuid: str) -> Dict[str, An
     if reader.succeeded(receipt):
         result = TransactionConfirmationService.confirm_transaction(
             tx_hash=tx_hash,
+            wallet=wallet,
             block_number=block_number,
             block_timestamp=block_timestamp,
             actual_fee=actual_fee,
@@ -159,6 +160,7 @@ def _confirm_pending_transaction(tx_hash: str, wallet_uuid: str) -> Dict[str, An
     else:
         result = TransactionConfirmationService.fail_transaction(
             tx_hash=tx_hash,
+            wallet=wallet,
             reason="Transaction reverted on-chain",
         )
         logger.warning(f"Transaction failed on-chain: {tx_hash}")
@@ -207,6 +209,7 @@ def cleanup_stale_pending_transactions(timestamp: int) -> Dict[str, Any]:
         try:
             result = TransactionConfirmationService.fail_transaction(
                 tx_hash=tx.tx_hash,
+                wallet=tx.wallet,
                 reason="Transaction stale - not confirmed within 24 hours",
             )
             if result["status"] == "failed":

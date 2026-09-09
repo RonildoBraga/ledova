@@ -63,7 +63,7 @@ class TransferFeeAccountingTest(BroadcastTransferGuardTestCase):
         self.send_token(get_client, "0xerc20failed")
 
         with patch.object(TransactionConfirmationService, "_notify_wallet_users"):
-            TransactionConfirmationService.fail_transaction("0xerc20failed", reason="reverted")
+            TransactionConfirmationService.fail_transaction("0xerc20failed", reason="reverted", wallet=self.wallet)
 
         self.assertEqual(self.quantities(), (Decimal("100"), Decimal("5")))
 
@@ -77,7 +77,7 @@ class TransferFeeAccountingTest(BroadcastTransferGuardTestCase):
         )
 
         with patch.object(TransactionConfirmationService, "_notify_wallet_users"):
-            TransactionConfirmationService.fail_transaction("0xnativefailed", reason="reverted")
+            TransactionConfirmationService.fail_transaction("0xnativefailed", reason="reverted", wallet=self.wallet)
 
         self.assertEqual(self.quantities(), (Decimal("100"), Decimal("5")))
 
@@ -86,7 +86,9 @@ class TransferFeeAccountingTest(BroadcastTransferGuardTestCase):
 
         with patch("wallets.services.transaction_confirmation.sync_holding") as sync:
             with patch.object(TransactionConfirmationService, "_notify_wallet_users"):
-                TransactionConfirmationService.confirm_transaction("0xerc20confirmed", block_number=1)
+                TransactionConfirmationService.confirm_transaction(
+                    "0xerc20confirmed", block_number=1, wallet=self.wallet
+                )
 
         synced = {call.args[1].symbol for call in sync.call_args_list}
         self.assertEqual(synced, {self.token.symbol, self.native.symbol})
@@ -102,7 +104,9 @@ class TransferFeeAccountingTest(BroadcastTransferGuardTestCase):
 
         with patch("wallets.services.transaction_confirmation.sync_holding") as sync:
             with patch.object(TransactionConfirmationService, "_notify_wallet_users"):
-                TransactionConfirmationService.confirm_transaction("0xnativeconfirmed", block_number=1)
+                TransactionConfirmationService.confirm_transaction(
+                    "0xnativeconfirmed", block_number=1, wallet=self.wallet
+                )
 
         self.assertEqual([call.args[1].symbol for call in sync.call_args_list], [self.native.symbol])
 
