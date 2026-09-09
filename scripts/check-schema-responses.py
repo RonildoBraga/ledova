@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fail when a view returns a serializer the generated schema does not know about.
 
-The rule and its scope are stated in docs/ARCHITECTURE.md under "The schema
+The rule and its scope are stated in docs/GATES.md under "The schema
 response gate". This script is the mechanical half of that rule; keep the two in
 step.
 
@@ -291,7 +291,7 @@ def main() -> int:
         for rule in sorted({finding.rsplit(": ", 1)[1] for finding in offenders}):
             print(f"  {rule}: {RULES[rule]}", file=sys.stderr)
         print(
-            '\nThe rule and its scope are in docs/ARCHITECTURE.md, "The schema response gate".',
+            '\nThe rule and its scope are in docs/GATES.md, "The schema response gate".',
             file=sys.stderr,
         )
         return 1

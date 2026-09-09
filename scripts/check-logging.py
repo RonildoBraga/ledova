@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fail when a log line is shaped so that it can carry a credential or an email address.
 
-The rule and its scope are stated in docs/ARCHITECTURE.md under "The logging
+The rule and its scope are stated in docs/GATES.md under "The logging
 privacy gate". This script is the mechanical half of that rule; keep the two in
 step.
 
@@ -585,7 +585,7 @@ def main() -> int:
         for rule in sorted({entry.split(": ")[1] for entry in violations}):
             print(f"  {rule}: {RULES[rule]}", file=sys.stderr)
         print(
-            "\nThe rule and its scope are in docs/ARCHITECTURE.md,"
+            "\nThe rule and its scope are in docs/GATES.md,"
             '\n"The logging privacy gate".',
             file=sys.stderr,
         )

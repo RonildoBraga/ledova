@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Hold the comment gate's tree list and ARCHITECTURE.md's to each other.
+"""Hold the comment gate's tree list and GATES.md's to each other.
 
 #185 added mobile/scripts to TREES and the prose kept describing the old set.
 The section had already asked its readers to "change it and this section
@@ -18,7 +18,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 SCRIPT = ROOT / "scripts" / "check-comments.py"
-DOCUMENT = ROOT / "docs" / "ARCHITECTURE.md"
+DOCUMENT = ROOT / "docs" / "GATES.md"
 
 _spec = importlib.util.spec_from_file_location("check_comments", SCRIPT)
 gate = importlib.util.module_from_spec(_spec)
