@@ -52,5 +52,6 @@ export {
 } from './errors';
 export type { SignInErrorReading, ApiErrorReading, ReadApiErrorOptions } from './errors';
 export { calculateHoldingsSummary, calculateAssetAllocation } from './holdings';
+export { getHoldingTokenDeployment } from './asset-deployment';
 export { calculateWalletTotals, filterWalletsByChain } from './wallet';
 export { parseFiatValue } from './valuation';

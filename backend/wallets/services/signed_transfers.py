@@ -14,11 +14,11 @@ from shared.constants import (
     normalize_chain,
 )
 from wallets.exceptions import InvalidTransactionException, UnsupportedChainException
+from wallets.services.chain import token_deployment_decimals
 
 ERC20_TRANSFER_SELECTOR = bytes.fromhex("a9059cbb")
 ERC20_TRANSFER_DATA_LENGTH = 68
 ADDRESS_PADDING = 12
-DEFAULT_TOKEN_DECIMALS = 18
 AMOUNT_MAX_DIGITS = 30
 AMOUNT_DECIMAL_PLACES = 18
 AMOUNT_LIMIT = Decimal(10) ** (AMOUNT_MAX_DIGITS - AMOUNT_DECIMAL_PLACES)
@@ -116,7 +116,7 @@ def _evm_plan(wallet, signed_transaction: str) -> SignedTransferPlan:
 
     return SignedTransferPlan(
         to_address=recipient,
-        amount=_recordable(_scaled(raw_amount, _decimals_for(asset, wallet, decoded.to))),
+        amount=_recordable(_scaled(raw_amount, token_deployment_decimals(asset, wallet.chain, decoded.to))),
         token_contract=decoded.to,
     )
 
@@ -135,19 +135,6 @@ def _decode(signed_transaction: str):
         raise InvalidTransactionException(UNSUPPORTED_ENVELOPE)
     except ValueError:
         raise InvalidTransactionException(UNDECODABLE)
-
-
-def _decimals_for(asset, wallet, contract_address: str) -> int:
-    from assets.models import AssetChainDeployment
-
-    deployment = AssetChainDeployment.objects.filter(
-        asset=asset, chain__iexact=normalize_chain(wallet.chain), contract_address__iexact=contract_address
-    ).first()
-    if deployment is not None and deployment.decimals is not None:
-        return deployment.decimals
-    if asset.decimals is not None:
-        return asset.decimals
-    return DEFAULT_TOKEN_DECIMALS
 
 
 def _recordable(amount: Decimal) -> Decimal:

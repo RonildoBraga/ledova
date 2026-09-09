@@ -4,7 +4,12 @@ from typing import Optional
 
 from assets.models import AssetType
 from integrations.blockchain import get_blockchain_client
-from shared.constants import CHAIN_TO_NATIVE_ASSET, NATIVE_ASSET_DECIMALS
+from shared.constants import (
+    CHAIN_TO_NATIVE_ASSET,
+    NATIVE_ASSET_DECIMALS,
+    normalize_chain,
+)
+from wallets.exceptions import InvalidTransactionException
 
 logger = logging.getLogger(__name__)
 
@@ -12,6 +17,19 @@ NO_CONTRACT_ADDRESS = "{symbol} has no contract address on {chain}; its balance 
 NOT_A_SHARE_CLASS = (
     "{symbol} at {address} on {chain} is not a share class this deployment issued; its balance stays unknown"
 )
+
+
+def token_deployment_decimals(asset, chain, contract_address) -> int:
+    deployment = asset.get_deployment_for_chain(normalize_chain(chain))
+    if (
+        not asset.is_active
+        or deployment is None
+        or not deployment.contract_address
+        or deployment.contract_address.casefold() != contract_address.casefold()
+        or not 0 <= deployment.decimals <= 255
+    ):
+        raise InvalidTransactionException("Token configuration on this network is unavailable.")
+    return deployment.decimals
 
 
 def fetch_chain_balance(wallet, asset) -> Optional[Decimal]:

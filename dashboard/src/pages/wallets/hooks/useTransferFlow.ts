@@ -8,6 +8,7 @@ import {
   getChainShortCode,
   getBlockchainDisplayName,
   formatCryptoBalance,
+  getHoldingTokenDeployment,
 } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 import type { Wallet } from '@ledova/shared';
@@ -92,9 +93,10 @@ export function useTransferFlow(selectedWallet: Wallet | null) {
     if (holdingsQuery.data) {
       for (const holding of holdingsQuery.data) {
         const balance = parseFloat(holding.quantity) || 0;
-        if (balance > 0 && holding.asset?.contractAddress) {
+        const deployment = getHoldingTokenDeployment(holding, selectedWallet);
+        if (balance > 0 && holding.asset && deployment?.contractAddress) {
           const type = mapAssetType(holding.asset.assetType);
-          const decimals = holding.asset.decimals || 18;
+          const decimals = deployment.decimals;
           const displayDecimals = type === 'share_token' ? 0 : decimals > 6 ? 6 : decimals;
           assetList.push({
             id: holding.uuid,
@@ -105,7 +107,7 @@ export function useTransferFlow(selectedWallet: Wallet | null) {
             displayBalance: parseFloat(holding.quantity).toFixed(displayDecimals),
             marketValue: holding.marketValue,
             decimals,
-            tokenAddress: holding.asset.contractAddress,
+            tokenAddress: deployment.contractAddress,
           });
         }
       }

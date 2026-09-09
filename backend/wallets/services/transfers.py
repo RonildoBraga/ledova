@@ -20,6 +20,7 @@ from wallets.exceptions import (
     NativeAssetUnavailableException,
     UnsupportedChainException,
 )
+from wallets.services.chain import token_deployment_decimals
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +117,7 @@ class TransferService:
             eth_balance=eth_balance,
             contract_address=token_contract,
             token_symbol=token_asset.symbol,
-            token_decimals=token_asset.decimals or 18,
+            token_decimals=token_deployment_decimals(token_asset, chain, token_contract),
         )
 
     @staticmethod

@@ -33,11 +33,17 @@ const getWalletHoldings = vi.fn(() =>
     data: [
       {
         uuid: 'holding-1',
+        walletUuid: wallet.uuid,
+        chain: wallet.chain,
         quantity: '10000',
         marketValue: '10000',
         assetSymbol: 'QAT',
         assetName: 'QA Token',
-        asset: { contractAddress: `0x${'3'.repeat(40)}`, assetType: 'tokenized_security', decimals: 0 },
+        asset: {
+          isActive: true,
+          assetType: 'tokenized_security',
+          chainDeployments: [{ chain: 'base', contractAddress: `0x${'3'.repeat(40)}`, decimals: 0, isActive: true }],
+        },
       },
     ],
   }),

@@ -1,6 +1,6 @@
 from decimal import Decimal
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from uuid import uuid4
 
 from django.contrib.auth import get_user_model
@@ -44,7 +44,13 @@ class TransferRoutingTest(SimpleTestCase):
     @patch("wallets.models.Holding.objects")
     @patch("assets.models.Asset.get_by_chain_and_contract")
     def test_base_erc20_prepare_passes_the_chain_through(self, get_asset, holdings, prepare, get_client, _balance):
-        get_asset.return_value = SimpleNamespace(symbol="USDC", decimals=6, is_verified=True, asset_type="stablecoin")
+        get_asset.return_value = SimpleNamespace(
+            symbol="USDC",
+            is_active=True,
+            is_verified=True,
+            asset_type="stablecoin",
+            get_deployment_for_chain=Mock(return_value=SimpleNamespace(contract_address=TO, decimals=6)),
+        )
         holdings.filter.return_value.first.return_value = None
 
         TransferService.prepare_transfer(_wallet("base"), to_address=TO, amount_token="1", token_contract=TO)
