@@ -1032,6 +1032,52 @@ runs. Both mechanisms hold at once on purpose:
   under a reverse. Reversing it with `remove` took a database from 80 policies,
   20 forced tables and 4 helpers to none of each, while `django_migrations`
   still said `0004` was applied.
+- **`check_rls_catalogue` is what makes that rule enforceable rather than
+  remembered.** It was the only rule here without a script, and it is the one
+  that is invisible when broken: both databases work, they are simply
+  different, and the difference surfaces weeks later as a defect on one
+  deployment and not another — #355 is the shape. The command reads what is
+  installed, then runs `policy_sql.install` itself inside a transaction it
+  rolls back and reads the result of that, and compares the two. Three things
+  about it are deliberate:
+  - **It compares `pg_get_expr` output against `pg_get_expr` output, never
+    against the text in `policies.py`.** PostgreSQL rewrites an expression when
+    it stores it — parenthesising, qualifying, making casts explicit, turning
+    an `IN` into `= ANY (ARRAY[...])` — so the catalogue string resembles
+    neither side. A gate comparing raw text would report formatting as drift,
+    get pinned, and then be ignored.
+  - **It runs the installer rather than reimplementing it.** Which expression
+    reaches which command is `policy_sql`'s business — `INSERTABLE` on `INSERT`
+    alone, `readable` on `SELECT` and the `USING` half of `UPDATE`. A gate that
+    restated that mapping would be a second source of truth for exactly the
+    thing it exists to keep singular. Before rendering, the probe drops every
+    policy on the catalogued tables inside its rollback transaction. Extra
+    permissive grants therefore cannot survive into the expected policy set.
+    It compares policy roles and permissiveness as well as command and clauses.
+    Helper comparison includes the zero-argument function's body, language,
+    volatility, security mode, strictness, parallel and leakproof flags,
+    configuration and return type.
+  - **The probe rolls back, and a test asserts the installed policies are
+    unchanged afterwards.** It takes the locks the migration takes, briefly, so
+    it belongs after `migrate` on the PostgreSQL job beside `check_rls_roles`,
+    and it is also the command an operator runs against an installation to ask
+    whether it is the one the code describes.
+
+  A catalogue that will not install is reported as a finding rather than
+  raised, because a fresh database could not be built from it either.
+  Run this privileged command after migration when validating a deployment.
+  The app does not maintain a separate startup hash or run a DDL probe on its
+  scoped connection.
+
+  Capital-increase and issuance requests have company policies installed by
+  `shared/0007`. A subscriber can also read the issuance request linked to their
+  subscription, so withdrawal still reports a claimed issuance as a business
+  refusal; only the issuer can change or delete the request. Their R0 columns
+  already exist when `shared/0004` first reads
+  the catalogue on a fresh database. `AWAITING_R0` entries explicitly name their
+  missing columns, and the command fails when one is already `NOT NULL` in the
+  migrated schema. Swap wallet columns are also complete; `AWAITING_RLS` records
+  their remaining trading-policy work instead of claiming that R0 is unfinished.
 
 **How R1 is proven, and where the proof deliberately diverges from
 production.** Three aliases are three *connections*, and Django's `TestCase`

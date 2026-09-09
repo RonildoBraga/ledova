@@ -166,7 +166,7 @@ jobs:
             --settings=ledova_backend.settings.test_scoped --noinput
           python manage.py test users.tests.test_account_type_under_the_app_role \
             --settings=ledova_backend.settings.test_scoped --noinput
-      - name: Row-level-security roles (the half no test can see)
+      - name: Row-level-security roles and catalogue (the half no test can see)
         env:
           POSTGRES_HOST: 127.0.0.1
           POSTGRES_PORT: '5432'
@@ -175,6 +175,7 @@ jobs:
         run: |
           python manage.py migrate --noinput
           python manage.py check_rls_roles
+          python manage.py check_rls_catalogue
       - uses: actions/setup-node@v7
         with:
           node-version: 22.15.1

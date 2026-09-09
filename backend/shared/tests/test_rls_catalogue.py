@@ -134,9 +134,10 @@ class EveryTenantTableIsScopedByAPolicyTest(TransactionTestCase):
                             self.assertNotIn(negation, expression.lower())
 
     def test_every_table_awaiting_a_column_says_which_one_and_why(self):
-        for table, reason in AWAITING_R0.items():
+        for table, prerequisite in AWAITING_R0.items():
             with self.subTest(table=table):
-                self.assertGreater(len(reason), 80)
+                self.assertTrue(prerequisite.columns)
+                self.assertGreater(len(prerequisite.reason), 80)
                 self.assertEqual(self._ask(SCOPED, table), [(False, False)])
 
     def test_every_deliberate_bypass_names_its_call_site_term_and_proof(self):
