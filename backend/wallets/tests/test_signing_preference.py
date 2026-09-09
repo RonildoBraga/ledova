@@ -52,6 +52,20 @@ class SigningPreferenceTest(APITestCase):
         self.assertEqual(response.status_code, 400)
         self.assertIn("signingPreference", response.json())
 
+    def test_empty_preferences_are_rejected_and_null_clears_either_alias(self):
+        for name in ("signingPreference", "walletType"):
+            with self.subTest(name=name):
+                refused = self.create(**{name: ""})
+                self.assertEqual(refused.status_code, 400, refused.content)
+                created = self.create(**{name: "hardware"})
+                self.assertEqual(created.status_code, 201, created.content)
+                url = f"/api/wallets/{created.json()['uuid']}/"
+                self.assertEqual(self.client.patch(url, {name: ""}, format="json").status_code, 400)
+                cleared = self.client.patch(url, {name: None}, format="json")
+                self.assertEqual(cleared.status_code, 200, cleared.content)
+                self.assertIsNone(cleared.json()["signingPreference"])
+                self.assertIsNone(cleared.json()["walletType"])
+
     def test_import_metadata_does_not_attest_hardware_or_select_a_preference(self):
         response = self.create(masterFingerprint="a1b2c3d4", parentPublicKey="02" + "1" * 64)
         self.assertEqual(response.status_code, 201, response.content)

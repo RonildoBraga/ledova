@@ -19,6 +19,12 @@ class WalletSerializer(serializers.ModelSerializer):
     uuid = serializers.CharField(read_only=True)
     user_account = serializers.PrimaryKeyRelatedField(queryset=UserAccount.objects.none())
     chain = serializers.ChoiceField(choices=sorted(SUPPORTED_CHAINS))
+    signing_preference = serializers.ChoiceField(
+        choices=WalletSigningPreference.choices(),
+        allow_null=True,
+        required=False,
+        help_text="Self-declared signing preference; not custody attestation.",
+    )
     wallet_type = serializers.ChoiceField(
         source="signing_preference",
         choices=WalletSigningPreference.choices(),
