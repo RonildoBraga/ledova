@@ -128,19 +128,26 @@ class TransactionConfirmationService:
             tx.status = TRANSACTION_STATUS_CONFIRMED
             tx.block_number = block_number
             tx.block_timestamp = block_timestamp or timezone.now()
+            tx.balance_reconciliation_token = uuid4()
             if actual_fee is not None:
                 tx.transaction_fee = actual_fee
-            tx.save(update_fields=["status", "block_number", "block_timestamp", "transaction_fee"])
+            tx.save(
+                update_fields=[
+                    "status",
+                    "block_number",
+                    "block_timestamp",
+                    "transaction_fee",
+                    "balance_reconciliation_token",
+                ]
+            )
+            TransactionConfirmationService._invalidate_balance_reads(tx)
 
             TransactionConfirmationService._notify_wallet_users(tx, "confirmed")
             logger.info(f"Transaction confirmed: tx_hash={tx_hash}, block={block_number}")
             return {"status": "confirmed", "tx_hash": tx_hash, "block_number": block_number}, None
 
         result = TransactionConfirmationService._on_this_wallets_row(tx_hash, wallet, confirm_once)
-        if result["status"] == "confirmed":
-            tx = Transaction.objects.select_related("asset").get(tx_hash=tx_hash, wallet=wallet)
-            TransactionConfirmationService._verify_holding_balance(wallet, tx.asset)
-            TransactionConfirmationService._update_snapshot_on_confirmation(tx)
+        TransactionConfirmationService.reconcile_transaction(tx_hash, wallet=wallet)
         return result
 
     @staticmethod
@@ -154,9 +161,7 @@ class TransactionConfirmationService:
             return {"status": "failed", "tx_hash": tx_hash, "reason": reason}, None
 
         result = TransactionConfirmationService._on_this_wallets_row(tx_hash, wallet, fail_once)
-        if result["status"] == "failed":
-            tx = Transaction.objects.select_related("asset").get(tx_hash=tx_hash, wallet=wallet)
-            TransactionConfirmationService._verify_holding_balance(wallet, tx.asset)
+        TransactionConfirmationService.reconcile_transaction(tx_hash, wallet=wallet)
         return result
 
     @staticmethod
@@ -170,7 +175,9 @@ class TransactionConfirmationService:
             logger.warning(f"Transaction dropped by a reorganisation: tx_hash={tx_hash}, block={tx.block_number}")
             return {"status": TRANSACTION_STATUS_REORGED, "tx_hash": tx_hash}, None
 
-        return TransactionConfirmationService._on_this_wallets_row(tx_hash, wallet, reverse_once)
+        result = TransactionConfirmationService._on_this_wallets_row(tx_hash, wallet, reverse_once)
+        TransactionConfirmationService.reconcile_transaction(tx_hash, wallet=wallet)
+        return result
 
     @staticmethod
     def mark_replaced(tx_hash: str, wallet: Wallet, replacement_tx_hash: str) -> Dict[str, Any]:
@@ -195,9 +202,43 @@ class TransactionConfirmationService:
     @staticmethod
     def _settle_the_optimistic_debit(tx: Transaction, status: str, extra_fields=None) -> None:
         tx.status = status
-        tx.save(update_fields=["status", "updated_at", *(extra_fields or [])])
+        fields = ["status", "updated_at", *(extra_fields or [])]
         if status in TRANSACTION_STATUSES_THAT_RETURN_THE_OPTIMISTIC_DEBIT:
-            TransactionConfirmationService._revert_optimistic_holding(tx)
+            tx.balance_reconciliation_token = uuid4()
+            fields.append("balance_reconciliation_token")
+        tx.save(update_fields=fields)
+        if status in TRANSACTION_STATUSES_THAT_RETURN_THE_OPTIMISTIC_DEBIT:
+            TransactionConfirmationService._invalidate_balance_reads(tx)
+            TransactionConfirmationService._revert_optimistic_holding(
+                tx, clear_superseded=status != TRANSACTION_STATUS_REORGED
+            )
+
+    @staticmethod
+    def _invalidate_balance_reads(tx: Transaction) -> None:
+        native = native_asset_for_chain(tx.wallet.chain)
+        Holding.objects.filter(wallet=tx.wallet, asset__in=[tx.asset, native]).update(balance_version=uuid4())
+
+    @staticmethod
+    def reconcile_transaction(tx_hash: str, *, wallet: Wallet) -> bool:
+        tx = Transaction.objects.select_related("asset").filter(tx_hash=tx_hash, wallet=wallet).first()
+        if tx is None or tx.balance_reconciliation_token is None:
+            return True
+        expected = tx.balance_reconciliation_token
+        if not TransactionConfirmationService._verify_holding_balance(wallet, tx.asset):
+            return False
+        with atomic():
+            Wallet.objects.select_for_update().get(pk=wallet.pk)
+            locked = Transaction.objects.select_for_update().get(pk=tx.pk)
+            if locked.balance_reconciliation_token != expected:
+                return False
+            if locked.status == TRANSACTION_STATUS_CONFIRMED:
+                TransactionConfirmationService._update_snapshot_on_confirmation(locked)
+            if locked.status == TRANSACTION_STATUS_REORGED:
+                locked.deducted_amount = Decimal("0")
+                locked.deducted_fee = Decimal("0")
+            locked.balance_reconciliation_token = None
+            locked.save(update_fields=["balance_reconciliation_token", "deducted_amount", "deducted_fee"])
+        return True
 
     @staticmethod
     def _on_this_wallets_row(tx_hash: str, wallet: Wallet, act) -> Dict[str, Any]:
@@ -242,11 +283,13 @@ class TransactionConfirmationService:
         return holding, holding.quantity - before
 
     @staticmethod
-    def _verify_holding_balance(wallet: Wallet, asset: Asset) -> None:
-        sync_holding(wallet, asset)
+    def _verify_holding_balance(wallet: Wallet, asset: Asset) -> bool:
+        holding = sync_holding(wallet, asset)
         native = native_asset_for_chain(wallet.chain)
         if asset != native:
-            sync_holding(wallet, native)
+            native_holding = sync_holding(wallet, native)
+            return holding is not None and native_holding is not None
+        return holding is not None
 
     @staticmethod
     def _update_snapshot_on_confirmation(tx: Transaction) -> None:
@@ -271,20 +314,22 @@ class TransactionConfirmationService:
         )
 
     @staticmethod
-    def _revert_optimistic_holding(tx: Transaction) -> None:
+    def _revert_optimistic_holding(tx: Transaction, *, clear_superseded=True) -> None:
         with atomic():
             Wallet.objects.select_for_update().get(pk=tx.wallet_id)
             locked = Transaction.objects.select_for_update().get(pk=tx.pk)
-            TransactionConfirmationService._return_outstanding_deductions(locked)
+            TransactionConfirmationService._return_outstanding_deductions(locked, clear_superseded=clear_superseded)
             tx.deducted_amount = locked.deducted_amount
             tx.deducted_fee = locked.deducted_fee
 
     @staticmethod
-    def _return_outstanding_deductions(tx: Transaction) -> None:
+    def _return_outstanding_deductions(tx: Transaction, *, clear_superseded=True) -> None:
         native = native_asset_for_chain(tx.wallet.chain)
         amount, fee = TransactionConfirmationService._deductions_to_reverse(tx, native)
-        tx.deducted_amount = Decimal("0")
-        tx.deducted_fee = Decimal("0")
+        if clear_superseded or amount:
+            tx.deducted_amount = Decimal("0")
+        if clear_superseded or fee:
+            tx.deducted_fee = Decimal("0")
         tx.save(update_fields=["deducted_amount", "deducted_fee"])
         if not amount and not fee:
             return

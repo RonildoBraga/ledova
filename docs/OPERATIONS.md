@@ -328,6 +328,15 @@ until a successful chain refresh. The migration never guesses a refund from an
 old declared amount or fee estimate. Optimistic changes do not advance the last
 successful chain-sync timestamp.
 
+Confirmation, failure and reorg transitions persist a balance-reconciliation
+token before committing. If a worker stops or a balance/snapshot operation fails,
+the five-minute sweep requeues that work even after transaction status changes.
+Retries complete the balance and snapshot work without repeating notifications
+or refunds. A reorg after a successful confirmation sync retains superseded
+deductions until an authoritative refresh succeeds. Unavailable providers leave
+the repair pending; a later transition prevents an older repair from completing
+over it.
+
 ### KYC providers
 
 Disabled until configured. With `KYC_PROVIDER` blank the integration answers

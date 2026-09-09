@@ -8,6 +8,11 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.AddField(
+            model_name="transaction",
+            name="balance_reconciliation_token",
+            field=models.UUIDField(null=True, blank=True, editable=False),
+        ),
+        migrations.AddField(
             model_name="holding", name="balance_version", field=models.UUIDField(default=uuid.uuid4, editable=False)
         ),
         migrations.AddField(

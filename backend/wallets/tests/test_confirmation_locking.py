@@ -1,10 +1,12 @@
 from concurrent.futures import ThreadPoolExecutor
+from datetime import timedelta
 from decimal import Decimal
 from threading import Event
 from unittest import skipUnless
 from unittest.mock import patch
 
 from django.db import connections
+from django.utils import timezone
 from rest_framework.test import APITransactionTestCase
 
 from assets.models import Asset, AssetChainDeployment
@@ -13,9 +15,13 @@ from shared.db import APP_ALIAS, acting_for, current_alias, use_operator
 from shared.db.aliases import configured
 from shared.tests.scoped import RunsOnTheScopedConnection
 from shared.tests.tenants import make_tenant
-from wallets.models import Holding, Transaction, Wallet
+from wallets.models import Holding, HoldingSnapshot, Transaction, Wallet
 from wallets.services.holdings import sync_holding
 from wallets.services.transaction_confirmation import TransactionConfirmationService
+from wallets.tasks.confirmation import (
+    check_all_pending_transactions,
+    confirm_pending_transaction,
+)
 
 
 class ConfirmationChecks:
@@ -274,6 +280,121 @@ class ConfirmationChecks:
         with acting_for(self.tenant.user.pk):
             sync_holding(self.wallet, self.asset)
             sync_holding(self.wallet, self.native)
+        self.assertEqual(self.quantities(), (Decimal("100"), Decimal("5")))
+
+    def assert_a_confirmation_repair_survives_failure(self, boundary):
+        tx = self.pending()
+        self.chain_available = True
+        self.token_balance = Decimal("98.5")
+        self.native_balance = Decimal("4.999")
+        with acting_for(self.tenant.user.pk):
+            with patch.object(
+                TransactionConfirmationService, boundary, side_effect=RuntimeError("Synthetic interruption")
+            ):
+                with self.assertRaises(RuntimeError):
+                    TransactionConfirmationService.confirm_transaction(tx.tx_hash, wallet=self.wallet, block_number=77)
+            tx.refresh_from_db()
+            self.assertEqual(tx.status, "confirmed")
+            self.assertIsNotNone(tx.balance_reconciliation_token)
+        with patch("wallets.tasks.confirmation.get_blockchain_client") as receipt_client:
+            result = confirm_pending_transaction(tx.tx_hash, str(self.wallet.pk), principal_id=self.tenant.user.pk)
+        self.assertEqual(result["status"], "reconciled")
+        receipt_client.assert_not_called()
+        self.notification.assert_called_once()
+        with use_operator():
+            tx.refresh_from_db()
+            self.assertIsNone(tx.balance_reconciliation_token)
+            self.assertEqual(
+                HoldingSnapshot.objects.get(holding__wallet=self.wallet, holding__asset=self.asset).block_number, 77
+            )
+        self.assertEqual(self.quantities(), (self.token_balance, self.native_balance))
+
+    def test_a_worker_interrupted_after_confirmation_commits_can_repair_on_retry(self):
+        self.assert_a_confirmation_repair_survives_failure("_verify_holding_balance")
+
+    def test_a_failed_snapshot_write_keeps_the_committed_confirmation_repairable(self):
+        self.assert_a_confirmation_repair_survives_failure("_update_snapshot_on_confirmation")
+
+    def test_the_sweep_requeues_a_confirmed_transaction_with_unfinished_balance_work(self):
+        tx = self.pending()
+        with acting_for(self.tenant.user.pk):
+            TransactionConfirmationService.confirm_transaction(tx.tx_hash, wallet=self.wallet)
+            Transaction.objects.filter(pk=tx.pk).update(created_at=timezone.now() - timedelta(minutes=3))
+        with use_operator(), patch("wallets.tasks.confirmation.confirm_pending_transaction.defer") as queued:
+            check_all_pending_transactions(0)
+        queued.assert_called_once_with(tx_hash=tx.tx_hash, wallet_uuid=str(self.wallet.pk), principal_id=None)
+
+    def test_a_reorg_after_the_confirmation_sync_restores_chain_truth_once(self):
+        tx = self.pending()
+        self.chain_available = True
+        self.token_balance = Decimal("98.5")
+        self.native_balance = Decimal("4.999")
+        with acting_for(self.tenant.user.pk):
+            TransactionConfirmationService.confirm_transaction(tx.tx_hash, wallet=self.wallet)
+            self.token_balance = Decimal("100")
+            self.native_balance = Decimal("5")
+            result = TransactionConfirmationService.mark_reorged(tx.tx_hash, self.wallet)
+            TransactionConfirmationService.mark_reorged(tx.tx_hash, self.wallet)
+            tx.refresh_from_db()
+            self.assertIsNone(tx.balance_reconciliation_token)
+            self.assertEqual((tx.deducted_amount, tx.deducted_fee), (Decimal("0"), Decimal("0")))
+        self.assertEqual(result["status"], "reorged")
+        self.assertEqual(self.quantities(), (Decimal("100"), Decimal("5")))
+        self.assertEqual(self.notification.call_count, 2)
+
+    def test_a_reorg_during_an_outage_retains_its_deductions_until_a_retry_can_refresh(self):
+        tx = self.pending()
+        self.chain_available = True
+        self.token_balance = Decimal("98.5")
+        self.native_balance = Decimal("4.999")
+        with acting_for(self.tenant.user.pk):
+            TransactionConfirmationService.confirm_transaction(tx.tx_hash, wallet=self.wallet)
+            self.chain_available = False
+            TransactionConfirmationService.mark_reorged(tx.tx_hash, self.wallet)
+            tx.refresh_from_db()
+            self.assertIsNotNone(tx.balance_reconciliation_token)
+            self.assertEqual(tx.deducted_amount, Decimal("1.5"))
+        self.assertEqual(self.quantities(), (Decimal("98.5"), Decimal("4.999")))
+        self.chain_available = True
+        self.token_balance = Decimal("100")
+        self.native_balance = Decimal("5")
+        result = confirm_pending_transaction(tx.tx_hash, str(self.wallet.pk), principal_id=self.tenant.user.pk)
+        self.assertEqual(result["status"], "reconciled")
+        self.assertEqual(self.quantities(), (Decimal("100"), Decimal("5")))
+        self.assertEqual(self.notification.call_count, 2)
+        with use_operator():
+            tx.refresh_from_db()
+            self.assertIsNone(tx.balance_reconciliation_token)
+            self.assertEqual((tx.deducted_amount, tx.deducted_fee), (Decimal("0"), Decimal("0")))
+
+    def test_an_older_confirmation_repair_cannot_finish_over_a_newer_reorg(self):
+        tx = self.pending()
+        self.chain_available = True
+        self.token_balance = Decimal("98.5")
+        self.native_balance = Decimal("4.999")
+        verify = TransactionConfirmationService._verify_holding_balance
+        first = True
+
+        def reorg_during_repair(wallet, asset):
+            nonlocal first
+            result = verify(wallet, asset)
+            if first:
+                first = False
+                self.token_balance = Decimal("100")
+                self.native_balance = Decimal("5")
+                TransactionConfirmationService.mark_reorged(tx.tx_hash, self.wallet)
+            return result
+
+        with acting_for(self.tenant.user.pk):
+            with patch.object(
+                TransactionConfirmationService, "_verify_holding_balance", side_effect=reorg_during_repair
+            ):
+                with patch.object(TransactionConfirmationService, "_update_snapshot_on_confirmation") as snapshot:
+                    TransactionConfirmationService.confirm_transaction(tx.tx_hash, wallet=self.wallet, block_number=77)
+            snapshot.assert_not_called()
+            tx.refresh_from_db()
+            self.assertEqual(tx.status, "reorged")
+            self.assertIsNone(tx.balance_reconciliation_token)
         self.assertEqual(self.quantities(), (Decimal("100"), Decimal("5")))
 
 

@@ -4,6 +4,7 @@ from datetime import timezone as datetime_timezone
 from decimal import Decimal
 from typing import Any, Callable, Dict, NamedTuple, Optional
 
+from django.db.models import Q
 from django.utils import timezone
 from procrastinate import RetryStrategy
 
@@ -131,6 +132,9 @@ def _confirm_pending_transaction(tx_hash: str, wallet_uuid: str) -> Dict[str, An
     try:
         tx = Transaction.objects.get(tx_hash=tx_hash, wallet=wallet)
         if tx.status != TRANSACTION_STATUS_PENDING:
+            if tx.balance_reconciliation_token is not None:
+                repaired = TransactionConfirmationService.reconcile_transaction(tx_hash, wallet=wallet)
+                return {"status": "reconciled" if repaired else "reconciliation_pending", "tx_hash": tx_hash}
             logger.info(f"Transaction already processed: {tx_hash}")
             return {"status": "already_processed", "current_status": tx.status}
     except Transaction.DoesNotExist:
@@ -173,7 +177,7 @@ def _confirm_pending_transaction(tx_hash: str, wallet_uuid: str) -> Dict[str, An
 def check_all_pending_transactions(timestamp: int) -> Dict[str, Any]:
     pending_cutoff = timezone.now() - timedelta(minutes=2)
     pending_txs = Transaction.objects.filter(
-        status=TRANSACTION_STATUS_PENDING,
+        Q(status=TRANSACTION_STATUS_PENDING) | Q(balance_reconciliation_token__isnull=False),
         created_at__lt=pending_cutoff,
     ).select_related("wallet")
 
