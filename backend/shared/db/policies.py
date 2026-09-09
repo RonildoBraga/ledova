@@ -127,6 +127,9 @@ POLICIES = {
         _company("company_id", MANAGEABLE_COMPANIES),
     ),
     "tokens_formerholder": (f"owner_id = {PRINCIPAL}", "false"),
+    "blockchain_outgoingoperation": ("false", "false"),
+    "blockchain_signingaccount": ("false", "false"),
+    "blockchain_signedattempt": ("false", "false"),
 }
 
 LOCKING_IS_READING = (
