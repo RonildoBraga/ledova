@@ -84,6 +84,8 @@ CHAIN_TO_NATIVE_ASSET = {
     BLOCKCHAIN_BASE: "ETH",
 }
 
+NATIVE_ASSET_DECIMALS = {"BTC": 8, "ETH": 18, "POL": 18, "SOL": 9, "AVAX": 18}
+
 
 def normalize_chain(chain: str) -> str:
     if not chain:

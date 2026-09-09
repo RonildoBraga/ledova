@@ -11,6 +11,7 @@ from assets.choices import PriceSource
 from assets.models import Asset, AssetChainDeployment, AssetSnapshot, AssetType
 from assets.services.exchange_rate import ExchangeRateService
 from integrations.coingecko import SYMBOL_TO_COINGECKO_ID, CoinGeckoClient
+from shared.constants import CHAIN_TO_NATIVE_ASSET, SUPPORTED_CHAINS
 from shared.db import atomic
 
 logger = logging.getLogger(__name__)
@@ -102,6 +103,9 @@ class AssetSyncService:
     @staticmethod
     def ensure_supported_assets() -> None:
         for symbol, meta in SUPPORTED_ASSETS.items():
+            native = meta["type"] == AssetType.NATIVE_CRYPTO
+            if native and Asset.objects.filter(symbol=symbol).exclude(asset_type=meta["type"].value).exists():
+                raise ValueError(f"Symbol {symbol} belongs to a token row, not the native coin")
             asset, _ = Asset.objects.update_or_create(
                 symbol=symbol,
                 defaults={
@@ -111,7 +115,16 @@ class AssetSyncService:
                     "is_verified": True,
                 },
             )
-            defaults = {"decimals": meta["decimals"], "is_active": True}
+            if native:
+                for chain in sorted(SUPPORTED_CHAINS):
+                    if CHAIN_TO_NATIVE_ASSET[chain] == symbol:
+                        AssetChainDeployment.objects.get_or_create(
+                            asset=asset,
+                            chain=chain,
+                            defaults={"decimals": meta["decimals"], "is_active": asset.is_active},
+                        )
+                continue
+            defaults = {"decimals": meta["decimals"]}
             address = configured_contract_address(meta)
             if address:
                 defaults["contract_address"] = address

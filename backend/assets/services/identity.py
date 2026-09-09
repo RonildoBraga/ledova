@@ -3,7 +3,11 @@ from typing import Optional
 
 from assets.models import Asset, AssetChainDeployment, AssetType
 from assets.services.sync import SUPPORTED_ASSETS
-from shared.constants import CHAIN_TO_NATIVE_ASSET, get_native_asset_symbol
+from shared.constants import (
+    CHAIN_TO_NATIVE_ASSET,
+    NATIVE_ASSET_DECIMALS,
+    normalize_chain,
+)
 from shared.db import atomic
 
 logger = logging.getLogger(__name__)
@@ -15,14 +19,31 @@ RESERVED_SYMBOLS = frozenset(symbol.upper() for symbol in (*SUPPORTED_ASSETS, *C
 
 
 def native_asset_for_chain(chain: str) -> Asset:
+    chain = normalize_chain(chain)
+    symbol = CHAIN_TO_NATIVE_ASSET.get(chain)
+    if symbol is None:
+        raise ValueError(f"No native coin is configured for {chain}")
     asset = Asset.objects.native_for_chain(chain)
-    if asset is None:
-        symbol = get_native_asset_symbol(chain)
+    if asset is not None:
+        return asset
+    with atomic():
         asset, _ = Asset.objects.get_or_create(
-            symbol=symbol, defaults={"name": symbol, "asset_type": AssetType.NATIVE_CRYPTO.value}
+            symbol=symbol,
+            defaults={
+                "name": symbol,
+                "asset_type": AssetType.NATIVE_CRYPTO.value,
+                "decimals": NATIVE_ASSET_DECIMALS[symbol],
+            },
         )
         if asset.asset_type != AssetType.NATIVE_CRYPTO.value:
             raise ValueError(f"Symbol {symbol} belongs to a {asset.asset_type} row, not the native coin of {chain}")
+        AssetChainDeployment.objects.get_or_create(
+            asset=asset,
+            chain=chain,
+            defaults={"decimals": NATIVE_ASSET_DECIMALS[symbol], "is_active": asset.is_active},
+        )
+        if Asset.objects.native_for_chain(chain) is None:
+            raise ValueError(f"Native {symbol} configuration on {chain} is unavailable")
     return asset
 
 

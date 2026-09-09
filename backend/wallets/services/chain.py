@@ -4,6 +4,7 @@ from typing import Optional
 
 from assets.models import AssetType
 from integrations.blockchain import get_blockchain_client
+from shared.constants import CHAIN_TO_NATIVE_ASSET, NATIVE_ASSET_DECIMALS
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +17,13 @@ NOT_A_SHARE_CLASS = (
 def fetch_chain_balance(wallet, asset) -> Optional[Decimal]:
     deployment = asset.get_deployment_for_chain(wallet.chain)
     if deployment is None:
+        return None
+    if asset.asset_type == AssetType.NATIVE_CRYPTO.value and (
+        not asset.is_active
+        or asset.symbol != CHAIN_TO_NATIVE_ASSET.get(wallet.chain)
+        or deployment.contract_address is not None
+        or deployment.decimals != NATIVE_ASSET_DECIMALS.get(asset.symbol)
+    ):
         return None
     if not deployment.contract_address and asset.asset_type != AssetType.NATIVE_CRYPTO.value:
         logger.warning(NO_CONTRACT_ADDRESS.format(symbol=asset.symbol, chain=wallet.chain))

@@ -38,6 +38,12 @@ class InsufficientBalanceException(APIException):
     default_code = "insufficient_balance"
 
 
+class NativeAssetUnavailableException(APIException):
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    default_detail = "Native asset configuration for this network is unavailable. Contact support before retrying."
+    default_code = "native_asset_unavailable"
+
+
 class InvalidTransactionException(APIException):
     status_code = status.HTTP_400_BAD_REQUEST
     default_detail = "The transaction parameters are invalid."
