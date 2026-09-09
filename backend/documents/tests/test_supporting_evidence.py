@@ -8,13 +8,13 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.core.files.base import ContentFile
 from django.db.models import ProtectedError
-from django.test import TestCase, override_settings
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient, APITestCase
 
 from documents.models import Document, DocumentExtraction, DocumentRead
-from documents.services.document import attach_document
+from documents.services.document import attach_document, create_document
 from documents.services.extraction import ExtractionService
 from documents.services.retention import purge_expired_documents
 from documents.tasks.extract import extract_document
@@ -185,6 +185,35 @@ class SupportingPayslipApiTest(EvidenceCase, APITestCase):
         self.assertIsNone(self.document.classification_id)
         self.assertEqual((self.root / self.document.file.name).read_bytes(), PDF)
 
+    def test_attachment_between_start_and_render_keeps_the_extraction_input_available(self):
+        original_name = self.document.file.name
+        render = ExtractionService.render_first_page
+
+        def attach_then_render(document, *args):
+            self.attach()
+            self.assertFalse((self.root / original_name).exists())
+            return render(document, *args)
+
+        import fitz
+
+        pdf = fitz.open()
+        pdf.new_page().insert_text((72, 72), "Synthetic supporting payslip")
+        self.document.file.save("synthetic.pdf", ContentFile(pdf.tobytes()), save=True)
+        pdf.close()
+        original_name = self.document.file.name
+        with patch.object(ExtractionService, "render_first_page", side_effect=attach_then_render), patch(
+            "documents.services.extraction.LlmExtractClient"
+        ) as llm:
+            llm.return_value.extract.return_value = SimpleNamespace(
+                parsed=SimpleNamespace(model_dump=lambda **kwargs: {"gross_pay": "1"}),
+                raw_output="synthetic extraction",
+                duration_ms=1,
+                model_used="synthetic",
+            )
+            result = ExtractionService.run(self.document)
+        self.assertEqual(result.status, "succeeded", result.error)
+        self.assertTrue(llm.return_value.extract.call_args.kwargs["image_bytes"].startswith(b"\x89PNG"))
+
     @patch("documents.services.document.extract_document.defer")
     def test_single_issuer_refuses_every_document_route_and_does_not_enqueue(self, defer):
         operator = Operator.get()
@@ -203,6 +232,32 @@ class SupportingPayslipApiTest(EvidenceCase, APITestCase):
 
 
 class SupportingPayslipAdminTest(EvidenceCase, TestCase):
+    def test_document_view_permission_does_not_grant_raw_extraction_access(self):
+        extraction = self.extraction()
+        reviewer = get_user_model().objects.create_user(
+            email="document-only@example.test",
+            password="pw-12345678",
+            is_staff=True,
+            is_active=True,
+            is_email_verified=True,
+        )
+        reviewer.user_permissions.add(
+            Permission.objects.get(content_type__app_label="documents", codename="view_document")
+        )
+        client = APIClient()
+        client.force_login(reviewer)
+        self.assertEqual(
+            client.get(reverse("admin:documents_document_change", args=[self.document.pk])).status_code, 200
+        )
+        for url in (
+            reverse("admin:documents_documentextraction_change", args=[extraction.pk]),
+            reverse("admin:documents_documentextraction_changelist"),
+        ):
+            response = client.get(url)
+            self.assertEqual(response.status_code, 403)
+            self.assertNotContains(response, "synthetic private raw response", status_code=403)
+        self.assertFalse(DocumentRead.objects.filter(actor_id=reviewer.pk, kind="extraction").exists())
+
     def test_the_claim_links_to_an_audited_worklist_without_granting_a_review_decision(self):
         self.attach()
         reviewer = self.operations_user()
@@ -398,3 +453,42 @@ class SupportingPayslipRetentionTest(EvidenceCase, TestCase):
             llm.return_value.extract.side_effect = complete_after_purge
             self.assertIsNone(ExtractionService.run(self.document))
         self.assertFalse(DocumentExtraction.objects.exists())
+
+
+class EvidenceCommitFailureTest(EvidenceCase, TransactionTestCase):
+    def test_failure_to_delete_the_old_file_preserves_committed_evidence_on_both_attach_paths(self):
+        storage = self.document.file.storage
+        delete = type(storage).delete
+
+        def fail_old_delete(instance, name):
+            if name.startswith("documents/"):
+                raise OSError("Synthetic old object cleanup outage")
+            return delete(instance, name)
+
+        with patch.object(type(storage), "delete", autospec=True, side_effect=fail_old_delete), patch(
+            "documents.services.document.extract_document.defer"
+        ):
+            for uploading in (False, True):
+                with self.subTest(uploading=uploading):
+                    failure = None
+                    try:
+                        if uploading:
+                            result = create_document(
+                                self.owner.user,
+                                {
+                                    "file": ContentFile(PDF, name="new.pdf"),
+                                    "mime_type": "application/pdf",
+                                    "classification": self.claim.pk,
+                                },
+                            )
+                        else:
+                            result = attach_document(self.document, self.owner.user, self.claim.pk)
+                    except OSError as exc:
+                        failure = exc
+                        result = Document.objects.filter(classification=self.claim).latest("created_at")
+                    result.refresh_from_db()
+                    self.assertEqual(result.classification_id, self.claim.pk)
+                    self.assertTrue(storage.exists(result.file.name))
+                    with result.file.open("rb") as retained:
+                        self.assertEqual(retained.read(), PDF)
+                    self.assertIsNone(failure)

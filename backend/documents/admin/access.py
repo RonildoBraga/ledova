@@ -8,7 +8,11 @@ class AuditsDocumentReads:
         return obj
 
     def has_view_permission(self, request, obj=None):
-        return may_review_documents(request.user) and (obj is None or self.document_for_read(obj).content_available)
+        return (
+            super().has_view_permission(request, obj)
+            and may_review_documents(request.user)
+            and (obj is None or self.document_for_read(obj).content_available)
+        )
 
     def has_add_permission(self, request):
         return False

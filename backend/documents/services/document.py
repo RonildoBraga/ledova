@@ -1,3 +1,5 @@
+import logging
+
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
@@ -8,6 +10,15 @@ from documents.services.access import require_documents_enabled
 from documents.tasks.extract import extract_document
 from shared.db import atomic, on_commit
 from users.models import InvestorClassification, InvestorClassificationStatus
+
+logger = logging.getLogger(__name__)
+
+
+def _delete_obsolete_upload(storage, name, document_uuid):
+    try:
+        storage.delete(name)
+    except Exception:
+        logger.warning("documents.attachment: obsolete upload cleanup deferred for document=%s", document_uuid)
 
 
 def create_document(uploaded_by, validated_data) -> Document:
@@ -60,7 +71,7 @@ def attach_document(document, user, classification_uuid):
             document.file = copied
             document.attached_at = timezone.now()
             document.save(update_fields=["classification", "file", "attached_at", "updated_at"])
-            on_commit(lambda: storage.delete(old_name))
+            on_commit(lambda: _delete_obsolete_upload(storage, old_name, document.uuid))
     except Exception:
         if copied:
             storage.delete(copied)
