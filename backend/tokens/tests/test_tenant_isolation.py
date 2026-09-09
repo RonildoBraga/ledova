@@ -38,7 +38,7 @@ class TenantOrderIsolationTest(APITestCase):
             user_account=account,
             address=address,
             chain="ethereum",
-            wallet_type="software",
+            signing_preference="software",
             verification_status="VERIFIED",
         )
         return user, account, wallet

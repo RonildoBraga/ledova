@@ -50,7 +50,7 @@ export function useAtomicSwapSigning({ orderUuid, walletAddress, wallet }: UseAt
 
   const needsApproval = approvalStatus?.needsApproval ?? null;
   const approvalTokenSymbol = approvalStatus?.tokenSymbol ?? approvalData?.tokenSymbol ?? null;
-  const isSoftwareWallet = wallet?.walletType === 'software';
+  const isSoftwareWallet = wallet?.signingPreference === 'software';
 
   const handleSignatureScanned = useCallback(
     async (signature: string) => {

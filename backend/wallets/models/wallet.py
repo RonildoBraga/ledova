@@ -12,7 +12,7 @@ from wallets.constants import (
 from wallets.querysets.wallet import WalletQuerySet
 
 
-class WalletType(str, Enum):
+class WalletSigningPreference(str, Enum):
     HARDWARE = "hardware"
     SOFTWARE = "software"
 
@@ -45,10 +45,12 @@ class Wallet(BaseModel):
         choices=Blockchain.choices(),
         db_index=True,
     )
-    wallet_type = models.CharField(
+    signing_preference = models.CharField(
         max_length=16,
-        choices=WalletType.choices(),
-        default=WalletType.HARDWARE.value,
+        choices=WalletSigningPreference.choices(),
+        null=True,
+        blank=True,
+        help_text="Self-declared signing preference. It does not attest custody or hardware use.",
     )
     verification_status = models.CharField(
         max_length=20, choices=WALLET_VERIFICATION_STATUS_CHOICES, default=WALLET_VERIFICATION_STATUS_PENDING
@@ -68,7 +70,7 @@ class Wallet(BaseModel):
         max_length=8,
         null=True,
         blank=True,
-        help_text="Hardware wallet identifier (8-char hex)",
+        help_text="Client-provided key fingerprint (8-char hex); not hardware attestation",
     )
     address_index = models.IntegerField(
         null=True,

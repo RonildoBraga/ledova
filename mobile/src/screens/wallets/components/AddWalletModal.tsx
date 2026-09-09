@@ -2,12 +2,12 @@ import React, { useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity } from 'react-native';
 import { WalletIcon, QrCodeIcon } from 'phosphor-react-native';
 import { getChainConfig, getAddressPlaceholder } from '@ledova/shared';
-import type { CreateWallet, DerivedAddress, HardwareWalletImport, WalletType } from '@ledova/shared';
+import type { CreateWallet, DerivedAddress, HardwareWalletImport, WalletSigningPreference } from '@ledova/shared';
 import type { SoftwareWalletImport } from '../../../utils/softwareWallet';
 import { AnimatedQRScanner } from '../../../components/qr';
 import { CustomModal } from '../../../components/modal';
 import { HardwareAccountSelector } from './HardwareAccountSelector';
-import { WalletTypeSelector } from './WalletTypeSelector';
+import { WalletSigningPreferenceSelector } from './WalletSigningPreferenceSelector';
 import { SeedPhraseSetup } from './SeedPhraseSetup';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
 import { useAddWalletForm, FORM_STEPS } from '../useAddWalletForm';
@@ -124,8 +124,8 @@ export function AddWalletModal({
     onClose();
   };
 
-  const handleWalletTypeSelect = (type: WalletType) => {
-    form.setWalletType(type);
+  const handleWalletSigningPreferenceSelect = (type: WalletSigningPreference) => {
+    form.setWalletSigningPreference(type);
     if (type === 'software') {
       form.setStep(FORM_STEPS.SEED_PHRASE);
     } else if (type === 'hardware') {
@@ -159,7 +159,7 @@ export function AddWalletModal({
       case FORM_STEPS.SELECT_TYPE:
         return (
           <CustomModal {...modalProps}>
-            <WalletTypeSelector onSelect={handleWalletTypeSelect} />
+            <WalletSigningPreferenceSelector onSelect={handleWalletSigningPreferenceSelect} />
           </CustomModal>
         );
 

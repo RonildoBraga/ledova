@@ -50,7 +50,7 @@ function randomStatus(): 'VERIFIED' | 'PENDING' {
   return Math.random() > 0.3 ? 'VERIFIED' : 'PENDING';
 }
 
-function randomWalletType(): 'hardware' | 'software' {
+function randomWalletSigningPreference(): 'hardware' | 'software' {
   return Math.random() > 0.4 ? 'hardware' : 'software';
 }
 
@@ -72,7 +72,7 @@ export const generateMockWalletsData = (): Wallet[] => {
   for (let i = 0; i < MOCK_WALLETS_PER_CHAIN; i++) {
     const balance = randomBalance(0.001, 2.5);
     const status = randomStatus();
-    const walletType = randomWalletType();
+    const signingPreference = randomWalletSigningPreference();
     const fingerprint = `btcfp${String(Math.floor(i / 5)).padStart(2, '0')}`;
     const parentPath = `m/84'/1'/${Math.floor(i / 5)}'`;
 
@@ -82,7 +82,7 @@ export const generateMockWalletsData = (): Wallet[] => {
       name: BTC_NAMES[i % BTC_NAMES.length] ?? undefined,
       address: makeBtcAddress(i),
       chain: 'Bitcoin',
-      walletType,
+      signingPreference,
       verificationStatus: status,
       verifiedAt:
         status === 'VERIFIED' ? new Date(Date.now() - (i + 1) * 2 * 24 * 60 * 60 * 1000).toISOString() : undefined,
@@ -94,9 +94,9 @@ export const generateMockWalletsData = (): Wallet[] => {
       derivationPath: `${parentPath}/0/${i % 5}`,
       addressIndex: i % 5,
       masterFingerprint: fingerprint,
-      parentPublicKey: walletType === 'hardware' ? `xpub-btc-${fingerprint}` : undefined,
-      parentChainCode: walletType === 'hardware' ? `chain-btc-${fingerprint}` : undefined,
-      parentDerivationPath: walletType === 'hardware' ? parentPath : undefined,
+      parentPublicKey: signingPreference === 'hardware' ? `xpub-btc-${fingerprint}` : undefined,
+      parentChainCode: signingPreference === 'hardware' ? `chain-btc-${fingerprint}` : undefined,
+      parentDerivationPath: signingPreference === 'hardware' ? parentPath : undefined,
       createdAt: new Date(Date.now() - (90 - i) * 24 * 60 * 60 * 1000).toISOString(),
       updatedAt: new Date(Date.now() - i * 60 * 60 * 1000).toISOString(),
     });
@@ -105,7 +105,7 @@ export const generateMockWalletsData = (): Wallet[] => {
   for (let i = 0; i < MOCK_WALLETS_PER_CHAIN; i++) {
     const balance = randomBalance(0.01, 10);
     const status = randomStatus();
-    const walletType = randomWalletType();
+    const signingPreference = randomWalletSigningPreference();
     const fingerprint = `ethfp${String(Math.floor(i / 5)).padStart(2, '0')}`;
     const parentPath = `m/44'/60'/${Math.floor(i / 5)}'`;
 
@@ -115,7 +115,7 @@ export const generateMockWalletsData = (): Wallet[] => {
       name: ETH_NAMES[i % ETH_NAMES.length] ?? undefined,
       address: makeEthAddress(i),
       chain: 'Ethereum',
-      walletType,
+      signingPreference,
       verificationStatus: status,
       verifiedAt:
         status === 'VERIFIED' ? new Date(Date.now() - (i + 1) * 3 * 24 * 60 * 60 * 1000).toISOString() : undefined,
@@ -127,9 +127,9 @@ export const generateMockWalletsData = (): Wallet[] => {
       derivationPath: `${parentPath}/0/${i % 5}`,
       addressIndex: i % 5,
       masterFingerprint: fingerprint,
-      parentPublicKey: walletType === 'hardware' ? `xpub-eth-${fingerprint}` : undefined,
-      parentChainCode: walletType === 'hardware' ? `chain-eth-${fingerprint}` : undefined,
-      parentDerivationPath: walletType === 'hardware' ? parentPath : undefined,
+      parentPublicKey: signingPreference === 'hardware' ? `xpub-eth-${fingerprint}` : undefined,
+      parentChainCode: signingPreference === 'hardware' ? `chain-eth-${fingerprint}` : undefined,
+      parentDerivationPath: signingPreference === 'hardware' ? parentPath : undefined,
       createdAt: new Date(Date.now() - (90 - i) * 24 * 60 * 60 * 1000).toISOString(),
       updatedAt: new Date(Date.now() - i * 30 * 60 * 1000).toISOString(),
     });

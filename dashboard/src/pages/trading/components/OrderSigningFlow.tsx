@@ -64,7 +64,8 @@ export function OrderSigningFlow({
   const [error, setError] = useState<string | null>(null);
   const [seedPhrase, setSeedPhrase] = useState('');
 
-  const isSoftwareWallet = wallet?.walletType === 'software' || (!wallet?.derivationPath && !wallet?.masterFingerprint);
+  const isSoftwareWallet =
+    wallet?.signingPreference === 'software' || (!wallet?.derivationPath && !wallet?.masterFingerprint);
 
   const createMessageMutation = useOrderCreateMessage();
   const cancelMessageMutation = useOrderCancelMessage();

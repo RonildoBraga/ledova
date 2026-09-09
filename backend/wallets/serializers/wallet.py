@@ -12,12 +12,26 @@ from shared.constants import (
 from users.models import UserAccount
 from wallets.constants import WALLET_VERIFICATION_STATUS_VERIFIED
 from wallets.models import Wallet
+from wallets.models.wallet import WalletSigningPreference
 
 
 class WalletSerializer(serializers.ModelSerializer):
     uuid = serializers.CharField(read_only=True)
     user_account = serializers.PrimaryKeyRelatedField(queryset=UserAccount.objects.none())
     chain = serializers.ChoiceField(choices=sorted(SUPPORTED_CHAINS))
+    signing_preference = serializers.ChoiceField(
+        choices=WalletSigningPreference.choices(),
+        allow_null=True,
+        required=False,
+        help_text="Self-declared signing preference; not custody attestation.",
+    )
+    wallet_type = serializers.ChoiceField(
+        source="signing_preference",
+        choices=WalletSigningPreference.choices(),
+        allow_null=True,
+        required=False,
+        help_text="Legacy alias for the self-declared signing preference; not custody attestation.",
+    )
 
     native_balance = serializers.DecimalField(
         source="annotated_native_balance", read_only=True, max_digits=40, decimal_places=18
@@ -37,6 +51,7 @@ class WalletSerializer(serializers.ModelSerializer):
             "name",
             "address",
             "chain",
+            "signing_preference",
             "wallet_type",
             "native_balance",
             "native_market_value",
@@ -105,6 +120,12 @@ class WalletSerializer(serializers.ModelSerializer):
         return immutable_changes
 
     def validate(self, data):
+        if (
+            "wallet_type" in self.initial_data
+            and "signing_preference" in self.initial_data
+            and self.initial_data["wallet_type"] != self.initial_data["signing_preference"]
+        ):
+            raise serializers.ValidationError({"signing_preference": "Conflicting signing preferences were supplied."})
         immutable_changes = self._verified_identity_change_errors(self.instance, data)
         if immutable_changes:
             raise serializers.ValidationError(immutable_changes)

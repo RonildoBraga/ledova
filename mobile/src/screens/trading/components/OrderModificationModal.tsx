@@ -150,7 +150,7 @@ export function OrderModificationModal({ visible, onClose, order, wallet, onSucc
   const modificationMessageMutation = useOrderModificationMessage();
   const executeModificationMutation = useExecuteOrderModification();
 
-  const isSoftwareWallet = wallet?.walletType === 'software';
+  const isSoftwareWallet = wallet?.signingPreference === 'software';
 
   useEffect(() => {
     if (visible && order) {

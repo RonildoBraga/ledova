@@ -12,7 +12,10 @@ export function WalletBadge({ verificationStatus }: WalletBadgeProps) {
   const isVerified = verificationStatus === WALLET_VERIFICATION_STATUS.VERIFIED;
 
   return (
-    <span className="relative inline-flex">
+    <span
+      className="relative inline-flex"
+      aria-label={isVerified ? 'Wallet address verified' : 'Wallet address verification pending'}
+    >
       <WalletIcon size={ICON_SM} className={isVerified ? 'text-success-light' : 'text-text-muted'} />
       {isVerified ? (
         <CheckCircleIcon size={ICON_XS} weight="fill" className="absolute -bottom-0.5 -right-0.5 text-success-light" />

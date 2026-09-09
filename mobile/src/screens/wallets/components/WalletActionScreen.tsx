@@ -22,7 +22,8 @@ import type { WalletsStackParamList } from '../../../navigation/WalletsStackNavi
 import type { Wallet, DerivedAddress } from '@ledova/shared';
 import {
   WALLET_VERIFICATION_STATUS,
-  WALLET_TYPE,
+  WALLET_SIGNING_PREFERENCE,
+  getWalletSigningPreferenceLabel,
   getChainByShortName,
   getChainShortCode,
   isBitcoinChain,
@@ -122,12 +123,15 @@ export function WalletActionScreen() {
     },
 
     typeValue: {
+      flexShrink: 1,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'flex-end',
       gap: theme.spacing.xs,
     },
     typeText: {
+      flexShrink: 1,
+      textAlign: 'right',
       fontSize: theme.fontSize.sm,
       fontWeight: theme.fontWeight.medium,
       color: theme.colors.text.primary,
@@ -232,7 +236,7 @@ export function WalletActionScreen() {
   const isVerified = wallet.verificationStatus === WALLET_VERIFICATION_STATUS.VERIFIED;
   const marketValue = parseFloat(wallet.marketValue) || 0;
   const chainCode = getChainShortCode(wallet.chain);
-  const isHardware = wallet.walletType === WALLET_TYPE.HARDWARE;
+  const isHardware = wallet.signingPreference === WALLET_SIGNING_PREFERENCE.HARDWARE;
   const isBtc = isBitcoinChain(chainCode);
   const ChainIcon = isBtc ? CurrencyBtcIcon : CurrencyEthIcon;
 
@@ -276,7 +280,7 @@ export function WalletActionScreen() {
         userAccount: crud.userAccountUuid!,
         address: derivedAddress.address,
         chain: chain.code,
-        walletType: wallet.walletType || 'hardware',
+        signingPreference: wallet.signingPreference ?? undefined,
         derivationPath: derivedAddress.derivationPath,
         masterFingerprint: wallet.masterFingerprint,
         addressIndex: derivedAddress.addressIndex,
@@ -349,16 +353,18 @@ export function WalletActionScreen() {
                   </View>
 
                   <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Type</Text>
+                    <Text style={styles.detailLabel}>Signing preference</Text>
                     <View style={styles.typeValue}>
-                      <Text style={styles.typeText}>{isHardware ? 'Hardware' : 'Software'}</Text>
-                      <View style={styles.typeIconContainer}>
-                        {isHardware ? (
-                          <HardDrivesIcon size={theme.icon.sizes.xs} color={theme.colors.text.muted} weight="bold" />
-                        ) : (
-                          <CloudIcon size={theme.icon.sizes.xs} color={theme.colors.text.muted} weight="bold" />
-                        )}
-                      </View>
+                      <Text style={styles.typeText}>{getWalletSigningPreferenceLabel(wallet.signingPreference)}</Text>
+                      {wallet.signingPreference && (
+                        <View style={styles.typeIconContainer}>
+                          {isHardware ? (
+                            <HardDrivesIcon size={theme.icon.sizes.xs} color={theme.colors.text.muted} weight="bold" />
+                          ) : (
+                            <CloudIcon size={theme.icon.sizes.xs} color={theme.colors.text.muted} weight="bold" />
+                          )}
+                        </View>
+                      )}
                     </View>
                   </View>
 
@@ -378,7 +384,7 @@ export function WalletActionScreen() {
                           },
                         ]}
                       >
-                        {isVerified ? 'Verified' : 'Pending'}
+                        {isVerified ? 'Address verified' : 'Pending'}
                       </Text>
                       {isVerified ? (
                         <ShieldCheckIcon

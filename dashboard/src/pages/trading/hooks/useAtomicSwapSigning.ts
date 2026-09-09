@@ -104,7 +104,8 @@ export function useAtomicSwapSigning({
   const [unsignedApprovalTx, setUnsignedApprovalTx] = useState<UnsignedTransaction | null>(null);
   const [seedPhrase, setSeedPhrase] = useState('');
 
-  const isSoftwareWallet = wallet?.walletType === 'software' || (!wallet?.derivationPath && !wallet?.masterFingerprint);
+  const isSoftwareWallet =
+    wallet?.signingPreference === 'software' || (!wallet?.derivationPath && !wallet?.masterFingerprint);
 
   const { data: swapData, isLoading: isLoadingSwapData, error: loadError } = useOrderSwapData(orderUuid, walletAddress);
 

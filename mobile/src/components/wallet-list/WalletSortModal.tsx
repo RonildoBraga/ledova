@@ -159,7 +159,7 @@ export function WalletSortModal({ visible, selectedChain, selectedSort, onClose,
       id: 'default',
       label: 'Default',
       icon: <ListBulletsIcon size={theme.icon.sizes.sm} color={theme.colors.text.primary} weight="regular" />,
-      description: 'Hardware wallets first',
+      description: 'Hardware signing preference first',
     },
     {
       id: 'verified',

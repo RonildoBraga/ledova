@@ -12,7 +12,7 @@ import {
   BLOCKCHAIN,
   isBitcoinChain,
   getWalletVerificationEvmChainId,
-  WALLET_TYPE,
+  WALLET_SIGNING_PREFERENCE,
 } from '@ledova/shared';
 import type { WalletsStackParamList } from '../../../navigation/WalletsStackNavigator';
 import { ButtonGroup } from '../../../components/buttons';
@@ -63,7 +63,7 @@ export function WalletVerificationScreen() {
 
   const { wallet } = route.params;
 
-  const isSoftwareWallet = wallet.walletType === WALLET_TYPE.SOFTWARE;
+  const isSoftwareWallet = wallet.signingPreference === WALLET_SIGNING_PREFERENCE.SOFTWARE;
 
   const {
     verificationChallenge,

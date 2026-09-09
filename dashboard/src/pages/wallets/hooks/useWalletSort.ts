@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { WALLET_TYPE } from '@ledova/shared';
+import { WALLET_SIGNING_PREFERENCE } from '@ledova/shared';
 import type { Wallet } from '@ledova/shared';
 
 export type WalletSortOption = 'default' | 'verified' | 'name' | 'namedFirst' | 'highestValue' | 'highestBalance';
@@ -7,8 +7,8 @@ export type WalletSortOption = 'default' | 'verified' | 'name' | 'namedFirst' | 
 function sortWallets(wallets: Wallet[], option: WalletSortOption): Wallet[] {
   if (option === 'default') {
     return [...wallets].sort((a, b) => {
-      const aIsHardware = !a.walletType || a.walletType === WALLET_TYPE.HARDWARE;
-      const bIsHardware = !b.walletType || b.walletType === WALLET_TYPE.HARDWARE;
+      const aIsHardware = a.signingPreference === WALLET_SIGNING_PREFERENCE.HARDWARE;
+      const bIsHardware = b.signingPreference === WALLET_SIGNING_PREFERENCE.HARDWARE;
       if (aIsHardware === bIsHardware) return 0;
       return aIsHardware ? -1 : 1;
     });

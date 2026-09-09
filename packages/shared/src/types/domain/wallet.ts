@@ -1,14 +1,14 @@
 import type { BaseEntity } from '../common';
 import type { BaseQueryParams } from '../api';
 
-export type WalletType = 'hardware' | 'software';
+export type WalletSigningPreference = 'hardware' | 'software';
 
 export interface Wallet extends BaseEntity {
   userAccount: string;
   name?: string;
   address: string;
   chain: string;
-  walletType?: WalletType;
+  signingPreference?: WalletSigningPreference | null;
   verificationStatus: 'PENDING' | 'VERIFIED';
   verificationChallenge?: string;
   verificationSignature?: string;
@@ -36,7 +36,7 @@ export type CreateWallet = {
   name?: string;
   address: string;
   chain: string;
-  walletType?: WalletType;
+  signingPreference?: WalletSigningPreference;
   derivationPath?: string;
   masterFingerprint?: string;
   addressIndex?: number;

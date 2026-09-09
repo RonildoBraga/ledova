@@ -2013,6 +2013,23 @@ Partial or conflicting cross-wallet valuations retain known amounts but mark
 the aggregate unpriced instead of inventing one source; the chart identifies
 an incomplete valuation and the list preserves its unpriced percentage dash.
 
+Wallet `signingPreference` is a self-declared client preference (`hardware`,
+`software` or null), not custody evidence. It chooses a signing interface and
+may be changed without changing the address verification status. Key
+fingerprints, public keys and derivation paths are also client-provided data;
+the presence of that metadata does not identify the signing device. New
+wallets with no preference remain unspecified instead of claiming hardware.
+The legacy `walletType` API name remains an alias for compatibility; conflicting
+values in the two names are rejected. Current clients use `signingPreference`.
+The stored field is renamed without deleting existing preferences or wallets.
+
+A valid verification signature proves control of the address for that challenge;
+a hardware device and software can produce the same signature. `VERIFIED` has
+no hardware-custody meaning, and no server permission or compliance rule uses
+the signing preference. The existing administrative verification override is
+not a device attestation either. Both wallet detail views label the preference
+as self-declared and keep address verification separate.
+
 Wallet holdings are an array and identify their wallet with `walletUuid`. Asset
 snapshots do not supply calculated chart changes; clients derive those from
 prices. Transactions expose `createdAt` but do not promise `updatedAt`. Sync
