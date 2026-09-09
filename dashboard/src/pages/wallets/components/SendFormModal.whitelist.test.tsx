@@ -2,7 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import apiClient from '@services/apiClient';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Wallet } from '@ledova/shared';
 
@@ -26,7 +26,7 @@ const getWalletHoldings = vi.fn(() =>
       {
         uuid: 'holding-1',
         quantity: '10000',
-        marketValue: '10000',
+        marketValue: '10000' as string | null,
         assetSymbol: 'QAT',
         assetName: 'QA Token',
         asset: { contractAddress: `0x${'3'.repeat(40)}`, assetType: 'tokenized_security', decimals: 0 },
@@ -99,6 +99,30 @@ async function chooseTheShareTokenAndType(address: string) {
 }
 
 describe('the Send form and the recipient allowlist', () => {
+  it('keeps an unpriced holding nullable and permits a valid quantity transfer', async () => {
+    getWalletHoldings.mockResolvedValueOnce({
+      data: [
+        {
+          uuid: 'holding-1',
+          quantity: '10000',
+          marketValue: null,
+          assetSymbol: 'QAT',
+          assetName: 'QA Token',
+          asset: { contractAddress: `0x${'3'.repeat(40)}`, assetType: 'tokenized_security', decimals: 0 },
+        },
+      ],
+    });
+    renderFlow();
+    await chooseTheShareTokenAndType(whitelisted);
+    const token = screen.getByText('QAT').closest('button')!;
+    expect(within(token).getByText('Unpriced')).toBeDefined();
+    expect(within(token).queryByText(/NaN|\$0\.00/)).toBeNull();
+    expect(screen.getByText('Unpriced: no fiat estimate available.')).toBeDefined();
+    fireEvent.change(screen.getByPlaceholderText('0'), { target: { value: '2' } });
+    await waitFor(() => expect(screen.getByText(/^Recipient is whitelisted$/i)).toBeDefined());
+    expect(screen.getByRole('button', { name: /continue/i }).hasAttribute('disabled')).toBe(false);
+  });
+
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();

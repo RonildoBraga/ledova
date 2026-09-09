@@ -19,6 +19,7 @@ import {
   getEstimatedFee,
   formatWalletAddressShort,
   validateWalletAddress,
+  parseFiatValue,
 } from '@ledova/shared';
 import { useCurrency } from '@hooks/useCurrency';
 import type { Wallet, WhitelistStatus } from '@ledova/shared';
@@ -227,6 +228,7 @@ export function SendFormModal({
 
             {assets.map((asset, index) => {
               const isSelected = selectedAsset?.id === asset.id;
+              const marketValue = parseFiatValue(asset.marketValue);
               return (
                 <button
                   key={asset.id}
@@ -254,7 +256,7 @@ export function SendFormModal({
                       </>
                     )}
                     <span className={`text-sm font-medium ${isSelected ? 'text-brand-light' : 'text-text-primary'}`}>
-                      {formatDisplayCurrency(parseFloat(asset.marketValue))}
+                      {marketValue === null ? 'Unpriced' : formatDisplayCurrency(marketValue)}
                     </span>
                   </span>
                 </button>
@@ -353,6 +355,9 @@ export function SendFormModal({
               placeholder={amountPlaceholder}
               className="w-full bg-surface-tertiary border border-border rounded-lg px-3 py-3 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-brand-mid"
             />
+            {parseFiatValue(selectedAsset.marketValue) === null && (
+              <p className="text-xs text-text-muted">Unpriced: no fiat estimate available.</p>
+            )}
             <div className="flex items-center justify-between">
               <p className="text-xs text-text-muted">
                 Max: {selectedAsset.displayBalance} {selectedAsset.symbol}
