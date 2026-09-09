@@ -8,6 +8,7 @@ from web3 import Web3
 from web3.exceptions import TimeExhausted, TransactionNotFound
 
 from integrations.base_chain.exceptions import GasEstimationError
+from shared.utils.token_amounts import token_base_units
 
 from .base import BlockchainClient
 
@@ -207,7 +208,7 @@ class EthereumClient(BlockchainClient):
 
             contract = self.w3.eth.contract(address=checksum_contract, abi=self.ERC20_ABI)
 
-            amount_base_units = int(amount * Decimal(10**decimals))
+            amount_base_units = token_base_units(amount, decimals)
 
             encoded_data = contract.encode_abi(
                 abi_element_identifier="transfer", args=[checksum_recipient, amount_base_units]

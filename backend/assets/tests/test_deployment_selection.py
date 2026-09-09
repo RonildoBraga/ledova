@@ -98,6 +98,40 @@ class DeploymentSelectionTest(APITestCase):
         plan = plan_signed_transfer(self.wallet, signed)
         self.assertEqual((plan.token_contract, plan.amount), (BASE_CONTRACT, Decimal("3")))
 
+    def test_preparation_refuses_fractional_base_units_before_any_provider_call(self):
+        for decimals, amount in ((0, "1.5"), (0, "0.5"), (6, "1.0000001"), (18, "12345678901.0000000000000000001")):
+            with self.subTest(decimals=decimals, amount=amount):
+                self.base.decimals = decimals
+                self.base.save(update_fields=["decimals"])
+                with patch("wallets.services.transfers.get_blockchain_client") as provider:
+                    response = self.client.post(
+                        f"/api/wallets/{self.wallet.pk}/prepare-transfer/",
+                        {"toAddress": RECIPIENT, "amountToken": amount, "tokenContract": BASE_CONTRACT},
+                        format="json",
+                    )
+                self.assertEqual(response.status_code, 400, response.content)
+                self.assertIn("decimal places", response.json()["detail"])
+                provider.assert_not_called()
+
+    def test_actual_encoder_preserves_exact_units_and_refuses_rounding(self):
+        encoder = SimpleNamespace(w3=Web3(), ERC20_ABI=EthereumClient.ERC20_ABI)
+        for amount, decimals, units in (
+            ("3.000", 0, 3),
+            ("1.500000", 6, 1_500_000),
+            ("12345678901.123456789012345678", 18, 12345678901123456789012345678),
+        ):
+            with self.subTest(amount=amount, decimals=decimals):
+                encoded = EthereumClient.build_erc20_transfer_data(
+                    encoder, BASE_CONTRACT, RECIPIENT, Decimal(amount), decimals
+                )
+                self.assertEqual(int(encoded[-64:], 16), units)
+        for amount, decimals in (("1.5", 0), ("0.5", 0), ("1.0000001", 6), ("1e78", 0), ("NaN", 0)):
+            with self.subTest(amount=amount, decimals=decimals):
+                with self.assertRaises(ValueError):
+                    EthereumClient.build_erc20_transfer_data(
+                        encoder, BASE_CONTRACT, RECIPIENT, Decimal(amount), decimals
+                    )
+
     def test_a_deployment_disabled_during_resolution_never_falls_back_to_asset_decimals(self):
         original = TransactionConfirmationService.resolve_transfer_asset
 
