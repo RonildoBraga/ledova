@@ -597,9 +597,10 @@ an `ACTIVE` company with a verified issuer wallet recorded as its
 `operator_wallet` and a draft share class, and an investor with a verified
 wallet, a live wholesale classification and a whitelist row. Without it,
 reaching that state by hand means a signup, nine document uploads, a listing
-submission, three admin transitions and a wallet the dashboard cannot verify —
-the Verify flow is hardware-wallet only, so a typed address only reaches
-`verified` through the admin.
+submission, three admin transitions and a wallet verification. A typed EVM
+address can be verified in the dashboard by signing the challenge with its seed
+phrase; a Bitcoin address, or an EVM address whose key you do not hold, still
+reaches `verified` only through a Keystone or the admin.
 
 No password is stored in the repository. The command takes `--password`, falls
 back to `$LEDOVA_DEMO_PASSWORD`, and otherwise generates one and prints it with
@@ -1111,8 +1112,19 @@ and a policy on every tenant table. Four things about running that deployment:
 
 ## Pre-release device checks
 
-Two mobile flows cannot be exercised in CI or a simulator and need a real
-development or production build on a device before any release:
+Three flows cannot be exercised in CI or a simulator and need real hardware
+before any release. The first needs a Keystone; the rest need a development or
+production build on a device:
+
+- **The Keystone QR round trip.** Nothing in CI scans a QR code, so the whole
+  air-gapped path — UR encoding, the animated fragments, the camera decoder and
+  the device's own firmware — is covered by this check alone. Verify a wallet,
+  send one EVM crypto transfer through the transfer signing flow, and sign one
+  trading order through the QR branch. The transfer is the only place a raw
+  transaction UR is exercised at all, and the encoder force-encodes a legacy
+  type-0 transaction, so an EIP-1559 prepare is downgraded on the way to the
+  device: check that what the Keystone displays matches what was prepared. The
+  seed-phrase alternative in the dashboard does not cover any of this.
 
 - **Bitcoin manual send.** Prepare a transfer from a Bitcoin wallet, sign the
   raw transaction with your own tooling, paste the hex, broadcast it, and

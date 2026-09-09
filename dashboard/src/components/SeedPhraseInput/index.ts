@@ -1,0 +1,1 @@
+export { SeedPhraseInput } from './SeedPhraseInput';

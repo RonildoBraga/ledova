@@ -2,6 +2,8 @@ import { ethers } from 'ethers';
 import { HDKey } from 'ethereum-cryptography/hdkey';
 import { mnemonicToSeedSync } from 'ethereum-cryptography/bip39';
 
+export const DEFAULT_EVM_DERIVATION_PATH = "m/44'/60'/0'/0/0";
+
 function wipe(...arrays: (Uint8Array | null | undefined)[]): void {
   for (const arr of arrays) {
     if (arr) arr.fill(0);

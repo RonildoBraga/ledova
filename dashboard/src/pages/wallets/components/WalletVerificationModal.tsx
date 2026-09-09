@@ -1,13 +1,21 @@
-import { useEffect, useCallback } from 'react';
-import { ShieldCheckIcon, QrCodeIcon, CameraIcon, CheckCircleIcon, ArrowLeftIcon } from '@phosphor-icons/react';
+import { useEffect, useCallback, useState } from 'react';
+import {
+  ShieldCheckIcon,
+  QrCodeIcon,
+  CameraIcon,
+  CheckCircleIcon,
+  ArrowLeftIcon,
+  KeyIcon,
+} from '@phosphor-icons/react';
 import { QRCodeSVG } from 'qrcode.react';
-import { DESIGN_TOKENS } from '@ledova/shared';
+import { DESIGN_TOKENS, getWalletVerificationEvmChainId } from '@ledova/shared';
 import type { Wallet } from '@ledova/shared';
 
 const ICON_SM = DESIGN_TOKENS.icon.sizes.sm;
 const ICON_XXL = DESIGN_TOKENS.icon.sizes.xxl;
 const ICON_DISPLAY = DESIGN_TOKENS.icon.sizes.display;
 import { Modal } from '@components/Modal';
+import { SeedPhraseInput } from '@components/SeedPhraseInput';
 import { useQRScanner, QRScannerView } from '@components/qr';
 import { useWalletVerification } from '../hooks/useWalletVerification';
 import { decodeKeystoneMessageSignature } from '@utils/keystone/urDecoder';
@@ -26,12 +34,16 @@ export function WalletVerificationModal({ isOpen, wallet, onClose }: WalletVerif
     verificationSuccess,
     isRequestingChallenge,
     isVerifying,
+    isSigningWithSeedPhrase,
     startVerification,
     proceedToScanSignature,
     handleSignatureScanned,
+    signWithSeedPhrase,
     goBack,
     reset,
   } = useWalletVerification();
+
+  const [seedPhrase, setSeedPhrase] = useState('');
 
   const { error: scannerError, stopScanner } = useQRScanner({
     scannerId: 'qr-scanner',
@@ -46,6 +58,7 @@ export function WalletVerificationModal({ isOpen, wallet, onClose }: WalletVerif
 
   const handleClose = useCallback(() => {
     stopScanner();
+    setSeedPhrase('');
     reset();
     onClose();
   }, [onClose, reset, stopScanner]);
@@ -61,11 +74,31 @@ export function WalletVerificationModal({ isOpen, wallet, onClose }: WalletVerif
 
   const handleStartVerification = () => {
     if (wallet) {
-      startVerification(wallet);
+      startVerification(wallet, 'hardware');
     }
   };
 
+  const handleStartSeedPhraseVerification = () => {
+    if (wallet) {
+      setSeedPhrase('');
+      startVerification(wallet, 'software');
+    }
+  };
+
+  const handleBackFromSeedPhrase = () => {
+    setSeedPhrase('');
+    goBack();
+  };
+
+  const handleSignWithSeedPhrase = () => {
+    const phrase = seedPhrase;
+    setSeedPhrase('');
+    void signWithSeedPhrase(phrase);
+  };
+
   if (!wallet) return null;
+
+  const supportsSeedPhraseSigning = getWalletVerificationEvmChainId(wallet.chain) !== null;
 
   const renderStepContent = () => {
     switch (verificationStep) {
@@ -120,6 +153,17 @@ export function WalletVerificationModal({ isOpen, wallet, onClose }: WalletVerif
             >
               {isRequestingChallenge ? 'Generating Challenge...' : 'Continue'}
             </button>
+
+            {supportsSeedPhraseSigning && (
+              <button
+                type="button"
+                onClick={handleStartSeedPhraseVerification}
+                disabled={isRequestingChallenge}
+                className="w-full py-3 bg-surface-tertiary text-text-primary text-sm font-medium rounded-lg hover:bg-surface-disabled disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                No hardware wallet? Sign with a seed phrase
+              </button>
+            )}
           </div>
         );
 
@@ -207,6 +251,62 @@ export function WalletVerificationModal({ isOpen, wallet, onClose }: WalletVerif
                 <span className="text-sm text-text-muted">Verifying signature...</span>
               </div>
             )}
+          </div>
+        );
+
+      case 'sign-software':
+        return (
+          <div className="space-y-6">
+            <button
+              type="button"
+              onClick={handleBackFromSeedPhrase}
+              className="flex items-center gap-1 text-sm text-text-muted hover:text-text-primary transition-colors"
+            >
+              <ArrowLeftIcon size={ICON_SM} />
+              Back
+            </button>
+
+            <div className="flex justify-center">
+              <div className="p-4 bg-brand-mid/10 rounded-full">
+                <KeyIcon size={ICON_XXL} className="text-brand-mid" />
+              </div>
+            </div>
+
+            <div className="text-center">
+              <h3 className="text-lg font-semibold text-text-primary mb-2">Sign with Seed Phrase</h3>
+              <p className="text-sm text-text-muted">
+                Enter the seed phrase for wallet{' '}
+                <span className="font-mono text-xs text-text-secondary">
+                  {wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}
+                </span>
+              </p>
+            </div>
+
+            <SeedPhraseInput
+              value={seedPhrase}
+              onChange={setSeedPhrase}
+              disabled={isSigningWithSeedPhrase || isVerifying}
+            />
+
+            {verificationError && (
+              <div className="p-3 bg-error-light/10 border border-error-light/20 rounded-lg">
+                <p className="text-sm text-error-light">{verificationError}</p>
+                {!seedPhrase && (
+                  <p className="text-xs text-error-light/80 mt-1">
+                    The phrase was cleared when it was handed to the signer. Enter it again to retry.
+                  </p>
+                )}
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={handleSignWithSeedPhrase}
+              disabled={!seedPhrase.trim() || isSigningWithSeedPhrase || isVerifying}
+              className="w-full py-3 bg-brand-mid text-white text-sm font-medium rounded-lg hover:bg-brand disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {isSigningWithSeedPhrase || isVerifying ? 'Verifying...' : 'Sign and Verify'}
+            </button>
           </div>
         );
 
