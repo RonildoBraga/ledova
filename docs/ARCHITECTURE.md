@@ -1487,16 +1487,21 @@ itself for any algorithm, including a wrong one.
 ## Wallet ownership and signing
 
 **`VERIFIED` means someone held the private key, not that a hardware device
-held it.** The server issues a plain-text challenge, stores it on the row, and
-on submission recovers the signer and compares it to the stored address. That
-is the whole check: `encode_defunct` plus `recover_message` plus a lowercase
-compare, standard EIP-191. Master fingerprint, derivation path and xpub are
-columns on the model and appear nowhere in the verification path, so a
-signature from a Keystone and a signature from a script are indistinguishable
-to it — they are the same ECDSA output over the same bytes. `wallet_type` is
-client-writable and no backend authorisation decision reads it, so anything
-downstream treating `VERIFIED` as evidence of hardware custody is reading a
-guarantee the code does not make.
+held it.** The server issues a plain-text challenge naming the address, a
+timestamp and a nonce, stores it on the row with its issue time, and on
+submission recovers the signer and compares it to the stored address. Three
+things bound that, all in `complete_wallet_verification`: the row is locked for
+the read-modify-write, the challenge is refused outside
+`WALLET_VERIFICATION_CHALLENGE_MINUTES` of its issue time, and it is cleared on
+success so a signature cannot be replayed. The identity check itself is
+`encode_defunct` plus `recover_message` plus a lowercase compare, standard
+EIP-191. Master fingerprint, derivation path and xpub are columns on the model
+and appear nowhere in that path, so a signature from a Keystone and a signature
+from a script are indistinguishable to it — they are the same ECDSA output over
+the same bytes. `signing_preference` is self-declared and client-writable, its
+own help text says it does not attest custody, and no backend authorisation
+decision reads it. Anything downstream treating `VERIFIED` as evidence of
+hardware custody is reading a guarantee the code does not make.
 
 **Two client signing paths therefore exist, and both are legitimate.** The
 Keystone path wraps the challenge as a UR/CBOR `eth-sign-request`, renders it
@@ -1523,7 +1528,8 @@ and the firmware's own behaviour are exercised only by a human with the
 hardware. That is a pre-release check rather than a gate, and it is listed as
 one in `docs/OPERATIONS.md`.
 
-Reference: `backend/wallets/services/wallets.py`,
+Reference: `backend/wallets/services/verification.py`,
+`backend/wallets/services/wallets.py`,
 `dashboard/src/pages/wallets/hooks/useWalletVerification.ts`,
 `dashboard/src/utils/softwareWallet/localSigner.ts`. Gate:
 `backend/wallets/tests/test_wallet_verification.py` and

@@ -90,6 +90,12 @@ export function WalletVerificationModal({ isOpen, wallet, onClose }: WalletVerif
     goBack();
   };
 
+  const handleSignWithSeedPhrase = () => {
+    const phrase = seedPhrase;
+    setSeedPhrase('');
+    void signWithSeedPhrase(phrase);
+  };
+
   if (!wallet) return null;
 
   const supportsSeedPhraseSigning = getWalletVerificationEvmChainId(wallet.chain) !== null;
@@ -285,12 +291,17 @@ export function WalletVerificationModal({ isOpen, wallet, onClose }: WalletVerif
             {verificationError && (
               <div className="p-3 bg-error-light/10 border border-error-light/20 rounded-lg">
                 <p className="text-sm text-error-light">{verificationError}</p>
+                {!seedPhrase && (
+                  <p className="text-xs text-error-light/80 mt-1">
+                    The phrase was cleared when it was handed to the signer. Enter it again to retry.
+                  </p>
+                )}
               </div>
             )}
 
             <button
               type="button"
-              onClick={() => signWithSeedPhrase(seedPhrase)}
+              onClick={handleSignWithSeedPhrase}
               disabled={!seedPhrase.trim() || isSigningWithSeedPhrase || isVerifying}
               className="w-full py-3 bg-brand-mid text-white text-sm font-medium rounded-lg hover:bg-brand disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
