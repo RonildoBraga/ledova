@@ -21,8 +21,8 @@ def fold_every_share_class(timestamp: int = 0):
             fold_former_holders(token)
             folded += 1
         except Exception as exc:
-            unreadable.append(f"{token.symbol}: {exc}")
-            logger.error(f"The former-members fold could not read {token.symbol}: {exc}")
+            unreadable.append(str(token.uuid))
+            logger.error("The former-members fold could not read %s: %s", token.uuid, type(exc).__name__)
 
     if unreadable:
         logger.warning(

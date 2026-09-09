@@ -470,42 +470,37 @@ class ShareTokenService:
     def head_block(self) -> int:
         return self.chain_client.w3.eth.block_number
 
-    def transfer_entries(self, contract_address: str, from_block: int, to_block: int, window: int = LOG_WINDOW):
+    def _transfer_logs(self, contract_address: str, from_block: int, to_block: int, window: int):
+        if window <= 0:
+            raise ValueError("Transfer-log window must be positive.")
         token_contract = self.load_share_token(contract_address)
-        entries = []
-        start = from_block
-        while start <= to_block:
+        for start in range(from_block, to_block + 1, window):
             end = min(start + window - 1, to_block)
-            for entry in token_contract.events.Transfer().get_logs(from_block=start, to_block=end):
-                entries.append(
-                    {
-                        "from": entry["args"]["from"],
-                        "to": entry["args"]["to"],
-                        "value": int(entry["args"]["value"]),
-                        "block_number": int(entry["blockNumber"]),
-                        "log_index": int(entry["logIndex"]),
-                    }
-                )
-            start = end + 1
-        entries.sort(key=lambda item: (item["block_number"], item["log_index"]))
-        return entries
+            yield from token_contract.events.Transfer().get_logs(from_block=start, to_block=end)
+
+    def transfer_entries(self, contract_address: str, from_block: int, to_block: int, window: int = LOG_WINDOW):
+        entries = [
+            {
+                "from": entry["args"]["from"],
+                "to": entry["args"]["to"],
+                "value": int(entry["args"]["value"]),
+                "block_number": int(entry["blockNumber"]),
+                "log_index": int(entry["logIndex"]),
+            }
+            for entry in self._transfer_logs(contract_address, from_block, to_block, window)
+        ]
+        return sorted(entries, key=lambda item: (item["block_number"], item["log_index"]))
 
     def block_date(self, block_number: int):
         stamp = self.chain_client.w3.eth.get_block(block_number)["timestamp"]
         return datetime.fromtimestamp(int(stamp), tz=dt_timezone.utc).date()
 
     def transfer_participants(self, contract_address: str, from_block: int, window: int = LOG_WINDOW) -> set:
-        token_contract = self.load_share_token(contract_address)
-        head = self.head_block()
-        addresses = set()
-        start = from_block
-        while start <= head:
-            end = min(start + window - 1, head)
-            for entry in token_contract.events.Transfer().get_logs(from_block=start, to_block=end):
-                addresses.add(entry["args"]["from"])
-                addresses.add(entry["args"]["to"])
-            start = end + 1
-        return addresses
+        return {
+            address
+            for entry in self._transfer_logs(contract_address, from_block, self.head_block(), window)
+            for address in (entry["args"]["from"], entry["args"]["to"])
+        }
 
     def share_supply(self, contract_address: str) -> tuple[int, int]:
         token_contract = self.load_share_token(contract_address)

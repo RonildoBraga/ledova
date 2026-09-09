@@ -50,14 +50,6 @@ IN_FLIGHT_STATUSES = (
 )
 
 
-IN_FLIGHT_STATUSES = (
-    RequestStatus.SUBMITTED,
-    RequestStatus.UNDER_REVIEW,
-    RequestStatus.APPROVED,
-    RequestStatus.EXECUTING,
-)
-
-
 class TransferOrderType(models.TextChoices):
     BUY = "buy", "Buy"
     SELL = "sell", "Sell"

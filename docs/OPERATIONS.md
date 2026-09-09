@@ -337,6 +337,44 @@ deductions until an authoritative refresh succeeds. Unavailable providers leave
 the repair pending; a later transition prevents an older repair from completing
 over it.
 
+### Former-member records
+
+The periodic former-member fold reads every deployed or paused share class every
+six hours. It replays ordered Transfer events from deployment and records each
+cessation under that class. If a holder ceases more than once in one block, the
+last cessation in that block supplies that record. Incomplete, repeated or
+unreadable history leaves the previous successful timestamp intact. Database
+writes and the new timestamp commit together after provider reads finish.
+
+The register API and CSV carry a separate former-members section with the last
+successful read time, block and stale indicator (24 hours). A class never read
+successfully is explicitly stale. The dashboard permits CSV export when all
+current holders have left. GET requests do not run or write the fold.
+
+Names and addresses are frozen on the first recorded cessation and are not
+looked up again on a refold. The source and recording time accompany those
+particulars. A current profile is identified as the profile at recording time;
+if it is unavailable, an allotment record dated no later than the cessation may
+supply the particulars. Otherwise the identity is marked unknown. This does not
+claim to reconstruct profile changes before the first fold.
+
+Former-member rows are readable by the company owner and operator only. Public
+visibility of the parent share class does not reveal these rows. The application
+role cannot insert, update or delete them. Owner-transfer support would need to
+propagate the derived owner column before such a feature is enabled.
+
+`FORMER_MEMBER_RETENTION_DAYS` defaults to 2557, independently of classification
+evidence retention. The sweep measures from the cessation date, and a later
+full-history fold cannot recreate expired records. A value below 2557 refuses
+the fold and purge. This implements the accepted seven-year retention assumption
+for s169(3); counsel must settle the legal basis and responsibility for the
+register before public use.
+
+Rejected offerings can be withdrawn by their issuer. Withdrawal retains the
+reviewer, review time, notes and rejection reason. A withdrawn row remains
+visible as a record, including its previous rejection, and offers no further
+edit, resubmit or delete action.
+
 ### KYC providers
 
 Disabled until configured. With `KYC_PROVIDER` blank the integration answers

@@ -58,6 +58,7 @@ FORMER_MEMBER_HEADERS = [
     "Shares held on ceasing",
     "Date ceased",
     "Identity source",
+    "Identity recorded at",
 ]
 AS_AT_ROW = "As at"
 NEVER_FOLDED = "never read"
@@ -317,7 +318,12 @@ def former_member_rows(token) -> list[list]:
             csv_cell(row.wallet_address),
             csv_cell(str(row.shares_at_cessation)),
             csv_cell(row.ceased_on.isoformat()),
-            csv_cell(IDENTITY_LABELS.get(row.identity_source, row.identity_source)),
+            csv_cell(
+                "Profile when the cessation was recorded"
+                if row.identity_source == IDENTITY_LIVE
+                else IDENTITY_LABELS.get(row.identity_source, row.identity_source)
+            ),
+            csv_cell(row.created_at.isoformat()),
         ]
         for row in former_members_of(token)
     ]

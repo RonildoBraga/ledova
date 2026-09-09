@@ -3,6 +3,7 @@ from unittest.mock import Mock
 
 from django.test import TestCase
 from django.utils import timezone
+from web3 import Web3
 
 from shared.tests.tenants import make_tenant
 from tokens.models import FormerHolder, ShareToken
@@ -22,8 +23,8 @@ from tokens.services.register import (
     export_rows,
 )
 
-ALICE = "0x" + "a1" * 20
-BOB = "0x" + "b2" * 20
+ALICE = Web3.to_checksum_address("0x" + "a1" * 20)
+BOB = Web3.to_checksum_address("0x" + "b2" * 20)
 ZERO = "0x" + "00" * 20
 
 
@@ -81,14 +82,14 @@ class WhatTheLogSaysAboutCeasingTest(TestCase):
 
         self.assertEqual([(row["address"], row["shares"]) for row in cessations], [(ALICE, 100), (BOB, 100)])
 
-    def test_the_same_block_read_the_other_way_round_says_something_different(self):
+    def test_the_fold_orders_a_scrambled_same_block_before_replaying_it(self):
         entries = [
             transfer(ZERO, ALICE, 100, 10),
             transfer(BOB, ALICE, 100, 20, index=1),
             transfer(ALICE, BOB, 100, 20, index=0),
         ]
 
-        self.assertNotEqual(cessations_in(entries), cessations_in(sorted(entries, key=lambda e: e["log_index"])))
+        self.assertEqual(cessations_in(entries), cessations_in(list(reversed(entries))))
 
 
 class TheReaderReturnsTheLogInTheOrderItHappenedTest(TestCase):
@@ -134,9 +135,10 @@ class TheReaderReturnsTheLogInTheOrderItHappenedTest(TestCase):
         )
 
 
-class TheFoldWritesEachCessationOnceTest(TestCase):
+class FoldTestFixtures:
 
     def setUp(self):
+        super().setUp()
         self.tenant = make_tenant("fold")
         self.token = self.tenant.deployed_token
 
@@ -154,6 +156,9 @@ class TheFoldWritesEachCessationOnceTest(TestCase):
         ShareToken.objects.filter(pk=self.token.pk).update(deployment_tx_hash="0x" + "de" * 32)
         self.token.refresh_from_db()
         return fold_former_holders(self.token, reader=reader)
+
+
+class TheFoldWritesEachCessationOnceTest(FoldTestFixtures, TestCase):
 
     def test_a_cessation_becomes_a_row_the_register_can_show(self):
         self.a_fold([transfer(ZERO, ALICE, 100, 10), transfer(ALICE, BOB, 100, 20)])
@@ -230,12 +235,23 @@ class WhatTheExportSaysAboutFormerMembersTest(TestCase):
         )
 
     def test_the_section_has_its_own_heading_and_the_row(self):
-        self.a_former_member()
+        member = self.a_former_member()
 
         rows = self.rows()
 
         self.assertIn([FORMER_MEMBERS_HEADING], rows)
-        self.assertIn(["Bob Byer", "", ALICE, "1000", "2026-03-14", "Never identified while it held shares"], rows)
+        self.assertIn(
+            [
+                "Bob Byer",
+                "",
+                ALICE,
+                "1000",
+                "2026-03-14",
+                "Never identified while it held shares",
+                member.created_at.isoformat(),
+            ],
+            rows,
+        )
 
     def test_a_register_never_folded_says_so_and_says_stale(self):
         as_at = [row for row in self.rows() if row and row[0] == AS_AT_ROW][0]

@@ -26,7 +26,7 @@ class FormerHolder(DerivesOwnerFromToken, BaseModel):
     wallet_address = models.CharField(max_length=42, db_index=True)
     ceased_on = models.DateField(db_index=True)
     ceased_at_block = models.BigIntegerField()
-    shares_at_cessation = models.BigIntegerField()
+    shares_at_cessation = models.DecimalField(max_digits=78, decimal_places=0)
     name = models.CharField(max_length=255, blank=True)
     residential_address = models.TextField(blank=True)
     identity_source = models.CharField(
@@ -39,10 +39,11 @@ class FormerHolder(DerivesOwnerFromToken, BaseModel):
         db_table = "tokens_formerholder"
         ordering = ["-ceased_on", "wallet_address"]
         constraints = [
+            models.CheckConstraint(condition=models.Q(shares_at_cessation__gt=0), name="former_holder_positive_shares"),
             models.UniqueConstraint(
                 fields=("token", "wallet_address", "ceased_at_block"),
                 name="one_cessation_per_wallet_per_block",
-            )
+            ),
         ]
         indexes = [models.Index(fields=["token", "-ceased_on"])]
         verbose_name = "Former holder"

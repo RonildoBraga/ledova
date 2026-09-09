@@ -4,7 +4,7 @@ import django.db.models.deletion
 from django.conf import settings
 from django.db import migrations, models
 
-from shared.db.policy_sql import install
+from shared.db.policy_sql import install_tables
 
 DERIVE_AND_REFUSE = """
 CREATE OR REPLACE FUNCTION {function}() RETURNS trigger AS $derive$
@@ -90,7 +90,7 @@ def install_trigger(apps, schema_editor):
 
 
 def install_policies(apps, schema_editor):
-    install(schema_editor)
+    install_tables(schema_editor, ["tokens_formerholder"])
 
 
 def policies_go_with_the_table(apps, schema_editor):
@@ -133,7 +133,7 @@ class Migration(migrations.Migration):
                 ("wallet_address", models.CharField(db_index=True, max_length=42)),
                 ("ceased_on", models.DateField(db_index=True)),
                 ("ceased_at_block", models.BigIntegerField()),
-                ("shares_at_cessation", models.BigIntegerField()),
+                ("shares_at_cessation", models.DecimalField(max_digits=78, decimal_places=0)),
                 ("name", models.CharField(blank=True, max_length=255)),
                 ("residential_address", models.TextField(blank=True)),
                 (
@@ -177,9 +177,12 @@ class Migration(migrations.Migration):
                 "ordering": ["-ceased_on", "wallet_address"],
                 "indexes": [models.Index(fields=["token", "-ceased_on"], name="tokens_form_token_i_7339eb_idx")],
                 "constraints": [
+                    models.CheckConstraint(
+                        condition=models.Q(shares_at_cessation__gt=0), name="former_holder_positive_shares"
+                    ),
                     models.UniqueConstraint(
                         fields=("token", "wallet_address", "ceased_at_block"), name="one_cessation_per_wallet_per_block"
-                    )
+                    ),
                 ],
             },
         ),

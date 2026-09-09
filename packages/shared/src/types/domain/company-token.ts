@@ -51,6 +51,10 @@ export interface TokenHolder {
 }
 
 export interface TokenHoldersResponse {
+  formerMembers: FormerMember[];
+  formerMembersAsAt: string | null;
+  formerMembersBlock: number | null;
+  formerMembersStale: boolean;
   token: {
     uuid: string;
     name: string;
@@ -60,6 +64,19 @@ export interface TokenHoldersResponse {
   };
   holders: TokenHolder[];
   totalHolders: number;
+}
+
+export interface FormerMember {
+  uuid: string;
+  walletAddress: string;
+  name: string;
+  residentialAddress: string;
+  sharesAtCessation: string;
+  ceasedOn: string;
+  ceasedAtBlock: number;
+  identitySource: string;
+  identitySourceDisplay: string;
+  identityRecordedAt: string;
 }
 
 export interface TokenIssuance {

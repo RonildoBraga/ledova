@@ -4,7 +4,8 @@ import os
 import secrets
 import threading
 import time
-from datetime import timedelta
+from datetime import datetime, timedelta
+from datetime import timezone as dt_timezone
 from decimal import Decimal
 from unittest import skipUnless
 from unittest.mock import patch
@@ -25,6 +26,7 @@ from shared.tests.tenants import make_tenant
 from tokens.exceptions import IssuanceRefusedException, TokenDeploymentFailedException
 from tokens.models import (
     CapitalIncreaseRequest,
+    FormerHolder,
     IssuanceStatus,
     RequestStatus,
     ShareIssuance,
@@ -33,6 +35,7 @@ from tokens.models import (
     ShareTokenStatus,
 )
 from tokens.services import ShareTokenService
+from tokens.services.former_holders import fold_former_holders
 from tokens.services.register import (
     IDENTITY_LABELS,
     IDENTITY_LIVE,
@@ -181,6 +184,64 @@ class ChainTestMixin:
 @chain_available
 @override_settings(**CHAIN_SETTINGS)
 class ShareTokenChainTest(ChainTestMixin, APITestCase):
+    def test_a_transfer_sent_outside_the_platform_is_retained_in_the_former_member_register(self):
+        investor = Account.create()
+        Wallet.objects.filter(address=self.investor).update(address=investor.address)
+        self.investor = investor.address
+        self._deployed()
+        self.assertTrue(self._execute(self._whitelisted_request(10))["success"])
+        recipient = self.w3.eth.accounts[1]
+        recipient_tenant = make_tenant("external-transfer-recipient")
+        Wallet.objects.filter(pk=recipient_tenant.wallet.pk).update(
+            address=recipient, verification_status=WALLET_VERIFICATION_STATUS_VERIFIED
+        )
+        WhitelistService().add_to_whitelist(recipient)
+        self.w3.eth.wait_for_transaction_receipt(
+            self.w3.eth.send_transaction(
+                {"from": self.w3.eth.accounts[0], "to": investor.address, "value": self.w3.to_wei(1, "ether")}
+            )
+        )
+        transfer = (
+            self._contract()
+            .functions.transfer(recipient, 10)
+            .build_transaction(
+                {
+                    "from": investor.address,
+                    "nonce": self.w3.eth.get_transaction_count(investor.address),
+                    "chainId": 31337,
+                }
+            )
+        )
+        signed = investor.sign_transaction(transfer)
+        receipt = self.w3.eth.wait_for_transaction_receipt(self.w3.eth.send_raw_transaction(signed.raw_transaction))
+        self.assertEqual(receipt["status"], 1)
+        start = self.service.deployment_block(self.token.deployment_tx_hash)
+        entries = self.service.transfer_entries(self.token.contract_address, start, receipt["blockNumber"], window=1)
+        self.assertEqual(
+            [(entry["from"], entry["to"], entry["value"]) for entry in entries],
+            [
+                ("0x" + "0" * 40, investor.address, 10),
+                (investor.address, recipient, 10),
+            ],
+        )
+        result = fold_former_holders(self.token, reader=self.service)
+        self.assertEqual(result["written"], 1)
+        row = FormerHolder.objects.get(token=self.token)
+        expected_date = datetime.fromtimestamp(
+            self.w3.eth.get_block(receipt["blockNumber"])["timestamp"], tz=dt_timezone.utc
+        ).date()
+        self.assertEqual(
+            (row.wallet_address, row.ceased_at_block, row.ceased_on, row.shares_at_cessation),
+            (investor.address, receipt["blockNumber"], expected_date, 10),
+        )
+        self.assertEqual(row.name, self.tenant.profile.full_name)
+        self.assertEqual(fold_former_holders(self.token, reader=self.service)["written"], 0)
+        self.client.force_authenticate(self.tenant.user)
+        response = self.client.get(f"/api/v1/tokens/{self.token.uuid}/holders/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["formerMembers"][0]["walletAddress"], investor.address)
+        self.assertEqual(response.json()["formerMembers"][0]["sharesAtCessation"], "10")
+
     def test_deploy_whitelist_issue_increase_pause_and_redeploy(self):
         self.token.mark_deploying()
         result = deploy_share_token_task(token_uuid=str(self.token.uuid))

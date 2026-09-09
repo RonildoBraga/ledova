@@ -144,9 +144,8 @@ DERIVED_FROM_A_MUTABLE_ATTRIBUTE = {
     "because tokens_sharetoken's public term one hop up exists so investors can browse a listing, and copying it "
     "here would publish former members' names and home addresses to every investor who can see the class. The "
     "write term is false for all three commands: the fold task writes on the operator alias, the retention sweep "
-    "deletes on the same alias on the statute's clock, and a correction to a former member's particulars is an "
-    "operator action through the admin rather than an issuer edit, because a register entry under s169(3) is a "
-    "statutory record and not the issuer's data.",
+    "deletes on the same alias on the accepted retention clock. Refolding leaves existing particulars unchanged. "
+    "The owner is derived through token.company.owner; a future owner-transfer feature must propagate it.",
     "tokens_sharetoken.owner_id": "Derived through company.owner, which is the only owner attribute an admin "
     "can edit. Between the parent changing and the child's next write the column is stale, so the previous "
     "owner keeps seeing the rows - #322 re-derives a stale row in the trigger and makes Company.owner "
