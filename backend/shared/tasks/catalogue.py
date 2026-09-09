@@ -1,3 +1,12 @@
+from typing import Literal, NamedTuple
+
+
+class TaskConversion(NamedTuple):
+    status: Literal["pending", "converted"]
+    converted_pr: int | None = None
+    waiting_reason: str = ""
+
+
 SYSTEM_WIDE = {
     "assets.sync_all_assets": "Refreshes the global asset catalogue, which belongs to no tenant.",
     "assets.sync_exchange_rates": "Fetches published rates, identical for every tenant.",
@@ -42,8 +51,8 @@ SYSTEM_WIDE = {
 
 PRINCIPAL_BEARING = {
     "offerings.tasks.subscription.allot_subscription_task": "Allots shares for one investor's "
-    "subscription, on the money "
-    "path: it writes that investor's rows and nobody else's.",
+    "subscription, on the money path: it executes the issuer's issuance request, seeds the recipient's "
+    "holding and marks the investor's subscription allotted.",
     "tokens.tasks.deployment.deploy_share_token_task": "Deploys one issuer's token and writes back to it.",
     "tokens.tasks.review_request.execute_review_request_task": "Executes one issuer's issuance request, on the "
     "money path, and records the issuance against it.",
@@ -57,9 +66,75 @@ PRINCIPAL_BEARING = {
     "the operator. The design covers it; the sentence exists so the next conversion with a longer delay "
     "knows the gap is proportional to it.",
     "wallets.tasks.sync.sync_wallet": "Reads and writes the holdings of exactly one wallet.",
-    "documents.tasks.extract.extract_document": "Reads one uploader's document and writes an extraction " "against it.",
+    "documents.tasks.extract.extract_document": "Reads one uploader's document and writes an extraction against it.",
     "users.tasks.notifications.send_push_notification": "Sends to one user's device tokens.",
     "users.tasks.notifications.send_transaction_notification": "Sends to one user about one transaction.",
+}
+
+CONVERSIONS = {
+    "offerings.tasks.subscription.allot_subscription_task": TaskConversion(
+        status="pending",
+        waiting_reason="allot and retry_allotment enqueue the subscription UUID and executed_by, which is "
+        "the approving operator's audit identity, not a scoped investor principal. Execution crosses two "
+        "write scopes: offerings_subscription is member-written, while tokens_shareissuancerequest is "
+        "issuer-written. The subscriber can now read the linked request but still cannot execute its "
+        "writes. Conversion needs explicit principal capture and separate bounded issuance and investor "
+        "steps, including the recipient holding and final subscription update; one acting_for block "
+        "cannot cover an investor subscribing to another issuer.",
+    ),
+    "tokens.tasks.deployment.deploy_share_token_task": TaskConversion(
+        status="pending",
+        waiting_reason="ShareTokenService.start_deployment and retry_deployment enqueue only token_uuid "
+        "from issuer API and staff admin paths. The worker never selects a principal. Conversion must "
+        "carry the issuer principal or an explicit operator choice from those producers and prove "
+        "deployment, retry and recovery writes under tokens_sharetoken's company-owner write policy. "
+        "The owner column and public operator-wallet read policies already exist; they are not pending "
+        "migration blockers.",
+    ),
+    "tokens.tasks.review_request.execute_review_request_task": TaskConversion(
+        status="pending",
+        waiting_reason="ReviewWorkflowAdmin.execute_view passes the staff actor as executed_by for audit "
+        "without selecting a database principal. CapitalIncreaseRequest and ShareIssuanceRequest writes "
+        "require the issuer's company owner. Share issuance also calls _seed_recipient_holding, which "
+        "joins and locks the recipient wallet; an issuer principal cannot reach an unrelated investor's "
+        "private wallet. Conversion needs an explicit enqueue principal/operator choice and a bounded "
+        "recipient-holding step before the issuer work can run scoped without dropping that side effect.",
+    ),
+    "wallets.tasks.confirmation.confirm_pending_transaction": TaskConversion(status="converted", converted_pr=327),
+    "wallets.tasks.sync.sync_wallet": TaskConversion(
+        status="pending",
+        waiting_reason="Verification, the wallet admin, the Alchemy webhook and sync_all_wallets all "
+        "enqueue only wallet_uuid. The worker never selects a principal for its wallet and transaction "
+        "writes. Conversion must preserve the verifying user's principal, make the admin/webhook/sweep "
+        "operator choices explicit, and test membership lost between enqueue and execution. The deployed "
+        "share-token read prerequisite is already resolved, as recorded in READS_MUST_SURVIVE_THE_POLICIES; "
+        "it is not a reason to wait for tokens/0024.",
+    ),
+    "documents.tasks.extract.extract_document": TaskConversion(
+        status="pending",
+        waiting_reason="create_document and DocumentExtractionAdmin.rerun_extraction enqueue only "
+        "document_uuid. Conversion must carry the uploader's principal for uploads and an explicit "
+        "operator choice for staff reruns, then keep the initial document lookup and ExtractionService's "
+        "locked content-retention rechecks on the chosen alias. The documents policy already scopes "
+        "reads and writes by uploaded_by_id; the extraction table is reached through that document.",
+    ),
+    "users.tasks.notifications.send_push_notification": TaskConversion(
+        status="pending",
+        waiting_reason="Company and offering transitions and identity verification already enqueue the "
+        "recipient user_id, but this task never enters acting_for that recipient. Conversion still needs "
+        "recipient-scoped notification-preference and device-token reads, notification creation and "
+        "device-token deactivation, with cross-user refusal tests. The corresponding user_id policies "
+        "already exist; no owner-column migration is outstanding for this task.",
+    ),
+    "users.tasks.notifications.send_transaction_notification": TaskConversion(
+        status="pending",
+        waiting_reason="TransactionConfirmationService._notify_wallet_users enqueues one recipient "
+        "user_id and transaction_id per account member. This delivery task still loads both on the "
+        "operator alias even after #327 scoped confirmation. Conversion must run as the recipient, "
+        "recheck that recipient's current transaction access before building the notification, and keep "
+        "preference/device/notification access under the same principal. Account membership can disappear "
+        "while delivery is queued; the parent task's principal cannot stand in for each recipient.",
+    ),
 }
 
 OPERATOR_READS = {
@@ -77,12 +152,13 @@ OPERATOR_READS = {
 }
 
 READS_MUST_SURVIVE_THE_POLICIES = {
-    "wallets.tasks.sync.sync_wallet": "Omarch 2's #319 gives this one a trap worth stating before anyone "
-    "converts it. _share_balance reads tokens_sharetoken through the ORM, and under a company-owner policy "
-    "an investor owns no issuer company, so a scoped sync_wallet would find no share class and stop syncing "
-    "share holdings silently - the failure path returns None and logs. Nothing breaks today only because "
-    "every task runs on the operator alias. It resolves when tokens/0024's leaf policy carries the market "
-    "term, since a deployed token is then visible to an investor principal.",
+    "wallets.tasks.sync.sync_wallet": "Resolved prerequisite to retain during conversion: "
+    "tokens/0024_r0_sharetoken_owner already supplies non-null owner_id, and POLICIES now gives "
+    "tokens_sharetoken an owner OR deployed-with-contract market SELECT term. "
+    "wallets.services.chain._share_balance uses deployed_at, so its share class is visible to an investor "
+    "without issuer ownership. Removing the market term would make that lookup return None and leave "
+    "the share holding unsynced. The remaining work is principal capture and scoped execution, recorded "
+    "in CONVERSIONS, rather than a missing migration or token-read policy.",
 }
 
 CLASSIFIED = {**SYSTEM_WIDE, **PRINCIPAL_BEARING}
