@@ -12,6 +12,9 @@ def registry_policy(apps, schema_editor):
     install_tables(schema_editor, ["companies_companyregistrycheck"])
     if schema_editor.connection.vendor != "postgresql":
         return
+    for statement in schema_editor.deferred_sql:
+        schema_editor.execute(statement)
+    schema_editor.deferred_sql.clear()
     table = "companies_companyregistrycheck"
     with schema_editor.connection.cursor() as cursor:
         constraints = schema_editor.connection.introspection.get_constraints(cursor, table)
