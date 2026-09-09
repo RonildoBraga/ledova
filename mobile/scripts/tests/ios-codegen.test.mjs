@@ -18,7 +18,7 @@ const manifest = JSON.parse(fs.readFileSync(path.join(mobile, 'package.json'), '
 const helper = path.join(mobile, 'plugins/native/codegen-inputs.rb');
 
 function fixture(hasSpec, run) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ledova-codegen-'));
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'ledova-codegen-')));
   const previous = process.cwd();
   try {
     const ios = path.join(root, 'ios');
