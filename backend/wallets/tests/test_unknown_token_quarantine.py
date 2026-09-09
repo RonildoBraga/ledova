@@ -172,7 +172,9 @@ class UnknownTokenQuarantineTest(APITestCase):
         with self.assertLogs("wallets.services.sync", level="WARNING") as logs:
             result = self.sync(transfer("0xoff", REAL_USDC, "USDC"))
 
-        self.assertEqual(result, {"status": "success", "transactions": 0, "snapshots": 0, "holdings": 0})
+        self.assertEqual(result["status"], "error")
+        self.assertEqual((result["transactions"], result["snapshots"], result["holdings"]), (0, 0, 0))
+        self.assertIn("history", result["error"])
         self.assertIn("switched off", "\n".join(logs.output))
         self.assertFalse(Transaction.objects.filter(tx_hash="0xoff").exists())
         self.assertFalse(Holding.objects.filter(wallet=self.wallet).exists())

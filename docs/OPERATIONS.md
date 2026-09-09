@@ -301,6 +301,19 @@ any deployment.
 | `BLOCKSTREAM_API_URL` | `https://blockstream.info/testnet/api` | No |
 | `BLOCKSTREAM_TIMEOUT` | `30` seconds | No |
 
+Manual wallet sync returns `success: false` with an actionable `syncResult.error`
+when verification is missing, the provider fails, history cannot be read or a
+known holding cannot be refreshed. Both clients display that reason. A partial
+refresh keeps any balances it did read, and leaves the wallet's last successful
+sync time unchanged.
+
+Alchemy transfer history follows each direction's `pageKey` through the final
+page, with an explicit newest-first order. Pagination finishes before receipt
+lookups, because Alchemy cursors expire after ten minutes. A repeated cursor,
+unreadable response or continuation beyond 100 pages per direction fails the
+sync rather than presenting a truncated history as complete. See the
+[Alchemy pagination contract](https://www.alchemy.com/docs/reference/transfers-api-quickstart).
+
 ### KYC providers
 
 Disabled until configured. With `KYC_PROVIDER` blank the integration answers

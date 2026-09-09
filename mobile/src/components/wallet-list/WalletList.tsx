@@ -24,7 +24,7 @@ interface WalletListProps {
   onWalletAction: (wallet: Wallet) => void;
   onSyncWallet?: (wallet: Wallet) => void;
   onDeleteWallet?: (wallet: Wallet) => void;
-  syncingWalletId?: string;
+  syncingWalletIds?: ReadonlySet<string>;
   showBottomButton?: boolean;
   bottomButtonLabel?: string;
   onBottomButtonPress?: () => void;
@@ -63,7 +63,7 @@ export function WalletList({
   onWalletAction,
   onSyncWallet,
   onDeleteWallet,
-  syncingWalletId,
+  syncingWalletIds,
   showBottomButton = false,
   bottomButtonLabel = 'Add Wallet',
   onBottomButtonPress,
@@ -162,7 +162,7 @@ export function WalletList({
                 onPress={() => onWalletAction(wallet)}
                 onSync={onSyncWallet ? () => onSyncWallet(wallet) : undefined}
                 onDelete={onDeleteWallet ? () => onDeleteWallet(wallet) : undefined}
-                isSyncing={syncingWalletId === wallet.uuid}
+                isSyncing={syncingWalletIds?.has(wallet.uuid)}
               />
             ))}
           </View>

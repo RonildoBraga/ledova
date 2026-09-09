@@ -126,6 +126,7 @@ class WalletActionContractTest(APITestCase):
         self.wallet.verification_status = "PENDING"
         self.wallet.save(update_fields=["verification_status"])
         result = self.post_action("sync")
+        self.assertFalse(result["success"])
         self.assertEqual(result["syncResult"]["status"], "skipped")
         self.assertNotIn("taskId", result)
 

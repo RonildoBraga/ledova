@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
+import { Alert } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   getWallets,
@@ -10,6 +11,7 @@ import {
   BLOCKCHAIN,
   calculateWalletTotals,
   filterWalletsByChain,
+  getErrorMessage,
 } from '@ledova/shared';
 import type { CreateWallet } from '@ledova/shared';
 import { apiClient } from '../../services/apiClient';
@@ -22,7 +24,8 @@ export function useWalletsCrud() {
   const USE_MOCK_DATA = mockDataEnabled();
   const queryClient = useQueryClient();
   const { selectedAccount } = useUserPreferences();
-  const [syncingWalletId, setSyncingWalletId] = useState<string | undefined>(undefined);
+  const [syncingWalletIds, setSyncingWalletIds] = useState<Set<string>>(() => new Set());
+  const pendingSyncs = useRef(new Map<string, ReturnType<typeof syncWallet>>());
 
   const walletsQuery = useQuery({
     queryKey: ['wallets', selectedAccount?.uuid, { order_by: 'address_index' }],
@@ -60,17 +63,38 @@ export function useWalletsCrud() {
   const syncMutation = useMutation({
     mutationFn: (uuid: string) => syncWallet(apiClient, uuid),
     onMutate: (uuid: string) => {
-      setSyncingWalletId(uuid);
+      setSyncingWalletIds((pending) => new Set(pending).add(uuid));
     },
-    onSuccess: () => {
+    onSettled: (_data, _error, uuid) => {
       queryClient.refetchQueries({ queryKey: ['wallets'] });
       queryClient.refetchQueries({ queryKey: ['transactions'] });
       invalidateHome();
+      setSyncingWalletIds((pending) => {
+        const next = new Set(pending);
+        next.delete(uuid);
+        return next;
+      });
     },
-    onSettled: () => {
-      setSyncingWalletId(undefined);
+    onError: (error) => {
+      Alert.alert(
+        'Wallet not synced',
+        getErrorMessage(error, 'Wallet sync could not finish. Please try again later.') ||
+          'Wallet sync could not finish. Please try again later.',
+      );
     },
   });
+
+  const { mutateAsync } = syncMutation;
+  const syncWalletOnce = useCallback(
+    (uuid: string) => {
+      const pending = pendingSyncs.current.get(uuid);
+      if (pending) return pending;
+      const request = mutateAsync(uuid).finally(() => pendingSyncs.current.delete(uuid));
+      pendingSyncs.current.set(uuid, request);
+      return request;
+    },
+    [mutateAsync],
+  );
 
   const wallets = walletsQuery.data?.data.results || [];
 
@@ -98,7 +122,7 @@ export function useWalletsCrud() {
       isUpdating: false,
       isDeleting: false,
       isSyncing: false,
-      syncingWalletId: undefined,
+      syncingWalletIds: new Set<string>(),
       createWallet: (_data: CreateWallet, options?: { onSuccess?: () => void }) => {
         options?.onSuccess?.();
       },
@@ -108,7 +132,7 @@ export function useWalletsCrud() {
       deleteWallet: (_uuid: string, options?: { onSuccess?: () => void }) => {
         options?.onSuccess?.();
       },
-      syncWallet: () => {},
+      syncWallet: async (_uuid: string) => undefined,
       refetch: async () => ({ data: undefined, error: null }),
     };
   }
@@ -125,14 +149,14 @@ export function useWalletsCrud() {
     isCreating: createMutation.isPending,
     isUpdating: updateMutation.isPending,
     isDeleting: deleteMutation.isPending,
-    isSyncing: syncMutation.isPending,
-    syncingWalletId,
+    isSyncing: syncingWalletIds.size > 0,
+    syncingWalletIds,
 
     createWallet: createMutation.mutate,
     updateWallet: (uuid: string, name: string, options?: { onSuccess?: () => void }) =>
       updateMutation.mutate({ uuid, name }, options),
     deleteWallet: deleteMutation.mutate,
-    syncWallet: syncMutation.mutateAsync,
+    syncWallet: syncWalletOnce,
 
     refetch: walletsQuery.refetch,
   };

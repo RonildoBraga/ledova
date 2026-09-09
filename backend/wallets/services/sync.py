@@ -21,6 +21,9 @@ logger = logging.getLogger(__name__)
 UNREADABLE_HOLDINGS = (
     "{count} holding(s) of wallet {wallet} could not be read from the chain; last_synced_at stays where it was"
 )
+SYNC_UNAVAILABLE = "Wallet sync could not finish. Please try again later."
+BALANCES_UNAVAILABLE = "Some wallet balances could not be refreshed. Please try again later."
+HISTORY_UNREADABLE = "Some wallet transaction history could not be read. Please try again later."
 
 
 class WalletSyncService:
@@ -28,7 +31,7 @@ class WalletSyncService:
     @staticmethod
     def sync_wallet(wallet: Wallet) -> Dict[str, Any]:
         if not wallet.is_verified:
-            return {"status": "skipped", "error": "Wallet not verified"}
+            return {"status": "skipped", "error": "Verify this wallet before syncing it."}
 
         try:
             chain = normalize_chain(wallet.chain)
@@ -44,20 +47,22 @@ class WalletSyncService:
 
             if unreadable:
                 logger.warning(UNREADABLE_HOLDINGS.format(count=unreadable, wallet=wallet.uuid))
-            else:
+                result.update(status="error", error=BALANCES_UNAVAILABLE)
+            elif result["status"] == "success":
                 wallet.last_synced_at = timezone.now()
                 wallet.save(update_fields=["last_synced_at"])
 
             return result
 
-        except Exception as e:
-            logger.error(f"Error: {e.__class__.__name__}: {e}")
-            return {"status": "error", "error": f"{e.__class__.__name__}: {str(e)}"}
+        except Exception as error:
+            logger.warning("Wallet sync could not finish (%s)", type(error).__name__)
+            return {"status": "error", "error": SYNC_UNAVAILABLE}
 
     @staticmethod
     def _process_transactions(wallet: Wallet, transactions_data: List[Dict]) -> Dict[str, Any]:
         transactions_created = 0
         snapshots_created = 0
+        unreadable = 0
 
         with atomic():
             for tx_data in transactions_data:
@@ -71,12 +76,14 @@ class WalletSyncService:
 
                 except (KeyError, ValueError) as e:
                     logger.warning(f"Skipped tx: {e}")
+                    unreadable += 1
                     continue
 
         return {
-            "status": "success",
+            "status": "error" if unreadable else "success",
             "transactions": transactions_created,
             "snapshots": snapshots_created,
+            **({"error": HISTORY_UNREADABLE} if unreadable else {}),
         }
 
     @staticmethod
