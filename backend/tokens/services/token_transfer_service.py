@@ -27,6 +27,7 @@ from tokens.models import (
     TransferOrderStatus,
     TransferOrderType,
 )
+from tokens.services.trading_locks import lock_orders
 from wallets.constants import WALLET_VERIFICATION_STATUS_VERIFIED
 from wallets.models import Wallet
 from wallets.models.wallet import Blockchain
@@ -157,6 +158,11 @@ class TokenTransferService:
     def match_orders(
         self, buy_order: TransferOrder, sell_order: TransferOrder, match_quantity: Optional[int] = None
     ) -> dict:
+        locked = {
+            order.pk: order for order in lock_orders(TransferOrder.objects.filter(pk__in=[buy_order.pk, sell_order.pk]))
+        }
+        buy_order = locked[buy_order.pk]
+        sell_order = locked[sell_order.pk]
         if buy_order.order_type != TransferOrderType.BUY:
             raise OrderMatchException("First order must be a buy order")
 
@@ -239,7 +245,6 @@ class TokenTransferService:
                     price_per_share__lte=order.price_per_share,
                 )
             )
-            qs = qs.order_by("price_per_share", "created_at")
         else:
             qs = (
                 TransferOrder.objects.ownership_bound()
@@ -250,13 +255,18 @@ class TokenTransferService:
                     price_per_share__gte=order.price_per_share,
                 )
             )
-            qs = qs.order_by("-price_per_share", "created_at")
 
-        qs = qs.exclude(wallet_address__iexact=order.wallet_address).select_for_update(of=("self",))
+        candidates = lock_orders(qs.exclude(wallet_address__iexact=order.wallet_address))
+        candidates.sort(
+            key=lambda candidate: (
+                candidate.price_per_share if order.order_type == TransferOrderType.BUY else -candidate.price_per_share,
+                candidate.created_at,
+            )
+        )
 
         order_remaining = order.quantity - (order.filled_quantity or 0)
 
-        for candidate in qs:
+        for candidate in candidates:
             candidate_remaining = candidate.quantity - (candidate.filled_quantity or 0)
 
             match_qty = min(order_remaining, candidate_remaining)
@@ -353,8 +363,10 @@ class TokenTransferService:
             matching_order, match_quantity = match_info
             if order_type == TransferOrderType.BUY:
                 match_result = self.match_orders(order, matching_order, match_quantity)
+                order = match_result["buy_order"]
             else:
                 match_result = self.match_orders(matching_order, order, match_quantity)
+                order = match_result["sell_order"]
 
             from tokens.events import publish_trading_event
 

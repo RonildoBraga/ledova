@@ -126,7 +126,10 @@ class SwapExecutionRecordsItsOutcomeTest(TransactionTestCase):
         self.service(reverted).execute_swap(self.swap)
         after_revert = self.status()
 
-        SwapOrder.objects.filter(pk=self.swap.pk).update(status=SwapOrderStatus.READY)
+        self.swap = make_tenant("other-outcome").swap
+        SwapOrder.objects.filter(pk=self.swap.pk).update(
+            status=SwapOrderStatus.READY, seller_signature=SIGNATURE, buyer_signature=SIGNATURE
+        )
         self.swap.refresh_from_db()
         silent = self.chain_client()
         silent.send_raw_transaction.return_value = "0xsilent"

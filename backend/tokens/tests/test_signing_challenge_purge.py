@@ -25,6 +25,7 @@ def a_challenge(wallet, *, expires_in, consumed=False, nonce=1):
         nonce=nonce,
         expires_at=now + expires_in,
         consumed_at=now if consumed else None,
+        consumed_signature="signed" if consumed else "",
     )
 
 

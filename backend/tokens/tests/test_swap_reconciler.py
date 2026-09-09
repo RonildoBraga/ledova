@@ -12,6 +12,7 @@ from tokens.models import SwapOrder, TransferOrder
 from tokens.models.choices import SwapOrderStatus, TransferOrderStatus
 from tokens.services import AtomicSwapService
 from tokens.tasks.swap_reconciler import STALE_EXECUTION_AGE, resolve_executing_swaps
+from tokens.tests.swap_state_fixtures import CONFIRMED, attach_claim
 
 CONTRACT = "0x" + "9d" * 20
 LEADING_ZERO_HASH = "0a" + "bc" * 31
@@ -53,31 +54,22 @@ class AnExecutingSwapIsAskedOfTheChainTest(TestCase):
         self.swap.refresh_from_db()
         return self.swap.status
 
-    def test_a_swap_whose_nonce_the_chain_used_is_reconciled_to_completed(self, _publish):
-        self.assertEqual(self.service(True).resolve_executing_swap(self.swap), "executed")
+    def test_a_used_nonce_without_a_recorded_transaction_does_not_complete_legacy_history(self, _publish):
+        self.assertIsNone(self.service(True).resolve_executing_swap(self.swap))
 
-        self.assertEqual(self.status(), SwapOrderStatus.COMPLETED)
+        self.assertEqual(self.status(), SwapOrderStatus.EXECUTING)
 
-    def test_a_swap_whose_nonce_is_unused_and_whose_deadline_has_passed_is_failed(self, _publish):
+    def test_an_unused_nonce_and_elapsed_deadline_do_not_release_legacy_reservations(self, _publish):
         self.expire()
 
-        self.assertEqual(self.service(False).resolve_executing_swap(self.swap), "never executed")
+        self.assertIsNone(self.service(False).resolve_executing_swap(self.swap))
 
-        self.assertEqual(self.status(), SwapOrderStatus.FAILED)
+        self.assertEqual(self.status(), SwapOrderStatus.EXECUTING)
 
     def test_a_swap_whose_nonce_is_unused_and_still_live_is_left_alone(self, _publish):
         self.assertIsNone(self.service(False).resolve_executing_swap(self.swap))
 
         self.assertEqual(self.status(), SwapOrderStatus.EXECUTING)
-
-    def test_a_swap_that_moved_on_before_the_write_is_not_reconciled_twice(self, _publish):
-        service = self.service(True)
-        service.is_nonce_used = Mock(
-            side_effect=lambda *_: SwapOrder.objects.filter(pk=self.swap.pk).update(status=SwapOrderStatus.COMPLETED)
-            or True
-        )
-
-        self.assertIsNone(service.resolve_executing_swap(self.swap))
 
 
 @override_settings(ATOMIC_SWAP_ADDRESS=CONTRACT, BLOCKCHAIN_OPERATOR_KEY="0x" + "11" * 32)
@@ -164,18 +156,18 @@ class TheChainIsAskedOutsideEveryTransactionTest(TransactionTestCase):
     def setUp(self):
         self.tenant = make_tenant("outside")
         self.swap = self.tenant.swap
-        SwapOrder.objects.filter(pk=self.swap.pk).update(status=SwapOrderStatus.EXECUTING)
-        self.swap.refresh_from_db()
+        attach_claim(self.swap)
 
-    def test_the_nonce_read_does_not_happen_inside_an_open_transaction(self, _publish):
+    def test_the_receipt_read_does_not_happen_inside_an_open_transaction(self, _publish):
         with patch("tokens.services.atomic_swap_service.get_base_chain_client"), patch(
             "tokens.services.atomic_swap_service.WhitelistService"
         ):
             service = AtomicSwapService()
         seen = []
-        service.is_nonce_used = Mock(
-            side_effect=lambda *_: seen.append(transaction.get_connection().in_atomic_block) or True
+        service.chain_client.receipt_even_if_reverted = Mock(
+            side_effect=lambda *_: seen.append(transaction.get_connection().in_atomic_block) or CONFIRMED
         )
+        service.chain_says_this_swap_executed = Mock(return_value=True)
 
         self.assertEqual(service.resolve_executing_swap(self.swap), "executed")
 
@@ -233,8 +225,7 @@ class TheReceiptMustNameThisOrderTest(TestCase):
     def setUp(self):
         self.tenant = make_tenant("receipts")
         self.swap = self.tenant.swap
-        SwapOrder.objects.filter(pk=self.swap.pk).update(status=SwapOrderStatus.EXECUTING, tx_hash="0xsettled")
-        self.swap.refresh_from_db()
+        attach_claim(self.swap, "0xsettled")
 
     @staticmethod
     def hashing_service():

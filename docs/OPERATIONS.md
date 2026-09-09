@@ -1264,6 +1264,18 @@ and a policy on every tenant table. Four things about running that deployment:
   exists: delete any queued Procrastinate jobs under that name.
 - `companies/0004_company_additional_info_response` stores the applicant's
   answer to a request for more information.
+- `tokens/0035_trading_state_invariants` checks existing order/swap amounts,
+  status/type values and the two challenge-consumption fields before installing
+  constraints. Invalid data aborts the migration without changing any row; the
+  error lists up to 20 UUIDs per violated rule. Resolve the identified history
+  explicitly before retrying. Do not clamp fills, rewrite signed intent, reset
+  consumed challenges or release unresolved swaps to make the migration pass.
+  PostgreSQL then freezes each issued challenge's envelope and completed spend.
+  Expired unspent challenges can still be purged. Existing unresolved swaps,
+  including those without a transaction/hash, retain their state and quantities;
+  neither timeout metadata nor nonce use alone resolves them. The current swap
+  transaction UUID prevents competing preparation but does not provide signed
+  transaction recovery after a process dies; #6 remains separate.
 - `whitelist/0002_whitelistentry_treasury_addresses` makes
   `WhitelistEntry.wallet` nullable and adds `address` and `label` with a check
   constraint; `whitelist/0003` adds the partial unique constraint on `address`

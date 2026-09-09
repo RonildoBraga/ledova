@@ -180,13 +180,11 @@ class ModificationChecks:
     def test_expiry_during_the_chain_read_is_checked_again_before_modifying(self):
         self.change_order(order_type=TransferOrderType.SELL)
         signed = self.issue(quantity=20)
-
-        def expire():
-            with use_operator():
-                SigningChallenge.objects.filter(digest=signed["digest"]).update(expires_at=timezone.now())
-
-        self.before_balance_return = expire
-        response = self.apply(signed)
+        with use_operator():
+            deadline = SigningChallenge.objects.get(digest=signed["digest"]).expires_at
+        with patch("tokens.models.signing_challenge.timezone.now", wraps=timezone.now) as clock:
+            self.before_balance_return = lambda: setattr(clock, "return_value", deadline)
+            response = self.apply(signed)
         self.assertEqual(response.status_code, 400, response.content)
         self.assertIn("expired", response.json()["detail"].lower())
         with use_operator():
