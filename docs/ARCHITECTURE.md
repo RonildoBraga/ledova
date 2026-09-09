@@ -272,6 +272,8 @@ request for withdrawal checks. The endpoint is read-only. The dashboard token
 modal refreshes this history after a successful submission, pages through older
 requests and offers retry on loading errors. Execution notes remain visible;
 private review notes are absent from both the API and its client type.
+Submitting an approval request writes database state without opening a chain
+connection; chain checks belong to execution of an approved request.
 
 The execution-history migration preserves every existing review note verbatim.
 It cannot establish authorship from phrases such as "Execution failed", which

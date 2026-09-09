@@ -427,8 +427,9 @@ class ShareTokenService:
         address = self.factory_contract.functions.getTokenByIdentifier(identifier).call()
         return None if address == ZERO_ADDRESS else address
 
+    @staticmethod
     def create_issuance_request(
-        self, token, recipient: str, amount: int, user, reason: str = "", issuance_type: str = "additional"
+        token, recipient: str, amount: int, user, reason: str = "", issuance_type: str = "additional"
     ) -> ShareIssuanceRequest:
         if token.status != "deployed":
             raise InvalidTokenStateException("Only deployed tokens can issue shares.")

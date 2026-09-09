@@ -1,4 +1,5 @@
 from unittest import skipUnless
+from unittest.mock import patch
 
 from django.conf import settings
 from django.db import connection
@@ -40,10 +41,11 @@ class AnIssuerCanSeeTheRequestItMadeTest(APITestCase):
         self.assertEqual([row["uuid"] for row in response.json()["results"]], [str(self.request.uuid)])
 
     def test_a_successful_submission_appears_in_the_token_history(self):
-        response = self.client.post(
-            f"/api/v1/tokens/{self.tenant.deployed_token.uuid}/issue/",
-            {"recipient": self.tenant.wallet.address, "amount": 10, "reason": "New allocation"},
-        )
+        with patch("tokens.services.share_token_service.get_base_chain_client", side_effect=AssertionError("No RPC")):
+            response = self.client.post(
+                f"/api/v1/tokens/{self.tenant.deployed_token.uuid}/issue/",
+                {"recipient": self.tenant.wallet.address, "amount": 10, "reason": "New allocation"},
+            )
         self.assertEqual(response.status_code, 201, response.content)
         submitted = response.json()["issuanceRequest"]
         self.assertEqual(submitted["status"], RequestStatus.SUBMITTED)

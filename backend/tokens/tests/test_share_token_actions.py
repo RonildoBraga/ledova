@@ -146,8 +146,7 @@ class ShareTokenActionTest(APITestCase):
         issuance_request = ShareIssuanceRequest.objects.create(
             token=token, recipient_address=RECIPIENT, amount=7, reason="Owner request", submitted_by=self.tenant.user
         )
-        service = service_class.return_value
-        service.create_issuance_request.return_value = issuance_request
+        service_class.create_issuance_request.return_value = issuance_request
         register.return_value = (HOLDERS, 0)
 
         issue = self.client.post(
@@ -157,7 +156,7 @@ class ShareTokenActionTest(APITestCase):
         )
         self.assertEqual(issue.status_code, 201)
         self.assertEqual(issue.json()["issuanceRequest"]["uuid"], str(issuance_request.uuid))
-        service.create_issuance_request.assert_called_once_with(
+        service_class.create_issuance_request.assert_called_once_with(
             token=token,
             recipient=RECIPIENT,
             amount=7,
@@ -208,7 +207,7 @@ class ShareTokenActionTest(APITestCase):
         )
         self.assertEqual(bad_type.status_code, 400)
         self.assertIn("issuanceType", bad_type.json())
-        service_class.return_value.create_issuance_request.assert_not_called()
+        service_class.create_issuance_request.assert_not_called()
 
     @patch("tokens.services.register.ShareTokenService")
     @patch("tokens.views.share_token.ShareTokenService")
