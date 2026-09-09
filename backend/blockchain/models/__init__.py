@@ -2,6 +2,7 @@ from blockchain.models.outgoing import (
     OutgoingOperation,
     OutgoingStatus,
     SignedAttempt,
+    SignerAdmission,
     SigningAccount,
 )
 from blockchain.models.outgoing_inventory import (
@@ -22,6 +23,7 @@ __all__ = [
     "OutgoingOperation",
     "OutgoingStatus",
     "SignedAttempt",
+    "SignerAdmission",
     "SigningAccount",
     "BlockchainTransaction",
     "TransactionStatus",

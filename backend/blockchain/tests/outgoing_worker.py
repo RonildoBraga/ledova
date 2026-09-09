@@ -34,13 +34,18 @@ def run(directory, phase, index):
 
     from blockchain.models import OutgoingOperation, OutgoingStatus
     from blockchain.services.outgoing import (
+        OutgoingTransactionError,
         broadcast_operation,
+        close_signer_admission,
         prepare_operation,
         record_receipt,
         sign_operation,
     )
     from blockchain.tests.outgoing_fixtures import (
+        CHAIN_ID,
         KEY,
+        SENDER,
+        admitted_signer,
         chain_client,
         claim_operation,
         receipt,
@@ -48,13 +53,24 @@ def run(directory, phase, index):
 
     if not database and phase != "recover":
         call_command("migrate", run_syncdb=True, verbosity=0)
+        admitted_signer()
+    if phase == "close_admission":
+        from django.db import connection
+
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT pg_backend_pid()")
+            (directory / "closing").write_text(str(cursor.fetchone()[0]))
+        generation = close_signer_admission(chain_id=CHAIN_ID, sender=SENDER)
+        (directory / "closed").touch()
+        print(json.dumps({"generation": generation}))
+        return
     key = "synthetic:process" if phase not in ("race", "sign", "blocked_send") else f"synthetic:race:{index}"
     claim = claim_operation(key)
     client = chain_client()
     operation = OutgoingOperation.objects.get(pk=claim.operation_id)
     if operation.status == OutgoingStatus.PREPARING:
         prepared = prepare_operation(claim, client)
-        if phase == "race":
+        if phase in ("race", "admission_wait", "admission_sign"):
             (directory / f"ready-{os.getpid()}").touch()
             await_file(directory / "go")
         save = OutgoingOperation.save
@@ -74,15 +90,27 @@ def run(directory, phase, index):
         if phase == "before_commit":
             with patch.object(OutgoingOperation, "save", save_then_kill):
                 attempt = sign_operation(claim, prepared, KEY)
-        elif phase == "race":
+        elif phase in ("race", "admission_sign"):
             with patch.object(LocalAccount, "sign_transaction", sign_after_release):
                 attempt = sign_operation(claim, prepared, KEY)
+        elif phase == "admission_wait":
+
+            def observed_signature(account, *args, **kwargs):
+                (directory / "signed").touch()
+                return local_sign(account, *args, **kwargs)
+
+            try:
+                with patch.object(LocalAccount, "sign_transaction", observed_signature):
+                    attempt = sign_operation(claim, prepared, KEY)
+            except OutgoingTransactionError as exc:
+                print(json.dumps({"refused": str(exc)}))
+                return
         else:
             attempt = sign_operation(claim, prepared, KEY)
     else:
         attempt = operation.current_attempt
 
-    if phase in ("race", "sign"):
+    if phase in ("race", "sign", "admission_sign", "admission_wait"):
         print(json.dumps({"hash": attempt.tx_hash, "nonce": attempt.nonce}))
         return
 

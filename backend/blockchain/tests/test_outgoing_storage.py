@@ -5,8 +5,20 @@ from django.conf import settings
 from django.db import DatabaseError, connection
 from django.test import TransactionTestCase
 
-from blockchain.models import OutgoingOperation, SignedAttempt, SigningAccount
-from blockchain.tests.outgoing_fixtures import claim_operation, sign_claim
+from blockchain.models import (
+    OutgoingOperation,
+    SignedAttempt,
+    SignerAdmission,
+    SigningAccount,
+)
+from blockchain.services.outgoing import close_signer_admission
+from blockchain.tests.outgoing_fixtures import (
+    CHAIN_ID,
+    SENDER,
+    admitted_signer,
+    claim_operation,
+    sign_claim,
+)
 from shared.db import atomic
 
 
@@ -15,6 +27,7 @@ from shared.db import atomic
 )
 class OutgoingStoragePolicyTest(TransactionTestCase):
     def setUp(self):
+        admitted_signer()
         self.claim = claim_operation()
         self.attempt = sign_claim(self.claim)
 
@@ -82,3 +95,36 @@ class OutgoingStoragePolicyTest(TransactionTestCase):
                 "claim_id = '00000000-0000-0000-0000-000000000001'"
             )
         self.assertEqual(OutgoingOperation.objects.get().current_attempt_id, self.attempt.pk)
+
+    def test_admission_is_private_and_only_the_operator_can_close_it(self):
+        with self.role("app"), connection.cursor() as cursor:
+            cursor.execute("SELECT set_config('app.user_id', '123', false)")
+            self.assertEqual(list(SigningAccount.objects.values("admission_state", "admission_generation")), [])
+            cursor.execute("UPDATE blockchain_signingaccount SET admission_state = 'closed', admission_generation = 2")
+            self.assertEqual(cursor.rowcount, 0)
+            cursor.execute("SELECT set_config('app.user_id', '', false)")
+        self.assertEqual(SigningAccount.objects.get().admission_state, SignerAdmission.ADMITTED)
+        with self.role("operator"):
+            self.assertEqual(close_signer_admission(chain_id=CHAIN_ID, sender=SENDER), 2)
+        self.assertEqual(SigningAccount.objects.get().admission_state, SignerAdmission.CLOSED)
+        self.assertEqual(SigningAccount.objects.get().next_nonce, 8)
+
+    def test_operator_sql_cannot_change_admission_without_advancing_or_rewind_a_generation(self):
+        with self.role("operator"):
+            for assignment in (
+                "admission_state = 'closed', admission_generation = 1",
+                "admission_state = 'closed', admission_generation = 0",
+            ):
+                with self.subTest(assignment=assignment):
+                    with self.assertRaisesMessage(DatabaseError, "cannot be reused or rewound"), atomic():
+                        with connection.cursor() as cursor:
+                            cursor.execute(f"UPDATE blockchain_signingaccount SET {assignment}")
+            self.assertEqual(close_signer_admission(chain_id=CHAIN_ID, sender=SENDER), 2)
+            for assignment in ("admission_state = 'admitted'", "admission_generation = 1"):
+                with self.subTest(assignment=assignment):
+                    with self.assertRaisesMessage(DatabaseError, "cannot be reused or rewound"), atomic():
+                        with connection.cursor() as cursor:
+                            cursor.execute(f"UPDATE blockchain_signingaccount SET {assignment}")
+            SigningAccount.objects.update(admission_state=SignerAdmission.ADMITTED, admission_generation=3)
+        self.assertEqual(SigningAccount.objects.get().admission_generation, 3)
+        self.assertEqual(sign_claim(claim_operation("after-synthetic-readmission")).nonce, 8)

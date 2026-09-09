@@ -28,6 +28,7 @@ from blockchain.services.outgoing import (
 from blockchain.tests.outgoing_fixtures import (
     KEY,
     SENDER,
+    admitted_signer,
     chain_client,
     claim_operation,
     receipt,
@@ -38,6 +39,7 @@ from shared.db import atomic
 
 class OutgoingOperationTest(TransactionTestCase):
     def setUp(self):
+        admitted_signer()
         self.claim = claim_operation()
         self.chain = chain_client()
 
@@ -97,8 +99,10 @@ class OutgoingOperationTest(TransactionTestCase):
     def test_independent_signers_and_chains_have_separate_nonce_counters(self):
         first = sign_claim(self.claim)
         other_key = "0x" + "22" * 32
+        admitted_signer(sender=Account.from_key(other_key).address)
         second = sign_claim(claim_operation("second-signer", sender=Account.from_key(other_key).address), key=other_key)
         other_chain = chain_client()
+        admitted_signer(chain_id=11155111)
         other_chain.assert_expected_chain.return_value = 11155111
         third = sign_claim(claim_operation("second-chain", chain_id=11155111), other_chain)
         self.assertEqual([first.nonce, second.nonce, third.nonce], [7, 7, 7])
@@ -131,7 +135,7 @@ class OutgoingOperationTest(TransactionTestCase):
                     sign_operation(self.claim, changed, KEY)
         with self.assertRaisesMessage(OutgoingTransactionError, "does not belong"):
             sign_operation(self.claim, prepared, "0x" + "22" * 32)
-        self.assertFalse(SigningAccount.objects.exists())
+        self.assertEqual(SigningAccount.objects.get().next_nonce, 0)
 
     def test_failed_journal_commit_allocates_no_nonce_and_returns_no_payload(self):
         prepared = prepare_operation(self.claim, self.chain)
@@ -140,7 +144,7 @@ class OutgoingOperationTest(TransactionTestCase):
                 sign_operation(self.claim, prepared, KEY)
         self.assertEqual(self.operation().status, OutgoingStatus.PREPARING)
         self.assertFalse(SignedAttempt.objects.exists())
-        self.assertFalse(SigningAccount.objects.exists())
+        self.assertEqual(SigningAccount.objects.get().next_nonce, 0)
         self.chain.send_raw_transaction.assert_not_called()
 
     def test_wrapping_transaction_and_manual_autocommit_disable_refuse_before_rpc(self):
@@ -317,7 +321,7 @@ class OutgoingOperationTest(TransactionTestCase):
             else:
                 self.fail("a failed journal write cannot return a signed payload")
         self.assertFalse(SignedAttempt.objects.exists())
-        self.assertFalse(SigningAccount.objects.exists())
+        self.assertEqual(SigningAccount.objects.get().next_nonce, 0)
 
     def test_signed_history_cannot_be_changed_via_model_or_queryset(self):
         attempt = sign_claim(self.claim)

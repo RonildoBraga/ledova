@@ -34,7 +34,11 @@ from blockchain.services.outgoing_inventory import (
     record_inventory,
     report_inventory,
 )
-from blockchain.tests.outgoing_fixtures import claim_operation, sign_claim
+from blockchain.tests.outgoing_fixtures import (
+    admitted_signer,
+    claim_operation,
+    sign_claim,
+)
 from blockchain.tests.outgoing_inventory_fixtures import (
     CONTRACT,
     RECIPIENT,
@@ -340,6 +344,7 @@ class OutgoingInventorySourceTest(TransactionTestCase):
         )
 
     def test_read_only_inventory_and_recording_never_sign_broadcast_or_mutate_authoritative_state(self):
+        admitted_signer()
         sign_claim(claim_operation())
         models = (
             ShareIssuance,
