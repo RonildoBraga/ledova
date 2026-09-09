@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.test import override_settings
@@ -77,6 +79,3 @@ class ScopedSupportingEvidenceTest(RunsOnTheScopedConnection, APITransactionTest
         self.assertEqual(purge_document_evidence(), {"purged": 2, "failed": 0})
         with use_operator():
             self.assertEqual(Document.objects.filter(pk__in=ids, purged_at__isnull=False).count(), 2)
-
-
-from datetime import timedelta
