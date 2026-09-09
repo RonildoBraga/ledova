@@ -18,7 +18,20 @@ from blockchain.models import (
     OutgoingOperation,
     OutgoingStatus,
     SignedAttempt,
+    SignerAdmission,
     SigningAccount,
+)
+from blockchain.services.outgoing import (
+    OutgoingTransactionError,
+    close_signer_admission,
+    prepare_operation,
+)
+from blockchain.tests.outgoing_fixtures import (
+    CHAIN_ID,
+    SENDER,
+    admitted_signer,
+    chain_client,
+    claim_operation,
 )
 
 
@@ -61,7 +74,7 @@ class OutgoingCrashRecoveryTest(SimpleTestCase):
                 ).fetchone()
             if phase == "before_commit":
                 self.assertEqual(attempts, [])
-                self.assertEqual(accounts, [])
+                self.assertEqual(accounts, [(0,)])
                 self.assertEqual((status, attempt_id), ("preparing", None))
             else:
                 self.assertEqual(len(attempts), 1)
@@ -97,6 +110,9 @@ class OutgoingCrashRecoveryTest(SimpleTestCase):
 
 @skipUnless(connection.vendor == "postgresql", "Independent signer row locks require PostgreSQL")
 class OutgoingProcessRaceTest(TransactionTestCase):
+    def setUp(self):
+        admitted_signer()
+
     def database(self):
         fields = ("ENGINE", "NAME", "USER", "PASSWORD", "HOST", "PORT", "OPTIONS")
         return {key: connection.settings_dict[key] for key in fields}
@@ -161,6 +177,120 @@ class OutgoingProcessRaceTest(TransactionTestCase):
                     blocked.kill()
                     blocked.communicate()
 
+    def test_a_paused_process_cannot_sign_after_close_and_synthetic_readmission(self):
+        with tempfile.TemporaryDirectory(prefix="outgoing-admission-generation-") as temporary:
+            directory = Path(temporary)
+            delayed = worker(directory, "admission_wait", database=self.database())
+            try:
+                self.wait_for_files(directory, "ready-*", 1)
+                self.assertEqual(close_signer_admission(chain_id=CHAIN_ID, sender=SENDER), 2)
+                SigningAccount.objects.update(admission_state=SignerAdmission.ADMITTED, admission_generation=3)
+                (directory / "go").touch()
+                code, out, err = finish(delayed)
+                self.assertEqual(code, 0, out + err)
+                self.assertIn("generation has changed", json.loads(out)["refused"])
+                self.assertFalse((directory / "signed").exists())
+                self.assertFalse(SignedAttempt.objects.exists())
+                self.assertEqual(SigningAccount.objects.get().next_nonce, 0)
+                code, out, err = finish(worker(directory, "sign", 1, self.database()))
+                self.assertEqual(code, 0, out + err)
+                self.assertEqual(json.loads(out)["nonce"], 7)
+            finally:
+                if delayed.poll() is None:
+                    delayed.kill()
+                    delayed.communicate()
+
+    def test_closure_winning_before_a_paused_signer_creates_no_signed_attempt(self):
+        with tempfile.TemporaryDirectory(prefix="outgoing-admission-close-first-") as temporary:
+            directory = Path(temporary)
+            delayed = worker(directory, "admission_wait", database=self.database())
+            try:
+                self.wait_for_files(directory, "ready-*", 1)
+                code, out, err = finish(worker(directory, "close_admission", database=self.database()))
+                self.assertEqual(code, 0, out + err)
+                self.assertEqual(json.loads(out)["generation"], 2)
+                (directory / "go").touch()
+                code, out, err = finish(delayed)
+                self.assertEqual(code, 0, out + err)
+                self.assertIn("admission is closed", json.loads(out)["refused"])
+                self.assertFalse((directory / "signed").exists())
+                self.assertFalse(SignedAttempt.objects.exists())
+                self.assertEqual(SigningAccount.objects.get().next_nonce, 0)
+                self.assertEqual(OutgoingOperation.objects.get().status, OutgoingStatus.PREPARING)
+            finally:
+                if delayed.poll() is None:
+                    delayed.kill()
+                    delayed.communicate()
+
+    def test_closure_waits_for_local_signing_to_commit_its_payload_and_nonce(self):
+        with tempfile.TemporaryDirectory(prefix="outgoing-admission-sign-first-") as temporary:
+            directory = Path(temporary)
+            signing = worker(directory, "admission_sign", database=self.database())
+            closing = None
+            try:
+                self.wait_for_files(directory, "ready-*", 1)
+                (directory / "go").touch()
+                self.wait_for_files(directory, "signing-*", 1)
+                closing = worker(directory, "close_admission", database=self.database())
+                self.wait_for_files(directory, "closing", 1)
+                backend_pid = int((directory / "closing").read_text())
+                until = time.monotonic() + 10
+                blocked = False
+                while time.monotonic() < until and closing.poll() is None:
+                    with connection.cursor() as cursor:
+                        cursor.execute("SELECT wait_event_type FROM pg_stat_activity WHERE pid = %s", [backend_pid])
+                        blocked = cursor.fetchone() == ("Lock",)
+                    if blocked:
+                        break
+                    time.sleep(0.01)
+                self.assertTrue(blocked, "The close process must wait on the signing transaction's row lock")
+                self.assertFalse((directory / "closed").exists())
+                self.assertIsNone(closing.poll())
+                (directory / "sign").touch()
+                code, out, err = finish(signing)
+                self.assertEqual(code, 0, out + err)
+                tx_hash = json.loads(out)["hash"]
+                code, out, err = finish(closing)
+                self.assertEqual(code, 0, out + err)
+                self.assertEqual(json.loads(out)["generation"], 2)
+                attempt = SignedAttempt.objects.get()
+                self.assertEqual(Web3.to_hex(Web3.keccak(bytes(attempt.raw_transaction))), tx_hash)
+                signer = SigningAccount.objects.get()
+                self.assertEqual((signer.admission_state, signer.next_nonce), (SignerAdmission.CLOSED, 8))
+                self.assertEqual(OutgoingOperation.objects.get().current_attempt_id, attempt.pk)
+            finally:
+                for process in (signing, closing):
+                    if process is not None and process.poll() is None:
+                        process.kill()
+                        process.communicate()
+
+    def test_closing_does_not_cancel_an_already_admitted_inflight_send(self):
+        with tempfile.TemporaryDirectory(prefix="outgoing-admission-inflight-") as temporary:
+            directory = Path(temporary)
+            sending = worker(directory, "blocked_send", database=self.database())
+            try:
+                self.wait_for_files(directory, "sending", 1)
+                self.assertEqual(close_signer_admission(chain_id=CHAIN_ID, sender=SENDER), 2)
+                self.assertIsNone(sending.poll())
+                client = chain_client()
+                with self.assertRaisesMessage(OutgoingTransactionError, "admission is closed"):
+                    prepare_operation(claim_operation("closed-after-admission"), client)
+                self.assertEqual(client.mock_calls, [])
+                (directory / "release").touch()
+                code, out, err = finish(sending)
+                self.assertEqual(code, 0, out + err)
+                ledger = json.loads((directory / "node.json").read_text())
+                self.assertEqual(len(ledger["broadcasts"]), 1)
+                attempt = SignedAttempt.objects.get()
+                self.assertEqual(ledger["broadcasts"][0], Web3.to_hex(bytes(attempt.raw_transaction)))
+                self.assertEqual(attempt.operation.status, OutgoingStatus.CONFIRMED)
+                signer = SigningAccount.objects.get()
+                self.assertEqual((signer.admission_state, signer.next_nonce), (SignerAdmission.CLOSED, 8))
+            finally:
+                if sending.poll() is None:
+                    sending.kill()
+                    sending.communicate()
+
     def recover_postgresql_crash(self, phase):
         with tempfile.TemporaryDirectory(prefix="outgoing-pg-crash-") as temporary:
             directory = Path(temporary)
@@ -171,7 +301,7 @@ class OutgoingProcessRaceTest(TransactionTestCase):
                 self.assertEqual(operation.status, OutgoingStatus.PREPARING)
                 self.assertIsNone(operation.current_attempt_id)
                 self.assertFalse(SignedAttempt.objects.exists())
-                self.assertFalse(SigningAccount.objects.exists())
+                self.assertEqual(SigningAccount.objects.get().next_nonce, 0)
             else:
                 attempt = operation.current_attempt
                 self.assertEqual(operation.status, OutgoingStatus.SIGNED)

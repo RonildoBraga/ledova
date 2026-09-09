@@ -1,5 +1,6 @@
 from django.db import models
 
+from blockchain.constants import MAX_SIGNER_ADMISSION_GENERATION
 from shared.models import BaseModel
 
 
@@ -11,10 +12,19 @@ class OutgoingStatus(models.TextChoices):
     FAILED = "failed", "Failed before signing"
 
 
+class SignerAdmission(models.TextChoices):
+    CLOSED = "closed", "Closed"
+    ADMITTED = "admitted", "Admitted"
+
+
 class SigningAccount(BaseModel):
     chain_id = models.PositiveBigIntegerField(editable=False)
     address = models.CharField(max_length=42, editable=False)
     next_nonce = models.PositiveBigIntegerField(default=0, editable=False)
+    admission_state = models.CharField(
+        max_length=8, choices=SignerAdmission.choices, default=SignerAdmission.CLOSED, editable=False
+    )
+    admission_generation = models.PositiveBigIntegerField(default=0, editable=False)
 
     class Meta:
         constraints = [
@@ -23,6 +33,17 @@ class SigningAccount(BaseModel):
                 condition=models.Q(address__regex=r"^0x[0-9a-f]{40}$"), name="outgoing_signer_address"
             ),
             models.CheckConstraint(condition=models.Q(chain_id__gt=0), name="outgoing_signer_chain"),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(admission_state=SignerAdmission.CLOSED)
+                    | models.Q(
+                        admission_state=SignerAdmission.ADMITTED,
+                        admission_generation__gt=0,
+                        admission_generation__lt=MAX_SIGNER_ADMISSION_GENERATION,
+                    )
+                ),
+                name="outgoing_signer_admission",
+            ),
         ]
 
     def __str__(self):

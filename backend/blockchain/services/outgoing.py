@@ -7,10 +7,12 @@ from eth_account import Account
 from eth_account._utils.legacy_transactions import Transaction as LegacyTransaction
 from web3 import Web3
 
+from blockchain.constants import MAX_SIGNER_ADMISSION_GENERATION
 from blockchain.models import (
     OutgoingOperation,
     OutgoingStatus,
     SignedAttempt,
+    SignerAdmission,
     SigningAccount,
 )
 from shared.db import APP_ALIAS, atomic, current_alias
@@ -42,6 +44,7 @@ class PreparedTransaction:
     observed_nonce: int
     gas: int
     gas_price: int
+    admission_generation: int
 
 
 @dataclass(frozen=True)
@@ -142,12 +145,49 @@ def _current(claim, *, lock=False):
     return operation
 
 
+def _admitted_signer(intent, *, lock=False, generation=None):
+    queryset = SigningAccount.objects.select_for_update() if lock else SigningAccount.objects
+    try:
+        signer = queryset.get(chain_id=intent["chain_id"], address=intent["sender"])
+    except SigningAccount.DoesNotExist:
+        raise OutgoingTransactionError("Outgoing signer admission is closed.") from None
+    if signer.admission_state != SignerAdmission.ADMITTED:
+        raise OutgoingTransactionError("Outgoing signer admission is closed.")
+    if not 0 < signer.admission_generation < MAX_SIGNER_ADMISSION_GENERATION:
+        raise OutgoingTransactionError("The outgoing signer admission generation is exhausted or invalid.")
+    if generation is not None and signer.admission_generation != generation:
+        raise OutgoingTransactionError("The outgoing signer admission generation has changed; prepare again.")
+    return signer
+
+
+def close_signer_admission(*, chain_id, sender):
+    _boundary()
+    if _integer(chain_id) == 0:
+        raise OutgoingTransactionError("The signer must name a chain.")
+    address = _address(sender)
+    try:
+        with atomic(durable=True):
+            signer, _ = SigningAccount.objects.get_or_create(chain_id=chain_id, address=address)
+            signer = SigningAccount.objects.select_for_update().get(pk=signer.pk)
+            if signer.admission_generation >= MAX_SIGNER_ADMISSION_GENERATION:
+                raise OutgoingTransactionError("The outgoing signer admission generation is exhausted.")
+            signer.admission_generation += 1
+            signer.admission_state = SignerAdmission.CLOSED
+            signer.save(update_fields=["admission_state", "admission_generation", "updated_at"])
+    except OutgoingTransactionError:
+        raise
+    except Exception:
+        raise OutgoingTransactionError("Outgoing signer admission could not be closed.") from None
+    return signer.admission_generation
+
+
 def prepare_operation(claim, client):
     _boundary()
     operation = _current(claim)
     if operation.status != OutgoingStatus.PREPARING:
         raise OutgoingTransactionError("This operation has no transaction to prepare.")
     intent = operation.intent
+    signer = _admitted_signer(intent)
     try:
         if client.assert_expected_chain() != intent["chain_id"]:
             raise OutgoingTransactionError("The endpoint is on a different chain from the outgoing intent.")
@@ -180,6 +220,7 @@ def prepare_operation(claim, client):
         nonce,
         gas,
         gas_price,
+        signer.admission_generation,
     )
 
 
@@ -198,6 +239,7 @@ def sign_operation(claim, prepared, private_key):
         raise OutgoingTransactionError("The signing key does not belong to the outgoing sender.")
     _integer(prepared.observed_nonce, MAX_DATABASE_INTEGER - 1)
     _integer(prepared.gas_price, MAX_TRANSACTION_VALUE)
+    _integer(prepared.admission_generation, MAX_SIGNER_ADMISSION_GENERATION - 1)
     if _integer(prepared.gas) == 0:
         raise OutgoingTransactionError("The transaction gas limit must be positive.")
     try:
@@ -205,12 +247,11 @@ def sign_operation(claim, prepared, private_key):
             operation = _current(claim, lock=True)
             if operation.intent != intent:
                 raise OutgoingTransactionError("The prepared transaction differs from the outgoing intent.")
+            if operation.status not in (OutgoingStatus.PREPARING, OutgoingStatus.SIGNED, OutgoingStatus.CONFIRMED):
+                raise OutgoingTransactionError(STALE_ATTEMPT)
+            signer = _admitted_signer(intent, lock=True, generation=prepared.admission_generation)
             if operation.status in (OutgoingStatus.SIGNED, OutgoingStatus.CONFIRMED):
                 return operation.current_attempt
-            if operation.status != OutgoingStatus.PREPARING:
-                raise OutgoingTransactionError(STALE_ATTEMPT)
-            signer, _ = SigningAccount.objects.get_or_create(chain_id=prepared.chain_id, address=intent["sender"])
-            signer = SigningAccount.objects.select_for_update().get(pk=signer.pk)
             nonce = _integer(max(signer.next_nonce, prepared.observed_nonce), MAX_DATABASE_INTEGER - 1)
             transaction = {
                 "chainId": prepared.chain_id,
@@ -301,12 +342,14 @@ def _record_broadcast(claim, tx_hash, error):
 
 def broadcast_operation(claim, client):
     _boundary()
-    operation = _current(claim)
-    attempt, raw = _payload(operation)
-    if operation.status == OutgoingStatus.CONFIRMED:
-        return BroadcastResult(attempt.tx_hash, True)
-    if operation.status != OutgoingStatus.SIGNED:
-        raise OutgoingTransactionError(STALE_ATTEMPT)
+    with atomic(durable=True):
+        operation = _current(claim, lock=True)
+        attempt, raw = _payload(operation)
+        if operation.status == OutgoingStatus.CONFIRMED:
+            return BroadcastResult(attempt.tx_hash, True)
+        if operation.status != OutgoingStatus.SIGNED:
+            raise OutgoingTransactionError(STALE_ATTEMPT)
+        _admitted_signer(operation.intent, lock=True)
     error = ""
     try:
         if client.assert_expected_chain() != operation.intent["chain_id"]:

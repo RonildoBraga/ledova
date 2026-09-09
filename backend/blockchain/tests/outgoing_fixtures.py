@@ -2,6 +2,7 @@ from unittest.mock import Mock
 
 from eth_account import Account
 
+from blockchain.models import SignerAdmission, SigningAccount
 from blockchain.services.outgoing import (
     open_operation,
     prepare_operation,
@@ -14,6 +15,15 @@ SENDER = Account.from_key(KEY).address
 TARGET = "0x" + "aa" * 20
 CHAIN_ID = 31337
 BLOCK_HASH = "0x" + "bb" * 32
+
+
+def admitted_signer(*, chain_id=CHAIN_ID, sender=SENDER, generation=1):
+    return SigningAccount.objects.create(
+        chain_id=chain_id,
+        address=sender.lower(),
+        admission_state=SignerAdmission.ADMITTED,
+        admission_generation=generation,
+    )
 
 
 def chain_client():

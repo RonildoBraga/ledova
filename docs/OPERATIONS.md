@@ -984,6 +984,40 @@ nonce coordination applies only to operations that use this service. Adopting
 every signer path and importing or quarantining existing signed transactions are
 required before claiming coordination across the application.
 
+The foundation now requires explicit signer admission. Existing and new
+`SigningAccount` rows start `closed`, and a missing row is also closed. A nonce
+counter, successful legacy status or inventory capture never grants admission.
+There is no activation command or admin edit surface; admitted synthetic test
+fixtures establish a test precondition only. Production adapters remain outside
+this foundation and keep their existing behavior, including mint recovery.
+
+`close_signer_admission(chain_id=..., sender=...)` is an operator-only service
+that closes an account and advances its admission generation. It preserves
+claims, outcomes, counters and every signed payload. Missing accounts are created
+closed. Closure blocks preparation RPC, new signing and exact-byte broadcast;
+receipt reconciliation remains available. Preparation records the generation,
+and signing checks it again under the operation and signer locks. A delayed
+preparer cannot survive a close/reopen cycle. The maximum signed 64-bit generation
+is reserved for closure, so an admitted account can always close; further
+advancement at that maximum is refused without wrap or reset.
+
+Broadcast admission takes a short operation-then-signer lock and commits before
+RPC. A call that crossed this boundary before closure may still send and record
+its result afterward. Closure is a drain barrier, not instant cancellation or
+credential revocation. Already signed reservations and exact-byte recovery must
+survive that interval.
+
+Before a later adapter is activated, every old same-key process and signing tool
+must drain and lose credential access. Recapture history after that drain, bind
+trusted authorization and intent, and import reservations or quarantine unresolved
+signers. Every remaining same-key writer must use the foundation or be disabled
+without legacy fallback. Old binaries do not consult this admission guard.
+Provider absence, terminal history or today's key and chain cannot establish
+historical authorization or release a nonce. App-role handoff and each adapter's
+durable transaction boundary still require proof. After signed activity, rollback
+cannot restore legacy sending with that key. Admission and the staged inventory
+do not establish a global nonce guarantee or resolve old business operations.
+
 Callers provide a stable operation key and immutable intent: chain, sender,
 target, value and calldata. Reusing a key with different terms is refused.
 `prepare_operation` reads the endpoint, pending nonce, gas price and gas estimate
@@ -995,7 +1029,7 @@ bytes, fixed hash, nonce reservation and operation pointer commit together befor
 enclosing database transaction or disabled autocommit.
 
 Signing an already prepared claim returns the winning attempt once another
-worker has signed.
+worker has signed, provided the signer remains admitted at the same generation.
 Restarting an unsigned failed attempt changes its claim identifier and fences out
 delayed workers. Once signed, uncertainty never authorizes another nonce: retries
 validate and broadcast the saved bytes, and missing receipts, provider errors,
