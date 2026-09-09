@@ -14,11 +14,12 @@ from documents.models import (
     DocumentType,
     ExtractionStatus,
 )
+from shared.tests.upload_fixtures import StubUploadDependencies, pdf_bytes
 
 User = get_user_model()
 
 
-class DocumentCustomerRouteTest(APITestCase):
+class DocumentCustomerRouteTest(StubUploadDependencies, APITestCase):
     def setUp(self):
         self.media_directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.media_directory.cleanup)
@@ -161,7 +162,7 @@ class DocumentCustomerRouteTest(APITestCase):
             self.client.force_authenticate(actor)
             upload = SimpleUploadedFile(
                 f"upload-{index}.pdf",
-                b"%PDF-1.4\nminimal test document\n",
+                pdf_bytes(),
                 content_type="application/pdf",
             )
 

@@ -12,11 +12,12 @@ from django.urls import clear_url_caches, reverse
 from rest_framework.test import APITestCase
 
 from documents.models import Document, DocumentType
+from shared.tests.upload_fixtures import StubUploadDependencies, pdf_bytes
 from shared.uploads import MAX_UPLOAD_SIZE
 
 User = get_user_model()
 
-DOCUMENT_BYTES = b"%PDF-1.4 payslip that must stay private"
+DOCUMENT_BYTES = pdf_bytes()
 SCRIPT_BYTES = b"<html><script>alert(document.cookie)</script></html>"
 PASSWORD = "pw-12345678"
 ADMIN_STORAGES = {
@@ -106,7 +107,7 @@ class DocumentFileRouteTest(APITestCase):
         self.assertEqual(url, f"/api/v1/documents/{self.document.uuid}/file/")
 
 
-class DocumentFileUrlTest(APITestCase):
+class DocumentFileUrlTest(StubUploadDependencies, APITestCase):
 
     def setUp(self):
         self.owner = make_user("doc-url-owner")
@@ -146,7 +147,7 @@ class DocumentFileUrlTest(APITestCase):
         self.assertTrue(document.file.name.startswith(f"documents/{document.uuid}/"))
 
 
-class DocumentUploadAllowlistTest(APITestCase):
+class DocumentUploadAllowlistTest(StubUploadDependencies, APITestCase):
 
     def setUp(self):
         self.owner = make_user("doc-allowlist-owner")

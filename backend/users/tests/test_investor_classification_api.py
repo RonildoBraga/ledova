@@ -13,6 +13,7 @@ from rest_framework.test import APITestCase
 
 from companies.models import Company, CompanyStatus, CompanyType
 from operators.models import Operator
+from shared.tests.upload_fixtures import StubUploadDependencies, pdf_bytes
 from users.models import (
     InvestorCategory,
     InvestorClassification,
@@ -28,7 +29,7 @@ from users.tests.factories import (
 
 User = get_user_model()
 BASE = "/api/investor-classifications/"
-EVIDENCE_BYTES = b"%PDF-1.4 net asset evidence"
+EVIDENCE_BYTES = pdf_bytes()
 ADMIN_STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
@@ -39,7 +40,7 @@ def _pdf(name="certificate.pdf"):
     return SimpleUploadedFile(name, EVIDENCE_BYTES, content_type="application/pdf")
 
 
-class InvestorClassificationApiTest(APITestCase):
+class InvestorClassificationApiTest(StubUploadDependencies, APITestCase):
 
     def setUp(self):
         self.user, self.account = make_investor("api-owner")

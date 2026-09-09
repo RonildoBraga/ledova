@@ -18,9 +18,11 @@ from documents.services.document import (
 )
 from shared.views import stream_stored_file
 from shared.views.principal import SetsThePrincipalOnTheConnection
+from shared.views.uploads import UploadProtectedView
 
 
 class DocumentViewSet(
+    UploadProtectedView,
     SetsThePrincipalOnTheConnection,
     mixins.CreateModelMixin,
     mixins.RetrieveModelMixin,

@@ -11,10 +11,11 @@ from django.urls import clear_url_caches, reverse
 from rest_framework.test import APITestCase
 
 from companies.models import Company, CompanyDocument, CompanyType, DocumentType
+from shared.tests.upload_fixtures import StubUploadDependencies, pdf_bytes
 
 User = get_user_model()
 
-DOCUMENT_BYTES = b"%PDF-1.4 company constitution"
+DOCUMENT_BYTES = pdf_bytes()
 EXTERNAL_URL = "https://docs.example.test/constitution.pdf"
 ADMIN_STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
@@ -49,7 +50,7 @@ def attach_file(document, payload=DOCUMENT_BYTES):
     return document
 
 
-class CompanyDocumentFileUrlTest(APITestCase):
+class CompanyDocumentFileUrlTest(StubUploadDependencies, APITestCase):
 
     def setUp(self):
         self.user, self.company = make_company("doc-file-url", "111222333")

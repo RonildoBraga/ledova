@@ -7,10 +7,26 @@ name: ledova
 x-backend-environment: &backend-environment
   POSTGRES_HOST: postgres
   REDIS_URL: redis://redis:6379/0
+  UPLOAD_SCANNER_HOST: clamav
   STORAGE_BACKEND: local
   DEBUG: "true"
 
 services:
+  clamav:
+    image: clamav/clamav:1.5.4
+    mem_limit: 4g
+    cpus: 2
+    pids_limit: 128
+    volumes:
+      - ./backend/clamav/clamd.conf:/etc/clamav/clamd.conf:ro
+      - clamav_data:/var/lib/clamav
+    healthcheck:
+      test: ["CMD", "clamdscan", "--ping=1", "--config-file=/etc/clamav/clamd.conf"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
   postgres:
     image: postgres:16-alpine
     env_file:
@@ -80,6 +96,8 @@ services:
       - media_data:/usr/src/app/media
       - private_media_data:/usr/src/app/private-media
     depends_on:
+      clamav:
+        condition: service_started
       migrate:
         condition: service_completed_successfully
       redis:
@@ -99,6 +117,8 @@ services:
       - media_data:/usr/src/app/media
       - private_media_data:/usr/src/app/private-media
     depends_on:
+      clamav:
+        condition: service_started
       migrate:
         condition: service_completed_successfully
       redis:
@@ -127,6 +147,7 @@ services:
       - "127.0.0.1:5173:5173"
 
 volumes:
+  clamav_data:
   media_data:
   private_media_data:
   postgres_data:
