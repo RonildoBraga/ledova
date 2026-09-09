@@ -45,6 +45,7 @@ from tokens.models import (
     ShareIssuanceRequest,
 )
 from tokens.services import ShareTokenService
+from tokens.services.mint_journal import mark_mint_reverted
 
 CHAIN_CLIENT = "tokens.services.share_token_service.get_base_chain_client"
 DEFER = "offerings.tasks.subscription.allot_subscription_task.defer"
@@ -266,6 +267,56 @@ class MoneyOutNeverLeavesSharesOutTest(AllotmentTestCase):
     def _broadcast_refusal(self, request, tx_hash, verb):
         return MINT_BROADCAST.format(uuid=request.uuid, tx_hash=tx_hash, verb=verb)
 
+    def _unidentified_legacy_mint(self):
+        subscription, request = self._allotted()
+        issuance = self._broadcast(request, tx_hash=None, status=IssuanceStatus.FAILED)
+        request.mark_failed("Legacy worker stopped without recording its transaction identity")
+        subscription.refresh_from_db()
+        self.assertIsNone(issuance.mint_journal)
+        self.assertEqual(request.status, RequestStatus.FAILED)
+        return subscription, request
+
+    def test_a_legacy_hashless_failed_mint_blocks_a_refund(self):
+        subscription, request = self._unidentified_legacy_mint()
+        with self.assertRaisesMessage(SubscriptionRefusedException, "unidentified legacy mint"):
+            record_refund(subscription, amount=Decimal("25.00"))
+        subscription.refresh_from_db()
+        request.refresh_from_db()
+        self.assertEqual(subscription.status, SubscriptionStatus.PAID)
+        self.assertIsNone(subscription.refunded_at)
+        self.assertEqual(request.status, RequestStatus.FAILED)
+
+    def _stop_before_signing(self, error):
+        subscription, request = self._allotted()
+        service = ShareTokenService()
+        with (
+            patch.object(service, "read_paused", return_value=False),
+            patch.object(service, "is_recipient_whitelisted", return_value=True),
+            patch.object(service, "_mint_to", side_effect=error),
+        ):
+            with self.assertRaises(type(error)):
+                service.execute_request(request)
+        return subscription, request, service
+
+    def test_a_journaled_failure_before_signing_can_still_be_refunded(self):
+        subscription, request, _ = self._stop_before_signing(RuntimeError("Stopped before signing"))
+        issuance = ShareIssuance.objects.get(idempotency_key=ShareTokenService.issuance_key(request))
+        self.assertEqual(set(issuance.mint_journal[-1]), {"id"})
+        self.assertIsNone(issuance.tx_hash)
+        record_refund(subscription, amount=Decimal("25.00"))
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.status, SubscriptionStatus.REFUNDED)
+
+    def test_an_abandoned_unsigned_attempt_can_still_be_refunded(self):
+        subscription, request, service = self._stop_before_signing(SystemExit())
+        self.assertEqual(service.resolve_executing_issuance(request), "released")
+        issuance = ShareIssuance.objects.get(idempotency_key=ShareTokenService.issuance_key(request))
+        self.assertTrue(issuance.mint_journal[-1]["abandoned"])
+        self.assertIsNone(issuance.tx_hash)
+        record_refund(subscription, amount=Decimal("25.00"))
+        subscription.refresh_from_db()
+        self.assertEqual(subscription.status, SubscriptionStatus.REFUNDED)
+
     def test_a_refund_is_refused_while_a_failed_request_still_carries_a_broadcast_mint(self):
         subscription, request, issuance = self._lost_the_receipt()
         self.assertTrue(request.can_be_executed)
@@ -314,12 +365,13 @@ class MoneyOutNeverLeavesSharesOutTest(AllotmentTestCase):
 
     def test_a_reverted_mint_clears_its_hash_and_the_refund_is_open_again(self):
         subscription, request, issuance = self._lost_the_receipt()
-        issuance.mark_reverted("Transaction reverted: 0xmint")
+        mark_mint_reverted(request, issuance, "0xmint")
 
         record_refund(subscription, amount=Decimal("25.00"), reference="RTGS-REVERTED")
 
         subscription.refresh_from_db()
         request.refresh_from_db()
+        issuance.refresh_from_db()
         self.assertIsNone(issuance.tx_hash)
         self.assertEqual(subscription.status, SubscriptionStatus.REFUNDED)
         self.assertEqual(request.status, RequestStatus.REJECTED)

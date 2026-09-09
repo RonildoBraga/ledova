@@ -844,6 +844,9 @@ transaction, the stale-execution sweep closes that attempt and releases the
 request for retry. A delayed worker cannot subsequently submit that closed
 attempt. Legacy rows have a null journal and cannot establish this fact: their
 hashless state remains unresolved, including rows previously marked failed.
+Those legacy rows also block subscription refunds until their mint is resolved;
+an attempt whose journal proves it failed or was closed before signing remains
+refundable.
 Once the legacy grace period has passed, the admin offers **Record legacy
 transaction hash** for those rows. Identify this request's mint in the operator's
 transaction history and record its hash so the sweep can reconcile it. The old
