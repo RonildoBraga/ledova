@@ -47,6 +47,12 @@ def native_asset_for_chain(chain: str) -> Asset:
     return asset
 
 
+def recorded_native_asset_for_chain(chain: str) -> Optional[Asset]:
+    return Asset.objects.filter(
+        symbol=CHAIN_TO_NATIVE_ASSET.get(normalize_chain(chain)), asset_type=AssetType.NATIVE_CRYPTO.value
+    ).first()
+
+
 def quarantine_unknown_token(
     chain: str, contract_address: str, symbol: Optional[str], decimals: Optional[int]
 ) -> Asset:

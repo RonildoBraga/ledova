@@ -557,6 +557,9 @@ settings. A native deployment with a contract address or incorrect decimals is
 unavailable until an operator repairs its configuration. Transfer preparation
 returns a service error for missing or unavailable native configuration instead
 of reporting a zero balance. An operator-disabled coin stays unavailable.
+Already-recorded transfers can still confirm, fail or be reversed using their
+existing asset identity and debit records. Unavailable chain reads leave balance
+reconciliation pending; they do not recreate a removed deployment.
 
 ### Valuation sources
 
