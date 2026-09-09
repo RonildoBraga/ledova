@@ -3,7 +3,7 @@ import type { BaseQueryParams } from '../api';
 import type { Asset } from './asset';
 
 export interface WalletHolding extends BaseEntity {
-  wallet: string;
+  walletUuid: string;
   walletAddress: string;
   chain: string;
   asset: Asset;

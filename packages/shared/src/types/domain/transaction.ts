@@ -1,7 +1,7 @@
 import type { BaseEntity } from '../common';
 import type { BaseQueryParams, DateRangeParams } from '../api';
 
-export interface Transaction extends BaseEntity {
+export interface Transaction extends Pick<BaseEntity, 'uuid' | 'createdAt'> {
   txHash: string;
   chain: string;
   fromAddress: string;

@@ -52,7 +52,7 @@ export function useTransferFlow(selectedWallet: Wallet | null) {
     queryFn: () => getWalletHoldings(apiClient, selectedWallet!.uuid),
     enabled: !!selectedWallet?.uuid,
     staleTime: CACHE_TIMING.DEFAULT_STALE_TIME,
-    select: (data) => data.data.results || data.data || [],
+    select: (data) => data.data,
   });
 
   const senderWhitelistQuery = useQuery({

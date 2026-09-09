@@ -18,8 +18,7 @@ export function useHoldings(walletsList: Wallet[]) {
   const holdings: HoldingWithWallet[] = useMemo(
     () =>
       holdingsQueries.flatMap((query, index) => {
-        const responseData = query.data?.data;
-        const holdingsData = Array.isArray(responseData) ? responseData : responseData?.results || [];
+        const holdingsData = query.data?.data ?? [];
         const wallet = walletsList[index];
         return holdingsData.map((holding) => ({
           ...holding,

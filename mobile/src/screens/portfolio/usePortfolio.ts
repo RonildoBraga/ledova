@@ -97,14 +97,7 @@ export function usePortfolio() {
   }
 
   const holdings: HoldingWithWallet[] = holdingsQueries.flatMap((query, index) => {
-    const responseData = (
-      query.data as
-        | {
-            data?: WalletHolding[] | { results?: WalletHolding[] };
-          }
-        | undefined
-    )?.data;
-    const holdingsData = Array.isArray(responseData) ? responseData : responseData?.results || [];
+    const holdingsData = query.data?.data ?? [];
     const wallet = wallets[index];
 
     return holdingsData.map((holding: WalletHolding) => ({

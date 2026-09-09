@@ -1,4 +1,4 @@
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import PolymorphicProxySerializer, extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -12,6 +12,18 @@ from wallets.serializers import (
     BroadcastTransferSerializer,
     HoldingSerializer,
     WalletSerializer,
+)
+from wallets.serializers.actions import (
+    BatchBalanceRequestSerializer,
+    BatchBalanceResponseSerializer,
+    BroadcastTransferResponseSerializer,
+    PreparedBitcoinTransferSerializer,
+    PreparedEvmTransferSerializer,
+    PrepareWalletTransferSerializer,
+    WalletSyncResponseSerializer,
+    WalletVerificationChallengeSerializer,
+    WalletVerificationResultSerializer,
+    WalletVerificationSignatureSerializer,
 )
 from wallets.services import (
     BalanceService,
@@ -58,6 +70,7 @@ class WalletViewSet(AuthenticatedModelViewSet):
         if portfolio and portfolio.user_account_id == wallet.user_account_id:
             portfolio.wallets.add(wallet)
 
+    @extend_schema(request=None, responses=WalletVerificationChallengeSerializer)
     @action(detail=True, methods=["post"], url_path="request-verification", url_name="request-verification")
     def request_verification(self, request, uuid=None):
         wallet = start_wallet_verification(request.user, uuid)
@@ -71,6 +84,7 @@ class WalletViewSet(AuthenticatedModelViewSet):
             status=status.HTTP_200_OK,
         )
 
+    @extend_schema(request=WalletVerificationSignatureSerializer, responses=WalletVerificationResultSerializer)
     @action(detail=True, methods=["post"], url_path="verify-signature", url_name="verify-signature")
     def verify_signature(self, request, uuid=None):
         wallet = complete_wallet_verification(request.user, uuid, request.data.get("signature"))
@@ -85,6 +99,7 @@ class WalletViewSet(AuthenticatedModelViewSet):
             status=status.HTTP_200_OK,
         )
 
+    @extend_schema(request=None, responses=WalletSyncResponseSerializer)
     @action(detail=True, methods=["post"], url_path="sync", url_name="sync")
     def sync(self, request, uuid=None):
         wallet = self.get_object()
@@ -96,12 +111,20 @@ class WalletViewSet(AuthenticatedModelViewSet):
         )
 
     @extend_schema(responses=HoldingSerializer(many=True))
-    @action(detail=True, methods=["get"], url_path="holdings", url_name="holdings")
+    @action(detail=True, methods=["get"], url_path="holdings", url_name="holdings", pagination_class=None)
     def holdings(self, request, uuid=None):
         wallet = self.get_object()
         holdings = wallet.holdings.filter(asset__is_active=True, asset__is_verified=True).select_related("asset")
         return Response(HoldingSerializer(holdings, many=True).data, status=status.HTTP_200_OK)
 
+    @extend_schema(
+        request=PrepareWalletTransferSerializer,
+        responses=PolymorphicProxySerializer(
+            component_name="PreparedWalletTransfer",
+            serializers=[PreparedEvmTransferSerializer, PreparedBitcoinTransferSerializer],
+            resource_type_field_name=None,
+        ),
+    )
     @action(detail=True, methods=["post"], url_path="prepare-transfer", url_name="prepare-transfer")
     def prepare_transfer(self, request, uuid=None):
         wallet = self.get_object()
@@ -117,6 +140,7 @@ class WalletViewSet(AuthenticatedModelViewSet):
 
         return Response(transaction_data, status=status.HTTP_200_OK)
 
+    @extend_schema(request=BroadcastTransferSerializer, responses=BroadcastTransferResponseSerializer)
     @action(detail=True, methods=["post"], url_path="broadcast-transfer", url_name="broadcast-transfer")
     def broadcast_transfer(self, request, uuid=None):
         wallet = self.get_object()
@@ -130,6 +154,7 @@ class WalletViewSet(AuthenticatedModelViewSet):
 
         return Response(result, status=status.HTTP_200_OK)
 
+    @extend_schema(request=BatchBalanceRequestSerializer, responses=BatchBalanceResponseSerializer)
     @action(detail=False, methods=["post"], url_path="batch-check-balances", url_name="batch-check-balances")
     def batch_check_balances(self, request):
         result = BalanceService.batch_check_balances(

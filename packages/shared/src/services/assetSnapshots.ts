@@ -7,5 +7,5 @@ export const getAssetSnapshots = async (
   assetUuid: string,
   params?: AssetSnapshotQueryParams,
 ) => {
-  return apiClient.get<AssetSnapshot[]>(`${ASSET_ENDPOINTS.BASE}${assetUuid}/snapshots/`, { params });
+  return apiClient.get<AssetSnapshot[]>(ASSET_ENDPOINTS.SNAPSHOTS(assetUuid), { params });
 };

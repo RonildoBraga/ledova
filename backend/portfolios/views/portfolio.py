@@ -77,7 +77,7 @@ class PortfolioViewSet(AuthenticatedModelViewSet):
         )
 
     @extend_schema(responses=PortfolioValuePointSerializer(many=True))
-    @action(detail=True, methods=["get"], url_path="snapshots")
+    @action(detail=True, methods=["get"], url_path="snapshots", pagination_class=None)
     def snapshots(self, request, *args, **kwargs):
         portfolio = self.get_object()
         params = request.query_params

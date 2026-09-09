@@ -156,6 +156,38 @@ class AnUnreachableEndpointIsAFailure(_Repository):
 
         self.assertIn(("get", "/api/offers/"), gate.service_calls())
 
+    def test_each_response_variant_is_checked_against_its_own_shape(self):
+        self.endpoints("  PREPARE: (uuid: string) => `/api/wallets/${uuid}/prepare-transfer/`,")
+        self.service("""
+            export const evm = c => c.post<EvmTransfer>(ENDPOINTS.PREPARE(u), d);
+            export const bitcoin = c => c.post<BitcoinTransfer>(ENDPOINTS.PREPARE(u), d);
+        """)
+        self.types("""
+            export interface EvmTransfer {
+              gasPrice: string;
+              gasLimit: number;
+              gasCost: string;
+            }
+            export interface BitcoinTransfer {
+              feePerByte: string;
+              feeSatoshis: number;
+              feeBtc: string;
+            }
+        """)
+        document = {
+            "paths": operation("post", "/api/wallets/{uuid}/prepare-transfer/", "PreparedTransfer"),
+            "components": {"schemas": {
+                "PreparedTransfer": {"oneOf": [
+                    {"$ref": "#/components/schemas/Evm"}, {"$ref": "#/components/schemas/Bitcoin"},
+                ]},
+                "Evm": {"properties": {"gasPrice": {}, "gasLimit": {}}},
+                "Bitcoin": {"properties": {"feePerByte": {}, "feeSatoshis": {}}},
+            }},
+        }
+        self.assertEqual(self.findings(document), [
+            ("BitcoinTransfer", "Bitcoin", ["feebtc"]), ("EvmTransfer", "Evm", ["gascost"]),
+        ])
+
 
 class OnlyTheDirectionThatBreaksAtRuntime(_Repository):
     def setUp(self):
@@ -239,112 +271,130 @@ class TheTwoListsStaySeparate(unittest.TestCase):
                 self.assertIn("#211", reason)
 
 
+class NestedFieldsStayOnTheirObject(_Repository):
+
+    def setUp(self):
+        super().setUp()
+        self.endpoints("  HOLDERS: '/api/tokens/holders/',")
+        self.service("export const holders = c => c.get<TokenHoldersResponse>(ENDPOINTS.HOLDERS);")
+        self.declaration = """
+            export interface TokenHoldersResponse {
+              token: {
+                uuid: string;
+                name: string;
+                symbol: string;
+                status: string;
+                totalSupply: string;
+                metadata?: { label: string; };
+              };
+              holders: TokenHolder[];
+              totalHolders: number;
+            }
+        """
+        self.document = {
+            "paths": operation("get", "/api/tokens/holders/", "ShareRegister"),
+            "components": {"schemas": {"ShareRegister": {
+                "properties": {"token": {}, "holders": {}, "total_holders": {}}
+            }}},
+        }
+
+    def test_nested_token_fields_are_not_required_on_the_register_itself(self):
+        self.types(self.declaration)
+        self.assertEqual(gate.interfaces()["TokenHoldersResponse"], {
+            "token": False, "holders": False, "totalholders": False,
+        })
+        self.assertEqual(self.findings(self.document), [])
+
+    def test_a_required_root_field_after_a_nested_object_is_still_rejected_when_absent(self):
+        self.types(self.declaration.replace("totalHolders: number;", "totalHolders: number;\n              missing: string;"))
+        self.assertEqual(self.findings(self.document), [("TokenHoldersResponse", "ShareRegister", ["missing"])])
+
+    def test_a_missing_nested_object_itself_is_still_a_missing_required_field(self):
+        self.types(self.declaration)
+        del self.document["components"]["schemas"]["ShareRegister"]["properties"]["token"]
+        self.assertEqual(self.findings(self.document), [("TokenHoldersResponse", "ShareRegister", ["token"])])
+
+    def test_a_quoted_brace_does_not_hide_the_next_required_field(self):
+        self.types("export interface TokenHoldersResponse {\n  marker: '{';\n  missing: string;\n}\n")
+        self.document["components"]["schemas"]["ShareRegister"]["properties"]["marker"] = {}
+        self.assertEqual(self.findings(self.document), [("TokenHoldersResponse", "ShareRegister", ["missing"])])
+
+
+class EveryServiceCallResolves(_Repository):
+
+    def test_literal_and_computed_urls_are_rejected_including_untyped_calls(self):
+        self.endpoints("  THING: '/api/things/',")
+        for body in (
+            "c.get<Wallet[]>('/api/wallets/')",
+            'c.get<Wallet[]>("/api/wallets/")',
+            "c.get<Wallet>(`/api/wallets/${uuid}/`)",
+            "c.get<Wallet>(url)",
+            "c.delete('/api/wallets/')",
+            "c.post<T>(url, data)",
+            "c.get<Wallet>(ENDPOINTS['THING'])",
+            "c.get<Wallet>(ENDPOINTS.THING + '/extra/')",
+            "c.get<Wallet>(ENDPOINTS.THING(uuid) + '/extra/')",
+        ):
+            with self.subTest(call=body):
+                self.service(f"export const call = c => {body};")
+                with self.assertRaises(gate.Unresolvable) as refused:
+                    gate.service_calls()
+                self.assertIn("thing.ts", str(refused.exception))
+
+    def test_a_call_inside_a_url_parameter_helper_cannot_bypass_the_gate(self):
+        self.service("""
+            const post = <T>(c, url, data) => c.post<T>(url, data);
+            export const prepare = (c, u, data) => post<PrepareTransferResponse>(c, u, data);
+        """)
+        with self.assertRaises(gate.Unresolvable):
+            gate.service_calls()
+
+    def test_a_generic_helper_with_a_constant_url_still_needs_a_concrete_response_shape(self):
+        self.endpoints("  THING: '/api/things/',")
+        self.service("const post = <T>(c, data) => c.post<T>(ENDPOINTS.THING, data);")
+        document = {
+            "paths": operation("post", "/api/things/", "Thing"),
+            "components": {"schemas": {"Thing": {"properties": {"uuid": {}}}}},
+        }
+        with self.assertRaises(gate.Unresolvable) as refused:
+            gate.scan(self.schema(document))
+        self.assertIn("T", str(refused.exception))
+
+    def test_quoted_examples_and_comments_are_not_calls(self):
+        self.endpoints("  THING: '/api/things/',")
+        self.service("""
+            const example = "c.get<Wallet>('/not-a-call/')";
+            const template = `c.get<Wallet>('/not-a-call/')`;
+            // c.post<Wallet>('/not-a-call/')
+            /* c.patch<Wallet>('/not-a-call/') */
+            export const get = c => c.get<Wallet>(ENDPOINTS.THING);
+        """)
+        self.assertEqual(gate.service_calls(), {("get", "/api/things/"): {"Wallet"}})
+
+    def test_a_required_wallet_field_is_checked_through_the_actual_service(self):
+        constants = REPO_ROOT / "packages/shared/src/constants/api.ts"
+        service = REPO_ROOT / "packages/shared/src/services/wallets.ts"
+        (self.shared / "constants/api.ts").write_text(constants.read_text())
+        (self.shared / "services/thing.ts").write_text(service.read_text())
+        self.types("export interface Wallet {\n  uuid: string;\n  missing: string;\n}\n")
+        document = {
+            "paths": operation("get", "/api/wallets/", "Wallet"),
+            "components": {"schemas": {"Wallet": {"properties": {"uuid": {}}}}},
+        }
+        self.assertEqual(self.findings(document), [("Wallet", "Wallet", ["missing"])])
+
+    def test_every_repository_service_call_resolves_including_former_helper_types(self):
+        gate.ROOT = REPO_ROOT
+        gate.SHARED = REPO_ROOT / "packages/shared/src"
+        calls = gate.service_calls()
+        reached = set().union(*calls.values())
+        for name in ("Wallet", "WalletHolding", "Transaction", "AssetSnapshot", "PortfolioSnapshot",
+                     "BatchBalanceResponse", "OnRampWidgetResponse", "RequestVerificationChallengeResponse",
+                     "VerifyWalletResponse", "SyncWalletResponse", "PrepareTransferResponse",
+                     "PrepareBitcoinTransferResponse", "BroadcastTransferResponse"):
+            with self.subTest(type=name):
+                self.assertIn(name, reached)
+
+
 if __name__ == "__main__":
     unittest.main()
-
-
-class TheGateCountsWhatItCannotSee(_Repository):
-
-    def test_a_call_passing_a_url_literal_is_counted_rather_than_silently_skipped(self):
-        self.endpoints("  WALLETS: { LIST: '/api/wallets/' },")
-        self.service(
-            """
-            import type { Wallet } from '../types/thing';
-            export const listWallets = (c) => c.get<Wallet[]>('/api/wallets/');
-            """
-        )
-
-        sites, types = gate.calls_the_gate_cannot_see()
-
-        self.assertEqual(sites, 1)
-        self.assertEqual(types, ["Wallet"])
-
-    def test_a_type_a_constant_call_also_reaches_is_not_reported_as_unchecked(self):
-        self.endpoints("  WALLETS: { LIST: '/api/wallets/' },")
-        self.service(
-            """
-            import type { Wallet } from '../types/thing';
-            export const listWallets = (c) => c.get<Wallet[]>(ENDPOINTS.WALLETS.LIST);
-            export const createWallet = (c) => c.post<Wallet>('/api/wallets/');
-            """
-        )
-
-        sites, types = gate.calls_the_gate_cannot_see()
-
-        self.assertEqual(sites, 1)
-        self.assertEqual(types, [])
-
-    def test_the_repository_carries_exactly_the_literal_url_counts_that_are_pinned(self):
-        gate.ROOT = REPO_ROOT
-        gate.SHARED = REPO_ROOT / "packages/shared/src"
-
-        sites, types = gate.calls_the_gate_cannot_see()
-
-        self.assertEqual(sites, gate.UNCHECKED["literal-url-sites"][0])
-        self.assertEqual(len(types), gate.UNCHECKED["literal-url-types"][0])
-        self.assertIn("Wallet", types)
-
-
-class AHelperThatTakesTheUrlIsCountedToo(_Repository):
-
-    def test_a_type_reached_only_inside_a_local_helper_is_reported(self):
-        self.endpoints("  WALLETS: { LIST: '/api/wallets/' },")
-        self.service(
-            """
-            import type { PrepareTransferResponse } from '../types/thing';
-            const post = <T>(c, url, data) => c.post<T>(url, data);
-            export const prepare = (c, uuid, data) =>
-              post<PrepareTransferResponse>(c, `/api/wallets/${uuid}/prepare-transfer/`, data);
-            """
-        )
-
-        self.assertEqual(sorted(gate.types_reached_only_through_a_local_helper()), ["PrepareTransferResponse"])
-
-    def test_a_type_a_direct_call_also_reaches_is_not_reported_as_helper_only(self):
-        self.endpoints("  WALLETS: { LIST: '/api/wallets/' },")
-        self.service(
-            """
-            import type { Wallet } from '../types/thing';
-            const post = <T>(c, url, data) => c.post<T>(url, data);
-            export const listWallets = (c) => c.get<Wallet>(ENDPOINTS.WALLETS.LIST);
-            export const createWallet = (c, data) => post<Wallet>(c, '/api/wallets/', data);
-            """
-        )
-
-        self.assertEqual(gate.types_reached_only_through_a_local_helper(), {})
-
-    def test_a_fourth_call_through_the_helper_moves_the_number(self):
-        self.endpoints("  WALLETS: { LIST: '/api/wallets/' },")
-        one = """
-            import type { PrepareTransferResponse } from '../types/thing';
-            const post = <T>(c, url, data) => c.post<T>(url, data);
-            export const prepare = (c, uuid, data) => post<PrepareTransferResponse>(c, urlFor(uuid), data);
-        """
-        self.service(one)
-        before = gate.types_reached_only_through_a_local_helper()
-
-        self.service(one + "export const broadcast = (c, uuid, data) => post<BroadcastTransferResponse>(c, u, data);")
-        after = gate.types_reached_only_through_a_local_helper()
-
-        self.assertEqual(sorted(before), ["PrepareTransferResponse"])
-        self.assertEqual(sorted(after), ["BroadcastTransferResponse", "PrepareTransferResponse"])
-
-    def test_the_repository_carries_exactly_the_helper_only_count_that_is_pinned(self):
-        gate.ROOT = REPO_ROOT
-        gate.SHARED = REPO_ROOT / "packages/shared/src"
-
-        through = gate.types_reached_only_through_a_local_helper()
-
-        self.assertEqual(len(through), gate.UNCHECKED["helper-only-types"][0])
-        self.assertIn("PrepareTransferResponse", through)
-
-
-class TheBlindnessIsPinnedLikeTheDebt(unittest.TestCase):
-
-    def test_every_unchecked_population_states_why_it_is_there(self):
-        for key, (_, reason) in gate.UNCHECKED.items():
-            with self.subTest(population=key):
-                self.assertGreater(len(reason), 80)
-
-    def test_no_key_is_carried_by_both_the_debt_lists_and_the_blindness_list(self):
-        self.assertEqual(sorted(set(gate.UNCHECKED) & (set(gate.TYPE_DEBT) | set(gate.SCHEMA_DEBT))), [])

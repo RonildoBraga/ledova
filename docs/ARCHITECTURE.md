@@ -1972,6 +1972,22 @@ closed as invalid) on exactly that collision. So the gate resolves each
 at that path and verb, and compares the type argument against **that operation's
 2xx response schema**. The test suite pins the collision case.
 
+Every HTTP call in a shared service must pass a resolvable endpoint constant,
+including wallet transfer helpers and calls with no response type argument.
+Literal URLs, computed URL parameters, unresolved constants and uninspectable
+response types fail the gate;
+there is no unchecked-call allowlist. Nested interface members stay under their
+object rather than becoming required root fields. Response unions are expanded
+so the EVM and Bitcoin preparation types are checked against their respective
+response shapes. The wallet action schema describes the actual challenge,
+verification, sync, preparation, broadcast and batch-balance replies.
+
+Wallet holdings are an array and identify their wallet with `walletUuid`. Asset
+snapshots do not supply calculated chart changes; clients derive those from
+prices. Transactions expose `createdAt` but do not promise `updatedAt`. Sync
+responses contain `syncResult`, rather than an asynchronous task identifier.
+The outcome-reporting behavior remains tracked by #237.
+
 Field names are compared with separators removed and case folded, because the
 wire is camelCase - `djangorestframework-camel-case` renders it - while a schema
 component may carry either form. `address_line_1` and `addressLine1` are one

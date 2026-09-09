@@ -57,39 +57,7 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 SHARED = ROOT / "packages/shared/src"
 
-# The three populations this gate cannot check. They are printed below, and printing
-# alone ratchets the debt while leaving the blindness free to grow: a fourth helper-only
-# type moved no number and the gate still exited 0. These are pinned two-sided like
-# TYPE_DEBT and SCHEMA_DEBT, so growth fails and a pin left above what is there fails too.
-UNCHECKED: dict[str, tuple[int, str]] = {
-    "literal-url-sites": (
-        16,
-        "Service calls passing a URL literal, which CALL cannot resolve to an endpoint. "
-        "#349 moves the nine files onto constants; the count only falls.",
-    ),
-    "literal-url-types": (
-        10,
-        "Shared types reached only by those sites, so nothing about them is checked at all. "
-        "Falls as #349 converts each file.",
-    ),
-    "helper-only-types": (
-        3,
-        "Shared types reached only inside a local helper that takes the URL as a parameter, "
-        "so neither pattern sees them. wallet-transfers.ts is the only one today.",
-    ),
-}
-
 TYPE_DEBT: dict[str, tuple[int, str]] = {
-    "TokenHoldersResponse:ShareRegister": (
-        4,
-        "GET /api/v1/tokens/*/holders/ answers ShareRegister, which carries no nested token object, "
-        "while TokenHoldersResponse declares name, symbol, status and totalSupply as required. Nothing "
-        "reads them - the two callers use holders and totalHolders only - so no screen is broken today. "
-        "Whether the type over-declares or #301 dropped context the endpoint should still carry is a "
-        "decision for the tokens lane; tracked in #330. It replaces the ShareTokenDetail entry that "
-        "stood here: #301 gave the endpoint a component of its own, so the old pairing stopped "
-        "occurring and the gate reported it as pinned too high, which is how the succession was found.",
-    ),
     "Company:CompanyList": (
         27,
         "GET /api/v1/companies/ serves CompanyListSerializer while the service is typed "
@@ -196,12 +164,12 @@ SCHEMA_DEBT: dict[str, tuple[int, str]] = {
         "tracked as a follow-up to #211.",
     ),
     "CreateOrderMessageResponse:TransferOrderCreate": (
-        10,
+        7,
         "tokens/views/trading_order.py create_message builds a signing challenge body while "
         "get_serializer_class names TransferOrderCreateSerializer, so the generator documents the "
         "request shape as the response. The interface is correct. Tracked as a follow-up to #211.",
     ),
-    "CancelOrderMessageResponse:TransferOrderList": (10, "tokens/views/trading_order.py builds this body itself while get_serializer_class names a TransferOrder serializer, so the generator documents the wrong shape. The interface is correct. In check-schema-responses.py's LEGACY; tracked by #211."),
+    "CancelOrderMessageResponse:TransferOrderList": (7, "tokens/views/trading_order.py builds this body itself while get_serializer_class names a TransferOrder serializer, so the generator documents the wrong shape. The interface is correct. In check-schema-responses.py's LEGACY; tracked by #211."),
     "ApprovalStatusResponse:TransferOrderList": (7, "tokens/views/trading_order.py builds this body itself while get_serializer_class names a TransferOrder serializer, so the generator documents the wrong shape. The interface is correct. In check-schema-responses.py's LEGACY; tracked by #211."),
     "ApprovalDataResponse:TransferOrderList": (1, "tokens/views/trading_order.py builds this body itself while get_serializer_class names a TransferOrder serializer, so the generator documents the wrong shape. The interface is correct. In check-schema-responses.py's LEGACY; tracked by #211."),
     "MarketData:ShareTokenList": (
@@ -218,13 +186,13 @@ SCHEMA_DEBT: dict[str, tuple[int, str]] = {
         "interface is correct. Tracked as a follow-up to #211.",
     ),
     "OrderModificationMessageResponse:TransferOrderList": (
-        12,
+        9,
         "tokens/views/trading_order.py create_message builds its own body while "
         "get_serializer_class names TransferOrderCreateSerializer, and the generator documents "
         "neither. The interface is correct. Tracked as a follow-up to #211.",
     ),
     "AccountExportData:UserProfile": (
-        33,
+        9,
         "users/views/user_profile.py export-data returns lifecycle.export_account_data(user), a "
         "literal body, so the generator falls back to the viewset's serializer. The interface is "
         "correct. In check-schema-responses.py's LEGACY; tracked by #211.",
@@ -272,26 +240,15 @@ ENDPOINT_ENTRY = re.compile(r"^\s*(\w+):\s*(?:\([^)]*\)\s*=>\s*)?[`']([^`'\n]+)[
 # pinning the receiver's name means renaming a parameter silently stops the gate
 # checking those calls.
 CALL = re.compile(
-    r"\b\w+\.(get|post|put|patch|delete)(?:<([^>]*(?:<[^>]*>)?[^>]*)>)?\s*\(\s*([A-Z][A-Z0-9_]*(?:\.\w+)+)",
+    r"\b\w+\.(get|post|put|patch|delete)(?:<([^>]*(?:<[^>]*>)?[^>]*)>)?\s*\(\s*([A-Z][A-Z0-9_]*(?:\.\w+)+)(?=\s*[(,)])",
     re.S,
 )
-# CALL requires an endpoint constant, so a call passing a URL literal is not a call
-# this gate declines to check - it is a call this gate cannot see, and it is absent
-# from the numerator and the denominator alike. LITERAL_CALL counts them so the
-# success line states the population it actually checked rather than the population
-# it matched. Nine service files still pass literals; #349 moves them onto constants.
-LITERAL_CALL = re.compile(
-    r"\b\w+\.(get|post|put|patch|delete)(?:<([^>]*(?:<[^>]*>)?[^>]*)>)?\s*\(\s*[`'\"]",
+HTTP_CALL = re.compile(r"\b\w+\.(?:get|post|put|patch|delete)\s*(?=<|\()")
+NONCODE = re.compile(
+    r"//[^\n]*|/\*.*?\*/|\"(?:\\.|[^\"\\])*\"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`",
     re.S,
 )
-# A third way past both patterns: the call is made inside a local helper that takes
-# the URL as a parameter, so the argument is neither a constant nor a literal, and
-# the concrete type argument is at the caller rather than at the apiClient call.
-# wallet-transfers.ts does this for three types. Following url back to the caller's
-# template literal is real static analysis; counting the helpers is not, and an
-# unreported hole is the thing this gate exists to refuse.
-HELPER_CALL = re.compile(r"\b([a-z]\w*)<([^>]*(?:<[^>]*>)?[^>]*)>\s*\(", re.S)
-INTERFACE = re.compile(r"^export interface (\w+)([^{]*)\{(.*?)^\}", re.S | re.M)
+INTERFACE = re.compile(r"^export interface (\w+)([^{]*)\{", re.M)
 FIELD = re.compile(r"^\s*(\w+)(\??):\s*([^;]+);", re.M)
 PICK = re.compile(r"Pick<\s*(\w+)\s*,\s*([^>]+)>")
 EXTENDS = re.compile(r"^\s*extends\s+([\w,\s]+)$")
@@ -317,10 +274,11 @@ def _balanced_body(text: str, brace: int) -> str:
     endpoints went unresolvable.
     """
     depth = 0
+    masked = mask_noncode(text)
     for index in range(brace, len(text)):
-        if text[index] == "{":
+        if masked[index] == "{":
             depth += 1
-        elif text[index] == "}":
+        elif masked[index] == "}":
             depth -= 1
             if depth == 0:
                 return text[brace + 1 : index]
@@ -360,36 +318,42 @@ def declared_endpoints() -> dict[str, str]:
 
 
 class Unresolvable(Exception):
-    """A service call naming an endpoint constant this gate cannot find."""
+    """A service call whose endpoint or response shape cannot be inspected."""
 
 
-def calls_the_gate_cannot_see() -> tuple[int, list[str]]:
-    sites = 0
-    reached: set[str] = set()
-    seen_by_constant: set[str] = set()
-    for path in sorted((SHARED / "services").glob("*.ts")):
-        source = path.read_text()
-        for _, generic in LITERAL_CALL.findall(source):
-            sites += 1
-            reached |= set(re.findall(r"\b([A-Z]\w+)", generic or "")) - GENERIC_NOISE
-        for _, generic, _ in CALL.findall(source):
-            seen_by_constant |= set(re.findall(r"\b([A-Z]\w+)", generic or "")) - GENERIC_NOISE
-    return sites, sorted(reached - seen_by_constant)
+def mask_noncode(text: str) -> str:
+    return NONCODE.sub(lambda match: re.sub(r"[^\n]", " ", match.group()), text)
 
 
-def types_reached_only_through_a_local_helper() -> dict[str, list[str]]:
-    seen_directly: set[str] = set()
-    through: dict[str, set[str]] = {}
-    for path in sorted((SHARED / "services").glob("*.ts")):
-        source = path.read_text()
-        for _, generic, _ in CALL.findall(source):
-            seen_directly |= set(re.findall(r"\b([A-Z]\w+)", generic or "")) - GENERIC_NOISE
-        for _, generic in LITERAL_CALL.findall(source):
-            seen_directly |= set(re.findall(r"\b([A-Z]\w+)", generic or "")) - GENERIC_NOISE
-        for helper, generic in HELPER_CALL.findall(source):
-            for name in set(re.findall(r"\b([A-Z]\w+)", generic or "")) - GENERIC_NOISE:
-                through.setdefault(name, set()).add(f"{path.name}:{helper}")
-    return {name: sorted(where) for name, where in through.items() if name not in seen_directly}
+def top_level_fields(body: str) -> dict[str, bool]:
+    flattened = list(body)
+    depth = 0
+    for index, char in enumerate(mask_noncode(body)):
+        if char == "{":
+            depth += 1
+        if depth and char != "\n":
+            flattened[index] = " "
+        if char == "}":
+            depth -= 1
+    return {
+        field_key(name): optional == "?"
+        for name, optional, _type in FIELD.findall("".join(flattened))
+    }
+
+
+def ends_url_argument(masked: str, end: int) -> bool:
+    while end < len(masked) and masked[end].isspace():
+        end += 1
+    if end < len(masked) and masked[end] == "(":
+        depth = 1
+        end += 1
+        while end < len(masked) and depth:
+            if masked[end] == "(":
+                depth += 1
+            elif masked[end] == ")":
+                depth -= 1
+            end += 1
+    return masked[end:].lstrip().startswith((",", ")"))
 
 
 def service_calls() -> dict[tuple[str, str], set[str]]:
@@ -397,7 +361,15 @@ def service_calls() -> dict[tuple[str, str], set[str]]:
     calls: dict[tuple[str, str], set[str]] = {}
     unresolved: list[str] = []
     for path in sorted((SHARED / "services").glob("*.ts")):
-        for verb, generic, constant in CALL.findall(path.read_text()):
+        source = path.read_text()
+        masked = mask_noncode(source)
+        for site in HTTP_CALL.finditer(masked):
+            matched = CALL.match(source, site.start())
+            if matched is None or not ends_url_argument(masked, matched.end()):
+                line = source.count("\n", 0, site.start()) + 1
+                unresolved.append(f"{path.name}:{line}: use a resolvable endpoint constant directly")
+                continue
+            verb, generic, constant = matched.groups()
             url = endpoints.get(constant)
             if not url:
                 # Skipping here is how 53 of 114 call sites went unchecked while the
@@ -405,14 +377,14 @@ def service_calls() -> dict[tuple[str, str], set[str]]:
                 # gate cannot resolve is a hole in its coverage, not a call to ignore.
                 unresolved.append(f"{path.name}: {constant}")
                 continue
-            named = set(re.findall(r"\b([A-Z]\w+)", generic or "")) - GENERIC_NOISE
+            named = set(re.findall(r"\b([A-Z]\w*)", generic or "")) - GENERIC_NOISE
             if named:
                 calls.setdefault((verb, url), set()).update(named)
 
     if unresolved:
         raise Unresolvable(
-            "These service calls name an endpoint constant this gate cannot find, so the "
-            "endpoints they reach are unchecked:\n  " + "\n  ".join(sorted(set(unresolved)))
+            "These service calls do not resolve to endpoint constants, so the "
+            "endpoints they reach cannot be checked:\n  " + "\n  ".join(sorted(set(unresolved)))
         )
     return calls
 
@@ -420,8 +392,10 @@ def service_calls() -> dict[tuple[str, str], set[str]]:
 def interfaces() -> dict[str, dict[str, bool]]:
     declared: dict[str, tuple[dict[str, bool], list[str]]] = {}
     for path in sorted((SHARED / "types").rglob("*.ts")):
-        for name, heritage, body in INTERFACE.findall(path.read_text()):
-            fields = {field_key(f): optional == "?" for f, optional, _type in FIELD.findall(body)}
+        source = path.read_text()
+        for opening in INTERFACE.finditer(source):
+            name, heritage = opening.groups()
+            fields = top_level_fields(_balanced_body(source, opening.end() - 1))
             for _base, picked in PICK.findall(heritage):
                 fields.update({field_key(v): False for v in re.findall(r"'([^']+)'", picked)})
             bases: list[str] = []
@@ -462,6 +436,18 @@ def _unwrapped(name: str, raw: dict) -> str:
     return inner if inner in raw else name
 
 
+def response_components(name: str, raw: dict, seen: tuple[str, ...] = ()) -> set[str]:
+    name = _unwrapped(name, raw)
+    if name in seen:
+        return set()
+    body = raw.get(name) or {}
+    choices = body.get("oneOf") or body.get("anyOf") or []
+    references = [choice["$ref"].rsplit("/", 1)[-1] for choice in choices if "$ref" in choice]
+    if references:
+        return set().union(*(response_components(ref, raw, seen + (name,)) for ref in references))
+    return {name}
+
+
 def schema_parts(document: dict) -> tuple[dict[str, dict[str, bool]], dict[tuple[str, str], set[str]]]:
     raw = document.get("components", {}).get("schemas") or {}
     components: dict[str, dict[str, bool]] = {}
@@ -486,7 +472,7 @@ def schema_parts(document: dict) -> tuple[dict[str, dict[str, bool]], dict[tuple
                     )
             if referenced:
                 responses.setdefault((verb, shape), set()).update(
-                    _unwrapped(name, raw) for name in referenced
+                    component for name in referenced for component in response_components(name, raw)
                 )
     return components, responses
 
@@ -496,6 +482,17 @@ def scan(schema_path: Path):
     components, responses = schema_parts(document)
     calls = service_calls()
     declared = interfaces()
+    unknown = sorted(
+        f"{verb.upper()} {url}: {name}"
+        for (verb, url), names in calls.items()
+        for name in names
+        if not declared.get(name)
+    )
+    if unknown:
+        raise Unresolvable(
+            "These response types have no inspectable shared interface. Use a concrete response "
+            "type or extend the gate's parser:\n  " + "\n  ".join(unknown)
+        )
 
     findings: list[tuple[str, str, str, list[str]]] = []
     matched = 0
@@ -555,7 +552,7 @@ def main() -> int:
     except Unresolvable as error:
         print(f"{error}\n", file=sys.stderr)
         print(
-            "Add the constant's file to constants/, or the call to the gate's reach.",
+            "Use resolvable endpoint constants and concrete shared response types, or extend the gate's parser.",
             file=sys.stderr,
         )
         return 1
@@ -596,29 +593,6 @@ def main() -> int:
         )
         return 1
 
-    unseen_sites, unseen_types = calls_the_gate_cannot_see()
-    through_a_helper = types_reached_only_through_a_local_helper()
-    blind = {
-        "literal-url-sites": unseen_sites,
-        "literal-url-types": len(unseen_types),
-        "helper-only-types": len(through_a_helper),
-    }
-    pinned_blind = {key: entry[0] for key, entry in UNCHECKED.items()}
-    grew = sorted(key for key, found in blind.items() if found > pinned_blind[key])
-    shrank = sorted(key for key, found in blind.items() if found < pinned_blind[key])
-    if grew or shrank:
-        for key in grew:
-            print(
-                f"{key}: pinned {pinned_blind[key]}, found {blind[key]} - the gate is blinder than it was",
-                file=sys.stderr,
-            )
-        for key in shrank:
-            print(
-                f"{key}: pinned {pinned_blind[key]}, found {blind[key]} - lower the pin in UNCHECKED",
-                file=sys.stderr,
-            )
-        return 1
-
     print(
         f"No shared type requires an absent field across {matched} of "
         f"{matched + len(unmatched)} endpoints reached by a resolvable call "
@@ -626,21 +600,6 @@ def main() -> int:
         f"{sum(pinned_counts[k] for k in SCHEMA_DEBT)} awaiting the schema fixes in #211; "
         f"{len(unmatched)} reaching no operation the schema declares)."
     )
-    print(
-        f"{unseen_sites} further call sites pass a URL literal, which this gate cannot resolve to "
-        f"an endpoint, so they are outside both numbers above."
-    )
-    if unseen_types:
-        print(
-            f"{len(unseen_types)} shared types are reached only by those sites and are unchecked "
-            f"entirely: {', '.join(unseen_types)}. #349 moves the nine files onto constants."
-        )
-    if through_a_helper:
-        named = ", ".join(f"{name} ({', '.join(where)})" for name, where in sorted(through_a_helper.items()))
-        print(
-            f"{len(through_a_helper)} more are reached only inside a local helper that takes the URL as a "
-            f"parameter, so neither pattern above sees them either: {named}."
-        )
     return 0
 
 

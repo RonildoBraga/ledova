@@ -10,4 +10,4 @@ export const getAssetsNextPage = (lastPage: AxiosResponse<PaginatedResponse<Asse
   getNextPageParam(lastPage.data);
 
 export const getAssetByUuid = (apiClient: AxiosInstance, uuid: string) =>
-  apiClient.get<Asset>(`${ASSET_ENDPOINTS.BASE}${uuid}/`);
+  apiClient.get<Asset>(ASSET_ENDPOINTS.DETAIL(uuid));

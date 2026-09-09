@@ -55,7 +55,7 @@ export const generateMockHoldingsData = () => {
         address: wallet.address,
         chain: wallet.chain,
       },
-      wallet: wallet.uuid,
+      walletUuid: wallet.uuid,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }));

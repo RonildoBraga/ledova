@@ -9,4 +9,4 @@ export const getPortfolioSnapshots = (
   apiClient: AxiosInstance,
   portfolioUuid: string,
   params?: PortfolioSnapshotQueryParams,
-) => apiClient.get<PortfolioSnapshot[]>(`${PORTFOLIO_ENDPOINTS.BASE}${portfolioUuid}/snapshots/`, { params });
+) => apiClient.get<PortfolioSnapshot[]>(PORTFOLIO_ENDPOINTS.SNAPSHOTS(portfolioUuid), { params });
