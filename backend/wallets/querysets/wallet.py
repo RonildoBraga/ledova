@@ -1,6 +1,7 @@
 from django.db.models import DecimalField, F, Q, QuerySet, Sum, Value
 from django.db.models.functions import Coalesce
 
+from assets.choices import PriceSource
 from shared.constants import BLOCKCHAIN_BASE, BLOCKCHAIN_ETHEREUM
 from wallets.constants import WALLET_VERIFICATION_STATUS_VERIFIED
 
@@ -22,11 +23,18 @@ class WalletQuerySet(QuerySet):
     def with_market_value(self):
         tradable = Q(holdings__asset__is_active=True, holdings__asset__is_verified=True)
         native = Q(holdings__asset__asset_type="native_crypto")
+        priced = Q(
+            holdings__asset__price_source__in=PriceSource.values,
+            holdings__asset__price_currency="USD",
+            holdings__asset__current_price__gt=0,
+        )
         holding_value = F("holdings__quantity") * F("holdings__asset__current_price")
         return self.annotate(
-            annotated_market_value=Coalesce(Sum(holding_value, filter=tradable), Value(0), output_field=_MONEY),
+            annotated_market_value=Coalesce(
+                Sum(holding_value, filter=tradable & priced), Value(0), output_field=_MONEY
+            ),
             annotated_native_market_value=Coalesce(
-                Sum(holding_value, filter=tradable & native), Value(0), output_field=_MONEY
+                Sum(holding_value, filter=tradable & native & priced), Value(0), output_field=_MONEY
             ),
             annotated_native_balance=Coalesce(
                 Sum("holdings__quantity", filter=native & Q(holdings__asset__is_active=True)),

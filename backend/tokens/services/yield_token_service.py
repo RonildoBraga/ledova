@@ -3,7 +3,8 @@ from decimal import Decimal
 
 from django.utils import timezone
 
-from assets.models import Asset, AssetSnapshot
+from assets.models import Asset
+from assets.services.sync import AssetSyncService
 from blockchain.models import TransactionType
 from integrations.base_chain.exceptions import (
     BaseChainContractError,
@@ -123,24 +124,12 @@ class YieldTokenService(BaseTokenService):
 
         try:
             asset = Asset.objects.get(symbol=yield_token.symbol)
-            asset.current_price = new_nav_per_token
-            asset.price_currency = "USD"
-            asset.save(update_fields=["current_price", "price_currency", "updated_at"])
-
-            today_midnight = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
-            AssetSnapshot.objects.update_or_create(
-                asset=asset,
-                source_timestamp=today_midnight,
-                defaults={
-                    "price": new_nav_per_token,
-                    "price_currency": "USD",
-                    "market_data": {
-                        "total_reserve_value": str(total_reserve_value),
-                        "custodian_report_ref": custodian_report_ref,
-                    },
-                    "data_source": "nav_update",
-                },
-            )
+            snapshot = AssetSyncService.update_price(asset, new_nav_per_token, source="nav_update")
+            snapshot.market_data = {
+                "total_reserve_value": str(total_reserve_value),
+                "custodian_report_ref": custodian_report_ref,
+            }
+            snapshot.save(update_fields=["market_data", "updated_at"])
         except Asset.DoesNotExist:
             logger.warning(f"Asset record not found for {yield_token.symbol}")
 

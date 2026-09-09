@@ -62,7 +62,7 @@ class AssetAdmin(admin.ModelAdmin):
         "is_verified",
     )
     list_per_page = 100
-    readonly_fields = ("uuid", "created_at", "updated_at")
+    readonly_fields = ("uuid", "current_price", "price_currency", "price_source", "created_at", "updated_at")
     inlines = [AssetChainDeploymentInline]
     actions = ["update_prices", "mark_as_active", "mark_as_inactive", "mark_as_verified"]
 

@@ -1,3 +1,5 @@
+import type { ValueSource } from '../../types/domain/asset';
+
 export const HOLDING_ASSET_TYPE = {
   NATIVE_CRYPTO: 'native_crypto',
   ERC20_TOKEN: 'erc20_token',
@@ -19,3 +21,10 @@ const HOLDING_ASSET_TYPE_LABELS: Record<string, string> = {
 export function getHoldingAssetTypeLabel(assetType: string): string {
   return HOLDING_ASSET_TYPE_LABELS[assetType] || 'Other Assets';
 }
+
+export const VALUE_SOURCE_LABELS: Record<ValueSource, string> = {
+  market: 'Market price',
+  nav: 'NAV',
+  par: 'Par value',
+  unpriced: 'Unpriced',
+};

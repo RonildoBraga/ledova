@@ -1,5 +1,7 @@
 import type { BaseQueryParams, TimeSeriesQueryParams } from '../api';
 
+export type ValueSource = 'market' | 'nav' | 'par' | 'unpriced';
+
 export interface AssetChainDeployment {
   uuid: string;
   chain: string;
@@ -28,7 +30,7 @@ export interface Asset {
   isin?: string | null;
   currentPrice: string | null;
   priceCurrency: string;
-  priceSource?: string;
+  valueSource: ValueSource;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;

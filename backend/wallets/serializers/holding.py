@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+from assets.choices import VALUE_SOURCE_CHOICES
 from assets.serializers import AssetSerializer
 from wallets.models import Holding
 
@@ -12,6 +13,7 @@ class HoldingSerializer(serializers.ModelSerializer):
     asset_symbol = serializers.CharField(source="asset.symbol", read_only=True)
     asset_name = serializers.CharField(source="asset.name", read_only=True)
     market_value = serializers.DecimalField(max_digits=40, decimal_places=2, read_only=True)
+    value_source = serializers.ChoiceField(choices=VALUE_SOURCE_CHOICES, read_only=True)
     asset = AssetSerializer(read_only=True, required=False)
 
     class Meta:
@@ -27,6 +29,7 @@ class HoldingSerializer(serializers.ModelSerializer):
             "asset",
             "quantity",
             "market_value",
+            "value_source",
             "last_synced_at",
             "created_at",
             "updated_at",

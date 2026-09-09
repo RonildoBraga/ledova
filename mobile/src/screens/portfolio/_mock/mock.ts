@@ -32,6 +32,7 @@ export const generateMockHoldingsData = () => {
       assetName: asset.name,
       quantity: (asset.value / (assetIndex + 1) / 100).toString(),
       marketValue: asset.value.toString(),
+      valueSource: 'market' as const,
       walletAddress: wallet.address,
       lastSyncedAt: new Date().toISOString(),
       asset: {
@@ -43,7 +44,8 @@ export const generateMockHoldingsData = () => {
         contractAddress: `0x${asset.uuid}`,
         chain: wallet.chain,
         iconUrl: null,
-        currentPrice: null,
+        currentPrice: ((assetIndex + 1) * 100).toString(),
+        valueSource: 'market' as const,
         priceCurrency: 'USD',
         isActive: true,
         createdAt: new Date().toISOString(),

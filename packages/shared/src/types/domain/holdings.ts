@@ -1,6 +1,6 @@
 import type { BaseEntity } from '../common';
 import type { BaseQueryParams } from '../api';
-import type { Asset } from './asset';
+import type { Asset, ValueSource } from './asset';
 
 export interface WalletHolding extends BaseEntity {
   walletUuid: string;
@@ -11,6 +11,7 @@ export interface WalletHolding extends BaseEntity {
   assetName: string;
   quantity: string;
   marketValue: string | null;
+  valueSource: ValueSource;
   lastSyncedAt: string;
 }
 
@@ -62,11 +63,11 @@ export interface AssetAllocationItem {
   totalValue: number;
   percentage: number;
   basis: AllocationBasis;
+  source: ValueSource;
   color: string;
   totalQuantity: number;
   perChain: AssetChainSlice[];
   navPerToken?: string | null;
-  isYieldToken?: boolean;
 }
 
 export interface WalletTotals {

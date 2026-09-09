@@ -8,6 +8,7 @@ function holding(symbol: string, quantity: string, marketValue: string | null): 
     assetName: `${symbol} Asset`,
     quantity,
     marketValue,
+    valueSource: marketValue == null ? 'unpriced' : 'market',
     asset: { uuid: `asset-${symbol}`, symbol, name: `${symbol} Asset` },
     walletInfo: { uuid: 'wallet', name: 'Wallet', address: '0x0', chain: 'base' },
   } as unknown as HoldingWithWallet;

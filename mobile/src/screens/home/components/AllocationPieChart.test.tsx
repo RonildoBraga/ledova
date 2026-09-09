@@ -1,12 +1,12 @@
 import type React from 'react';
-import { render } from '@testing-library/react-native';
+import { act, render } from '@testing-library/react-native';
 import type { AssetAllocationItem } from '@ledova/shared';
 
-const drawn: { data: { value: number; color: string; text: string }[] }[] = [];
+const drawn: { data: { value: number; color: string; text: string; onPress: () => void }[] }[] = [];
 
 jest.mock('react-native-gifted-charts', () => ({
   PieChart: (props: {
-    data: { value: number; color: string; text: string }[];
+    data: { value: number; color: string; text: string; onPress: () => void }[];
     centerLabelComponent?: () => React.ReactNode;
   }) => {
     drawn.push({ data: props.data });
@@ -33,6 +33,7 @@ function item(overrides: Partial<AssetAllocationItem>): AssetAllocationItem {
     totalValue: 400,
     percentage: 40,
     basis: 'value',
+    source: 'market',
     color: '#112233',
     totalQuantity: 400,
     perChain: [{ chain: 'base', quantity: 400, totalValue: 400, priced: true }],
@@ -79,11 +80,38 @@ describe('what mobile hands its ring, rather than what the function returns', ()
 
   it('says beneath the total how many holdings it could not price', async () => {
     const { view } = await draw(
-      [item({ percentage: 100 }), item({ assetUuid: 'asset-2', basis: 'unpriced', percentage: 0 })],
+      [item({ percentage: 100 }), item({ assetUuid: 'asset-2', basis: 'unpriced', source: 'unpriced', percentage: 0 })],
       400,
     );
 
     expect(view.getByText('excludes 1 unpriced')).toBeTruthy();
     expect(view.getByText('$400.00')).toBeTruthy();
+  });
+});
+
+describe('the mobile ring displays valuation provenance', () => {
+  it.each([
+    ['market', 'Market price'],
+    ['nav', 'NAV'],
+    ['par', 'Par value'],
+  ] as const)('shows %s when its arc is selected and restores the total on a second tap', async (source, label) => {
+    const { data, view } = await draw([item({ source, percentage: 100 })], 400);
+    expect(view.getByLabelText(`USDC: ${label}, 100.0% by value`)).toBeTruthy();
+    await act(() => data[0].onPress());
+    expect(view.getByText(label)).toBeTruthy();
+    expect(view.getByText('100.0% by value')).toBeTruthy();
+    await act(() => data[0].onPress());
+    expect(view.getByText('Total')).toBeTruthy();
+  });
+
+  it('displays unpriced and quantity weighting together', async () => {
+    const { data, view } = await draw(
+      [item({ source: 'unpriced', basis: 'quantity', percentage: 100, totalValue: 0 })],
+      0,
+    );
+    expect(view.getByLabelText('USDC: Unpriced, 100.0% by quantity')).toBeTruthy();
+    await act(() => data[0].onPress());
+    expect(view.getByText('Unpriced')).toBeTruthy();
+    expect(view.getByText('100.0% by quantity')).toBeTruthy();
   });
 });

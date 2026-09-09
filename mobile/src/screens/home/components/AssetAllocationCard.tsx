@@ -5,7 +5,7 @@ import { Panel } from '../../../components/panel';
 import { AllocationPieChart } from './AllocationPieChart';
 import { ErrorBoundary } from '../../../components/ErrorBoundary';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
-import { formatPercentage } from '@ledova/shared';
+import { formatPercentage, VALUE_SOURCE_LABELS } from '@ledova/shared';
 import { useCurrency } from '../../../hooks/useCurrency';
 import type { AssetAllocationItem, HoldingsSummary } from '@ledova/shared';
 
@@ -72,7 +72,7 @@ export function AssetAllocationCard({
       fontWeight: theme.fontWeight.semibold,
       color: theme.colors.text.secondary,
     },
-    navText: {
+    sourceText: {
       fontSize: theme.fontSize.xs,
       color: theme.colors.text.subtle,
     },
@@ -197,8 +197,11 @@ export function AssetAllocationCard({
                   <View style={[styles.colorDot, { backgroundColor: item.color }]} />
                   <View>
                     <Text style={styles.holdingSymbol}>{item.name}</Text>
-                    {item.isYieldToken && item.navPerToken && (
-                      <Text style={styles.navText}>NAV: ${parseFloat(item.navPerToken).toFixed(6)}</Text>
+                    <Text style={styles.sourceText}>{VALUE_SOURCE_LABELS[item.source]}</Text>
+                    {item.source === 'nav' && item.navPerToken && (
+                      <Text style={styles.sourceText}>
+                        {formatDisplayCurrency(Number(item.navPerToken), 6)} per token
+                      </Text>
                     )}
                   </View>
                   <View style={styles.rightGroup}>
