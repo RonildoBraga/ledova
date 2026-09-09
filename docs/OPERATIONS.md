@@ -935,6 +935,44 @@ transaction history and record its hash so the sweep can reconcile it. The old
 evidence for issuing again. Legacy rows that already identify a transaction
 continue receipt-based reconciliation and cannot replay without a saved payload.
 
+`blockchain.services.outgoing` provides the durable outgoing transaction
+foundation for the next signer migration. It has no production send callers yet;
+existing transfer, deployment and mint paths keep their current behavior. Its
+nonce coordination applies only to operations that use this service. Adopting
+every signer path and importing or quarantining existing signed transactions are
+required before claiming coordination across the application.
+
+Callers provide a stable operation key and immutable intent: chain, sender,
+target, value and calldata. Reusing a key with different terms is refused.
+`prepare_operation` reads the endpoint, pending nonce, gas price and gas estimate
+outside database transactions. `sign_operation` then locks the operation followed
+by the chain-and-sender account, allocates a nonce from the greater of the observed
+pending nonce and the durable counter, and signs locally without RPC. The signed
+bytes, fixed hash, nonce reservation and operation pointer commit together before
+`broadcast_operation` can submit anything. All service entry points refuse an
+enclosing database transaction or disabled autocommit.
+
+Signing an already prepared claim returns the winning attempt once another
+worker has signed.
+Restarting an unsigned failed attempt changes its claim identifier and fences out
+delayed workers. Once signed, uncertainty never authorizes another nonce: retries
+validate and broadcast the saved bytes, and missing receipts, provider errors,
+already-known responses and nonce errors leave the operation unresolved. Receipt
+updates require the same claim and hash. A recorded revert permits a new claim
+and nonce while retaining the immutable earlier attempt. Here `confirmed` means
+a successful receipt was observed; confirmation depth, replacement detection and
+reorg repair remain part of the separate finality work.
+
+This initial API signs EIP-155 legacy gas-price transactions, including contract
+creation. Chain IDs and gas limits fit a positive signed 64-bit database integer;
+allocated nonces stop one below its maximum so the next counter still fits.
+Transaction value and gas price accept unsigned 256-bit values. PostgreSQL
+enforces immutable attempts, monotonic signer counters and guarded operation
+transitions. All three tables deny application-role access, even with a user
+principal; operator access is required. They have no admin or serializer surface.
+Signed payloads are broadcast capabilities and belong in protected backups;
+errors retain a category rather than provider or database exception text.
+
 `purge_classification_evidence` deletes the evidence file of an investor
 classification once it is past its retention horizon, leaving the row, its
 status and its review outcome untouched. There is one horizon and two things
