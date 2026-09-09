@@ -85,7 +85,11 @@ jobs:
         run: make test
 
       - name: Dashboard smoke tests (built bundle, real Chromium)
-        run: make smoke PLAYWRIGHT_BROWSER_DEPS=--with-deps
+        run: |
+          # Playwright installs its own Chromium; the runner's Chrome update repo is unused.
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list \
+            /etc/apt/sources.list.d/google-chrome.sources
+          make smoke PLAYWRIGHT_BROWSER_DEPS=--with-deps
 
       - name: Smoke test artefacts
         if: failure()
