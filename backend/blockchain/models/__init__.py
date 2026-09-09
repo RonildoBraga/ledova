@@ -4,6 +4,11 @@ from blockchain.models.outgoing import (
     SignedAttempt,
     SigningAccount,
 )
+from blockchain.models.outgoing_inventory import (
+    OutgoingCutoverHold,
+    OutgoingHistoryCapture,
+    OutgoingHistoryEvidence,
+)
 from blockchain.models.transaction import (
     BlockchainTransaction,
     TransactionStatus,
@@ -11,6 +16,9 @@ from blockchain.models.transaction import (
 )
 
 __all__ = [
+    "OutgoingCutoverHold",
+    "OutgoingHistoryCapture",
+    "OutgoingHistoryEvidence",
     "OutgoingOperation",
     "OutgoingStatus",
     "SignedAttempt",
