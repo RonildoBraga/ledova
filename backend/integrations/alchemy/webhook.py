@@ -7,6 +7,7 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
+from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -50,6 +51,7 @@ def verify_alchemy_signature(payload: bytes, signature: str, signing_key: str) -
 class AlchemyWebhookView(RunsOnTheOperatorConnection, APIView):
     authentication_classes = []
     permission_classes = []
+    parser_classes = [JSONParser]
 
     @extend_schema(exclude=True)
     def post(self, request):
