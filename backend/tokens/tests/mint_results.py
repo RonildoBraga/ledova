@@ -1,4 +1,13 @@
+from web3 import Web3
+
 from tokens.models import ShareIssuance
+
+MINT_HASH = Web3.to_hex(Web3.keccak(b"synthetic-mint"))
+
+
+def signed_mint_transaction(*args, on_signed, **kwargs):
+    on_signed(MINT_HASH, b"synthetic-mint")
+    return MINT_HASH, None
 
 
 def recorded_mint_result(result):

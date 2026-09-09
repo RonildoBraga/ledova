@@ -48,11 +48,14 @@ from tokens.services.share_token_service import (
 )
 from tokens.tasks import check_executing_issuance_requests, execute_review_request_task
 from tokens.tasks.review_request import STALE_EXECUTION_AGE
-from tokens.tests.mint_results import recorded_mint_result
+from tokens.tests.mint_results import (
+    MINT_HASH,
+    recorded_mint_result,
+    signed_mint_transaction,
+)
 
 RECIPIENT = "0x" + "a" * 40
 SIGNER = "0x" + "e" * 40
-MINT_HASH = Web3.to_hex(Web3.keccak(b"synthetic-mint"))
 RECEIPT = {"blockNumber": 9, "blockHash": bytes.fromhex("ab" * 32), "gasUsed": 1_000_000}
 CHAIN_CLIENT = "tokens.services.share_token_service.get_base_chain_client"
 WHITELISTED = "tokens.services.share_token_service.ShareTokenService.is_recipient_whitelisted"
@@ -335,11 +338,7 @@ class ExecuteRequestServiceTest(TestCase):
         request = self._approved(issuance_request(self.token, amount=10))
         stale = ShareIssuanceRequest.objects.get(pk=request.pk)
 
-        def send(*args, on_signed, **kwargs):
-            on_signed(MINT_HASH, b"synthetic-mint")
-            return MINT_HASH, None
-
-        self.chain.send_transaction.side_effect = send
+        self.chain.send_transaction.side_effect = signed_mint_transaction
         self.chain.wait_for_receipt.return_value = RECEIPT
         first = self.service.execute_request(request)
         request.refresh_from_db()
@@ -634,11 +633,7 @@ class ExecuteRequestServiceTest(TestCase):
     def _mint_contract(self):
         contract = self.chain.load_contract.return_value
 
-        def send(*args, on_signed, **kwargs):
-            on_signed(MINT_HASH, b"synthetic-mint")
-            return MINT_HASH, None
-
-        self.chain.send_transaction.side_effect = send
+        self.chain.send_transaction.side_effect = signed_mint_transaction
         self.chain.wait_for_receipt.return_value = RECEIPT
         self.chain.get_transaction_receipt.return_value = None
         return contract

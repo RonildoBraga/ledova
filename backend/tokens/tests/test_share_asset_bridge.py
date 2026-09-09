@@ -17,6 +17,7 @@ from tokens.models import (
 )
 from tokens.services import ShareTokenService
 from tokens.services.share_token_service import SHARE_ASSET_CHAIN
+from tokens.tests.mint_results import MINT_HASH, signed_mint_transaction
 from wallets.models import Holding
 from whitelist.models import WhitelistEntry, WhitelistStatus
 
@@ -122,7 +123,7 @@ class IssuanceSeedsTheHoldingTest(TestCase):
         self.chain.to_checksum_address.side_effect = Web3.to_checksum_address
         self.chain.get_address_from_private_key.return_value = SIGNER
         self.chain.load_contract.return_value.functions.paused.return_value.call.return_value = False
-        self.chain.send_transaction.return_value = ("0xmint", None)
+        self.chain.send_transaction.side_effect = signed_mint_transaction
         self.chain.wait_for_receipt.return_value = RECEIPT
         self.chain.get_transaction_receipt.return_value = None
         patch(WHITELISTED, return_value=True).start()
@@ -193,7 +194,7 @@ class IssuanceSeedsTheHoldingTest(TestCase):
 
         sync.assert_called_once()
         self.assertIn("Could not record the DEP holding", "\n".join(logs.output))
-        self.assertEqual(result["tx_hash"], "0xmint")
+        self.assertEqual(result["tx_hash"], MINT_HASH)
         request.refresh_from_db()
         self.assertEqual(request.status, RequestStatus.EXECUTED)
         self.assertEqual(ShareIssuance.objects.get(token=self.token).status, IssuanceStatus.COMPLETED)
