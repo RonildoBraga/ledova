@@ -5,6 +5,7 @@ from typing import Optional
 from django.utils import timezone
 
 from shared.db import atomic
+from shared.services import act_under_row_lock
 from tokens.exceptions import (
     OrderModificationConflictException,
     OrderModificationException,
@@ -44,6 +45,8 @@ class OrderModificationService:
         new_quantity: Optional[int] = None,
         new_min_quantity: Optional[int] = None,
         new_price: Optional[Decimal] = None,
+        *,
+        available_balance: Optional[int],
     ) -> list[str]:
         errors = []
 
@@ -66,8 +69,9 @@ class OrderModificationService:
 
         if order.order_type == TransferOrderType.SELL and new_quantity is not None and new_quantity > order.quantity:
             additional_needed = new_quantity - order.quantity
-            available_balance = self._get_available_balance(order)
-            if additional_needed > available_balance:
+            if available_balance is None:
+                errors.append("The order has changed. Please request and sign a new modification message.")
+            elif additional_needed > available_balance:
                 errors.append(
                     f"Insufficient token balance. Need {additional_needed} more, have {available_balance} available."
                 )
@@ -87,7 +91,13 @@ class OrderModificationService:
         effective_min_qty = new_min_quantity if new_min_quantity is not None else order.min_quantity
         effective_price = new_price if new_price is not None else order.price_per_share
 
-        errors = self.validate_modifications(order, effective_quantity, effective_min_qty, effective_price)
+        errors = self.validate_modifications(
+            order,
+            effective_quantity,
+            effective_min_qty,
+            effective_price,
+            available_balance=self._balance_for_quantity(order, effective_quantity),
+        )
         if errors:
             raise OrderModificationException("; ".join(errors))
 
@@ -121,7 +131,6 @@ class OrderModificationService:
             },
         }
 
-    @atomic()
     def apply_modification(
         self,
         order: TransferOrder,
@@ -130,7 +139,36 @@ class OrderModificationService:
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
     ) -> tuple[TransferOrder, list[dict]]:
-        order = TransferOrder.objects.select_for_update().get(uuid=order.uuid)
+        with atomic():
+            challenge = consume_challenge(
+                digest,
+                SigningChallengePurpose.ORDER_MODIFY,
+                order.wallet_address,
+                signature,
+                order=order,
+            )
+
+        try:
+            self.validate_can_modify(order)
+        except (OrderModificationException, OrderModificationConflictException):
+            available_balance = None
+        else:
+            available_balance = self._balance_for_quantity(order, int(challenge.payload["message"]["newQuantity"]))
+
+        modified, changes = act_under_row_lock(
+            TransferOrder.objects.all(),
+            order.pk,
+            lambda locked: self._spend_then_modify(
+                locked, digest, signature, available_balance, ip_address, user_agent
+            ),
+        )
+
+        from tokens.events import publish_trading_event
+
+        publish_trading_event("order_modified", str(modified.token_id))
+        return modified, changes
+
+    def _spend_then_modify(self, order, digest, signature, available_balance, ip_address, user_agent):
 
         challenge = consume_challenge(
             digest,
@@ -142,16 +180,21 @@ class OrderModificationService:
         spend(challenge, signature)
         signer = challenge.wallet_address
 
-        self.validate_can_modify(order)
+        try:
+            self.validate_can_modify(order)
+        except (OrderModificationException, OrderModificationConflictException) as refusal:
+            return None, refusal
 
         intent = challenge.payload["message"]
         new_quantity = int(intent["newQuantity"])
         new_min_quantity = int(intent["newMinQuantity"])
         new_price = Decimal(intent["newPricePerShare"])
 
-        errors = self.validate_modifications(order, new_quantity, new_min_quantity, new_price)
+        errors = self.validate_modifications(
+            order, new_quantity, new_min_quantity, new_price, available_balance=available_balance
+        )
         if errors:
-            raise OrderModificationException("; ".join(errors))
+            return None, OrderModificationException("; ".join(errors))
 
         order.record_original_values()
 
@@ -209,11 +252,12 @@ class OrderModificationService:
 
         logger.info(f"Modified order {order.uuid}: {len(changes)} field(s) changed")
 
-        from tokens.events import publish_trading_event
+        return (order, changes), None
 
-        publish_trading_event("order_modified", str(order.token.uuid))
-
-        return order, changes
+    def _balance_for_quantity(self, order: TransferOrder, quantity: int) -> Optional[int]:
+        if order.order_type == TransferOrderType.SELL and quantity > order.quantity:
+            return self._get_available_balance(order)
+        return None
 
     def _get_available_balance(self, order: TransferOrder) -> int:
         try:

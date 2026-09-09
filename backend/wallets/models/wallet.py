@@ -54,6 +54,7 @@ class Wallet(BaseModel):
         max_length=20, choices=WALLET_VERIFICATION_STATUS_CHOICES, default=WALLET_VERIFICATION_STATUS_PENDING
     )
     verification_challenge = models.TextField(null=True, blank=True)
+    verification_challenge_issued_at = models.DateTimeField(null=True, blank=True)
     verification_signature = models.TextField(null=True, blank=True)
     verified_at = models.DateTimeField(null=True, blank=True)
     last_synced_at = models.DateTimeField(null=True, blank=True)

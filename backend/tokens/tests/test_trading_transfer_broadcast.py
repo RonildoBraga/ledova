@@ -6,7 +6,13 @@ from eth_account import Account
 from rest_framework.test import APITestCase
 
 from feature_flags.models import FeatureFlag
-from tokens.tests.test_signed_transactions import CONTRACT, SIGNER, _hex, sign_legacy
+from tokens.tests.test_signed_transactions import (
+    CHAIN_ID,
+    CONTRACT,
+    SIGNER,
+    _hex,
+    sign_legacy,
+)
 from users.models import UserAccount, UserProfile
 from wallets.models import Wallet
 
@@ -16,6 +22,7 @@ TX_HASH = "0x" + "f" * 64
 STRANGER = Account.from_key("0x" + "22" * 32)
 
 
+@override_settings(BLOCKCHAIN_CHAIN_ID=CHAIN_ID)
 class TradingTransferBroadcastContractTest(APITestCase):
     url = "/api/v1/trading/transfers/broadcast/"
 
@@ -63,7 +70,7 @@ class TradingTransferBroadcastContractTest(APITestCase):
                     "to": CONTRACT,
                     "value": 5,
                     "data": b"",
-                    "chainId": 84532,
+                    "chainId": CHAIN_ID,
                 }
             )
         )

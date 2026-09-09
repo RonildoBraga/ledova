@@ -601,6 +601,14 @@ than failing later with Hardhat's `HH108`.
 `POSTGRES_*` variables set) runs it on PostgreSQL, which adds the two-worker
 capital-increase case that needs real row locks. CI runs both.
 
+Wallet ownership challenges expire five minutes after issuance, including the
+exact five-minute boundary. Requesting another challenge replaces the nonce and
+restarts that window; successful verification consumes it. The message and the
+server use the same `WALLET_VERIFICATION_CHALLENGE_MINUTES` setting and stored
+issue time. Migration `wallets/0011` adds that internal timestamp. Outstanding
+challenges issued before the migration have no trustworthy issue time and must
+be requested and signed again. Existing verified wallets keep their status.
+
 ## Background jobs
 
 Procrastinate runs on PostgreSQL. Start a worker with

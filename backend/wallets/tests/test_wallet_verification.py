@@ -8,7 +8,6 @@ from wallets.constants import (
     WALLET_VERIFICATION_STATUS_VERIFIED,
 )
 from wallets.exceptions import VerificationChallengeNotFoundException
-from wallets.models import Wallet
 
 
 class WalletVerificationTest(APITestCase):
@@ -29,7 +28,8 @@ class WalletVerificationTest(APITestCase):
     @patch("wallets.tasks.sync_wallet")
     @patch("wallets.services.verification.verify_wallet_signature", return_value=True)
     def test_valid_signature_verifies_wallet_and_enqueues_one_sync(self, verify_signature, sync_task):
-        Wallet.objects.filter(pk=self.wallet.pk).update(verification_challenge="challenge")
+        issued = self.client.post(f"/api/wallets/{self.wallet.uuid}/request-verification/")
+        self.assertEqual(issued.status_code, 200)
 
         response = self.client.post(
             f"/api/wallets/{self.wallet.uuid}/verify-signature/", {"signature": "0x01"}, format="json"
@@ -41,13 +41,14 @@ class WalletVerificationTest(APITestCase):
         self.assertEqual(self.wallet.verification_status, WALLET_VERIFICATION_STATUS_VERIFIED)
         self.assertEqual(self.wallet.verification_signature, "0x01")
         self.assertIsNotNone(self.wallet.verified_at)
-        verify_signature.assert_called_once_with(self.wallet.address, "challenge", "0x01", "ETHEREUM")
+        verify_signature.assert_called_once_with(self.wallet.address, issued.json()["challenge"], "0x01", "ETHEREUM")
         sync_task.defer.assert_called_once_with(wallet_uuid=str(self.wallet.uuid))
 
     @patch("wallets.tasks.sync_wallet")
     @patch("wallets.services.verification.verify_wallet_signature", return_value=True)
     def test_the_same_challenge_and_signature_cannot_be_replayed(self, verify_signature, sync_task):
-        Wallet.objects.filter(pk=self.wallet.pk).update(verification_challenge="challenge")
+        issued = self.client.post(f"/api/wallets/{self.wallet.uuid}/request-verification/")
+        self.assertEqual(issued.status_code, 200)
         first = self.client.post(
             f"/api/wallets/{self.wallet.uuid}/verify-signature/", {"signature": "0x01"}, format="json"
         )

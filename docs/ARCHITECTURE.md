@@ -933,6 +933,14 @@ runs. Both mechanisms hold at once on purpose:
   would silently undo, turning a spent challenge back into a replayable one. With
   no connection reuse there is no stale principal to leak, so the `RESET` in the
   middleware's `finally` is hygiene rather than the load-bearing part.
+- **Order modification spends survive business refusals.** A valid challenge is
+  checked in a short transaction before any advisory balance RPC. The order lock
+  and a second challenge check follow the RPC, so a concurrent fill, cancellation,
+  expiry or spend is seen before writing. `validate_modifications` receives the
+  advisory balance; it does not call the chain. `act_under_row_lock` commits a
+  business refusal's spend before raising it. A provider failure before this
+  block leaves the signature retryable. The scoped transaction tests exercise
+  this with real signatures and no surrounding test transaction.
 - **The strict read is deliberate.** Policies call
   `current_setting('app.user_id')::bigint` with no `missing_ok`, so an unset
   connection raises `unrecognized configuration parameter` and a cleared one
