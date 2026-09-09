@@ -9,11 +9,12 @@ from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
-from openai import OpenAI, OpenAIError, Timeout
+from openai import APIConnectionError, APIStatusError, OpenAI, OpenAIError, Timeout
 from pydantic import BaseModel, ValidationError
 
 from integrations.llm_extract.exceptions import (
     LlmExtractError,
+    LlmExtractTransientError,
     LlmExtractValidationError,
 )
 
@@ -87,6 +88,7 @@ class LlmExtractClient:
             base_url=self.base_url,
             api_key=self._get_api_key(),
             timeout=Timeout(self.timeout_s, connect=self.connect_timeout_s),
+            max_retries=0,
         )
 
         started = time.monotonic()
@@ -111,8 +113,14 @@ class LlmExtractClient:
                 temperature=0,
             )
         except OpenAIError as e:
-            logger.warning("llm_extract: local upstream call failed")
-            raise LlmExtractError(f"{LlmExtractError.default_detail}; check LLM_BASE_URL") from e
+            logger.warning("llm_extract: local upstream call failed: %s", type(e).__name__)
+            if isinstance(e, APIConnectionError) or (
+                isinstance(e, APIStatusError) and (e.status_code in (408, 429) or e.status_code >= 500)
+            ):
+                raise LlmExtractTransientError() from e
+            raise LlmExtractError(f"{LlmExtractError.default_detail}; check LLM_BASE_URL and LLM_MODEL") from e
+        finally:
+            client.close()
         duration_ms = int((time.monotonic() - started) * 1000)
 
         raw = response.choices[0].message.content or ""

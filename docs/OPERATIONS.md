@@ -341,12 +341,24 @@ range, which is deliberate — every admitted host is one an operator typed.
 
 Installing the service on the host is **not sufficient on such a host**: an
 operator who installs Ollama and sees the same failure has fixed the first
-cause and not the second. The failure names the setting to look at —
-`LLM extraction service unavailable; check LLM_BASE_URL` — and not its value,
+cause and not the second. Operator diagnostics name the settings to inspect —
+`LLM_BASE_URL` and `LLM_MODEL` — and not their values,
 because `_validate_local_base_url` checks the scheme, host, userinfo, query
 and fragment and **never the path**, so a value like
 `http://127.0.0.1:11434/v1/sk-proj-…` passes it and would otherwise reach the
-uploader's screen.
+uploader's screen. The member API derives its failure message from the extraction
+status and never sends the stored diagnostic, including on historical attempts.
+The operator can read that diagnostic in the extraction admin.
+
+Connection failures, timeouts, rate limits and upstream server errors are retried
+by the extraction task, up to three attempts spaced thirty seconds apart. SDK
+retries are disabled so each recorded attempt makes one upstream request, and its
+client connection is closed after the call. Invalid requests, model/configuration
+errors and invalid extracted output stop after one attempt. Each attempt remains
+in the extraction history. After correcting a terminal failure, the operator can
+select its failed attempt in the extraction admin and re-run it. Unclassified
+storage or rendering failures require that operator action; they are not assumed
+to be transient.
 
 ### Clients
 

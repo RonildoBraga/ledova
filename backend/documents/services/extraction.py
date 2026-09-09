@@ -14,6 +14,7 @@ from documents.schemas import SCHEMA_BY_TYPE
 from integrations.llm_extract import (
     LlmExtractClient,
     LlmExtractError,
+    LlmExtractTransientError,
     LlmExtractValidationError,
 )
 from integrations.llm_extract.prompts import PROMPT_BY_TYPE
@@ -96,6 +97,8 @@ class ExtractionService:
             extraction.finished_at = timezone.now()
             extraction.save()
             logger.warning("documents.extraction: doc=%s failed: %s", document.uuid, e.detail)
+            if isinstance(e, LlmExtractTransientError):
+                raise
             return extraction
 
         except Exception as e:

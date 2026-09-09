@@ -5,12 +5,13 @@ from procrastinate import RetryStrategy
 
 from documents.models import Document
 from documents.services.extraction import ExtractionService
+from integrations.llm_extract import LlmExtractTransientError
 from ledova_backend.procrastinate_app import app
 
 logger = logging.getLogger(__name__)
 
 
-@app.task(retry=RetryStrategy(max_attempts=3, wait=30))
+@app.task(retry=RetryStrategy(max_attempts=2, wait=30, retry_exceptions=(LlmExtractTransientError,)))
 def extract_document(document_uuid: str) -> Dict[str, Any]:
     try:
         document = Document.objects.get(uuid=document_uuid)
