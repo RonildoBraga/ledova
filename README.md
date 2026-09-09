@@ -165,7 +165,7 @@ cd contracts && npm ci && npx hardhat test
 | Where | For |
 | --- | --- |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Contracts, backend apps and layers, clients, the shared package, the issuance data flow, auth, tenancy, uploaded files |
-| [docs/GATES.md](docs/GATES.md) | The coding rules and the nine gate scripts that enforce them, each with what it refuses and what it does not cover |
+| [docs/GATES.md](docs/GATES.md) | The coding rules, and the eight gate scripts documented here, each with what it refuses and what it does not cover |
 | [docs/TRAPS.md](docs/TRAPS.md) | Tests and measurements that looked like checks and were not, kept as recognisable shapes |
 | [docs/OPERATIONS.md](docs/OPERATIONS.md) | Operator setup, the environment variable reference, seeds, keys, chain configuration, background jobs, migration notes, deploy checklist |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | The phases and the product decisions taken |

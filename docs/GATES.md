@@ -24,7 +24,7 @@ checked. Three are gated today — the comment rule through `make
 check-comments`, the "one migration per model change" half of the migrations
 rule through CI's `makemigrations --check --dry-run`, and the generated design
 tokens through the `git diff --exit-code` step (stated under [Clients and the
-shared package](#clients-and-the-shared-package)).
+shared package](ARCHITECTURE.md#clients-and-the-shared-package)).
 
 A new gate ships with an explicit allowlist of the offenders that exist on the
 day it lands, so it is green immediately and blocks only new violations. That
@@ -289,8 +289,9 @@ set.
 ## The layer gate
 
 `scripts/check-layers.py` is the mechanical half of the "Never contains" column
-of the layer table above. `make check-layers` runs it, `make check` includes it,
-and CI runs it in the same job as the comment gate. Like that gate it needs only
+of the layer table under [Backend layers](ARCHITECTURE.md#backend-layers).
+`make check-layers` runs it, `make check` includes it, and CI runs it in the
+same job as the comment gate. Like that gate it needs only
 Python 3 and a checkout. `backend/shared/tests/test_layer_gate.py` pins each
 rule against a snippet, so the decisions below are executable rather than prose.
 
@@ -355,7 +356,7 @@ and the tenancy section below describes deliberate pressure to widen the first.
 Loosening the rule would have removed the standing warning from the one line that
 says so. Those four are pinned with counts instead.
 
-The `bare-admin-view` rule is the one rule outside the layer table's "Never
+The `bare-admin-view` rule is the one rule outside that table's "Never
 contains" column, and it needed the walker widened before it could exist:
 `layer_of` recognised `views`, `models` and `tasks`, so **no admin module was
 parsed at all** — 136 files scanned became 190. Adding the layer on its own
@@ -876,9 +877,10 @@ Container literals are walked wherever they appear, including `extra=`, so
 Backend, third rule -- a logger must be bound to `logger`, `log` or `logging`.
 The gate only recognises calls on those three names, so a module binding its
 logger to anything else is not scanned at all, and nothing would say so. That
-is the failure this document argues against under "Clients and the shared
-package": *for a gate, prefer the failure that shouts.* Binding
-`audit = logging.getLogger("audit")` is a finding naming the binding. The same
+is the failure argued against under [Clients and the shared
+package](ARCHITECTURE.md#clients-and-the-shared-package): *for a gate, prefer
+the failure that shouts.* Binding `audit = logging.getLogger("audit")` is a
+finding naming the binding. The same
 rule covers subscripts, annotated assignments, assignment expressions and
 chained targets. Tuple and list assignments pair targets with values, including
 nested pairs. An uninspectable mapping or container cannot silently hide a

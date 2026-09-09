@@ -15,10 +15,10 @@ they share `packages/shared`, and a change there is a change to both.
 
 ## Discipline
 
-The gates in [ARCHITECTURE.md](ARCHITECTURE.md) encode what can be checked
-mechanically. This is the part that cannot be: how to establish that a change does
-what it claims. Every rule here was bought by a specific failure, and that
-document's **Test traps** and **Measurement traps** hold the individual cases.
+The gates in [GATES.md](GATES.md) encode what can be checked mechanically. This
+is the part that cannot be: how to establish that a change does what it claims.
+Every rule here was bought by a specific failure, and [TRAPS.md](TRAPS.md) holds
+the individual cases under **Test traps** and **Measurement traps**.
 
 **Red-prove the claim, and if it will not go red, say why in the body.** Revert
 the fix, watch a *named* test fail, restore it, watch it pass, and put both
