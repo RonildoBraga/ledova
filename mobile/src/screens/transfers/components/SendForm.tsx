@@ -2,7 +2,13 @@ import React from 'react';
 import { View, Text, ActivityIndicator, TouchableOpacity, TextInput, ScrollView } from 'react-native';
 import { CurrencyBtcIcon, CurrencyEthIcon, CurrencyCircleDollarIcon, QrCodeIcon } from 'phosphor-react-native';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
-import { formatCryptoBalance, formatWalletAddressMedium, getAddressPlaceholder, isBitcoinChain } from '@ledova/shared';
+import {
+  formatCryptoBalance,
+  formatWalletAddressMedium,
+  getAddressPlaceholder,
+  isBitcoinChain,
+  parseFiatValue,
+} from '@ledova/shared';
 import { useCurrency } from '../../../hooks/useCurrency';
 import type { TransferableAsset } from '@ledova/shared';
 
@@ -207,11 +213,14 @@ export function SendForm({
     return <CurrencyCircleDollarIcon size={theme.icon.sizes.md} color={color} weight={weight} />;
   };
 
-  const balance = selectedAsset ? parseFloat(selectedAsset.balance) : 0;
-  const marketValue = selectedAsset ? parseFloat(selectedAsset.marketValue) : 0;
-  const unitPrice = balance > 0 ? marketValue / balance : 0;
-  const parsedAmount = parseFloat(amount) || 0;
-  const fiatEstimate = parsedAmount > 0 && unitPrice > 0 ? parsedAmount * unitPrice : 0;
+  const balance = Number(selectedAsset?.balance);
+  const marketValue = parseFiatValue(selectedAsset?.marketValue);
+  const parsedAmount = Number(amount);
+  const estimate =
+    marketValue !== null && Number.isFinite(balance) && balance > 0 && parsedAmount > 0
+      ? (marketValue / balance) * parsedAmount
+      : null;
+  const fiatEstimate = estimate !== null && Number.isFinite(estimate) ? estimate : null;
 
   if (isLoadingHoldings) {
     return (
@@ -242,6 +251,7 @@ export function SendForm({
           {transferableAssets.map((asset: TransferableAsset, index: number) => {
             const isSelected = selectedAsset?.uuid === asset.uuid;
             const isLast = index === transferableAssets.length - 1;
+            const assetValue = parseFiatValue(asset.marketValue);
             return (
               <TouchableOpacity
                 key={asset.uuid}
@@ -261,7 +271,7 @@ export function SendForm({
                     </>
                   )}
                   <Text style={[styles.assetFiat, isSelected && styles.assetTextSelected]}>
-                    {formatDisplayCurrency(parseFloat(asset.marketValue))}
+                    {assetValue === null ? 'Unpriced' : formatDisplayCurrency(assetValue)}
                   </Text>
                 </View>
               </TouchableOpacity>
@@ -312,7 +322,8 @@ export function SendForm({
               placeholderTextColor={theme.colors.text.muted}
               keyboardType="decimal-pad"
             />
-            {fiatEstimate > 0 && <Text style={styles.fiatEstimate}>≈ {formatDisplayCurrency(fiatEstimate)}</Text>}
+            {marketValue === null && <Text style={styles.fiatEstimate}>Unpriced: no fiat estimate available.</Text>}
+            {fiatEstimate !== null && <Text style={styles.fiatEstimate}>≈ {formatDisplayCurrency(fiatEstimate)}</Text>}
             {!selectedAsset.isNative && <Text style={styles.gasWarningText}>Note: ETH is required for gas fees</Text>}
           </View>
         </View>

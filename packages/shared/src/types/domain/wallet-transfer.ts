@@ -17,7 +17,7 @@ export interface TransferableAsset {
   symbol: string;
   name: string;
   balance: string;
-  marketValue: string;
+  marketValue: string | null;
   isNative: boolean;
   contractAddress?: string;
   decimals: number;

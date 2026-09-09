@@ -75,7 +75,7 @@ function buildTransferableAssets(wallet: Wallet, holdings: WalletHolding[]): Tra
           symbol: holding.assetSymbol,
           name: holding.assetName,
           balance: holding.quantity,
-          marketValue: holding.marketValue ?? '',
+          marketValue: holding.marketValue,
           isNative: false,
           contractAddress: holding.asset.contractAddress,
           decimals: holding.asset.decimals || 18,

@@ -22,7 +22,7 @@ export interface UnifiedAsset {
   name: string;
   balance: string;
   displayBalance: string;
-  marketValue: string;
+  marketValue: string | null;
   decimals: number;
   tokenAddress?: string;
 }
@@ -103,7 +103,7 @@ export function useTransferFlow(selectedWallet: Wallet | null) {
             name: holding.assetName,
             balance: holding.quantity,
             displayBalance: parseFloat(holding.quantity).toFixed(displayDecimals),
-            marketValue: holding.marketValue ?? '',
+            marketValue: holding.marketValue,
             decimals,
             tokenAddress: holding.asset.contractAddress,
           });
