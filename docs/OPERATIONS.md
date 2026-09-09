@@ -952,7 +952,8 @@ bytes, fixed hash, nonce reservation and operation pointer commit together befor
 `broadcast_operation` can submit anything. All service entry points refuse an
 enclosing database transaction or disabled autocommit.
 
-Repeated preparation returns the winning attempt once another worker has signed.
+Signing an already prepared claim returns the winning attempt once another
+worker has signed.
 Restarting an unsigned failed attempt changes its claim identifier and fences out
 delayed workers. Once signed, uncertainty never authorizes another nonce: retries
 validate and broadcast the saved bytes, and missing receipts, provider errors,
