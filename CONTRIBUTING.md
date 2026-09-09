@@ -65,6 +65,30 @@ Local compilation and the contract tests need no credentials.
 5. Write a clear pull request description: what changed, why, and how you
    verified it. Reference the issue it addresses (`Closes #12`).
 
+## Review and merge
+
+1. **Everything lands through a pull request.** Nothing is pushed to `main`
+   directly, documentation included.
+2. **The author records what they checked** in the description before asking for
+   review: the commands run and their results, what could not be reproduced, and
+   what was deliberately not checked. An unstated gap reads as a checked one.
+3. **One independent review, at the commit that will merge.** Independent means
+   somebody other than the author; two passes by the same author are not two
+   approvals. A review approves a named head, and does not follow the branch: if
+   the branch moves, either show the content is unchanged or have the delta read.
+4. **Required CI green, on a branch up to date with `main`.** Green on the branch
+   and green on `main` separately do not establish that the two are green
+   together.
+5. **Product and legal decisions are the repository owner's**, not a reviewer's.
+   So are merges to the paths the owner reserves, currently
+   `backend/wallets/services/transfers.py`,
+   `backend/wallets/services/signed_transfers.py`,
+   `backend/offerings/services/payments.py` and anything under
+   `backend/authentication/`.
+
+How to establish that a change does what it claims is a separate question, and is
+in [docs/PRACTICES.md](docs/PRACTICES.md).
+
 ## Gates
 
 Run these locally before opening a pull request. Most are also CI gates; the

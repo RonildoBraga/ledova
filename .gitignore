@@ -81,8 +81,10 @@ __pycache__/
 **/*secret*.tgz
 **/*secret*.7z
 
-# Claude Code — per-developer permission overrides
-.claude/settings.local.json
+# Assistant tooling is per-developer and never a source of truth. The standards
+# this repository works to are in docs/, so that one description serves whoever
+# is doing the work rather than one description per tool.
+.claude/
 
 # Local working dir for ad-hoc GCP url-map edits (not source of truth)
 .gcp-url-map-change/

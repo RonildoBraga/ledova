@@ -167,6 +167,7 @@ cd contracts && npm ci && npx hardhat test
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Contracts, backend apps and layers, clients, the shared package, the issuance data flow, auth, tenancy, coding rules |
 | [docs/OPERATIONS.md](docs/OPERATIONS.md) | Operator setup, the environment variable reference, seeds, keys, chain configuration, background jobs, migration notes, deploy checklist |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | The phases and the product decisions taken |
+| [docs/PRACTICES.md](docs/PRACTICES.md) | How work is done here: the discipline, building, reviewing, driving the product, the four audits, triage and design notes |
 | [GitHub issues](https://github.com/RonildoBraga/ledova/issues) | Open high-risk work, deferred deliberately — labeled [`deferred-hardening`](https://github.com/RonildoBraga/ledova/issues?q=is%3Aopen+label%3Adeferred-hardening) |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Workflow, gates and pull request rules |
 | [SECURITY.md](SECURITY.md) | Reporting a vulnerability |
