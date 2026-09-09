@@ -38,7 +38,7 @@ class WalletViewSet(AuthenticatedModelViewSet):
     serializer_class = WalletSerializer
     filterset_class = WalletFilter
     ordering = ["-created_at"]
-    ordering_fields = ["created_at", "chain", "verification_status"]
+    ordering_fields = ["created_at", "chain", "verification_status", "signing_preference"]
 
     def get_throttles(self):
         self.throttle_scope = "broadcast" if self.action == "broadcast_transfer" else None

@@ -3,7 +3,8 @@ import {
   formatCryptoBalance,
   formatWalletAddressShort,
   formatSyncAge,
-  WALLET_TYPE,
+  WALLET_SIGNING_PREFERENCE,
+  getWalletSigningPreferenceLabel,
   DESIGN_TOKENS,
 } from '@ledova/shared';
 import { useCurrency } from '@hooks/useCurrency';
@@ -22,7 +23,7 @@ interface WalletItemProps {
 export function WalletItem({ wallet, isSelected, onSelect, onEdit }: WalletItemProps) {
   const { formatDisplayCurrency } = useCurrency();
   const secondaryLabel = wallet.name || formatWalletAddressShort(wallet.address);
-  const isHardware = wallet.walletType === WALLET_TYPE.HARDWARE;
+  const isHardware = wallet.signingPreference === WALLET_SIGNING_PREFERENCE.HARDWARE;
   const TypeIcon = isHardware ? HardDriveIcon : CloudIcon;
   const syncAge = formatSyncAge(wallet.lastSyncedAt);
 
@@ -38,9 +39,15 @@ export function WalletItem({ wallet, isSelected, onSelect, onEdit }: WalletItemP
     >
       <WalletBadge verificationStatus={wallet.verificationStatus} />
       <span className="text-xs text-text-muted truncate">{secondaryLabel}</span>
-      <span className="inline-flex items-center justify-center p-1">
-        <TypeIcon size={ICON_XS} weight="bold" className="text-text-secondary" />
-      </span>
+      {wallet.signingPreference && (
+        <span
+          title={getWalletSigningPreferenceLabel(wallet.signingPreference)}
+          aria-label={getWalletSigningPreferenceLabel(wallet.signingPreference)}
+          className="inline-flex items-center justify-center p-1"
+        >
+          <TypeIcon size={ICON_XS} weight="bold" className="text-text-secondary" />
+        </span>
+      )}
       <div className="flex-1" />
       {syncAge && (
         <span

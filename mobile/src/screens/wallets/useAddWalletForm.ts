@@ -6,7 +6,7 @@ import {
   validateWalletAddress,
   detectChainFromAddress,
 } from '@ledova/shared';
-import type { DerivedAddress, HardwareWalletImport, CreateWallet, WalletType } from '@ledova/shared';
+import type { DerivedAddress, HardwareWalletImport, CreateWallet, WalletSigningPreference } from '@ledova/shared';
 
 export const FORM_STEPS = {
   SELECT_TYPE: 'selectType',
@@ -31,7 +31,7 @@ export function useAddWalletForm({
   preselectedChain,
 }: UseAddWalletFormProps) {
   const [step, setStep] = useState<FormStep>(FORM_STEPS.SELECT_TYPE);
-  const [walletType, setWalletType] = useState<WalletType | null>(null);
+  const [signingPreference, setWalletSigningPreference] = useState<WalletSigningPreference | null>(null);
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
   const [selectedChain, setSelectedChain] = useState<string | null>(() => {
@@ -48,7 +48,7 @@ export function useAddWalletForm({
 
   const reset = useCallback(() => {
     setStep(FORM_STEPS.SELECT_TYPE);
-    setWalletType(null);
+    setWalletSigningPreference(null);
     setName('');
     setAddress('');
     setErrors({});
@@ -164,9 +164,9 @@ export function useAddWalletForm({
       name: name.trim() || undefined,
       address: address.trim(),
       chain: selectedChain,
-      walletType: walletType || 'hardware',
+      signingPreference: signingPreference ?? undefined,
     });
-  }, [validate, selectedChain, userAccountUuid, name, address, walletType, onSubmit]);
+  }, [validate, selectedChain, userAccountUuid, name, address, signingPreference, onSubmit]);
 
   const toggleScanner = useCallback(() => {
     setShowScanner((prev) => !prev);
@@ -178,7 +178,7 @@ export function useAddWalletForm({
 
   return {
     step,
-    walletType,
+    signingPreference,
     name,
     address,
     selectedChain,
@@ -189,7 +189,7 @@ export function useAddWalletForm({
 
     setName,
     setStep,
-    setWalletType,
+    setWalletSigningPreference,
     setShowScannerDirect,
 
     reset,

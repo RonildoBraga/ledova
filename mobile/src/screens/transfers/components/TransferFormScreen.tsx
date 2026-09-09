@@ -11,7 +11,7 @@ import {
   isBitcoinChain,
   isEthereumChain,
   normalizeBitcoinRawTransactionHex,
-  WALLET_TYPE,
+  WALLET_SIGNING_PREFERENCE,
 } from '@ledova/shared';
 import type { WalletsStackParamList } from '../../../navigation/WalletsStackNavigator';
 import { SendForm } from './SendForm';
@@ -85,7 +85,7 @@ export function TransferFormScreen({ route, navigation }: Props) {
   const [softwareSignTrigger, setSoftwareSignTrigger] = useState(0);
   const [signedHexInput, setSignedHexInput] = useState('');
   const [signedHexError, setSignedHexError] = useState<string | null>(null);
-  const isSoftwareWallet = routeWallet?.walletType === WALLET_TYPE.SOFTWARE;
+  const isSoftwareWallet = routeWallet?.signingPreference === WALLET_SIGNING_PREFERENCE.SOFTWARE;
 
   const {
     step,
@@ -257,7 +257,7 @@ export function TransferFormScreen({ route, navigation }: Props) {
             />
           );
         }
-        if (wallet.walletType === WALLET_TYPE.SOFTWARE) {
+        if (wallet.signingPreference === WALLET_SIGNING_PREFERENCE.SOFTWARE) {
           if (!transactionData) return null;
           return (
             <SoftwareSignTransaction

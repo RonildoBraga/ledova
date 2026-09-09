@@ -15,7 +15,8 @@ import {
 import { useQuery, useMutation } from '@tanstack/react-query';
 import {
   BUYABLE_ASSETS,
-  WALLET_TYPE,
+  WALLET_SIGNING_PREFERENCE,
+  getWalletSigningPreferenceLabel,
   WALLET_VERIFICATION_STATUS,
   CACHE_TIMING,
   getWallets,
@@ -253,14 +254,14 @@ export function BuyCryptoModal({
     queryKey: [
       'wallets',
       userAccountUuid,
-      { chain: selectedAsset?.chain, verification_status: 'VERIFIED', order_by: 'wallet_type' },
+      { chain: selectedAsset?.chain, verification_status: 'VERIFIED', order_by: 'signing_preference' },
     ],
     queryFn: () =>
       getWallets(apiClient, {
         user_account: userAccountUuid!,
         chain: selectedAsset!.chain,
         verification_status: 'VERIFIED',
-        order_by: 'wallet_type',
+        order_by: 'signing_preference',
       }),
     enabled: !!userAccountUuid && !!selectedAsset,
   });
@@ -409,7 +410,7 @@ export function BuyCryptoModal({
             {matchingWallets.map((wallet: Wallet) => {
               const walletLabel = wallet.name || formatWalletAddressShort(wallet.address);
               const isVerified = wallet.verificationStatus === WALLET_VERIFICATION_STATUS.VERIFIED;
-              const isHardware = wallet.walletType === WALLET_TYPE.HARDWARE;
+              const isHardware = wallet.signingPreference === WALLET_SIGNING_PREFERENCE.HARDWARE;
               const marketValue = parseFloat(wallet.marketValue) || 0;
               const syncAge = formatSyncAge(wallet.lastSyncedAt);
               const isSelected = isLoading && widgetMutation.variables?.uuid === wallet.uuid;
@@ -449,13 +450,18 @@ export function BuyCryptoModal({
                     <Text style={styles.walletName} numberOfLines={1}>
                       {walletLabel}
                     </Text>
-                    <View style={styles.walletBadge}>
-                      {isHardware ? (
-                        <HardDrivesIcon size={theme.icon.sizes.xs} color={theme.colors.text.muted} weight="bold" />
-                      ) : (
-                        <CloudIcon size={theme.icon.sizes.xs} color={theme.colors.text.muted} weight="bold" />
-                      )}
-                    </View>
+                    {wallet.signingPreference && (
+                      <View
+                        style={styles.walletBadge}
+                        accessibilityLabel={getWalletSigningPreferenceLabel(wallet.signingPreference)}
+                      >
+                        {isHardware ? (
+                          <HardDrivesIcon size={theme.icon.sizes.xs} color={theme.colors.text.muted} weight="bold" />
+                        ) : (
+                          <CloudIcon size={theme.icon.sizes.xs} color={theme.colors.text.muted} weight="bold" />
+                        )}
+                      </View>
+                    )}
                   </View>
 
                   <View style={styles.walletSpacer} />

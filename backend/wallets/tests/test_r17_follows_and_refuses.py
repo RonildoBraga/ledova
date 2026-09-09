@@ -46,7 +46,7 @@ class ATransactionFollowsItsWalletAndWillNotChangeHandsTest(TestCase):
             user_account=self.tenant.account,
             address="0x" + "51" * 20,
             chain=self.wallet.chain,
-            wallet_type=self.wallet.wallet_type,
+            signing_preference=self.wallet.signing_preference,
         )
 
     def test_an_ordinary_write_after_the_wallet_changes_hands_is_not_refused(self):

@@ -1037,3 +1037,19 @@ above.
 The operator's obligations under securities, AML/CTF, privacy and company-law
 regimes are out of scope for this repository and must be settled with counsel
 before any real issuance.
+
+
+### Wallet signing preference migration
+
+`wallets/0013` renames `wallet_type` to `signing_preference` and preserves each
+recorded value. New unspecified wallets default to null. The field and imported
+key metadata are self-declared hints; operators must not use either as custody
+assurance. The API continues to accept and return `walletType` as a legacy alias,
+while current clients use `signingPreference`. Supplying different values under
+both names is a validation error. A matching address signature does not attest
+which device held the key, and changing this preference does not verify an
+address or remove an existing verification.
+
+Apply the backend migration and release its API before updating the clients.
+Older clients continue to use the legacy alias with the updated backend; the
+new clients require an API that serves `signingPreference`.

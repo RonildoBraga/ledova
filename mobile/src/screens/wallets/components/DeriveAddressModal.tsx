@@ -175,7 +175,7 @@ export function DeriveAddressModal({
         />
         <Text style={styles.title}>Derive New Address</Text>
         <Text style={styles.subtitle}>
-          {wallet.walletType === 'software'
+          {wallet.signingPreference === 'software'
             ? 'Add another address from your software wallet'
             : 'Add another address from your hardware wallet'}
         </Text>
@@ -212,7 +212,7 @@ export function DeriveAddressModal({
           <View style={styles.infoContainer}>
             <CheckCircleIcon size={theme.icon.sizes.sm} color={theme.colors.status.info.icon} weight="fill" />
             <Text style={styles.infoText}>
-              {wallet.walletType === 'software'
+              {wallet.signingPreference === 'software'
                 ? 'This address is derived from the same recovery phrase as your existing wallet'
                 : 'This address shares the same master fingerprint as your existing wallet'}
             </Text>

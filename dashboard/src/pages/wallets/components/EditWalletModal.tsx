@@ -14,7 +14,8 @@ import {
   getChainShortCode,
   isBitcoinChain,
   WALLET_VERIFICATION_STATUS,
-  WALLET_TYPE,
+  WALLET_SIGNING_PREFERENCE,
+  getWalletSigningPreferenceLabel,
   DESIGN_TOKENS,
 } from '@ledova/shared';
 import { useCurrency } from '@hooks/useCurrency';
@@ -45,7 +46,7 @@ export function EditWalletModal({ wallet, isOpen, onClose, onSave, isUpdating }:
 
   const chainShortName = getChainShortCode(wallet.chain);
   const marketValue = parseFloat(wallet.nativeMarketValue) || 0;
-  const isHardware = !wallet.walletType || wallet.walletType === WALLET_TYPE.HARDWARE;
+  const isHardware = wallet.signingPreference === WALLET_SIGNING_PREFERENCE.HARDWARE;
   const isVerified = wallet.verificationStatus === WALLET_VERIFICATION_STATUS.VERIFIED;
   const isBtc = isBitcoinChain(chainShortName);
   const ChainIcon = isBtc ? CurrencyBtcIcon : CurrencyEthIcon;
@@ -85,16 +86,20 @@ export function EditWalletModal({ wallet, isOpen, onClose, onSave, isUpdating }:
           </div>
 
           <div className="flex items-center justify-between py-2.5 border-b border-border-subtle">
-            <span className="text-sm text-text-muted">Type</span>
+            <span className="text-sm text-text-muted">Signing preference</span>
             <div className="flex items-center gap-1.5">
-              <span className="text-sm font-medium text-text-primary">{isHardware ? 'Hardware' : 'Software'}</span>
-              <span className="inline-flex items-center justify-center rounded bg-surface-tertiary p-1">
-                {isHardware ? (
-                  <HardDriveIcon size={ICON_SM} weight="bold" className="text-text-secondary" />
-                ) : (
-                  <CloudIcon size={ICON_SM} weight="bold" className="text-text-secondary" />
-                )}
+              <span className="text-sm font-medium text-text-primary">
+                {getWalletSigningPreferenceLabel(wallet.signingPreference)}
               </span>
+              {wallet.signingPreference && (
+                <span className="inline-flex items-center justify-center rounded bg-surface-tertiary p-1">
+                  {isHardware ? (
+                    <HardDriveIcon size={ICON_SM} weight="bold" className="text-text-secondary" />
+                  ) : (
+                    <CloudIcon size={ICON_SM} weight="bold" className="text-text-secondary" />
+                  )}
+                </span>
+              )}
             </div>
           </div>
 
@@ -107,7 +112,7 @@ export function EditWalletModal({ wallet, isOpen, onClose, onSave, isUpdating }:
             <span className="text-sm text-text-muted">Verification</span>
             <div className="flex items-center gap-1.5">
               <span className={`text-sm font-medium ${isVerified ? 'text-success-light' : 'text-warning-light'}`}>
-                {isVerified ? 'Verified' : 'Pending'}
+                {isVerified ? 'Address verified' : 'Pending'}
               </span>
               {isVerified ? (
                 <ShieldCheckIcon size={ICON_SM} className="text-success-light" />

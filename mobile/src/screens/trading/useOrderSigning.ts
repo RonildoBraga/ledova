@@ -45,7 +45,7 @@ export function useOrderSigning({ mode, orderData, orderUuid, wallet, onSuccess 
   const cancelOrderMutation = useCancelOrder();
 
   const isCreating = mode === 'create';
-  const isSoftwareWallet = wallet?.walletType === 'software';
+  const isSoftwareWallet = wallet?.signingPreference === 'software';
 
   const start = useCallback(() => {
     setStep('getting-message');

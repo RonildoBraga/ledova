@@ -12,7 +12,8 @@ import {
 import { useQuery, useMutation } from '@tanstack/react-query';
 import {
   BUYABLE_ASSETS,
-  WALLET_TYPE,
+  WALLET_SIGNING_PREFERENCE,
+  getWalletSigningPreferenceLabel,
   DESIGN_TOKENS,
   getWallets,
   getOnRampWidgetUrl,
@@ -70,14 +71,14 @@ export function BuyCryptoModal({
     queryKey: [
       'wallets',
       userAccountUuid,
-      { chain: selectedAsset?.chain, verification_status: 'VERIFIED', order_by: 'wallet_type' },
+      { chain: selectedAsset?.chain, verification_status: 'VERIFIED', order_by: 'signing_preference' },
     ],
     queryFn: () =>
       getWallets(apiClient, {
         user_account: userAccountUuid!,
         chain: selectedAsset!.chain,
         verification_status: 'VERIFIED',
-        order_by: 'wallet_type',
+        order_by: 'signing_preference',
       }),
     enabled: !!userAccountUuid && !!selectedAsset,
   });
@@ -199,7 +200,7 @@ export function BuyCryptoModal({
           <div className="space-y-1">
             {matchingWallets.map((wallet) => {
               const walletLabel = wallet.name || formatWalletAddressShort(wallet.address);
-              const isHardware = wallet.walletType === WALLET_TYPE.HARDWARE;
+              const isHardware = wallet.signingPreference === WALLET_SIGNING_PREFERENCE.HARDWARE;
               const TypeIcon = isHardware ? HardDriveIcon : CloudIcon;
               const marketValue = parseFloat(wallet.marketValue) || 0;
               const syncAge = formatSyncAge(wallet.lastSyncedAt);
@@ -215,9 +216,15 @@ export function BuyCryptoModal({
                 >
                   <WalletBadge verificationStatus={wallet.verificationStatus} />
                   <span className="text-xs text-text-muted truncate">{walletLabel}</span>
-                  <span className="inline-flex items-center justify-center p-1">
-                    <TypeIcon size={ICON_XS} weight="bold" className="text-text-secondary" />
-                  </span>
+                  {wallet.signingPreference && (
+                    <span
+                      title={getWalletSigningPreferenceLabel(wallet.signingPreference)}
+                      aria-label={getWalletSigningPreferenceLabel(wallet.signingPreference)}
+                      className="inline-flex items-center justify-center p-1"
+                    >
+                      <TypeIcon size={ICON_XS} weight="bold" className="text-text-secondary" />
+                    </span>
+                  )}
                   <div className="flex-1" />
                   {isSelected ? (
                     <SpinnerGapIcon size={ICON_SM} className="animate-spin text-brand-mid" />

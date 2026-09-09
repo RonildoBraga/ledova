@@ -12,7 +12,13 @@ import { Panel } from '../../../components/panel';
 import { ButtonGroup, SecondaryButton } from '../../../components/buttons';
 import { QRScanner } from '../../../components/qr';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
-import { BLOCKCHAIN, getChainShortCode, isBitcoinChain, isEthereumChain, WALLET_TYPE } from '@ledova/shared';
+import {
+  BLOCKCHAIN,
+  getChainShortCode,
+  isBitcoinChain,
+  isEthereumChain,
+  WALLET_SIGNING_PREFERENCE,
+} from '@ledova/shared';
 import { SendForm } from '../../transfers/components/SendForm';
 import { ReviewTransaction } from '../../transfers/components/ReviewTransaction';
 import { SignTransaction } from '../../transfers/components/SignTransaction';
@@ -117,7 +123,7 @@ export function SendFormScreen({ onDone }: SendFormScreenProps) {
     reset,
   } = useTransfers();
 
-  const isSoftwareWallet = wallet?.walletType === WALLET_TYPE.SOFTWARE;
+  const isSoftwareWallet = wallet?.signingPreference === WALLET_SIGNING_PREFERENCE.SOFTWARE;
   const chainShortName = wallet ? getChainShortCode(wallet.chain) : 'ETH';
   const isEthereum = isEthereumChain(chainShortName) || wallet?.chain === BLOCKCHAIN.BASE;
 
@@ -249,7 +255,7 @@ export function SendFormScreen({ onDone }: SendFormScreenProps) {
         return <ReviewTransaction transactionData={transactionData} chainShortName={chainShortName} />;
 
       case 'sign':
-        if (wallet.walletType === WALLET_TYPE.SOFTWARE) {
+        if (wallet.signingPreference === WALLET_SIGNING_PREFERENCE.SOFTWARE) {
           if (!transactionData) return null;
           return (
             <SoftwareSignTransaction

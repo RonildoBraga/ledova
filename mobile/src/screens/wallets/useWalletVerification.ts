@@ -72,7 +72,7 @@ export function useWalletVerification({ wallet }: UseWalletVerificationProps) {
 
   const autoVerify = useCallback(async () => {
     if (autoVerifyingRef.current) return;
-    if (wallet.walletType !== 'software') return;
+    if (wallet.signingPreference !== 'software') return;
     if (!wallet.derivationPath || !wallet.masterFingerprint) return;
 
     autoVerifyingRef.current = true;
@@ -109,7 +109,7 @@ export function useWalletVerification({ wallet }: UseWalletVerificationProps) {
     }
   }, [
     wallet.uuid,
-    wallet.walletType,
+    wallet.signingPreference,
     wallet.chain,
     wallet.derivationPath,
     wallet.masterFingerprint,

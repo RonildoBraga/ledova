@@ -3,10 +3,16 @@ export const WALLET_VERIFICATION_STATUS = {
   VERIFIED: 'VERIFIED',
 } as const;
 
-export const WALLET_TYPE = {
+export const WALLET_SIGNING_PREFERENCE = {
   HARDWARE: 'hardware',
   SOFTWARE: 'software',
 } as const;
+
+export function getWalletSigningPreferenceLabel(preference?: string | null): string {
+  if (preference === WALLET_SIGNING_PREFERENCE.HARDWARE) return 'Hardware (self-declared)';
+  if (preference === WALLET_SIGNING_PREFERENCE.SOFTWARE) return 'Software (self-declared)';
+  return 'Not specified';
+}
 
 export const BLOCKCHAIN = {
   ETHEREUM: 'ethereum',

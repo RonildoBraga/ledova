@@ -7,7 +7,8 @@ import {
   formatCryptoBalance,
   formatWalletAddressShort,
   formatSyncAge,
-  WALLET_TYPE,
+  WALLET_SIGNING_PREFERENCE,
+  getWalletSigningPreferenceLabel,
 } from '@ledova/shared';
 import { useCurrency } from '@hooks/useCurrency';
 import type { Wallet } from '@ledova/shared';
@@ -30,12 +31,12 @@ interface WalletSelectionModalProps {
 export function WalletSelectionModal({ isOpen, onClose, onSelectWallet, userAccountUuid }: WalletSelectionModalProps) {
   const { formatDisplayCurrency } = useCurrency();
   const walletsQuery = useQuery({
-    queryKey: ['wallets', userAccountUuid, { verification_status: 'VERIFIED', order_by: 'wallet_type' }],
+    queryKey: ['wallets', userAccountUuid, { verification_status: 'VERIFIED', order_by: 'signing_preference' }],
     queryFn: () =>
       getWallets(apiClient, {
         user_account: userAccountUuid!,
         verification_status: 'VERIFIED',
-        order_by: 'wallet_type',
+        order_by: 'signing_preference',
       }),
     enabled: !!userAccountUuid && isOpen,
   });
@@ -47,7 +48,7 @@ export function WalletSelectionModal({ isOpen, onClose, onSelectWallet, userAcco
 
   const renderWallet = (wallet: Wallet) => {
     const walletLabel = wallet.name || formatWalletAddressShort(wallet.address);
-    const isHardware = wallet.walletType === WALLET_TYPE.HARDWARE;
+    const isHardware = wallet.signingPreference === WALLET_SIGNING_PREFERENCE.HARDWARE;
     const TypeIcon = isHardware ? HardDriveIcon : CloudIcon;
     const syncAge = formatSyncAge(wallet.lastSyncedAt);
     const marketValue = parseFloat(wallet.marketValue) || 0;
@@ -61,9 +62,15 @@ export function WalletSelectionModal({ isOpen, onClose, onSelectWallet, userAcco
       >
         <WalletBadge verificationStatus={wallet.verificationStatus} />
         <span className="text-xs text-text-muted truncate">{walletLabel}</span>
-        <span className="inline-flex items-center justify-center p-1">
-          <TypeIcon size={ICON_XS} weight="bold" className="text-text-secondary" />
-        </span>
+        {wallet.signingPreference && (
+          <span
+            title={getWalletSigningPreferenceLabel(wallet.signingPreference)}
+            aria-label={getWalletSigningPreferenceLabel(wallet.signingPreference)}
+            className="inline-flex items-center justify-center p-1"
+          >
+            <TypeIcon size={ICON_XS} weight="bold" className="text-text-secondary" />
+          </span>
+        )}
         <div className="flex-1" />
         {syncAge && (
           <span className="inline-flex items-center gap-0.5 text-xs text-text-subtle flex-shrink-0">

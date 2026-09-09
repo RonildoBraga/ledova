@@ -2,14 +2,14 @@ import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { WalletIcon, KeyIcon, QrCodeIcon } from 'phosphor-react-native';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
-import type { WalletType } from '@ledova/shared';
+import type { WalletSigningPreference } from '@ledova/shared';
 
-interface WalletTypeSelectorProps {
-  onSelect: (type: WalletType) => void;
+interface WalletSigningPreferenceSelectorProps {
+  onSelect: (type: WalletSigningPreference) => void;
 }
 
-const WALLET_TYPE_OPTIONS: {
-  type: WalletType;
+const WALLET_SIGNING_PREFERENCE_OPTIONS: {
+  type: WalletSigningPreference;
   label: string;
   description: string;
   Icon: typeof KeyIcon;
@@ -28,7 +28,7 @@ const WALLET_TYPE_OPTIONS: {
   },
 ];
 
-export function WalletTypeSelector({ onSelect }: WalletTypeSelectorProps) {
+export function WalletSigningPreferenceSelector({ onSelect }: WalletSigningPreferenceSelectorProps) {
   const theme = useAppTheme();
   const styles = useThemedStyles((theme) => ({
     heroSection: {
@@ -89,7 +89,7 @@ export function WalletTypeSelector({ onSelect }: WalletTypeSelectorProps) {
       </View>
 
       <View style={styles.optionsContainer}>
-        {WALLET_TYPE_OPTIONS.map(({ type, label, description, Icon }) => (
+        {WALLET_SIGNING_PREFERENCE_OPTIONS.map(({ type, label, description, Icon }) => (
           <TouchableOpacity key={type} style={styles.option} onPress={() => onSelect(type)} activeOpacity={0.7}>
             <View style={styles.iconContainer}>
               <Icon size={theme.icon.sizes.md} color={theme.colors.interactive.active} weight="regular" />
