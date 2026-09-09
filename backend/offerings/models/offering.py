@@ -181,7 +181,7 @@ class Offering(DerivesCompanyFromToken, BaseModel):
         self.save(update_fields=["status", "closed_at", "close_reason", "updated_at"])
 
     def withdraw(self, reason=""):
-        pending = [OfferingStatus.DRAFT, OfferingStatus.SUBMITTED, OfferingStatus.UNDER_REVIEW]
+        pending = [OfferingStatus.DRAFT, OfferingStatus.SUBMITTED, OfferingStatus.UNDER_REVIEW, OfferingStatus.REJECTED]
         self._require_status(pending, OfferingStatus.WITHDRAWN)
         self.status = OfferingStatus.WITHDRAWN
         self.closed_at = timezone.now()

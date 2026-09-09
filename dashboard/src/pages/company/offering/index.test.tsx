@@ -115,13 +115,38 @@ describe('which offerings an issuer may edit, and which may be deleted', () => {
     expect(screen.getByText('Submit for review')).toBeTruthy();
   });
 
-  it('offers Edit but not Delete on a rejected offering, which is the whole of the decision', () => {
+  it('lets the issuer edit or withdraw a rejected offering while retaining the record', () => {
     aPageShowing(anOffering({ status: 'rejected', statusDisplay: 'Rejected', canBeEdited: true, canBeDeleted: false }));
 
     render(<OfferingPage />);
 
     expect(screen.getByText('Edit')).toBeTruthy();
     expect(screen.queryByText('Delete')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Withdraw' }));
+    expect(useOfferingActions.mock.results.at(-1)?.value.withdraw.mutateAsync).toHaveBeenCalledWith({
+      uuid: 'offering-1',
+      reason: 'Withdrawn by the issuer',
+    });
+  });
+
+  it('keeps the previous rejection visible on a withdrawn offering with no further actions', () => {
+    aPageShowing(
+      anOffering({
+        status: 'withdrawn',
+        statusDisplay: 'Withdrawn',
+        rejectionReason: REJECTION,
+        closeReason: 'No longer proceeding',
+        canBeEdited: false,
+        canBeDeleted: false,
+      }),
+    );
+    render(<OfferingPage />);
+    expect(screen.getByText(`Previous rejection: ${REJECTION}`)).toBeTruthy();
+    expect(screen.getByText('Closed: No longer proceeding')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Withdraw' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Submit again' })).toBeNull();
   });
 
   it('says Submit again rather than Submit for review, because the operator has seen it once', () => {
