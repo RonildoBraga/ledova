@@ -2360,7 +2360,7 @@ rather than re-raising, so `assertRaises` never fires — assert the status code
 and the row count instead.
 
 **A test of the policies proves nothing about the routing if it runs on one
-connection.** `RLS_AMBIENT_ALIAS` is `migrate` under `settings.test_postgres`,
+connection.** `RLS_AMBIENT_ALIAS` is `default` under `settings.test_postgres`,
 so a request, its fixtures and its assertions all share a connection and the
 only way to take the app role is `SET ROLE`. That is a real policy test, and it
 is also the shape under which a view that reached the wrong connection still
@@ -2368,7 +2368,44 @@ passes, because there is no other connection to reach. `settings.test_scoped`
 makes `app` the ambient alias; `shared.tests.scoped.RunsOnTheScopedConnection`
 carries the `databases` set, the principal a request would arrive with, and
 `as_an_operator_would()`. The CI step is *Request path on the scoped
-connection*. Three things follow, none of them obvious:
+connection*. Ordinary `test` and `test_postgres` settings keep the migrate alias
+for the broad unit suite. Their passing role assertions do not prove which
+connection a request or task uses. CI runs the designated subset separately:
+
+```sh
+python manage.py test --settings=ledova_backend.settings.test_scoped \
+  --require-scoped-coverage --noinput
+```
+
+`shared.scoped_test_runner.SCOPED_TEST_LABELS` names the required harness, route
+matrix, sign-in/signup, account/document rollback, row-lock and converted-task
+classes. A source inventory of classes using `RunsOnTheScopedConnection` must
+match that list, so removing a class from the CI list is refused while its tests
+still exist. The runner also refuses a missing or empty class, filtered subset, wrong
+ambient alias, absent connection, or skipped test. Adding methods to those classes
+adds them to the required run. The application role must actually lack superuser
+and BYPASSRLS privileges. The locking-update tests record real `FOR UPDATE`
+statements on `app` and require a successful route for every view declaring a row
+lock. They assert that no test transaction is open before sending each request.
+The matrix's per-case rollback supplies an outer transaction, so it cannot prove
+that a view opens its own: removing a view's `atomic()` still passes that matrix
+and must fail the separate locking-update test.
+
+The confirmation task runs from an operator worker with a real principal context,
+checks the database's actual role, performs its reads and writes, and must refuse
+a foreign private wallet before contacting the chain. A system invocation uses
+the operator connection. The test replaces provider and delivery boundaries, not
+the task body or its database services. Removing `acting_for` must fail these
+checks. Company operator wallets are intentionally readable under R14; they are
+not suitable fixtures for a private-wallet refusal.
+
+The scoped account-create path must provide its authenticated profile as director
+on INSERT, then add membership in the same app transaction. Adding the director
+only after INSERT fails the existing R19 policy, before registration can run.
+After membership exists, a joint account retains its original null director.
+The serializer keeps director read-only; a client cannot choose that principal.
+
+Three fixture rules follow:
 
 - **A bare `transaction.atomic()` in a test is exempt from
   `check-connection-binding` by design, and under `test_scoped` it binds to

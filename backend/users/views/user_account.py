@@ -19,7 +19,8 @@ class UserAccountViewSet(AuthenticatedModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
-        register_account(serializer.save(), self.request.user.userprofile)
+        profile = self.request.user.userprofile
+        register_account(serializer.save(director=profile), profile)
 
     def perform_update(self, serializer):
         return serializer.save()

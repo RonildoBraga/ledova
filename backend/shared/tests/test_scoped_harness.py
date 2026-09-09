@@ -34,9 +34,13 @@ class TheScopedHarnessIsActuallyScopedTest(RunsOnTheScopedConnection, APITransac
 
     def test_the_queries_really_reach_the_scoped_role(self):
         with connections[current_alias()].cursor() as cursor:
-            cursor.execute("SELECT current_user")
+            cursor.execute("SELECT current_user, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user")
 
-            self.assertEqual(cursor.fetchone()[0], settings.RLS_ROLES[APP_ALIAS])
+            role, superuser, bypass = cursor.fetchone()
+            self.assertEqual(role, settings.RLS_ROLES[APP_ALIAS])
+            self.assertNotIn(role, (settings.RLS_ROLES[OPERATOR_ALIAS], settings.RLS_ROLES["migrate"]))
+            self.assertFalse(superuser)
+            self.assertFalse(bypass)
 
     def test_a_fixture_written_as_an_operator_is_visible_to_the_principal_it_belongs_to(self):
         with self.as_an_operator_would():

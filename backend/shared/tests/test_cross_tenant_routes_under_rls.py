@@ -1,3 +1,4 @@
+import ast
 import sys
 from contextlib import contextmanager
 from unittest import TestSuite, defaultTestLoader, skipUnless
@@ -119,6 +120,21 @@ class TheMatrixRunsOnTheConnectionTheRouterChoosesTest(RunsOnTheScopedConnection
             sorted(f"{route.method} {route.path}" for route in ROUTES),
             sorted(f"{route.method} {route.path}" for route in matrix.CrossTenantRouteMatrixTest.routes()),
         )
+
+
+def locking_request_views():
+    names = set()
+    for path in settings.BASE_DIR.glob("*/views/*.py"):
+        module = ".".join(path.relative_to(settings.BASE_DIR).with_suffix("").parts)
+        for node in ast.parse(path.read_text()).body:
+            if isinstance(node, ast.ClassDef) and any(
+                isinstance(call, ast.Call)
+                and isinstance(call.func, ast.Attribute)
+                and call.func.attr == "select_for_update"
+                for call in ast.walk(node)
+            ):
+                names.add(f"{module}.{node.name}")
+    return names
 
 
 def every_case(suite):
