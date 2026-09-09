@@ -1,5 +1,6 @@
+from decimal import Decimal
+
 from django.db import models
-from django.utils import timezone
 
 from shared.models import BaseModel
 from tokens.querysets import TransferOrderQuerySet
@@ -102,6 +103,27 @@ class TransferOrder(BaseModel):
         verbose_name = "Transfer Order"
         verbose_name_plural = "Transfer Orders"
         ordering = ["-created_at"]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(quantity__gt=0), name="transfer_order_positive_quantity"),
+            models.CheckConstraint(
+                condition=models.Q(price_per_share__gt=0, price_per_share__lt=Decimal("10000000000000000")),
+                name="transfer_order_positive_price",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(filled_quantity__gte=0, filled_quantity__lte=models.F("quantity")),
+                name="transfer_order_filled_bounds",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(min_quantity__gte=0, min_quantity__lte=models.F("quantity")),
+                name="transfer_order_minimum_bounds",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(status__in=TransferOrderStatus.values), name="transfer_order_known_status"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(order_type__in=TransferOrderType.values), name="transfer_order_known_type"
+            ),
+        ]
         indexes = [
             models.Index(fields=["token", "status"]),
             models.Index(fields=["wallet_address"]),
@@ -176,35 +198,6 @@ class TransferOrder(BaseModel):
             other_order.status = TransferOrderStatus.PARTIALLY_FILLED
 
         other_order.save(update_fields=["filled_quantity", "matched_order", "status", "updated_at"])
-
-    def mark_executing(self, tx_hash: str):
-        self.tx_hash = tx_hash
-        self.status = TransferOrderStatus.EXECUTING
-        self.save(update_fields=["tx_hash", "status", "updated_at"])
-
-    def mark_completed(self):
-        self.status = TransferOrderStatus.COMPLETED
-        self.completed_at = timezone.now()
-        self.save(update_fields=["status", "completed_at", "updated_at"])
-
-        if self.matched_order and self.matched_order.status != TransferOrderStatus.COMPLETED:
-            self.matched_order.status = TransferOrderStatus.COMPLETED
-            self.matched_order.completed_at = timezone.now()
-            self.matched_order.tx_hash = self.tx_hash
-            self.matched_order.save(update_fields=["status", "completed_at", "tx_hash", "updated_at"])
-
-    def mark_failed(self, error_message: str):
-        self.status = TransferOrderStatus.FAILED
-        self.error_message = error_message
-        self.save(update_fields=["status", "error_message", "updated_at"])
-
-        if self.matched_order and self.matched_order.status not in [
-            TransferOrderStatus.FAILED,
-            TransferOrderStatus.COMPLETED,
-        ]:
-            self.matched_order.status = TransferOrderStatus.FAILED
-            self.matched_order.error_message = error_message
-            self.matched_order.save(update_fields=["status", "error_message", "updated_at"])
 
     def cancel(self):
         if not self.can_cancel:

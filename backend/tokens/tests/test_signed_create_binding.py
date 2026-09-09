@@ -3,7 +3,6 @@ from decimal import Decimal
 from unittest.mock import patch
 
 from django.core.cache import cache
-from django.utils import timezone
 from eth_account import Account
 from eth_utils import to_checksum_address
 from rest_framework.test import APITestCase
@@ -153,11 +152,9 @@ class SignedCreateBindingTest(APITestCase):
     @patch("tokens.views.trading_order.TokenTransferService")
     def test_an_expired_challenge_is_refused_and_says_so(self, transfers):
         issued = self.request_challenge()
-        SigningChallenge.objects.filter(digest=issued["digest"]).update(
-            expires_at=timezone.now() - timedelta(seconds=1)
-        )
-
-        response = self.post_create(issued, self.sign(issued))
+        deadline = SigningChallenge.objects.get(digest=issued["digest"]).expires_at
+        with patch("tokens.models.signing_challenge.timezone.now", return_value=deadline + timedelta(seconds=1)):
+            response = self.post_create(issued, self.sign(issued))
 
         self.assertEqual(response.status_code, 400, response.content)
         self.assertEqual(response.json()["code"], "challenge_expired")

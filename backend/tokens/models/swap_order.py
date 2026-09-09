@@ -111,6 +111,11 @@ class SwapOrder(DerivesWalletsFromOrders, BaseModel):
         ordering = ["-created_at"]
         constraints = [
             models.UniqueConstraint(fields=["nonce"], name="unique_swap_nonce"),
+            models.CheckConstraint(condition=models.Q(share_amount__gt=0), name="swap_order_positive_shares"),
+            models.CheckConstraint(condition=models.Q(payment_amount__gt=0), name="swap_order_positive_payment"),
+            models.CheckConstraint(
+                condition=models.Q(status__in=SwapOrderStatus.values), name="swap_order_known_status"
+            ),
         ]
         indexes = [
             models.Index(fields=["status"]),

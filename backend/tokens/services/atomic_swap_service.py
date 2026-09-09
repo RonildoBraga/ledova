@@ -1,5 +1,6 @@
 import logging
 import secrets
+from collections.abc import Mapping
 from datetime import timedelta
 from typing import Optional
 
@@ -28,6 +29,12 @@ from tokens.models import (
     TransferOrder,
     TransferOrderStatus,
     TransferOrderType,
+)
+from tokens.services.trading_locks import (
+    hash_identity,
+    lock_current_claim,
+    lock_orders,
+    swap_terms,
 )
 from whitelist.services import WhitelistService
 
@@ -250,6 +257,11 @@ class AtomicSwapService:
         share_amount: Optional[int] = None,
         price_per_share=None,
     ) -> SwapOrder:
+        locked = {
+            order.pk: order for order in lock_orders(TransferOrder.objects.filter(pk__in=[sell_order.pk, buy_order.pk]))
+        }
+        sell_order = locked[sell_order.pk]
+        buy_order = locked[buy_order.pk]
         if sell_order.order_type != TransferOrderType.SELL:
             raise ValueError("sell_order must be a SELL order")
         if buy_order.order_type != TransferOrderType.BUY:
@@ -312,86 +324,98 @@ class AtomicSwapService:
             logger.warning(f"Signature verification failed: {e}", exc_info=True)
             return False
 
-    @atomic()
     def submit_signature(
         self,
         swap_order: SwapOrder,
         signature: str,
         signer_address: str,
     ) -> SwapOrder:
-        if swap_order.is_expired:
-            raise SwapExpiredException()
-
+        snapshot = SwapOrder.objects.get(pk=swap_order.pk)
         signer_checksum = self.chain_client.to_checksum_address(signer_address)
-        if signer_checksum == self.chain_client.to_checksum_address(swap_order.seller_address):
-            expected_signer = swap_order.seller_address
+        if signer_checksum == self.chain_client.to_checksum_address(snapshot.seller_address):
             is_seller = True
-        elif signer_checksum == self.chain_client.to_checksum_address(swap_order.buyer_address):
-            expected_signer = swap_order.buyer_address
+            expected_signer = snapshot.seller_address
+        elif signer_checksum == self.chain_client.to_checksum_address(snapshot.buyer_address):
             is_seller = False
+            expected_signer = snapshot.buyer_address
         else:
             raise SwapSignatureException("Signer is neither the buyer nor seller")
-
-        if not self.verify_signature(swap_order, signature, expected_signer):
+        if not self.verify_signature(snapshot, signature, expected_signer):
             raise SwapSignatureException("Invalid signature")
+        return self._store_signature(snapshot, signature, is_seller)
 
+    @atomic()
+    def _store_signature(self, snapshot, signature, is_seller):
+        swap = SwapOrder.objects.select_for_update(of=("self",)).get(pk=snapshot.pk)
+        if swap_terms(swap) != swap_terms(snapshot):
+            raise SwapSignatureException("The swap changed while its signature was being checked")
+        stored = swap.seller_signature if is_seller else swap.buyer_signature
+        if stored:
+            if stored != signature:
+                raise SwapSignatureException("This party has already signed the swap")
+            return swap
+        allowed = (
+            (SwapOrderStatus.CREATED, SwapOrderStatus.BUYER_SIGNED)
+            if is_seller
+            else (SwapOrderStatus.CREATED, SwapOrderStatus.SELLER_SIGNED)
+        )
+        if swap.status not in allowed or swap.transaction_id is not None or swap.tx_hash:
+            raise SwapNotReadyException()
+        if swap.deadline_passed:
+            raise SwapExpiredException()
         if is_seller:
-            swap_order.add_seller_signature(signature)
+            swap.add_seller_signature(signature)
         else:
-            swap_order.add_buyer_signature(signature)
-        logger.info(f"{'Seller' if is_seller else 'Buyer'} signed swap {swap_order.uuid} (ready={swap_order.is_ready})")
-
-        from tokens.events import publish_trading_event
-
-        publish_trading_event("swap_signed", str(swap_order.share_token.uuid))
-
-        return swap_order
+            swap.add_buyer_signature(signature)
+        publish_trading_event("swap_signed", str(swap.share_token_id))
+        return swap
 
     def execute_swap(self, swap_order: SwapOrder) -> str:
-        if not swap_order.is_ready:
-            raise SwapNotReadyException()
-
-        if swap_order.is_expired:
-            raise SwapExpiredException()
-
-        self.validate_swap_balances(swap_order)
-
-        signed_tx, tx_record = self._prepare_attempt(swap_order)
-
+        swap, tx_record = self._claim_execution(swap_order.pk)
+        try:
+            self.validate_swap_balances(swap)
+            signed_tx = self._prepare_attempt(swap)
+        except Exception as exc:
+            told_to_the_parties = decode_exception_to_message(exc, "Swap execution failed")
+            self._record_never_sent(swap, tx_record, str(exc), told_to_the_parties)
+            if isinstance(exc, InsufficientBalanceException):
+                raise
+            raise SwapExecutionException(f"Swap execution failed: {told_to_the_parties}") from exc
         try:
             tx_hash = self.chain_client.send_raw_transaction(signed_tx)
-        except Exception as e:
-            self._record_unknown_fate(swap_order, tx_record, str(e))
+        except Exception as exc:
+            self._record_unknown_fate(swap, tx_record, str(exc))
             raise SwapExecutionException(
-                f"Swap execution outcome is unknown: {decode_exception_to_message(e, 'no response from the chain')}"
-            ) from e
+                f"Swap execution outcome is unknown: {decode_exception_to_message(exc, 'no response from the chain')}"
+            ) from exc
+        return self._record_broadcast(swap, tx_record, tx_hash)
 
-        return self._record_broadcast(swap_order, tx_record, tx_hash)
+    @atomic(durable=True)
+    def _claim_execution(self, swap_id):
+        swap = SwapOrder.objects.select_for_update(of=("self",)).get(pk=swap_id)
+        if not swap.is_ready or swap.transaction_id is not None or swap.tx_hash:
+            raise SwapNotReadyException()
+        if swap.deadline_passed:
+            raise SwapExpiredException()
+        relayer_account = Account.from_key(self.relayer_private_key)
+        arguments = {
+            "seller": swap.seller_address,
+            "buyer": swap.buyer_address,
+            "shareToken": swap.share_token.contract_address,
+            "paymentToken": payment_address(swap),
+            "shareAmount": str(swap.share_amount),
+            "paymentAmount": str(swap.payment_amount),
+            "nonce": str(swap.nonce),
+        }
+        tx_record = self._new_transaction_record(swap, relayer_account.address, arguments)
+        swap.mark_executing(transaction=tx_record)
+        return swap, tx_record
 
     def _prepare_attempt(self, swap_order: SwapOrder):
         relayer_account = Account.from_key(self.relayer_private_key)
-        arguments = {
-            "seller": swap_order.seller_address,
-            "buyer": swap_order.buyer_address,
-            "shareToken": swap_order.share_token.contract_address,
-            "paymentToken": payment_address(swap_order),
-            "shareAmount": str(swap_order.share_amount),
-            "paymentAmount": str(swap_order.payment_amount),
-            "nonce": str(swap_order.nonce),
-        }
-
-        try:
-            execute_fn = self._execute_swap_call(swap_order)
-            tx = self.chain_client.build_transaction(execute_fn, from_address=relayer_account.address)
-            signed_tx = self.chain_client.sign_transaction(tx, self.relayer_private_key)
-        except InsufficientBalanceException:
-            raise
-        except Exception as e:
-            told_to_the_parties = decode_exception_to_message(e, "Swap execution failed")
-            self._record_never_sent(swap_order, relayer_account.address, arguments, str(e), told_to_the_parties)
-            raise SwapExecutionException(f"Swap execution failed: {told_to_the_parties}") from e
-
-        return signed_tx, self._record_intent(swap_order, relayer_account.address, arguments)
+        execute_fn = self._execute_swap_call(swap_order)
+        tx = self.chain_client.build_transaction(execute_fn, from_address=relayer_account.address)
+        return self.chain_client.sign_transaction(tx, self.relayer_private_key)
 
     def _execute_swap_call(self, swap_order: SwapOrder):
         contract = self.chain_client.load_contract("AtomicSwap", self.contract_address)
@@ -422,93 +446,109 @@ class AtomicSwapService:
         )
 
     @atomic(durable=True)
-    def _record_intent(self, swap_order: SwapOrder, relayer_address: str, arguments: dict):
-        tx_record = self._new_transaction_record(swap_order, relayer_address, arguments)
-        swap_order.mark_executing(transaction=tx_record)
-        return tx_record
-
-    @atomic(durable=True)
-    def _record_never_sent(
-        self,
-        swap_order: SwapOrder,
-        relayer_address: str,
-        arguments: dict,
-        raw_error: str,
-        told_to_the_parties: str,
-    ) -> None:
-        tx_record = self._new_transaction_record(swap_order, relayer_address, arguments)
-        tx_record.mark_failed(raw_error)
-        swap_order.mark_failed(told_to_the_parties)
-        logger.error(f"Swap {swap_order.uuid} was never sent: {raw_error}")
-        publish_trading_event("swap_failed", str(swap_order.share_token.uuid))
+    def _record_never_sent(self, swap_order, tx_record, raw_error, told_to_the_parties):
+        current = lock_current_claim(swap_order, tx_record, with_orders=True)
+        if current is None:
+            return
+        swap, transaction = current
+        if transaction.tx_hash or transaction.status not in (TransactionStatus.PENDING, TransactionStatus.FAILED):
+            return
+        transaction.mark_failed(raw_error)
+        swap.mark_failed(told_to_the_parties)
+        logger.error("Swap %s was never sent", swap.uuid)
+        publish_trading_event("swap_failed", str(swap.share_token_id))
 
     @atomic()
-    def _record_unknown_fate(self, swap_order: SwapOrder, tx_record, raw_error: str) -> None:
-        tx_record.mark_outcome_unknown(raw_error)
-        logger.error(f"Swap {swap_order.uuid} may or may not have been broadcast: {raw_error}")
+    def _record_unknown_fate(self, swap_order, tx_record, raw_error):
+        current = lock_current_claim(swap_order, tx_record)
+        if current is None:
+            return
+        _swap, transaction = current
+        if transaction.status not in (TransactionStatus.CONFIRMED, TransactionStatus.REVERTED):
+            transaction.mark_outcome_unknown(raw_error)
 
-    def _record_broadcast(self, swap_order: SwapOrder, tx_record, tx_hash: str) -> str:
-        self._record_sent(swap_order, tx_record, tx_hash)
-
+    def _record_broadcast(self, swap_order, tx_record, tx_hash):
+        current = self._record_sent(swap_order, tx_record, tx_hash)
+        if current is None:
+            return tx_hash
+        swap, transaction = current
         try:
             receipt = self.chain_client.receipt_even_if_reverted(tx_hash)
-        except Exception as e:
-            logger.error(f"Swap {swap_order.uuid} broadcast as {tx_hash} but its receipt is unknown: {e}")
+        except Exception:
+            logger.warning("Swap %s has a recorded broadcast and no receipt yet", swap.uuid)
             return tx_hash
-
-        self._record_receipt(swap_order, tx_record, tx_hash, receipt)
+        self._record_receipt(swap, transaction, tx_hash, receipt)
         return tx_hash
 
     @atomic()
-    def _record_sent(self, swap_order: SwapOrder, tx_record, tx_hash: str) -> None:
-        tx_record.mark_submitted(tx_hash)
-        swap_order.mark_executing(tx_hash, transaction=tx_record)
+    def _record_sent(self, swap_order, tx_record, tx_hash):
+        current = lock_current_claim(swap_order, tx_record)
+        if current is None or not hash_identity(tx_hash):
+            return None
+        swap, transaction = current
+        if transaction.tx_hash and hash_identity(transaction.tx_hash) != hash_identity(tx_hash):
+            return None
+        if transaction.status in (TransactionStatus.CONFIRMED, TransactionStatus.REVERTED):
+            return current if transaction.tx_hash else None
+        if transaction.status != TransactionStatus.SUBMITTED or not transaction.tx_hash:
+            transaction.mark_submitted(tx_hash)
+        if not swap.tx_hash:
+            swap.mark_executing(tx_hash, transaction=transaction)
+        return swap, transaction
 
     @atomic()
-    def _record_receipt(self, swap_order: SwapOrder, tx_record, tx_hash: str, receipt) -> None:
-        if receipt and receipt.get("status") == 1:
-            block_hash = receipt.get("blockHash", "")
-            tx_record.mark_confirmed(
-                block_number=receipt.get("blockNumber"),
-                block_hash=block_hash.hex() if isinstance(block_hash, bytes) else block_hash,
-                gas_used=receipt.get("gasUsed"),
-            )
-            swap_order.mark_completed()
-            logger.info(f"Swap {swap_order.uuid} completed: {tx_hash}")
-            publish_trading_event("swap_completed", str(swap_order.share_token.uuid))
-            return
-
+    def _record_receipt(self, swap_order, tx_record, tx_hash, receipt):
+        if not isinstance(receipt, Mapping) or receipt.get("status") not in (0, 1):
+            return None
+        if not hash_identity(tx_hash):
+            return None
+        receipt_hash = receipt.get("transactionHash")
+        if receipt_hash is not None and hash_identity(receipt_hash) != hash_identity(tx_hash):
+            return None
+        current = lock_current_claim(swap_order, tx_record, with_orders=True)
+        if current is None:
+            return None
+        swap, transaction = current
+        if hash_identity(transaction.tx_hash) != hash_identity(tx_hash):
+            return None
+        if receipt["status"] == 1:
+            if transaction.status == TransactionStatus.REVERTED:
+                return None
+            if transaction.status != TransactionStatus.CONFIRMED:
+                block_hash = receipt.get("blockHash", "")
+                transaction.mark_confirmed(
+                    block_number=receipt.get("blockNumber"),
+                    block_hash=block_hash.hex() if isinstance(block_hash, bytes) else block_hash,
+                    gas_used=receipt.get("gasUsed"),
+                )
+            swap.mark_completed()
+            publish_trading_event("swap_completed", str(swap.share_token_id))
+            return "executed"
+        if transaction.status == TransactionStatus.CONFIRMED:
+            return None
         reason = f"The chain reverted the swap: {tx_hash}"
-        tx_record.mark_reverted(reason)
-        swap_order.mark_failed(reason)
-        logger.error(f"Swap {swap_order.uuid} reverted on chain and moved nothing: {tx_hash}")
-        publish_trading_event("swap_failed", str(swap_order.share_token.uuid))
-
-    @staticmethod
-    def _locked_with_its_orders(swap_order: SwapOrder) -> SwapOrder:
-        return (
-            SwapOrder.objects.select_for_update()
-            .select_related("sell_order", "buy_order", "share_token")
-            .get(pk=swap_order.pk)
-        )
+        if transaction.status != TransactionStatus.REVERTED:
+            transaction.mark_reverted(reason)
+        swap.mark_failed(reason)
+        publish_trading_event("swap_failed", str(swap.share_token_id))
+        return "reverted"
 
     def executed_order_hash(self, swap_order: SwapOrder) -> str:
         signable = encode_typed_data(full_message=self.get_typed_data(swap_order))
         return _hash_eip191_message(signable).hex()
 
-    def chain_says_this_swap_executed(self, swap_order: SwapOrder) -> bool:
+    def chain_says_this_swap_executed(self, swap_order: SwapOrder, receipt=None) -> bool:
         if not swap_order.tx_hash:
-            return True
-
-        receipt = self.chain_client.receipt_even_if_reverted(swap_order.tx_hash)
+            return False
+        if receipt is None:
+            receipt = self.chain_client.receipt_even_if_reverted(swap_order.tx_hash)
+        if not isinstance(receipt, Mapping) or receipt.get("status") != 1:
+            return False
         contract = self.chain_client.load_contract("AtomicSwap", self.contract_address)
         expected = self.executed_order_hash(swap_order)
-
         for event in contract.events.SwapExecuted().process_receipt(receipt):
-            if event["args"]["orderHash"].hex().removeprefix("0x") == expected.removeprefix("0x"):
+            if hash_identity(event["args"]["orderHash"]) == hash_identity(expected):
                 return True
-
-        logger.error(f"Swap {swap_order.uuid} broadcast as {swap_order.tx_hash} settled a different order")
         return False
 
     def is_nonce_used(self, account: str, nonce: int) -> bool:
@@ -516,43 +556,16 @@ class AtomicSwapService:
         return contract.functions.isNonceUsed(self.chain_client.to_checksum_address(account), nonce).call()
 
     def resolve_executing_swap(self, swap_order: SwapOrder) -> Optional[str]:
-        if swap_order.status != SwapOrderStatus.EXECUTING:
+        if swap_order.status != SwapOrderStatus.EXECUTING or not swap_order.transaction_id or not swap_order.tx_hash:
             return None
-
-        settled = self.is_nonce_used(swap_order.seller_address, swap_order.nonce)
-
-        if settled:
-            if not self.chain_says_this_swap_executed(swap_order):
+        transaction = BlockchainTransaction.objects.get(pk=swap_order.transaction_id)
+        if hash_identity(transaction.tx_hash) != hash_identity(swap_order.tx_hash):
+            return None
+        receipt = self.chain_client.receipt_even_if_reverted(swap_order.tx_hash)
+        if isinstance(receipt, Mapping) and receipt.get("status") == 1:
+            if not self.chain_says_this_swap_executed(swap_order, receipt):
                 return None
-            return self._settle_from_chain(swap_order)
-
-        if not swap_order.deadline_passed:
-            logger.info(f"Swap {swap_order.uuid} is still executing and its deadline is still live; leaving it")
-            return None
-
-        return self._abandon_unsettled(swap_order)
-
-    @atomic()
-    def _settle_from_chain(self, swap_order: SwapOrder) -> Optional[str]:
-        swap = self._locked_with_its_orders(swap_order)
-        if swap.status != SwapOrderStatus.EXECUTING:
-            return None
-
-        swap.mark_completed()
-        logger.info(f"Swap {swap.uuid} settled on chain while its outcome was unknown; reconciled to completed")
-        publish_trading_event("swap_completed", str(swap.share_token.uuid))
-        return "executed"
-
-    @atomic()
-    def _abandon_unsettled(self, swap_order: SwapOrder) -> Optional[str]:
-        swap = self._locked_with_its_orders(swap_order)
-        if swap.status != SwapOrderStatus.EXECUTING:
-            return None
-
-        swap.mark_failed("The swap nonce was never used on chain and the deadline has passed.")
-        logger.warning(f"Swap {swap.uuid} never reached the chain and can no longer; reconciled to failed")
-        publish_trading_event("swap_failed", str(swap.share_token.uuid))
-        return "never executed"
+        return self._record_receipt(swap_order, transaction, swap_order.tx_hash, receipt)
 
     def find_swap_order_by_transfer_order(self, transfer_order: TransferOrder) -> Optional[SwapOrder]:
         return SwapOrder.objects.for_transfer_order(transfer_order)

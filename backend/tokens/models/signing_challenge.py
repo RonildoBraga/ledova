@@ -53,6 +53,13 @@ class SigningChallenge(DerivesWalletFromOrder, BaseModel):
         ordering = ["-created_at"]
         constraints = [
             models.UniqueConstraint(fields=["wallet_address", "nonce"], name="unique_nonce_per_wallet"),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(consumed_at__isnull=True, consumed_signature="")
+                    | (models.Q(consumed_at__isnull=False) & ~models.Q(consumed_signature=""))
+                ),
+                name="signing_challenge_complete_spend",
+            ),
         ]
         indexes = [
             models.Index(fields=["wallet_address", "purpose"]),

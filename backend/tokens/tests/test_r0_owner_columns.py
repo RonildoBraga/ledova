@@ -32,17 +32,22 @@ POSTGRES_ONLY = "The trigger is PostgreSQL; SQLite has no derive-and-refuse"
 MIGRATION_ROUND_TRIP_ONLY = "Deferred constraint checks are PostgreSQL; SQLite queues nothing to settle"
 BEFORE_THE_OWNER_COLUMNS = [("tokens", "0022_swap_nonce_is_unique")]
 TABLE = "signing_challenges"
-TRIGGER = "signing_challenges_wallet_is_checked"
+TRIGGERS = ("signing_challenges_wallet_is_checked", "signing_challenges_preserve_issued_intent")
 SIGNATURE = "0x" + "ab" * 65
 
 
 def orphan(challenge):
     with connection.cursor() as cursor:
-        if connection.vendor == "postgresql":
-            cursor.execute(f"ALTER TABLE {TABLE} DISABLE TRIGGER {TRIGGER}")
-        cursor.execute(f"UPDATE {TABLE} SET wallet_id = NULL WHERE digest = %s", [challenge.digest])
-        if connection.vendor == "postgresql":
-            cursor.execute(f"ALTER TABLE {TABLE} ENABLE TRIGGER {TRIGGER}")
+        disabled = []
+        try:
+            if connection.vendor == "postgresql":
+                for trigger in TRIGGERS:
+                    cursor.execute(f"ALTER TABLE {TABLE} DISABLE TRIGGER {trigger}")
+                    disabled.append(trigger)
+            cursor.execute(f"UPDATE {TABLE} SET wallet_id = NULL WHERE digest = %s", [challenge.digest])
+        finally:
+            for trigger in disabled:
+                cursor.execute(f"ALTER TABLE {TABLE} ENABLE TRIGGER {trigger}")
     return SigningChallenge.objects.get(pk=challenge.pk)
 
 

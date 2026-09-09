@@ -949,6 +949,26 @@ runs. Both mechanisms hold at once on purpose:
   business refusal's spend before raising it. A provider failure before this
   block leaves the signature retryable. The scoped transaction tests exercise
   this with real signatures and no surrounding test transaction.
+- **Issued trading intent is immutable.** `tokens/0035` adds database bounds for
+  order/swap amounts and their existing status/type values. Partial settlement
+  may still leave an OPEN order with nonzero fills, and a minimum fill may exceed
+  its remaining quantity. A PostgreSQL trigger freezes each signing challenge's
+  issued envelope and prevents resetting or replacing its first consumption.
+  The existing purge of expired, unspent challenges remains allowed.
+- **One current swap execution is claimed before preparation.** A fresh READY
+  row receives a transaction UUID and becomes EXECUTING in a durable transaction
+  before balance checks, building, signing or sending. Competing callers cannot
+  prepare another attempt. Signature writes also reread the locked swap. Shared
+  order locks are acquired by primary key, followed by challenge, swap and
+  current transaction locks where needed; matching then selects by the existing
+  price/time priority. Receipt I/O runs outside these locks, and each outcome
+  rechecks the order links, current UUID, both recorded hashes and fresh terminal
+  transaction evidence before changing reservations. A local failure before any
+  send can unwind once; a missing receipt, provider exception, monitor timeout,
+  elapsed deadline or unattributed nonce use cannot. A process death after the
+  claim leaves unresolved history. This does not supply durable signed-byte
+  recovery, request idempotency, aggregate reservations, a complete cross-row
+  state machine or trading RLS; those remain in #5 and #6.
 - **The strict read is deliberate.** Policies call
   `current_setting('app.user_id')::bigint` with no `missing_ok`, so an unset
   connection raises `unrecognized configuration parameter` and a cleared one
