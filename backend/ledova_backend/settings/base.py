@@ -89,6 +89,15 @@ USE_X_FORWARDED_PORT = True
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
 
+CACHES = {
+    "default": {
+        "BACKEND": "shared.cache.SharedRedisCache",
+        "LOCATION": REDIS_URL,
+        "KEY_PREFIX": "ledova",
+        "OPTIONS": {"socket_connect_timeout": 2, "socket_timeout": 2},
+    }
+}
+
 
 OPERATOR_NAME = os.environ.get("OPERATOR_NAME") or "Ledova operator"
 

@@ -7,6 +7,7 @@ from . import *  # noqa: F401,F403
 DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}}
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
+CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
 STORAGE_BACKEND = "local"
 MEDIA_ROOT = tempfile.mkdtemp(prefix="ledova-test-media-")
 PRIVATE_MEDIA_ROOT = tempfile.mkdtemp(prefix="ledova-test-private-media-")

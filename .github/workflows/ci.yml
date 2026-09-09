@@ -105,6 +105,12 @@ jobs:
       SECRET_KEY: ci-only
       STORAGE_BACKEND: local
     services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 20
       postgres:
         image: postgres:16
         env:
@@ -137,6 +143,12 @@ jobs:
         run: python manage.py makemigrations --check --dry-run
       - name: Unit tests (credential-free settings)
         run: python manage.py test --settings=ledova_backend.settings.test
+      - name: Shared sign-in throttle (real Redis, fresh and concurrent processes)
+        env:
+          THROTTLE_TEST_REDIS_URL: redis://127.0.0.1:6379/0
+        run: >-
+          python manage.py test authentication.tests.redis_throttle
+          --settings=ledova_backend.settings.test --noinput
       - name: API type drift gate
         env:
           POSTGRES_HOST: 127.0.0.1
