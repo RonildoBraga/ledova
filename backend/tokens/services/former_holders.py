@@ -90,7 +90,7 @@ def former_members_of(token: ShareToken):
 def fold_former_holders(token: ShareToken, reader=None) -> dict:
     retention_cutoff()
     reader = reader or chain_service()
-    head = reader.head_block()
+    head = reader.finalized_block()
     entries = reader.transfer_entries(token.contract_address, _deployment_block(token, reader), head)
     cessations = cessations_in(entries)
 

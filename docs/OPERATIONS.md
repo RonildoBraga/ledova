@@ -340,11 +340,17 @@ over it.
 ### Former-member records
 
 The periodic former-member fold reads every deployed or paused share class every
-six hours. It replays ordered Transfer events from deployment and records each
+six hours. It reads through the provider's `finalized` block, using the
+[Base RPC block tag](https://docs.base.org/base-chain/api-reference/ethereum-json-rpc-api/eth_getBlockByNumber).
+An unavailable finality reading leaves the last successful fold unchanged.
+It replays ordered Transfer events from deployment and records each
 cessation under that class. If a holder ceases more than once in one block, the
 last cessation in that block supplies that record. Incomplete, repeated or
 unreadable history leaves the previous successful timestamp intact. Database
 writes and the new timestamp commit together after provider reads finish.
+A class failure does not stop other classes being processed, but fails the task
+after the batch so its retry policy runs again after five minutes, within its
+configured retry limit. Refolding a class already processed does not rewrite its records.
 
 The register API and CSV carry a separate former-members section with the last
 successful read time, block and stale indicator (24 hours). A class never read

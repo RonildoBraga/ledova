@@ -144,7 +144,7 @@ class FoldTestFixtures:
 
     def reader(self, entries):
         reader = Mock()
-        reader.head_block.return_value = 99
+        reader.finalized_block.return_value = 99
         reader.transfer_entries.return_value = entries
         reader.block_date.side_effect = lambda block: date(2026, 3, 1) + timedelta(days=block)
         reader.deployment_block.return_value = 1

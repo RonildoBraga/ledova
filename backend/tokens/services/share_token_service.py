@@ -470,6 +470,12 @@ class ShareTokenService:
     def head_block(self) -> int:
         return self.chain_client.w3.eth.block_number
 
+    def finalized_block(self) -> int:
+        number = self.chain_client.w3.eth.get_block("finalized")["number"]
+        if not isinstance(number, int) or isinstance(number, bool) or number < 0:
+            raise ValueError("The provider did not return a finalized block number.")
+        return number
+
     def _transfer_logs(self, contract_address: str, from_block: int, to_block: int, window: int):
         if window <= 0:
             raise ValueError("Transfer-log window must be positive.")

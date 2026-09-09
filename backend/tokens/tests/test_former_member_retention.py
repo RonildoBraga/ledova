@@ -101,7 +101,7 @@ class FormerMemberRetentionTest(FoldTestFixtures, TestCase):
         self.token.refresh_from_db()
         stamp = self.token.former_holders_folded_at
         reader = self.reader(entries)
-        reader.head_block.return_value = 50
+        reader.finalized_block.return_value = 50
         result = fold_former_holders(self.token, reader=reader)
         self.token.refresh_from_db()
         self.assertEqual(result["block"], 99)
