@@ -172,7 +172,11 @@ endpoints, an independently trusted leaf and wrong-CA refusals. Top-level eviden
 includes the selected tool path/version, configuration hash and public certificate
 diagnostics; private keys are not uploaded. Named stages, including each probe
 reset, and separate primary/cleanup errors identify
-infrastructure failures without recording request credentials or bodies. The runner
+infrastructure failures without recording request credentials or bodies. Xcode
+commands have a 45-minute deadline; other asynchronous commands retain their
+30-minute limit, and the iOS CI job remains bounded to 90 minutes. A timeout
+terminates the owned command group and is reported separately from an exit code
+or signal. The runner
 then builds a separate test entry against loopback TLS servers with a generated
 CA. Android receives a temporary test-only trust resource; iOS receives the CA
 only in the owned simulator keychain. The ordinary artifact retains its normal

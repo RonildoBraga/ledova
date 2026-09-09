@@ -125,6 +125,7 @@ async function command(file, args, name, extraEnvironment = {}, cwd = mobile) {
   const log = fs.openSync(path.join(directory, `${name}.log`), 'w');
   let child;
   let timedOut = false;
+  const milliseconds = (file === 'xcodebuild' ? 45 : 30) * 60 * 1000;
   try {
     await new Promise((resolve, reject) => {
       child = ownedSpawn(file, args, {
@@ -132,13 +133,10 @@ async function command(file, args, name, extraEnvironment = {}, cwd = mobile) {
         env: { ...baseEnvironment, ...extraEnvironment },
         stdio: ['ignore', log, log],
       });
-      const timeout = setTimeout(
-        () => {
-          timedOut = true;
-          stopOwned(child).catch(reject);
-        },
-        30 * 60 * 1000,
-      );
+      const timeout = setTimeout(() => {
+        timedOut = true;
+        stopOwned(child).catch(reject);
+      }, milliseconds);
       const abort = () => {
         stopOwned(child).catch(reject);
       };
@@ -148,11 +146,12 @@ async function command(file, args, name, extraEnvironment = {}, cwd = mobile) {
         cancellation.signal.removeEventListener('abort', abort);
         reject(error);
       });
-      child.once('exit', (code) => {
+      child.once('exit', (code, signal) => {
         clearTimeout(timeout);
         cancellation.signal.removeEventListener('abort', abort);
-        if (code === 0 && !timedOut) resolve();
-        else reject(new Error(`${name} failed (${code}); read its log.`));
+        if (timedOut) reject(new Error(`${name} timed out after ${milliseconds / 1000} seconds; read its log.`));
+        else if (code === 0) resolve();
+        else reject(new Error(`${name} failed (${signal ?? code}); read its log.`));
       });
     });
     cancellation.signal.throwIfAborted();
