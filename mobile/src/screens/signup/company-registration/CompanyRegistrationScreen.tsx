@@ -309,7 +309,7 @@ export function CompanyRegistrationScreen() {
               ) : null}
 
               <View style={styles.fieldContainer}>
-                <Text style={styles.label}>Company Name *</Text>
+                <Text style={styles.label}>Registered company name *</Text>
                 <View style={styles.inputWrapper}>
                   <View style={styles.inputIcon}>
                     <BuildingsIcon

@@ -3,6 +3,7 @@ from rest_framework import serializers
 from companies.models import Company, CompanyStatus
 from companies.serializers.document import CompanyDocumentSerializer
 from companies.services.company import register_company
+from companies.services.editing import update_company
 from companies.validators import checked_abn, checked_acn, with_matching_identifiers
 from wallets.models import Wallet
 
@@ -198,6 +199,12 @@ class CompanyUpdateSerializer(serializers.ModelSerializer):
         ).verified_evm()
         return fields
 
+    def validate_name(self, value):
+        if self.instance and self.instance.status not in (CompanyStatus.DRAFT, CompanyStatus.INFO_REQUIRED):
+            if value != self.instance.name:
+                raise serializers.ValidationError("Request information before correcting the registered name.")
+        return value
+
     def validate_acn(self, value):
         instance = self.instance
         if instance and instance.status != CompanyStatus.DRAFT:
@@ -222,6 +229,9 @@ class CompanyUpdateSerializer(serializers.ModelSerializer):
     def validate(self, data):
         return with_matching_identifiers(self, data)
 
+    def update(self, instance, validated_data):
+        return update_company(instance, validated_data)
+
 
 class CompanyAPIKeySerializer(serializers.Serializer):
 
@@ -233,6 +243,9 @@ class CompanyStatusUpdateSerializer(serializers.Serializer):
 
     status = serializers.ChoiceField(choices=CompanyStatus.choices)
     reason = serializers.CharField(required=False, allow_blank=True)
+    declarant_name = serializers.CharField(max_length=255, required=False)
+    board_resolution_reference = serializers.CharField(max_length=255, required=False)
+    attest_officeholder = serializers.BooleanField(required=False)
 
     def validate(self, data):
         new_status = data["status"]

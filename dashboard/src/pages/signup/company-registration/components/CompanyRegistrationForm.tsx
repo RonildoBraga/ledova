@@ -60,7 +60,7 @@ export function CompanyRegistrationForm({
             )}
 
             <Field className="space-y-1">
-              <Label className="block text-sm font-medium text-text-body">Company Name *</Label>
+              <Label className="block text-sm font-medium text-text-body">Registered company name *</Label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <BuildingsIcon size={ICON_MD} className="text-text-subtle" />

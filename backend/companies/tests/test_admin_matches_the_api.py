@@ -81,7 +81,7 @@ class TheAdminIsNotMorePermissiveThanTheApiTest(TestCase):
         return self.refused_at(company, CompanyStatus.ACTIVE) - self.refused_at(company, CompanyStatus.DRAFT)
 
     def test_the_probe_finds_the_fields_the_api_locks_and_nothing_else(self):
-        self.assertEqual(self.immutable_after_draft(self.company), {"company_type", "acn", "abn"})
+        self.assertEqual(self.immutable_after_draft(self.company), {"name", "company_type", "acn", "abn"})
 
     def test_a_value_the_api_rejects_at_every_status_is_not_read_as_immutable(self):
         def always_invalid(company, name):

@@ -25,6 +25,8 @@ EMAIL_BACKEND = (
 
 KYC_PROVIDER = os.environ.get("KYC_PROVIDER", "")
 
+ABR_AUTH_GUID = os.environ.get("ABR_AUTH_GUID", "")
+
 KYCAID_API_TOKEN = os.environ.get("KYCAID_API_TOKEN", "")
 KYCAID_BASE_URL = os.environ.get("KYCAID_BASE_URL", "")
 KYCAID_FORM_ID = os.environ.get("KYCAID_FORM_ID", "")

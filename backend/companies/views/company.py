@@ -136,12 +136,11 @@ class CompanyViewSet(AuthenticatedModelViewSet):
         new_status = serializer.validated_data["status"]
         reason = serializer.validated_data.get("reason", "")
 
-        back_to_active = {CompanyStatus.WARNING: "resolve_warning", CompanyStatus.SUSPENDED: "reinstate"}
         transitions = {
             CompanyStatus.REVIEW: ("start_review", {}),
             CompanyStatus.INFO_REQUIRED: ("request_info", {"reason": reason}),
             CompanyStatus.APPROVED: ("approve", {"approved_by": request.user}),
-            CompanyStatus.ACTIVE: (back_to_active.get(company.status, "activate"), {}),
+            CompanyStatus.ACTIVE: ("set_active", {}),
             CompanyStatus.REJECTED: ("reject", {"reason": reason, "rejected_by": request.user}),
             CompanyStatus.WARNING: ("issue_warning", {"reason": reason}),
             CompanyStatus.SUSPENDED: ("suspend", {"reason": reason}),
@@ -153,7 +152,12 @@ class CompanyViewSet(AuthenticatedModelViewSet):
                 to_status=CompanyStatus(new_status).label,
             )
         method, kwargs = transitions[new_status]
-        transition_company(company, method, **kwargs)
+        declaration = {
+            key: serializer.validated_data[key]
+            for key in ("declarant_name", "board_resolution_reference", "attest_officeholder")
+            if key in serializer.validated_data
+        }
+        company = transition_company(company, method, actor=request.user, declaration=declaration, **kwargs)
 
         return Response(
             {
@@ -175,7 +179,7 @@ class CompanyViewSet(AuthenticatedModelViewSet):
         serializer = ApplicationSubmitSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        submit_application(company, submitted_by=request.user)
+        company = submit_application(company, submitted_by=request.user)
 
         return Response(
             {
@@ -197,7 +201,7 @@ class CompanyViewSet(AuthenticatedModelViewSet):
         serializer = ApplicationResubmitSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        transition_company(company, "resubmit", response=serializer.validated_data["response"])
+        company = transition_company(company, "resubmit", response=serializer.validated_data["response"])
 
         return Response(
             {
@@ -219,7 +223,7 @@ class CompanyViewSet(AuthenticatedModelViewSet):
         serializer = ApplicationWithdrawSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        transition_company(company, "withdraw", reason=serializer.validated_data.get("reason") or "")
+        company = transition_company(company, "withdraw", reason=serializer.validated_data.get("reason") or "")
 
         return Response(
             {
