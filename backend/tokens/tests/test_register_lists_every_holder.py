@@ -89,7 +89,7 @@ class TransferAcquiredHolderTest(RegisterTestBase):
         rows = list(csv.reader(io.StringIO(response.content.decode())))
 
         self.assertEqual(
-            rows[rows.index([]) + 1 :],
+            rows[rows.index([]) + 1 : rows.index([]) + 4],
             [
                 ["Issued supply", "12000"],
                 ["Held by listed holders", "11000"],

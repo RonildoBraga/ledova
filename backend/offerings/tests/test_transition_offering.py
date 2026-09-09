@@ -28,6 +28,7 @@ LEGAL = [
     (OfferingStatus.DRAFT, "withdraw", OfferingStatus.WITHDRAWN),
     (OfferingStatus.SUBMITTED, "withdraw", OfferingStatus.WITHDRAWN),
     (OfferingStatus.UNDER_REVIEW, "withdraw", OfferingStatus.WITHDRAWN),
+    (OfferingStatus.REJECTED, "withdraw", OfferingStatus.WITHDRAWN),
 ]
 
 METHOD_SOURCES = {
@@ -36,7 +37,7 @@ METHOD_SOURCES = {
     "approve": {OfferingStatus.SUBMITTED, OfferingStatus.UNDER_REVIEW},
     "reject": {OfferingStatus.SUBMITTED, OfferingStatus.UNDER_REVIEW},
     "close": {OfferingStatus.APPROVED},
-    "withdraw": {OfferingStatus.DRAFT, OfferingStatus.SUBMITTED, OfferingStatus.UNDER_REVIEW},
+    "withdraw": {OfferingStatus.DRAFT, OfferingStatus.SUBMITTED, OfferingStatus.UNDER_REVIEW, OfferingStatus.REJECTED},
 }
 
 NOTIFIED = {

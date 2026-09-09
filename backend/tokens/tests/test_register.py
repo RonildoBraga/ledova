@@ -282,7 +282,7 @@ class RegisterExportTest(RegisterTestBase):
         self.assertEqual(body["Company treasury"]["Residential address"], "")
         self.assertEqual(member["Percentage of issued supply"], "66.67%")
         self.assertEqual(
-            rows[rows.index([]) + 1 :],
+            rows[rows.index([]) + 1 : rows.index([]) + 3],
             [["Issued supply", "150"], ["Held by listed holders", "150"]],
         )
         self.assertEqual(body["Company treasury"]["Identity source"], IDENTITY_LABELS[IDENTITY_TREASURY_LABEL])

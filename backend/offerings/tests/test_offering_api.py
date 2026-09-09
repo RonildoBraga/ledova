@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+from django.utils import timezone
 from rest_framework.test import APITestCase
 
 from companies.models import Company, CompanyStatus
@@ -75,6 +76,39 @@ class OfferingApiTest(APITestCase):
             ),
         )
         self.assertEqual(Offering.objects.get(uuid=created.json()["uuid"]).status, OfferingStatus.DRAFT)
+
+    def test_withdrawing_a_rejected_offering_preserves_the_operator_review(self):
+        reviewed_at = timezone.now()
+        offering = self.tenant.offering
+        Offering.objects.filter(pk=offering.pk).update(
+            status=OfferingStatus.REJECTED,
+            rejection_reason="The evidence does not support this exemption.",
+            reviewed_by=self.other.user,
+            reviewed_at=reviewed_at,
+            review_notes="Evidence reviewed.",
+        )
+        response = self.client.post(f"{self._detail()}withdraw/", {"reason": "No longer proceeding"}, format="json")
+        self.assertEqual(response.status_code, 200, response.content)
+        offering.refresh_from_db()
+        self.assertEqual(offering.status, OfferingStatus.WITHDRAWN)
+        self.assertEqual(offering.close_reason, "No longer proceeding")
+        self.assertIsNotNone(offering.closed_at)
+        self.assertEqual(offering.rejection_reason, "The evidence does not support this exemption.")
+        self.assertEqual(offering.reviewed_by, self.other.user)
+        self.assertEqual(offering.reviewed_at, reviewed_at)
+        self.assertEqual(offering.review_notes, "Evidence reviewed.")
+        self.assertFalse(response.json()["canBeEdited"])
+        self.assertFalse(response.json()["canBeDeleted"])
+        self.assertEqual(self.client.post(f"{self._detail()}withdraw/").status_code, 400)
+        self.assertEqual(self.client.post(f"{self._detail()}submit/").status_code, 400)
+        self.assertEqual(self.client.delete(self._detail()).status_code, 400)
+
+    def test_another_issuer_cannot_withdraw_the_rejected_offering(self):
+        Offering.objects.filter(pk=self.other.offering.pk).update(status=OfferingStatus.REJECTED)
+        response = self.client.post(f"{self._detail(self.other.offering)}withdraw/")
+        self.assertEqual(response.status_code, 404)
+        self.other.offering.refresh_from_db()
+        self.assertEqual(self.other.offering.status, OfferingStatus.REJECTED)
 
     def test_a_foreign_share_class_cannot_be_offered(self):
         response = self.client.post(BASE, {"token": str(self.other.deployed_token.uuid), **PAYLOAD}, format="json")

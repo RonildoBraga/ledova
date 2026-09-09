@@ -18,6 +18,7 @@ SCOPED_TEST_LABELS = (
     "wallets.tests.test_confirmation_under_split_roles.ConfirmationUsesSeparateRolesTest",
     "tokens.tests.test_modification_refusals.ScopedModificationRefusalTest",
     "wallets.tests.test_confirmation_locking.ScopedConfirmationLockingTest",
+    "tokens.tests.test_former_member_privacy.ScopedFormerMemberPrivacyTest",
 )
 
 

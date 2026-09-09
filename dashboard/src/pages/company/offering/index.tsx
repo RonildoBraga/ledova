@@ -57,6 +57,9 @@ function OfferingRow({
         {offering.status === 'rejected' && offering.rejectionReason && (
           <p className="text-xs text-error-light mt-1">Rejected: {offering.rejectionReason}</p>
         )}
+        {offering.status === 'withdrawn' && offering.rejectionReason && (
+          <p className="text-xs text-text-muted mt-1">Previous rejection: {offering.rejectionReason}</p>
+        )}
         {offering.closeReason && <p className="text-xs text-text-muted mt-1">Closed: {offering.closeReason}</p>}
       </div>
       <div className="flex items-center gap-3">

@@ -91,6 +91,13 @@ afterEach(() => {
 });
 
 describe('the issuer request history through real query and service hooks', () => {
+  it('allows a register export after the last current holder has left', async () => {
+    showHistory();
+    await screen.findByText('No issuance requests yet.');
+    const download = screen.getByRole('button', { name: 'Download CSV' }) as HTMLButtonElement;
+    expect(download.disabled).toBe(false);
+  });
+
   it('refreshes the history after a submitted request receives 201', async () => {
     api.post.mockImplementation(async (url: string, data: { recipient: string; amount: number; reason: string }) => {
       expect(url).toBe(COMPANY_TOKEN_ENDPOINTS.ISSUE('token-1'));

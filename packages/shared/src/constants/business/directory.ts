@@ -31,7 +31,7 @@ export const OFFERING_EXEMPTION_LABELS: Record<OfferingExemption, string> = {
 };
 
 export const OFFERING_EDITABLE_STATUSES: OfferingStatus[] = ['draft'];
-export const OFFERING_WITHDRAWABLE_STATUSES: OfferingStatus[] = ['draft', 'submitted', 'under_review'];
+export const OFFERING_WITHDRAWABLE_STATUSES: OfferingStatus[] = ['draft', 'submitted', 'under_review', 'rejected'];
 
 export const DIRECTORY_COPY = {
   EMPTY_TITLE: 'No companies are listed yet',

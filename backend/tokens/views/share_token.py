@@ -12,6 +12,7 @@ from shared.views import AuthenticatedModelViewSet
 from tokens.filters import ShareTokenFilter
 from tokens.models import ShareIssuance, ShareToken
 from tokens.serializers import (
+    FormerMemberSerializer,
     ShareIssuanceCreateSerializer,
     ShareIssuanceListSerializer,
     ShareIssuanceRequestSerializer,
@@ -21,6 +22,7 @@ from tokens.serializers import (
     ShareTokenListSerializer,
 )
 from tokens.services import ShareTokenService
+from tokens.services.former_holders import fold_is_stale, former_members_of
 from tokens.services.register import (
     REGISTER_HEADERS,
     api_holders,
@@ -165,6 +167,10 @@ class ShareTokenViewSet(AuthenticatedModelViewSet):
                 "issued_supply": serializers.CharField(),
                 "listed_total": serializers.CharField(),
                 "discrepancy": serializers.CharField(),
+                "former_members": FormerMemberSerializer(many=True),
+                "former_members_as_at": serializers.DateTimeField(allow_null=True),
+                "former_members_block": serializers.IntegerField(allow_null=True),
+                "former_members_stale": serializers.BooleanField(),
             },
         )
     )
@@ -187,6 +193,10 @@ class ShareTokenViewSet(AuthenticatedModelViewSet):
                 "issued_supply": str(listed + discrepancy),
                 "listed_total": str(listed),
                 "discrepancy": str(discrepancy),
+                "former_members": FormerMemberSerializer(former_members_of(token), many=True).data,
+                "former_members_as_at": token.former_holders_folded_at,
+                "former_members_block": token.former_holders_block,
+                "former_members_stale": fold_is_stale(token),
             }
         )
 

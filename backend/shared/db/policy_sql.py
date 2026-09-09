@@ -11,7 +11,19 @@ def install(schema_editor):
         for name, body in HELPERS.items():
             cursor.execute(f"CREATE OR REPLACE FUNCTION {name}() RETURNS SETOF uuid LANGUAGE sql STABLE AS $${body}$$")
 
-        for table, (readable, writable) in POLICIES.items():
+    install_tables(schema_editor, POLICIES)
+
+
+def install_tables(schema_editor, tables):
+    if schema_editor.connection.vendor != "postgresql":
+        return
+
+    with schema_editor.connection.cursor() as cursor:
+        for table in tables:
+            readable, writable = POLICIES[table]
+            cursor.execute("SELECT to_regclass(%s) IS NOT NULL", [table])
+            if not cursor.fetchone()[0]:
+                continue
             cursor.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
             cursor.execute(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY")
             for suffix in SUFFIXES:
@@ -31,6 +43,9 @@ def remove(schema_editor):
 
     with schema_editor.connection.cursor() as cursor:
         for table in POLICIES:
+            cursor.execute("SELECT to_regclass(%s) IS NOT NULL", [table])
+            if not cursor.fetchone()[0]:
+                continue
             for suffix in SUFFIXES:
                 cursor.execute(f"DROP POLICY IF EXISTS {table}_{suffix} ON {table}")
             cursor.execute(f"ALTER TABLE {table} NO FORCE ROW LEVEL SECURITY")

@@ -275,16 +275,16 @@ class TheHoleIsBackAfterTheReverseAndGoneAfterTheForwardTest(TransactionTestCase
         token = tenant.deployed_token
         ShareToken.objects.filter(pk=token.pk).update(symbol="RTRP")
 
-        migrate_to(BEFORE_THE_REPARENT_REFUSAL)
-        ShareToken.objects.filter(pk=token.pk).update(company=stranger.company)
-        self.assertEqual(ShareToken.objects.get(pk=token.pk).owner_id, stranger.company.owner_id)
+        historical = migrate_to(BEFORE_THE_REPARENT_REFUSAL).get_model("tokens", "ShareToken")
+        historical.objects.filter(pk=token.pk).update(company_id=stranger.company.pk)
+        self.assertEqual(historical.objects.get(pk=token.pk).owner_id, stranger.company.owner_id)
 
-        ShareToken.objects.filter(pk=token.pk).update(company=tenant.company)
-        migrate_to(WITH_THE_REPARENT_REFUSAL)
+        historical.objects.filter(pk=token.pk).update(company_id=tenant.company.pk)
+        historical = migrate_to(WITH_THE_REPARENT_REFUSAL).get_model("tokens", "ShareToken")
 
         with self.assertRaises(Exception) as refusal:
             with transaction.atomic():
-                ShareToken.objects.filter(pk=token.pk).update(company=stranger.company)
+                historical.objects.filter(pk=token.pk).update(company_id=stranger.company.pk)
 
         self.assertIn("cannot move this row to another owner", str(refusal.exception))
-        self.assertEqual(ShareToken.objects.get(pk=token.pk).owner_id, tenant.company.owner_id)
+        self.assertEqual(historical.objects.get(pk=token.pk).owner_id, tenant.company.owner_id)
