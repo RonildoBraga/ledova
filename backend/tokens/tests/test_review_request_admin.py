@@ -1,13 +1,20 @@
+from datetime import timedelta
 from unittest.mock import patch
 
 from django.contrib.admin.sites import site
 from django.contrib.auth import get_user_model
 from django.test import RequestFactory, TestCase, override_settings
-from django.urls import reverse
+from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
 
 from shared.tests.tenants import make_tenant
-from tokens.models import CapitalIncreaseRequest, RequestStatus, ShareIssuanceRequest
+from tokens.models import (
+    CapitalIncreaseRequest,
+    RequestStatus,
+    ShareIssuance,
+    ShareIssuanceRequest,
+)
+from tokens.services import ShareTokenService
 from tokens.services.capital_increase import submit_capital_increase
 
 User = get_user_model()
@@ -52,6 +59,35 @@ class ReviewRequestAdminTest(TestCase):
                 self.assertContains(change, url(obj, "approve"))
                 self.assertContains(change, url(obj, "reject"))
                 self.assertNotContains(change, url(obj, "execute"))
+
+    def test_legacy_recovery_renders_the_hash_form_without_a_release_action(self):
+        self.issuance.status = RequestStatus.FAILED
+        self.issuance.save(update_fields=["status"])
+        ShareIssuanceRequest.objects.filter(pk=self.issuance.pk).update(updated_at=timezone.now() - timedelta(hours=1))
+        recorded = ShareIssuance.objects.create(
+            token=self.issuance.token,
+            recipient_address=self.issuance.recipient_address,
+            amount=str(self.issuance.amount),
+            status="failed",
+            idempotency_key=ShareTokenService.issuance_key(self.issuance),
+        )
+        change = self.client.get(url(self.issuance, "change"))
+        self.assertContains(change, "Record legacy transaction hash")
+        self.assertNotContains(change, "Release claim")
+        with self.assertRaises(NoReverseMatch):
+            url(self.issuance, "release_claim")
+
+        page = self.client.get(url(self.issuance, "name_mint"))
+        self.assertContains(page, 'name="tx_hash"')
+        invalid = self.client.post(url(self.issuance, "name_mint"), {"tx_hash": "0x" + "z" * 64})
+        self.assertContains(invalid, "64 hexadecimal characters")
+        recorded.refresh_from_db()
+        self.assertIsNone(recorded.tx_hash)
+        with patch("tokens.services.share_token_service.get_base_chain_client"):
+            response = self.client.post(url(self.issuance, "name_mint"), {"tx_hash": "0x" + "ab" * 32})
+        self.assertRedirects(response, url(self.issuance, "change"), fetch_redirect_response=False)
+        recorded.refresh_from_db()
+        self.assertEqual(recorded.tx_hash, "0x" + "ab" * 32)
 
     def test_start_review_approve_then_execute_defers_one_task(self):
         for obj, step in ((self.capital_increase, "setAuthorizedShares(1100)"), (self.issuance, "mint(0x")):

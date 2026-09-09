@@ -20,6 +20,7 @@ from integrations.base_chain.client import BROADCAST_ROUND_TRIPS, HTTP_TIMEOUT_S
 from integrations.base_chain.exceptions import (
     BaseChainConnectionError,
     BaseChainContractError,
+    BaseChainTransactionError,
 )
 from operators.settlement import settlement_deployments
 from shared.constants import BLOCKCHAIN_BASE
@@ -52,6 +53,16 @@ from tokens.models import (
 from tokens.querysets.share_issuance import ISSUANCE_KEY_PREFIX
 from tokens.services.dilution import dilution_for
 from tokens.services.holder_identity import identity_at_allotment
+from tokens.services.mint_journal import (
+    fail_mint_attempt,
+    fail_recorded_mint,
+    mark_mint_reverted,
+    mint_failure_detail,
+    record_signed_mint,
+    recorded_mint_payload,
+    release_unsigned_mint,
+    start_mint_attempt,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -60,14 +71,12 @@ LOG_WINDOW = 2000
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 NOT_WHITELISTED = "Recipient wallet is not whitelisted. Whitelist it before executing."
 EXCEEDS_AUTHORIZED = "Amount exceeds authorized shares. Submit a capital increase first."
-RELEASED_BY_OPERATOR = (
-    "An operator checked the chain, found no mint for this request, and released the claim. " "Retrying issues afresh."
-)
 UNNAMED_MINT_GRACE = 2 * BROADCAST_ROUND_TRIPS * timedelta(seconds=HTTP_TIMEOUT_SECONDS)
 CLAIMED_BEFORE_RECORDED = (
     "The worker claimed this request and stopped before recording a mint, so nothing was sent. "
     "Retrying issues afresh."
 )
+STOPPED_BEFORE_SIGNING = "The worker stopped before recording a signed mint. Its attempt was closed; retrying is safe."
 TOKEN_PAUSED = "Token is paused. Unpause it before executing."
 SHARE_ASSET_CHAIN = BLOCKCHAIN_BASE
 NOT_ATTESTED = "{symbol} at {address} is not the address the factory holds for {identifier}; left unverified"
@@ -188,15 +197,19 @@ class ShareTokenService:
         }
 
     def _mint_to(
-        self, contract_address: str, recipient: str, amount: int, on_sent: Callable[[str], None] | None = None
+        self,
+        contract_address: str,
+        recipient: str,
+        amount: int,
+        on_signed: Callable[[str, bytes], None],
     ) -> dict:
         token_contract = self.load_share_token(contract_address)
         recipient_checksum = self.chain_client.to_checksum_address(recipient)
 
         mint_fn = token_contract.functions.mint(recipient_checksum, amount)
-        tx_hash, _ = self.chain_client.send_transaction(mint_fn, self.signer_key, wait_for_receipt=False)
-        if on_sent is not None:
-            on_sent(tx_hash)
+        tx_hash, _ = self.chain_client.send_transaction(
+            mint_fn, self.signer_key, wait_for_receipt=False, on_signed=on_signed
+        )
         receipt = self.chain_client.wait_for_receipt(tx_hash)
 
         return self._tx_result(tx_hash, receipt)
@@ -571,22 +584,22 @@ class ShareTokenService:
             request.mark_refused(EXCEEDS_AUTHORIZED)
             raise IssuanceRefusedException(EXCEEDS_AUTHORIZED)
 
-        self._start_execution(request)
-        if issuance is None:
-            stamped = identity_at_allotment(recipient, chain=SHARE_ASSET_CHAIN)
-            issuance = ShareIssuance.objects.create(
-                token=token,
-                recipient_address=recipient,
-                recipient_name=stamped.name or request.recipient_name,
-                recipient_residential_address=stamped.residential_address,
-                identity_stamped_at=timezone.now() if stamped.name else None,
-                amount=str(request.amount),
-                issuance_type=request.issuance_type,
-                reason=f"Issuance request: {request.reason}",
-                initiated_by=executed_by or request.reviewed_by,
-                idempotency_key=self.issuance_key(request),
-            )
-        issuance.mark_processing()
+        stamped = identity_at_allotment(recipient, chain=SHARE_ASSET_CHAIN)
+        issuance, attempt_id = start_mint_attempt(
+            request,
+            issuance,
+            token=token,
+            recipient_address=recipient,
+            recipient_name=stamped.name or request.recipient_name,
+            recipient_residential_address=stamped.residential_address,
+            identity_stamped_at=timezone.now() if stamped.name else None,
+            amount=str(request.amount),
+            issuance_type=request.issuance_type,
+            reason=f"Issuance request: {request.reason}",
+            initiated_by=executed_by or request.reviewed_by,
+            idempotency_key=self.issuance_key(request),
+        )
+        request.refresh_from_db(fields=["status", "updated_at"])
         logger.info(f"Minting {request.amount} {token.symbol} to {recipient}")
 
         try:
@@ -594,12 +607,14 @@ class ShareTokenService:
                 token.contract_address,
                 recipient,
                 request.amount,
-                on_sent=lambda tx_hash: issuance.mark_processing(tx_hash=tx_hash),
+                on_signed=lambda tx_hash, raw: record_signed_mint(request, issuance, attempt_id, tx_hash, raw),
             )
         except Exception as exc:
-            logger.error(f"Issuance failed: {exc}")
-            issuance.mark_failed(str(exc))
-            request.mark_failed(ISSUANCE_EXECUTION_FAILED)
+            logger.error(f"Issuance failed for request {request.uuid} ({type(exc).__name__})")
+            detail = mint_failure_detail(exc)
+            fail_mint_attempt(request, issuance, attempt_id, detail, ISSUANCE_EXECUTION_FAILED)
+            if detail != str(exc):
+                raise BaseChainTransactionError(detail) from None
             raise
 
         self._complete_issuance(request, issuance, result)
@@ -617,14 +632,17 @@ class ShareTokenService:
             receipt = self.chain_client.get_transaction_receipt(tx_hash)
             if receipt is not None and receipt["status"] != 1:
                 logger.warning(f"mint {tx_hash} for request {request.uuid} reverted; a fresh mint is safe")
-                issuance.mark_reverted(f"Transaction reverted: {tx_hash}")
+                mark_mint_reverted(request, issuance, tx_hash)
                 return None
             if receipt is None:
+                self._rebroadcast_mint(issuance)
                 receipt = self.chain_client.wait_for_receipt(tx_hash)
         except Exception as exc:
-            logger.error(f"mint {tx_hash} for request {request.uuid} still unconfirmed: {exc}")
-            issuance.mark_failed(str(exc))
-            request.mark_failed(ISSUANCE_EXECUTION_FAILED)
+            logger.error(f"mint {tx_hash} for request {request.uuid} still unconfirmed ({type(exc).__name__})")
+            detail = mint_failure_detail(exc)
+            fail_recorded_mint(request, issuance, tx_hash, detail, ISSUANCE_EXECUTION_FAILED)
+            if detail != str(exc):
+                raise BaseChainTransactionError(detail) from None
             raise
 
         logger.info(f"mint {tx_hash} for request {request.uuid} already mined; completing without sending")
@@ -632,12 +650,33 @@ class ShareTokenService:
         self._complete_issuance(request, issuance, result)
         return result
 
+    def _rebroadcast_mint(self, issuance: ShareIssuance) -> None:
+        raw_transaction = recorded_mint_payload(issuance)
+        if raw_transaction is None:
+            return
+        try:
+            answered_hash = self.chain_client.send_raw_transaction(raw_transaction)
+        except Exception as exc:
+            logger.warning(f"Mint replay remains unresolved for issuance {issuance.pk} ({type(exc).__name__})")
+            return
+        if answered_hash != issuance.tx_hash:
+            raise InvalidTokenStateException("The node returned a different hash for the recorded mint.")
+
     @staticmethod
     def _complete_issuance(request: ShareIssuanceRequest, issuance: ShareIssuance, result: dict) -> None:
-        issuance.mark_completed(
-            tx_hash=result["tx_hash"], block_number=result["block_number"], gas_used=result["gas_used"]
-        )
-        request.mark_executed(issuance)
+        with atomic():
+            current_request = ShareIssuanceRequest.objects.select_for_update().get(pk=request.pk)
+            current = ShareIssuance.objects.select_for_update().get(pk=issuance.pk)
+            if current.tx_hash != result["tx_hash"]:
+                raise InvalidTokenStateException("The issuance now identifies a different mint transaction.")
+            if current.status != IssuanceStatus.COMPLETED:
+                current.mark_completed(
+                    tx_hash=result["tx_hash"], block_number=result["block_number"], gas_used=result["gas_used"]
+                )
+            if current_request.status != RequestStatus.EXECUTED:
+                current_request.mark_executed(current)
+        issuance.refresh_from_db()
+        request.refresh_from_db()
         ShareTokenService._seed_recipient_holding(request.token, issuance.recipient_address)
         logger.info(f"Issuance executed for {request.token.symbol}: {result['tx_hash']}")
 
@@ -667,7 +706,7 @@ class ShareTokenService:
     @classmethod
     def unnamed_mint(cls, request: ShareIssuanceRequest) -> Optional[ShareIssuance]:
         recorded = ShareIssuance.objects.filter(idempotency_key=cls.issuance_key(request)).first()
-        if recorded is None or recorded.tx_hash:
+        if recorded is None or recorded.tx_hash or recorded.mint_journal is not None:
             return None
         if request.updated_at > timezone.now() - UNNAMED_MINT_GRACE:
             return None
@@ -682,23 +721,14 @@ class ShareTokenService:
         logger.info(f"Request {request.uuid} had its mint named {tx_hash} by an operator")
         return issuance
 
-    @atomic()
-    def release_unnamed_claim(self, request: ShareIssuanceRequest) -> ShareIssuanceRequest:
-        issuance = self.unnamed_mint(request)
-        if issuance is None:
-            raise InvalidTokenStateException("This request has no unnamed mint, so there is no claim to release.")
-        issuance.mark_failed(RELEASED_BY_OPERATOR)
-        request.mark_failed(RELEASED_BY_OPERATOR)
-        logger.warning(f"Request {request.uuid} had its claim released by an operator; a retry will mint afresh")
-        return request
-
     def resolve_executing_issuance(self, request: ShareIssuanceRequest) -> Optional[str]:
         recorded = ShareIssuance.objects.filter(idempotency_key=self.issuance_key(request)).first()
         if recorded is None:
             logger.warning(f"Request {request.uuid} was claimed and no mint was recorded; releasing the claim")
-            request.mark_failed(CLAIMED_BEFORE_RECORDED)
-            return "released"
+            return "released" if release_unsigned_mint(request, CLAIMED_BEFORE_RECORDED) else None
         if not recorded.tx_hash:
+            if release_unsigned_mint(request, STOPPED_BEFORE_SIGNING):
+                return "released"
             logger.warning(
                 f"Request {request.uuid} recorded a mint it never named, so the send may have gone out; "
                 f"left for the operator"
@@ -708,11 +738,15 @@ class ShareTokenService:
         tx_hash = issuance.tx_hash
         receipt = self.chain_client.get_transaction_receipt(tx_hash)
         if receipt is None:
-            return None
+            self._rebroadcast_mint(issuance)
+            if issuance.mint_journal is None:
+                return None
+            receipt = self.chain_client.get_transaction_receipt(tx_hash)
+            if receipt is None:
+                return None
         if receipt["status"] != 1:
             logger.warning(f"mint {tx_hash} for request {request.uuid} reverted; the request can be retried")
-            issuance.mark_reverted(f"Transaction reverted: {tx_hash}")
-            request.mark_failed(f"Transaction reverted: {tx_hash}")
+            mark_mint_reverted(request, issuance, tx_hash, fail_request=True)
             return "reverted"
         logger.info(f"mint {tx_hash} for request {request.uuid} mined while the worker was gone; completing")
         self._complete_issuance(request, issuance, self._tx_result(tx_hash, receipt))

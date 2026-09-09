@@ -15,6 +15,7 @@ from django.test import override_settings
 from django.utils import timezone
 from eth_account import Account
 from rest_framework.test import APITestCase, APITransactionTestCase
+from web3 import Web3
 
 from assets.models import Asset, AssetChainDeployment, AssetType
 from blockchain.models import BlockchainTransaction, TransactionStatus, TransactionType
@@ -612,6 +613,60 @@ class ShareTokenChainTest(ChainTestMixin, APITestCase):
         self.assertEqual((issuance.status, issuance.block_number), (IssuanceStatus.COMPLETED, retried["block_number"]))
         self.assertEqual((request.status, request.executed_issuance), (RequestStatus.EXECUTED, issuance))
         self.assertEqual(ShareIssuance.objects.completed_supply(self.token), 10)
+
+    def test_a_mint_journaled_before_a_failed_send_is_replayed_on_the_same_nonce(self):
+        self._deployed()
+        request = self._whitelisted_request(amount=10)
+        nonce_before = self._signer_nonce()
+        with patch.object(
+            BaseChainClient, "send_raw_transaction", side_effect=ConnectionError("send never reached node")
+        ):
+            with self.assertRaisesMessage(ConnectionError, "send never reached node"):
+                self._execute(request)
+        issuance = ShareIssuance.objects.get(token=self.token)
+        raw = Web3.to_bytes(hexstr=issuance.mint_journal[-1]["raw_transaction"])
+        self.assertEqual(issuance.tx_hash, Web3.to_hex(Web3.keccak(raw)))
+        self.assertEqual(self._signer_nonce(), nonce_before)
+        self.assertEqual(self._contract().functions.totalSupply().call(), 0)
+        self.assertIsNone(self.service.chain_client.get_transaction_receipt(issuance.tx_hash))
+
+        request.refresh_from_db()
+        with patch.object(BaseChainClient, "sign_transaction", side_effect=AssertionError("must replay saved bytes")):
+            result = self._execute(request)
+        self.assertTrue(result["success"], result)
+        self.assertEqual(result["tx_hash"], issuance.tx_hash)
+        self.assertEqual(self._signer_nonce(), nonce_before + 1)
+        self.assertEqual(self._contract().functions.totalSupply().call(), 10)
+        self.assertEqual(self._contract().functions.balanceOf(self.investor).call(), 10)
+
+    def test_a_lost_send_response_is_reconciled_to_the_original_mint(self):
+        self._deployed()
+        request = self._whitelisted_request(amount=10)
+        nonce_before = self._signer_nonce()
+        actual_send = self.service.chain_client.send_raw_transaction
+
+        def send_then_lose_response(raw):
+            actual_send(raw)
+            raise ConnectionError("send response lost")
+
+        with patch.object(BaseChainClient, "send_raw_transaction", side_effect=send_then_lose_response):
+            with self.assertRaisesMessage(ConnectionError, "send response lost"):
+                self._execute(request)
+        issuance = ShareIssuance.objects.get(token=self.token)
+        self.assertEqual(self._contract().functions.totalSupply().call(), 10)
+        self.assertEqual(self._signer_nonce(), nonce_before + 1)
+        self.assertEqual(self.w3.eth.get_transaction_receipt(issuance.tx_hash)["status"], 1)
+
+        request.refresh_from_db()
+        with patch.object(
+            BaseChainClient, "sign_transaction", side_effect=AssertionError("must not sign another mint")
+        ):
+            result = self._execute(request)
+        self.assertTrue(result["success"], result)
+        self.assertEqual(result["tx_hash"], issuance.tx_hash)
+        self.assertEqual(self._signer_nonce(), nonce_before + 1)
+        self.assertEqual(self._contract().functions.totalSupply().call(), 10)
+        self.assertEqual(self._contract().functions.balanceOf(self.investor).call(), 10)
 
     def test_lost_set_authorized_receipt_is_resumed_on_retry_instead_of_refusing_the_increase(self):
         self._deployed()

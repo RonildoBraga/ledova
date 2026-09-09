@@ -821,6 +821,36 @@ nothing else. `expire_unpaid_subscriptions` only ever touches a subscription
 that is awaiting payment, past its due date, and has no payment recorded
 against it — a part-paid row is left for the operator.
 
+Share issuances created after `tokens/0034` keep a private `mint_journal`.
+Each attempt records its fixed transaction hash and signed payload in a durable
+database transaction **before** submitting it to the node. The payload already
+contains the account nonce and chain ID. Wrapping mint execution in another
+database transaction is refused because a rollback after submission would lose
+that identity. The journal is omitted from API responses and admin forms;
+database backups containing it carry signed transactions that can be broadcast.
+
+If a worker stops after signing, retrying the request or running
+`check_executing_issuance_requests` looks for its receipt and, when no receipt
+is available, resubmits the **same signed bytes**. A missing receipt or transaction
+does not prove that submission never happened. Duplicate, nonce-too-low and
+unavailable-provider responses leave the recorded transaction unresolved until
+its receipt can be read; they never authorize a new nonce. A confirmed revert
+permits a new signed attempt while preserving the previous attempt in the journal.
+The global signer nonce coordination and receipt finality work remain separate
+hardening items; trading remains disabled by default.
+
+If the journal shows that an attempt stopped before recording any signed
+transaction, the stale-execution sweep closes that attempt and releases the
+request for retry. A delayed worker cannot subsequently submit that closed
+attempt. Legacy rows have a null journal and cannot establish this fact: their
+hashless state remains unresolved, including rows previously marked failed.
+Once the legacy grace period has passed, the admin offers **Record legacy
+transaction hash** for those rows. Identify this request's mint in the operator's
+transaction history and record its hash so the sweep can reconcile it. The old
+**Release claim** action has been removed; provider absence alone is insufficient
+evidence for issuing again. Legacy rows that already identify a transaction
+continue receipt-based reconciliation and cannot replay without a saved payload.
+
 `purge_classification_evidence` deletes the evidence file of an investor
 classification once it is past its retention horizon, leaving the row, its
 status and its review outcome untouched. There is one horizon and two things
