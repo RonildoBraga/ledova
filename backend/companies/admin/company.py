@@ -435,7 +435,7 @@ class CompanyAdmin(admin.ModelAdmin):
 
     inlines = [CompanyDocumentInline, CompanyRegistryCheckInline]
 
-    actions = ["start_review_action"]
+    actions = []
 
     status_badge = status_badge(STATUS_COLORS)
 
@@ -553,11 +553,3 @@ class CompanyAdmin(admin.ModelAdmin):
         else:
             messages.add_message(request, spec.get("level", messages.SUCCESS), spec["done"].format(name=company.name))
         return HttpResponseRedirect(change_url)
-
-    @admin.action(description="Start review for selected submitted applications")
-    def start_review_action(self, request, queryset):
-        count = 0
-        for company in queryset.filter(status=CompanyStatus.SUBMITTED):
-            transition_company(company, "start_review", actor=request.user)
-            count += 1
-        self.message_user(request, f"Review started for {count} applications.")

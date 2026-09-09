@@ -65,6 +65,7 @@ class ABRResponseTest(SimpleTestCase):
             b"x" * (MAX_RESPONSE_BYTES + 1),
             b"<different />",
             registry_xml(ENTITY + "<mainName><organisationName>Other Pty Ltd</organisationName></mainName>"),
+            registry_xml(ENTITY + "<entityType><entityTypeCode>PUB</entityTypeCode></entityType>"),
             registry_xml(ENTITY.replace("123456780</ASICNumber>", "bad</ASICNumber>")),
             registry_xml(ENTITY.replace("99123456780", "123")),
             registry_xml(ENTITY.replace("Synthetic Example Pty Ltd", "x" * 256)),

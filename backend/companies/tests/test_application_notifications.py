@@ -1,8 +1,6 @@
-from types import SimpleNamespace
 from unittest import skipUnless
 from unittest.mock import patch
 
-from django.contrib.admin.sites import AdminSite
 from django.contrib.auth import get_user_model
 from django.db import connection, transaction
 from django.test import TestCase, override_settings
@@ -10,7 +8,6 @@ from django.urls import reverse
 from procrastinate.contrib.django.models import ProcrastinateJob
 from rest_framework.test import APITestCase
 
-from companies.admin.company import CompanyAdmin
 from companies.models import (
     LISTING_REQUIRED_DOCUMENTS,
     Company,
@@ -191,14 +188,16 @@ class ApplicationNotificationEntryPointsTest(APITestCase):
         self.assertEqual(self._titles(), ["More information requested"])
         self.assertEqual(Notification.objects.get().body, "More information requested: Share register")
 
-    def test_admin_bulk_start_review_action(self):
-        self._set_status(CompanyStatus.REVIEW)
-        draft = Company.objects.create(owner=self.owner, name="Still draft", acn="333333333")
-        admin = CompanyAdmin(Company, AdminSite())
-        admin.message_user = lambda *args, **kwargs: None
-
+    def test_admin_individual_start_review_notifies_only_after_confirmation(self):
         self._set_status(CompanyStatus.SUBMITTED)
-        admin.start_review_action(SimpleNamespace(user=self.staff), Company.objects.all())
+        draft = Company.objects.create(owner=self.owner, name="Still draft", acn="333333333")
+        self.client.force_login(self.staff)
+        url = reverse("admin:companies_company_transition", args=[self.company.uuid, "start-review"])
+        self.assertEqual(self.client.get(url).status_code, 200)
+        self.task.defer.assert_not_called()
+        self.company.refresh_from_db()
+        self.assertEqual(self.company.status, CompanyStatus.SUBMITTED)
+        self.assertEqual(self.client.post(url, {"confirm": True}).status_code, 302)
 
         self.task.defer.assert_called_once()
         self.assertEqual(self._titles(), ["Review started"])

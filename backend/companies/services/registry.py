@@ -1,10 +1,21 @@
 from django.utils import timezone
 
 from companies.identity import company_identity, registered_name
-from companies.models import Company, CompanyRegistryCheck, RegistryCheckStatus
+from companies.models import (
+    Company,
+    CompanyRegistryCheck,
+    CompanyType,
+    RegistryCheckStatus,
+)
 from companies.validators import digits_of
 from integrations.abr import lookup_company
 from shared.db import atomic
+
+ABR_COMPANY_TYPES = {
+    CompanyType.PROPRIETARY: "PRV",
+    CompanyType.PUBLIC: "PUB",
+    CompanyType.UNLISTED_PUBLIC: "PUB",
+}
 
 
 def begin_registry_check(company, purpose, initiated_by):
@@ -49,7 +60,9 @@ def observation_result(check, observation):
     if observation.reason:
         status = RegistryCheckStatus.FAILED if observation.reason == "not_found" else RegistryCheckStatus.PENDING
         return status, observation.reason
-    if not all((observation.abn, observation.acn, observation.entity_name, observation.entity_status)):
+    if not all(
+        (observation.abn, observation.acn, observation.entity_name, observation.entity_type, observation.entity_status)
+    ):
         return RegistryCheckStatus.PENDING, "incomplete_identity"
     if (
         digits_of(observation.acn) != check.identity["acn"]
@@ -63,6 +76,11 @@ def observation_result(check, observation):
         return RegistryCheckStatus.PENDING, "unknown_status"
     if registered_name(observation.entity_name) != check.identity["name"]:
         return RegistryCheckStatus.FAILED, "name_mismatch"
+    expected_type = ABR_COMPANY_TYPES.get(check.identity["company_type"])
+    if expected_type is None or observation.entity_type not in ABR_COMPANY_TYPES.values():
+        return RegistryCheckStatus.PENDING, "unknown_entity_type"
+    if observation.entity_type != expected_type:
+        return RegistryCheckStatus.FAILED, "entity_type_mismatch"
     return RegistryCheckStatus.PASSED, "matched"
 
 

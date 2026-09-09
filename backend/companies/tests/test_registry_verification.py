@@ -19,6 +19,7 @@ from companies.exceptions import (
 from companies.models import (
     Company,
     CompanyStatus,
+    CompanyType,
     RegistryCheckPurpose,
     RegistryCheckStatus,
 )
@@ -221,6 +222,90 @@ class CompanyRegistryVerificationTest(TransactionTestCase):
         self.transition("activate")
         self.assertEqual(self.company.status, CompanyStatus.ACTIVE)
 
+    def test_each_company_type_requires_its_corresponding_registry_type_before_activation(self):
+        for company_type, expected, contradictory in (
+            (CompanyType.PROPRIETARY, "PRV", "PUB"),
+            (CompanyType.PUBLIC, "PUB", "PRV"),
+            (CompanyType.UNLISTED_PUBLIC, "PUB", "PRV"),
+        ):
+            with self.subTest(company_type=company_type):
+                Company.objects.filter(pk=self.company.pk).update(company_type=company_type)
+                self.approve()
+                observation = matching_observation(self.company)
+                self.lookup.return_value = replace(observation, entity_type=contradictory)
+
+                with self.assertRaises(RegistryVerificationRequiredException):
+                    self.transition("activate")
+
+                self.company.refresh_from_db()
+                self.assertEqual(self.company.status, CompanyStatus.APPROVED)
+                self.assertEqual(self.company.registry_status, RegistryCheckStatus.FAILED)
+                self.assertEqual(self.company.registry_reason, "entity_type_mismatch")
+                self.assertEqual(self.company.registry_check.entity_type, contradictory)
+                self.lookup.return_value = replace(observation, entity_type=expected)
+                self.transition("activate")
+                self.assertEqual(self.company.status, CompanyStatus.ACTIVE)
+                self.assertEqual(self.company.registry_check.entity_type, expected)
+
+    def test_missing_and_unsupported_registry_types_remain_pending_and_refuse_activation(self):
+        self.approve()
+        observation = matching_observation(self.company)
+        for entity_type, reason in (
+            ("", "incomplete_identity"),
+            ("UNKNOWN", "unknown_entity_type"),
+            ("PRV PUB", "unknown_entity_type"),
+            ("IND", "unknown_entity_type"),
+        ):
+            with self.subTest(entity_type=entity_type):
+                self.set_status(CompanyStatus.APPROVED)
+                self.lookup.return_value = replace(observation, entity_type=entity_type)
+                with self.assertRaises(RegistryVerificationRequiredException):
+                    self.transition("activate")
+                self.company.refresh_from_db()
+                self.assertEqual(self.company.status, CompanyStatus.APPROVED)
+                self.assertEqual(self.company.registry_status, RegistryCheckStatus.PENDING)
+                self.assertEqual(self.company.registry_reason, reason)
+                self.assertEqual(self.company.registry_check.entity_type, entity_type)
+        self.set_status(CompanyStatus.APPROVED)
+        self.lookup.return_value = observation
+        self.transition("activate")
+        self.assertEqual(self.company.status, CompanyStatus.ACTIVE)
+
+    def test_a_bulk_review_post_performs_no_lookups_and_individual_review_still_works(self):
+        self.set_status(CompanyStatus.SUBMITTED)
+        second = Company.objects.create(
+            owner=self.owner, name="Second Pty Ltd", acn="987654320", status=CompanyStatus.SUBMITTED
+        )
+        self.client.force_login(self.operator)
+        changelist = reverse("admin:companies_company_changelist")
+        response = self.client.post(
+            changelist,
+            {"action": "start_review_action", "_selected_action": [str(self.company.pk), str(second.pk)], "index": 0},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.lookup.assert_not_called()
+        self.company.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual(self.company.status, CompanyStatus.SUBMITTED)
+        self.assertEqual(second.status, CompanyStatus.SUBMITTED)
+        self.assertFalse(self.company.registry_checks.exists())
+        self.assertFalse(second.registry_checks.exists())
+        self.assertNotContains(self.client.get(changelist), "Start review for selected submitted applications")
+
+        page = self.client.get(self.admin_action("start-review"))
+        self.assertEqual(page.status_code, 200)
+        self.lookup.assert_not_called()
+        response = self.client.post(self.admin_action("start-review"), {"confirm": True})
+        self.assertEqual(response.status_code, 302)
+        self.lookup.assert_called_once_with(acn=self.company.acn, abn="")
+        self.company.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual(self.company.status, CompanyStatus.REVIEW)
+        self.assertEqual(self.company.registry_status, RegistryCheckStatus.PASSED)
+        self.assertEqual(second.status, CompanyStatus.SUBMITTED)
+        self.assertFalse(second.registry_checks.exists())
+
     def test_supplied_abn_must_match_and_acn_fallback_does_not_fill_application_abn(self):
         self.approve()
         self.transition("activate")
@@ -397,6 +482,11 @@ class CompanyRegistryVerificationTest(TransactionTestCase):
         self.lookup.return_value = RegistryObservation(reason="timeout")
         self.transition("retry_registry")
         self.assertEqual(self.company.status, CompanyStatus.ACTIVE)
+        for entity_type, status in (("PUB", RegistryCheckStatus.FAILED), ("", RegistryCheckStatus.PENDING)):
+            self.lookup.return_value = replace(matching_observation(self.company), entity_type=entity_type)
+            self.transition("retry_registry")
+            self.assertEqual(self.company.registry_status, status)
+            self.assertEqual(self.company.status, CompanyStatus.ACTIVE)
 
     def test_legacy_active_entries_have_a_supported_admin_attestation_recovery(self):
         self.client.force_login(self.operator)

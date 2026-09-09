@@ -1,11 +1,8 @@
-from types import SimpleNamespace
 from unittest.mock import patch
 
-from django.contrib.admin.sites import AdminSite
 from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
 
-from companies.admin.company import CompanyAdmin
 from companies.exceptions import InvalidStatusTransitionException
 from companies.models import (
     LISTING_REQUIRED_DOCUMENTS,
@@ -279,20 +276,3 @@ class ApplicationLifecycleTest(APITestCase):
                 transition()
         self.company.refresh_from_db()
         self.assertEqual(self.company.status, CompanyStatus.DRAFT)
-
-    def test_bulk_review_preserves_drafts_and_approval_requires_a_per_company_action(self):
-        self.company.status = CompanyStatus.SUBMITTED
-        self.company.save(update_fields=["status"])
-        draft = Company.objects.create(owner=self.owner, name="Still draft", acn="333333332")
-        admin = CompanyAdmin(Company, AdminSite())
-        admin.message_user = lambda *args, **kwargs: None
-        request = SimpleNamespace(user=self.staff)
-
-        admin.start_review_action(request, Company.objects.all())
-        self.company.refresh_from_db()
-        draft.refresh_from_db()
-        self.assertEqual(self.company.status, CompanyStatus.REVIEW)
-        self.assertEqual(draft.status, CompanyStatus.DRAFT)
-
-        self.assertNotIn("approve_action", admin.actions)
-        self.assertNotIn("activate_action", admin.actions)

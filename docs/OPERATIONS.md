@@ -498,8 +498,9 @@ edit, resubmit or delete action.
 server-side. With no GUID, review records a pending, unconfigured attempt without
 contacting ABR. All test and development inputs must remain synthetic.
 
-The operator's Start Review and Retry Registry Check actions record each ABR
-attempt, its input, time and selected entity response. Lookup uses the application
+Start Review uses each company's confirmation page and POST action; bulk review
+is unavailable. Start Review and Retry Registry Check record each ABR attempt,
+its input, time and selected entity response. Lookup uses the application
 ABN, or its ACN when ABN is blank. Each lookup has a 15-second whole-call deadline,
 including DNS and response reads, in a supervised subprocess with a 1 MiB streamed
 response cap. The authentication GUID travels through its input pipe, not its
@@ -508,6 +509,12 @@ in the attempt; it does not replace the application identifier. Registered compa
 names must match after Unicode, case and whitespace normalization. Trading names and fuzzy
 matches do not establish identity. Suppressed or unknown responses, missing
 records, mismatches, cancelled registrations and provider failures cannot pass.
+
+Company type must match the [ABR entity-type code](https://abr.business.gov.au/documentation/referencedata):
+Proprietary Limited requires `PRV`; Public Company and Unlisted Public Company
+require `PUB`. ABR does not distinguish listed from unlisted public companies, so
+this check does not verify listing status. Missing, ambiguous or unsupported
+types remain pending; a contradictory `PRV` or `PUB` result fails verification.
 
 Approval requires a named officeholder declaration, board-resolution reference
 and explicit operator attestation. Only operator review pages expose these
