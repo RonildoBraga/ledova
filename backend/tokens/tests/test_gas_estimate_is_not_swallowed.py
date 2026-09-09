@@ -17,7 +17,7 @@ SENDER = "0x" + "a" * 40
 
 
 def client_whose_estimate(behaviour) -> BaseChainClient:
-    client = BaseChainClient.__new__(BaseChainClient)
+    client = object.__new__(BaseChainClient)
     client._web3 = SimpleNamespace(
         eth=SimpleNamespace(estimate_gas=behaviour),
         to_checksum_address=lambda address: address,
