@@ -1,7 +1,9 @@
 from datetime import timedelta
+from unittest import skipUnless
 from unittest.mock import patch
 
 from django.core.exceptions import ImproperlyConfigured
+from django.db import connection
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
@@ -121,6 +123,7 @@ class FormerMemberRetentionTest(FoldTestFixtures, TestCase):
     def test_a_self_transfer_does_not_create_a_former_member(self):
         self.assertEqual(cessations_in([transfer(ZERO, ALICE, 100, 10), transfer(ALICE, ALICE, 100, 20)]), [])
 
+    @skipUnless(connection.vendor == "postgresql", "Exact large NUMERIC storage requires PostgreSQL")
     def test_a_large_chain_quantity_is_retained_exactly(self):
         shares = 10**30 + 1
         self.a_fold([transfer(ZERO, ALICE, shares, 10), transfer(ALICE, BOB, shares, 20)])
