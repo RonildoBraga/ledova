@@ -9,7 +9,7 @@ import EventSource from 'react-native-sse';
 import { apiClient, rotateRefreshToken } from '../src/services/apiClient';
 import { clearTokens, getAccessToken, getRefreshToken, storeTokens } from '../src/services/tokenStorage';
 import { generateMnemonic, getSeedPhrase, storeSeedPhrase, validateMnemonic } from '../src/services/secureKeyStorage';
-import { getTradingEventsUrl } from '../src/config/networkPolicy';
+import { getApiBaseUrl, getTradingEventsUrl } from '../src/config/networkPolicy';
 import { verifyMessage } from 'ethers';
 import { deriveAccountsFromMnemonic } from '../src/utils/softwareWallet/seedDerivation';
 import { signEthereumMessage } from '../src/utils/softwareWallet/localSigner';
@@ -48,6 +48,10 @@ async function run(): Promise<Check[]> {
     }
   }
 
+  await check('compiled API destination matches isolated server', () => {
+    requireTrue(apiClient.defaults.baseURL === process.env.EXPO_PUBLIC_API_URL);
+    requireTrue(getApiBaseUrl() === process.env.EXPO_PUBLIC_API_URL);
+  });
   await check('native entropy and mnemonic', () => {
     const first = getRandomValues(new Uint8Array(32));
     const second = getRandomValues(new Uint8Array(32));

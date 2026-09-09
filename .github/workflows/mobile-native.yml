@@ -45,6 +45,11 @@ jobs:
       - name: Install native tools and prepare the emulator
         run: |
           export JAVA_HOME="$JAVA_HOME_21_X64"
+          native_command_tools="$ANDROID_HOME/cmdline-tools/latest/bin"
+          test -x "$native_command_tools/sdkmanager"
+          test -x "$native_command_tools/avdmanager"
+          export PATH="$native_command_tools:$ANDROID_HOME/platform-tools:$PATH"
+          printf '%s\n' "$native_command_tools" "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
           sdkmanager 'platform-tools' 'platforms;android-36' 'build-tools;36.0.0' 'ndk;27.1.12297006' 'cmake;3.22.1' 'emulator' 'system-images;android-36;google_apis;x86_64'
           mkdir -p "$ANDROID_AVD_HOME" "$ANDROID_USER_HOME"
           printf 'no\n' | avdmanager create avd --name ledova_native --package 'system-images;android-36;google_apis;x86_64' --device pixel_6

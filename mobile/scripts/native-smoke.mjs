@@ -193,6 +193,9 @@ const appPath =
     : path.join(derived, 'Build/Products/Release-iphonesimulator', `${config.name}.app`);
 
 async function build(name, environment) {
+  const temporary = path.join(directory, 'build-temporary', name);
+  fs.mkdirSync(temporary, { recursive: true });
+  const buildEnvironment = { ...environment, TMPDIR: temporary, TMP: temporary, TEMP: temporary };
   if (platform === 'android') {
     await command(
       './gradlew',
@@ -204,7 +207,7 @@ async function build(name, environment) {
         `-PreactNativeArchitectures=${process.env.NATIVE_ANDROID_ABIS || 'x86_64,arm64-v8a'}`,
       ],
       name,
-      environment,
+      buildEnvironment,
       path.join(mobile, 'android'),
     );
   } else {
@@ -229,7 +232,7 @@ async function build(name, environment) {
         'build',
       ],
       name,
-      environment,
+      buildEnvironment,
     );
   }
 }
