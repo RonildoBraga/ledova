@@ -42,7 +42,7 @@ def custom_exception_handler(exc, context):
                 status=status.HTTP_409_CONFLICT,
             )
         elif isinstance(exc, RedisError):
-            logger.error(f"Shared cache unavailable, so a rate-limited request could not be served: {exc}")
+            logger.error(f"Shared Redis unavailable: {exc}")
             response = Response(
                 {"error": "Shared cache unavailable", "detail": CACHE_UNAVAILABLE},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,

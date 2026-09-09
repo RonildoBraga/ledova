@@ -159,38 +159,40 @@ compared against the literal `true` and treats anything else as off.
 | `OPERATOR_NAME` | `Ledova operator` | No, used only when the operator row is created |
 | `REDIS_URL` | `redis://redis:6379/0` | **Yes.** It is `CACHES["default"]`, which holds the sign-in throttle, and it is the trading event stream (`tokens/events.py`, `tokens/views/trading_events.py`). Background work is still Procrastinate on PostgreSQL |
 
-**The sign-in throttle counts in Redis, and it did not always.** `auth_email`
-limits sign-in to 10 an hour per address and DRF keeps that count in
-`django.core.cache`. Until #369 there was no `CACHES` setting at all, so Django's
-default applied: `LocMemCache`, a dict inside one process. QA1 cleared a
-fifty-seven-minute lockout by restarting the container, and every extra uvicorn
-worker or replica multiplied the limit, because each one counted alone. Measured,
-two processes against a limit of 10:
+The per-address sign-in limit is 10 attempts in a rolling hour, shared by all
+backend workers through `CACHES["default"]`. `SharedRedisCache` reserves each
+attempt atomically in Redis using Redis's clock. Simultaneous requests cannot
+overwrite each other's counts. Successful and unsuccessful credential checks both
+consume an attempt; requests already over the limit return 429 with `Retry-After`.
+The count survives backend worker restarts and deployments. Redis data loss or an
+explicit cache clear resets it; the Compose volume alone is not a durability
+guarantee for every Redis failure.
 
+Redis is required for sign-in. An unreachable cache returns 503 with "This service
+is temporarily unavailable. Please try again shortly." before checking credentials.
+Backend and worker containers wait for the Redis healthcheck. Trading event streams
+handle their own Redis failures and continue to degrade independently.
+
+The default cache also holds the Transak access token
+(`integrations/transak/client.py`), which is now shared between workers. Other DRF
+rate limits use this shared cache but retain DRF's approximate read/write counting;
+the strict atomic rolling window applies to `auth_email`.
+
+Ordinary test settings retain `LocMemCache`. CI separately runs the deployed cache
+against a real Redis service, including fresh processes, concurrent sign-in
+requests, window expiry and a connection failure. Run that suite locally with an
+isolated Redis URL:
+
+```sh
+THROTTLE_TEST_REDIS_URL=redis://127.0.0.1:6379/15 \
+  python manage.py test authentication.tests.redis_throttle \
+  --settings=ledova_backend.settings.test --noinput
 ```
-LocMemCache   process A: allow x6   process B: allow x6            12 allowed
-RedisCache    process A: allow x6   process B: allow x4 DENY x2    10 allowed
-```
 
-`CACHES["default"]` now points at `REDIS_URL` with the key prefix `ledova`, so the
-count is shared between processes and survives a restart. **Redis is therefore a
-dependency of signing in.** With it unreachable the throttle cannot count, and the
-request answers **503** with *"This service is temporarily unavailable. Please try
-again shortly."* — fail closed, deliberately, because the alternative is admitting
-unlimited attempts, which is the defect this replaced. It is a 503 and not a 500
-because a cache outage is a service that is down rather than a bug: the log line
-names the cache and carries the driver's own message for an operator, and the
-member reads a sentence instead of an internal error. Compose makes the dependency
-visible: `backend` and `worker` now wait for the `redis` healthcheck. The trading event stream still swallows its own Redis
-failures and only degrades, which is right for a notification and wrong for a
-brute-force defence.
-
-The same cache now holds the Transak access token (`integrations/transak/client.py`),
-which becomes shared rather than per-process. That is the intended direction — one
-token fetch instead of one per worker — and is named here because it is a
-consequence of the change rather than the point of it.
-
-Test settings keep `LocMemCache`, so the suite needs no Redis.
+The Redis suite requires its URL and fails if Redis is unavailable. It deletes
+only its own unique test keys and stops its child processes on completion.
+The concurrent test holds real history reads until all requests have read the
+same state, exposing lost updates if DRF's read/write implementation returns.
 
 ### Auth cookies and tokens
 
