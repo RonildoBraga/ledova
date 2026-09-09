@@ -55,7 +55,9 @@ from tokens.tasks import (
     execute_review_request_task,
 )
 from wallets.constants import WALLET_VERIFICATION_STATUS_VERIFIED
+from wallets.exceptions import BlockchainAPIError
 from wallets.models import Holding, Wallet
+from wallets.services.transfers import prepare_erc20_transaction
 from whitelist.services import WhitelistService
 
 CHAIN_ENV = (
@@ -184,6 +186,49 @@ class ChainTestMixin:
 @chain_available
 @override_settings(**CHAIN_SETTINGS)
 class ShareTokenChainTest(ChainTestMixin, APITestCase):
+    def test_real_unwhitelisted_and_paused_transfer_estimates_explain_the_refusal_without_sending(self):
+        self._deployed()
+        self.assertTrue(self._execute(self._whitelisted_request(10))["success"])
+        self.w3.eth.wait_for_transaction_receipt(
+            self.w3.eth.send_transaction(
+                {"from": self.w3.eth.accounts[0], "to": self.investor, "value": self.w3.to_wei(1, "ether")}
+            )
+        )
+        recipient = Account.create().address
+        BlockchainClientFactory._clients.clear()
+        self.addCleanup(BlockchainClientFactory._clients.clear)
+        nonce = self.w3.eth.get_transaction_count(self.investor)
+
+        def prepare():
+            return prepare_erc20_transaction(
+                "base",
+                self.investor,
+                recipient,
+                Decimal("1"),
+                Decimal("10"),
+                Decimal("1"),
+                self.token.contract_address,
+                self.token.symbol,
+                0,
+            )
+
+        with self.assertRaises(BlockchainAPIError) as refusal:
+            prepare()
+        self.assertEqual(str(refusal.exception.detail), "Recipient is not whitelisted for transfers")
+        Wallet.objects.create(
+            user_account=self.tenant.account,
+            address=recipient,
+            chain="base",
+            verification_status=WALLET_VERIFICATION_STATUS_VERIFIED,
+        )
+        WhitelistService().add_to_whitelist(recipient)
+        self.service.pause(self.token)
+        with self.assertRaises(BlockchainAPIError) as refusal:
+            prepare()
+        self.assertEqual(str(refusal.exception.detail), "Token transfers are paused")
+        self.assertEqual(self.w3.eth.get_transaction_count(self.investor), nonce)
+        self.assertEqual(self._contract().functions.balanceOf(self.investor).call(), 10)
+
     def test_a_transfer_sent_outside_the_platform_is_retained_in_the_former_member_register(self):
         investor = Account.create()
         Wallet.objects.filter(address=self.investor).update(address=investor.address)

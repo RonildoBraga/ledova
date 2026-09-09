@@ -2087,8 +2087,16 @@ Two things are deliberately not findings. A message built from the repository's
 own state — `f"Cannot execute request with status '{request.get_status_display()}'"`
 — names a condition rather than repeating a library, so it stays. And
 `shared/utils/blockchain.decode_exception_to_message` is a **sanitiser**: it
-extracts a hex blob, decodes a known revert reason and returns that or a stated
-default, never the exception's text. It is named in `SANITISERS`, and adding a
+reads structured revert data, explicit revert text and preserved exception causes,
+decodes a known reason and returns a constructed sentence or a stated default.
+URL hex, unknown selectors and conflicting reasons produce no diagnostic echo.
+The traversal and payload sizes are bounded, and incomplete allowance/balance
+data does not invent zero amounts. Decoded ABI integers are explicitly base
+units because the generic decoder does not know the token's decimals. Token
+and ERC-20 transfer preparation use it after a refused gas estimate; the
+ERC-20 wrapper's sanitized outer message retains its underlying cause. Native
+preparation and Bitcoin paths do not produce ABI revert data, and the existing
+broadcast defaults still cover transport and node-submission failures. It is named in `SANITISERS`, and adding a
 name there is a claim about that function which has to be true.
 
 **The same rule one layer out: a field a client-facing serializer exposes.** An
