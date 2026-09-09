@@ -1,5 +1,4 @@
-from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import requests
 from django.test import SimpleTestCase, override_settings
@@ -10,6 +9,7 @@ from integrations.abr.client import (
     MAX_RESPONSE_BYTES,
     lookup_company,
     parse_observation,
+    request_company,
 )
 
 
@@ -61,6 +61,7 @@ class ABRResponseTest(SimpleTestCase):
     def test_malformed_ambiguous_oversized_and_historical_responses_never_supply_identity(self):
         for payload in (
             b"broken XML",
+            b'<?xml version="1.0" encoding="unknown-codec"?><x/>',
             b"x" * (MAX_RESPONSE_BYTES + 1),
             b"<different />",
             registry_xml(ENTITY + "<mainName><organisationName>Other Pty Ltd</organisationName></mainName>"),
@@ -85,13 +86,13 @@ class ABRResponseTest(SimpleTestCase):
 class ABRTransportTest(SimpleTestCase):
     @patch("integrations.abr.client.requests.post")
     def test_post_selects_abn_or_acn_method_without_credentials_in_the_url(self, post):
-        post.return_value = SimpleNamespace(status_code=200, content=registry_xml(ENTITY))
+        post.return_value = streamed_response(registry_xml(ENTITY))
         for abn, method, identifier in (
             ("99123456780", "SearchByABNv202001", "99123456780"),
             ("", "SearchByASICv201408", "123456780"),
         ):
             with self.subTest(method=method):
-                observation = lookup_company(acn="123456780", abn=abn)
+                observation = request_company(acn="123456780", abn=abn, guid="synthetic-guid")
                 self.assertEqual(observation.entity_status, "Active")
                 post.assert_called_with(
                     f"{ABR_SERVICE}/{method}",
@@ -102,6 +103,8 @@ class ABRTransportTest(SimpleTestCase):
                     },
                     timeout=(3, 10),
                     allow_redirects=False,
+                    stream=True,
+                    headers={"Accept-Encoding": "identity"},
                 )
 
     @patch("integrations.abr.client.requests.post")
@@ -117,10 +120,30 @@ class ABRTransportTest(SimpleTestCase):
             (requests.ConnectionError("synthetic-guid"), "unavailable"),
         ):
             post.side_effect = error
-            observation = lookup_company(acn="123456780", abn="")
+            observation = request_company(acn="123456780", abn="", guid="synthetic-guid")
             self.assertEqual(observation.reason, reason)
             self.assertNotIn("synthetic-guid", repr(observation))
         post.side_effect = None
         for code in (301, 403, 429, 500, 503):
-            post.return_value = SimpleNamespace(status_code=code, content=b"synthetic-guid")
-            self.assertEqual(lookup_company(acn="123456780", abn="").reason, "provider_error")
+            post.return_value = streamed_response(b"synthetic-guid", code=code)
+            self.assertEqual(request_company(acn="123456780", abn="", guid="synthetic-guid").reason, "provider_error")
+
+    @patch("integrations.abr.client.requests.post")
+    def test_streaming_stops_at_the_cap_even_without_a_length_header(self, post):
+        def chunks():
+            yield b"x" * MAX_RESPONSE_BYTES
+            yield b"x"
+            self.fail("The registry reader consumed bytes after exceeding its cap")
+
+        response = streamed_response(b"")
+        response.iter_content.return_value = chunks()
+        post.return_value = response
+        self.assertEqual(request_company(acn="123456780", abn="", guid="synthetic-guid").reason, "invalid_response")
+        response.__exit__.assert_called_once()
+
+
+def streamed_response(body, code=200):
+    response = MagicMock(status_code=code, headers={})
+    response.__enter__.return_value = response
+    response.iter_content.return_value = [body]
+    return response

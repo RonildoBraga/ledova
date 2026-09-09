@@ -500,9 +500,12 @@ contacting ABR. All test and development inputs must remain synthetic.
 
 The operator's Start Review and Retry Registry Check actions record each ABR
 attempt, its input, time and selected entity response. Lookup uses the application
-ABN, or its ACN when ABN is blank. A discovered ABN is recorded in the attempt;
-it does not replace the application identifier. Registered company names must
-match after Unicode, case and whitespace normalization. Trading names and fuzzy
+ABN, or its ACN when ABN is blank. Each lookup has a 15-second whole-call deadline,
+including DNS and response reads, in a supervised subprocess with a 1 MiB streamed
+response cap. The authentication GUID travels through its input pipe, not its
+command line or inherited application environment. A discovered ABN is recorded
+in the attempt; it does not replace the application identifier. Registered company
+names must match after Unicode, case and whitespace normalization. Trading names and fuzzy
 matches do not establish identity. Suppressed or unknown responses, missing
 records, mismatches, cancelled registrations and provider failures cannot pass.
 

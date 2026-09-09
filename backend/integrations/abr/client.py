@@ -1,6 +1,12 @@
+import json
 import re
+import subprocess
+import sys
 from dataclasses import dataclass
 from datetime import date
+from pathlib import Path
+from threading import Event, Timer
+from time import monotonic
 from xml.etree import ElementTree
 
 import requests
@@ -10,6 +16,9 @@ from django.utils.dateparse import parse_date, parse_datetime
 ABR_SERVICE = "https://abr.business.gov.au/abrxmlsearch/abrxmlsearch.asmx"
 ABR_NAMESPACE = "http://abr.business.gov.au/ABRXMLSearch/"
 MAX_RESPONSE_BYTES = 1024 * 1024
+MAX_WORKER_BYTES = 4096
+LOOKUP_DEADLINE_SECONDS = 15
+WORKER_COMMAND = (sys.executable, "-m", "integrations.abr.worker")
 
 
 @dataclass(frozen=True)
@@ -77,7 +86,53 @@ def parse_observation(content):
         if _text(entity, "ABN/isCurrentIndicator") not in ("", "Y"):
             return RegistryObservation(reason="invalid_response")
         return observation
-    except (ElementTree.ParseError, ValueError, TypeError):
+    except (ElementTree.ParseError, ValueError, TypeError, LookupError):
+        return RegistryObservation(reason="invalid_response")
+
+
+def request_company(*, acn, abn, guid):
+    method = "SearchByABNv202001" if abn else "SearchByASICv201408"
+    try:
+        with requests.post(
+            f"{ABR_SERVICE}/{method}",
+            data={"searchString": abn or acn, "includeHistoricalDetails": "N", "authenticationGuid": guid},
+            timeout=(3, 10),
+            allow_redirects=False,
+            stream=True,
+            headers={"Accept-Encoding": "identity"},
+        ) as response:
+            if response.status_code != 200:
+                return RegistryObservation(reason="provider_error")
+            length = response.headers.get("Content-Length")
+            if length is not None and (not length.isdecimal() or int(length) > MAX_RESPONSE_BYTES):
+                return RegistryObservation(reason="invalid_response")
+            if response.headers.get("Content-Encoding", "identity").casefold() != "identity":
+                return RegistryObservation(reason="invalid_response")
+            content = bytearray()
+            for chunk in response.iter_content(chunk_size=65536):
+                if len(content) + len(chunk) > MAX_RESPONSE_BYTES:
+                    return RegistryObservation(reason="invalid_response")
+                content.extend(chunk)
+            return parse_observation(bytes(content))
+    except requests.Timeout:
+        return RegistryObservation(reason="timeout")
+    except requests.RequestException:
+        return RegistryObservation(reason="unavailable")
+
+
+def _expire_worker(process, expired):
+    expired.set()
+    process.kill()
+
+
+def _worker_observation(output):
+    try:
+        fields = json.loads(output)
+        for field in ("effective_from", "register_updated_at"):
+            if fields.get(field) is not None:
+                fields[field] = parse_date(fields[field])
+        return RegistryObservation(**fields)
+    except (ValueError, TypeError, AttributeError):
         return RegistryObservation(reason="invalid_response")
 
 
@@ -85,18 +140,52 @@ def lookup_company(*, acn, abn):
     guid = settings.ABR_AUTH_GUID
     if not guid:
         return RegistryObservation(reason="unconfigured")
-    method = "SearchByABNv202001" if abn else "SearchByASICv201408"
+    request = json.dumps({"acn": acn, "abn": abn, "guid": guid}).encode()
+    if len(request) > MAX_WORKER_BYTES:
+        return RegistryObservation(reason="invalid_configuration")
+    deadline = monotonic() + LOOKUP_DEADLINE_SECONDS
     try:
-        response = requests.post(
-            f"{ABR_SERVICE}/{method}",
-            data={"searchString": abn or acn, "includeHistoricalDetails": "N", "authenticationGuid": guid},
-            timeout=(3, 10),
-            allow_redirects=False,
-        )
-        if response.status_code != 200:
-            return RegistryObservation(reason="provider_error")
-        return parse_observation(response.content)
-    except requests.Timeout:
-        return RegistryObservation(reason="timeout")
-    except requests.RequestException:
+        with subprocess.Popen(
+            WORKER_COMMAND,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            cwd=Path(__file__).resolve().parents[2],
+            env={"PYTHONDONTWRITEBYTECODE": "1"},
+            close_fds=True,
+        ) as process:
+            expired = Event()
+            timer = Timer(max(0, deadline - monotonic()), _expire_worker, args=(process, expired))
+            timer.daemon = True
+            try:
+                timer.start()
+            except RuntimeError:
+                process.kill()
+                process.wait()
+                return RegistryObservation(reason="unavailable")
+            output = b""
+            failed = False
+            try:
+                process.stdin.write(request)
+                process.stdin.close()
+                output = process.stdout.read(MAX_WORKER_BYTES + 1)
+                if len(output) > MAX_WORKER_BYTES:
+                    process.kill()
+                process.wait()
+            except OSError:
+                failed = True
+            finally:
+                timer.cancel()
+                timer.join()
+                if process.poll() is None:
+                    process.kill()
+                process.wait()
+            if expired.is_set() or monotonic() >= deadline:
+                return RegistryObservation(reason="timeout")
+            if len(output) > MAX_WORKER_BYTES:
+                return RegistryObservation(reason="invalid_response")
+            if failed or process.returncode:
+                return RegistryObservation(reason="unavailable")
+    except OSError:
         return RegistryObservation(reason="unavailable")
+    return _worker_observation(output)
