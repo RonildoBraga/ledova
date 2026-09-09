@@ -72,9 +72,9 @@ class PrivateStorageMigrationRoundTripTest(TransactionTestCase):
         self.addCleanup(self.restore_latest)
 
     def restore_latest(self):
+        restore_every_migration()
         CompanyDocument.objects.all().delete()
         Document.objects.all().delete()
-        restore_every_migration()
 
     @staticmethod
     def private_path(key):
@@ -194,8 +194,8 @@ class ReverseMigrationLeaksNothingTest(TransactionTestCase):
         self.addCleanup(self.restore_latest)
 
     def restore_latest(self):
-        Document.objects.all().delete()
         restore_every_migration()
+        Document.objects.all().delete()
         call_command("reconcile_private_media", verbosity=0)
 
     @staticmethod

@@ -27,6 +27,7 @@ const ICON_SM = DESIGN_TOKENS.icon.sizes.sm;
 const ICON_MD = DESIGN_TOKENS.icon.sizes.md;
 import { Panel } from '@components/Panel';
 import { DocumentsPanel } from '@components/DocumentsPanel';
+import { useDocumentsEnabled } from '@hooks/useDocuments';
 import { IdentityVerificationModal } from './components/IdentityVerificationModal';
 
 interface SectionProps {
@@ -104,6 +105,7 @@ function VerificationStatusIcon({ statusType }: { statusType: VerificationStatus
 
 export function UserProfilePage() {
   const { userProfile, isLoading, isError, refreshProfile, updateProfile, isUpdating } = useUserProfile();
+  const documentsEnabled = useDocumentsEnabled();
 
   const verificationStatus = getUserVerificationStatus(userProfile);
 
@@ -295,11 +297,13 @@ export function UserProfilePage() {
                 />
               </Section>
 
-              <Section title="Documents">
-                <div className="p-3">
-                  <DocumentsPanel />
-                </div>
-              </Section>
+              {documentsEnabled && (
+                <Section title="Supporting payslips">
+                  <div className="p-3">
+                    <DocumentsPanel />
+                  </div>
+                </Section>
+              )}
             </>
           ) : (
             <p className="text-sm text-text-muted italic text-center py-6">No profile data available</p>

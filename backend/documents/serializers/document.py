@@ -37,6 +37,7 @@ class DocumentExtractionSerializer(serializers.ModelSerializer):
 class DocumentSerializer(serializers.ModelSerializer):
     latest_extraction = serializers.SerializerMethodField()
     file_url = serializers.SerializerMethodField()
+    retention_until = serializers.DateTimeField(read_only=True, allow_null=True)
 
     class Meta:
         model = Document
@@ -46,22 +47,27 @@ class DocumentSerializer(serializers.ModelSerializer):
             "original_filename",
             "mime_type",
             "note",
+            "classification",
+            "attached_at",
+            "retention_until",
+            "purged_at",
             "file_url",
             "latest_extraction",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["uuid", "mime_type", "file_url", "latest_extraction", "created_at", "updated_at"]
+        read_only_fields = fields
 
     def get_latest_extraction(self, obj: Document):
-
+        if not obj.content_available:
+            return None
         latest = next(iter(obj.extractions.all()), None)
         if not latest:
             return None
         return DocumentExtractionSerializer(latest).data
 
     def get_file_url(self, obj: Document):
-        if not obj.file:
+        if not obj.content_available:
             return None
         url = reverse("documents:documents-file", kwargs={"uuid": obj.uuid})
         request = self.context.get("request")
@@ -70,11 +76,16 @@ class DocumentSerializer(serializers.ModelSerializer):
 
 class DocumentUploadSerializer(serializers.ModelSerializer):
     file = serializers.FileField(write_only=True)
+    classification = serializers.UUIDField(required=False, allow_null=True)
 
     class Meta:
         model = Document
-        fields = ["document_type", "note", "file"]
+        fields = ["document_type", "note", "file", "classification"]
 
     def validate(self, data):
         _, data["mime_type"] = validate_upload(data["file"])
         return data
+
+
+class DocumentAttachmentSerializer(serializers.Serializer):
+    classification = serializers.UUIDField()

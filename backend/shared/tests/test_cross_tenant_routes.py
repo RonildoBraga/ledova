@@ -384,6 +384,8 @@ ROUTES = (
     Route("get", "/api/v1/trading/orders/{order}/swap/approval-data/?wallet_address={own_wallet_address}"),
     Route("get", "/api/v1/documents/{document}/"),
     Route("get", "/api/v1/documents/{document}/file/"),
+    Route("post", "/api/v1/documents/{document}/attach/", {"classification": "{own_investor_classification}"}),
+    Route("post", "/api/v1/documents/{own_document}/attach/", {"classification": "{investor_classification}"}),
     Route("delete", "/api/v1/documents/{document}/"),
 )
 

@@ -324,6 +324,9 @@ FRAMEWORK = {
 }
 
 OPERATOR_ONLY = {
+    "documents_documentread": "Append-only administrative document read records, written on the operator "
+    "connection and visible only to permitted platform reviewers. They contain UUIDs and reader IDs, not "
+    "file names, extraction values or file contents, and outlive document content purges.",
     "compliance_compliancealert": "Raised and worked by compliance staff on the operator connection. It "
     "carries user_account_id but no queryset scopes it, so a policy would be a new rule rather than a "
     "translation of one.",

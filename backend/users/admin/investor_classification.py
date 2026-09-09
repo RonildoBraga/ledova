@@ -5,6 +5,7 @@ from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.utils.html import format_html
 
+from documents.services.access import may_review_documents
 from shared.utils.admin_actions import admin_action_re_path
 from shared.utils.admin_display import action_buttons
 from shared.utils.admin_files import admin_file_path
@@ -133,6 +134,7 @@ class InvestorClassificationAdmin(admin.ModelAdmin):
         "evidence_link",
         "evidence_file_size",
         "evidence_mime_type",
+        "supporting_evidence",
         "submitted_at",
         "reviewed_by",
         "reviewed_at",
@@ -232,6 +234,20 @@ class InvestorClassificationAdmin(admin.ModelAdmin):
             ),
         ]
         return custom_urls + super().get_urls()
+
+    def get_fieldsets(self, request, obj=None):
+        fieldsets = super().get_fieldsets(request, obj)
+        if not may_review_documents(request.user):
+            return fieldsets
+        return [*fieldsets, ("Supporting payslips", {"fields": ["supporting_evidence"]})]
+
+    @admin.display(description="Supporting evidence (requires human review)")
+    def supporting_evidence(self, obj):
+        return format_html(
+            '<a href="{}?classification__exact={}">Review supporting payslips and extraction history</a>',
+            reverse("admin:documents_document_changelist"),
+            obj.pk,
+        )
 
     def _resolve_evidence(self, request, uuid):
         classification = get_object_or_404(InvestorClassification, uuid=uuid)

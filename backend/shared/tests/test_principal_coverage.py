@@ -162,4 +162,4 @@ class AStaffOnlyActionSaysWhichConnectionItRunsOnTest(SimpleTestCase):
         for _, (target, _, _) in routed_views().items():
             seen |= {klass.__name__ for klass in getattr(target, "permission_classes", None) or ()}
 
-        self.assertEqual(sorted(seen - {"IsAuthenticated"} - STAFF_PERMISSIONS), [])
+        self.assertEqual(sorted(seen - {"IsAuthenticated", "DocumentsEnabled"} - STAFF_PERMISSIONS), [])

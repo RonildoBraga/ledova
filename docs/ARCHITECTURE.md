@@ -1185,12 +1185,32 @@ the migration is checkable.
   detail route or action gets a row there or a cross-tenant test in its own
   app.
 - `deployment_mode` on the operator row (`single_issuer` or `registry`) records
-  which shape a deployment is; it does not change the isolation rules.
+  which shape a deployment is. Single issuer disables the supporting-payslip
+  store, including API and admin reads, uploads and extraction. Claims still
+  use their existing classification evidence upload and human review.
 
 ## Uploaded files
 
 Every uploaded file is private. There is no such thing as a public upload in
 this codebase, and `MEDIA_ROOT` holds nothing an authenticated route serves.
+
+Supporting payslips belong to an existing `InvestorClassification` claim through
+`Document.classification`. An uploader may attach an available payslip once,
+only to a claim they can access while it remains submitted. Attachment neither
+changes the claim's category nor reviews it; extracted figures are not inputs
+to eligibility. Permitted operations staff follow links from the claim to its
+supporting documents and extraction history and use the existing human review
+actions. Migration `documents/0003` seeds a read-only Document operations group
+without assigning members or granting classification decisions. Company owners
+and company-role accounts cannot use this cross-customer evidence access.
+
+Document and extraction admin pages, changelists and file downloads record
+`DocumentRead` rows with reader ID, document and claim UUIDs, kind and timestamp.
+The audit contains no extracted values or filenames. A failed audit write stops
+the response. Read records survive content purge and have no admin mutation
+path. The owner API remains scoped to the uploader; staff use the separately
+permissioned admin connection for review. Single issuer has neither surface,
+and the operator form refuses conversion while unpurged payslips remain.
 
 - A `FileField` that holds an upload carries `storage=private_storage`
   (`backend/shared/storage.py`) and `max_length=255`, because a private key is
@@ -1240,14 +1260,22 @@ this codebase, and `MEDIA_ROOT` holds nothing an authenticated route serves.
   GCS adapters with synthetic objects: startup registration, live references,
   committed and rolled-back deletion, rollback uploads, grace and retained
   evidence. These checks require no filesystem path or live bucket.
-- **`users.InvestorClassification.evidence_file` is the one exception, and it
-  is deliberate.** Classification evidence has a statutory retention horizon
+- **Classification evidence and attached supporting payslips use retained
+  storage.** Classification evidence has a retention horizon
   and outlives its subject on purpose; account deletion does not purge it
   early. `purge_classification_evidence` is the only thing that removes it, and
   `users/` is in `RETAINED_STORAGE_PREFIXES` so the sweep never walks it. The
   consequence is that a **hard delete of a classification row carrying evidence
   is itself the defect** — the surviving file is correct behaviour, and the row
-  should refuse or soft-delete instead. Tracked on issue 177.
+  should refuse or soft-delete instead. Member deletion withdraws a submitted
+  classification; the admin cannot hard-delete it and its account is protected.
+  `documents.Document` is a conditional entry in `RETAINED_AFTER_ROW_DELETE`:
+  unattached files remain under the swept `documents/` prefix, while attachment
+  copies the original bytes to `users/supporting-documents/` and removes the
+  old copy only after commit. The shared file lifecycle receiver refuses a
+  cascade that would delete a linked row still carrying content. The document
+  retention service clears the file and every extraction only after the claim
+  horizon; failed storage operations leave a retryable reference.
 - The bytes reach a caller through one authenticated action per model, which
   resolves the row through the app's own owner-scoped queryset and then calls
   `shared.views.stream_stored_file`. A foreign row is the same 404 as a phantom
