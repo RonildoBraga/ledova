@@ -21,6 +21,7 @@ SCOPED_TEST_LABELS = (
     "tokens.tests.test_former_member_privacy.ScopedFormerMemberPrivacyTest",
     "documents.tests.test_evidence_under_scoped_roles.ScopedSupportingEvidenceTest",
     "wallets.tests.test_network_identity.ScopedWalletNetworkIdentityTest",
+    "companies.tests.test_registry_policy.ReviewedCompanyDeletionOnScopedConnectionTest",
 )
 
 
