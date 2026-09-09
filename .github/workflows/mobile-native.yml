@@ -23,10 +23,6 @@ jobs:
       EXPO_NO_DOTENV: '1'
       EXPO_NO_TELEMETRY: '1'
       EXPO_PUBLIC_DEV_API_HOST: '192.168.50.10'
-      ANDROID_USER_HOME: ${{ runner.temp }}/ledova-android-user
-      ANDROID_EMULATOR_HOME: ${{ runner.temp }}/ledova-android-user
-      ANDROID_AVD_HOME: ${{ runner.temp }}/ledova-avd
-      GRADLE_USER_HOME: ${{ runner.temp }}/ledova-gradle
       ANDROID_SERIAL: emulator-5556
       NATIVE_ANDROID_ABIS: x86_64,arm64-v8a
     steps:
@@ -34,6 +30,13 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: 22.15.1
+      - name: Configure owned native directories
+        run: |
+          printf '%s\n' \
+            "ANDROID_USER_HOME=$RUNNER_TEMP/ledova-android-user" \
+            "ANDROID_EMULATOR_HOME=$RUNNER_TEMP/ledova-android-user" \
+            "ANDROID_AVD_HOME=$RUNNER_TEMP/ledova-avd" \
+            "GRADLE_USER_HOME=$RUNNER_TEMP/ledova-gradle" >> "$GITHUB_ENV"
       - name: Install locked JavaScript dependencies without package scripts
         run: |
           npm install --global npm@11.5.2
