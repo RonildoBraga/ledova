@@ -64,6 +64,10 @@ describe('dashboard token deployment selection', () => {
       decimals: 0,
       displayBalance: '3',
     });
+    expect(result.current.assets.find((row) => row.id === 'native-base')).toMatchObject({
+      symbol: 'ETH',
+      displayBalance: '1 ETH',
+    });
   });
   it('does not offer the other networks contract when this deployment is disabled', async () => {
     api.get.mockResolvedValue({ data: [holding(false)] });

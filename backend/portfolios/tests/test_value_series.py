@@ -116,7 +116,7 @@ class PortfolioValueSeriesTest(ValueSeriesFixtureMixin, APITestCase):
 
         point = self.point(portfolio_value_series(self.portfolio), 22)
 
-        self.assertEqual(set(point["holdings_data"]["AAA"]), {"asset_uuid", "quantity", "wallets"})
+        self.assertEqual(set(point["holdings_data"]["AAA"]), {"asset_uuid", "quantity", "wallets", "per_chain"})
         self.assertIsNone(point["total_market_value"])
         self.assertFalse(point["has_value_data"])
 
@@ -183,9 +183,9 @@ class PortfolioSnapshotsEndpointTest(ValueSeriesFixtureMixin, APITestCase):
         self.assertEqual(first["totalMarketValue"], "101.000000000000000000")
         self.assertTrue(first["hasValueData"])
         self.assertEqual(
-            set(first["holdingsData"]["AAA"]), {"assetUuid", "quantity", "wallets", "price", "marketValue"}
+            set(first["holdingsData"]["AAA"]), {"assetUuid", "quantity", "wallets", "price", "marketValue", "perChain"}
         )
-        self.assertEqual(set(first["holdingsData"]["BBB"]), {"assetUuid", "quantity", "wallets"})
+        self.assertEqual(set(first["holdingsData"]["BBB"]), {"assetUuid", "quantity", "wallets", "perChain"})
         self.assertEqual(first["holdingsData"]["AAA"]["quantity"], "1.000000000000000000")
         self.assertEqual(first["holdingsData"]["AAA"]["price"], "101.000000000000000000")
         self.assertEqual(Decimal(first["holdingsData"]["AAA"]["marketValue"]), Decimal("101"))
@@ -225,6 +225,85 @@ class PortfolioSnapshotsEndpointTest(ValueSeriesFixtureMixin, APITestCase):
         self.client.force_authenticate(bob)
         self.assertEqual(self.client.get(self.url).status_code, 404)
         self.assertEqual(self.client.get(f"/api/portfolios/{bob_portfolio.uuid}/snapshots/").status_code, 200)
+
+
+class PortfolioNetworkHistoryTest(ValueSeriesFixtureMixin, APITestCase):
+    def setUp(self):
+        self.build_scenario()
+        self.base_wallet = Wallet.objects.create(user_account=self.account, address=self.wallet_1.address, chain="base")
+        self.portfolio.wallets.add(self.base_wallet)
+        self.base_holding = Holding.objects.create(wallet=self.base_wallet, asset=self.aaa, quantity=Decimal("90"))
+        for number, quantity in ((5, "4"), (20, "0")):
+            HoldingSnapshot.objects.create(
+                holding=self.base_holding, quantity=Decimal(quantity), snapshot_date=self.day(number)
+            )
+        self.client.force_authenticate(self.user)
+        self.url = f"/api/portfolios/{self.portfolio.uuid}/snapshots/"
+
+    def row(self, number):
+        response = self.client.get(self.url, {"start_date": self.day(number), "end_date": self.day(number)})
+        self.assertEqual(response.status_code, 200)
+        return response.json()[0]
+
+    def test_same_address_retains_each_networks_historical_quantity_and_wallet(self):
+        before = self.row(4)["holdingsData"]["AAA"]
+        self.assertEqual([entry["chain"] for entry in before["perChain"]], ["ethereum"])
+
+        point = self.row(5)
+        self.assertEqual(set(point["holdingsData"]), {"AAA", "BBB"})
+        asset = point["holdingsData"]["AAA"]
+        self.assertEqual(asset["assetUuid"], str(self.aaa.uuid))
+        self.assertEqual(Decimal(asset["quantity"]), Decimal("6"))
+        self.assertEqual(Decimal(asset["marketValue"]), Decimal("630"))
+        self.assertEqual(Decimal(point["totalMarketValue"]), Decimal("680"))
+        self.assertEqual([entry["chain"] for entry in asset["perChain"]], ["base", "ethereum"])
+        base, ethereum = asset["perChain"]
+        self.assertEqual(base["wallets"], [str(self.base_wallet.uuid)])
+        self.assertEqual(ethereum["wallets"], [str(self.wallet_1.uuid)])
+        self.assertEqual(Decimal(base["quantity"]), Decimal("4"))
+        self.assertEqual(Decimal(ethereum["quantity"]), Decimal("2"))
+        self.assertEqual(Decimal(base["marketValue"]), Decimal("420"))
+        self.assertEqual(Decimal(ethereum["marketValue"]), Decimal("210"))
+
+        carried = {entry["chain"]: entry for entry in self.row(19)["holdingsData"]["AAA"]["perChain"]}
+        self.assertEqual(Decimal(carried["base"]["quantity"]), Decimal("4"))
+        self.assertEqual(Decimal(carried["base"]["marketValue"]), Decimal("476"))
+
+        emptied = {entry["chain"]: entry for entry in self.row(20)["holdingsData"]["AAA"]["perChain"]}
+        self.assertEqual(Decimal(emptied["base"]["quantity"]), Decimal("0"))
+        self.assertEqual(Decimal(emptied["base"]["marketValue"]), Decimal("0"))
+        self.assertEqual(Decimal(emptied["ethereum"]["quantity"]), Decimal("5"))
+        self.assertCountEqual(emptied["ethereum"]["wallets"], [str(self.wallet_1.uuid), str(self.wallet_2.uuid)])
+
+    def test_unpriced_network_slices_keep_quantity_without_inventing_value(self):
+        AssetSnapshot.objects.all().delete()
+
+        point = self.row(5)
+
+        self.assertIsNone(point["totalMarketValue"])
+        self.assertFalse(point["hasValueData"])
+        self.assertNotIn("marketValue", point["holdingsData"]["AAA"])
+        self.assertEqual(
+            [(entry["chain"], Decimal(entry["quantity"])) for entry in point["holdingsData"]["AAA"]["perChain"]],
+            [("base", Decimal("4")), ("ethereum", Decimal("2"))],
+        )
+        for entry in point["holdingsData"]["AAA"]["perChain"]:
+            self.assertNotIn("marketValue", entry)
+
+    def test_foreign_same_address_and_unlinked_network_are_excluded(self):
+        _, _, account, _, _ = self.make_tenant("bob")
+        foreign = Wallet.objects.create(user_account=account, address=self.wallet_1.address, chain="base")
+        holding = Holding.objects.create(wallet=foreign, asset=self.aaa, quantity=Decimal("50"))
+        HoldingSnapshot.objects.create(holding=holding, quantity=Decimal("50"), snapshot_date=self.day(1))
+        self.portfolio.wallets.add(foreign)
+        self.assertEqual(Decimal(self.row(5)["holdingsData"]["AAA"]["quantity"]), Decimal("6"))
+
+        self.portfolio.wallets.remove(self.base_wallet)
+
+        asset = self.row(5)["holdingsData"]["AAA"]
+        self.assertEqual(Decimal(asset["quantity"]), Decimal("2"))
+        self.assertEqual([entry["chain"] for entry in asset["perChain"]], ["ethereum"])
+        self.assertEqual(asset["perChain"][0]["wallets"], [str(self.wallet_1.uuid)])
 
 
 class SharesOnlyPortfolioTest(ValueSeriesFixtureMixin, APITestCase):

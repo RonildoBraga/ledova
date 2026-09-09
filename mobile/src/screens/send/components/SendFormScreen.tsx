@@ -12,13 +12,7 @@ import { Panel } from '../../../components/panel';
 import { ButtonGroup, SecondaryButton } from '../../../components/buttons';
 import { QRScanner } from '../../../components/qr';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
-import {
-  BLOCKCHAIN,
-  getChainShortCode,
-  isBitcoinChain,
-  isEthereumChain,
-  WALLET_SIGNING_PREFERENCE,
-} from '@ledova/shared';
+import { getChainShortCode, isBitcoinChain, isSupportedEvmChain, WALLET_SIGNING_PREFERENCE } from '@ledova/shared';
 import { SendForm } from '../../transfers/components/SendForm';
 import { ReviewTransaction } from '../../transfers/components/ReviewTransaction';
 import { SignTransaction } from '../../transfers/components/SignTransaction';
@@ -125,7 +119,7 @@ export function SendFormScreen({ onDone }: SendFormScreenProps) {
 
   const isSoftwareWallet = wallet?.signingPreference === WALLET_SIGNING_PREFERENCE.SOFTWARE;
   const chainShortName = wallet ? getChainShortCode(wallet.chain) : 'ETH';
-  const isEthereum = isEthereumChain(chainShortName) || wallet?.chain === BLOCKCHAIN.BASE;
+  const isEvm = isSupportedEvmChain(chainShortName);
 
   const handleSelectWallet = useCallback(
     (selected: Wallet) => {
@@ -144,7 +138,7 @@ export function SendFormScreen({ onDone }: SendFormScreenProps) {
   const canSubmit = !!toAddress && !!amount && !!selectedAsset && !isPreparing;
 
   const urEncodedTransaction = useMemo(() => {
-    if (!transactionData || !wallet || !isEthereum) return null;
+    if (!transactionData || !wallet || !isEvm) return null;
 
     try {
       const encoded = encodeEthereumTransaction(
@@ -157,7 +151,7 @@ export function SendFormScreen({ onDone }: SendFormScreenProps) {
     } catch {
       return null;
     }
-  }, [transactionData, wallet, isEthereum]);
+  }, [transactionData, wallet, isEvm]);
 
   const handleOpenAddressScanner = useCallback(() => {
     setShowAddressScanner(true);

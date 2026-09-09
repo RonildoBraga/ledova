@@ -777,6 +777,23 @@ no longer stand in for Base wallets. Historical whitelist rows linked to another
 network remain visible to operations for review and are excluded from registry
 address resolution; their wallet ownership is not rewritten automatically.
 
+Portfolio history keeps one holding entry per asset and adds `perChain` to
+each entry in the API response. Each slice identifies its network, exact
+decimal quantity and wallet UUIDs, plus `marketValue` when a historical price
+exists. Two registrations of the same address on different networks stay in
+their respective slices; the portfolio total still sums the asset once across
+those slices. The price belongs to the canonical asset and applies to each
+network's recorded quantity for that date.
+
+The breakdown comes from daily `HoldingSnapshot` rows and their wallet links.
+Quantities carry forward from the last recorded day, including a recorded zero;
+current live balances do not replace historical quantities. There is no history
+before the first recorded holding. Dashboard and mobile expose the split under
+the chart's Holdings view, following the selected date. Older responses without
+network detail offer no expansion. A missing price is shown as unpriced, while
+a priced zero stays zero. Base transfers use ETH for native quantities and gas
+fees, and use Base's chain ID for signing.
+
 ## Background jobs
 
 Procrastinate runs on PostgreSQL. Start a worker with

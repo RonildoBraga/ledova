@@ -56,3 +56,4 @@ export { getHoldingTokenDeployment } from './asset-deployment';
 export { importAddressKey, importOnEvmNetwork, importedParentKey, canDeriveNextWalletAddress } from './wallet-import';
 export { calculateWalletTotals, filterWalletsByChain } from './wallet';
 export { parseFiatValue } from './valuation';
+export { portfolioSnapshotPoints } from './portfolio-snapshots';

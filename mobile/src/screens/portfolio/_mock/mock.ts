@@ -1,15 +1,6 @@
 import { HOLDING_ASSET_TYPE, calculateAssetAllocation, calculateHoldingsSummary, type TimeRange } from '@ledova/shared';
-import type { HoldingWithWallet } from '@ledova/shared';
+import type { HoldingWithWallet, PortfolioSnapshotDataPoint, PortfolioSnapshotHolding } from '@ledova/shared';
 import { MOCK_ASSETS, MOCK_ASSET_VALUES, MOCK_WALLETS } from '../../../_mock/mockConfig';
-
-interface MockPortfolioSnapshot {
-  dayIndex: number;
-  date: string;
-  totalMarketValue: number;
-  assetValues: Record<string, number>;
-  assetQuantities: Record<string, number>;
-  assetSymbols: string[];
-}
 
 export const generateMockHoldingsData = () => {
   const mockAssets = MOCK_ASSETS.map((asset) => ({
@@ -75,7 +66,7 @@ export const generateMockHoldingsData = () => {
   };
 };
 
-export const generateMockPortfolioChartData = (timeRange: TimeRange): MockPortfolioSnapshot[] => {
+export const generateMockPortfolioChartData = (timeRange: TimeRange): PortfolioSnapshotDataPoint[] => {
   const dataPointsMap: Record<TimeRange, number> = {
     '3M': 90,
     '6M': 180,
@@ -92,13 +83,17 @@ export const generateMockPortfolioChartData = (timeRange: TimeRange): MockPortfo
   const { assetAllocation, summary } = currentHoldings;
 
   const currentAssetValues: Record<string, number> = {};
-  const currentAssetQuantities: Record<string, number> = {};
+  const snapshotHoldings: Record<string, PortfolioSnapshotHolding> = {};
 
   assetAllocation.forEach((asset) => {
     currentAssetValues[asset.symbol] = asset.totalValue;
 
-    const assetPrice = MOCK_ASSET_VALUES[asset.symbol as keyof typeof MOCK_ASSET_VALUES];
-    currentAssetQuantities[asset.symbol] = asset.totalValue / assetPrice;
+    snapshotHoldings[asset.symbol] = {
+      assetUuid: asset.assetUuid,
+      quantity: String(asset.totalQuantity),
+      marketValue: String(asset.totalValue),
+      wallets: [],
+    };
   });
 
   const assets = assetAllocation.map((a) => a.symbol);
@@ -117,7 +112,7 @@ export const generateMockPortfolioChartData = (timeRange: TimeRange): MockPortfo
         date: date.toISOString().split('T')[0],
         totalMarketValue: summary.totalValue,
         assetValues: currentAssetValues,
-        assetQuantities: currentAssetQuantities,
+        assetHoldings: snapshotHoldings,
         assetSymbols: sortedAssets,
       };
     }
@@ -126,7 +121,7 @@ export const generateMockPortfolioChartData = (timeRange: TimeRange): MockPortfo
     const trend = 0.0003;
 
     const assetValues: Record<string, number> = {};
-    const assetQuantities: Record<string, number> = {};
+    const assetHoldings: Record<string, PortfolioSnapshotHolding> = {};
     let totalMarketValue = 0;
 
     assets.forEach((symbol) => {
@@ -144,7 +139,7 @@ export const generateMockPortfolioChartData = (timeRange: TimeRange): MockPortfo
       const historicalValue = currentValue / trendFactor / cyclicalFactor / randomWalk;
 
       assetValues[symbol] = historicalValue;
-      assetQuantities[symbol] = currentAssetQuantities[symbol];
+      assetHoldings[symbol] = { ...snapshotHoldings[symbol], marketValue: String(historicalValue) };
       totalMarketValue += historicalValue;
     });
 
@@ -155,7 +150,7 @@ export const generateMockPortfolioChartData = (timeRange: TimeRange): MockPortfo
       date: date.toISOString().split('T')[0],
       totalMarketValue,
       assetValues,
-      assetQuantities,
+      assetHoldings,
       assetSymbols: sortedAssets,
     };
   });

@@ -67,9 +67,14 @@ def _point(portfolio, day, wallets, quantities, assets, prices, computed_at) -> 
             if wallet_id != wallet.pk:
                 continue
             asset = assets[asset_id]
-            entry = aggregated.setdefault(asset.symbol, {"asset": asset, "quantity": Decimal("0"), "wallets": []})
+            entry = aggregated.setdefault(
+                asset.symbol, {"asset": asset, "quantity": Decimal("0"), "wallets": [], "per_chain": {}}
+            )
             entry["quantity"] += quantity
             entry["wallets"].append(str(wallet.uuid))
+            chain = entry["per_chain"].setdefault(wallet.chain, {"quantity": Decimal("0"), "wallets": []})
+            chain["quantity"] += quantity
+            chain["wallets"].append(str(wallet.uuid))
 
     holdings_data = {}
     total_value = Decimal("0")
@@ -78,6 +83,10 @@ def _point(portfolio, day, wallets, quantities, assets, prices, computed_at) -> 
             "asset_uuid": str(entry["asset"].uuid),
             "quantity": str(entry["quantity"]),
             "wallets": entry["wallets"],
+            "per_chain": [
+                {"chain": chain, "quantity": str(holding["quantity"]), "wallets": holding["wallets"]}
+                for chain, holding in sorted(entry["per_chain"].items())
+            ],
         }
         price = prices.get(entry["asset"].pk)
         if price is not None:
@@ -85,6 +94,8 @@ def _point(portfolio, day, wallets, quantities, assets, prices, computed_at) -> 
             total_value += market_value
             holdings_data[symbol]["price"] = str(price.price)
             holdings_data[symbol]["market_value"] = str(market_value)
+            for chain in holdings_data[symbol]["per_chain"]:
+                chain["market_value"] = str(entry["per_chain"][chain["chain"]]["quantity"] * price.price)
     total = total_value if total_value > 0 else None
 
     return {
