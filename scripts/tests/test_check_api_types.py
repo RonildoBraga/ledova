@@ -14,7 +14,10 @@ import importlib.util
 import tempfile
 import textwrap
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
+from io import StringIO
 from pathlib import Path
+from unittest.mock import patch
 
 import yaml
 
@@ -306,7 +309,9 @@ class NestedFieldsStayOnTheirObject(_Repository):
         self.assertEqual(self.findings(self.document), [])
 
     def test_a_required_root_field_after_a_nested_object_is_still_rejected_when_absent(self):
-        self.types(self.declaration.replace("totalHolders: number;", "totalHolders: number;\n              missing: string;"))
+        self.types(
+            self.declaration.replace("totalHolders: number;", "totalHolders: number;\n              missing: string;")
+        )
         self.assertEqual(self.findings(self.document), [("TokenHoldersResponse", "ShareRegister", ["missing"])])
 
     def test_a_missing_nested_object_itself_is_still_a_missing_required_field(self):
@@ -394,6 +399,86 @@ class EveryServiceCallResolves(_Repository):
                      "PrepareBitcoinTransferResponse", "BroadcastTransferResponse"):
             with self.subTest(type=name):
                 self.assertIn(name, reached)
+
+
+class OperationAndResponseCoverage(_Repository):
+    def setUp(self):
+        super().setUp()
+        self.endpoints("  THING: '/api/things/',")
+        self.types("export interface Thing {\n  uuid: string;\n}\n")
+
+    def outcome(self, document):
+        with patch.object(gate, "trading_event_drift", return_value=[]), redirect_stdout(StringIO()), redirect_stderr(
+            StringIO()
+        ):
+            return gate.main(["--schema", str(self.schema(document))])
+
+    def test_a_named_object_without_successful_response_metadata_fails(self):
+        self.service("export const get = c => c.get<Thing>(ENDPOINTS.THING);")
+        document = {"paths": {"/api/things/": {"get": {"responses": {"200": {"description": "No response body"}}}}}}
+        self.assertEqual(self.outcome(document), 1)
+
+    def test_a_named_object_with_an_uninspectable_component_fails(self):
+        self.service("export const get = c => c.get<Thing>(ENDPOINTS.THING);")
+        document = {
+            "paths": operation("get", "/api/things/", "Thing"),
+            "components": {"schemas": {"Thing": {"type": "object"}}},
+        }
+        self.assertEqual(self.outcome(document), 1)
+
+    def test_a_missing_typed_operation_and_a_wrong_verb_fail(self):
+        self.service("export const get = c => c.get<Thing>(ENDPOINTS.THING);")
+        for paths in ({}, operation("post", "/api/things/", "Thing")):
+            with self.subTest(paths=paths):
+                self.assertEqual(self.outcome({"paths": paths}), 1)
+
+    def test_an_untyped_delete_requires_its_own_declared_operation(self):
+        self.service("export const remove = c => c.delete(ENDPOINTS.THING);")
+        declared = {"paths": {"/api/things/": {"delete": {"responses": {"204": {"description": "No content"}}}}}}
+        self.assertEqual(self.outcome(declared), 0)
+        self.assertEqual(self.outcome({"paths": {}}), 1)
+
+    def test_bodyless_text_binary_scalar_and_object_successes_are_valid_for_untyped_calls(
+        self,
+    ):
+        self.service("export const get = c => c.get(ENDPOINTS.THING);")
+        responses = [
+            {"204": {"description": "No content"}},
+            {"200": {"content": {"text/csv": {"schema": {"type": "string"}}}}},
+            {"200": {"content": {"*/*": {"schema": {"type": "string", "format": "binary"}}}}},
+            {"200": {"content": {"application/json": {"schema": {"type": "integer"}}}}},
+            {"200": {"content": {"application/json": {"schema": {"type": "object", "additionalProperties": {}}}}}},
+            {"200": {"content": {"text/event-stream": {"schema": {"type": "string", "x-sse-events": ["changed"]}}}}},
+        ]
+        for response in responses:
+            with self.subTest(response=response):
+                self.assertEqual(
+                    self.outcome({"paths": {"/api/things/": {"get": {"responses": response}}}}),
+                    0,
+                )
+
+    def test_an_error_only_compatibility_operation_is_not_a_successful_client_call(
+        self,
+    ):
+        self.service("export const get = c => c.get(ENDPOINTS.THING);")
+        document = {
+            "paths": {
+                "/api/things/": {
+                    "get": {"responses": {"400": {"content": {"application/json": {"schema": {"type": "object"}}}}}}
+                }
+            }
+        }
+        self.assertEqual(self.outcome(document), 1)
+
+    def test_a_valid_named_object_preserves_the_existing_field_comparison(self):
+        self.service("export const get = c => c.get<Thing>(ENDPOINTS.THING);")
+        document = {
+            "paths": operation("get", "/api/things/", "Thing"),
+            "components": {"schemas": {"Thing": {"properties": {"uuid": {}, "extra": {}}}}},
+        }
+        self.assertEqual(self.outcome(document), 0)
+        document["components"]["schemas"]["Thing"]["properties"] = {"extra": {}}
+        self.assertEqual(self.outcome(document), 1)
 
 
 if __name__ == "__main__":
