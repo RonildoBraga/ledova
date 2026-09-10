@@ -8,7 +8,16 @@
  import androidx.camera.core.UseCaseGroup
  import androidx.camera.core.resolutionselector.ResolutionSelector
  import androidx.camera.core.resolutionselector.ResolutionStrategy
-@@ -136,6 +137,13 @@
+@@ -49,6 +50,8 @@
+ import androidx.core.app.ActivityCompat
+ import androidx.core.content.ContextCompat
+ import androidx.core.graphics.drawable.toDrawable
++import androidx.lifecycle.LiveData
++import androidx.lifecycle.Observer
+ import expo.modules.camera.analyzers.BarcodeAnalyzer
+ import expo.modules.camera.analyzers.toByteArray
+ import expo.modules.camera.common.BarcodeScannedEvent
+@@ -136,6 +139,15 @@
    private val scope = CoroutineScope(Dispatchers.Main)
    private var shouldCreateCamera = false
    private var previewPaused = false
@@ -19,10 +28,12 @@
 +  private var cameraWindowAllowed = false
 +  private var cameraWindowRevoked = false
 +  private var cameraUseCases: List<UseCase> = emptyList()
++  private var observedCameraState: LiveData<CameraState>? = null
++  private var cameraStateObserver: Observer<CameraState>? = null
 
    var lensFacing = CameraType.BACK
      set(value) {
-@@ -407,9 +415,14 @@
+@@ -407,11 +419,19 @@
 
    @SuppressLint("UnsafeOptInUsageError")
    suspend fun createCamera() {
@@ -37,8 +48,13 @@
 +    val generation = ++cameraGeneration
      shouldCreateCamera = false
      val cameraProvider = ProcessCameraProvider.awaitInstance(context)
++    if (generation != cameraGeneration || previewPaused || !hasCameraWindow()) {
++      return
++    }
 
-@@ -452,29 +465,38 @@
+     ratio?.let {
+       previewView.scaleType =
+@@ -452,29 +472,38 @@
      val videoCapture = createVideoCapture()
      imageAnalysisUseCase = createImageAnalyzer()
 
@@ -79,19 +95,30 @@
      } catch (_: Exception) {
        onMountError(
          CameraMountErrorEvent("Camera component could not be rendered - is there any other instance running?")
-@@ -594,7 +616,11 @@
+@@ -594,7 +623,11 @@
    }
 
    private fun observeCameraState(cameraInfo: CameraInfo) {
+-    cameraInfo.cameraState.observe(currentActivity) {
 +    val generation = cameraGeneration
-     cameraInfo.cameraState.observe(currentActivity) {
++    val observer = Observer<CameraState> {
 +      if (generation != cameraGeneration || previewPaused || !hasCameraWindow() || camera?.cameraInfo !== cameraInfo) {
-+        return@observe
++        return@Observer
 +      }
        when (it.type) {
          CameraState.Type.OPEN -> {
            onCameraReady(Unit)
-@@ -625,7 +651,7 @@
+@@ -604,6 +637,9 @@
+         else -> {}
+       }
+     }
++    observedCameraState = cameraInfo.cameraState
++    cameraStateObserver = observer
++    cameraInfo.cameraState.observe(currentActivity, observer)
+   }
+
+   @OptIn(ExperimentalCamera2Interop::class)
+@@ -625,7 +661,7 @@
 
    fun pausePreview() {
      previewPaused = true
@@ -100,7 +127,7 @@
    }
 
    fun setShouldScanBarcodes(shouldScanBarcodes: Boolean) {
-@@ -736,7 +762,7 @@
+@@ -736,7 +772,7 @@
    }
 
    private fun onBarcodeScanned(barcode: BarCodeScannerResult) {
@@ -109,7 +136,7 @@
        transformBarcodeScannerResultToViewCoordinates(barcode)
        val (cornerPoints, boundingBox) = getCornerPointsAndBoundingBox(
          barcode.cornerPoints,
-@@ -797,10 +823,75 @@
+@@ -797,10 +833,78 @@
      Log.e(CameraViewModule.TAG, "The scope does not have a job in it")
    }
 
@@ -120,6 +147,9 @@
 +    !cameraDisposed && !cameraWindowRevoked && hasVisibleCameraWindow()
 +
 +  private fun releaseCamera() {
++    cameraStateObserver?.let { observedCameraState?.removeObserver(it) }
++    cameraStateObserver = null
++    observedCameraState = null
 +    cameraProvider?.unbind(*cameraUseCases.toTypedArray())
 +    cameraUseCases = emptyList()
 +    cameraProvider = null

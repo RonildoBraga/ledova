@@ -147,7 +147,7 @@ test('ordinary artifact inspection requires camera markers and refuses probe hoo
   }
 });
 
-for (const mode of ['red', 'green']) {
+for (const mode of ['red', 'review-red', 'green']) {
   test(`only the exact ${mode} native body and probe entrypoint are accepted`, (t) => {
     const { root } = fixture(t);
     prepareCamera('apply', root);

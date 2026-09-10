@@ -5,7 +5,7 @@
     {
       "path": "android/src/main/java/expo/modules/camera/ExpoCameraView.kt",
       "beforeSha256": "9e5bf6c2b46560e855deea46b36b44ef0e5b7bbafc9efc446352ae9c2d3e2c32",
-      "afterSha256": "395ae6aeb3074e71e82362cf2f1caf2e590a463c60637142138ef197589bf5e5",
+      "afterSha256": "f0a489015f96b3ad6a34214a34a1a2627bca84cd2a05168f00444cc609389003",
       "replacements": [
         {
           "before": "import androidx.camera.core.UseCaseGroup",
@@ -50,6 +50,49 @@
         {
           "before": "  private fun onBarcodeScanned(barcode: BarCodeScannerResult) {\n    if (shouldScanBarcodes) {",
           "after": "  private fun onBarcodeScanned(barcode: BarCodeScannerResult) {\n    if (shouldScanBarcodes && !previewPaused && hasCameraWindow() && camera != null) {"
+        },
+        {
+          "before": "import androidx.core.graphics.drawable.toDrawable",
+          "after": "import androidx.core.graphics.drawable.toDrawable\nimport androidx.lifecycle.LiveData\nimport androidx.lifecycle.Observer"
+        },
+        {
+          "before": "  private var cameraUseCases: List<UseCase> = emptyList()",
+          "after": "  private var cameraUseCases: List<UseCase> = emptyList()\n  private var observedCameraState: LiveData<CameraState>? = null\n  private var cameraStateObserver: Observer<CameraState>? = null"
+        },
+        {
+          "before": "    val cameraProvider = ProcessCameraProvider.awaitInstance(context)",
+          "after": "    val cameraProvider = ProcessCameraProvider.awaitInstance(context)\n    if (generation != cameraGeneration || previewPaused || !hasCameraWindow()) {\n      return\n    }"
+        },
+        {
+          "before": "  private fun observeCameraState(cameraInfo: CameraInfo) {\n    val generation = cameraGeneration\n    cameraInfo.cameraState.observe(currentActivity) {\n      if (generation != cameraGeneration || previewPaused || !hasCameraWindow() || camera?.cameraInfo !== cameraInfo) {\n        return@observe\n      }\n      when (it.type) {\n        CameraState.Type.OPEN -> {\n          onCameraReady(Unit)\n          setTorchEnabled(enableTorch)\n        }\n\n        else -> {}\n      }\n    }\n  }\n\n",
+          "after": "  private fun observeCameraState(cameraInfo: CameraInfo) {\n    val generation = cameraGeneration\n    val observer = Observer<CameraState> {\n      if (generation != cameraGeneration || previewPaused || !hasCameraWindow() || camera?.cameraInfo !== cameraInfo) {\n        return@Observer\n      }\n      when (it.type) {\n        CameraState.Type.OPEN -> {\n          onCameraReady(Unit)\n          setTorchEnabled(enableTorch)\n        }\n\n        else -> {}\n      }\n    }\n    observedCameraState = cameraInfo.cameraState\n    cameraStateObserver = observer\n    cameraInfo.cameraState.observe(currentActivity, observer)\n  }\n\n"
+        },
+        {
+          "before": "  private fun releaseCamera() {\n    cameraProvider?.unbind",
+          "after": "  private fun releaseCamera() {\n    cameraStateObserver?.let { observedCameraState?.removeObserver(it) }\n    cameraStateObserver = null\n    observedCameraState = null\n    cameraProvider?.unbind"
+        }
+      ],
+      "reviewSha256": "395ae6aeb3074e71e82362cf2f1caf2e590a463c60637142138ef197589bf5e5",
+      "reviewReplacements": [
+        {
+          "before": "import androidx.core.graphics.drawable.toDrawable",
+          "after": "import androidx.core.graphics.drawable.toDrawable\nimport androidx.lifecycle.LiveData\nimport androidx.lifecycle.Observer"
+        },
+        {
+          "before": "  private var cameraUseCases: List<UseCase> = emptyList()",
+          "after": "  private var cameraUseCases: List<UseCase> = emptyList()\n  private var observedCameraState: LiveData<CameraState>? = null\n  private var cameraStateObserver: Observer<CameraState>? = null"
+        },
+        {
+          "before": "    val cameraProvider = ProcessCameraProvider.awaitInstance(context)",
+          "after": "    val cameraProvider = ProcessCameraProvider.awaitInstance(context)\n    if (generation != cameraGeneration || previewPaused || !hasCameraWindow()) {\n      return\n    }"
+        },
+        {
+          "before": "  private fun observeCameraState(cameraInfo: CameraInfo) {\n    val generation = cameraGeneration\n    cameraInfo.cameraState.observe(currentActivity) {\n      if (generation != cameraGeneration || previewPaused || !hasCameraWindow() || camera?.cameraInfo !== cameraInfo) {\n        return@observe\n      }\n      when (it.type) {\n        CameraState.Type.OPEN -> {\n          onCameraReady(Unit)\n          setTorchEnabled(enableTorch)\n        }\n\n        else -> {}\n      }\n    }\n  }\n\n",
+          "after": "  private fun observeCameraState(cameraInfo: CameraInfo) {\n    val generation = cameraGeneration\n    val observer = Observer<CameraState> {\n      if (generation != cameraGeneration || previewPaused || !hasCameraWindow() || camera?.cameraInfo !== cameraInfo) {\n        return@Observer\n      }\n      when (it.type) {\n        CameraState.Type.OPEN -> {\n          onCameraReady(Unit)\n          setTorchEnabled(enableTorch)\n        }\n\n        else -> {}\n      }\n    }\n    observedCameraState = cameraInfo.cameraState\n    cameraStateObserver = observer\n    cameraInfo.cameraState.observe(currentActivity, observer)\n  }\n\n"
+        },
+        {
+          "before": "  private fun releaseCamera() {\n    cameraProvider?.unbind",
+          "after": "  private fun releaseCamera() {\n    cameraStateObserver?.let { observedCameraState?.removeObserver(it) }\n    cameraStateObserver = null\n    observedCameraState = null\n    cameraProvider?.unbind"
         }
       ]
     },
@@ -57,7 +100,9 @@
       "path": "android/src/main/java/expo/modules/camera/CameraViewModule.kt",
       "beforeSha256": "e845933868e33b4799c39c1a4fd4c1ed8cba52cab8092b98f84fcd0f04d30151",
       "afterSha256": "e845933868e33b4799c39c1a4fd4c1ed8cba52cab8092b98f84fcd0f04d30151",
-      "replacements": []
+      "replacements": [],
+      "reviewSha256": "e845933868e33b4799c39c1a4fd4c1ed8cba52cab8092b98f84fcd0f04d30151",
+      "reviewReplacements": []
     }
   ],
   "android": {
@@ -69,5 +114,6 @@
       "repository": "local-maven-repo"
     }
   },
-  "gradleSha256": "684ee20f7352318d744c9406b5cc9bfdc2107705f514469e634552f45ef02a9d"
+  "gradleSha256": "684ee20f7352318d744c9406b5cc9bfdc2107705f514469e634552f45ef02a9d",
+  "reviewHead": "8c1088c2b4bf4339ddd5d9fcda7acc6628c32079"
 }

@@ -394,8 +394,8 @@ generated project. Remove only the owned emulator/simulator afterward. Deleting
 the iOS simulator also removes its test CA.
 Do not distribute the probe artifact.
 
-Android then builds two additional camera-only probe APKs. The probe installer
-accepts only the exact original or patched camera bodies plus the checked-in
+Android then builds three additional camera-only probe APKs. The probe installer
+accepts only the exact upstream, review-red or corrected camera bodies plus the checked-in
 instrumentation and `native-tests/camera-window.tsx` entrypoint. Ordinary builds
 refuse these test hooks. Each camera probe is saved separately with its digest,
 source hashes, compiled class hashes, state observations and screenshot. The
@@ -406,16 +406,36 @@ alone are not proof of native behavior. The resolved Gradle graph must select
 The camera probe grants permission to the owned emulator and opens the actual
 modal preview. It requires bound use cases and an `OPEN` camera as its positive
 control, then actual unbound use cases and `CLOSED` state on window/ancestor loss.
+The sustained window cover also tracks the actual bound camera's Camera2 ID:
+its probe-owned availability callback must observe unavailable while open, then
+available after release. Initial availability cannot satisfy that transition.
+Replacement controls permit that physical camera to remain unavailable while the
+replacement is open. Emulator availability does not establish physical/OEM behavior.
 It injects a fixed synthetic barcode through the compiled camera callback to
 check delivery and retirement; it does not prove optical QR recognition. A gate
 after the real `awaitInstance` holds camera creation. A first-create live control
 is separate from already-open ratio changes, whose real property update enters
 the module-scope body before loss, close, detach, pause or owner replacement.
 This avoids attributing a view-scope cancellation to the post-await guard.
+An additional same-view control holds a 4:3 recreation, lets a later 16:9
+recreation bind, then checks that releasing the old continuation preserves the
+actual bound capture/analyzer and recorder field identities. A separate control
+reads the actual LiveData observer registry before/after production registration
+and after rebind/teardown: only the view's observer may disappear, while the
+probe's own observer and Activity-bound sibling continue receiving camera state.
+These test-only registry reads fail if the loaded implementation cannot expose
+those identities; observer counts alone do not establish removal.
 Quick native focus cycles run while JavaScript delivery is held, including a
 session already completed in JavaScript; an old owner's later cleanup must also
-preserve the replacement's `OPEN` camera. The old compiled body must fail the
-named negative controls, while live continuations and all patched controls pass.
+preserve the replacement's `OPEN` camera. The 15 controls preserve the original
+13 and add the two recreation/observer checks. The upstream-red expectation is
+11 failures; review-red is the exact `8c1088c2` camera body and must fail only the
+two added checks; corrected green must pass all 15. These are expectations until
+the native runs execute. Sustained-cover release can also occur through JS
+cleanup in the old body; that control's expected old-body failure is retired
+barcode delivery, not proof of synchronous native release. The extra review-red
+build and three dependency-graph checks add native validation time; existing
+command/report timeouts remain unchanged.
 The runner restores ordinary camera source in `finally`; after an uncatchable
 kill, use a fresh owned dependency copy and prebuild before any ordinary build.
 

@@ -58,7 +58,7 @@ export function prepareCamera(command, root = mobileRoot, environment = process.
   const mode = environment.LEDOVA_CAMERA_PROBE;
   const support = path.join(camera, probeSupportPath);
   if (mode !== undefined) {
-    assert.ok(mode === 'red' || mode === 'green', 'Unknown camera probe mode.');
+    assert.ok(['red', 'review-red', 'green'].includes(mode), 'Unknown camera probe mode.');
     assert.equal(command, 'verify', 'Probe preparation must not replace the ordinary patch operation.');
     assert.equal(environment.ENTRY_FILE, probeEntry, 'Camera test hooks require the exact probe entrypoint.');
     assert.equal(
@@ -71,7 +71,7 @@ export function prepareCamera(command, root = mobileRoot, environment = process.
       const body = removeCameraInstrumentation(file.path, source);
       assert.equal(
         hash(body),
-        mode === 'red' ? file.beforeSha256 : file.afterSha256,
+        mode === 'red' ? file.beforeSha256 : mode === 'review-red' ? file.reviewSha256 : file.afterSha256,
         'Camera probe body differs from the declared old/new implementation.',
       );
       assert.equal(source, instrumentCamera(file.path, body), 'Camera probe transform differs from reviewed source.');
@@ -94,16 +94,17 @@ export function prepareCamera(command, root = mobileRoot, environment = process.
 }
 
 export function installCameraProbe(mode, root = mobileRoot) {
-  assert.ok(mode === 'red' || mode === 'green');
+  assert.ok(['red', 'review-red', 'green'].includes(mode));
   prepareCamera('verify', root, {});
   const { camera, manifest } = cameraSources(root);
   const files = manifest.files.map((file) => {
     const filename = path.join(camera, file.path);
     const original = fs.readFileSync(filename, 'utf8');
     let body = original;
-    if (mode === 'red') {
-      for (const change of [...file.replacements].reverse()) body = body.replace(change.after, change.before);
-      assert.equal(hash(body), file.beforeSha256);
+    if (mode !== 'green') {
+      const changes = mode === 'red' ? file.replacements : file.reviewReplacements;
+      for (const change of [...changes].reverse()) body = body.replace(change.after, change.before);
+      assert.equal(hash(body), mode === 'red' ? file.beforeSha256 : file.reviewSha256);
     }
     return { filename, original, source: instrumentCamera(file.path, body) };
   });

@@ -23,7 +23,12 @@ export function instrumentCamera(file, source) {
     source = once(
       source,
       '      camera = cameraProvider.bindToLifecycle(currentActivity, cameraSelector, useCases)',
-      '      LedovaCameraWindowProbe.attempt(this)\n      camera = cameraProvider.bindToLifecycle(currentActivity, cameraSelector, useCases)\n      LedovaCameraWindowProbe.bound(this, cameraProvider, camera!!, listOfNotNull<androidx.camera.core.UseCase>(preview, if (cameraMode == CameraMode.PICTURE) imageCaptureUseCase else videoCapture, if (cameraMode == CameraMode.PICTURE) imageAnalysisUseCase else null))',
+      '      LedovaCameraWindowProbe.attempt(this)\n      camera = cameraProvider.bindToLifecycle(currentActivity, cameraSelector, useCases)\n      LedovaCameraWindowProbe.bound(this, cameraProvider, camera!!, listOfNotNull<androidx.camera.core.UseCase>(preview, if (cameraMode == CameraMode.PICTURE) imageCaptureUseCase else videoCapture, if (cameraMode == CameraMode.PICTURE) imageAnalysisUseCase else null), currentActivity)',
+    );
+    source = once(
+      source,
+      '        observeCameraState(it.cameraInfo)',
+      '        LedovaCameraWindowProbe.beforeObserve(this, it.cameraInfo)\n        observeCameraState(it.cameraInfo)\n        LedovaCameraWindowProbe.afterObserve(this, it.cameraInfo)',
     );
     source = once(
       source,
@@ -65,7 +70,7 @@ export function removeCameraInstrumentation(file, source) {
   try {
     const view = file.endsWith('/ExpoCameraView.kt');
     const original = view
-      ? '    val cameraProvider = ProcessCameraProvider.awaitInstance(context)\n      camera = cameraProvider.bindToLifecycle(currentActivity, cameraSelector, useCases)\n          onCameraReady(Unit)\n      onBarcodeScanned(\n        BarcodeScannedEvent('
+      ? '    val cameraProvider = ProcessCameraProvider.awaitInstance(context)\n      camera = cameraProvider.bindToLifecycle(currentActivity, cameraSelector, useCases)\n        observeCameraState(it.cameraInfo)\n          onCameraReady(Unit)\n      onBarcodeScanned(\n        BarcodeScannedEvent('
       : 'import expo.modules.kotlin.functions.Queues\n    Events("onModernBarcodeScanned")';
     instrumentCamera(file, original);
     for (const { before, after } of transformations.reverse()) {

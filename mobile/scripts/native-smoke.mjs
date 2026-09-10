@@ -551,8 +551,12 @@ try {
     for (const count of ['http', 'untrusted']) assert.equal(result.counts[count], 0);
   }
   if (platform === 'android') {
+    const reviewFailures = [
+      'out-of-order same-view recreation preserves the newer bound fields',
+      'view teardown removes only its actual observer and preserves sibling observers',
+    ].sort();
     const expectedRed = [
-      'owning window cover releases bound use cases and reaches CLOSED',
+      'sustained window cover releases the camera and refuses retired barcode delivery',
       ...['loss', 'close', 'detach', 'pause'].map(
         (outcome) => `post-await ${outcome} continuation retains its original admission`,
       ),
@@ -561,9 +565,10 @@ try {
       ...['completed', 'live'].map(
         (status) => `quick native focus cycle before JS delivery keeps ${status} old owner revoked`,
       ),
+      ...reviewFailures,
     ].sort();
-    let oldCameraClass;
-    for (const mode of ['red', 'green']) {
+    const cameraClasses = new Set();
+    for (const mode of ['red', 'review-red', 'green']) {
       const files = installCameraProbe(mode, mobile);
       try {
         const cameraEnvironment = { ...environment, ENTRY_FILE: probeEntry, LEDOVA_CAMERA_PROBE: mode };
@@ -573,6 +578,16 @@ try {
         );
         await localRequest(endpoints.apiUrl, '/reset', ca);
         await build(`camera-${mode}-build`, cameraEnvironment);
+        await command(
+          './gradlew',
+          [':app:dependencies', '--configuration', 'releaseRuntimeClasspath', '--no-daemon', '--max-workers=2'],
+          `camera-${mode}-dependencies`,
+          cameraEnvironment,
+          path.join(mobile, 'android'),
+        );
+        const dependencies = fs.readFileSync(path.join(directory, `camera-${mode}-dependencies.log`), 'utf8');
+        assert.match(dependencies, /project :expo-camera/);
+        assert.doesNotMatch(dependencies, /host\.exp\.exponent:expo\.modules\.camera:/);
         const cameraArtifact = path.join(directory, `camera-${mode}.apk`);
         fs.copyFileSync(appPath, cameraArtifact);
         fs.writeFileSync(
@@ -589,27 +604,25 @@ try {
               .digest('hex'),
           }),
         );
-        if (mode === 'red') oldCameraClass = inputs[0].sha256;
-        else
-          assert.notEqual(
-            inputs[0].sha256,
-            oldCameraClass,
-            'The actual compiled camera class must change between old and patched bodies.',
-          );
+        assert.ok(
+          !cameraClasses.has(inputs[0].sha256),
+          'The actual compiled camera class must differ for each reviewed body.',
+        );
+        cameraClasses.add(inputs[0].sha256);
         fs.writeFileSync(path.join(directory, `camera-${mode}-compiled-classes.json`), JSON.stringify(inputs, null, 2));
         await launch(`camera-${mode}`, true);
         markStage(`camera-${mode}-report`);
         const result = await waitFor(path.join(directory, 'server/result.json'), 180000);
         fs.writeFileSync(path.join(directory, `camera-${mode}.json`), JSON.stringify(result, null, 2));
         await screenshot(`camera-${mode}`);
-        assert.equal(result.checks.length, 13);
-        assert.equal(new Set(result.checks.map((check) => check.name)).size, 13);
+        assert.equal(result.checks.length, 15);
+        assert.equal(new Set(result.checks.map((check) => check.name)).size, 15);
         assert.deepEqual(
           result.checks
             .filter((check) => !check.passed)
             .map((check) => check.name)
             .sort(),
-          mode === 'red' ? expectedRed : [],
+          mode === 'red' ? expectedRed : mode === 'review-red' ? reviewFailures : [],
         );
       } finally {
         restoreCameraProbe(files, mobile);

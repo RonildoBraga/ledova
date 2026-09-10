@@ -13,11 +13,23 @@ type Entry = {
   id: number;
   waiting: boolean;
   awaitedRatio: string;
+  gatedRatio: string;
   attempts: number;
   binds: number;
   ready: number;
   barcodes: number;
   state: string;
+  siblingState: string;
+  fieldsMatchBound: boolean;
+  boundCapture: boolean;
+  boundAnalyzer: boolean;
+  registeredObservers: number;
+  presentObservers: number;
+  retiredObserversPresent: number;
+  probeObserverPresent: boolean;
+  siblingObserverPresent: boolean;
+  cameraId: string;
+  availability: string[];
   bound: boolean;
   attached: boolean;
   focused: boolean;
@@ -52,7 +64,7 @@ const access = createCameraAccess();
 access.setAllowed(true);
 const pause = (milliseconds: number) => new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
 const completed = new Set<number>();
-const changedRatio = new Set<number>();
+const changedRatio = new Map<number, '4:3' | '16:9'>();
 const scans = new Map<number, number>();
 let afterScan: (() => void) | undefined;
 let currentSurface = 0;
@@ -131,7 +143,7 @@ function Scanner({ surface }: { surface: number }) {
               key={camera.previewKey}
               style={StyleSheet.absoluteFillObject}
               facing="back"
-              ratio={changedRatio.has(surface) ? '4:3' : undefined}
+              ratio={changedRatio.get(surface)}
               barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
               onBarcodeScanned={camera.onBarcodeScanned}
             />
@@ -192,13 +204,23 @@ async function run() {
     await record();
   });
 
-  await check('owning window cover releases bound use cases and reaches CLOSED', async (record) => {
+  await check('sustained window cover releases the camera and refuses retired barcode delivery', async (record) => {
     const opened = await open();
+    const active = await waitFor(
+      () => state(opened.id),
+      (entry) => entry.availability.at(-1) === 'UNAVAILABLE',
+    );
+    expect(active.bound && active.state === 'OPEN' && active.cameraId !== 'NONE');
     await record();
     await probe.cameraProbeCover();
     await waitFor(
       () => state(opened.id),
-      (entry) => !entry.bound && entry.state === 'CLOSED',
+      (entry) =>
+        !entry.bound &&
+        entry.state === 'CLOSED' &&
+        entry.cameraId === active.cameraId &&
+        entry.availability.length > active.availability.length &&
+        entry.availability.at(-1) === 'AVAILABLE',
     );
     const covered = await probe.cameraProbeSnapshot();
     expect(covered.activityState === 'RESUMED' && AppState.currentState === 'active');
@@ -252,7 +274,7 @@ async function run() {
       const opened = await open();
       const before = await state(opened.id);
       await probe.cameraProbeArm();
-      changedRatio.add(opened.surface);
+      changedRatio.set(opened.surface, '4:3');
       await renderSurfaces(surfaces);
       await waitFor(
         () => state(opened.id),
@@ -308,7 +330,7 @@ async function run() {
     const first = await open();
     const before = await state(first.id);
     await probe.cameraProbeArm();
-    changedRatio.add(first.surface);
+    changedRatio.set(first.surface, '4:3');
     await renderSurfaces(surfaces);
     await waitFor(
       () => state(first.id),
@@ -354,6 +376,74 @@ async function run() {
     const retired = await state(first.id);
     expect(retired.ready === before.ready && retired.barcodes === before.barcodes);
     await record();
+  });
+
+  await check('out-of-order same-view recreation preserves the newer bound fields', async (record) => {
+    const opened = await open();
+    const before = await state(opened.id);
+    expect(before.fieldsMatchBound && before.boundCapture && before.boundAnalyzer);
+    await probe.cameraProbeArm();
+    changedRatio.set(opened.surface, '4:3');
+    await renderSurfaces(surfaces);
+    await waitFor(
+      () => state(opened.id),
+      (entry) => entry.waiting && entry.gatedRatio === 'FOUR_THREE',
+    );
+    await record();
+    changedRatio.set(opened.surface, '16:9');
+    await renderSurfaces(surfaces);
+    const newer = await waitFor(
+      () => state(opened.id),
+      (entry) => entry.binds > before.binds && entry.bound && entry.state === 'OPEN',
+    );
+    expect(newer.waiting && newer.gatedRatio === 'FOUR_THREE' && newer.awaitedRatio === 'SIXTEEN_NINE');
+    expect(newer.fieldsMatchBound && newer.boundCapture && newer.boundAnalyzer);
+    await record();
+    await probe.cameraProbeRelease(opened.id);
+    await waitFor(
+      () => state(opened.id),
+      (entry) => !entry.waiting,
+    );
+    await record();
+    const retained = await state(opened.id);
+    expect(retained.fieldsMatchBound && retained.boundCapture && retained.boundAnalyzer);
+    expect(retained.attempts === newer.attempts && retained.binds === newer.binds);
+    expect(retained.bound && retained.state === 'OPEN');
+  });
+
+  await check('view teardown removes only its actual observer and preserves sibling observers', async (record) => {
+    const first = await open();
+    const before = await state(first.id);
+    expect(before.registeredObservers === 1 && before.presentObservers === 1);
+    expect(before.probeObserverPresent && before.siblingObserverPresent && before.siblingState === 'OPEN');
+    await record();
+    changedRatio.set(first.surface, '4:3');
+    await renderSurfaces(surfaces);
+    const rebound = await waitFor(
+      () => state(first.id),
+      (entry) => entry.binds > before.binds && entry.bound && entry.state === 'OPEN',
+    );
+    await record();
+    const second = await open();
+    await close(first.surface);
+    await probe.cameraProbeRetire(first.id);
+    const replacement = await state(second.id);
+    const retired = await state(first.id);
+    await record();
+    await close(second.surface);
+    const closed = await waitFor(
+      () => state(second.id),
+      (entry) => !entry.bound && entry.state === 'CLOSED' && entry.siblingState === 'CLOSED',
+    );
+    await record();
+    expect(
+      rebound.registeredObservers === 2 && rebound.presentObservers === 1 && rebound.retiredObserversPresent === 0,
+    );
+    expect(rebound.probeObserverPresent && rebound.siblingObserverPresent);
+    expect(retired.presentObservers === 0 && retired.probeObserverPresent && retired.siblingObserverPresent);
+    expect(replacement.bound && replacement.state === 'OPEN' && replacement.presentObservers === 1);
+    expect(replacement.probeObserverPresent && replacement.siblingObserverPresent);
+    expect(closed.presentObservers === 0 && closed.probeObserverPresent && closed.siblingObserverPresent);
   });
 
   for (const complete of [false, true]) {
