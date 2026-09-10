@@ -1,6 +1,13 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getUserProfiles, registerCompany, getCompanies, updateCompany, CACHE_TIMING } from '@ledova/shared';
+import {
+  getUserProfiles,
+  registerCompany,
+  getCompanies,
+  getCompany,
+  updateCompany,
+  CACHE_TIMING,
+} from '@ledova/shared';
 import type { CompanyRegistration, CompanyType } from '@ledova/shared';
 import { apiClient } from '../../../services/apiClient';
 
@@ -22,46 +29,131 @@ const initialFormData: CompanyFormData = {
   abn: '',
 };
 
+const DISPLAYED_FIELDS = Object.keys(initialFormData) as (keyof CompanyFormData)[];
+
+interface FormOwner {
+  uuid: string | null | undefined;
+}
+
+interface FormState {
+  owner: FormOwner;
+  form: CompanyFormData;
+  errors: FormErrors;
+  generalError: string;
+  dirty: Set<keyof CompanyFormData>;
+  hydrated: boolean;
+}
+
+interface Submission {
+  owner: FormOwner;
+  owners: FormOwner[];
+  cancelled: boolean;
+}
+
+const initialState = (owner: FormOwner): FormState => ({
+  owner,
+  form: { ...initialFormData },
+  errors: {},
+  generalError: '',
+  dirty: new Set(),
+  hydrated: owner.uuid === null,
+});
+
 export function useCompanyRegistration() {
   const queryClient = useQueryClient();
-
-  const [form, setForm] = useState<CompanyFormData>(initialFormData);
-  const [errors, setErrors] = useState<FormErrors>({});
-  const [generalError, setGeneralError] = useState('');
-  const lastPopulatedUuid = useRef<string | null>(null);
-
-  const { data: profilesResponse, isLoading: isLoadingProfiles } = useQuery({
+  const profilesQuery = useQuery({
     queryKey: ['userProfiles'],
     queryFn: () => getUserProfiles(apiClient),
     staleTime: CACHE_TIMING.DEFAULT_STALE_TIME,
   });
-
-  const { data: companiesResponse, isLoading: isLoadingCompany } = useQuery({
+  const companiesQuery = useQuery({
     queryKey: ['signup', 'company'],
     queryFn: () => getCompanies(apiClient),
     staleTime: 0,
   });
+  const existingCompany = companiesQuery.data?.data.results[0] || null;
+  const selectedUuid = companiesQuery.data ? (existingCompany?.uuid ?? null) : undefined;
+  const detailQuery = useQuery({
+    queryKey: ['signup', 'company-detail', selectedUuid],
+    queryFn: () => getCompany(apiClient, selectedUuid!),
+    enabled: Boolean(selectedUuid),
+    staleTime: 0,
+  });
+  const detail = selectedUuid && detailQuery.data?.data.uuid === selectedUuid ? detailQuery.data.data : null;
+  const owner = useMemo(() => ({ uuid: selectedUuid }), [selectedUuid]);
+  const currentOwner = useRef(owner);
+  currentOwner.current = owner;
+  const mounted = useRef(true);
+  const submission = useRef<Submission | null>(null);
+  const pending = submission.current;
+  if (pending && pending.owners[pending.owners.length - 1] !== owner) pending.owners.push(owner);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const responseData = profilesResponse?.data as any;
-  const userProfile = responseData?.results?.[0] || responseData?.[0] || null;
+  useLayoutEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      if (submission.current) submission.current.cancelled = true;
+    };
+  }, []);
 
-  const existingCompany = companiesResponse?.data?.results?.[0] || null;
+  const [storedState, setState] = useState(() => initialState(owner));
+  const state = storedState.owner === owner ? storedState : initialState(owner);
+  const { form, errors, generalError } = state;
+  const updateState = useCallback(
+    (update: (value: FormState) => FormState) => {
+      setState((previous) =>
+        currentOwner.current === owner ? update(previous.owner === owner ? previous : initialState(owner)) : previous,
+      );
+    },
+    [owner],
+  );
+  const setErrors = useCallback(
+    (value: FormErrors) => updateState((previous) => ({ ...previous, errors: value })),
+    [updateState],
+  );
+  const setGeneralError = useCallback(
+    (value: string) => updateState((previous) => ({ ...previous, generalError: value })),
+    [updateState],
+  );
 
   useEffect(() => {
-    if (existingCompany && existingCompany.uuid !== lastPopulatedUuid.current) {
-      lastPopulatedUuid.current = existingCompany.uuid;
-      setForm({
-        name: existingCompany.name || '',
-        tradingName: existingCompany.tradingName || '',
-        companyType: existingCompany.companyType || 'pty',
-        acn: existingCompany.acn || '',
-        abn: 'abn' in existingCompany && typeof existingCompany.abn === 'string' ? existingCompany.abn : '',
-      });
-    }
-  }, [existingCompany]);
+    if (!detail) return;
+    const saved: CompanyFormData = {
+      name: detail.name || '',
+      tradingName: detail.tradingName || '',
+      companyType: detail.companyType || 'pty',
+      acn: detail.acn || '',
+      abn: detail.abn || '',
+    };
+    updateState((previous) => {
+      const values = { ...previous.form };
+      for (const field of DISPLAYED_FIELDS) if (!previous.dirty.has(field)) values[field] = saved[field];
+      if (previous.hydrated && DISPLAYED_FIELDS.every((field) => values[field] === previous.form[field]))
+        return previous;
+      return { ...previous, form: values, hydrated: true };
+    });
+  }, [detail, updateState]);
 
-  const isLoading = isLoadingProfiles || isLoadingCompany;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const responseData = profilesQuery.data?.data as any;
+  const userProfile = responseData?.results?.[0] || responseData?.[0] || null;
+  const loadError =
+    profilesQuery.error?.message ||
+    companiesQuery.error?.message ||
+    (selectedUuid
+      ? detailQuery.error?.message ||
+        (detailQuery.isSuccess && !detail
+          ? 'Company details did not match the selected company. Please try again.'
+          : null)
+      : null) ||
+    null;
+  const hasLoadedForm = state.hydrated;
+  const isLoading =
+    profilesQuery.isLoading ||
+    companiesQuery.isLoading ||
+    Boolean(selectedUuid && detailQuery.isLoading) ||
+    (!hasLoadedForm && !loadError);
+  const canSubmit = hasLoadedForm && !loadError && !isLoading;
 
   const registerMutation = useMutation({
     mutationFn: (data: CompanyRegistration) => registerCompany(apiClient, data),
@@ -71,28 +163,43 @@ export function useCompanyRegistration() {
       queryClient.invalidateQueries({ queryKey: ['signup', 'company'] });
     },
   });
-
   const updateMutation = useMutation({
     mutationFn: (data: { uuid: string; update: Partial<CompanyRegistration> }) =>
       updateCompany(apiClient, data.uuid, data.update),
-    onSuccess: () => {
+    onSuccess: (_response, data) => {
       queryClient.invalidateQueries({ queryKey: ['signup', 'company'] });
+      queryClient.invalidateQueries({ queryKey: ['signup', 'company-detail', data.uuid] });
     },
   });
 
   const setFieldValue = useCallback(
     (field: keyof CompanyFormData, value: string) => {
-      setForm((prev) => ({ ...prev, [field]: value }));
-      if (errors[field]) {
-        setErrors((prev) => {
-          const next = { ...prev };
-          delete next[field];
-          return next;
-        });
-      }
-      setGeneralError('');
+      updateState((previous) => {
+        const fieldErrors = { ...previous.errors };
+        delete fieldErrors[field];
+        return {
+          ...previous,
+          form: { ...previous.form, [field]: value },
+          errors: fieldErrors,
+          generalError: '',
+          dirty: new Set(previous.dirty).add(field),
+        };
+      });
     },
-    [errors],
+    [updateState],
+  );
+
+  const isCurrentSubmission = useCallback(
+    (attempt: Submission, registeredUuid?: string) =>
+      mounted.current &&
+      !attempt.cancelled &&
+      submission.current === attempt &&
+      attempt.owners.every(
+        (seen) =>
+          seen === attempt.owner ||
+          (attempt.owner.uuid === null && registeredUuid !== undefined && seen.uuid === registeredUuid),
+      ),
+    [],
   );
 
   const validateForm = useCallback((): boolean => {
@@ -131,11 +238,13 @@ export function useCompanyRegistration() {
 
   const handleSubmit = useCallback(
     async (onSuccess: () => void) => {
-      if (!validateForm()) return;
-
+      if (currentOwner.current !== owner || !mounted.current || submission.current || !canSubmit || !validateForm())
+        return;
+      const attempt: Submission = { owner, owners: [owner], cancelled: false };
+      submission.current = attempt;
       setGeneralError('');
-
       try {
+        let registeredUuid: string | undefined;
         const fullName = userProfile?.fullName || '';
         const nameParts = fullName.trim().split(/\s+/);
         const firstName = nameParts[0] || '';
@@ -164,11 +273,14 @@ export function useCompanyRegistration() {
             abn: form.abn ? form.abn.replace(/\s/g, '') : undefined,
             primaryContact: { firstName, lastName, phone },
           };
-          await registerMutation.mutateAsync(data);
+          const response = await registerMutation.mutateAsync(data);
+          registeredUuid = response.data.company.uuid;
         }
 
-        onSuccess();
+        if (isCurrentSubmission(attempt, registeredUuid)) onSuccess();
       } catch (err: unknown) {
+        if (!isCurrentSubmission(attempt)) return;
+
         const error = err as { response?: { data?: Record<string, unknown> } };
         const data = error?.response?.data;
         if (data) {
@@ -181,20 +293,42 @@ export function useCompanyRegistration() {
         } else {
           setGeneralError('An error occurred. Please try again.');
         }
+      } finally {
+        if (submission.current === attempt) submission.current = null;
       }
     },
-    [form, userProfile, existingCompany, validateForm, registerMutation, updateMutation],
+    [
+      owner,
+      canSubmit,
+      form,
+      userProfile,
+      existingCompany,
+      validateForm,
+      registerMutation,
+      updateMutation,
+      isCurrentSubmission,
+      setGeneralError,
+      setErrors,
+    ],
   );
 
-  const retryLoad = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ['userProfiles'] });
-    queryClient.invalidateQueries({ queryKey: ['signup', 'company'] });
-  }, [queryClient]);
+  const retryLoad = useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['userProfiles'] }),
+      queryClient.invalidateQueries({ queryKey: ['signup', 'company'] }),
+      ...(selectedUuid
+        ? [queryClient.invalidateQueries({ queryKey: ['signup', 'company-detail', selectedUuid] })]
+        : []),
+    ]);
+  }, [queryClient, selectedUuid]);
 
   return {
     form,
     errors,
     generalError,
+    loadError,
+    hasLoadedForm,
+    canSubmit,
     isLoading,
     isSubmitting: registerMutation.isPending || updateMutation.isPending,
     setFieldValue,

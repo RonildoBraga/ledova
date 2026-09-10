@@ -11,8 +11,19 @@ const ICON_MD = DESIGN_TOKENS.icon.sizes.md;
 
 export function SignupCompanyRegistration() {
   const navigate = useNavigate();
-  const { form, errors, generalError, isLoading, isSubmitting, setFieldValue, handleSubmit, retryLoad } =
-    useSignupCompanyRegistration();
+  const {
+    form,
+    errors,
+    generalError,
+    loadError,
+    hasLoadedForm,
+    canSubmit,
+    isLoading,
+    isSubmitting,
+    setFieldValue,
+    handleSubmit,
+    retryLoad,
+  } = useSignupCompanyRegistration();
 
   const handleContinue = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,8 +40,8 @@ export function SignupCompanyRegistration() {
     return <LoadingState message="Loading company data..." />;
   }
 
-  if (generalError && !form.name && !isSubmitting) {
-    return <ErrorState title="Unable to Load" message={generalError} onRetry={retryLoad} />;
+  if ((loadError && !hasLoadedForm) || (generalError && !form.name && !isSubmitting)) {
+    return <ErrorState title="Unable to Load" message={loadError || generalError} onRetry={retryLoad} />;
   }
 
   return (
@@ -45,11 +56,20 @@ export function SignupCompanyRegistration() {
         <p className="text-sm text-text-muted mt-1">Enter your company&apos;s basic information</p>
       </div>
 
+      {loadError && (
+        <div role="alert" className="mb-4 text-error">
+          <p>{loadError}</p>
+          <button type="button" onClick={retryLoad} className="mt-2 font-semibold underline">
+            Try Again
+          </button>
+        </div>
+      )}
       <CompanyRegistrationForm
         form={form}
         errors={errors}
         generalError={generalError}
         isSubmitting={isSubmitting}
+        canSubmit={canSubmit}
         setFieldValue={setFieldValue}
         onSubmit={handleContinue}
         onBack={handleBack}
