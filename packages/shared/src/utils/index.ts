@@ -57,3 +57,4 @@ export { importAddressKey, importOnEvmNetwork, importedParentKey, canDeriveNextW
 export { calculateWalletTotals, filterWalletsByChain } from './wallet';
 export { parseFiatValue } from './valuation';
 export { portfolioSnapshotPoints } from './portfolio-snapshots';
+export { readFeatureFlags, type FeatureFlagInputs } from './feature-flags';
