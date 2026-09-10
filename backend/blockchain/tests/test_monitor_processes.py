@@ -121,7 +121,7 @@ class MonitorProcessesTest(TransactionTestCase):
                     [blocker_pid, child.database_pid],
                 )
                 observed = cursor.fetchone()
-            if observed and observed[1] and observed[2] == "Lock":
+            if observed and observed[1] and observed[2] == "Lock" and observed[0] != "BEGIN":
                 self.assertTrue(observed[0].startswith("SELECT "), observed)
                 self.assertIn('"blockchain_blockchaintransaction"', observed[0])
                 return
