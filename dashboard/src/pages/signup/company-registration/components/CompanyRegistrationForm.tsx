@@ -20,6 +20,7 @@ interface CompanyRegistrationFormProps {
   errors: FormErrors;
   generalError: string;
   isSubmitting: boolean;
+  canSubmit: boolean;
   setFieldValue: (field: keyof CompanyFormData, value: string) => void;
   onSubmit: (e: React.FormEvent) => void;
   onBack: () => void;
@@ -35,6 +36,7 @@ export function CompanyRegistrationForm({
   errors,
   generalError,
   isSubmitting,
+  canSubmit,
   setFieldValue,
   onSubmit,
   onBack,
@@ -169,7 +171,7 @@ export function CompanyRegistrationForm({
 
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || !canSubmit}
               className="w-full bg-brand-mid hover:bg-brand disabled:bg-surface-disabled disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-lg transition-colors shadow-lg shadow-brand-light/40 disabled:shadow-none focus:outline-none focus:ring-2 focus:ring-border-focus focus:ring-offset-2 focus:ring-offset-surface-base"
             >
               {isSubmitting ? (
