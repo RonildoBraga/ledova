@@ -5,8 +5,6 @@ from typing import Any
 from django.utils import timezone
 from web3 import Web3
 
-from shared.db import atomic
-
 logger = logging.getLogger(__name__)
 
 
@@ -49,17 +47,11 @@ class TransactionMonitorService:
         return {"checked": checked, "confirmed": confirmed, "failed": failed}
 
     @staticmethod
-    @atomic()
     def cleanup_stale_transactions(hours: int = 24) -> dict[str, Any]:
         from blockchain.models import BlockchainTransaction
 
         cutoff = timezone.now() - timedelta(hours=hours)
-        stale = BlockchainTransaction.objects.stale(cutoff)
+        overdue = BlockchainTransaction.objects.stale(cutoff).count()
 
-        count = 0
-        for tx in stale:
-            tx.mark_failed(f"Transaction timed out after {hours} hours")
-            count += 1
-
-        logger.info(f"Marked {count} stale transactions as failed")
-        return {"cleaned": count}
+        logger.info("Retained %s overdue transactions for receipt recovery", overdue)
+        return {"cleaned": 0, "overdue": overdue}
