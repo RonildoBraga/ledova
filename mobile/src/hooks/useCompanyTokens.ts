@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getCompanyTokens, getCompanyTokenHolders, createCompanyToken } from '@ledova/shared';
-import type { TokenCreate, CompanyShareToken, TokenHoldersResponse } from '@ledova/shared';
+import type { TokenCreate, TokenHoldersResponse } from '@ledova/shared';
 import { apiClient } from '../services/apiClient';
 
 type ShareholderSummary = {
@@ -61,15 +61,15 @@ export function useCompanyShareholders() {
     queryFn: () => getCompanyTokens(apiClient, { page_size: 100 }),
   });
 
-  const deployedTokens = (tokensData?.data?.results || []).filter((t: CompanyShareToken) => t.status === 'deployed');
+  const deployedTokens = (tokensData?.data?.results || []).filter((t) => t.status === 'deployed');
 
   const holdersQuery = useQuery({
-    queryKey: ['all-shareholders', deployedTokens.map((t: CompanyShareToken) => t.uuid)],
+    queryKey: ['all-shareholders', deployedTokens.map((t) => t.uuid)],
     queryFn: async () => {
       if (deployedTokens.length === 0) return [];
 
       const results = await Promise.all(
-        deployedTokens.map(async (token: CompanyShareToken) => {
+        deployedTokens.map(async (token) => {
           try {
             const response = await getCompanyTokenHolders(apiClient, token.uuid);
             const data: TokenHoldersResponse = response.data;

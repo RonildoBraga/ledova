@@ -39,8 +39,6 @@ afterEach(async () => {
 function flag(overrides: Partial<FeatureFlag>): FeatureFlag {
   return {
     uuid: 'flag-uuid',
-    createdAt: '2026-01-01T00:00:00Z',
-    updatedAt: '2026-01-01T00:00:00Z',
     name: 'trading_enabled',
     description: '',
     enabled: true,

@@ -1,5 +1,11 @@
 import { useState, useEffect } from 'react';
-import { getFinancialProfiles, createFinancialProfile, updateFinancialProfile, getUserProfiles } from '@ledova/shared';
+import {
+  getFinancialProfiles,
+  createFinancialProfile,
+  updateFinancialProfile,
+  getUserProfiles,
+  sourceOfFundsChoices,
+} from '@ledova/shared';
 import { apiClient } from '../../../services/apiClient';
 import type { CreateFinancialProfile, FinancialProfileFormState, FormErrors } from '@ledova/shared';
 
@@ -48,7 +54,7 @@ export const useFinancialProfile = () => {
           setForm({
             userProfileId: profileUuid,
             occupation: existingProfile.occupation || '',
-            sourceOfFunds: existingProfile.sourceOfFunds || [],
+            sourceOfFunds: sourceOfFundsChoices(existingProfile.sourceOfFunds),
             sourceOfFundsOtherText: existingProfile.sourceOfFundsOtherText || '',
             intendedUse: existingProfile.intendedUse || '',
             intendedUseOtherText: existingProfile.intendedUseOtherText || '',

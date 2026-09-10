@@ -1,16 +1,15 @@
-import type { BaseEntity } from '../common';
+import type { JsonValue } from '../common';
 
-export interface FinancialProfile extends BaseEntity {
+export interface FinancialProfile {
+  uuid: string;
   userProfile: string;
   occupation: string | null;
-  sourceOfFunds: string[];
+  sourceOfFunds: JsonValue;
   sourceOfFundsOtherText: string | null;
   intendedUse: string | null;
   intendedUseOtherText: string | null;
 }
 
-export type CreateFinancialProfile = Omit<FinancialProfile, 'uuid' | 'createdAt' | 'updatedAt' | 'userProfile'>;
+export type CreateFinancialProfile = Omit<FinancialProfile, 'uuid' | 'userProfile'>;
 
-export type UpdateFinancialProfile = Partial<
-  Omit<FinancialProfile, 'uuid' | 'createdAt' | 'updatedAt' | 'userProfile'>
->;
+export type UpdateFinancialProfile = Partial<CreateFinancialProfile>;

@@ -28,8 +28,6 @@ afterEach(() => {
 function flag(overrides: Partial<FeatureFlag> = {}): FeatureFlag {
   return {
     uuid: 'synthetic-flag',
-    createdAt: '2026-01-01T00:00:00Z',
-    updatedAt: '2026-01-01T00:00:00Z',
     name: 'trading_enabled',
     description: '',
     enabled: true,

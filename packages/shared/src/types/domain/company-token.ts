@@ -38,6 +38,28 @@ export interface TokenCreate {
   isDivisible?: boolean;
 }
 
+export interface CompanyShareTokenListItem {
+  uuid: string;
+  company: string;
+  name: string;
+  symbol: string;
+  tokenType: TokenType;
+  status: TokenStatus;
+  contractAddress: string | null;
+  chain: string | null;
+  totalSupply: string;
+  decimals: number;
+  isTransferable: boolean;
+  isDivisible: boolean;
+  deployedAt: string | null;
+  createdAt: string;
+}
+
+export interface CompanyTokenActionResponse {
+  message: string;
+  token: CompanyShareToken;
+}
+
 export interface TokenHolder {
   address: string;
   name: string | null;
@@ -94,19 +116,11 @@ export interface TokenIssuance {
   statusDisplay: string;
   txHash: string | null;
   blockNumber: number | null;
-  initiatedBy: string | null;
+  initiatedBy: number | null;
   initiatedByEmail: string | null;
   processedAt: string | null;
   completedAt: string | null;
   createdAt: string;
-}
-
-export interface TokenIssuancesResponse {
-  results: TokenIssuance[];
-  count: number;
-  page: number;
-  pageSize: number;
-  totalPages: number;
 }
 
 export interface CapitalIncreaseRequest {
@@ -121,11 +135,11 @@ export interface CapitalIncreaseRequest {
   shareholderApprovalReference?: string;
   status: CapitalIncreaseStatus;
   statusDisplay: string;
-  dilutionPercentage: number | null;
-  submittedBy: string | null;
+  dilutionPercentage: string | null;
+  submittedBy: number | null;
   submittedByEmail: string | null;
   submittedAt: string | null;
-  reviewedBy?: string | null;
+  reviewedBy?: number | null;
   reviewedByEmail?: string | null;
   reviewedAt?: string | null;
   executionNotes?: string;
@@ -147,11 +161,26 @@ export interface CapitalIncreaseCreate {
   shareholderApprovalReference?: string;
 }
 
-export interface CapitalIncreaseResponse {
-  results: CapitalIncreaseRequest[];
-  count: number;
-  page?: number;
-  pageSize?: number;
+export interface CapitalIncreaseListItem {
+  uuid: string;
+  token: string;
+  tokenSymbol: string;
+  tokenName: string;
+  additionalShares: number;
+  newAuthorizedTotal: number;
+  purpose: string;
+  status: CapitalIncreaseStatus;
+  statusDisplay: string;
+  dilutionPercentage: string | null;
+  submittedBy: number | null;
+  submittedByEmail: string | null;
+  submittedAt: string | null;
+  createdAt: string;
+}
+
+export interface CapitalIncreaseSubmission {
+  message: string;
+  request: CapitalIncreaseRequest;
 }
 
 export interface ShareIssuanceRequest {

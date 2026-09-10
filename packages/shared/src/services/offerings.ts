@@ -1,9 +1,9 @@
 import { AxiosInstance } from 'axios';
 import { OFFERING_ENDPOINTS } from '../constants';
-import type { IssuerSubscription, Offering, OfferingInput, PaginatedResponse } from '../types';
+import type { IssuerSubscription, Offering, OfferingListItem, OfferingInput, PaginatedResponse } from '../types';
 
 export const getOfferings = (apiClient: AxiosInstance) =>
-  apiClient.get<PaginatedResponse<Offering>>(OFFERING_ENDPOINTS.BASE);
+  apiClient.get<PaginatedResponse<OfferingListItem>>(OFFERING_ENDPOINTS.BASE);
 
 export const getOffering = (apiClient: AxiosInstance, uuid: string) =>
   apiClient.get<Offering>(OFFERING_ENDPOINTS.DETAIL(uuid));

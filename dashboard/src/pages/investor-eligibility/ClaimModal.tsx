@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import { FileIcon, UploadSimpleIcon, XIcon } from '@phosphor-icons/react';
 import { Modal } from '@components/Modal';
 import { getCompanies, getErrorMessage, submitInvestorClassification } from '@ledova/shared';
-import type { Company, InvestorCategory } from '@ledova/shared';
+import type { CompanyListItem, InvestorCategory } from '@ledova/shared';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '@services/apiClient';
 import { CATEGORIES, CERTIFIER_BODIES, WHOLESALE_ONLY_NOTICE } from './constants';
@@ -47,7 +47,7 @@ export function ClaimModal({ isOpen, onClose, category, userAccount, onSuccess }
     queryFn: () => getCompanies(apiClient),
     enabled: isOpen && needsCompany,
   });
-  const companies: Company[] = companiesData?.data?.results ?? [];
+  const companies: CompanyListItem[] = companiesData?.data?.results ?? [];
 
   const spec = CATEGORIES.find((item) => item.category === category);
 

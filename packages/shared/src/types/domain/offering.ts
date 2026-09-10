@@ -59,6 +59,31 @@ export interface Offering {
   updatedAt: string;
 }
 
+export interface OfferingListItem {
+  uuid: string;
+  tokenUuid: string;
+  tokenSymbol: string;
+  tokenName: string;
+  status: OfferingStatus;
+  statusDisplay: string;
+  exemption: OfferingExemption;
+  exemptionDisplay: string;
+  pricePerShare: string;
+  priceCurrency: string;
+  minimumShares: number;
+  targetShares: number;
+  capShares: number;
+  maximumShares: number | null;
+  opensAt: string;
+  closesAt: string | null;
+  isOpen: boolean;
+  canBeEdited: boolean;
+  canBeDeleted: boolean;
+  rejectionReason: string;
+  closeReason: string;
+  createdAt: string;
+}
+
 export interface OfferingInput {
   token: string;
   exemption: OfferingExemption;

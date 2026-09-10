@@ -13,11 +13,11 @@ import { useAccountRole } from '@hooks/useAccountRole';
 import { AUTH_QUERY_KEY } from '@hooks/useAuth';
 import apiClient from '@services/apiClient';
 
-import type { ReviewData, Company } from '@ledova/shared';
+import type { ReviewData, CompanyListItem } from '@ledova/shared';
 
 export interface ReviewHookReturn {
   data: ReviewData;
-  company: Company | null;
+  company: CompanyListItem | null;
   signupRole: string;
   isLoading: boolean;
   error: string | null;
@@ -49,7 +49,8 @@ export const useReview = (): ReviewHookReturn => {
     staleTime: CACHE_TIMING.DEFAULT_STALE_TIME,
   });
 
-  const company: Company | null = signupRole === 'company' ? companyQuery.data?.data?.results?.[0] || null : null;
+  const company: CompanyListItem | null =
+    signupRole === 'company' ? companyQuery.data?.data?.results?.[0] || null : null;
 
   const data: ReviewData = {
     userProfile,

@@ -1,7 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getCompanies, getCompany, getCompanyStats, updateCompany } from '@ledova/shared';
-import type { Company, CompanyStats, CompanyUpdate } from '@ledova/shared';
+import type { Company, CompanyListItem, CompanyStats, CompanyUpdate } from '@ledova/shared';
 import { apiClient } from '../services/apiClient';
+
+type CompanyView = CompanyListItem & Partial<Company>;
 
 export function useCompanyProfile() {
   const queryClient = useQueryClient();
@@ -46,8 +48,10 @@ export function useCompanyProfile() {
     await Promise.all([refetchCompany(), refetchStats()]);
   };
 
+  const companyView: CompanyView | null = company || companiesData?.data?.results?.[0] || null;
+
   return {
-    company: company || companiesData?.data?.results?.[0] || null,
+    company: companyView,
     companyUuid,
     stats: stats || null,
     isLoading: isLoadingList || isLoadingCompany || isLoadingStats,

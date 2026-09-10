@@ -7,7 +7,7 @@ import {
   issueCompanyShares,
   deployCompanyToken,
 } from '@ledova/shared';
-import type { CompanyShareToken, TokenHolder, TokenIssuance, CapitalIncreaseRequest } from '@ledova/shared';
+import type { CompanyShareToken, TokenHolder, TokenIssuance, CapitalIncreaseListItem } from '@ledova/shared';
 import { apiClient } from '../../services/apiClient';
 
 export function useTokenDetail(uuid: string) {
@@ -41,7 +41,7 @@ export function useTokenDetail(uuid: string) {
   const totalHolders = holdersQuery.data?.totalHolders || 0;
   const issuances: TokenIssuance[] = issuancesQuery.data?.results || [];
   const issuanceCount = issuancesQuery.data?.count || 0;
-  const capitalIncreases: CapitalIncreaseRequest[] = capitalIncreasesQuery.data?.results || [];
+  const capitalIncreases: CapitalIncreaseListItem[] = capitalIncreasesQuery.data?.results || [];
   const capitalIncreaseCount = capitalIncreasesQuery.data?.count || 0;
 
   const issueMutation = useMutation({
