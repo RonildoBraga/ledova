@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { getFeatureFlags, CACHE_TIMING } from '@ledova/shared';
+import { getFeatureFlags, readFeatureFlags, CACHE_TIMING } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 
 export interface FeatureFlags {
@@ -15,8 +15,7 @@ export function useFeatureFlags(): FeatureFlags {
     gcTime: CACHE_TIMING.EXTRA_LONG_GC_TIME,
   });
 
-  const flags = query.data?.data?.results || [];
-  const isEnabled = (name: string) => flags.some((flag) => flag.name === name && flag.enabled);
+  const { isEnabled } = readFeatureFlags(query.data?.data?.results || []);
 
   return {
     tradingEnabled: isEnabled('trading_enabled'),
