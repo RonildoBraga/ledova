@@ -188,8 +188,7 @@ class UnclaimedSwapExpiryTest(ExpiryFixtures, TransactionTestCase):
                 elif mutation == "counterparty":
                     orders.update(matched_order=None)
                 else:
-                    other = make_swap("other-expiry")
-                    SwapOrder.objects.filter(pk=other.pk).update(sell_order=swap.sell_order)
+                    self.service.create_swap_order(swap.sell_order, swap.buy_order, share_amount=10)
                 before = persisted_outcome(swap)
                 self.assertFalse(expire_unclaimed_swap(swap, self.expired_at(swap)))
                 self.assertEqual(persisted_outcome(swap), before)

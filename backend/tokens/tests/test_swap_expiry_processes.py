@@ -32,10 +32,10 @@ class ExpiryProcessesRespectExecutionClaimsTest(ExpiryFixtures, TransactionTestC
         second = workers.SwapProcess(self, "expire", swap.pk, cutoff)
         with atomic():
             lock_orders(TransferOrder.objects.filter(pk__in=[swap.sell_order_id, swap.buy_order_id]))
-            for worker in (first, second):
+            for worker, blocker in ((first, None), (second, first.database_pid)):
                 worker.send("run")
                 worker.receive("expiring")
-                self.wait_for_row_lock(worker, "tokens_transferorder")
+                self.wait_for_row_lock(worker, "tokens_transferorder", blocker)
         outcomes = [first.done()["result"], second.done()["result"]]
         self.assertEqual(sorted(outcomes), [False, True])
         self.assert_available(swap, 20)
