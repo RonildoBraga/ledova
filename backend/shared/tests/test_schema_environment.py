@@ -1,10 +1,15 @@
 import json
+import os
+import shlex
+import subprocess
+import sys
 from copy import deepcopy
 from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
+import yaml
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import SimpleTestCase
@@ -110,3 +115,67 @@ class SchemaEnvironmentTest(SimpleTestCase):
         self.assertIn("GET /api/synthetic/", error)
         self.assertTrue(exists)
         self.assertTrue(report["route_findings"])
+
+    def invoke_ci_generation(self, valid):
+        repository = Path(__file__).resolve().parents[3]
+        workflow = yaml.safe_load((repository / ".github/workflows/ci.yml").read_text())
+        job = next(
+            job
+            for job in workflow["jobs"].values()
+            if any(step.get("id") == "generate-schema" for step in job.get("steps", []))
+        )
+        step = next(step for step in job["steps"] if step.get("id") == "generate-schema")
+        shell = step.get(
+            "shell",
+            job.get("defaults", {})
+            .get("run", {})
+            .get("shell", workflow.get("defaults", {}).get("run", {}).get("shell")),
+        )
+        commands = {None: ["bash", "-e"], "bash": ["bash", "--noprofile", "--norc", "-eo", "pipefail"]}
+        self.assertIn(shell, commands)
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            launcher = root / "python"
+            launcher.write_text(
+                f'#!/bin/sh\nexec {shlex.quote(sys.executable)} -m shared.tests.schema_pipeline_worker "$@"\n'
+            )
+            launcher.chmod(0o700)
+            script = root / "workflow.sh"
+            script.write_text(step["run"].replace("/tmp/ledova-schema", str(root / "ledova-schema")))
+            result = subprocess.run(
+                [*commands[shell], str(script)],
+                cwd=repository / "backend",
+                env={
+                    **os.environ,
+                    "PATH": f"{root}{os.pathsep}{os.environ['PATH']}",
+                    "PYTHONPATH": str(repository / "backend"),
+                    "LEDOVA_SCHEMA_PIPELINE_VALID": "1" if valid else "0",
+                },
+                capture_output=True,
+                text=True,
+                timeout=20,
+            )
+            return (
+                result,
+                json.loads((root / "ledova-schema.json").read_text()),
+                json.loads((root / "ledova-schema-environment.json").read_text()),
+                (root / "ledova-schema-diagnostics.log").read_text(),
+            )
+
+    def test_ci_propagates_the_actual_export_refusal_after_tee_preserves_its_artifacts(self):
+        result, document, report, diagnostics = self.invoke_ci_generation(valid=False)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(document["paths"], {})
+        self.assertEqual(
+            report["route_findings"], ["GET /api/synthetic/: registered operation is absent from the schema"]
+        )
+        self.assertIn("CommandError: Registered API operations differ from the schema", diagnostics)
+        self.assertIn(diagnostics, result.stdout)
+
+    def test_ci_retains_valid_generation_success_and_diagnostics(self):
+        result, document, report, diagnostics = self.invoke_ci_generation(valid=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("/api/synthetic/", document["paths"])
+        self.assertEqual(report["route_findings"], [])
+        self.assertIn("Schema accounts for 1 registered operations", diagnostics)
+        self.assertIn(diagnostics, result.stdout)

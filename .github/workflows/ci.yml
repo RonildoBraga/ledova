@@ -197,6 +197,7 @@ jobs:
         run: docker rm -f -v ledova-upload-clamav || true
       - name: Generate API schema and compare registered operation coverage
         id: generate-schema
+        shell: bash
         env:
           POSTGRES_HOST: 127.0.0.1
           POSTGRES_PORT: '5432'

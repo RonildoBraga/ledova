@@ -245,6 +245,8 @@ export function checkClientOperations(root, document) {
     if (!scope) return false;
     let unchanged = true;
     visit(scope, (node) => {
+      if (ts.isShorthandPropertyAssignment(node) && checker.getShorthandAssignmentValueSymbol(node) === symbol(config))
+        unchanged = false;
       if (!ts.isIdentifier(node) || symbol(node) !== symbol(config) || node === declared.name) return;
       let parent = node.parent;
       if (

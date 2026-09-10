@@ -178,6 +178,22 @@ test('a rewritten or escaped retry config is unresolved, including method and or
   }
 });
 
+test('a retry config escaping through an object shorthand cannot bypass destination coverage', async (t) => {
+  const result = await fixture(
+    t,
+    {
+      'dashboard/src/service.ts':
+        client +
+        "client.get('/api/items/'); client.interceptors.response.use(r => r, (error: AxiosError) => { const config = error.config; if (config) { const escaped = { config }; escaped.config.url = '/unrecorded/'; return client.request(config); } });",
+    },
+    { '/api/items/': { get: good } },
+  );
+  assert.equal(result.replays.length, 0);
+  assert.deepEqual(result.failures, [
+    'dashboard/src/service.ts:2: Unresolved Axios request configuration; declare its method/path or preserve an unchanged AxiosError.config replay.',
+  ]);
+});
+
 test('the response-linked company file requires its internal binary route', async (t) => {
   const sources = {
     'mobile/src/screens/listing/index.tsx':
