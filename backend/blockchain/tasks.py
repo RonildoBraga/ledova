@@ -15,7 +15,6 @@ def check_pending_transactions(timestamp: int) -> dict[str, Any]:
     return TransactionMonitorService.check_pending_transactions(chain_client)
 
 
-@app.periodic(cron="0 3 * * *")
 @app.task(retry=RetryStrategy(max_attempts=4, wait=60))
 def cleanup_failed_transactions(timestamp: int) -> dict[str, Any]:
     from blockchain.services import TransactionMonitorService

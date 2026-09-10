@@ -950,7 +950,7 @@ one.
 | every 10 min | `assets.sync_all_assets`, `assets.sync_exchange_rates` |
 | every 30 min | whitelist `sync_all_entries` |
 | hourly | `sync_all_wallets`, `compliance.tasks.run_batch_monitoring` |
-| daily 03:00 | `cleanup_failed_transactions`, `cleanup_stale_pending_transactions`, `offerings.expire_unpaid_subscriptions`, `users.purge_classification_evidence` |
+| daily 03:00 | `offerings.expire_unpaid_subscriptions`, `users.purge_classification_evidence` |
 | daily 04:00 | `compliance.tasks.check_periodic_reviews` |
 
 `expire_unclaimed_matches` releases the reserved share quantity of an expired
@@ -974,6 +974,32 @@ protocol. Claimed, executing, inconsistent and legacy matches retain their
 reservations for reconciliation. This sweep does not inspect the chain, refund
 money, cancel a broadcast or change an existing signature/deadline. Trading
 remains disabled by default.
+
+The two transaction sweeps keep receipt recovery running after 24 hours.
+`check_pending_transactions` checks recorded hashes on pending or submitted
+operator transactions. `check_all_pending_transactions` requeues wallet
+transactions older than two minutes that are still pending, plus rows with
+unfinished balance reconciliation after a status transition. An exhausted
+confirmation job can therefore be queued again by the next sweep. Age, a
+missing receipt or a provider error does not establish failure and does not
+release a wallet's outstanding deductions. Explicit receipt outcomes continue
+through the existing confirmation or failure paths.
+
+`blockchain.tasks.cleanup_failed_transactions` and
+`wallets.tasks.confirmation.cleanup_stale_pending_transactions` retain their
+names and `timestamp` argument for jobs already queued by older workers. They
+only report overdue unresolved row counts; their legacy `cleaned` or `failed`
+counts are zero. The callable `TransactionMonitorService.cleanup_stale_transactions`
+also retains its `hours` argument and adds an `overdue` count. None of these
+compatibility handlers changes transaction state, balances or reservations,
+and neither task has a recurring schedule. Workers must load the updated code
+for the schedule and behavior changes to take effect; an old process still
+contains the former cleanup implementation.
+
+Operator transactions without a hash remain unresolved. Recovering their
+identity, reviewing rows already failed by historical cleanup, and per-chain
+finality or reorg policy remain separate work. This change does not reopen
+terminal history or infer a compensating balance movement from an old timeout.
 
 `reconcile_subscriptions` is the mirror of `check_executing_issuance_requests`
 on the subscription row. The issuance sweep finishes a request a killed worker

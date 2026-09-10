@@ -197,31 +197,13 @@ def check_all_pending_transactions(timestamp: int) -> Dict[str, Any]:
     return {"total": total, "queued": queued}
 
 
-@app.periodic(cron="0 3 * * *")
 @app.task
 def cleanup_stale_pending_transactions(timestamp: int) -> Dict[str, Any]:
     stale_cutoff = timezone.now() - timedelta(hours=24)
-    stale_txs = Transaction.objects.filter(
+    overdue = Transaction.objects.filter(
         status=TRANSACTION_STATUS_PENDING,
         created_at__lt=stale_cutoff,
-    ).select_related("wallet")
+    ).count()
 
-    total = stale_txs.count()
-    failed = 0
-
-    for tx in stale_txs:
-        try:
-            result = TransactionConfirmationService.fail_transaction(
-                tx_hash=tx.tx_hash,
-                wallet=tx.wallet,
-                reason="Transaction stale - not confirmed within 24 hours",
-            )
-            if result["status"] == "failed":
-                failed += 1
-        except Exception as e:
-            logger.error(f"Stale cleanup failed {tx.tx_hash}: {e}")
-
-    if total > 0:
-        logger.info(f"Marked {failed}/{total} stale transactions as failed")
-
-    return {"total": total, "failed": failed}
+    logger.info("Retained %s overdue wallet transactions for receipt recovery", overdue)
+    return {"total": overdue, "failed": 0}
