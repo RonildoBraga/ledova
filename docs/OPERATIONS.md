@@ -355,6 +355,40 @@ execution fallback. Existing settlement signatures and stored swap deadlines are
 unchanged. This protocol neither changes balance eligibility nor enables trading,
 activates signers, broadcasts transactions or establishes settlement finality.
 
+New matches use the immutable settlement context introduced by `tokens/0039`.
+Coordinate backend, shared package, dashboard and mobile before deploying this
+protocol: this backend phase alone does not complete the client recovery flow.
+New-context swap requests require the exact swap, order, account and verified
+wallet identity; signing and approval requests also require the recorded full
+settlement digest. The existing unqualified request form remains for legacy
+rows and returns `swap_context_refresh_required` for new-context rows. Exact
+lookup preserves the original review display and decimal-string typed values
+after expiry or configuration drift; it does not authorize a new signature or
+approval under changed terms. Ordinary numeric order/swap fields are not a
+lossless source for rebuilding those signed values.
+
+The scoped approval-broadcast route verifies the actual signed bytes against
+the captured party, chain, token, spender and existing unlimited approval value.
+A confirmed result requires both the provider's returned hash and the receipt's
+transaction hash to equal the computed signed-byte hash. Missing or conflicting
+identity, or a send/receipt exception, returns `swap_approval_unconfirmed` with
+HTTP 503, the original scoped identity and computed hash. Retain that identity
+and check the original outcome; this is not confirmation, a new journal or
+permission to rebroadcast. A matching receipt remains attributed to its original
+context if the deadline or configuration changes during the wait. The general
+transfer service is unchanged. Local signature-request and approval-data schema
+envelopes use `anyOf` because valid scoped objects extend their legacy forms.
+
+Provider admission uses the inherited cached `assert_expected_chain` result;
+it is not a fresh endpoint-identity observation on every call. New claims retain
+complete signed arguments and their original domain. A receipt that cannot be
+attributed to that original chain/context leaves the claim unresolved.
+Same/shared-account scoped controls pass, but a private cross-account relay
+currently returns 503 at unchanged `0023` wallet derivation without persisting a
+signature or event. That #5 compatibility dependency must be resolved before
+final integration; no trigger bypass or swap-row RLS completion is implied.
+Trading and outgoing signer activation remain unchanged.
+
 Share-token deployment records the computed transaction hash and its token
 association in one independent database transaction before broadcasting. An
 enclosing transaction, disabled autocommit, failed persistence or competing
@@ -1501,6 +1535,15 @@ and a policy on every tenant table. Four things about running that deployment:
   neither timeout metadata nor nonce use alone resolves them. The current swap
   transaction UUID prevents competing preparation but does not provide signed
   transaction recovery after a process dies; #6 remains separate.
+- `tokens/0039_swap_settlement_context` marks pre-existing swaps as legacy
+  without changing their old fields, signatures or deadlines. It then requires
+  a context on new inserts and refuses explicit legacy inserts, context changes
+  and new-context identity replacement on PostgreSQL. Stop old API/worker writers and coordinate
+  all consumers before permitting new matches; do not backfill historical
+  domains, erase prior fields or bypass the cutover guard. Existing 24-hour
+  signatures, the 15-minute new-match default, finite overrides and distinct
+  equal orders retain their existing meaning. Full composed PostgreSQL/scoped
+  and chain validation remains required before this phase can be integrated.
 - `whitelist/0002_whitelistentry_treasury_addresses` makes
   `WhitelistEntry.wallet` nullable and adds `address` and `label` with a check
   constraint; `whitelist/0003` adds the partial unique constraint on `address`

@@ -979,6 +979,23 @@ runs. Both mechanisms hold at once on purpose:
   its remaining quantity. A PostgreSQL trigger freezes each signing challenge's
   issued envelope and prevents resetting or replacing its first consumption.
   The existing purge of expired, unspent challenges remains allowed.
+- **New swaps retain their original settlement context.** Matching captures the
+  V1 domain, addresses, exact integer strings, deadline, scales, display and
+  order/account/wallet/asset/deployment identities without provider I/O. The full
+  EIP-712 digest is separate from the unchanged domain-free `order_hash`.
+  `tokens/0039` preserves existing rows as legacy and protects new contexts and
+  their identity fields against replacement or deletion on PostgreSQL. Exact
+  scoped reads recover the named swap; new signatures and approvals recheck the
+  caller's current verified wallet/account/order binding and captured context.
+  Either captured party may supply the signature through an authorized
+  participant. The existing private-counterparty derivation trigger can still
+  refuse that relay under the scoped role; resolving it is a separate #5
+  dependency, and `tokens_swaporder` remains `AWAITING_RLS`.
+  New execution claims record every signed argument, both signatures, original
+  domain/digest and contract recipient. Receipt attribution retains that
+  identity after configuration changes. Provider admission reuses the existing
+  cached chain check; it does not establish a fresh RPC observation at every
+  boundary. Legacy signatures are neither reconstructed nor invalidated.
 - **One current swap execution is claimed before preparation.** A fresh READY
   row receives a transaction UUID and becomes EXECUTING in a durable transaction
   before balance checks, building, signing or sending. Competing callers cannot
