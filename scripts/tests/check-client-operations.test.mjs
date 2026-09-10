@@ -322,14 +322,19 @@ test('aliased browser streams are covered and new browser transports fail visibl
   const result = await fixture(
     t,
     {
-      'dashboard/src/service.ts':
-        'export {}; const Stream = EventSource; new Stream("/events/"); new window.EventSource("/events/"); new WebSocket("wss://other.invalid"); new XMLHttpRequest();',
+      'dashboard/src/service.ts': [
+        'export {}; const Stream = EventSource; new Stream("/events/"); new window.EventSource("/events/");',
+        'new WebSocket("wss://other.invalid");',
+        'new XMLHttpRequest();',
+      ].join('\n'),
     },
     { '/events/': { get: stream } },
   );
   assert.equal(result.operations.length, 2);
-  assert.equal(result.failures.length, 1);
-  assert.match(result.failures[0], /Unclassified client transport/);
+  assert.deepEqual(result.failures, [
+    'dashboard/src/service.ts:2: Unclassified client transport; add explicit operation coverage before using it.',
+    'dashboard/src/service.ts:3: Unclassified client transport; add explicit operation coverage before using it.',
+  ]);
 });
 
 test('syntax errors cannot hide the remainder of an actual client file', async (t) => {
