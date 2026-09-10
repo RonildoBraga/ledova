@@ -1,7 +1,7 @@
 import csv
 
 from django.http import Http404, HttpResponse
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiTypes, extend_schema
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAdminUser
@@ -125,6 +125,7 @@ class WhitelistEntryViewSet(
             status=status.HTTP_200_OK,
         )
 
+    @extend_schema(responses={(200, "text/csv"): OpenApiTypes.STR})
     @action(detail=False, methods=["get"])
     def export(self, request):
         queryset = self.filter_queryset(self.get_queryset())
