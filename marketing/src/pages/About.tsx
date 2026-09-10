@@ -1,5 +1,5 @@
 const STATUS = [
-  { label: 'License', value: 'Apache-2.0' },
+  { label: 'License', value: 'FSL-1.1-ALv2' },
   { label: 'Environment', value: 'Local + testnet' },
   { label: 'Security review', value: 'Not audited' },
   { label: 'Service status', value: 'No hosted service' },
@@ -13,7 +13,7 @@ export function About() {
           <div className="mx-auto max-w-3xl text-center">
             <h1 className="text-4xl font-bold text-text-primary sm:text-5xl">About Ledova</h1>
             <p className="mt-6 text-lg leading-relaxed text-text-muted">
-              Ledova is experimental open-source software for exploring self-custody interfaces and token-contract
+              Ledova is experimental source-available software for exploring self-custody interfaces and token-contract
               designs. It is a developer project, not a company, exchange, issuer, or financial service.
             </p>
           </div>

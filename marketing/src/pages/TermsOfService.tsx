@@ -10,7 +10,7 @@ export function TermsOfService() {
       <section className="border-t border-border-subtle bg-surface-raised/50 py-24">
         <div className="mx-auto max-w-3xl space-y-8 px-6 leading-relaxed text-text-muted">
           <p>
-            Ledova is unaudited open-source software supplied under the repository license for development and
+            Ledova is unaudited source-available software supplied under the repository license for development and
             evaluation. It is not an exchange, custodian, broker, issuer, investment product, or financial service.
           </p>
           <div>
