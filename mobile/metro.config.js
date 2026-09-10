@@ -27,4 +27,13 @@ config.resolver.extraNodeModules = {
   util: require.resolve('util'),
 };
 
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  const sharedPeer = /^(react|@tanstack\/react-query)(\/.*)?$/.test(moduleName);
+  return context.resolveRequest(
+    sharedPeer ? { ...context, originModulePath: path.join(__dirname, 'index.ts') } : context,
+    moduleName,
+    platform,
+  );
+};
+
 module.exports = config;

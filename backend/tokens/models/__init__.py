@@ -13,6 +13,7 @@ from .former_holder import FormerHolder
 from .mint_request import MintRequest, MintRequestStatus
 from .nav_update import NAVUpdate
 from .order_modification_log import OrderModificationLog
+from .order_submission import OrderSubmission, OrderSubmissionStatus
 from .share_issuance import ShareIssuance
 from .share_issuance_request import ShareIssuanceRequest
 from .share_token import ShareToken
@@ -29,6 +30,8 @@ __all__ = [
     "MintRequestStatus",
     "NAVUpdate",
     "OrderModificationLog",
+    "OrderSubmission",
+    "OrderSubmissionStatus",
     "RequestStatus",
     "ShareIssuance",
     "ShareIssuanceRequest",

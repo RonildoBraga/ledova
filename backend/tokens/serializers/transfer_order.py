@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.conf import settings
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 from web3 import Web3
 
@@ -90,30 +91,33 @@ class TransferOrderDetailSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+@extend_schema_field({"oneOf": [{"type": "integer", "minimum": 1}, {"type": "string", "pattern": r"^[1-9][0-9]*$"}]})
+class PositiveIntegerInputField(serializers.IntegerField):
+    pass
+
+
+@extend_schema_field(
+    {"oneOf": [{"type": "integer", "minimum": 0}, {"type": "string", "pattern": r"^(0|[1-9][0-9]*)$"}]}
+)
+class NonnegativeIntegerInputField(serializers.IntegerField):
+    pass
+
+
 class TransferOrderCreateSerializer(serializers.Serializer):
+    submission_id = serializers.UUIDField()
+    owner_account_uuid = serializers.UUIDField()
     token = serializers.UUIDField()
     order_type = serializers.ChoiceField(choices=TransferOrderType.choices)
     wallet_uuid = serializers.UUIDField(write_only=True)
     wallet_address = serializers.CharField(max_length=42)
-    quantity = serializers.IntegerField(min_value=1)
-    min_quantity = serializers.IntegerField(
+    quantity = PositiveIntegerInputField(min_value=1)
+    min_quantity = NonnegativeIntegerInputField(
         required=False,
         min_value=0,
         default=0,
         help_text="Minimum quantity per fill. 0 means accept any partial fill.",
     )
     price_per_share = serializers.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0.01"))
-
-    def validate_token(self, value):
-        try:
-            token = ShareToken.objects.get(uuid=value)
-        except ShareToken.DoesNotExist:
-            raise serializers.ValidationError("Token not found")
-
-        if not token.is_deployed:
-            raise serializers.ValidationError("Token is not deployed")
-
-        return token
 
     def validate_wallet_address(self, value):
         if not Web3.is_address(value):
@@ -133,15 +137,14 @@ class TransferOrderCreateSerializer(serializers.Serializer):
 
         wallet = (
             Wallet.objects.visible_to_user(request.user)
-            .verified_evm()
             .select_related("user_account")
-            .filter(uuid=data["wallet_uuid"])
+            .filter(uuid=data["wallet_uuid"], user_account_id=data["owner_account_uuid"])
             .first()
         )
 
         if wallet is None:
             raise serializers.ValidationError(
-                {"wallet_uuid": "Select a verified EVM wallet from one of your accounts."}
+                {"wallet_uuid": "Select a wallet from the specified account that you currently belong to."}
             )
 
         if not Web3.is_address(wallet.address):

@@ -187,6 +187,8 @@ class TransferOrderOwnershipBindingTest(APITestCase):
     def _payload(self, wallet=None, address=None):
         wallet = wallet or self.wallet
         return {
+            "submission_id": "bda8dace-8f0f-4a24-8bd7-326e9b1c6823",
+            "owner_account_uuid": str(wallet.user_account_id),
             "token": str(self.token.uuid),
             "order_type": TransferOrderType.BUY,
             "wallet_uuid": str(wallet.uuid),
@@ -218,10 +220,10 @@ class TransferOrderOwnershipBindingTest(APITestCase):
         self.assertFalse(serializer.is_valid())
         self.assertIn("wallet_uuid", serializer.errors)
 
-    def test_pending_wallet_is_rejected(self):
+    def test_pending_wallet_identity_can_be_validated_before_outcome_recovery(self):
         serializer = self._serializer(self._payload(wallet=self.pending_wallet))
-        self.assertFalse(serializer.is_valid())
-        self.assertIn("wallet_uuid", serializer.errors)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["wallet"], self.pending_wallet)
 
     def test_foreign_wallet_is_rejected(self):
         other_user = User.objects.create_user(email="other@example.test", password="pw-12345678")
@@ -257,7 +259,7 @@ class TransferOrderOwnershipBindingTest(APITestCase):
         self.assertEqual(serializer.validated_data["wallet"], second_wallet)
         self.assertEqual(serializer.validated_data["owner_account"], second_account)
 
-    def test_non_evm_wallet_is_rejected(self):
+    def test_wallet_chain_eligibility_is_deferred_until_after_outcome_recovery(self):
         bitcoin_wallet = Wallet.objects.create(
             user_account=self.account,
             address="0x" + "f" * 40,
@@ -265,8 +267,8 @@ class TransferOrderOwnershipBindingTest(APITestCase):
             verification_status="VERIFIED",
         )
         serializer = self._serializer(self._payload(wallet=bitcoin_wallet))
-        self.assertFalse(serializer.is_valid())
-        self.assertIn("wallet_uuid", serializer.errors)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        self.assertEqual(serializer.validated_data["wallet"], bitcoin_wallet)
 
     def test_matching_and_order_book_ignore_invalid_ownership_bindings(self):
         incoming = TransferOrder.objects.create(

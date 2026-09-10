@@ -20,13 +20,21 @@ const isCsrfFailure = (error: AxiosError) => {
   return error.response?.status === 403 && typeof detail === 'string' && detail.startsWith('CSRF Failed');
 };
 
+apiClient.interceptors.request.use((config) => {
+  config.ledovaSubmissionGuard?.();
+  return config;
+});
+
 apiClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
     const config = error.config as RetriableRequestConfig | undefined;
+    config?.ledovaSubmissionGuard?.();
     if (config && !config.csrfRetried && isCsrfFailure(error)) {
       config.csrfRetried = true;
-      return apiClient.get(AUTH_ENDPOINTS.VERIFY).then(() => apiClient.request(config));
+      return apiClient
+        .get(AUTH_ENDPOINTS.VERIFY, { ledovaSubmissionGuard: config.ledovaSubmissionGuard })
+        .then(() => apiClient.request(config));
     }
 
     console.error(`API request failed: ${describeFailure(error)}`);

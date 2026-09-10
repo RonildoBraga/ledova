@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView } from 'react-native';
 import { ShoppingCartIcon, TagIcon, WalletIcon, ShieldWarningIcon } from 'phosphor-react-native';
 import { formatWalletAddressShort, formatCurrency } from '@ledova/shared';
@@ -13,7 +13,8 @@ interface CreateOrderModalProps {
   orderType: OrderType;
   wallets: Wallet[];
   walletsWithHoldings: { walletAddress: string; balance: string }[];
-  onSubmit: (data: CreateOrderRequest) => void;
+  onSubmit: (data: CreateOrderRequest) => Promise<boolean>;
+  submissionError: string | null;
   isWalletWhitelisted: (address: string) => boolean;
   getWhitelistStatus: (address: string) => WhitelistStatus | undefined;
   isLoadingWhitelistStatus: boolean;
@@ -27,6 +28,7 @@ export function CreateOrderModal({
   wallets,
   walletsWithHoldings,
   onSubmit,
+  submissionError,
   isWalletWhitelisted,
   getWhitelistStatus,
   isLoadingWhitelistStatus,
@@ -175,6 +177,8 @@ export function CreateOrderModal({
   const [minQuantity, setMinQuantity] = useState('');
   const [pricePerShare, setPricePerShare] = useState('');
   const [selectedWalletIndex, setSelectedWalletIndex] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const transition = useRef({ generation: 0, pending: false });
 
   const availableWallets = useMemo(() => {
     if (!isBuy) {
@@ -218,9 +222,12 @@ export function CreateOrderModal({
   const whitelistStatusUnknown = selectedWallet
     ? getWhitelistStatus(selectedWallet.address)?.status === 'unknown'
     : false;
-  const isConfirmDisabled = !isValid || (!walletIsWhitelisted && !isLoadingWhitelistStatus);
+  const isConfirmDisabled = isSubmitting || !isValid || (!walletIsWhitelisted && !isLoadingWhitelistStatus);
 
   useEffect(() => {
+    transition.current.generation++;
+    transition.current.pending = false;
+    setIsSubmitting(false);
     if (visible) {
       setQuantity('');
       setMinQuantity('');
@@ -229,23 +236,39 @@ export function CreateOrderModal({
     }
   }, [visible, token.lastPrice]);
 
-  const handleSubmit = () => {
-    if (!isValid || !selectedWallet) return;
+  const dismiss = () => {
+    transition.current.generation++;
+    transition.current.pending = false;
+    onClose();
+  };
+
+  const handleSubmit = async () => {
+    if (!visible || !isValid || !selectedWallet || transition.current.pending) return;
+    const generation = transition.current.generation;
+    transition.current.pending = true;
+    setIsSubmitting(true);
     const minQty = parseFloat(minQuantity) || 0;
-    onSubmit({
-      token: token.uuid,
-      orderType,
-      walletUuid: selectedWallet.uuid,
-      walletAddress: selectedWallet.address,
-      quantity: parseFloat(quantity),
-      minQuantity: minQty > 0 ? minQty : undefined,
-      pricePerShare,
-    });
+    try {
+      await onSubmit({
+        token: token.uuid,
+        orderType,
+        walletUuid: selectedWallet.uuid,
+        walletAddress: selectedWallet.address,
+        quantity: parseFloat(quantity),
+        minQuantity: minQty > 0 ? minQty : undefined,
+        pricePerShare,
+      });
+    } finally {
+      if (generation === transition.current.generation) {
+        transition.current.pending = false;
+        setIsSubmitting(false);
+      }
+    }
   };
 
   if (wallets.length === 0) {
     return (
-      <CustomModal visible={visible} onClose={onClose} showFooter cancelLabel="Close">
+      <CustomModal visible={visible} onClose={dismiss} showFooter cancelLabel="Close">
         <View style={styles.emptyContainer}>
           <WalletIcon size={theme.icon.sizes.xl} color={theme.colors.status.warning.icon} />
           <Text style={styles.emptyTitle}>No Wallets Found</Text>
@@ -257,7 +280,7 @@ export function CreateOrderModal({
 
   if (!isBuy && availableWallets.length === 0) {
     return (
-      <CustomModal visible={visible} onClose={onClose} showFooter cancelLabel="Close">
+      <CustomModal visible={visible} onClose={dismiss} showFooter cancelLabel="Close">
         <View style={styles.emptyContainer}>
           <WalletIcon size={theme.icon.sizes.xl} color={theme.colors.status.warning.icon} />
           <Text style={styles.emptyTitle}>No Holdings Found</Text>
@@ -270,13 +293,18 @@ export function CreateOrderModal({
   return (
     <CustomModal
       visible={visible}
-      onClose={onClose}
+      onClose={dismiss}
       showFooter
       confirmLabel={isBuy ? 'Buy' : 'Sell'}
       onConfirm={handleSubmit}
       confirmDisabled={isConfirmDisabled}
     >
       <ScrollView showsVerticalScrollIndicator={false}>
+        {submissionError && (
+          <Text accessibilityRole="alert" style={styles.warningTitle}>
+            {submissionError}
+          </Text>
+        )}
         <View style={styles.headerRow}>
           <View style={[styles.headerIcon, isBuy ? styles.buyIcon : styles.sellIcon]}>
             {isBuy ? (

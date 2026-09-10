@@ -42,6 +42,7 @@ from tokens.models import (
     SwapOrder,
     TransferOrder,
 )
+from tokens.tests.order_submission_fixtures import pending_submission
 from users.models.investor_classification import InvestorClassification
 
 
@@ -134,6 +135,10 @@ def _an_issuance_request(tenant):
     return _create_issuance_request(
         tenant.deployed_token, "0x" + "c" * 40, 10, tenant.user, reason="Founder allocation"
     )
+
+
+def _a_pending_order_submission(tenant):
+    pending_submission(tenant, submission_id=tenant.account.pk)
 
 
 Route = namedtuple(
@@ -354,6 +359,8 @@ ROUTES = (
         "post",
         "/api/v1/trading/orders/create/",
         {
+            "submissionId": "{own_account}",
+            "ownerAccountUuid": "{own_account}",
             "token": "{own_deployed_token}",
             "orderType": "sell",
             "walletUuid": "{wallet}",
@@ -370,6 +377,8 @@ ROUTES = (
         "post",
         "/api/v1/trading/orders/create/message/",
         {
+            "submissionId": "{own_account}",
+            "ownerAccountUuid": "{own_account}",
             "token": "{own_deployed_token}",
             "orderType": "sell",
             "walletUuid": "{wallet}",
@@ -379,6 +388,11 @@ ROUTES = (
         },
         foreign=400,
         rejects="walletUuid",
+    ),
+    Route(
+        "get",
+        "/api/v1/trading/orders/submissions/{account}/?owner_account_uuid={account}",
+        prepare=_a_pending_order_submission,
     ),
     Route("get", "/api/v1/trading/orders/{order}/"),
     Route("post", "/api/v1/trading/orders/{order}/cancel/", {"digest": DIGEST, "signature": SIGNATURE}),
@@ -531,15 +545,12 @@ class CrossTenantRouteMatrixTest(StubUploadDependencies, APITransactionTestCase)
         register_chain.share_supply.return_value = (0, 0)
         trading_orders = self._service("tokens.views.trading_order.TradingOrderService")
         trading_orders.get_order_cancel_message.return_value = {}
-        trading_orders.get_order_create_message.return_value = {}
-        trading_orders.verify_order_create_signature.return_value = None
-        self._service("tokens.views.trading_order.verify_and_spend_create").return_value = None
+        self._service("tokens.views.trading_order.execute_order_submission")
+        self._service("tokens.views.trading_order.issue_order_submission")
+        self._service("tokens.views.trading_order.submission_snapshot").return_value = {}
         trading_transfers = self._service("tokens.views.trading_transfer.TokenTransferService")
         trading_transfers.contract_address.return_value = "0x" + "6" * 40
         trading_transfers.return_value.prepare_transfer.return_value = {}
-        order_transfers = self._service("tokens.views.trading_order.TokenTransferService")
-        order_transfers.return_value.create_order_and_match.return_value = (None, None)
-        trading_orders.build_order_response.return_value = {}
         self._service("tokens.views.trading_order.cancel_signed_order").side_effect = lambda order, **kwargs: order
         modifications = self._service("tokens.views.trading_order.OrderModificationService").return_value
         modifications.generate_modification_message.return_value = {}

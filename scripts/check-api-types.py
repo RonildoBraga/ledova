@@ -137,12 +137,6 @@ TYPE_DEBT: dict[str, tuple[int, str]] = {
         "get_serializer_class names it for the create action - while the service is typed "
         "apiClient.post<SubscriptionDetail>.",
     ),
-    "TransferOrder:TransferOrderCreate": (
-        6,
-        "TradingOrderViewSet.get_serializer_class names TransferOrderCreateSerializer for the "
-        "create_order action, so POST /api/v1/trading/orders/create/ answers with the write shape "
-        "while the service is typed as the full TransferOrder.",
-    ),
     "DeviceToken:DeviceToken": (
         1,
         "DeviceTokenSerializer lists created_at but not updated_at, while the interface extends "
@@ -158,12 +152,6 @@ SCHEMA_DEBT: dict[str, tuple[int, str]] = {
         "check-schema-responses.py does not see: it looks for Response(...) and this is a third "
         "spelling. The generator falls back to OfferingDetailSerializer. The interface is correct; "
         "tracked as a follow-up to #211.",
-    ),
-    "CreateOrderMessageResponse:TransferOrderCreate": (
-        7,
-        "tokens/views/trading_order.py create_message builds a signing challenge body while "
-        "get_serializer_class names TransferOrderCreateSerializer, so the generator documents the "
-        "request shape as the response. The interface is correct. Tracked as a follow-up to #211.",
     ),
     "CancelOrderMessageResponse:TransferOrderList": (7, "tokens/views/trading_order.py builds this body itself while get_serializer_class names a TransferOrder serializer, so the generator documents the wrong shape. The interface is correct. In check-schema-responses.py's LEGACY; tracked by #211."),
     "ApprovalStatusResponse:TransferOrderList": (7, "tokens/views/trading_order.py builds this body itself while get_serializer_class names a TransferOrder serializer, so the generator documents the wrong shape. The interface is correct. In check-schema-responses.py's LEGACY; tracked by #211."),

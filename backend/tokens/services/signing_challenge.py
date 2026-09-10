@@ -17,6 +17,7 @@ from tokens.exceptions import (
     ChallengeMismatchException,
     ChallengeUnknownException,
     InvalidSignatureException,
+    OrderSubmissionRefreshRequiredException,
 )
 from tokens.models import SigningChallenge, SigningChallengePurpose
 
@@ -44,6 +45,9 @@ CHALLENGE_TYPES = {
     },
     SigningChallengePurpose.ORDER_CREATE: {
         "OrderCreate": [
+            {"name": "submissionId", "type": "string"},
+            {"name": "ownerAccountUuid", "type": "string"},
+            {"name": "walletUuid", "type": "string"},
             {"name": "tokenUuid", "type": "string"},
             {"name": "orderType", "type": "string"},
             {"name": "quantity", "type": "uint256"},
@@ -67,7 +71,9 @@ def challenge_lifetime_seconds() -> int:
     return settings.SIGNING_CHALLENGE_TTL_SECONDS
 
 
-def issue_challenge(purpose, wallet_address: str, fields: dict, verifying_contract=None, order=None, wallet=None):
+def issue_challenge(
+    purpose, wallet_address: str, fields: dict, verifying_contract=None, order=None, wallet=None, submission=None
+):
     types = CHALLENGE_TYPES[purpose]
     owner = wallet or (order.wallet if order is not None else None)
     if owner is None:
@@ -75,6 +81,8 @@ def issue_challenge(purpose, wallet_address: str, fields: dict, verifying_contra
             "A signing challenge needs the wallet it is issued to, either directly or through its order. "
             "The caller is authenticated, so the service holds it."
         )
+    if purpose == SigningChallengePurpose.ORDER_CREATE and submission is None:
+        raise ValueError("An order creation challenge requires its immutable submission.")
     wallet_of_record = to_checksum_address(wallet_address)
     nonce = secrets.randbits(63)
     expires_at = timezone.now() + timezone.timedelta(seconds=challenge_lifetime_seconds())
@@ -94,6 +102,7 @@ def issue_challenge(purpose, wallet_address: str, fields: dict, verifying_contra
         chain_id=domain["chainId"],
         verifying_contract=domain["verifyingContract"],
         order=order,
+        submission=submission,
         payload={"domain": domain, "types": types, "message": message},
         digest=typed_data_digest(domain, types, message),
         nonce=nonce,
@@ -112,7 +121,7 @@ def challenge_response(challenge) -> dict:
     }
 
 
-def consume_challenge(digest: str, purpose, wallet_address: str, signature: str, order=None):
+def consume_challenge(digest: str, purpose, wallet_address: str, signature: str, order=None, submission=None):
     if not digest or not signature:
         raise ChallengeUnknownException()
 
@@ -128,6 +137,16 @@ def consume_challenge(digest: str, purpose, wallet_address: str, signature: str,
 
     if order is not None and challenge.order_id != order.pk:
         raise ChallengeMismatchException("order")
+
+    if submission is not None:
+        if challenge.submission_id is None:
+            raise OrderSubmissionRefreshRequiredException()
+        if challenge.submission_id != submission.pk or challenge.wallet_id != submission.wallet_id:
+            raise ChallengeMismatchException("submission")
+        if challenge.verifying_contract.lower() != submission.verifying_contract.lower():
+            raise ChallengeMismatchException("contract")
+        if challenge.chain_id != submission.chain_id:
+            raise ChallengeMismatchException("chain")
 
     if challenge.chain_id != settings.BLOCKCHAIN_CHAIN_ID:
         raise ChallengeMismatchException("chain")

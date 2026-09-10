@@ -1,4 +1,12 @@
-from drf_spectacular.utils import extend_schema, inline_serializer
+from uuid import UUID
+
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import (
+    OpenApiParameter,
+    OpenApiResponse,
+    extend_schema,
+    inline_serializer,
+)
 from rest_framework import serializers, status
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, ValidationError
@@ -8,13 +16,19 @@ from shared.utils import get_client_ip
 from shared.views import AuthenticatedReadOnlyViewSet
 from tokens.exceptions import SwapExpiredException
 from tokens.filters import TransferOrderFilter
-from tokens.models import SwapOrder, TransferOrder
+from tokens.models import OrderSubmissionStatus, SwapOrder, TransferOrder
 from tokens.serializers import (
     OrderModificationExecuteSerializer,
     OrderModificationRequestSerializer,
     TransferOrderCreateSerializer,
     TransferOrderDetailSerializer,
     TransferOrderListSerializer,
+)
+from tokens.serializers.order_submission import (
+    OrderSubmissionLookupSerializer,
+    OrderSubmissionSerializer,
+    SignedOrderSubmissionSerializer,
+    submission_snapshot,
 )
 from tokens.serializers.swap_order import (
     SubmitSignatureSerializer,
@@ -23,12 +37,15 @@ from tokens.serializers.swap_order import (
 from tokens.services import (
     AtomicSwapService,
     OrderModificationService,
-    TokenTransferService,
     TradingOrderService,
 )
 from tokens.services.atomic_swap_service import sign_and_execute_swap
 from tokens.services.trading_order_cancel import cancel_signed_order
-from tokens.services.trading_order_create import verify_and_spend_create
+from tokens.services.trading_order_create import (
+    execute_order_submission,
+    issue_order_submission,
+    recover_order_submission,
+)
 from tokens.trading_wallet_access import resolve_verified_evm_wallets
 
 
@@ -44,36 +61,48 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
         return TransferOrder.objects.with_relations().visible_to_user(self.request.user)
 
     def get_serializer_class(self):
-        if self.action in ["create_order", "create_message"]:
+        if self.action == "create_order":
+            return SignedOrderSubmissionSerializer
+        if self.action == "create_message":
             return TransferOrderCreateSerializer
         if self.action in ["retrieve", "cancel"]:
             return TransferOrderDetailSerializer
         return TransferOrderListSerializer
 
+    @extend_schema(
+        responses={
+            200: OrderSubmissionSerializer,
+            201: OrderSubmissionSerializer,
+            400: OpenApiResponse(
+                response={
+                    "anyOf": [
+                        {"$ref": "#/components/schemas/OrderSubmission"},
+                        {"type": "object", "additionalProperties": {}},
+                    ]
+                },
+                description="A recorded business refusal snapshot, or an ordinary request/challenge validation error.",
+            ),
+            401: OpenApiResponse(response=OpenApiTypes.OBJECT, description="Authentication required."),
+            403: OpenApiResponse(response=OpenApiTypes.OBJECT, description="Signature refused."),
+            404: OpenApiResponse(response=OpenApiTypes.OBJECT, description="No currently authorized submission."),
+            409: OpenApiResponse(
+                response=OpenApiTypes.OBJECT, description="Original terms conflict or challenge spent."
+            ),
+            429: OpenApiResponse(response=OpenApiTypes.OBJECT, description="Request throttle exceeded."),
+            500: OpenApiResponse(response=OpenApiTypes.OBJECT, description="Unknown outcome; recover before retrying."),
+            503: OpenApiResponse(response=OpenApiTypes.OBJECT, description="Service failure; recover before retrying."),
+        }
+    )
     @action(detail=False, methods=["post"], url_path="create")
     def create_order(self, request):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
-
-        verify_and_spend_create(data, request.data.get("digest"), request.data.get("signature"))
-
-        transfer_service = TokenTransferService()
-        order, match_result = transfer_service.create_order_and_match(
-            token=data["token"],
-            order_type=data["order_type"],
-            actor=request.user,
-            wallet=data["wallet"],
-            owner_account=data["owner_account"],
-            wallet_address=data["wallet_address"],
-            quantity=data["quantity"],
-            price_per_share=data["price_per_share"],
-            min_quantity=data.get("min_quantity", 0),
-        )
-
-        response_data = TradingOrderService.build_order_response(order, match_result)
-
-        return Response(response_data, status=status.HTTP_201_CREATED)
+        result = execute_order_submission(request.user, serializer.validated_data)
+        if result.submission.status == OrderSubmissionStatus.REFUSED:
+            response_status = status.HTTP_400_BAD_REQUEST
+        else:
+            response_status = status.HTTP_201_CREATED if result.created else status.HTTP_200_OK
+        return Response(submission_snapshot(result.submission), status=response_status)
 
     @extend_schema(responses=TransferOrderDetailSerializer)
     @action(detail=True, methods=["post"])
@@ -92,23 +121,52 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
         message_data = TradingOrderService.get_order_cancel_message(order)
         return Response(message_data, status=status.HTTP_200_OK)
 
+    @extend_schema(
+        responses={
+            200: OrderSubmissionSerializer,
+            400: OpenApiResponse(response=OpenApiTypes.OBJECT, description="Invalid request or new-order eligibility."),
+            401: OpenApiResponse(response=OpenApiTypes.OBJECT, description="Authentication required."),
+            404: OpenApiResponse(response=OpenApiTypes.OBJECT, description="No currently authorized submission."),
+            409: OpenApiResponse(response=OpenApiTypes.OBJECT, description="Original submission terms conflict."),
+            429: OpenApiResponse(response=OpenApiTypes.OBJECT, description="Request throttle exceeded."),
+            503: OpenApiResponse(
+                response=OpenApiTypes.OBJECT, description="Service failure; retain the submission ID."
+            ),
+        }
+    )
     @action(detail=False, methods=["post"], url_path="create/message")
     def create_message(self, request):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
+        result = issue_order_submission(request.user, serializer.validated_data)
+        return Response(submission_snapshot(result.submission, result.challenge))
 
-        message_data = TradingOrderService.get_order_create_message(
-            token=data["token"],
-            wallet_address=data["wallet_address"],
-            order_type=data["order_type"],
-            quantity=data["quantity"],
-            min_quantity=data.get("min_quantity", 0),
-            price_per_share=data["price_per_share"],
-            wallet=data.get("wallet"),
-        )
-
-        return Response(message_data, status=status.HTTP_200_OK)
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("submission_id", OpenApiTypes.UUID, OpenApiParameter.PATH, required=True),
+            OpenApiParameter("owner_account_uuid", OpenApiTypes.UUID, OpenApiParameter.QUERY, required=True),
+        ],
+        responses={
+            200: OrderSubmissionSerializer,
+            400: OpenApiResponse(response=OpenApiTypes.OBJECT, description="Invalid account selector."),
+            401: OpenApiResponse(response=OpenApiTypes.OBJECT, description="Authentication required."),
+            404: OpenApiResponse(
+                response=OpenApiTypes.OBJECT, description="Unknown or currently inaccessible submission."
+            ),
+            429: OpenApiResponse(response=OpenApiTypes.OBJECT, description="Request throttle exceeded."),
+            503: OpenApiResponse(response=OpenApiTypes.OBJECT, description="Service temporarily unavailable."),
+        },
+    )
+    @action(detail=False, methods=["get"], url_path=r"submissions/(?P<submission_id>[^/.]+)")
+    def submission(self, request, submission_id=None):
+        serializer = OrderSubmissionLookupSerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        try:
+            key = UUID(submission_id)
+        except (ValueError, TypeError, AttributeError):
+            raise NotFound("Order submission not found.")
+        result = recover_order_submission(request.user, serializer.validated_data["owner_account_uuid"], key)
+        return Response(submission_snapshot(result.submission))
 
     @extend_schema(
         responses=inline_serializer(

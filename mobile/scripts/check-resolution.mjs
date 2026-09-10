@@ -4,6 +4,7 @@ import { createRequire, isBuiltin } from 'node:module';
 import path from 'node:path';
 import process from 'node:process';
 import ts from 'typescript';
+import { checkSharedPeers } from './shared-peer-resolution.mjs';
 import { sourceImports } from '../../scripts/source-imports.mjs';
 
 const MOBILE = path.resolve(import.meta.dirname, '..');
@@ -170,4 +171,9 @@ if (failures.length > 0) {
 console.log(
   `Mobile resolution clean: ${sites.size} runtime specifiers from mobile/, ` +
     `${workspaceSites.size} from packages/, all reaching mobile/node_modules.`,
+);
+
+const sharedPeers = checkSharedPeers(metro, MOBILE);
+console.log(
+  `Mobile peer identity clean: ${sharedPeers.length} actual Metro resolutions share mobile's React and query context.`,
 );

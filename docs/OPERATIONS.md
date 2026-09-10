@@ -266,6 +266,47 @@ override still takes precedence: remove an older `SWAP_ORDER_EXPIRY_HOURS=24`
 override or set it to `0.25` to use the new default for future swaps. The ordinary
 order-challenge lifetime remains 300 seconds.
 
+Create-order requests use an account-scoped client `submission_id`. A deliberate
+new order gets a new UUID, including another order with equal terms. A retry
+keeps its original UUID. The message route records the original account, wallet,
+terms and signing domain before issuing a challenge whose envelope binds those
+identities. Legacy issued challenges are preserved and require a fresh challenge
+for this protocol; they cannot be attached retroactively to a submission. An old
+request missing the new IDs receives ordinary required-field errors. A new keyed
+request presenting an unlinked legacy challenge receives
+`submission_refresh_required`. Both are refused before challenge spend.
+
+After an uncertain response, read
+`GET /api/v1/trading/orders/submissions/{submission_id}/?owner_account_uuid=...`.
+Current account membership and wallet ownership/address are still required.
+Unknown and inaccessible submissions share a 404; that response does not prove
+that a preceding request failed to commit. Keep the same ID when retrying.
+Changed original terms return `submission_conflict` and never spend a challenge.
+Recovery of a created or refused outcome precedes current deployment, wallet
+verification and challenge-expiry checks. A pending submission still needs an
+eligible token/wallet and a valid, unspent linked signature before creating an
+order. Recovery returns immutable `intent` alongside the current `order` and
+the original `match`; order modification or cancellation does not rewrite intent.
+The immutable intent's `quantity` and `min_quantity` are canonical decimal
+strings. Forward them unchanged when renewing or retrying so JavaScript number
+rounding cannot alter stored terms. New numeric draft inputs and existing order
+detail quantities retain their current formats.
+If a token becomes hidden, its previously authorized display snapshot can still
+describe the owned order without granting visibility to the token itself.
+
+Challenge spend, order creation, matching and the recorded outcome share one
+independent database transaction. An enclosing transaction or disabled autocommit
+is refused. Only an explicit negative whitelist result or insufficient seller
+balance records a terminal business refusal: creation is rolled back to its
+savepoint while spend and refusal commit together. Provider, configuration,
+database and unclassified matching failures remain retryable; a lost commit
+acknowledgement requires recovery. `tokens/0037` protects the account/key, original
+intent, challenge linkage and terminal outcome against direct SQL changes.
+Never delete these identities to retry or reinterpret a refusal as permission
+to create another order. A separate deliberate order still undergoes the ordinary
+creation and matching checks. This protocol adds no aggregate balance policy,
+outgoing signer activation or settlement finality guarantee.
+
 ### Data retention
 
 | Variable | Default | Required |

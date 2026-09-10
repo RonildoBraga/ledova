@@ -69,6 +69,7 @@ export const TRADING_ENDPOINTS = {
     DETAIL: (uuid: string) => `/api/v1/trading/orders/${uuid}/` as const,
     CREATE: '/api/v1/trading/orders/create/',
     CREATE_MESSAGE: '/api/v1/trading/orders/create/message/',
+    SUBMISSION: (uuid: string) => `/api/v1/trading/orders/submissions/${uuid}/` as const,
     CANCEL: (uuid: string) => `/api/v1/trading/orders/${uuid}/cancel/` as const,
     CANCEL_MESSAGE: (uuid: string) => `/api/v1/trading/orders/${uuid}/cancel/message/` as const,
     MODIFY: (uuid: string) => `/api/v1/trading/orders/${uuid}/modify/` as const,

@@ -32,6 +32,7 @@ class TradingOrderService:
         price_per_share: Decimal,
         digest: Optional[str],
         signature: Optional[str],
+        submission,
     ):
         if not signature or not digest:
             raise SignatureRequiredException()
@@ -41,10 +42,14 @@ class TradingOrderService:
             SigningChallengePurpose.ORDER_CREATE,
             wallet_address,
             signature,
+            submission=submission,
         )
         assert_payload_matches(
             challenge,
             {
+                "submissionId": str(submission.submission_id),
+                "ownerAccountUuid": str(submission.owner_account_id),
+                "walletUuid": str(submission.wallet_id),
                 "tokenUuid": token_uuid,
                 "orderType": order_type,
                 "quantity": quantity,
@@ -74,12 +79,15 @@ class TradingOrderService:
 
     @staticmethod
     def get_order_create_message(
-        token, wallet_address, order_type, quantity, min_quantity, price_per_share, wallet=None
+        token, wallet_address, order_type, quantity, min_quantity, price_per_share, wallet, submission
     ) -> dict:
         challenge = issue_challenge(
             SigningChallengePurpose.ORDER_CREATE,
             wallet_address,
             {
+                "submissionId": str(submission.submission_id),
+                "ownerAccountUuid": str(submission.owner_account_id),
+                "walletUuid": str(submission.wallet_id),
                 "tokenUuid": str(token.uuid),
                 "orderType": order_type,
                 "quantity": str(quantity),
@@ -88,6 +96,7 @@ class TradingOrderService:
             },
             verifying_contract=token.contract_address,
             wallet=wallet,
+            submission=submission,
         )
 
         return {

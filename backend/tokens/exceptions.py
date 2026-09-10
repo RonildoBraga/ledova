@@ -2,6 +2,20 @@ from rest_framework import status
 from rest_framework.exceptions import APIException
 
 
+class OrderSubmissionConflictException(APIException):
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "This submission identifies different original order terms."
+    default_code = "submission_conflict"
+    expose_code = True
+
+
+class OrderSubmissionRefreshRequiredException(APIException):
+    status_code = status.HTTP_400_BAD_REQUEST
+    default_detail = "Request a new challenge bound to this order submission."
+    default_code = "submission_refresh_required"
+    expose_code = True
+
+
 class TokenFactoryNotConfiguredException(APIException):
     status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
     default_detail = "Token factory contract is not configured."
@@ -112,6 +126,14 @@ class TokenPausedException(APIException):
     status_code = status.HTTP_400_BAD_REQUEST
     default_detail = "Token transfers are paused."
     default_code = "token_paused"
+
+
+class CreateOrderNotWhitelistedException(NotWhitelistedException):
+    pass
+
+
+class CreateOrderInsufficientBalanceException(InsufficientBalanceException):
+    pass
 
 
 class TransferPreparationException(APIException):

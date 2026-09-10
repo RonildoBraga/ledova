@@ -105,6 +105,7 @@ POLICIES = {
         f"{_member('owner_account_id')} AND {OWNERSHIP_BOUND}",
         f"{_member('owner_account_id')} AND {OWNERSHIP_BOUND}",
     ),
+    "tokens_ordersubmission": (_member("owner_account_id"), _member("owner_account_id")),
     "companies_companydocument": (
         _company("company_id", VISIBLE_COMPANIES),
         _company("company_id", MANAGEABLE_COMPANIES),
