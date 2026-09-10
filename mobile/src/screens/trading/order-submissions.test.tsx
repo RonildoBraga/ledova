@@ -73,7 +73,6 @@ jest.mock('./components/MarketList', () => ({ MarketList: () => null }));
 jest.mock('./components/OrdersCard', () => ({ OrdersCard: () => null }));
 jest.mock('./components/OrderDetailModal', () => ({ OrderDetailModal: () => null }));
 jest.mock('./components/SwapSigningModal', () => ({ SwapSigningModal: () => null }));
-jest.mock('./components/OrderModificationModal', () => ({ OrderModificationModal: () => null }));
 jest.mock('./hooks/useTradingEvents', () => ({ useTradingEvents: () => {} }));
 jest.mock('./useAtomicSwaps', () => ({ useSwapOrdersMulti: () => ({ data: [], refetch: jest.fn() }) }));
 jest.mock('./useTrading', () => {

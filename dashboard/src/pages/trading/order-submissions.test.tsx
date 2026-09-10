@@ -69,7 +69,6 @@ vi.mock('@utils/softwareWallet/localSigner', () => ({ deriveAddress: vi.fn(), si
 vi.mock('./components/MarketOverview', () => ({ MarketOverview: () => null }));
 vi.mock('./components/OrdersPanel', () => ({ OrdersPanel: () => null }));
 vi.mock('./components/SwapSigningFlow', () => ({ SwapSigningFlow: () => null }));
-vi.mock('./components/OrderModificationModal', () => ({ OrderModificationModal: () => null }));
 vi.mock('./hooks/useTradingEvents', () => ({ useTradingEvents: () => {} }));
 vi.mock('./hooks/useAtomicSwaps', () => ({ useSwapOrdersMulti: () => ({ data: [], isLoading: false }) }));
 vi.mock('./useTrading', async () => {
