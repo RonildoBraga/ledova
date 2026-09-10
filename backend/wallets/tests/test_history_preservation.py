@@ -250,7 +250,7 @@ class HistoryPreservationChecks:
                                 [pids[True], pids[False]],
                             )
                             observed = cursor.fetchone()
-                        if observed and observed[1] and observed[0] != "BEGIN":
+                        if observed and observed[1] and observed[2] == "Lock" and observed[0] != "BEGIN":
                             break
                         if second.done():
                             self.fail(f"History import finished before the first writer committed: {second.result()}")
