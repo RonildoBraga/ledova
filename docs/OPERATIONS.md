@@ -995,6 +995,17 @@ with `confirmed: true` and a positive integer confirmation count. Missing,
 unconfirmed or malformed Bitcoin evidence stays unresolved; that adapter does
 not report an explicit failure receipt.
 
+The platform monitor fetches each receipt before locking the current transaction
+row. It applies an outcome only while the UUID, hash, pending/submitted status,
+recorded call and business reference, nonce, gas terms and submission time still
+match the captured row. A newer terminal decision or changed submission is
+retained; duplicate observations do not rewrite its metadata. When a receipt
+supplies `transactionHash`, its bytes or hexadecimal value must match the hash
+requested. If that field is absent, the monitor retains the existing assumption
+that the configured Base provider answered that requested hash. This is not
+proof of canonical inclusion or finality; the record has no chain ID. These
+guards cover the generic monitor, not every specialized transaction writer.
+
 `blockchain.tasks.cleanup_failed_transactions` and
 `wallets.tasks.confirmation.cleanup_stale_pending_transactions` retain their
 names and `timestamp` argument for jobs already queued by older workers. They
