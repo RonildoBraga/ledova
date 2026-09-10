@@ -1,6 +1,7 @@
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import patch
+from uuid import uuid4
 
 from django.db import connections
 from django.utils import timezone
@@ -8,14 +9,13 @@ from eth_account import Account
 from rest_framework.test import APITransactionTestCase
 
 from feature_flags.models import FeatureFlag
-from shared.db import APP_ALIAS, acting_for, atomic, current_alias, use_operator
+from shared.db import APP_ALIAS, atomic, current_alias, use_operator
 from shared.db.aliases import configured
 from shared.tests.scoped import RunsOnTheScopedConnection
 from shared.tests.tenants import make_tenant
 from shared.utils.typed_data import signable_message
 from tokens.models import OrderModificationLog, SigningChallenge, TransferOrder
 from tokens.models.choices import TransferOrderStatus, TransferOrderType
-from tokens.services import OrderModificationService
 from tokens.services.signing_challenge import spend
 from wallets.models import Wallet
 
@@ -77,15 +77,19 @@ class ModificationChecks:
             self.order.refresh_from_db()
 
     def issue(self, quantity=12, minimum=0, price="2.00", signer=OWNER):
-        with acting_for(self.tenant.user.pk):
-            issued = OrderModificationService().generate_modification_message(
-                self.order, new_quantity=quantity, new_min_quantity=minimum, new_price=Decimal(price)
-            )
+        identity = {"action_id": str(uuid4()), "owner_account_uuid": str(self.tenant.account.pk)}
+        response = self.client.post(
+            f"/api/v1/trading/orders/{self.order.pk}/modify/message/",
+            {**identity, "new_quantity": str(quantity), "new_min_quantity": str(minimum), "new_price_per_share": price},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        issued = response.json()["challenge"]
         signature = signer.sign_message(
             signable_message(issued["domain"], issued["types"], issued["message"])
         ).signature.to_0x_hex()
         self.balance_observations.clear()
-        return {"digest": issued["digest"], "signature": signature}
+        return {**identity, "digest": issued["digest"], "signature": signature}
 
     def apply(self, signed):
         return self.client.post(f"/api/v1/trading/orders/{self.order.uuid}/modify/", signed, format="json")
@@ -104,19 +108,19 @@ class ModificationChecks:
         self.change_order(status=TransferOrderStatus.CANCELLED)
         response = self.apply(signed)
         self.assertEqual(response.status_code, 400, response.content)
-        self.assertIn("Cancelled", response.json()["detail"])
+        self.assertIn("Cancelled", response.json()["refusal"]["detail"])
         self.assert_spent_without_modification(signed)
         self.change_order(status=TransferOrderStatus.OPEN)
         replay = self.apply(signed)
-        self.assertEqual(replay.status_code, 409, replay.content)
-        self.assertIn("already", replay.json()["detail"].lower())
+        self.assertEqual(replay.status_code, 400, replay.content)
+        self.assertEqual(replay.json()["refusal"], response.json()["refusal"])
 
     def test_fills_that_make_the_signed_minimum_invalid_still_leave_the_signature_spent(self):
         signed = self.issue(quantity=12, minimum=8)
         self.change_order(filled_quantity=9, status=TransferOrderStatus.PARTIALLY_FILLED)
         response = self.apply(signed)
         self.assertEqual(response.status_code, 400, response.content)
-        self.assertIn("Min quantity", response.json()["detail"])
+        self.assertIn("Min quantity", response.json()["refusal"]["detail"])
         self.assert_spent_without_modification(signed)
 
     def test_a_sell_increase_reads_the_chain_before_any_transaction_or_order_lock(self):
@@ -133,7 +137,7 @@ class ModificationChecks:
         self.balance = 0
         response = self.apply(signed)
         self.assertEqual(response.status_code, 400, response.content)
-        self.assertIn("Insufficient token balance", response.json()["detail"])
+        self.assertIn("Insufficient token balance", response.json()["refusal"]["detail"])
         self.assert_spent_without_modification(signed)
         self.assertEqual(self.balance_observations, [(configured(APP_ALIAS), False)])
 
@@ -165,7 +169,7 @@ class ModificationChecks:
         self.before_balance_return = lambda: self.change_order(status=TransferOrderStatus.CANCELLED)
         response = self.apply(signed)
         self.assertEqual(response.status_code, 400, response.content)
-        self.assertIn("Cancelled", response.json()["detail"])
+        self.assertIn("Cancelled", response.json()["refusal"]["detail"])
         self.assert_spent_without_modification(signed)
         self.assertEqual(self.order.status, TransferOrderStatus.CANCELLED)
 

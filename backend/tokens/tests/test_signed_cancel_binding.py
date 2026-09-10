@@ -1,163 +1,129 @@
 from datetime import timedelta
-from decimal import Decimal
 from unittest.mock import patch
+from uuid import uuid4
 
 from django.conf import settings
-from eth_account import Account
 from eth_utils import to_checksum_address
-from rest_framework.test import APITestCase
+from rest_framework.test import APITransactionTestCase
 
-from feature_flags.models import FeatureFlag
-from shared.tests.tenants import make_tenant
-from shared.utils.typed_data import signable_message, typed_data_digest
+from shared.utils.typed_data import typed_data_digest
 from tokens.exceptions import ChallengeAlreadyUsedException, ChallengeMismatchException
 from tokens.models import SigningChallenge, SigningChallengePurpose, TransferOrder
-from tokens.models.choices import TransferOrderStatus, TransferOrderType
-from tokens.services.signing_challenge import consume_challenge, issue_challenge
-
-OWNER = Account.from_key("0x" + "17" * 32)
-STRANGER = Account.from_key("0x" + "29" * 32)
+from tokens.models.choices import TransferOrderStatus
+from tokens.services.signing_challenge import consume_challenge
+from tokens.tests.order_action_fixtures import OTHER_KEY, OWNER, ActionFixtures
 
 
-class SignedCancelBindingTest(APITestCase):
-
-    def setUp(self):
-        FeatureFlag.objects.update_or_create(name="trading_enabled", defaults={"enabled": True})
-        self.tenant = make_tenant("canceller")
-        self.tenant.wallet.address = OWNER.address
-        self.tenant.wallet.save(update_fields=["address"])
-        self.order = self._order()
-        self.client.force_authenticate(self.tenant.user)
-
-    def _order(self):
-        return TransferOrder.objects.create(
-            order_type=TransferOrderType.SELL,
-            token=self.tenant.deployed_token,
-            payment_asset=self.tenant.refs.stablecoin,
-            wallet=self.tenant.wallet,
-            owner_account=self.tenant.account,
-            wallet_address=OWNER.address,
-            quantity=10,
-            price_per_share=Decimal("1.50"),
-        )
-
+class SignedCancelBindingTest(ActionFixtures, APITransactionTestCase):
     def request_challenge(self, order=None):
-        order = order or self.order
-        response = self.client.get(f"/api/v1/trading/orders/{order.uuid}/cancel/message/")
+        response = self.message(order=order)
         self.assertEqual(response.status_code, 200, response.content)
         return response.json()
 
-    @staticmethod
-    def sign(issued, account=OWNER):
-        encoded = signable_message(issued["domain"], issued["types"], issued["message"])
-        return account.sign_message(encoded).signature.hex()
+    def post_cancel(self, issued, signer=OWNER, order=None):
+        return self.execute("cancel", self.sign(issued, signer), order=order)
 
-    def post_cancel(self, digest, signature, order=None):
-        order = order or self.order
-        return self.client.post(
-            f"/api/v1/trading/orders/{order.uuid}/cancel/",
-            {"digest": digest, "signature": signature},
-            format="json",
-        )
-
-    def reopen(self, order=None):
-        order = order or self.order
-        TransferOrder.objects.filter(pk=order.pk).update(status=TransferOrderStatus.OPEN)
+    def reopen(self):
+        TransferOrder.objects.filter(pk=self.order.pk).update(status=TransferOrderStatus.OPEN)
 
     def test_a_cancel_signature_is_accepted_once_and_the_order_is_cancelled(self):
         issued = self.request_challenge()
-
-        response = self.post_cancel(issued["digest"], self.sign(issued))
-
+        response = self.post_cancel(issued)
         self.assertEqual(response.status_code, 200, response.content)
         self.order.refresh_from_db()
         self.assertEqual(self.order.status, TransferOrderStatus.CANCELLED)
-        self.assertIsNotNone(SigningChallenge.objects.get(digest=issued["digest"]).consumed_at)
+        self.assertIsNotNone(SigningChallenge.objects.get(digest=issued["challenge"]["digest"]).consumed_at)
 
-    def test_a_spent_cancel_signature_is_refused_even_when_the_order_is_cancellable_again(self):
+    def test_a_spent_action_recovers_without_cancelling_a_reopened_order(self):
         issued = self.request_challenge()
-        signature = self.sign(issued)
-        self.assertEqual(self.post_cancel(issued["digest"], signature).status_code, 200)
-
+        first = self.post_cancel(issued)
+        self.assertEqual(first.status_code, 200)
         self.reopen()
-        replay = self.post_cancel(issued["digest"], signature)
-
-        self.assertEqual(replay.status_code, 409, replay.content)
+        replay = self.post_cancel(issued)
+        self.assertEqual(replay.status_code, 200, replay.content)
+        self.assertEqual(replay.json()["result"], first.json()["result"])
         self.order.refresh_from_db()
         self.assertEqual(self.order.status, TransferOrderStatus.OPEN)
+        self.assertEqual(len(self.events), 1)
+        self.action_id = uuid4()
+        other = self.request_challenge()
+        stale = {**self.sign(issued), **self.identity()}
+        self.assertEqual(self.execute("cancel", stale).status_code, 400)
+        self.assertEqual(self.post_cancel(other).status_code, 200)
 
     def test_a_signature_refused_because_the_order_moved_is_still_spent(self):
         issued = self.request_challenge()
-        signature = self.sign(issued)
         TransferOrder.objects.filter(pk=self.order.pk).update(status=TransferOrderStatus.MATCHED)
-
-        refused = self.post_cancel(issued["digest"], signature)
-
+        refused = self.post_cancel(issued)
         self.assertEqual(refused.status_code, 400, refused.content)
-        self.assertIsNotNone(SigningChallenge.objects.get(digest=issued["digest"]).consumed_at)
-
+        self.assertEqual(refused.json()["refusal"]["code"], "order_cancellation_failed")
+        self.assertIsNotNone(SigningChallenge.objects.get(digest=issued["challenge"]["digest"]).consumed_at)
         self.reopen()
-        replay = self.post_cancel(issued["digest"], signature)
-
-        self.assertEqual(replay.status_code, 409, replay.content)
+        replay = self.post_cancel(issued)
+        self.assertEqual(replay.status_code, 400, replay.content)
+        self.assertEqual(replay.json()["refusal"], refused.json()["refusal"])
         self.order.refresh_from_db()
         self.assertEqual(self.order.status, TransferOrderStatus.OPEN)
 
     def test_a_challenge_issued_for_another_order_is_refused(self):
-        other = self._order()
-        issued = self.request_challenge(other)
-
-        response = self.post_cancel(issued["digest"], self.sign(issued))
-
-        self.assertEqual(response.status_code, 400, response.content)
+        issued = self.request_challenge()
+        response = self.post_cancel(issued, order=self.tenant.order)
+        self.assertEqual(response.status_code, 409, response.content)
+        self.assertEqual(response.json()["code"], "action_intent_conflict")
         self.order.refresh_from_db()
         self.assertEqual(self.order.status, TransferOrderStatus.OPEN)
+        self.assertEqual(self.post_cancel(issued).status_code, 200)
 
     def test_a_signature_from_another_key_is_refused(self):
         issued = self.request_challenge()
-
-        response = self.post_cancel(issued["digest"], self.sign(issued, STRANGER))
-
+        response = self.post_cancel(issued, OTHER_KEY)
         self.assertEqual(response.status_code, 403, response.content)
-        self.order.refresh_from_db()
-        self.assertEqual(self.order.status, TransferOrderStatus.OPEN)
+        self.assert_pending(self.sign(issued))
+        self.assertEqual(self.post_cancel(issued).status_code, 200)
 
     def test_an_expired_challenge_is_refused_and_says_so(self):
         issued = self.request_challenge()
-        deadline = SigningChallenge.objects.get(digest=issued["digest"]).expires_at
+        deadline = SigningChallenge.objects.get(digest=issued["challenge"]["digest"]).expires_at
         with patch("tokens.models.signing_challenge.timezone.now", return_value=deadline + timedelta(seconds=1)):
-            response = self.post_cancel(issued["digest"], self.sign(issued))
-
+            response = self.post_cancel(issued)
         self.assertEqual(response.status_code, 400, response.content)
         self.assertEqual(response.json()["code"], "challenge_expired")
-        self.order.refresh_from_db()
-        self.assertEqual(self.order.status, TransferOrderStatus.OPEN)
+        self.assert_pending(self.sign(issued))
+        refreshed = self.request_challenge()
+        self.assertEqual(refreshed["actionId"], issued["actionId"])
+        self.assertEqual(self.post_cancel(refreshed).status_code, 200)
 
     def test_a_digest_nobody_issued_is_refused(self):
-        response = self.post_cancel("0x" + "ee" * 32, "0x" + "ab" * 65)
-
+        issued = self.request_challenge()
+        response = self.execute(
+            "cancel", {**self.identity(), "digest": "0x" + "ee" * 32, "signature": "0x" + "ab" * 65}
+        )
         self.assertEqual(response.status_code, 400, response.content)
         self.assertEqual(response.json()["code"], "challenge_unknown")
+        self.assertEqual(self.post_cancel(issued).status_code, 200)
 
     def test_the_issued_challenge_names_the_chain_and_the_verifying_contract(self):
-        issued = self.request_challenge()
-
+        issued = self.request_challenge()["challenge"]
         self.assertEqual(issued["domain"]["chainId"], settings.BLOCKCHAIN_CHAIN_ID)
         self.assertEqual(
-            issued["domain"]["verifyingContract"],
-            to_checksum_address(self.tenant.deployed_token.contract_address),
+            issued["domain"]["verifyingContract"], to_checksum_address(self.tenant.deployed_token.contract_address)
         )
         self.assertEqual(issued["message"]["orderUuid"], str(self.order.uuid))
         self.assertEqual(issued["message"]["wallet"], OWNER.address)
-        self.assertIn("OrderCancel", issued["types"])
+        self.assertEqual(issued["message"]["actionId"], str(self.action_id))
+        self.assertEqual(issued["message"]["ownerAccountUuid"], str(self.tenant.account.pk))
+        self.assertEqual(issued["message"]["walletUuid"], str(self.wallet.pk))
+        self.assertEqual(issued["message"]["tokenUuid"], str(self.order.token_id))
+        self.assertEqual(issued["message"]["protocolVersion"], "1")
+        self.assertIn("OrderCancelV1", issued["types"])
 
-    def test_no_number_on_the_wire_can_be_rounded_by_a_javascript_client(self):
-        issued = self.request_challenge()
+    def test_no_number_in_the_challenge_can_be_rounded_by_a_javascript_client(self):
+        issued = self.request_challenge()["challenge"]
 
         def numbers(value):
             if isinstance(value, bool):
                 return []
-            if isinstance(value, int) or isinstance(value, float):
+            if isinstance(value, (int, float)):
                 return [value]
             if isinstance(value, dict):
                 return [n for item in value.values() for n in numbers(item)]
@@ -165,55 +131,54 @@ class SignedCancelBindingTest(APITestCase):
                 return [n for item in value for n in numbers(item)]
             return []
 
-        oversized = [n for n in numbers(issued) if abs(n) > 2**53 - 1]
-
-        self.assertEqual(oversized, [])
+        self.assertEqual([n for n in numbers(issued) if abs(n) > 2**53 - 1], [])
         self.assertIsInstance(issued["message"]["nonce"], str)
         self.assertIsInstance(issued["message"]["deadline"], str)
 
     def test_a_signature_over_the_wire_form_matches_the_stored_digest(self):
-        issued = self.request_challenge()
+        issued = self.request_challenge()["challenge"]
         stored = SigningChallenge.objects.get(digest=issued["digest"])
-
         self.assertEqual(issued["message"], stored.payload["message"])
-        self.assertEqual(
-            issued["digest"],
-            typed_data_digest(issued["domain"], issued["types"], issued["message"]),
-        )
+        self.assertEqual(issued["digest"], typed_data_digest(issued["domain"], issued["types"], issued["message"]))
 
-    def test_two_challenges_for_one_order_carry_different_nonces(self):
+    def test_two_challenges_for_one_action_carry_different_nonces(self):
         first = self.request_challenge()
         second = self.request_challenge()
-
-        self.assertNotEqual(first["digest"], second["digest"])
-        self.assertNotEqual(first["message"]["nonce"], second["message"]["nonce"])
+        self.assertEqual(first["actionId"], second["actionId"])
+        self.assertNotEqual(first["challenge"]["digest"], second["challenge"]["digest"])
+        self.assertNotEqual(first["challenge"]["message"]["nonce"], second["challenge"]["message"]["nonce"])
 
     def test_a_cancel_challenge_cannot_authorise_another_action(self):
-        challenge = issue_challenge(
-            SigningChallengePurpose.ORDER_CANCEL,
-            OWNER.address,
-            {"orderUuid": str(self.order.uuid)},
-            verifying_contract=self.tenant.deployed_token.contract_address,
-            order=self.order,
-        )
-
+        issued = self.request_challenge()
         with self.assertRaises(ChallengeMismatchException):
             consume_challenge(
-                challenge.digest,
+                issued["challenge"]["digest"],
                 SigningChallengePurpose.ORDER_MODIFY,
                 OWNER.address,
-                "0x" + "ab" * 65,
+                self.sign(issued)["signature"],
+                order=self.order,
+                action=self.journal(),
             )
+        self.assertEqual(self.post_cancel(issued).status_code, 200)
 
     def test_a_challenge_is_spendable_exactly_once_at_the_service_boundary(self):
         issued = self.request_challenge()
-        signature = self.sign(issued)
+        signed = self.sign(issued)
         challenge = consume_challenge(
-            issued["digest"], SigningChallengePurpose.ORDER_CANCEL, OWNER.address, signature, order=self.order
+            signed["digest"],
+            SigningChallengePurpose.ORDER_CANCEL,
+            OWNER.address,
+            signed["signature"],
+            order=self.order,
+            action=self.journal(),
         )
-        challenge.mark_consumed(signature)
-
+        challenge.mark_consumed(signed["signature"])
         with self.assertRaises(ChallengeAlreadyUsedException):
             consume_challenge(
-                issued["digest"], SigningChallengePurpose.ORDER_CANCEL, OWNER.address, signature, order=self.order
+                signed["digest"],
+                SigningChallengePurpose.ORDER_CANCEL,
+                OWNER.address,
+                signed["signature"],
+                order=self.order,
+                action=self.journal(),
             )

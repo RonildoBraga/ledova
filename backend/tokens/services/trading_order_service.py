@@ -2,7 +2,7 @@ import logging
 from decimal import Decimal
 from typing import Optional
 
-from tokens.exceptions import OrderCancellationException, SignatureRequiredException
+from tokens.exceptions import SignatureRequiredException
 from tokens.models import (
     ShareToken,
     SigningChallengePurpose,
@@ -61,23 +61,6 @@ class TradingOrderService:
         return challenge
 
     @staticmethod
-    def verify_order_cancel_signature(
-        order: TransferOrder,
-        digest: Optional[str],
-        signature: Optional[str],
-    ):
-        if not signature or not digest:
-            raise SignatureRequiredException()
-
-        return consume_challenge(
-            digest,
-            SigningChallengePurpose.ORDER_CANCEL,
-            order.wallet_address,
-            signature,
-            order=order,
-        )
-
-    @staticmethod
     def get_order_create_message(
         token, wallet_address, order_type, quantity, min_quantity, price_per_share, wallet, submission
     ) -> dict:
@@ -101,25 +84,6 @@ class TradingOrderService:
 
         return {
             "token_uuid": str(token.uuid),
-            "wallet_address": challenge.wallet_address,
-            **challenge_response(challenge),
-        }
-
-    @staticmethod
-    def get_order_cancel_message(order: TransferOrder) -> dict:
-        if not order.can_cancel:
-            raise OrderCancellationException(f"Order with status '{order.get_status_display()}' cannot be cancelled.")
-
-        challenge = issue_challenge(
-            SigningChallengePurpose.ORDER_CANCEL,
-            order.wallet_address,
-            {"orderUuid": str(order.uuid)},
-            verifying_contract=order.token.contract_address,
-            order=order,
-        )
-
-        return {
-            "order_uuid": str(order.uuid),
             "wallet_address": challenge.wallet_address,
             **challenge_response(challenge),
         }
