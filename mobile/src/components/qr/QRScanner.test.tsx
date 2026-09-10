@@ -8,15 +8,17 @@ const mockCameraMounted = jest.fn();
 const mockCameraUnmounted = jest.fn();
 let mockScan: ((result: { data: string }) => void) | undefined;
 
+jest.mock('expo-camera/build/ExpoCameraManager', () => ({
+  getCameraPermissionsAsync: () => mockGetPermission(),
+  requestCameraPermissionsAsync: () => mockRequestPermission(),
+}));
+
 jest.mock('expo-camera', () => {
-  const { createPermissionHook } = jest.requireActual<typeof import('expo-modules-core')>('expo-modules-core');
+  const { useCameraPermissions } = jest.requireActual<typeof import('expo-camera')>('expo-camera');
   const { useEffect } = jest.requireActual<typeof import('react')>('react');
   const { View } = jest.requireActual<typeof import('react-native')>('react-native');
   return {
-    useCameraPermissions: createPermissionHook({
-      getMethod: () => mockGetPermission(),
-      requestMethod: () => mockRequestPermission(),
-    }),
+    useCameraPermissions,
     CameraView: ({ onBarcodeScanned }: { onBarcodeScanned?: typeof mockScan }) => {
       mockScan = onBarcodeScanned;
       useEffect(() => {
