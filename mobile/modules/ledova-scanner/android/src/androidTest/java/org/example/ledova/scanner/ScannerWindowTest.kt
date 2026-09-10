@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.view.View
 import android.widget.FrameLayout
 import androidx.camera.core.CameraState
+import androidx.camera.core.UseCase
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.concurrent.futures.CallbackToFutureAdapter
 import androidx.lifecycle.Lifecycle
@@ -103,6 +104,13 @@ class ScannerWindowTest {
       assertTrue(scanner.isCurrentScan(generation, scanId))
       assertFalse(scanner.isCurrentScan(generation - 1, scanId))
       assertFalse(scanner.isCurrentScan(generation, scanId - 1))
+    }
+  }
+
+  private fun useCases(view: ScannerCameraView): List<UseCase> {
+    val session = ScannerCameraView::class.java.getDeclaredField("session").apply { isAccessible = true }.get(view)!!
+    return listOf("preview", "analysis").map {
+      session.javaClass.getDeclaredField(it).apply { isAccessible = true }.get(session) as UseCase
     }
   }
 
@@ -244,5 +252,84 @@ class ScannerWindowTest {
     }
     eventually("replacement observer never focused") { allowed }
     start()
+  }
+
+  @Test fun lateProviderFromAnOlderAdmissionCannotReplaceTheCurrentCamera() {
+    val ready = ProcessCameraProvider.getInstance(activity)
+    val provider = ready.get(15, TimeUnit.SECONDS)
+    lateinit var completer: CallbackToFutureAdapter.Completer<ProcessCameraProvider>
+    val delayed = CallbackToFutureAdapter.getFuture<ProcessCameraProvider> { completer = it; "older-admission" }
+    var requests = 0
+    main {
+      observe(ScannerCameraView(activity) { if (requests++ == 0) delayed else ready })
+      activity.container.addView(scanner, FrameLayout.LayoutParams(500, 500))
+    }
+    eventually("scanner window never focused") { allowed }
+    main { scanner.request(true, generation, 1); assertNull(scanner.camera) }
+    start(2)
+    val replacement = scanner.camera!!
+    lateinit var owned: List<UseCase>
+    main { owned = useCases(scanner); assertTrue(owned.all { provider.isBound(it) }) }
+    completer.set(provider)
+    instrumentation.waitForIdleSync()
+    main {
+      assertSame(replacement, scanner.camera)
+      assertTrue(scanner.isCurrentScan(generation, 2))
+      assertTrue(owned.all { provider.isBound(it) })
+    }
+  }
+
+  @Test fun disposedViewLateCompletionAndTeardownCannotCloseAReplacementView() {
+    val provider = ProcessCameraProvider.getInstance(activity).get(15, TimeUnit.SECONDS)
+    lateinit var completer: CallbackToFutureAdapter.Completer<ProcessCameraProvider>
+    val delayed = CallbackToFutureAdapter.getFuture<ProcessCameraProvider> { completer = it; "older-view" }
+    lateinit var retired: ScannerCameraView
+    main {
+      observe(ScannerCameraView(activity) { delayed })
+      retired = scanner
+      activity.container.addView(scanner, FrameLayout.LayoutParams(500, 500))
+    }
+    eventually("scanner window never focused") { allowed }
+    main {
+      scanner.request(true, generation, 1)
+      scanner.dispose()
+      activity.container.removeView(scanner)
+      observe(ScannerCameraView(activity))
+      activity.container.addView(scanner, FrameLayout.LayoutParams(500, 500))
+    }
+    eventually("replacement window never focused") { allowed }
+    start(2)
+    val replacement = scanner.camera!!
+    lateinit var owned: List<UseCase>
+    main { owned = useCases(scanner); assertTrue(owned.all { provider.isBound(it) }) }
+    completer.set(provider)
+    instrumentation.waitForIdleSync()
+    main {
+      retired.dispose()
+      assertNull(retired.camera)
+      assertSame(replacement, scanner.camera)
+      assertTrue(owned.all { provider.isBound(it) })
+      assertTrue(scanner.isCurrentScan(generation, 2))
+    }
+  }
+
+  @Test fun rapidNativeFocusCycleCannotReuseUnchangedJavaScriptAdmission() {
+    attach()
+    start()
+    val previous = scanner.camera!!
+    val admittedGeneration = generation
+    val dialog = cover()
+    main { dialog.dismiss() }
+    eventually("focus did not return") { allowed }
+    main {
+      assertTrue(generation >= admittedGeneration + 2)
+      assertFalse(scanner.isCurrentScan(admittedGeneration, 1))
+      scanner.request(true, admittedGeneration, 1)
+      assertNull(scanner.camera)
+    }
+    eventually("retired camera reopened without fresh admission") {
+      previous.cameraInfo.cameraState.value?.type == CameraState.Type.CLOSED
+    }
+    start(2)
   }
 }

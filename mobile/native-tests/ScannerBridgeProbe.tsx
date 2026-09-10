@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type Ref } from 'react';
-import { Modal, View, Text, Platform, type ViewProps } from 'react-native';
+import { Button, Modal, View, Text, Platform, type ViewProps } from 'react-native';
 import { requireNativeView } from 'expo';
 import { CameraAccessContext, createCameraAccess } from '../src/contexts/cameraAccess';
 import { ScannerPreview } from '../src/components/qr/ScannerPreview';
@@ -44,19 +44,9 @@ function WindowProbe({ onComplete }: Props) {
       .catch((error) => onComplete(false, `method-${failureCategory(error)}`));
   };
   useEffect(() => {
-    const deadline = setTimeout(() => onComplete(false, 'window-timeout'), 25000);
+    const deadline = setTimeout(() => onComplete(false, 'window-timeout'), 60000);
     return () => clearTimeout(deadline);
   }, [onComplete]);
-  useEffect(() => {
-    if (stage === 'opening' && camera.status === 'ready' && methodReady) {
-      setFirstGeneration(camera.preview.generation);
-      setStage('covered');
-    } else if (stage === 'covered' && camera.status === 'inactive') {
-      setStage('returning');
-    } else if (stage === 'returning' && camera.status === 'ready') {
-      onComplete(camera.preview.generation > firstGeneration);
-    }
-  }, [stage, camera.status, camera.preview.generation, firstGeneration, methodReady, onComplete]);
 
   return (
     <Modal visible animationType="none">
@@ -64,6 +54,23 @@ function WindowProbe({ onComplete }: Props) {
         <ScannerPreview {...camera.preview} />
         <Text>{camera.status}</Text>
       </View>
+      {stage === 'opening' && camera.status === 'ready' && methodReady && (
+        <Button
+          title="Cover scanner"
+          accessibilityLabel="scanner-probe-cover"
+          onPress={() => {
+            setFirstGeneration(camera.preview.generation);
+            setStage('covered');
+          }}
+        />
+      )}
+      {stage === 'returning' && camera.status === 'ready' && (
+        <Button
+          title="Complete scanner check"
+          accessibilityLabel="scanner-probe-complete"
+          onPress={() => onComplete(camera.preview.generation > firstGeneration)}
+        />
+      )}
       {InactiveProbe && (
         <InactiveProbe
           ref={native}
@@ -75,8 +82,15 @@ function WindowProbe({ onComplete }: Props) {
         />
       )}
       <Modal visible={stage === 'covered'} transparent animationType="none">
-        <View>
+        <View style={{ paddingTop: 64 }}>
           <Text>Synthetic scanner window cover</Text>
+          {camera.status === 'inactive' && (
+            <Button
+              title="Return to scanner"
+              accessibilityLabel="scanner-probe-return"
+              onPress={() => setStage('returning')}
+            />
+          )}
         </View>
       </Modal>
     </Modal>

@@ -95,7 +95,8 @@ jobs:
             ${{ runner.temp }}/ledova-native-android/*.json
             ${{ runner.temp }}/ledova-native-android/*.txt
             ${{ runner.temp }}/ledova-native-android/*.png
-            ${{ runner.temp }}/ledova-native-android/ordinary-release.apk
+            ${{ runner.temp }}/ledova-native-android/*.xml
+            ${{ runner.temp }}/ledova-native-android/*.apk
             ${{ runner.temp }}/ledova-emulator.log
       - name: Remove the owned emulator
         if: always()

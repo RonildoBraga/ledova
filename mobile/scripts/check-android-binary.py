@@ -9,6 +9,12 @@ found = set()
 libraries = []
 with zipfile.ZipFile(sys.argv[1]) as artifact:
     for name in artifact.namelist():
+        if name.endswith('.dex') or name == 'assets/index.android.bundle':
+            data = artifact.read(name)
+            for marker in (b'org/example/ledova/releaseprobe/ScannerReleaseTest', b'scanner-probe-cover'):
+                if marker in data:
+                    raise SystemExit(f'An ordinary Release artifact contains scanner test code: {name}')
+    for name in artifact.namelist():
         if not name.startswith('lib/') or not name.endswith('.so'):
             continue
         architecture = name.split('/')[1]

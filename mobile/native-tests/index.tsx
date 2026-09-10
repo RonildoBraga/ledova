@@ -292,7 +292,7 @@ function NativeProbe() {
       .catch(() => setStatus('NATIVE_PROBE_REPORT_FAILED'));
   }, [scannerCheck]);
   return (
-    <View>
+    <View style={{ paddingTop: 64 }}>
       {Platform.OS === 'android' && !scannerCheck && <ScannerBridgeProbe onComplete={scannerComplete} />}
       <Text testID="native-probe-status">{status}</Text>
     </View>

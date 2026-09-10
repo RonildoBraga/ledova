@@ -182,15 +182,24 @@ even when the window-change notification has not reached JavaScript yet.
 `ScannerWindow.android.test.tsx` exercises each placement through the native
 event boundary. The Android instrumentation suite exercises real Activity and
 Dialog windows, CameraX open/closed state, parent visibility and detachment,
-fully clipped previews, backgrounding, delayed provider completion and real
+fully clipped previews, backgrounding, delayed provider completion, replacement
+sessions, focus loss/regain before JavaScript admission changes, and real
 decoding of a synthetic QR bitmap. It runs
 inside the Android native CI probe and retains `scanner-window-tests.log`.
 The Release probe also drives nested React Native modal windows through the
 actual Expo bridge with camera permission granted by the emulator runner. That
-check establishes event/admission wiring, not OS permission-prompt behavior.
+separate instrumentation APK waits for bound preview/analysis use cases and
+CameraX OPEN before covering the window. It checks both use cases are unbound,
+CameraX is CLOSED and the selected camera becomes available before returning.
+Refocus must open fresh use cases on the same view, and completion must release
+them again. The ordinary Release APK is checked for absence of the test class
+and probe controls; the test uses reflection rather than product test hooks.
+This establishes Release adapter behavior, not OS permission-prompt behavior.
 These emulator controls do not replace physical-device verification of sensor
-shutdown, OS permission dialogs, settings or OEM behavior. The test APK is a
-separate test application and must not be distributed.
+shutdown, OS permission dialogs, settings or OEM behavior. The runner retains
+APK hashes, instrumentation logs, screenshots and window diagnostics, including
+failed runs, and removes both owned instrumentation packages during cleanup.
+The test APKs and synthetic probe apps must not be distributed.
 
 To run only these native controls on an owned emulator after prebuild:
 
