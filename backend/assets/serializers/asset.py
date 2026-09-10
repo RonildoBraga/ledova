@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from assets.choices import VALUE_SOURCE_CHOICES
@@ -30,11 +31,11 @@ class AssetSerializer(serializers.ModelSerializer):
         source="valuation_price", max_digits=40, decimal_places=18, allow_null=True, read_only=True
     )
 
-    def get_chain(self, obj):
+    def get_chain(self, obj) -> str | None:
         dep = self._single_active_deployment(obj)
         return dep.chain if dep else None
 
-    def get_contract_address(self, obj):
+    def get_contract_address(self, obj) -> str | None:
         dep = self._single_active_deployment(obj)
         return dep.contract_address if dep else None
 
@@ -43,7 +44,7 @@ class AssetSerializer(serializers.ModelSerializer):
         deployments = [row for row in obj.chain_deployments.all() if row.is_active]
         return deployments[0] if len(deployments) == 1 else None
 
-    def get_asset_type_display(self, obj):
+    def get_asset_type_display(self, obj) -> str:
         type_mapping = {
             "native_crypto": "Crypto",
             "stablecoin": "Stablecoin",
@@ -61,15 +62,16 @@ class AssetSerializer(serializers.ModelSerializer):
             obj._yield_token_cache = YieldToken.objects.filter(symbol=obj.symbol, is_active=True).first()
         return obj._yield_token_cache
 
-    def get_nav_per_token(self, obj):
+    def get_nav_per_token(self, obj) -> str | None:
         yt = self._get_yield_token(obj)
         return str(yt.nav_per_token) if yt and yt.nav_per_token else None
 
+    @extend_schema_field(serializers.DateTimeField(allow_null=True))
     def get_last_nav_update(self, obj):
         yt = self._get_yield_token(obj)
         return yt.last_nav_update.isoformat() if yt and yt.last_nav_update else None
 
-    def get_is_yield_token(self, obj):
+    def get_is_yield_token(self, obj) -> bool:
         return self._get_yield_token(obj) is not None
 
     class Meta:

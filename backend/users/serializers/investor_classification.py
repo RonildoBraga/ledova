@@ -1,5 +1,6 @@
 from django.urls import reverse
 from django.utils import timezone
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from companies.models import Company
@@ -82,7 +83,7 @@ class InvestorClassificationSerializer(serializers.ModelSerializer):
             fields["company"].queryset = Company.objects.active()
         return fields
 
-    def get_evidence_url(self, obj):
+    def get_evidence_url(self, obj) -> str | None:
         if not obj.evidence_retained:
             return None
         url = reverse("investor-classifications-evidence", args=[obj.uuid])
@@ -142,9 +143,11 @@ class InvestorEligibilitySerializer(serializers.Serializer):
     account = serializers.SerializerMethodField()
     classification = serializers.SerializerMethodField()
 
+    @extend_schema_field(serializers.UUIDField(allow_null=True))
     def get_account(self, obj):
         return str(obj.account.uuid) if obj.account else None
 
+    @extend_schema_field(InvestorClassificationSerializer(allow_null=True))
     def get_classification(self, obj):
         if obj.classification is None:
             return None

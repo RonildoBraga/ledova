@@ -50,16 +50,16 @@ class ShareTokenListSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
-    def get_last_price(self, obj):
+    def get_last_price(self, obj) -> str | None:
         if obj.last_trade_share_amount is None:
             return None
         payment_full_units = Decimal(obj.last_trade_payment_amount) / (10**obj.last_trade_decimals)
         return str(payment_full_units / Decimal(obj.last_trade_share_amount))
 
-    def get_best_bid(self, obj):
+    def get_best_bid(self, obj) -> str | None:
         return None if obj.best_bid is None else str(obj.best_bid.quantize(PRICE_PLACES))
 
-    def get_best_ask(self, obj):
+    def get_best_ask(self, obj) -> str | None:
         return None if obj.best_ask is None else str(obj.best_ask.quantize(PRICE_PLACES))
 
 

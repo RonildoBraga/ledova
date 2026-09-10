@@ -1,4 +1,5 @@
 from django.urls import reverse
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from documents.models import Document, DocumentExtraction, ExtractionStatus
@@ -58,6 +59,7 @@ class DocumentSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
+    @extend_schema_field(DocumentExtractionSerializer(allow_null=True))
     def get_latest_extraction(self, obj: Document):
         if not obj.content_available:
             return None
@@ -66,7 +68,7 @@ class DocumentSerializer(serializers.ModelSerializer):
             return None
         return DocumentExtractionSerializer(latest).data
 
-    def get_file_url(self, obj: Document):
+    def get_file_url(self, obj: Document) -> str | None:
         if not obj.content_available:
             return None
         url = reverse("documents:documents-file", kwargs={"uuid": obj.uuid})
