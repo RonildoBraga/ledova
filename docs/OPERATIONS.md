@@ -307,6 +307,21 @@ to create another order. A separate deliberate order still undergoes the ordinar
 creation and matching checks. This protocol adds no aggregate balance policy,
 outgoing signer activation or settlement finality guarantee.
 
+Share-token deployment records the computed transaction hash and its token
+association in one independent database transaction before broadcasting. An
+enclosing transaction, disabled autocommit, failed persistence or competing
+binding refuses that broadcast. The transaction row is marked submitted at this
+boundary; that label and the hash identify the prepared transaction and do not
+prove that the provider accepted it.
+
+A lost send acknowledgement leaves the token Deploying with its original hash.
+Retry and reconciliation use the recorded transaction; an unavailable receipt
+does not authorize another create. Failures before the persistence callback can
+return an unbound token to Draft. Existing confirmed-revert and factory-adoption
+paths remain. Do not clear a hash to retry. This boundary does not persist signed
+bytes, freeze all deployment terms or historical identities, activate the
+outgoing signer foundation, or establish all-writer cutover or finality.
+
 ### Data retention
 
 | Variable | Default | Required |
