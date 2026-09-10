@@ -94,37 +94,67 @@ export function QRScanner({ visible, onClose, onScan, title = 'Scan QR Code', su
   }));
   const [permission, requestPermission] = useCameraPermissions();
   const [hasScanned, setHasScanned] = useState(false);
+  const [scanGeneration, setScanGeneration] = useState(0);
+  const [permissionRequestState, setPermissionRequestState] = useState<'idle' | 'requesting' | 'failed'>('idle');
 
   const scanLockRef = useRef(false);
+  const scanGenerationRef = useRef(0);
+  const permissionRequestInFlightRef = useRef(false);
+  const permissionAttemptedRef = useRef(false);
 
   useEffect(() => {
-    if (!permission) {
-      requestPermission();
+    if (!visible) {
+      permissionAttemptedRef.current = false;
+      return;
     }
-  }, [permission, requestPermission]);
+    if (permissionRequestInFlightRef.current) {
+      permissionAttemptedRef.current = true;
+      return;
+    }
+    if (!permission || permission.granted || !permission.canAskAgain || permissionAttemptedRef.current) return;
+
+    permissionAttemptedRef.current = true;
+    permissionRequestInFlightRef.current = true;
+    setPermissionRequestState('requesting');
+    void requestPermission()
+      .then(
+        () => setPermissionRequestState('idle'),
+        () => setPermissionRequestState('failed'),
+      )
+      .finally(() => {
+        permissionRequestInFlightRef.current = false;
+      });
+  }, [visible, permission, requestPermission]);
 
   useEffect(() => {
     if (visible) {
+      scanGenerationRef.current += 1;
+      setScanGeneration(scanGenerationRef.current);
       setHasScanned(false);
       scanLockRef.current = false;
     }
+    return () => {
+      scanLockRef.current = true;
+      scanGenerationRef.current += 1;
+    };
   }, [visible]);
 
   const handleBarCodeScanned = useCallback(
     ({ data }: { data: string }) => {
-      if (scanLockRef.current) return;
+      if (!visible || scanLockRef.current || scanGeneration !== scanGenerationRef.current) return;
       scanLockRef.current = true;
       setHasScanned(true);
       onScan(data);
     },
-    [onScan],
+    [visible, onScan, scanGeneration],
   );
 
   const handleClose = useCallback(() => {
-    setHasScanned(false);
-    scanLockRef.current = false;
+    scanLockRef.current = true;
     onClose();
   }, [onClose]);
+
+  if (!visible) return null;
 
   return (
     <CustomModal visible={visible} onClose={handleClose} showFooter={true} cancelLabel="Cancel">
@@ -135,9 +165,13 @@ export function QRScanner({ visible, onClose, onScan, title = 'Scan QR Code', su
       </View>
 
       <View style={styles.cameraContainer}>
-        {!permission ? (
+        {!permission || permissionRequestState === 'requesting' ? (
           <View style={styles.messageContainer}>
             <Text style={styles.message}>Requesting camera permission...</Text>
+          </View>
+        ) : permissionRequestState === 'failed' ? (
+          <View style={styles.messageContainer}>
+            <Text style={styles.message}>Unable to request camera permission. Close the scanner and try again.</Text>
           </View>
         ) : !permission.granted ? (
           <View style={styles.messageContainer}>
