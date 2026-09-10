@@ -1,7 +1,15 @@
 export type OrderType = 'buy' | 'sell';
 
 export type OrderStatus =
-  'open' | 'partially_filled' | 'matched' | 'pending_signature' | 'completed' | 'cancelled' | 'expired';
+  | 'open'
+  | 'partially_filled'
+  | 'matched'
+  | 'pending_signature'
+  | 'executing'
+  | 'completed'
+  | 'cancelled'
+  | 'expired'
+  | 'failed';
 
 export type SwapStatus =
   'created' | 'seller_signed' | 'buyer_signed' | 'ready' | 'executing' | 'completed' | 'failed' | 'expired';

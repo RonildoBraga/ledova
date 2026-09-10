@@ -507,3 +507,27 @@ it('retires the real QR scan callback after closing and executes the next action
   expect(JSON.parse(executes()[0]!.data).action_id).toBe(otherActionId);
   expect(await orderActionStore.list(owner)).toHaveLength(1);
 });
+
+it.each(['executing', 'failed'])(
+  'recovers original modification and separately displays the later %s order',
+  async (status) => {
+    render(<TradingPage />, { wrapper });
+    await begin();
+    handler = async (config) => {
+      const reply = await ordinary(config);
+      if (config.method === 'post') throw new Error('Synthetic lost committed response');
+      reply.data.order.status = status;
+      return reply;
+    };
+    sign();
+    await waitFor(() => expect(screen.getByText('Action status unconfirmed')).toBeTruthy());
+    const count = requests.length;
+    fireEvent.click(screen.getByText('Check change status'));
+    await waitFor(() => expect(screen.getByText('Original action recovered')).toBeTruthy());
+    expect(screen.getByText('price per share: 12.50 → 14.00')).toBeTruthy();
+    expect(screen.getByText(`Current order status: ${status}`)).toBeTruthy();
+    expect(requests.slice(count).map((request) => request.url)).toEqual([endpoints.ACTION(actionId)]);
+    expect(executes()).toHaveLength(1);
+    expect(await orderActionStore.list(owner)).toHaveLength(0);
+  },
+);

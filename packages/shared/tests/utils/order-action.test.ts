@@ -448,3 +448,26 @@ test('recovery compares a recorded outcome by values and rejects a changed origi
   expect(f.action.getSnapshot().phase).toBe('error');
   expect(f.action.getSnapshot().error).toContain('changed its recorded outcome');
 });
+
+test.each(['executing', 'failed'])('recovers an original result when the current order is later %s', async (status) => {
+  const f = setup();
+  await prepare(f);
+  f.handler(async () => {
+    throw new Error('Synthetic lost committed response');
+  });
+  await f.action.submitSignature('synthetic-signature');
+  expect(f.action.getSnapshot().phase).toBe('error');
+  expect(f.values.size).toBe(1);
+  const original = actionSnapshot('modify', 'applied');
+  Object.assign(original.order, { status });
+  f.handler(async (config) => response(config, original));
+  const count = f.requests.length;
+  await f.action.recover();
+  expect(f.action.getSnapshot().phase).toBe('applied');
+  expect(f.action.getSnapshot().snapshot?.result).toEqual(original.result);
+  expect(f.action.getSnapshot().snapshot?.order.status).toBe(status);
+  expect(f.requests.slice(count).map((request) => [request.method, request.url])).toEqual([
+    ['get', endpoints.ACTION(actionId)],
+  ]);
+  expect(f.values.size).toBe(0);
+});

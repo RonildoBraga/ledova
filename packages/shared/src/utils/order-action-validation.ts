@@ -9,7 +9,17 @@ import type { SavedOrderAction } from './order-action-storage';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ADDRESS = /^0x[0-9a-f]{40}$/i;
-const STATUSES = ['open', 'partially_filled', 'matched', 'pending_signature', 'completed', 'cancelled', 'expired'];
+const STATUSES = [
+  'open',
+  'partially_filled',
+  'matched',
+  'pending_signature',
+  'executing',
+  'completed',
+  'cancelled',
+  'expired',
+  'failed',
+];
 
 function integer(value: unknown, max = 9223372036854775807n): value is string {
   return typeof value === 'string' && /^(0|[1-9]\d*)$/.test(value) && value.length <= 78 && BigInt(value) <= max;
