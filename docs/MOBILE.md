@@ -87,15 +87,17 @@ existing camera permission before requesting it. Hidden scanners never request
 permission or mount a preview. Opening an unpermitted scanner makes one request
 when the platform allows asking again. Denial or a native request failure does
 not automatically retry; a later opening can try again. Closing and reopening
-while a request is outstanding shares that attempt. Closing removes the preview
-and ignores scan callbacks while closed.
+while a request is outstanding shares that attempt. Closing or unmounting the
+scanner removes the preview and invalidates its scan callbacks, including events
+retained from an earlier opening.
 
 The component tests use Expo's installed permission hook with controlled native
 responses and a camera lifecycle stand-in. They establish JavaScript request and
 mount timing, not OS prompt presentation or physical camera shutdown. Wallet
 import's animated scanner and wallet verification's scan step have separate
-permission handling. Physical permission denial/revocation and camera lifecycle
-checks remain under #13.
+permission handling. Refreshing permission after an external settings change,
+handling a failed initial permission getter, and physical permission
+denial/revocation and camera lifecycle checks remain under #13.
 
 ## Native dependencies and randomness
 

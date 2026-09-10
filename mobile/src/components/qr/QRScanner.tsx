@@ -94,9 +94,11 @@ export function QRScanner({ visible, onClose, onScan, title = 'Scan QR Code', su
   }));
   const [permission, requestPermission] = useCameraPermissions();
   const [hasScanned, setHasScanned] = useState(false);
+  const [scanGeneration, setScanGeneration] = useState(0);
   const [permissionRequestState, setPermissionRequestState] = useState<'idle' | 'requesting' | 'failed'>('idle');
 
   const scanLockRef = useRef(false);
+  const scanGenerationRef = useRef(0);
   const permissionRequestInFlightRef = useRef(false);
   const permissionAttemptedRef = useRef(false);
 
@@ -126,21 +128,25 @@ export function QRScanner({ visible, onClose, onScan, title = 'Scan QR Code', su
 
   useEffect(() => {
     if (visible) {
+      scanGenerationRef.current += 1;
+      setScanGeneration(scanGenerationRef.current);
       setHasScanned(false);
       scanLockRef.current = false;
-    } else {
-      scanLockRef.current = true;
     }
+    return () => {
+      scanLockRef.current = true;
+      scanGenerationRef.current += 1;
+    };
   }, [visible]);
 
   const handleBarCodeScanned = useCallback(
     ({ data }: { data: string }) => {
-      if (!visible || scanLockRef.current) return;
+      if (!visible || scanLockRef.current || scanGeneration !== scanGenerationRef.current) return;
       scanLockRef.current = true;
       setHasScanned(true);
       onScan(data);
     },
-    [visible, onScan],
+    [visible, onScan, scanGeneration],
   );
 
   const handleClose = useCallback(() => {

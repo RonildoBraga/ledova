@@ -244,3 +244,32 @@ it('mounts an already permitted preview only while open and resets scanning on r
   await act(() => mockScan!({ data: 'second-opening' }));
   expect(onScan.mock.calls).toEqual([['first-opening'], ['second-opening']]);
 });
+
+it('ignores a retained scan callback after the scanner owner unmounts', async () => {
+  mockGetPermission.mockResolvedValue(granted);
+  const onScan = jest.fn();
+  const view = await render(scanner(true, onScan));
+  expect(mockCameraMounted).toHaveBeenCalledTimes(1);
+  expect(mockScan).toEqual(expect.any(Function));
+  const scan = mockScan!;
+  await view.unmount();
+  expect(mockCameraUnmounted).toHaveBeenCalledTimes(1);
+  await act(() => scan({ data: 'event-after-owner-unmount' }));
+  expect(onScan).not.toHaveBeenCalled();
+});
+
+it('ignores an earlier opening callback without consuming the current scan', async () => {
+  mockGetPermission.mockResolvedValue(granted);
+  const onScan = jest.fn();
+  const view = await render(scanner(true, onScan));
+  expect(mockScan).toEqual(expect.any(Function));
+  const earlierScan = mockScan!;
+  await view.rerender(scanner(false, onScan));
+  await view.rerender(scanner(true, onScan));
+  expect(mockScan).toEqual(expect.any(Function));
+  const currentScan = mockScan!;
+  await act(() => earlierScan({ data: 'event-from-earlier-opening' }));
+  expect(onScan).not.toHaveBeenCalled();
+  await act(() => currentScan({ data: 'current-opening-control' }));
+  expect(onScan.mock.calls).toEqual([['current-opening-control']]);
+});
