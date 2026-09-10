@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useLayoutEffect } from 'react';
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { AppState, type AppStateStatus } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -11,6 +11,8 @@ const mockRequestPermission = jest.fn<Promise<PermissionResponse>, []>();
 const mockRequestChallenge = jest.fn();
 const mockVerifySignature = jest.fn();
 const mockGoBack = jest.fn();
+const mockGetAccessToken = jest.fn<Promise<string | null>, []>();
+const mockLockPreference = jest.fn<Promise<string | null>, []>();
 const mockNavigation = { goBack: mockGoBack };
 let mockScan: ((result: { data: string }) => void) | undefined;
 let mockFocused = true;
@@ -51,8 +53,31 @@ jest.mock('../../../hooks/useUserPreferences', () => ({
 }));
 jest.mock('../../../services/apiClient', () => ({ apiClient: {} }));
 jest.mock('../../../services/secureKeyStorage', () => ({ getSeedPhrase: async () => null }));
+jest.mock('../../../services/tokenStorage', () => ({
+  getAccessToken: () => mockGetAccessToken(),
+  getBiometricLoginState: async () => ({ enabled: false, ready: false }),
+}));
+jest.mock('expo-secure-store', () => ({ getItemAsync: () => mockLockPreference() }));
+jest.mock('expo-local-authentication', () => ({
+  AuthenticationType: { FINGERPRINT: 1, FACIAL_RECOGNITION: 2 },
+  hasHardwareAsync: async () => true,
+  isEnrolledAsync: async () => true,
+  supportedAuthenticationTypesAsync: async () => [1],
+  authenticateAsync: async () => ({ success: true }),
+}));
 
 import { WalletVerificationScreen } from './WalletVerificationScreen';
+import { AppLockProvider, useAppLock } from '../../../contexts/AppLockContext';
+
+let currentLock: ReturnType<typeof useAppLock>;
+
+function LockControl() {
+  const lock = useAppLock();
+  useLayoutEffect(() => {
+    currentLock = lock;
+  }, [lock]);
+  return null;
+}
 
 const granted: PermissionResponse = {
   status: 'granted' as PermissionResponse['status'],
@@ -88,6 +113,8 @@ beforeEach(() => {
   mockRequestChallenge.mockReset().mockResolvedValue({ data: { challenge: 'synthetic-verification-challenge' } });
   mockVerifySignature.mockReset().mockResolvedValue({ data: {} });
   mockGetPermission.mockReset().mockResolvedValue(granted);
+  mockGetAccessToken.mockReset().mockResolvedValue(null);
+  mockLockPreference.mockReset().mockResolvedValue('false');
   mockRequestPermission.mockReset().mockResolvedValue(granted);
   mockFocused = true;
   mockScan = undefined;
@@ -105,7 +132,12 @@ afterEach(async () => {
 });
 
 function wrapper({ children }: { children: React.ReactNode }) {
-  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  return (
+    <AppLockProvider>
+      <LockControl />
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    </AppLockProvider>
+  );
 }
 
 async function openScanner() {
@@ -243,4 +275,33 @@ it('does not involve the camera when verifying a software wallet', async () => {
   await waitFor(() => expect(mockRequestChallenge).toHaveBeenCalledTimes(1));
   expect(mockRequestPermission).not.toHaveBeenCalled();
   expect(view.queryByTestId('camera-preview')).toBeNull();
+});
+
+it('keeps the verification step and challenge through app lock without submitting paused frames', async () => {
+  mockLockPreference.mockResolvedValue('true');
+  mockGetAccessToken.mockResolvedValue('synthetic-session');
+  const now = jest.spyOn(Date, 'now').mockReturnValue(10000);
+  const view = await openScanner();
+  const retained = mockScan!;
+  await changeAppState('background');
+  now.mockReturnValue(13001);
+  await changeAppState('active');
+  expect(currentLock.isLocked).toBe(true);
+  expect(view.queryByTestId('camera-preview')).toBeNull();
+  await act(() => retained({ data: signatureQR }));
+  expect(mockVerifySignature).not.toHaveBeenCalled();
+  await act(async () => {
+    expect(await currentLock.unlock()).toBe(true);
+  });
+  expect(view.getByTestId('camera-preview')).toBeTruthy();
+  expect(mockRequestChallenge).toHaveBeenCalledTimes(1);
+  expect(mockRequestPermission).not.toHaveBeenCalled();
+  await act(() => {
+    retained({ data: signatureQR });
+    mockScan!({ data: signatureQR });
+  });
+  await waitFor(() => expect(view.getByText('Verification Successful!')).toBeTruthy());
+  expect(mockVerifySignature.mock.calls).toEqual([
+    [{}, 'synthetic-wallet', { signature: '0x' + signatureBytes.toString('hex') }, 'synthetic-account'],
+  ]);
 });

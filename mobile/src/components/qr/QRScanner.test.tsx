@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render as renderComponent } from '@testing-library/react-native';
 import type { PermissionResponse } from 'expo-camera';
 import { AppState, type AppStateStatus } from 'react-native';
 
@@ -57,6 +57,18 @@ jest.mock('../modal', () => {
 });
 
 import { QRScanner } from './QRScanner';
+import { CameraAccessContext, createCameraAccess } from '../../contexts/cameraAccess';
+
+const cameraAccess = createCameraAccess();
+cameraAccess.setAllowed(true);
+
+function render(ui: React.ReactElement) {
+  return renderComponent(ui, {
+    wrapper: ({ children }) => (
+      <CameraAccessContext.Provider value={cameraAccess}>{children}</CameraAccessContext.Provider>
+    ),
+  });
+}
 
 const undetermined: PermissionResponse = {
   status: 'undetermined' as PermissionResponse['status'],

@@ -102,12 +102,24 @@ clears them on a new opening. Wallet verification requests permission at the sca
 step, after the challenge; software-wallet verification does not use the camera.
 An unsupported signature QR displays guidance and leaves scanning available.
 
+The app-lock provider also pauses camera admission during initialization,
+backgrounding, a pending foreground lock decision and the locked overlay. Its
+synchronous admission snapshot blocks permission work and retained callbacks
+before React removes the preview, regardless of provider/scanner listener order.
+A newer background transition or an authorized unlock/disable retires an older
+lock decision. Unlock refreshes permission without requesting it again; an opening
+first made while locked is passive until a later explicit close/reopen. A lock
+pause preserves completed scans, accumulated UR parts and the verification
+challenge/step. The optional lock setting, existing session criterion, absence
+threshold and biometric/passcode fallback remain unchanged.
+
 Component tests exercise the installed Expo permission methods at a controlled
 native boundary, actual UR encoding/decoding and verification step/mutation
-hooks. They establish JavaScript request, callback and mount timing. OS prompt
-presentation, physical camera shutdown, device settings/OEM behavior and scanning
-behind the separate app-lock overlay are not established by these controls and
-remain under #13.
+hooks, plus the actual app-lock provider with delayed session/authentication
+responses. They establish JavaScript request, callback and mount timing. OS prompt
+presentation, physical camera shutdown, device settings/OEM behavior, Android
+Activity versus modal-window focus and global lock-overlay/input stacking are
+not established by these controls and remain under #13.
 
 ## Document upload copies
 
