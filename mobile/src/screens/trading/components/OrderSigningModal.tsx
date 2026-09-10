@@ -14,6 +14,7 @@ export function OrderSigningModal({ visible, submission, tokens = [], wallet = n
   if (!visible || !submission) return null;
   return (
     <CreateOrderSigningModal
+      key={submission.record.submissionId}
       submission={submission}
       tokens={tokens}
       wallet={wallet}

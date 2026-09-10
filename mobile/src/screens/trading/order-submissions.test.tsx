@@ -4,10 +4,18 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import axios, { AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
-import { ApiClientProvider, AUTH_QUERY_KEY, USER_PREFERENCES_QUERY_KEY, TRADING_ENDPOINTS } from '@ledova/shared';
+import {
+  ApiClientProvider,
+  AUTH_QUERY_KEY,
+  USER_PREFERENCES_QUERY_KEY,
+  TRADING_ENDPOINTS,
+  OrderSubmission,
+  createOrderSubmissionStore,
+} from '@ledova/shared';
 import { EthSignRequest, ETHSignature } from '@keystonehq/bc-ur-registry-eth';
 import { QRDisplay, QRScanner } from '../../components/qr';
 import { TradingScreen } from './index';
+import { OrderSigningModal } from './components/OrderSigningModal';
 import { CustomModal } from '../../components/modal';
 import { getSeedPhrase } from '../../services/secureKeyStorage';
 import { signEthereumTypedData } from '../../utils/softwareWallet/localSigner';
@@ -16,6 +24,8 @@ import { invalidateSessionScope } from '../../services/sessionScope';
 import {
   accountUuid,
   deferred,
+  draft,
+  memoryStorage,
   largeMinQuantity,
   largeQuantity,
   largeSnapshotJson,
@@ -410,4 +420,55 @@ it('displays and retries exact recovered quantities above the safe integer range
     expect(call[4]).toMatchObject({ quantity: largeQuantity, minQuantity: largeMinQuantity });
   expect(Crypto.randomUUID).toHaveBeenCalledTimes(1);
   expect(await orderSubmissionStore.list(owner)).toHaveLength(0);
+});
+
+async function readySubmissionPair() {
+  const ids = [submissionId, secondId];
+  const store = createOrderSubmissionStore(memoryStorage().storage, () => ids.shift()!);
+  handler = async (config) => {
+    const id = JSON.parse(config.data).submission_id;
+    const created = config.url === endpoints.CREATE;
+    const data = snapshot(id, created ? 'created' : 'pending');
+    if (data.order)
+      data.order.uuid =
+        id === submissionId ? '60000000-0000-4000-8000-000000000001' : '60000000-0000-4000-8000-000000000002';
+    return response(config, data, created ? 201 : 200);
+  };
+  const prepare = async () => {
+    const record = await store.create(owner, wallet.uuid);
+    const submission = new OrderSubmission(record, {
+      apiClient: api,
+      store,
+      isCurrent: () => true,
+      onSettled: () => {},
+      onRecordsChanged: () => {},
+    });
+    await submission.start(draft);
+    expect(submission.getSnapshot().phase).toBe('ready');
+    return submission;
+  };
+  return { first: await prepare(), second: await prepare(), store };
+}
+
+it('delivers each S1 success once when the open wrapper switches directly between saved submissions', async () => {
+  const { first, second, store } = await readySubmissionPair();
+  const onClose = jest.fn();
+  const onSuccess = jest.fn();
+  const props = { visible: true, wallet, onClose, onSuccess };
+  const view = await render(<OrderSigningModal {...props} submission={first} />);
+  await fireEvent.press(view.getByText('Sign with biometric'));
+  await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1));
+  first.close();
+  await view.rerender(<OrderSigningModal {...props} submission={second} />);
+  await fireEvent.press(view.getByText('Sign with biometric'));
+  await waitFor(() => expect(view.getByText('Order created')).toBeTruthy());
+  expect(creates().map((request) => JSON.parse(request.data).submission_id)).toEqual([submissionId, secondId]);
+  expect(onSuccess.mock.calls.map(([order]) => order.uuid)).toEqual([
+    '60000000-0000-4000-8000-000000000001',
+    '60000000-0000-4000-8000-000000000002',
+  ]);
+  await view.rerender(<OrderSigningModal {...props} submission={second} />);
+  expect(onSuccess).toHaveBeenCalledTimes(2);
+  expect(onClose).not.toHaveBeenCalled();
+  expect(await store.list(owner)).toHaveLength(0);
 });

@@ -14,6 +14,7 @@ export function OrderSigningFlow({ isOpen, submission, tokens = [], wallet = nul
   if (!isOpen || !submission) return null;
   return (
     <CreateOrderSigningFlow
+      key={submission.record.submissionId}
       submission={submission}
       tokens={tokens}
       wallet={wallet}
