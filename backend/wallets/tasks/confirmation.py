@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Mapping
 from datetime import datetime, timedelta
 from datetime import timezone as datetime_timezone
 from decimal import Decimal
@@ -9,6 +10,7 @@ from django.utils import timezone
 from procrastinate import RetryStrategy
 
 from integrations.blockchain import get_blockchain_client
+from integrations.blockchain.receipts import transaction_hash_matches
 from ledova_backend.procrastinate_app import app
 from shared.constants import BLOCKCHAIN_BITCOIN, EVM_BLOCKCHAINS
 from shared.db import acting_for
@@ -157,6 +159,10 @@ def _confirm_pending_transaction(tx_hash: str, wallet_uuid: str) -> Dict[str, An
     if receipt is None:
         logger.info(f"Transaction not yet confirmed: {tx_hash}")
         raise RuntimeError(f"receipt not yet available for {tx_hash}")
+
+    hash_field = "tx_hash" if wallet.chain.lower() == BLOCKCHAIN_BITCOIN else "transactionHash"
+    if not isinstance(receipt, Mapping) or not transaction_hash_matches(receipt.get(hash_field), tx_hash):
+        raise RuntimeError(f"receipt identity not yet available for {tx_hash}")
 
     reader = get_receipt_reader(wallet.chain)
     succeeded = reader.succeeded(receipt)
