@@ -18,6 +18,7 @@ from tokens.services.signing_challenge import (
     issue_challenge,
 )
 from tokens.tests.order_submission_fixtures import pending_submission
+from tokens.tests.signing_challenge_fixtures import action_fields, pending_action
 
 SIGNER = Account.from_key("0x" + "5c" * 32)
 CONTRACT = "0x" + "7b" * 20
@@ -38,7 +39,7 @@ class EverySignablePayloadSurvivesJsonParseTest(TestCase):
         self.tenant = make_tenant("signable-rule")
 
     def test_every_challenge_purpose_survives_a_value_above_the_safe_range(self):
-        for purpose, types in CHALLENGE_TYPES.items():
+        for nonce, (purpose, types) in enumerate(CHALLENGE_TYPES.items(), start=OVER_THE_LIMIT):
             with self.subTest(purpose=purpose):
                 struct = next(iter(types.values()))
                 caller_fields = {
@@ -47,6 +48,7 @@ class EverySignablePayloadSurvivesJsonParseTest(TestCase):
                     if field["name"] not in ("wallet", "nonce", "deadline")
                 }
                 submission = None
+                action = None
                 if purpose == SigningChallengePurpose.ORDER_CREATE:
                     submission = pending_submission(
                         self.tenant,
@@ -62,15 +64,33 @@ class EverySignablePayloadSurvivesJsonParseTest(TestCase):
                         orderType=submission.order_type,
                         pricePerShare=str(submission.price_per_share),
                     )
-                challenge = issue_challenge(
-                    purpose,
-                    self.tenant.wallet.address,
-                    caller_fields,
-                    verifying_contract=CONTRACT,
-                    wallet=self.tenant.wallet,
-                    submission=submission,
-                )
+                else:
+                    replacements = (
+                        {"new_quantity": OVER_THE_LIMIT, "new_min_quantity": OVER_THE_LIMIT}
+                        if purpose == SigningChallengePurpose.ORDER_MODIFY
+                        else {}
+                    )
+                    action = pending_action(
+                        self.tenant,
+                        purpose.removeprefix("order_"),
+                        verifying_contract=CONTRACT,
+                        **replacements,
+                    )
+                    caller_fields.update(action_fields(action))
+                with patch("tokens.services.signing_challenge.secrets.randbits", return_value=nonce):
+                    challenge = issue_challenge(
+                        purpose,
+                        self.tenant.wallet.address,
+                        caller_fields,
+                        verifying_contract=CONTRACT,
+                        wallet=self.tenant.wallet,
+                        order=action.order if action else None,
+                        submission=submission,
+                        action=action,
+                    )
 
+                self.assertEqual(challenge.payload["message"]["nonce"], str(nonce))
+                self.assertGreater(challenge.nonce, JAVASCRIPT_SAFE_INTEGER)
                 assert_signable(self, challenge_response(challenge))
 
     @override_settings(ATOMIC_SWAP_ADDRESS=CONTRACT)

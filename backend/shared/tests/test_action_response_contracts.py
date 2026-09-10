@@ -17,7 +17,7 @@ from offerings.tests.factories import (
     open_offering,
 )
 from shared.tests.tenants import make_eligible, make_tenant, open_to_investors
-from tokens.models import ShareIssuance, SwapOrder, TransferOrder
+from tokens.models import ShareIssuance, SwapOrder
 from tokens.services.atomic_swap_service import AtomicSwapService
 from tokens.services.token_transfer_service import TokenTransferService
 from tokens.tests.test_signed_transactions import SIGNER, sign_legacy
@@ -91,83 +91,6 @@ class ActionResponseContractTest(APITestCase):
         for row in body["results"]:
             self.assert_fields(items, row, item_fields)
         return items
-
-    def unpaired_order(self):
-        return TransferOrder.objects.create(
-            token=self.owner.deployed_token,
-            payment_asset=self.owner.refs.stablecoin,
-            order_type="buy",
-            wallet=self.owner.wallet,
-            owner_account=self.owner.account,
-            wallet_address=self.owner.wallet.address,
-            quantity=10,
-            min_quantity=0,
-            price_per_share=Decimal("1.50"),
-        )
-
-    def test_cancel_challenge_declares_the_actual_stored_typed_data(self):
-        order = self.unpaired_order()
-        response = self.client.get(f"/api/v1/trading/orders/{order.uuid}/cancel/message/")
-        self.assertEqual(response.status_code, 200)
-        body = response.json()
-        self.assertEqual(body["orderUuid"], str(order.uuid))
-        self.assertEqual(body["walletAddress"], order.wallet_address)
-        self.assertEqual(body["purpose"], "order_cancel")
-        self.assertEqual(body["message"]["orderUuid"], str(order.uuid))
-        schema = self.assert_fields(
-            self.response_schema("/api/v1/trading/orders/{uuid}/cancel/message/"),
-            body,
-            {
-                "orderUuid": "string",
-                "walletAddress": "string",
-                "purpose": "string",
-                "digest": "string",
-                "domain": "object",
-                "types": "object",
-                "message": "object",
-                "expiresAt": "string",
-            },
-        )
-        self.assertEqual(set(schema["required"]), set(body))
-
-    def test_modification_challenge_keeps_numeric_values_and_decimal_text(self):
-        order = self.unpaired_order()
-        response = self.client.post(
-            f"/api/v1/trading/orders/{order.uuid}/modify/message/",
-            {"newQuantity": 12, "newMinQuantity": 1, "newPricePerShare": "2.00"},
-            format="json",
-        )
-        self.assertEqual(response.status_code, 200)
-        body = response.json()
-        self.assertEqual(
-            body["currentValues"],
-            {"quantity": 10, "minQuantity": 0, "pricePerShare": "1.50", "filledQuantity": 0, "remainingQuantity": 10},
-        )
-        self.assertEqual(body["newValues"], {"quantity": 12, "minQuantity": 1, "pricePerShare": "2.00"})
-        self.assertEqual(body["message"]["newQuantity"], "12")
-        schema = self.assert_fields(
-            self.response_schema("/api/v1/trading/orders/{uuid}/modify/message/", "post"),
-            body,
-            {
-                "orderUuid": "string",
-                "purpose": "string",
-                "digest": "string",
-                "domain": "object",
-                "types": "object",
-                "message": "object",
-                "expiresAt": "string",
-                "currentValues": "object",
-                "newValues": "object",
-            },
-        )
-        fields = {"quantity": "integer", "minQuantity": "integer", "pricePerShare": "string"}
-        self.assert_fields(schema["properties"]["newValues"], body["newValues"], fields)
-        self.assert_fields(
-            schema["properties"]["currentValues"],
-            body["currentValues"],
-            {**fields, "filledQuantity": "integer", "remainingQuantity": "integer"},
-        )
-        self.assertEqual(set(schema["required"]), set(body))
 
     def allowance_service(self, sufficient):
         configure_operator(self.owner.refs.stablecoin)

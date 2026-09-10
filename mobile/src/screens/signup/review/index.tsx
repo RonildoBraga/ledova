@@ -190,7 +190,8 @@ export function ReviewScreen() {
     },
   }));
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
-  const { data, company, isCompany, isLoading, error, completeSignup, isSubmitting, canCompleteSignup } = useReview();
+  const { data, company, isCompany, isLoading, error, completeSignup, isSubmitting, canCompleteSignup, retryLoad } =
+    useReview();
 
   const handleBack = () => {
     navigation.navigate(isCompany ? 'CompanyRegistration' : 'FinancialProfile');
@@ -242,6 +243,7 @@ export function ReviewScreen() {
           <View style={styles.errorContainer}>
             <Text style={styles.errorTitle}>Error Loading Data</Text>
             <Text style={styles.errorMessage}>{error}</Text>
+            <PrimaryButton onPress={retryLoad}>Try Again</PrimaryButton>
           </View>
         </SafeAreaView>
       </GradientBackground>
@@ -316,7 +318,7 @@ export function ReviewScreen() {
                       <Text style={styles.infoLabel}>ACN:</Text>
                       <Text style={styles.infoValue}>{company.acn}</Text>
                     </View>
-                    {'abn' in company && typeof company.abn === 'string' && company.abn ? (
+                    {company.abn ? (
                       <View style={styles.infoRow}>
                         <Text style={styles.infoLabel}>ABN:</Text>
                         <Text style={styles.infoValue}>{company.abn}</Text>

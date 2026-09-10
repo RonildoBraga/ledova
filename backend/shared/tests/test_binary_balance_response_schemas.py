@@ -112,7 +112,7 @@ class BinaryAndBalanceResponseSchemaTest(APITestCase):
         self.assertTrue(response.streaming)
         self.assertEqual(b"".join(response.streaming_content), expected_bytes)
         self.assertEqual(response["Content-Type"], "application/pdf")
-        response.close()
+        self.assertTrue(response.closed)
         content = self.response_content(path, response)
         self.assertEqual(set(content), {"*/*"})
         self.assertEqual(content["*/*"]["schema"], {"type": "string", "format": "binary"})
@@ -147,7 +147,7 @@ class BinaryAndBalanceResponseSchemaTest(APITestCase):
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response["Content-Type"], mime or "application/octet-stream")
             self.assertEqual(b"".join(response.streaming_content), f"payslip for {self.tenant.label}".encode())
-            response.close()
+            self.assertTrue(response.closed)
 
     def assert_csv_schema(self, path, response):
         self.assertEqual(response.status_code, 200)

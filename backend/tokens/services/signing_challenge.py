@@ -17,6 +17,7 @@ from tokens.exceptions import (
     ChallengeMismatchException,
     ChallengeUnknownException,
     InvalidSignatureException,
+    OrderActionRefreshRequiredException,
     OrderSubmissionRefreshRequiredException,
 )
 from tokens.models import SigningChallenge, SigningChallengePurpose
@@ -25,7 +26,12 @@ logger = logging.getLogger(__name__)
 
 CHALLENGE_TYPES = {
     SigningChallengePurpose.ORDER_CANCEL: {
-        "OrderCancel": [
+        "OrderCancelV1": [
+            {"name": "actionId", "type": "string"},
+            {"name": "protocolVersion", "type": "uint256"},
+            {"name": "ownerAccountUuid", "type": "string"},
+            {"name": "walletUuid", "type": "string"},
+            {"name": "tokenUuid", "type": "string"},
             {"name": "orderUuid", "type": "string"},
             {"name": "wallet", "type": "address"},
             {"name": "nonce", "type": "uint256"},
@@ -33,7 +39,12 @@ CHALLENGE_TYPES = {
         ]
     },
     SigningChallengePurpose.ORDER_MODIFY: {
-        "OrderModify": [
+        "OrderModifyV1": [
+            {"name": "actionId", "type": "string"},
+            {"name": "protocolVersion", "type": "uint256"},
+            {"name": "ownerAccountUuid", "type": "string"},
+            {"name": "walletUuid", "type": "string"},
+            {"name": "tokenUuid", "type": "string"},
             {"name": "orderUuid", "type": "string"},
             {"name": "newQuantity", "type": "uint256"},
             {"name": "newMinQuantity", "type": "uint256"},
@@ -72,7 +83,14 @@ def challenge_lifetime_seconds() -> int:
 
 
 def issue_challenge(
-    purpose, wallet_address: str, fields: dict, verifying_contract=None, order=None, wallet=None, submission=None
+    purpose,
+    wallet_address: str,
+    fields: dict,
+    verifying_contract=None,
+    order=None,
+    wallet=None,
+    submission=None,
+    action=None,
 ):
     types = CHALLENGE_TYPES[purpose]
     owner = wallet or (order.wallet if order is not None else None)
@@ -83,6 +101,8 @@ def issue_challenge(
         )
     if purpose == SigningChallengePurpose.ORDER_CREATE and submission is None:
         raise ValueError("An order creation challenge requires its immutable submission.")
+    if purpose in (SigningChallengePurpose.ORDER_CANCEL, SigningChallengePurpose.ORDER_MODIFY) and action is None:
+        raise OrderActionRefreshRequiredException()
     wallet_of_record = to_checksum_address(wallet_address)
     nonce = secrets.randbits(63)
     expires_at = timezone.now() + timezone.timedelta(seconds=challenge_lifetime_seconds())
@@ -103,6 +123,7 @@ def issue_challenge(
         verifying_contract=domain["verifyingContract"],
         order=order,
         submission=submission,
+        action=action,
         payload={"domain": domain, "types": types, "message": message},
         digest=typed_data_digest(domain, types, message),
         nonce=nonce,
@@ -121,7 +142,9 @@ def challenge_response(challenge) -> dict:
     }
 
 
-def consume_challenge(digest: str, purpose, wallet_address: str, signature: str, order=None, submission=None):
+def consume_challenge(
+    digest: str, purpose, wallet_address: str, signature: str, order=None, submission=None, action=None
+):
     if not digest or not signature:
         raise ChallengeUnknownException()
 
@@ -137,6 +160,16 @@ def consume_challenge(digest: str, purpose, wallet_address: str, signature: str,
 
     if order is not None and challenge.order_id != order.pk:
         raise ChallengeMismatchException("order")
+
+    if purpose in (SigningChallengePurpose.ORDER_CANCEL, SigningChallengePurpose.ORDER_MODIFY):
+        if action is None or challenge.action_id is None:
+            raise OrderActionRefreshRequiredException()
+        if challenge.action_id != action.pk or challenge.wallet_id != action.wallet_id:
+            raise ChallengeMismatchException("action")
+        if challenge.verifying_contract.lower() != action.verifying_contract.lower():
+            raise ChallengeMismatchException("contract")
+        if challenge.chain_id != action.chain_id:
+            raise ChallengeMismatchException("chain")
 
     if submission is not None:
         if challenge.submission_id is None:

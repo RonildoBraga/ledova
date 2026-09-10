@@ -30,6 +30,9 @@ class SigningChallenge(DerivesWalletFromOrder, BaseModel):
     submission = models.ForeignKey(
         "tokens.OrderSubmission", on_delete=models.PROTECT, related_name="challenges", null=True, blank=True
     )
+    action = models.ForeignKey(
+        "tokens.OrderActionSubmission", on_delete=models.PROTECT, related_name="challenges", null=True, blank=True
+    )
 
     wallet = models.ForeignKey(
         "wallets.Wallet",
@@ -56,6 +59,10 @@ class SigningChallenge(DerivesWalletFromOrder, BaseModel):
         ordering = ["-created_at"]
         constraints = [
             models.UniqueConstraint(fields=["wallet_address", "nonce"], name="unique_nonce_per_wallet"),
+            models.CheckConstraint(
+                condition=models.Q(submission__isnull=True) | models.Q(action__isnull=True),
+                name="signing_challenge_one_intent",
+            ),
             models.CheckConstraint(
                 condition=(
                     models.Q(consumed_at__isnull=True, consumed_signature="")

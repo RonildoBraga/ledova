@@ -8,3 +8,5 @@ export { useOrderSubmissionSigning } from './useOrderSubmissionSigning';
 export { useCurrency } from './useCurrency';
 export { useFinancialProfile } from './useFinancialProfile';
 export { useNotifications } from './useNotifications';
+export { useOrderActions } from './useOrderActions';
+export { useOrderActionSigning } from './useOrderActionSigning';
