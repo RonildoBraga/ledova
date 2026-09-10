@@ -281,6 +281,12 @@ object LedovaCameraWindowProbe {
     check(entries.none { it.waiting })
     for (item in entries) {
       item.view.cleanupCamera()
+      item.registrations.forEach { registration ->
+        @Suppress("UNCHECKED_CAST")
+        val observer = registration.observer as Observer<CameraState>
+        registration.state.removeObserver(observer)
+      }
+      item.registrations.clear()
       removeProbeObservers(item)
       item.siblingObservers.forEach { (state, observer) -> state.removeObserver(observer) }
       item.siblingObservers.clear()
