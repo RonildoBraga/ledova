@@ -17,7 +17,8 @@ const ICON_LG = DESIGN_TOKENS.icon.sizes.lg;
 
 export function SignupReview() {
   const navigate = useNavigate();
-  const { data, company, signupRole, isLoading, error, completeSignup, isSubmitting, canCompleteSignup } = useReview();
+  const { data, company, signupRole, isLoading, error, completeSignup, isSubmitting, canCompleteSignup, retryLoad } =
+    useReview();
 
   const handleBack = () => {
     if (signupRole === 'company') {
@@ -45,6 +46,9 @@ export function SignupReview() {
           <div className="text-center">
             <h3 className="text-lg font-medium text-error mb-2">Error Loading Data</h3>
             <p className="text-error">{error}</p>
+            <button type="button" onClick={retryLoad} className="mt-4 font-semibold text-brand-light underline">
+              Try Again
+            </button>
           </div>
         </div>
       </AuthLayout>
@@ -113,7 +117,7 @@ export function SignupReview() {
                     <span className="text-sm text-text-muted">ACN:</span>
                     <span className="text-sm text-text-primary font-medium">{company.acn}</span>
                   </div>
-                  {'abn' in company && typeof company.abn === 'string' && company.abn && (
+                  {company.abn && (
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-text-muted">ABN:</span>
                       <span className="text-sm text-text-primary font-medium">{company.abn}</span>

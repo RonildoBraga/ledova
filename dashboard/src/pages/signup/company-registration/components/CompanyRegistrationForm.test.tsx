@@ -21,6 +21,7 @@ function formWith(errors: Record<string, string[]>, generalError = '') {
       errors={errors}
       generalError={generalError}
       isSubmitting={false}
+      canSubmit
       setFieldValue={vi.fn()}
       onSubmit={vi.fn()}
       onBack={vi.fn()}
