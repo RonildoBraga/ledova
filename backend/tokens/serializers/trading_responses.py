@@ -4,37 +4,6 @@ from rest_framework import serializers
 from wallets.serializers.actions import PreparedEvmTransactionSerializer
 
 
-class OrderChallengeResponseSerializer(serializers.Serializer):
-    order_uuid = serializers.UUIDField()
-    digest = serializers.CharField()
-    domain = serializers.DictField()
-    types = serializers.DictField()
-    message = serializers.DictField()
-    expires_at = serializers.DateTimeField()
-
-
-class CancelOrderMessageResponseSerializer(OrderChallengeResponseSerializer):
-    purpose = serializers.ChoiceField(choices=("order_cancel",))
-    wallet_address = serializers.CharField()
-
-
-class OrderModificationValuesSerializer(serializers.Serializer):
-    quantity = serializers.IntegerField()
-    min_quantity = serializers.IntegerField()
-    price_per_share = serializers.CharField()
-
-
-class CurrentOrderValuesSerializer(OrderModificationValuesSerializer):
-    filled_quantity = serializers.IntegerField()
-    remaining_quantity = serializers.IntegerField()
-
-
-class OrderModificationMessageResponseSerializer(OrderChallengeResponseSerializer):
-    purpose = serializers.ChoiceField(choices=("order_modify",))
-    current_values = CurrentOrderValuesSerializer()
-    new_values = OrderModificationValuesSerializer()
-
-
 class ApprovalStatusResponseSerializer(serializers.Serializer):
     swap_uuid = serializers.UUIDField()
     user_role = serializers.ChoiceField(choices=("buyer", "seller"))

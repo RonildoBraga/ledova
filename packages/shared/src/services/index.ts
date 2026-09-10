@@ -47,6 +47,8 @@ export {
   getUserOrders,
   getOrderCreateMessage,
   getOrderCancelMessage,
+  getOrderActionContext,
+  getOrderAction,
   createOrder,
   getOrderSubmission,
   cancelOrder,

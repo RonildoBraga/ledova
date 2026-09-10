@@ -1,15 +1,11 @@
 import re
 
 from django.test import SimpleTestCase
-from django.urls import get_resolver
-from django.urls.resolvers import URLPattern, URLResolver
 
+from shared.api.routes import registered_routes
 from shared.tests import test_cross_tenant_routes as matrix
 
-PARAMETER = re.compile(r"\(\?P<[^>]+>[^)]*\)")
 TEMPLATE = re.compile(r"\{[a-z_]+\}")
-IGNORED_PREFIXES = ("/admin", "/static", "/media", "/api-auth", "/health")
-BODYLESS = {"head", "options", "trace"}
 
 UNAUTHENTICATED_AUTH = "Unauthenticated auth surface: there is no session yet, so there is no tenant to cross."
 PROVIDER_WEBHOOK = "Provider webhook: no session, authenticated by signature, and it names its own subject."
@@ -112,58 +108,13 @@ EXEMPT = {
 }
 
 
-def _walk(patterns, prefix=""):
-    for entry in patterns:
-        raw = str(entry.pattern)
-        if isinstance(entry, URLResolver):
-            yield from _walk(entry.url_patterns, prefix + raw)
-        elif isinstance(entry, URLPattern):
-            yield prefix + raw, entry.callback
-
-
-def _normalise(path):
-    path = PARAMETER.sub("{}", path)
-    path = path.replace("^", "").replace("$", "").replace("\\.", ".")
-    path = re.sub(r"<[^:>]+:[^>]+>", "{}", path)
-    path = re.sub(r"<[^>]+>", "{}", path)
-    path = "/" + path.lstrip("/")
-    return path if path.endswith("/") else path + "/"
-
-
-def _methods(callback):
-    view = getattr(callback, "cls", None) or getattr(callback, "view_class", None)
-    allowed = set(getattr(view, "http_method_names", []) or []) if view else set()
-    actions = getattr(callback, "actions", None)
-    if actions:
-        methods = (set(actions) & allowed) if allowed else set(actions)
-    elif view:
-        methods = {name for name in allowed if hasattr(view, name)}
-    else:
-        methods = {"get"}
-    return methods - BODYLESS
-
-
-def registered_routes():
-    routes = set()
-    for path, callback in _walk(get_resolver().url_patterns):
-        normalised = _normalise(path)
-        if normalised.startswith(IGNORED_PREFIXES) or ".{}" in normalised:
-            continue
-        view = getattr(callback, "cls", None)
-        if getattr(view, "__name__", "") == "APIRootView":
-            continue
-        for method in _methods(callback):
-            routes.add((method, normalised))
-    return routes
-
-
 def matrix_routes():
     routes = set()
 
     def add(method, path):
         routes.add((method.lower(), TEMPLATE.sub("{}", path.split("?")[0])))
 
-    for route in matrix.ROUTES + matrix.DIRECTORY_ROUTES + matrix.MARKET_ROUTES:
+    for route in matrix.ROUTES + matrix.ACTION_ROUTES + matrix.DIRECTORY_ROUTES + matrix.MARKET_ROUTES:
         add(route.method, route.path)
     for path, _ in matrix.LIST_ROUTES:
         add("get", path)

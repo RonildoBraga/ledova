@@ -307,6 +307,54 @@ to create another order. A separate deliberate order still undergoes the ordinar
 creation and matching checks. This protocol adds no aggregate balance policy,
 outgoing signer activation or settlement finality guarantee.
 
+Cancel and modify requests use a separate account-scoped `action_id`, introduced
+by `tokens/0038`. Coordinate backend, shared package, dashboard and mobile
+releases for this protocol change. Before preparing a fresh action, read
+`GET /api/v1/trading/orders/{order_uuid}/action-context/?owner_account_uuid=...`.
+This request is read-only. Use its canonical quantity/minimum/price strings for
+all absolute replacement values, including unchanged values in a price-only
+modification; ordinary order-detail numeric quantities are not a lossless source.
+Persist and verify a fresh action UUID before the first message POST. A deliberate
+second action gets another UUID even if its terms are equal.
+
+`POST /orders/{order_uuid}/cancel/message/` takes `action_id` and
+`owner_account_uuid`; `POST /orders/{order_uuid}/modify/message/` additionally
+requires all three `new_quantity`, `new_min_quantity` and `new_price_per_share`
+strings. These paths are relative to `/api/v1/trading`. Issuance freezes the
+authoritative identity and domain. A client must compare those values with its
+reviewed context before signing. A mismatch may already have created a pending
+action: retain its ID, discard the stale review/challenge and recover the recorded
+intent before asking for a new review. Do not attach that ID to different terms.
+
+For an existing reminder or uncertain response, read
+`GET /api/v1/trading/orders/actions/{action_id}/?owner_account_uuid=...` directly.
+A 404 means absent or currently inaccessible; it does not authorize deleting the
+reminder, generating a replacement ID or claiming recovered terms. The execute
+POST identifies the action before checking a pending signature, so an authorized
+recorded result remains recoverable with absent, expired or irrelevant old
+credentials. Current account membership and wallet/order ownership still apply.
+The response separates immutable `intent`, `review`, `result` and `refusal` from
+the current `order`. HTTP responses use the existing camel-case renderer.
+
+A stored business refusal returns the complete snapshot with `status: refused`
+and `refusal.httpStatus` 400 or 409. Its allowed codes are
+`order_cancellation_failed`, `order_modification_failed` and
+`order_modification_conflict`. Ordinary `action_intent_conflict` or
+`action_context_conflict` errors are not terminal snapshots. Provider/preflight,
+validation and infrastructure errors also leave the reminder unresolved; recover
+before retrying. Terminal replay does not repeat an order change or publish a
+second event. The existing event mechanism has no outbox, so database recovery
+is not a guarantee of event delivery.
+
+Old unlinked cancel/modify challenges and modification logs remain unchanged.
+The retired GET cancel-message route returns `action_refresh_required`; old
+POSTs without the new identity fields receive ordinary required-field errors.
+A keyed pending action presenting an unlinked legacy challenge also receives
+`action_refresh_required` before spend. There is no automatic rebinding or legacy
+execution fallback. Existing settlement signatures and stored swap deadlines are
+unchanged. This protocol neither changes balance eligibility nor enables trading,
+activates signers, broadcasts transactions or establishes settlement finality.
+
 Share-token deployment records the computed transaction hash and its token
 association in one independent database transaction before broadcasting. An
 enclosing transaction, disabled autocommit, failed persistence or competing

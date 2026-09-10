@@ -187,7 +187,7 @@ def ends_url_argument(masked: str, end: int) -> bool:
     return masked[end:].lstrip().startswith((",", ")"))
 
 
-def service_calls() -> dict[tuple[str, str], set[str]]:
+def service_calls(include_untyped=False) -> dict[tuple[str, str], set[str]]:
     endpoints = declared_endpoints()
     calls: dict[tuple[str, str], set[str]] = {}
     unresolved: list[str] = []
@@ -209,7 +209,7 @@ def service_calls() -> dict[tuple[str, str], set[str]]:
                 unresolved.append(f"{path.name}: {constant}")
                 continue
             named = set(re.findall(r"\b([A-Z]\w*)", generic or "")) - GENERIC_NOISE
-            if named:
+            if named or include_untyped:
                 calls.setdefault((verb, url), set()).update(named)
 
     if unresolved:
@@ -308,6 +308,35 @@ def schema_parts(document: dict) -> tuple[dict[str, dict[str, bool]], dict[tuple
     return components, responses
 
 
+def shared_operation_drift(document):
+    operations = {
+        (verb, url_shape(path)): operation
+        for path, methods in (document.get("paths") or {}).items()
+        for verb, operation in methods.items()
+        if verb in {"get", "post", "put", "patch", "delete"}
+    }
+    failures = []
+    calls = service_calls(include_untyped=True)
+    for verb, path in sorted(calls):
+        operation = operations.get((verb, path))
+        if operation is None:
+            failures.append(f"{verb.upper()} {path}: no operation is declared")
+            continue
+        declared = False
+        for code, response in (operation.get("responses") or {}).items():
+            if not str(code).startswith("2"):
+                continue
+            if str(code) == "204" and not response.get("content"):
+                declared = True
+            for media in (response.get("content") or {}).values():
+                schema = media.get("schema") or {}
+                if any(key in schema for key in ("type", "$ref", "oneOf", "anyOf", "allOf")):
+                    declared = True
+        if not declared:
+            failures.append(f"{verb.upper()} {path}: no successful response kind is declared")
+    return failures, len(calls)
+
+
 def scan(schema_path: Path):
     document = yaml.safe_load(schema_path.read_text())
     components, responses = schema_parts(document)
@@ -331,10 +360,7 @@ def scan(schema_path: Path):
 
     for (verb, url), names in sorted(calls.items()):
         referenced = responses.get((verb, url))
-        if not referenced:
-            # A call the schema has no operation for. Not a failure - the endpoint
-            # may be one of #211's schemaless views - but counting only the matches
-            # makes a partial number read as a total.
+        if not referenced or not any(component in components for component in referenced):
             unmatched.append(f"{verb.upper()} {url}")
             continue
         matched += 1
@@ -359,9 +385,7 @@ def scan(schema_path: Path):
                 if not best:
                     continue
             absent = sorted(
-                field
-                for field, optional in fields.items()
-                if not optional and field not in components[best]
+                field for field, optional in fields.items() if not optional and field not in components[best]
             )
             if absent:
                 findings.append((f"{verb.upper()} {url}", name, best, absent))
@@ -412,11 +436,11 @@ def trading_event_drift(document: dict) -> list[str]:
     return errors
 
 
-def main() -> int:
+def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--schema", required=True, type=Path)
     parser.add_argument("--explain", action="store_true")
-    arguments = parser.parse_args()
+    arguments = parser.parse_args(argv)
 
     if arguments.explain:
         print(__doc__)
@@ -424,7 +448,9 @@ def main() -> int:
 
     try:
         findings, matched, unmatched = scan(arguments.schema)
-        event_errors = trading_event_drift(yaml.safe_load(arguments.schema.read_text()))
+        document = yaml.safe_load(arguments.schema.read_text())
+        event_errors = trading_event_drift(document)
+        operation_errors, operation_count = shared_operation_drift(document)
     except Unresolvable as error:
         print(f"{error}\n", file=sys.stderr)
         print(
@@ -433,8 +459,25 @@ def main() -> int:
         )
         return 1
 
+    if unmatched or operation_errors:
+        print(
+            "Shared HTTP calls have incomplete operation or response declarations:\n",
+            file=sys.stderr,
+        )
+        for operation in unmatched:
+            print(
+                f"  {operation}: a named response type has no inspectable successful object schema",
+                file=sys.stderr,
+            )
+        for error in operation_errors:
+            print(f"  {error}", file=sys.stderr)
+        return 1
+
     if event_errors:
-        print("Trading event names differ between the server and client:\n", file=sys.stderr)
+        print(
+            "Trading event names differ between the server and client:\n",
+            file=sys.stderr,
+        )
         for error in event_errors:
             print(f"  {error}", file=sys.stderr)
         return 1
@@ -455,7 +498,10 @@ def main() -> int:
         for endpoint, name, component, absent in findings:
             if f"{name}:{component}" in new:
                 print(f"  {endpoint}", file=sys.stderr)
-                print(f"    {name} declares {', '.join(absent)} as required", file=sys.stderr)
+                print(
+                    f"    {name} declares {', '.join(absent)} as required",
+                    file=sys.stderr,
+                )
                 print(f"    {component} does not carry them\n", file=sys.stderr)
         print(
             "Every read of such a field type-checks and is undefined at run time.\n"
@@ -466,9 +512,15 @@ def main() -> int:
         return 1
 
     if stale:
-        print(f"These pinned counts are higher than what is there ({len(stale)}):\n", file=sys.stderr)
+        print(
+            f"These pinned counts are higher than what is there ({len(stale)}):\n",
+            file=sys.stderr,
+        )
         for key in stale:
-            print(f"  {key}: pinned {pinned_counts[key]}, found {counts.get(key, 0)}", file=sys.stderr)
+            print(
+                f"  {key}: pinned {pinned_counts[key]}, found {counts.get(key, 0)}",
+                file=sys.stderr,
+            )
         print(
             "\nLower the count in TYPE_DEBT or SCHEMA_DEBT in this script; they may only shrink.",
             file=sys.stderr,
@@ -480,7 +532,11 @@ def main() -> int:
         f"{matched + len(unmatched)} endpoints reached by a resolvable call "
         f"({sum(pinned_counts[k] for k in TYPE_DEBT)} known type findings, "
         f"{sum(pinned_counts[k] for k in SCHEMA_DEBT)} awaiting the schema fixes in #211; "
-        f"{len(unmatched)} reaching no operation the schema declares)."
+        f"{len(unmatched)} without an inspectable successful object schema)."
+    )
+    print(
+        f"All {operation_count} distinct shared HTTP operations declare a successful response kind, "
+        "including untyped calls."
     )
     print("TradingEventType matches every invalidating event in the stream schema in both directions.")
     return 0

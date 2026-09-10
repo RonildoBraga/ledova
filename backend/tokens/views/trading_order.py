@@ -15,15 +15,23 @@ from rest_framework.response import Response
 
 from shared.utils import get_client_ip
 from shared.views import AuthenticatedReadOnlyViewSet
-from tokens.exceptions import SwapExpiredException
+from tokens.exceptions import OrderActionRefreshRequiredException, SwapExpiredException
 from tokens.filters import TransferOrderFilter
-from tokens.models import OrderSubmissionStatus, TransferOrder
+from tokens.models import OrderActionPurpose, OrderSubmissionStatus, TransferOrder
 from tokens.serializers import (
-    OrderModificationExecuteSerializer,
-    OrderModificationRequestSerializer,
     TransferOrderCreateSerializer,
     TransferOrderDetailSerializer,
     TransferOrderListSerializer,
+)
+from tokens.serializers.order_action import (
+    ORDER_ACTION_RESPONSES,
+    OrderActionContextSerializer,
+    OrderActionExecuteRequestSerializer,
+    OrderActionIdentitySerializer,
+    OrderActionLookupSerializer,
+    OrderActionModifyRequestSerializer,
+    OrderActionSubmissionSerializer,
+    action_snapshot,
 )
 from tokens.serializers.order_submission import (
     OrderSubmissionLookupSerializer,
@@ -38,18 +46,20 @@ from tokens.serializers.swap_order import (
 from tokens.serializers.trading_responses import (
     ApprovalStatusResponseSerializer,
     ApprovalTransactionResponseSerializer,
-    CancelOrderMessageResponseSerializer,
-    OrderModificationMessageResponseSerializer,
     SufficientApprovalResponseSerializer,
 )
 from tokens.services import (
     AtomicSwapService,
-    OrderModificationService,
-    TradingOrderService,
 )
 from tokens.services.atomic_swap_service import sign_and_execute_swap
+from tokens.services.order_actions import (
+    execute_order_action,
+    issue_order_action,
+    order_action_context,
+    recover_order_action,
+)
+from tokens.services.order_modification_service import get_modification_history
 from tokens.services.trading_order_access import resolve_order_swap_context
-from tokens.services.trading_order_cancel import cancel_signed_order
 from tokens.services.trading_order_create import (
     execute_order_submission,
     issue_order_submission,
@@ -74,7 +84,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
             return SignedOrderSubmissionSerializer
         if self.action == "create_message":
             return TransferOrderCreateSerializer
-        if self.action in ["retrieve", "cancel"]:
+        if self.action == "retrieve":
             return TransferOrderDetailSerializer
         return TransferOrderListSerializer
 
@@ -113,23 +123,63 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
             response_status = status.HTTP_201_CREATED if result.created else status.HTTP_200_OK
         return Response(submission_snapshot(result.submission), status=response_status)
 
-    @extend_schema(responses=TransferOrderDetailSerializer)
+    @extend_schema(request=OrderActionExecuteRequestSerializer, responses=ORDER_ACTION_RESPONSES)
     @action(detail=True, methods=["post"])
     def cancel(self, request, uuid=None):
-        order = cancel_signed_order(
-            order=self.get_object(),
-            digest=request.data.get("digest"),
-            signature=request.data.get("signature"),
-        )
+        return self._execute_action(request, uuid, OrderActionPurpose.CANCEL)
 
-        return Response(TransferOrderDetailSerializer(order).data)
-
-    @extend_schema(responses=CancelOrderMessageResponseSerializer)
-    @action(detail=True, methods=["get"], url_path="cancel/message")
+    @extend_schema(methods=["GET"], responses={400: OpenApiTypes.OBJECT}, request=None)
+    @extend_schema(methods=["POST"], request=OrderActionIdentitySerializer, responses=ORDER_ACTION_RESPONSES)
+    @action(detail=True, methods=["get", "post"], url_path="cancel/message")
     def cancel_message(self, request, uuid=None):
-        order = self.get_object()
-        message_data = TradingOrderService.get_order_cancel_message(order)
-        return Response(message_data, status=status.HTTP_200_OK)
+        if request.method == "GET":
+            raise OrderActionRefreshRequiredException()
+        serializer = OrderActionIdentitySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = issue_order_action(request.user, uuid, OrderActionPurpose.CANCEL, serializer.validated_data)
+        return Response(action_snapshot(result.action, result.challenge), status=result.http_status)
+
+    @extend_schema(
+        parameters=[OpenApiParameter("owner_account_uuid", OpenApiTypes.UUID, OpenApiParameter.QUERY, required=True)],
+        responses=OrderActionContextSerializer,
+    )
+    @action(detail=True, methods=["get"], url_path="action-context")
+    def action_context(self, request, uuid=None):
+        serializer = OrderActionLookupSerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        return Response(order_action_context(request.user, serializer.validated_data["owner_account_uuid"], uuid))
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("action_id", OpenApiTypes.UUID, OpenApiParameter.PATH, required=True),
+            OpenApiParameter("owner_account_uuid", OpenApiTypes.UUID, OpenApiParameter.QUERY, required=True),
+        ],
+        responses=OrderActionSubmissionSerializer,
+    )
+    @action(detail=False, methods=["get"], url_path=r"actions/(?P<action_id>[^/.]+)")
+    def order_action(self, request, action_id=None):
+        serializer = OrderActionLookupSerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        try:
+            key = UUID(action_id)
+        except (ValueError, TypeError, AttributeError):
+            raise NotFound("Order action not found.")
+        result = recover_order_action(request.user, serializer.validated_data["owner_account_uuid"], key)
+        return Response(action_snapshot(result.action))
+
+    def _execute_action(self, request, order_id, purpose):
+        serializer = OrderActionIdentitySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        result = execute_order_action(
+            request.user,
+            order_id,
+            purpose,
+            serializer.validated_data,
+            request.data,
+            ip_address=get_client_ip(request),
+            user_agent=request.META.get("HTTP_USER_AGENT", ""),
+        )
+        return Response(action_snapshot(result.action), status=result.http_status)
 
     @extend_schema(
         responses={
@@ -304,61 +354,20 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
         atomic_swap_service = AtomicSwapService()
         return atomic_swap_service, swap_order, user_role, has_signed
 
-    @extend_schema(responses=OrderModificationMessageResponseSerializer)
+    @extend_schema(request=OrderActionModifyRequestSerializer, responses=ORDER_ACTION_RESPONSES)
     @action(detail=True, methods=["post"], url_path="modify/message")
     def modify_message(self, request, uuid=None):
-        order = self.get_object()
-
-        serializer = OrderModificationRequestSerializer(data=request.data)
+        serializer = OrderActionModifyRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
+        result = issue_order_action(request.user, uuid, OrderActionPurpose.MODIFY, serializer.validated_data)
+        return Response(action_snapshot(result.action, result.challenge), status=result.http_status)
 
-        result = OrderModificationService().generate_modification_message(
-            order=order,
-            new_quantity=data.get("new_quantity"),
-            new_min_quantity=data.get("new_min_quantity"),
-            new_price=data.get("new_price_per_share"),
-        )
-
-        return Response(result)
-
-    @extend_schema(
-        responses=inline_serializer(
-            name="TransferOrderModified",
-            fields={
-                "order": TransferOrderDetailSerializer(),
-                "modification_count": serializers.IntegerField(),
-                "changes": serializers.JSONField(),
-            },
-        )
-    )
+    @extend_schema(request=OrderActionExecuteRequestSerializer, responses=ORDER_ACTION_RESPONSES)
     @action(detail=True, methods=["post"], url_path="modify")
     def modify(self, request, uuid=None):
-        order = self.get_object()
-
-        serializer = OrderModificationExecuteSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        digest = serializer.validated_data["digest"]
-        signature = serializer.validated_data["signature"]
-
-        modified_order, changes = OrderModificationService().apply_modification(
-            order=order,
-            digest=digest,
-            signature=signature,
-            ip_address=get_client_ip(request),
-            user_agent=request.META.get("HTTP_USER_AGENT", ""),
-        )
-
-        return Response(
-            {
-                "order": TransferOrderDetailSerializer(modified_order).data,
-                "modification_count": modified_order.modification_count,
-                "changes": changes,
-            }
-        )
+        return self._execute_action(request, uuid, OrderActionPurpose.MODIFY)
 
     @action(detail=True, methods=["get"], url_path="modifications")
     def modifications(self, request, uuid=None):
         order = self.get_object()
-        return Response(OrderModificationService().get_modification_history(order))
+        return Response(get_modification_history(order))

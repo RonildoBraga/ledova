@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo, useRef } from 'react';
 import { View, Text, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
 import type { ShareToken, TransferOrder, CreateOrderRequest, SwapOrder, Wallet } from '@ledova/shared';
-import { useOrderSubmissions } from '@ledova/shared';
+import { useOrderSubmissions, useOrderActions } from '@ledova/shared';
 import { orderSubmissionSession, orderSubmissionStore } from '../../services/orderSubmissions';
 import { GradientBackground } from '../../components/GradientBackground';
 import {
@@ -20,13 +20,15 @@ import { OrdersCard } from './components/OrdersCard';
 import { BuySellButtons } from './components/BuySellButtons';
 import { CreateOrderModal } from './components/CreateOrderModal';
 import { OrderSigningModal } from './components/OrderSigningModal';
-import { OrderModificationModal } from './components/OrderModificationModal';
+import { OrderActionModal } from './components/OrderActionModal';
+import { orderActionStore } from '../../services/orderActions';
 import { OrderDetailModal } from './components/OrderDetailModal';
 import { SwapSigningModal } from './components/SwapSigningModal';
 import { useAppTheme, useThemedStyles } from '../../contexts';
 
 export function TradingScreen() {
   const submissions = useOrderSubmissions(orderSubmissionStore, orderSubmissionSession);
+  const actions = useOrderActions(orderActionStore, orderSubmissionSession);
   const signingGeneration = useRef(0);
   const currentSigningGeneration = signingGeneration.current;
   const theme = useAppTheme();
@@ -47,7 +49,7 @@ export function TradingScreen() {
   const { data: tokens, isLoading: isLoadingTokens, refetch: refetchTokens } = useShareTokens();
   const { data: eligibility } = useInvestorEligibilityQuery();
   const isEligible = eligibility?.isEligible ?? false;
-  const { wallets, walletAddresses } = useUserTradingWallets();
+  const { wallets, actionWallets, walletAddresses } = useUserTradingWallets();
   const whitelistStatus = useWalletsWhitelistStatus(walletAddresses);
   const tokenBalances = useAllWalletTokenBalances(walletAddresses);
   const userOrders = useAllUserOrders(walletAddresses);
@@ -67,15 +69,6 @@ export function TradingScreen() {
   const [createOrderType, setCreateOrderType] = useState<'buy' | 'sell'>('buy');
   const [showCreateOrder, setShowCreateOrder] = useState(false);
 
-  const [cancelOrderUuid, setCancelOrderUuid] = useState<string | undefined>();
-  const [cancelOrderSymbol, setCancelOrderSymbol] = useState<string | undefined>();
-  const [cancelWallet, setCancelWallet] = useState<Wallet | null>(null);
-  const [showCancelSigning, setShowCancelSigning] = useState(false);
-
-  const [modifyOrder, setModifyOrder] = useState<TransferOrder | null>(null);
-  const [modifyWallet, setModifyWallet] = useState<Wallet | null>(null);
-  const [showModifyOrder, setShowModifyOrder] = useState(false);
-
   const [detailOrder, setDetailOrder] = useState<TransferOrder | null>(null);
   const [showDetailOrder, setShowDetailOrder] = useState(false);
 
@@ -92,6 +85,7 @@ export function TradingScreen() {
   const handleBuy = () => {
     signingGeneration.current++;
     submissions.close();
+    actions.close();
     setCreateOrderType('buy');
     setShowCreateOrder(true);
   };
@@ -99,6 +93,7 @@ export function TradingScreen() {
   const handleSell = () => {
     signingGeneration.current++;
     submissions.close();
+    actions.close();
     setCreateOrderType('sell');
     setShowCreateOrder(true);
   };
@@ -110,26 +105,21 @@ export function TradingScreen() {
     return accepted;
   };
 
-  const handleCancelOrder = useCallback(
-    (orderUuid: string) => {
-      const order = userOrders.orders.find((o) => o.uuid === orderUuid);
-      if (!order) return;
-      setCancelOrderUuid(orderUuid);
-      setCancelOrderSymbol(order.tokenSymbol);
-      setCancelWallet(findWalletForAddress(order.walletAddress));
-      setShowCancelSigning(true);
-    },
-    [userOrders.orders, findWalletForAddress],
-  );
+  const handleCancelOrder = (orderUuid: string) => {
+    signingGeneration.current++;
+    submissions.close();
+    setShowCreateOrder(false);
+    setShowDetailOrder(false);
+    actions.open(orderUuid, 'cancel');
+  };
 
-  const handleEditOrder = useCallback(
-    (order: TransferOrder) => {
-      setModifyOrder(order);
-      setModifyWallet(findWalletForAddress(order.walletAddress));
-      setShowModifyOrder(true);
-    },
-    [findWalletForAddress],
-  );
+  const handleEditOrder = (order: TransferOrder) => {
+    signingGeneration.current++;
+    submissions.close();
+    setShowCreateOrder(false);
+    setShowDetailOrder(false);
+    actions.open(order.uuid, 'modify');
+  };
 
   const handleViewOrder = useCallback((order: TransferOrder) => {
     setDetailOrder(order);
@@ -213,6 +203,7 @@ export function TradingScreen() {
                   accessibilityRole="button"
                   onPress={() => {
                     signingGeneration.current++;
+                    actions.close();
                     submissions.recover(record);
                   }}
                 >
@@ -225,6 +216,40 @@ export function TradingScreen() {
                 disabled={submissions.isLoading}
               >
                 <Text style={{ color: theme.colors.interactive.default }}>Refresh saved orders</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ gap: theme.spacing.sm }} accessibilityLabel="Saved cancellations and changes">
+              <Text style={{ color: theme.colors.text.primary, fontWeight: theme.fontWeight.semibold }}>
+                Saved cancellations and changes
+              </Text>
+              {actions.error && (
+                <Text accessibilityRole="alert" style={{ color: theme.colors.status.error.icon }}>
+                  {actions.error}
+                </Text>
+              )}
+              {actions.pending.map((record, index) => (
+                <TouchableOpacity
+                  key={record.actionId}
+                  accessibilityRole="button"
+                  onPress={() => {
+                    signingGeneration.current++;
+                    submissions.close();
+                    setShowCreateOrder(false);
+                    actions.recover(record);
+                  }}
+                >
+                  <Text style={{ color: theme.colors.interactive.default }}>
+                    Check {record.purpose === 'cancel' ? 'cancellation' : 'change'} {index + 1}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity
+                accessibilityRole="button"
+                disabled={actions.isLoading}
+                onPress={() => void actions.refresh()}
+              >
+                <Text style={{ color: theme.colors.interactive.default }}>Refresh saved actions</Text>
               </TouchableOpacity>
             </View>
 
@@ -283,30 +308,20 @@ export function TradingScreen() {
           signingGeneration.current++;
           submissions.close();
         }}
-        mode="create"
         submission={submissions.active}
         tokens={tokens ?? []}
         wallet={wallets.find((wallet) => wallet.uuid === submissions.active?.record.walletUuid) ?? null}
         onSuccess={handleSigningSuccess}
       />
 
-      <OrderSigningModal
-        visible={showCancelSigning}
-        onClose={() => setShowCancelSigning(false)}
-        mode="cancel"
-        orderUuid={cancelOrderUuid}
-        orderSymbol={cancelOrderSymbol}
-        wallet={cancelWallet}
-        onSuccess={handleSigningSuccess}
-      />
-
-      <OrderModificationModal
-        visible={showModifyOrder}
-        onClose={() => setShowModifyOrder(false)}
-        order={modifyOrder}
-        wallet={modifyWallet}
-        onSuccess={handleSigningSuccess}
-      />
+      {actions.active && (
+        <OrderActionModal
+          key={actions.active.record?.actionId ?? `${actions.active.orderUuid}/${actions.active.purpose}`}
+          action={actions.active}
+          wallets={actionWallets}
+          onClose={actions.close}
+        />
+      )}
 
       <OrderDetailModal
         visible={showDetailOrder}
