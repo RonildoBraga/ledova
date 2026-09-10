@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import weakref
 from unittest import skipUnless
 
 from django.db import connections
@@ -24,7 +25,7 @@ from shared.db import atomic, current_alias
 
 class MonitorProcess:
     def __init__(self, test, status, mode="observe"):
-        self.test = test
+        self._test = weakref.ref(test)
         self.closed = False
         self.errors = tempfile.TemporaryFile()
         database = connections[current_alias()].settings_dict
@@ -45,6 +46,13 @@ class MonitorProcess:
         test.assertNotEqual(loaded["pid"], os.getpid())
         test.assertEqual(loaded["alias"], "operator")
         self.database_pid = loaded["database_pid"]
+
+    @property
+    def test(self):
+        test = self._test()
+        if test is None:
+            raise RuntimeError("Monitor testcase is no longer available")
+        return test
 
     def __enter__(self):
         return self
@@ -114,10 +122,9 @@ class MonitorProcessesTest(TransactionTestCase):
                     [blocker_pid, child.database_pid],
                 )
                 observed = cursor.fetchone()
-            if observed and observed[1]:
+            if observed and observed[1] and observed[2] == "Lock":
                 self.assertTrue(observed[0].startswith("SELECT "), observed)
                 self.assertIn('"blockchain_blockchaintransaction"', observed[0])
-                self.assertEqual(observed[2], "Lock", observed)
                 return
             time.sleep(0.01)
         self.fail(f"Monitor never waited for the current transaction row: {observed}")
