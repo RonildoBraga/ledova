@@ -234,8 +234,19 @@ export function CompanyRegistrationScreen() {
     },
   }));
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
-  const { form, errors, generalError, isLoading, isSubmitting, setFieldValue, handleSubmit, retryLoad } =
-    useCompanyRegistration();
+  const {
+    form,
+    errors,
+    generalError,
+    loadError,
+    hasLoadedForm,
+    canSubmit,
+    isLoading,
+    isSubmitting,
+    setFieldValue,
+    handleSubmit,
+    retryLoad,
+  } = useCompanyRegistration();
   const [showTypePicker, setShowTypePicker] = useState(false);
 
   const selectedType = COMPANY_TYPES.find((t) => t.value === form.companyType);
@@ -262,7 +273,7 @@ export function CompanyRegistrationScreen() {
     );
   }
 
-  if (generalError && !form.name && !isSubmitting) {
+  if ((loadError && !hasLoadedForm) || (generalError && !form.name && !isSubmitting)) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.errorStateContainer}>
@@ -272,7 +283,7 @@ export function CompanyRegistrationScreen() {
             weight={theme.icon.weights.regular}
           />
           <Text style={styles.errorStateTitle}>Unable to Load</Text>
-          <Text style={styles.errorStateMessage}>{generalError}</Text>
+          <Text style={styles.errorStateMessage}>{loadError || generalError}</Text>
           <PrimaryButton onPress={retryLoad}>Try Again</PrimaryButton>
         </View>
       </SafeAreaView>
@@ -390,7 +401,19 @@ export function CompanyRegistrationScreen() {
                 </View>
               </View>
 
-              <PrimaryButton onPress={handleContinue} loading={isSubmitting} fullWidth style={styles.continueButton}>
+              {loadError && (
+                <View style={styles.errorContainer}>
+                  <Text style={styles.errorText}>{loadError}</Text>
+                  <PrimaryButton onPress={retryLoad}>Try Again</PrimaryButton>
+                </View>
+              )}
+              <PrimaryButton
+                onPress={handleContinue}
+                loading={isSubmitting}
+                disabled={!canSubmit}
+                fullWidth
+                style={styles.continueButton}
+              >
                 Continue
               </PrimaryButton>
             </View>

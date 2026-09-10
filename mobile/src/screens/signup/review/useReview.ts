@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../../../navigation/AppNavigator';
@@ -6,6 +7,7 @@ import {
   getUserProfiles,
   updateUserProfileCompletion,
   getCompanies,
+  getCompany,
   useFinancialProfile,
   CACHE_TIMING,
 } from '@ledova/shared';
@@ -37,7 +39,14 @@ export const useReview = () => {
     staleTime: CACHE_TIMING.DEFAULT_STALE_TIME,
   });
 
-  const company = isCompany ? companyQuery.data?.data?.results?.[0] || null : null;
+  const selectedUuid = isCompany ? companyQuery.data?.data.results[0]?.uuid : undefined;
+  const detailQuery = useQuery({
+    queryKey: ['signup', 'company-detail', selectedUuid],
+    queryFn: () => getCompany(apiClient, selectedUuid!),
+    enabled: Boolean(selectedUuid),
+    staleTime: CACHE_TIMING.DEFAULT_STALE_TIME,
+  });
+  const company = selectedUuid && detailQuery.data?.data.uuid === selectedUuid ? detailQuery.data.data : null;
 
   const data: ReviewData = {
     userProfile,
@@ -45,16 +54,25 @@ export const useReview = () => {
   };
 
   const isLoading = Boolean(
-    userProfileQuery.isLoading || (!isCompany && financialProfileLoading) || (isCompany && companyQuery.isLoading),
+    userProfileQuery.isLoading ||
+    (!isCompany && financialProfileLoading) ||
+    (isCompany && (companyQuery.isLoading || detailQuery.isLoading)),
   );
 
   const error =
     userProfileQuery.error?.message ||
     (!isCompany ? financialProfileError?.message : null) ||
-    companyQuery.error?.message ||
+    (isCompany
+      ? companyQuery.error?.message ||
+        detailQuery.error?.message ||
+        (selectedUuid && detailQuery.isSuccess && !company
+          ? 'Company details did not match the selected company. Please try again.'
+          : null)
+      : null) ||
     null;
 
-  const canCompleteSignup = isCompany ? Boolean(userProfile && company) : Boolean(userProfile && financialProfile);
+  const canCompleteSignup =
+    !isLoading && !error && (isCompany ? Boolean(userProfile && company) : Boolean(userProfile && financialProfile));
 
   const completeSignupMutation = useMutation({
     mutationFn: async () => {
@@ -85,6 +103,17 @@ export const useReview = () => {
     }
   };
 
+  const retryLoad = useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['userProfiles'] }),
+      ...(isCompany ? [queryClient.invalidateQueries({ queryKey: ['signup', 'company'] })] : []),
+      ...(!isCompany ? [queryClient.invalidateQueries({ queryKey: ['financialProfiles'] })] : []),
+      ...(selectedUuid
+        ? [queryClient.invalidateQueries({ queryKey: ['signup', 'company-detail', selectedUuid] })]
+        : []),
+    ]);
+  }, [queryClient, isCompany, selectedUuid]);
+
   return {
     data,
     company,
@@ -94,5 +123,6 @@ export const useReview = () => {
     completeSignup,
     isSubmitting: completeSignupMutation.isPending,
     canCompleteSignup,
+    retryLoad,
   };
 };

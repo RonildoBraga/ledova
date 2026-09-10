@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 
@@ -5,6 +6,7 @@ import {
   getUserProfiles,
   updateUserProfileCompletion,
   getCompanies,
+  getCompany,
   useFinancialProfile,
   CACHE_TIMING,
   describeFailure,
@@ -13,17 +15,18 @@ import { useAccountRole } from '@hooks/useAccountRole';
 import { AUTH_QUERY_KEY } from '@hooks/useAuth';
 import apiClient from '@services/apiClient';
 
-import type { ReviewData, CompanyListItem } from '@ledova/shared';
+import type { ReviewData, Company } from '@ledova/shared';
 
 export interface ReviewHookReturn {
   data: ReviewData;
-  company: CompanyListItem | null;
+  company: Company | null;
   signupRole: string;
   isLoading: boolean;
   error: string | null;
   completeSignup: () => void;
   isSubmitting: boolean;
   canCompleteSignup: boolean;
+  retryLoad: () => Promise<void>;
 }
 
 export const useReview = (): ReviewHookReturn => {
@@ -49,8 +52,14 @@ export const useReview = (): ReviewHookReturn => {
     staleTime: CACHE_TIMING.DEFAULT_STALE_TIME,
   });
 
-  const company: CompanyListItem | null =
-    signupRole === 'company' ? companyQuery.data?.data?.results?.[0] || null : null;
+  const selectedUuid = signupRole === 'company' ? companyQuery.data?.data.results[0]?.uuid : undefined;
+  const detailQuery = useQuery({
+    queryKey: ['signup', 'company-detail', selectedUuid],
+    queryFn: () => getCompany(apiClient, selectedUuid!),
+    enabled: Boolean(selectedUuid),
+    staleTime: CACHE_TIMING.DEFAULT_STALE_TIME,
+  });
+  const company = selectedUuid && detailQuery.data?.data.uuid === selectedUuid ? detailQuery.data.data : null;
 
   const data: ReviewData = {
     userProfile,
@@ -60,17 +69,25 @@ export const useReview = (): ReviewHookReturn => {
   const isLoading = Boolean(
     userProfileQuery.isLoading ||
     (signupRole === 'investor' && financialProfileLoading) ||
-    (signupRole === 'company' && companyQuery.isLoading),
+    (signupRole === 'company' && (companyQuery.isLoading || detailQuery.isLoading)),
   );
 
   const error =
     userProfileQuery.error?.message ||
     (signupRole === 'investor' ? financialProfileError?.message : null) ||
-    companyQuery.error?.message ||
+    (signupRole === 'company'
+      ? companyQuery.error?.message ||
+        detailQuery.error?.message ||
+        (selectedUuid && detailQuery.isSuccess && !company
+          ? 'Company details did not match the selected company. Please try again.'
+          : null)
+      : null) ||
     null;
 
   const canCompleteSignup =
-    signupRole === 'company' ? Boolean(userProfile && company) : Boolean(userProfile && financialProfile);
+    !isLoading &&
+    !error &&
+    (signupRole === 'company' ? Boolean(userProfile && company) : Boolean(userProfile && financialProfile));
 
   const completeSignupMutation = useMutation({
     mutationFn: async () => {
@@ -100,6 +117,17 @@ export const useReview = (): ReviewHookReturn => {
     }
   };
 
+  const retryLoad = useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['userProfiles'] }),
+      ...(signupRole === 'company' ? [queryClient.invalidateQueries({ queryKey: ['signup', 'company'] })] : []),
+      ...(signupRole === 'investor' ? [queryClient.invalidateQueries({ queryKey: ['financialProfiles'] })] : []),
+      ...(selectedUuid
+        ? [queryClient.invalidateQueries({ queryKey: ['signup', 'company-detail', selectedUuid] })]
+        : []),
+    ]);
+  }, [queryClient, signupRole, selectedUuid]);
+
   return {
     data,
     company,
@@ -109,5 +137,6 @@ export const useReview = (): ReviewHookReturn => {
     completeSignup,
     isSubmitting: completeSignupMutation.isPending,
     canCompleteSignup,
+    retryLoad,
   };
 };
