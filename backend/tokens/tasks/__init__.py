@@ -5,6 +5,7 @@ from .review_request import (
     execute_review_request_task,
 )
 from .signing_challenge import purge_signing_challenges
+from .swap_expiry import expire_unclaimed_matches
 from .swap_reconciler import resolve_executing_swaps
 
 __all__ = [
@@ -12,6 +13,7 @@ __all__ = [
     "check_pending_token_deployments",
     "deploy_share_token_task",
     "execute_review_request_task",
+    "expire_unclaimed_matches",
     "fold_every_share_class",
     "purge_former_members_past_the_clock",
     "purge_signing_challenges",

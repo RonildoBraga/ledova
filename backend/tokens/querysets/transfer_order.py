@@ -66,7 +66,7 @@ class TransferOrderQuerySet(QuerySet):
         return result or 0
 
     def order_book_levels(self, token, order_type: str, limit: int = 20):
-        qs = self.ownership_bound().open().filter(token=token)
+        qs = self.ownership_bound().open_or_partial().filter(token=token)
 
         if order_type == TransferOrderType.BUY:
             qs = qs.buy_orders().order_by("-price_per_share")
@@ -79,10 +79,24 @@ class TransferOrderQuerySet(QuerySet):
         )[:limit]
 
     def best_bid(self, token):
-        return self.ownership_bound().open().buy_orders().filter(token=token).order_by("-price_per_share").first()
+        return (
+            self.ownership_bound()
+            .open_or_partial()
+            .buy_orders()
+            .filter(token=token)
+            .order_by("-price_per_share")
+            .first()
+        )
 
     def best_ask(self, token):
-        return self.ownership_bound().open().sell_orders().filter(token=token).order_by("price_per_share").first()
+        return (
+            self.ownership_bound()
+            .open_or_partial()
+            .sell_orders()
+            .filter(token=token)
+            .order_by("price_per_share")
+            .first()
+        )
 
     def with_relations(self):
         return self.select_related(

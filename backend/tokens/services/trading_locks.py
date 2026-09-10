@@ -21,6 +21,7 @@ def swap_terms(swap):
         swap.nonce,
         swap.order_hash,
         swap.expires_at,
+        swap.expiry_release_eligible,
     )
 
 

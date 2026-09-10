@@ -298,6 +298,7 @@ class AtomicSwapService:
             nonce=nonce,
             order_hash="",
             expires_at=expires_at,
+            expiry_release_eligible=True,
             status=SwapOrderStatus.CREATED,
         )
         swap_order.order_hash = self._compute_order_hash(swap_order)
