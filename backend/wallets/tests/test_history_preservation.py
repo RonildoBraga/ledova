@@ -278,6 +278,112 @@ class HistoryPreservationChecks:
             self.assertFalse(tx.asset.is_verified)
             self.assertIsNone(tx.balance_reconciliation_token)
 
+    def test_history_arriving_after_a_missing_lookup_is_left_for_a_later_receipt_job(self):
+        original_get = Transaction.objects.get
+        for status in (0, 1):
+            with self.subTest(status=status):
+                data = self.history(
+                    tx_hash="0x" + f"{status + 400:064x}",
+                    contract_address="0x" + "cd" * 20,
+                    block_timestamp=timezone.now() - timezone.timedelta(days=7),
+                )
+                client = self.receipt_client(status=status)
+                before = self.state()[1:]
+
+                def history_arrives(*args, **kwargs):
+                    try:
+                        return original_get(*args, **kwargs)
+                    except Transaction.DoesNotExist:
+                        _process_transactions(self.wallet, [data])
+                        raise
+
+                with (
+                    patch.object(Transaction.objects, "get", side_effect=history_arrives),
+                    patch(
+                        "wallets.services.transaction_confirmation.send_transaction_notification.defer"
+                    ) as notification,
+                    patch("wallets.services.transaction_confirmation.sync_holding", wraps=sync_holding),
+                    patch("wallets.services.holdings.fetch_chain_balance", return_value=Decimal("37")),
+                ):
+                    self.assertEqual(
+                        self.check_receipt(data, client), {"status": "not_found", "tx_hash": data["tx_hash"]}
+                    )
+                client.get_transaction_receipt.assert_not_called()
+                notification.assert_not_called()
+                self.assertEqual(self.state()[1:], before)
+                with use_operator():
+                    tx = Transaction.objects.get(wallet=self.wallet, tx_hash=data["tx_hash"])
+                self.assertEqual(tx.status, "pending")
+                self.assertIsNone(tx.balance_reconciliation_token)
+                self.assertIsNone(tx.deducted_amount)
+                self.assertEqual(self.check_receipt(data, client)["status"], "confirmed" if status else "failed")
+                self.assertEqual(self.state()[1:], before)
+
+    def test_a_receipt_for_a_still_missing_row_cannot_enter_the_local_transfer_writer(self):
+        with (
+            patch(
+                "wallets.tasks.confirmation.TransactionConfirmationService.confirm_transaction",
+                wraps=TransactionConfirmationService.confirm_transaction,
+            ) as confirm,
+            patch(
+                "wallets.tasks.confirmation.TransactionConfirmationService.fail_transaction",
+                wraps=TransactionConfirmationService.fail_transaction,
+            ) as fail,
+        ):
+            for status in (0, 1):
+                data = self.history()
+                client = self.receipt_client(status=status)
+                self.assertEqual(self.check_receipt(data, client)["status"], "not_found")
+                client.get_transaction_receipt.assert_not_called()
+            confirm.assert_not_called()
+            fail.assert_not_called()
+        self.pending()
+        self.assertEqual(self.check_receipt(self.history(), self.receipt_client())["status"], "confirmed")
+
+    @skipUnless(connections[configured(APP_ALIAS)].vendor == "postgresql", "Concurrent connections need PostgreSQL")
+    def test_a_missing_lookup_in_one_connection_cannot_settle_an_import_from_another(self):
+        data = self.history(contract_address="0x" + "cd" * 20)
+        lookup_finished = Event()
+        release = Event()
+        client = self.receipt_client()
+        original_get = Transaction.objects.get
+
+        def missing_lookup(*args, **kwargs):
+            try:
+                return original_get(*args, **kwargs)
+            except Transaction.DoesNotExist:
+                lookup_finished.set()
+                if not release.wait(10):
+                    raise AssertionError("The missing lookup was not released after history import")
+                raise
+
+        def confirm():
+            try:
+                return self.check_receipt(data, client)
+            finally:
+                connections.close_all()
+
+        with (
+            patch.object(Transaction.objects, "get", side_effect=missing_lookup),
+            patch("wallets.services.transaction_confirmation.send_transaction_notification.defer") as notification,
+            patch("wallets.services.transaction_confirmation.sync_holding", wraps=sync_holding),
+            patch("wallets.services.holdings.fetch_chain_balance", return_value=Decimal("37")),
+            ThreadPoolExecutor(max_workers=1) as pool,
+        ):
+            waiting = pool.submit(confirm)
+            try:
+                self.assertTrue(lookup_finished.wait(5))
+                self.import_history(data)
+                before = self.state()[1:]
+            finally:
+                release.set()
+            self.assertEqual(waiting.result(timeout=10), {"status": "not_found", "tx_hash": data["tx_hash"]})
+        client.get_transaction_receipt.assert_not_called()
+        notification.assert_not_called()
+        self.assertEqual(self.state()[1:], before)
+        self.assertEqual(self.check_receipt(data, client)["status"], "confirmed")
+        self.assertEqual(self.state()[1:], before)
+
     def test_history_without_block_metadata_stays_unknown_after_receipt_verification(self):
         data = self.history(block_timestamp=None, block_number=None)
         self.import_history(data)

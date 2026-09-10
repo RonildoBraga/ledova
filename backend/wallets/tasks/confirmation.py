@@ -149,7 +149,7 @@ def _confirm_pending_transaction(tx_hash: str, wallet_uuid: str) -> Dict[str, An
             logger.info(f"Transaction already processed: {tx_hash}")
             return {"status": "already_processed", "current_status": tx.status}
     except Transaction.DoesNotExist:
-        tx = None
+        return {"status": "not_found", "tx_hash": tx_hash}
 
     client = get_blockchain_client(wallet.chain)
     receipt = client.get_transaction_receipt(tx_hash)
@@ -167,7 +167,7 @@ def _confirm_pending_transaction(tx_hash: str, wallet_uuid: str) -> Dict[str, An
     block_timestamp = reader.block_timestamp(client, receipt, block_number)
     actual_fee = _extract_actual_fee(receipt, wallet.chain)
 
-    if tx is not None and tx.imported_from_history:
+    if tx.imported_from_history:
         return record_history_receipt(
             tx_hash,
             wallet=wallet,
