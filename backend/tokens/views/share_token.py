@@ -212,6 +212,7 @@ class ShareTokenViewSet(AuthenticatedModelViewSet):
             }
         )
 
+    @extend_schema(responses={(200, "text/csv"): OpenApiTypes.STR})
     @action(detail=True, methods=["get"], url_path="register/export")
     def register_export(self, request, uuid=None):
         token = self.get_object()

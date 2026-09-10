@@ -1,5 +1,5 @@
 from django.http import Http404
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiTypes, extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -44,6 +44,7 @@ class InvestorClassificationViewSet(UploadProtectedView, AuthenticatedModelViewS
         outcome = investor_eligibility(request.user)
         return Response(InvestorEligibilitySerializer(outcome, context=self.get_serializer_context()).data)
 
+    @extend_schema(responses={(200, "*/*"): OpenApiTypes.BINARY})
     @action(detail=True, methods=["get"])
     def evidence(self, request, uuid=None):
         classification = self.get_object()

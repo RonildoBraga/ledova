@@ -1,3 +1,4 @@
+from drf_spectacular.utils import OpenApiParameter, OpenApiTypes, extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
@@ -6,12 +7,17 @@ from rest_framework.response import Response
 from integrations.base_chain.exceptions import BaseChainConnectionError
 from shared.views import AuthenticatedGenericViewSet
 from tokens.exceptions import WalletBalancesUnavailableException
+from tokens.serializers.trading_wallet import TradingWalletBalancesSerializer
 from tokens.services import ShareTokenService
 from tokens.trading_wallet_access import resolve_verified_evm_wallets
 
 
 class TradingWalletViewSet(AuthenticatedGenericViewSet):
 
+    @extend_schema(
+        parameters=[OpenApiParameter("wallet_address", OpenApiTypes.STR, OpenApiParameter.QUERY, required=True)],
+        responses=TradingWalletBalancesSerializer,
+    )
     @action(detail=False, methods=["get"])
     def balances(self, request):
         wallet_address = request.query_params.get("wallet_address")

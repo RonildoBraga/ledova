@@ -1,3 +1,4 @@
+from drf_spectacular.utils import OpenApiTypes, extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound
@@ -36,6 +37,7 @@ class DocumentViewSet(UploadProtectedView, AuthenticatedModelViewSet):
         )
         return scope(user).filter(company=self._company()).select_related("company")
 
+    @extend_schema(responses={(200, "*/*"): OpenApiTypes.BINARY})
     @action(detail=True, methods=["get"])
     def file(self, request, company_uuid=None, uuid=None):
         document = self.get_object()
