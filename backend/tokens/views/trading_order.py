@@ -4,6 +4,7 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
     OpenApiParameter,
     OpenApiResponse,
+    PolymorphicProxySerializer,
     extend_schema,
     inline_serializer,
 )
@@ -33,6 +34,13 @@ from tokens.serializers.order_submission import (
 from tokens.serializers.swap_order import (
     SubmitSignatureSerializer,
     SwapOrderDetailSerializer,
+)
+from tokens.serializers.trading_responses import (
+    ApprovalStatusResponseSerializer,
+    ApprovalTransactionResponseSerializer,
+    CancelOrderMessageResponseSerializer,
+    OrderModificationMessageResponseSerializer,
+    SufficientApprovalResponseSerializer,
 )
 from tokens.services import (
     AtomicSwapService,
@@ -116,6 +124,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
 
         return Response(TransferOrderDetailSerializer(order).data)
 
+    @extend_schema(responses=CancelOrderMessageResponseSerializer)
     @action(detail=True, methods=["get"], url_path="cancel/message")
     def cancel_message(self, request, uuid=None):
         order = self.get_object()
@@ -224,6 +233,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
 
         return Response(SwapOrderDetailSerializer(updated_order).data)
 
+    @extend_schema(responses=ApprovalStatusResponseSerializer)
     @action(detail=True, methods=["get"], url_path="swap/approval-status")
     def swap_approval_status(self, request, uuid=None):
         atomic_swap_service, swap_order, user_role, _has_signed = self._get_authorized_swap_context(request)
@@ -243,6 +253,13 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
             }
         )
 
+    @extend_schema(
+        responses=PolymorphicProxySerializer(
+            component_name="ApprovalDataResponse",
+            serializers=[SufficientApprovalResponseSerializer, ApprovalTransactionResponseSerializer],
+            resource_type_field_name=None,
+        )
+    )
     @action(detail=True, methods=["get"], url_path="swap/approval-data")
     def swap_approval_data(self, request, uuid=None):
         atomic_swap_service, swap_order, user_role, _has_signed = self._get_authorized_swap_context(request)
@@ -287,6 +304,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
         atomic_swap_service = AtomicSwapService()
         return atomic_swap_service, swap_order, user_role, has_signed
 
+    @extend_schema(responses=OrderModificationMessageResponseSerializer)
     @action(detail=True, methods=["post"], url_path="modify/message")
     def modify_message(self, request, uuid=None):
         order = self.get_object()

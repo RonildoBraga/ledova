@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
@@ -5,6 +6,10 @@ from shared.db import atomic
 from shared.views.base import AuthenticatedModelViewSet
 from users.models.user_profile import UserProfile
 from users.serializers import UserProfileSerializer
+from users.serializers.account_actions import (
+    AccountExportDataSerializer,
+    DeletedAccountResponseSerializer,
+)
 from users.services import lifecycle
 
 
@@ -30,11 +35,13 @@ class UserProfileViewSet(AuthenticatedModelViewSet):
     def update(self, request, *args, **kwargs):
         return super().update(request, *args, **kwargs)
 
+    @extend_schema(responses=DeletedAccountResponseSerializer)
     @action(detail=False, methods=["post"], url_path="delete-account")
     def delete_account(self, request):
         lifecycle.delete_account(request.user)
         return Response({"message": "Your account has been successfully deleted."})
 
+    @extend_schema(responses=AccountExportDataSerializer)
     @action(detail=False, methods=["get"], url_path="export-data")
     def export_data(self, request):
         return Response(lifecycle.export_account_data(request.user))

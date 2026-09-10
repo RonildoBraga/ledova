@@ -3,6 +3,14 @@ from rest_framework import serializers
 from users.models.notification import Notification
 
 
+class UnreadCountResponseSerializer(serializers.Serializer):
+    unread_count = serializers.IntegerField()
+
+
+class MarkAllReadResponseSerializer(serializers.Serializer):
+    marked = serializers.IntegerField()
+
+
 class NotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notification

@@ -19,6 +19,7 @@ from companies.serializers import (
     CompanyStatusUpdateSerializer,
     CompanyUpdateSerializer,
 )
+from companies.serializers.stats import CompanyStatsSerializer
 from companies.services import delete_company, submit_application, transition_company
 from shared.views import AuthenticatedModelViewSet
 from tokens.services.company_stats import company_stats
@@ -98,6 +99,7 @@ class CompanyViewSet(AuthenticatedModelViewSet):
     def perform_destroy(self, instance):
         delete_company(instance)
 
+    @extend_schema(responses=CompanyStatsSerializer)
     @action(detail=True, methods=["get"])
     def stats(self, request, uuid=None):
         return Response(company_stats(self.get_object()))

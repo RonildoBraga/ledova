@@ -62,73 +62,7 @@ SHARED = ROOT / "packages/shared/src"
 
 TYPE_DEBT: dict[str, tuple[int, str]] = {}
 
-SCHEMA_DEBT: dict[str, tuple[int, str]] = {
-    "IssuerSubscription:OfferingDetail": (
-        11,
-        "offerings/views/offering.py subscriptions returns "
-        "self.get_paginated_response(IssuerSubscriptionSerializer(page, many=True).data), which "
-        "check-schema-responses.py does not see: it looks for Response(...) and this is a third "
-        "spelling. The generator falls back to OfferingDetailSerializer. The interface is correct; "
-        "tracked as a follow-up to #211.",
-    ),
-    "CancelOrderMessageResponse:TransferOrderList": (7, "tokens/views/trading_order.py builds this body itself while get_serializer_class names a TransferOrder serializer, so the generator documents the wrong shape. The interface is correct. In check-schema-responses.py's LEGACY; tracked by #211."),
-    "ApprovalStatusResponse:TransferOrderList": (7, "tokens/views/trading_order.py builds this body itself while get_serializer_class names a TransferOrder serializer, so the generator documents the wrong shape. The interface is correct. In check-schema-responses.py's LEGACY; tracked by #211."),
-    "ApprovalDataResponse:TransferOrderList": (1, "tokens/views/trading_order.py builds this body itself while get_serializer_class names a TransferOrder serializer, so the generator documents the wrong shape. The interface is correct. In check-schema-responses.py's LEGACY; tracked by #211."),
-    "MarketData:ShareTokenList": (
-        7,
-        "tokens/views/trading_token.py market_data returns Response(market_data), a body built "
-        "into a local, so the generator falls back to the viewset's serializer. The interface is "
-        "correct. check-schema-responses.py does not see this spelling either - it looks for a "
-        "dict literal, and this is a name. Tracked as a follow-up to #211.",
-    ),
-    "OrderBook:ShareTokenList": (
-        3,
-        "tokens/views/trading_token.py order_book returns Response(order_book), the same shape as "
-        "market_data above and invisible to check-schema-responses.py for the same reason. The "
-        "interface is correct. Tracked as a follow-up to #211.",
-    ),
-    "OrderModificationMessageResponse:TransferOrderList": (
-        9,
-        "tokens/views/trading_order.py create_message builds its own body while "
-        "get_serializer_class names TransferOrderCreateSerializer, and the generator documents "
-        "neither. The interface is correct. Tracked as a follow-up to #211.",
-    ),
-    "AccountExportData:UserProfile": (
-        9,
-        "users/views/user_profile.py export-data returns lifecycle.export_account_data(user), a "
-        "literal body, so the generator falls back to the viewset's serializer. The interface is "
-        "correct. In check-schema-responses.py's LEGACY; tracked by #211.",
-    ),
-    "TokenIssuancesResponse:ShareTokenDetail": (
-        5,
-        "tokens/views/share_token.py issuances returns a literal paginated body and the generator "
-        "falls back to the viewset's serializer. The interface is correct. Tracked by #211.",
-    ),
-    "CompanyStats:CompanyDetail": (
-        3,
-        "companies/views/company.py stats returns company_stats(...), a literal body, so the "
-        "generator falls back to the viewset's serializer. The interface is correct. Tracked by "
-        "#211.",
-    ),
-    "CapitalIncreaseResponse:CapitalIncreaseList": (
-        2,
-        "tokens/views/capital_increase.py list returns a literal body carrying count and results, "
-        "and the generator documents the row serializer. The interface is correct. Tracked by "
-        "#211.",
-    ),
-    "MarkAllReadResponse:Notification": (
-        1,
-        "users/views/notification.py mark_all_read returns {'marked': n}, a literal body, so the "
-        "generator falls back to the viewset's serializer. The interface is correct. Tracked by "
-        "#211.",
-    ),
-    "UnreadCountResponse:Notification": (
-        1,
-        "users/views/notification.py unread_count returns {'unreadCount': n}, a literal body, so "
-        "the generator falls back to the viewset's serializer. The interface is correct. Tracked "
-        "by #211.",
-    ),
-}
+SCHEMA_DEBT: dict[str, tuple[int, str]] = {}
 
 ENDPOINT_OPENS = re.compile(r"export const (\w+)\s*=\s*\{")
 ENDPOINT_ENTRY = re.compile(r"^\s*(\w+):\s*(?:\([^)]*\)\s*=>\s*)?[`']([^`'\n]+)[`']", re.M)
