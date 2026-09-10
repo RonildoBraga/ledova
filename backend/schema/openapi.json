@@ -118,15 +118,15 @@
           },
           "isActive": {
             "readOnly": true,
-            "type": "string"
+            "type": "boolean"
           },
           "isApproved": {
             "readOnly": true,
-            "type": "string"
+            "type": "boolean"
           },
           "isPendingReview": {
             "readOnly": true,
-            "type": "string"
+            "type": "boolean"
           },
           "name": {
             "readOnly": true,
@@ -367,6 +367,7 @@
             "type": "string"
           },
           "chain": {
+            "nullable": true,
             "readOnly": true,
             "type": "string"
           },
@@ -378,6 +379,7 @@
             "type": "array"
           },
           "contractAddress": {
+            "nullable": true,
             "readOnly": true,
             "type": "string"
           },
@@ -403,9 +405,11 @@
           },
           "isYieldToken": {
             "readOnly": true,
-            "type": "string"
+            "type": "boolean"
           },
           "lastNavUpdate": {
+            "format": "date-time",
+            "nullable": true,
             "readOnly": true,
             "type": "string"
           },
@@ -414,6 +418,7 @@
             "type": "string"
           },
           "navPerToken": {
+            "nullable": true,
             "readOnly": true,
             "type": "string"
           },
@@ -1393,7 +1398,7 @@
           },
           "canIssueTokens": {
             "readOnly": true,
-            "type": "string"
+            "type": "boolean"
           },
           "city": {
             "maxLength": 100,
@@ -1456,11 +1461,11 @@
           },
           "isActive": {
             "readOnly": true,
-            "type": "string"
+            "type": "boolean"
           },
           "isApproved": {
             "readOnly": true,
-            "type": "string"
+            "type": "boolean"
           },
           "isOpenToInvestors": {
             "description": "Show this company's share classes in the investor directory.",
@@ -1468,7 +1473,7 @@
           },
           "isPendingReview": {
             "readOnly": true,
-            "type": "string"
+            "type": "boolean"
           },
           "name": {
             "maxLength": 255,
@@ -1720,11 +1725,11 @@
           },
           "isActive": {
             "readOnly": true,
-            "type": "string"
+            "type": "boolean"
           },
           "isApproved": {
             "readOnly": true,
-            "type": "string"
+            "type": "boolean"
           },
           "name": {
             "readOnly": true,
@@ -2080,13 +2085,53 @@
         ],
         "type": "object"
       },
+      "DirectoryOpenOfferingResponse": {
+        "properties": {
+          "closesAt": {
+            "format": "date-time",
+            "nullable": true,
+            "readOnly": true,
+            "type": "string"
+          },
+          "opensAt": {
+            "format": "date-time",
+            "readOnly": true,
+            "type": "string"
+          },
+          "priceCurrency": {
+            "readOnly": true,
+            "type": "string"
+          },
+          "pricePerShare": {
+            "format": "decimal",
+            "pattern": "^-?\\d{0,16}(?:\\.\\d{0,2})?$",
+            "readOnly": true,
+            "type": "string"
+          },
+          "uuid": {
+            "format": "uuid",
+            "readOnly": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "closesAt",
+          "opensAt",
+          "priceCurrency",
+          "pricePerShare",
+          "uuid"
+        ],
+        "type": "object"
+      },
       "DirectoryTokenList": {
         "properties": {
           "bestAsk": {
+            "nullable": true,
             "readOnly": true,
             "type": "string"
           },
           "bestBid": {
+            "nullable": true,
             "readOnly": true,
             "type": "string"
           },
@@ -2146,6 +2191,7 @@
             "type": "integer"
           },
           "lastPrice": {
+            "nullable": true,
             "readOnly": true,
             "type": "string"
           },
@@ -2154,8 +2200,13 @@
             "type": "string"
           },
           "openOffering": {
-            "readOnly": true,
-            "type": "string"
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DirectoryOpenOfferingResponse"
+              }
+            ],
+            "nullable": true,
+            "readOnly": true
           },
           "status": {
             "allOf": [
@@ -2260,12 +2311,18 @@
             "readOnly": true
           },
           "fileUrl": {
+            "nullable": true,
             "readOnly": true,
             "type": "string"
           },
           "latestExtraction": {
-            "readOnly": true,
-            "type": "string"
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DocumentExtraction"
+              }
+            ],
+            "nullable": true,
+            "readOnly": true
           },
           "mimeType": {
             "readOnly": true,
@@ -2331,6 +2388,97 @@
           "classification"
         ],
         "type": "object"
+      },
+      "DocumentExtraction": {
+        "properties": {
+          "confidence": {
+            "format": "double",
+            "nullable": true,
+            "readOnly": true,
+            "type": "number"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "readOnly": true,
+            "type": "string"
+          },
+          "durationMs": {
+            "nullable": true,
+            "readOnly": true,
+            "type": "integer"
+          },
+          "error": {
+            "readOnly": true,
+            "type": "string"
+          },
+          "finishedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "readOnly": true,
+            "type": "string"
+          },
+          "modelName": {
+            "readOnly": true,
+            "type": "string"
+          },
+          "parsedJson": {
+            "nullable": true,
+            "readOnly": true
+          },
+          "startedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "readOnly": true,
+            "type": "string"
+          },
+          "status": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DocumentExtractionStatusEnum"
+              }
+            ],
+            "readOnly": true
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "readOnly": true,
+            "type": "string"
+          },
+          "uuid": {
+            "description": "Unique identifier (primary key)",
+            "format": "uuid",
+            "readOnly": true,
+            "type": "string"
+          },
+          "warnings": {
+            "readOnly": true
+          }
+        },
+        "required": [
+          "confidence",
+          "createdAt",
+          "durationMs",
+          "error",
+          "finishedAt",
+          "modelName",
+          "parsedJson",
+          "startedAt",
+          "status",
+          "updatedAt",
+          "uuid",
+          "warnings"
+        ],
+        "type": "object"
+      },
+      "DocumentExtractionStatusEnum": {
+        "description": "* `pending` - Pending\n* `running` - Running\n* `succeeded` - Succeeded\n* `failed` - Failed",
+        "enum": [
+          "pending",
+          "running",
+          "succeeded",
+          "failed"
+        ],
+        "type": "string"
       },
       "DocumentTypeF54Enum": {
         "description": "* `payslip` - Payslip\n* `bank_statement` - Bank Statement\n* `tax_return` - Tax Return\n* `other` - Other",
@@ -3354,6 +3502,7 @@
             "type": "string"
           },
           "evidenceUrl": {
+            "nullable": true,
             "readOnly": true,
             "type": "string"
           },
@@ -3452,12 +3601,19 @@
       "InvestorEligibility": {
         "properties": {
           "account": {
+            "format": "uuid",
+            "nullable": true,
             "readOnly": true,
             "type": "string"
           },
           "classification": {
-            "readOnly": true,
-            "type": "string"
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/InvestorClassification"
+              }
+            ],
+            "nullable": true,
+            "readOnly": true
           },
           "isEligible": {
             "type": "boolean"
@@ -4321,8 +4477,13 @@
             "type": "string"
           },
           "paymentInstructions": {
-            "readOnly": true,
-            "type": "string"
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OperatorPaymentInstructions"
+              }
+            ],
+            "nullable": true,
+            "readOnly": true
           },
           "supportedSettlementAssets": {
             "items": {
@@ -4350,6 +4511,29 @@
           "supportedSettlementAssets",
           "website"
         ],
+        "type": "object"
+      },
+      "OperatorPaymentInstructions": {
+        "properties": {
+          "bankAccountName": {
+            "type": "string"
+          },
+          "bankAccountNumber": {
+            "type": "string"
+          },
+          "bankBsb": {
+            "type": "string"
+          },
+          "paymentReferencePrefix": {
+            "type": "string"
+          },
+          "receivingWalletAddress": {
+            "type": "string"
+          },
+          "receivingWalletChain": {
+            "type": "string"
+          }
+        },
         "type": "object"
       },
       "OrderActionAppliedResult": {
@@ -6550,6 +6734,7 @@
             "type": "string"
           },
           "citizenshipCountryName": {
+            "nullable": true,
             "readOnly": true,
             "type": "string"
           },
@@ -6563,6 +6748,7 @@
             "type": "boolean"
           },
           "dateJoined": {
+            "format": "date-time",
             "readOnly": true,
             "type": "string"
           },
@@ -6583,7 +6769,7 @@
           },
           "isActive": {
             "readOnly": true,
-            "type": "string"
+            "type": "boolean"
           },
           "isIdVerified": {
             "readOnly": true,
@@ -6594,7 +6780,7 @@
           },
           "isStaff": {
             "readOnly": true,
-            "type": "string"
+            "type": "boolean"
           },
           "kycProvider": {
             "allOf": [
@@ -6610,6 +6796,8 @@
             "type": "string"
           },
           "lastLogin": {
+            "format": "date-time",
+            "nullable": true,
             "readOnly": true,
             "type": "string"
           },
@@ -6633,6 +6821,7 @@
             "type": "string"
           },
           "residenceCountryName": {
+            "nullable": true,
             "readOnly": true,
             "type": "string"
           },
@@ -8072,10 +8261,12 @@
       "ShareTokenList": {
         "properties": {
           "bestAsk": {
+            "nullable": true,
             "readOnly": true,
             "type": "string"
           },
           "bestBid": {
+            "nullable": true,
             "readOnly": true,
             "type": "string"
           },
@@ -8129,6 +8320,7 @@
             "type": "boolean"
           },
           "lastPrice": {
+            "nullable": true,
             "readOnly": true,
             "type": "string"
           },
@@ -9998,6 +10190,7 @@
             "type": "string"
           },
           "citizenshipCountryName": {
+            "nullable": true,
             "readOnly": true,
             "type": "string"
           },
@@ -10011,6 +10204,7 @@
             "type": "boolean"
           },
           "dateJoined": {
+            "format": "date-time",
             "readOnly": true,
             "type": "string"
           },
@@ -10031,7 +10225,7 @@
           },
           "isActive": {
             "readOnly": true,
-            "type": "string"
+            "type": "boolean"
           },
           "isIdVerified": {
             "readOnly": true,
@@ -10042,7 +10236,7 @@
           },
           "isStaff": {
             "readOnly": true,
-            "type": "string"
+            "type": "boolean"
           },
           "kycProvider": {
             "allOf": [
@@ -10058,6 +10252,8 @@
             "type": "string"
           },
           "lastLogin": {
+            "format": "date-time",
+            "nullable": true,
             "readOnly": true,
             "type": "string"
           },
@@ -10081,6 +10277,7 @@
             "type": "string"
           },
           "residenceCountryName": {
+            "nullable": true,
             "readOnly": true,
             "type": "string"
           },
