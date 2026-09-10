@@ -8,8 +8,7 @@ from django.utils import timezone
 from shared.db import atomic
 from shared.tests.schema import migrate_to, restore_every_migration
 from shared.tests.tenants import make_tenant
-from tokens.models import SigningChallengePurpose
-from tokens.services.signing_challenge import issue_challenge
+from tokens.tests.signing_challenge_fixtures import historical_cancel_values
 
 BEFORE = [("tokens", "0034_shareissuance_mint_journal")]
 AFTER = [("tokens", "0035_trading_state_invariants")]
@@ -24,13 +23,9 @@ class TradingStateMigrationRefusesInvalidHistoryTest(TransactionTestCase):
         tenant = make_tenant("old-trading")
         self.order_id = tenant.swap.sell_order_id
         self.swap_id = tenant.swap.pk
-        self.challenge = issue_challenge(
-            SigningChallengePurpose.ORDER_CANCEL,
-            tenant.wallet.address,
-            {"orderUuid": str(self.order_id)},
-            order=tenant.swap.sell_order,
-        )
+        challenge_values = historical_cancel_values(tenant.swap.sell_order)
         self.old_apps = migrate_to(BEFORE)
+        self.challenge = self.old_apps.get_model("tokens", "SigningChallenge").objects.create(**challenge_values)
         self.addCleanup(self.restore)
 
     def restore(self):
