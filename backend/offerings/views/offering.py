@@ -57,7 +57,10 @@ class OfferingViewSet(AuthenticatedModelViewSet):
     @action(detail=True, methods=["get"])
     def subscriptions(self, request, uuid=None):
         offering = self.get_object()
-        page = self.paginate_queryset(Subscription.objects.for_issuer(offering))
+        subscriptions = Subscription.objects.filter(
+            offering__in=Offering.objects.manageable_by_user(request.user)
+        ).for_issuer(offering)
+        page = self.paginate_queryset(subscriptions)
         return self.get_paginated_response(IssuerSubscriptionSerializer(page, many=True).data)
 
     @extend_schema(responses=OfferingDetailSerializer)

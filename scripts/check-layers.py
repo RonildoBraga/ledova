@@ -86,13 +86,7 @@ ALLOWED: dict[str, tuple[int, str]] = {
     ),
 }
 
-LEGACY: dict[str, int] = {
-    "backend/assets/views/asset.py:raw-orm-in-view": 1,
-    "backend/offerings/views/offering.py:raw-orm-in-view": 1,
-    "backend/tokens/views/share_token.py:raw-orm-in-view": 1,
-    "backend/tokens/views/trading_order.py:raw-orm-in-view": 1,
-    "backend/tokens/views/trading_token.py:raw-orm-in-view": 1,
-}
+LEGACY: dict[str, int] = {}
 
 
 def layer_of(path: Path) -> str | None:

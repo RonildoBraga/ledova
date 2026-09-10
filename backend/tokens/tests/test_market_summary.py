@@ -5,8 +5,14 @@ from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
+from companies.models import Company
 from feature_flags.models import FeatureFlag
-from shared.tests.tenants import make_eligible, make_tenant, open_to_investors
+from shared.tests.tenants import (
+    make_associated,
+    make_eligible,
+    make_tenant,
+    open_to_investors,
+)
 from tokens.models import ShareToken, SwapOrder
 
 DIRECTORY = "/api/v1/directory/tokens/"
@@ -82,3 +88,52 @@ class MarketSummaryTest(APITestCase):
         row = self.rows(response)[str(self.alice.deployed_token.uuid)]
         self.assertEqual({"lastPrice", "bestBid", "bestAsk"} & set(row), {"lastPrice", "bestBid", "bestAsk"})
         self.assertEqual((row["lastPrice"], row["bestBid"], row["bestAsk"]), ("1.5", "1.50", "1.50"))
+
+    def test_an_issuer_association_does_not_replace_general_market_eligibility(self):
+        associate = make_tenant("associate")
+        make_associated(associate, self.bob.company)
+        self.client.force_authenticate(associate.user)
+
+        directory = self.client.get(DIRECTORY)
+        self.assertEqual(directory.status_code, 200)
+        self.assertEqual(set(self.rows(directory)), {str(self.bob.deployed_token.uuid)})
+        self.assertEqual(self.client.get(TRADING).json()["results"], [])
+        self.assertEqual(self.client.get(f"{TRADING}{self.bob.deployed_token.uuid}/").status_code, 404)
+
+        make_eligible(associate)
+        Company.objects.filter(pk=self.bob.company.pk).update(is_open_to_investors=False)
+        market = self.client.get(TRADING)
+        self.assertEqual(market.status_code, 200)
+        self.assertEqual(
+            set(self.rows(market)),
+            {str(tenant.deployed_token.uuid) for tenant in (self.alice, self.bob, associate)},
+        )
+        self.assertEqual(self.client.get(f"{TRADING}{self.bob.deployed_token.uuid}/").status_code, 200)
+
+    def test_the_market_keeps_cross_issuer_name_ordering_and_pages(self):
+        ShareToken.objects.filter(pk=self.alice.deployed_token.pk).update(name="Z Alice")
+        ShareToken.objects.filter(pk=self.bob.deployed_token.pk).update(name="Z Bob")
+        tokens = []
+        for index in range(26):
+            token = ShareToken.objects.create(
+                company=self.bob.company,
+                name=f"A Token {index:02}",
+                symbol=f"T{index:02}",
+                total_supply="1000",
+                status="deployed",
+                contract_address=f"0x{index + 10000:040x}",
+            )
+            tokens.append(str(token.uuid))
+        first = self.client.get(TRADING)
+        self.assertEqual(first.status_code, 200)
+        body = first.json()
+        self.assertEqual(body["count"], 28)
+        self.assertEqual([row["uuid"] for row in body["results"]], tokens[:25])
+        second = self.client.get(body["next"]).json()
+        self.assertEqual(
+            [row["uuid"] for row in second["results"]],
+            [tokens[25], str(self.alice.deployed_token.uuid), str(self.bob.deployed_token.uuid)],
+        )
+        self.assertIsNone(second["next"])
+        descending = self.client.get(TRADING, {"ordering": "-name"}).json()
+        self.assertEqual([row["name"] for row in descending["results"][:2]], ["Z Bob", "Z Alice"])

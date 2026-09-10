@@ -348,16 +348,15 @@ heuristic is about false positives, and four files agreeing means the shape is
 common, not that it is safe.**
 
 Whether a row the caller can see implies its children are visible is a property of
-each relation, and no rule over the syntax can know it. This product has a
-relation where it is meant not to hold — `offerings/views/offering.py`'s
-`subscriptions` action is outside `MANAGE_ACTIONS`, so it reads through
-`visible_to_user`, and `Subscription.objects.for_issuer(offering)` would return
-every investor's subscriptions. It is correct today only because
-`Company.visible_to_user` and `Company.manageable_by_user` have identical bodies,
-and the [tenancy model](ARCHITECTURE.md#tenancy-model) describes deliberate
-pressure to widen the first.
-Loosening the rule would have removed the standing warning from the one line that
-says so. Those four are pinned with counts instead.
+each relation, and no rule over the syntax can know it. The issuer subscriptions
+action illustrates why: reading an offering does not by itself authorize the
+caller to read every investor's subscriptions. Its child query now explicitly
+filters by `Offering.objects.manageable_by_user(request.user)` before applying
+the issuer read bundle. The [tenancy model](ARCHITECTURE.md#tenancy-model)
+describes pressure to widen company visibility, so the issuer boundary must not
+depend on the visible/manageable predicates retaining identical bodies. The
+former child-query findings were discharged with explicit scopes or complete
+authorization decisions in services; the per-expression rule remains unchanged.
 
 The `bare-admin-view` rule is the one rule outside that table's "Never
 contains" column, and it needed the walker widened before it could exist:

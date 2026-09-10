@@ -1,5 +1,9 @@
+from datetime import timedelta
+
+from django.utils import timezone
 from rest_framework.test import APITestCase
 
+from offerings.models import Subscription
 from offerings.tests.factories import (
     configure_operator,
     eligible_subscriber,
@@ -81,3 +85,74 @@ class IssuerSubscriptionReadTest(APITestCase):
         response = self.client.get(f"/api/v1/tokens/{token.uuid}/issuances/")
 
         self.assertIsNone(response.json()["results"][0]["subscriptionReference"])
+
+    def test_the_issuer_keeps_other_investors_on_newest_first_pages(self):
+        other = make_tenant("subscriber")
+        first_created = self.subscription.created_at
+        later = []
+        for index in range(25):
+            subscription = Subscription.objects.create(
+                offering=self.offering,
+                user_account=other.account,
+                wallet=other.wallet,
+                submitted_by=other.user,
+                quantity=index + 1,
+                price_per_share=self.offering.price_per_share,
+                amount_due=(index + 1) * self.offering.price_per_share,
+            )
+            Subscription.objects.filter(pk=subscription.pk).update(
+                created_at=first_created + timedelta(seconds=index + 1)
+            )
+            later.append(str(subscription.uuid))
+
+        path = f"/api/v1/offerings/{self.offering.uuid}/subscriptions/"
+        first = self.client.get(path)
+        self.assertEqual(first.status_code, 200)
+        body = first.json()
+        self.assertEqual(body["count"], 26)
+        self.assertEqual([row["uuid"] for row in body["results"]], list(reversed(later)))
+        self.assertEqual({row["investorName"] for row in body["results"]}, {"subscriber owner"})
+        second = self.client.get(body["next"]).json()
+        self.assertEqual([row["uuid"] for row in second["results"]], [str(self.subscription.uuid)])
+        self.assertIsNone(second["next"])
+        self.client.force_authenticate(other.user)
+        self.assertEqual(self.client.get(path).status_code, 404)
+
+    def test_issuance_history_keeps_token_status_ordering_and_pagination(self):
+        token = self.tenant.deployed_token
+        other = make_tenant("other-issuer")
+        started = timezone.now()
+        completed = []
+        for index in range(26):
+            issuance = ShareIssuance.objects.create(
+                token=token,
+                recipient_address=self.tenant.wallet.address,
+                amount=str(index + 1),
+                status=IssuanceStatus.COMPLETED,
+                completed_at=started + timedelta(seconds=index),
+            )
+            completed.append(str(issuance.uuid))
+        ShareIssuance.objects.create(
+            token=other.deployed_token,
+            recipient_address=other.wallet.address,
+            amount="999",
+            status=IssuanceStatus.COMPLETED,
+            completed_at=started + timedelta(minutes=1),
+        )
+        ShareIssuance.objects.create(
+            token=token, recipient_address=self.tenant.wallet.address, amount="555", status=IssuanceStatus.PENDING
+        )
+
+        path = f"/api/v1/tokens/{token.uuid}/issuances/?status=completed"
+        first = self.client.get(path)
+        self.assertEqual(first.status_code, 200)
+        body = first.json()
+        self.assertEqual(body["count"], 26)
+        self.assertEqual([row["uuid"] for row in body["results"]], list(reversed(completed[1:])))
+        self.assertEqual({row["token"] for row in body["results"]}, {str(token.uuid)})
+        self.assertEqual(body["results"][0]["amount"], "26")
+        second = self.client.get(body["next"]).json()
+        self.assertEqual([row["uuid"] for row in second["results"]], [completed[0]])
+        self.assertIsNone(second["next"])
+        self.client.force_authenticate(other.user)
+        self.assertEqual(self.client.get(path).status_code, 404)

@@ -67,3 +67,13 @@ class AssetSnapshotsEndpointTest(APITestCase):
         response = self.client.get(self.url, {"start_date": "2026-09-01T12:00:00"})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["detail"], "start_date and end_date must be YYYY-MM-DD.")
+
+    def test_a_second_visible_asset_does_not_mix_its_series_into_the_selected_asset(self):
+        other = Asset.objects.create(symbol="OTHER", name="Other asset", asset_type="erc20_token", is_verified=True)
+        AssetChainDeployment.objects.create(asset=other, chain="ethereum")
+        AssetSnapshot.objects.create(asset=other, price=99, source_timestamp=self.timestamps[0], data_source="manual")
+
+        self.assertEqual(self._prices({"max_points": "2"}), ["3.000000000000000000", "1.000000000000000000"])
+        response = self.client.get(f"/api/assets/{other.uuid}/snapshots/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([row["price"] for row in response.json()], ["99.000000000000000000"])

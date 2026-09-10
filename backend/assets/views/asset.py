@@ -40,9 +40,9 @@ class AssetViewSet(AuthenticatedReadOnlyViewSet):
         if order_by not in {"source_timestamp", "-source_timestamp"}:
             order_by = "-source_timestamp"
         try:
-            queryset = AssetSnapshot.objects.filter(asset=asset).filter_by_date_range(
-                request.query_params.get("start_date"), request.query_params.get("end_date")
-            )
+            queryset = AssetSnapshot.objects.filter(
+                asset=asset, asset__in=Asset.objects.visible_to_user(request.user)
+            ).filter_by_date_range(request.query_params.get("start_date"), request.query_params.get("end_date"))
         except ValueError:
             raise ValidationError({"detail": "start_date and end_date must be YYYY-MM-DD."})
         queryset = sample_evenly(queryset.order_by(order_by), request.query_params.get("max_points"))
