@@ -14,8 +14,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  scope:
+    name: Determine native build scope
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      required: ${{ steps.scope.outputs.required }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - name: Classify the complete pull-request change
+        id: scope
+        run: python3 scripts/native-build-scope.py route
+
   android:
     name: Android Release and native probe
+    needs: scope
+    if: needs.scope.outputs.required == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
@@ -90,6 +106,8 @@ jobs:
 
   ios:
     name: iOS ad hoc simulator Release and native probe
+    needs: scope
+    if: needs.scope.outputs.required == 'true'
     runs-on: macos-15
     timeout-minutes: 90
     env:
@@ -152,3 +170,16 @@ jobs:
             xcrun simctl shutdown "$IOS_SIMULATOR_UDID" || true
             xcrun simctl delete "$IOS_SIMULATOR_UDID"
           fi
+
+  native-status:
+    name: Mobile native checks
+    if: always()
+    needs: [scope, android, ios]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Require successful routing and the expected native outcomes
+        env:
+          NATIVE_JOB_RESULTS: ${{ toJSON(needs) }}
+        run: python3 scripts/native-build-scope.py verdict
