@@ -1,3 +1,5 @@
+import type { JsonValue } from './common';
+
 export interface FormErrors {
   [key: string]: string[];
 }
@@ -64,7 +66,7 @@ export interface AccountExportData {
   } | null;
   financialProfile: {
     occupation: string | null;
-    sourceOfFunds: string[] | null;
+    sourceOfFunds: JsonValue;
     sourceOfFundsOtherText: string | null;
     intendedUse: string | null;
     intendedUseOtherText: string | null;

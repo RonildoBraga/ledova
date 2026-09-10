@@ -1,3 +1,5 @@
+import type { JsonValue } from '../types/common';
+
 const SOURCE_OF_FUNDS_LABELS: Record<string, string> = {
   employment_income: 'Employment income',
   savings: 'Savings',
@@ -15,9 +17,14 @@ const INTENDED_USE_LABELS: Record<string, string> = {
   other: 'Other',
 };
 
-export function formatSourceOfFunds(funds: string[]): string {
-  if (!funds || funds.length === 0) return '';
-  return funds.map((fund) => SOURCE_OF_FUNDS_LABELS[fund] || fund).join(', ');
+export function sourceOfFundsChoices(funds: JsonValue): string[] {
+  return Array.isArray(funds) ? funds.filter((fund): fund is string => typeof fund === 'string') : [];
+}
+
+export function formatSourceOfFunds(funds: JsonValue): string {
+  return sourceOfFundsChoices(funds)
+    .map((fund) => SOURCE_OF_FUNDS_LABELS[fund] || fund)
+    .join(', ');
 }
 
 export function formatIntendedUse(use: string): string {

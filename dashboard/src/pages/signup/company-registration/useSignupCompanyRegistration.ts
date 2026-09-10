@@ -59,7 +59,7 @@ export function useSignupCompanyRegistration() {
         tradingName: existingCompany.tradingName || '',
         companyType: existingCompany.companyType || 'pty',
         acn: existingCompany.acn || '',
-        abn: existingCompany.abn || '',
+        abn: 'abn' in existingCompany && typeof existingCompany.abn === 'string' ? existingCompany.abn : '',
       });
     }
   }, [existingCompany]);

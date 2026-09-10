@@ -37,7 +37,7 @@ export {
 export { hasActiveFilters } from './filters';
 export { parseAddress, getAddressDisplayLines } from './address';
 export { formatPhoneForDisplay, cleanPhoneNumber } from './phoneFormatting';
-export { formatSourceOfFunds, formatIntendedUse } from './formatting-labels';
+export { formatSourceOfFunds, sourceOfFundsChoices, formatIntendedUse } from './formatting-labels';
 export { validateUserProfileField } from './user-validation';
 export { getUserVerificationStatus, type VerificationStatusType } from './user-verification';
 export { getNextPageParam } from './pagination';

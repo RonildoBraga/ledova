@@ -113,7 +113,7 @@ export function SignupReview() {
                     <span className="text-sm text-text-muted">ACN:</span>
                     <span className="text-sm text-text-primary font-medium">{company.acn}</span>
                   </div>
-                  {company.abn && (
+                  {'abn' in company && typeof company.abn === 'string' && company.abn && (
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-text-muted">ABN:</span>
                       <span className="text-sm text-text-primary font-medium">{company.abn}</span>

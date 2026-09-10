@@ -3,3 +3,5 @@ export interface BaseEntity {
   createdAt: string;
   updatedAt: string;
 }
+
+export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };

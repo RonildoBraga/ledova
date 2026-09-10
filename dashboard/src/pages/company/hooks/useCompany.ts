@@ -1,7 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { getCompanies, getCompany, getCompanyStats } from '@ledova/shared';
-import type { Company, CompanyStats } from '@ledova/shared';
+import type { Company, CompanyListItem, CompanyStats } from '@ledova/shared';
 import apiClient from '@services/apiClient';
+
+export type CompanyView = CompanyListItem & Partial<Company>;
 
 export function useCompany() {
   const { data: companiesData, isLoading: isLoadingList } = useQuery({
@@ -33,8 +35,10 @@ export function useCompany() {
     enabled: !!companyUuid,
   });
 
+  const companyView: CompanyView | null = company || companiesData?.data?.results?.[0] || null;
+
   return {
-    company: company || companiesData?.data?.results?.[0] || null,
+    company: companyView,
     companyUuid,
     stats: stats || null,
     isLoading: isLoadingList || isLoadingCompany || isLoadingStats,

@@ -33,17 +33,15 @@ import {
 import { useCompany } from './hooks/useCompany';
 import { useTokensList, useTokenDetail } from './hooks/useTokens';
 import type {
-  Company,
   CompanyUpdate,
   CompanyStatus,
-  CompanyShareToken as ShareToken,
+  CompanyShareTokenListItem as ShareToken,
   TokenStatus,
   TokenType,
   TokenCreate,
   TokenHolder,
   HolderType,
   TokenIssuance,
-  CapitalIncreaseRequest,
   ShareIssuanceRequest,
   CapitalIncreaseStatus,
 } from '@ledova/shared';
@@ -131,7 +129,7 @@ const REQUEST_STATUS_COLORS: Record<CapitalIncreaseStatus, string> = {
 const INPUT_CLASS =
   'w-full rounded-lg border border-border bg-surface-raised px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:border-brand-mid focus:outline-none focus:ring-1 focus:ring-brand-mid';
 
-function formatAddress(company: Company): string {
+function formatAddress(company: NonNullable<ReturnType<typeof useCompany>['company']>): string {
   const parts = [
     company.addressLine1,
     company.addressLine2,
@@ -1062,7 +1060,7 @@ export function TokenDetailModal({
               </div>
             ) : capitalIncreases.length > 0 ? (
               <div className="bg-surface-tertiary/50 rounded-lg border border-border divide-y divide-border-subtle">
-                {capitalIncreases.slice(0, 5).map((request: CapitalIncreaseRequest) => (
+                {capitalIncreases.slice(0, 5).map((request) => (
                   <div key={request.uuid} className="flex items-center gap-3 px-3 py-2.5">
                     <span className="text-xs text-text-muted w-20 flex-shrink-0">
                       {new Date(request.createdAt).toLocaleDateString()}
@@ -1072,7 +1070,11 @@ export function TokenDetailModal({
                       <p className="text-xs text-text-muted">
                         +{request.additionalShares.toLocaleString()} → {request.newAuthorizedTotal.toLocaleString()}{' '}
                         authorized
-                        {request.rejectionReason ? ` · ${request.rejectionReason}` : ''}
+                        {'rejectionReason' in request &&
+                        typeof request.rejectionReason === 'string' &&
+                        request.rejectionReason
+                          ? ` · ${request.rejectionReason}`
+                          : ''}
                       </p>
                     </div>
                     {request.status === 'draft' && (
@@ -1131,7 +1133,11 @@ export function TokenDetailModal({
                       </p>
                       <p className="text-xs text-text-muted">
                         {request.reason || request.issuanceTypeDisplay}
-                        {request.rejectionReason ? ` · ${request.rejectionReason}` : ''}
+                        {'rejectionReason' in request &&
+                        typeof request.rejectionReason === 'string' &&
+                        request.rejectionReason
+                          ? ` · ${request.rejectionReason}`
+                          : ''}
                       </p>
                       {request.executionNotes && (
                         <details className="text-xs text-text-muted mt-1">

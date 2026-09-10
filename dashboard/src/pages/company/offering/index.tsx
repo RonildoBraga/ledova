@@ -11,7 +11,7 @@ import {
   getErrorMessage,
   updateCompany,
 } from '@ledova/shared';
-import type { IssuerSubscription, Offering, OfferingExemption, OfferingInput } from '@ledova/shared';
+import type { IssuerSubscription, OfferingListItem, OfferingExemption, OfferingInput } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 import { PageWrapper } from '../components/PageWrapper';
 import { useCompany } from '../hooks/useCompany';
@@ -28,7 +28,7 @@ function OfferingRow({
   onDelete,
   busy,
 }: {
-  offering: Offering;
+  offering: OfferingListItem;
   onSubmit: () => void;
   onEdit: () => void;
   onWithdraw: () => void;
@@ -104,7 +104,7 @@ function OfferingRow({
   );
 }
 
-function SubscriptionsPanel({ offerings }: { offerings: Offering[] }) {
+function SubscriptionsPanel({ offerings }: { offerings: OfferingListItem[] }) {
   const [selected, setSelected] = useState<string>('');
   const uuid = selected || offerings[0]?.uuid;
   const { subscriptions, isLoading } = useOfferingSubscriptions(uuid);

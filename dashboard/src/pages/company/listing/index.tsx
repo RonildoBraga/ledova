@@ -435,7 +435,7 @@ function ApplicationStatusView({
   canWithdraw,
   onWithdraw,
 }: {
-  company: Company;
+  company: NonNullable<ReturnType<typeof useCompany>['company']>;
   operatorName: string;
   canWithdraw: boolean;
   onWithdraw: () => void;

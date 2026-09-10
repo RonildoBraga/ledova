@@ -28,7 +28,7 @@ import type {
   TokenHolder,
   TokenIssuance,
   IssuanceStatus,
-  CapitalIncreaseRequest,
+  CapitalIncreaseListItem,
   CapitalIncreaseStatus,
 } from '@ledova/shared';
 import { getBlockExplorerAddressUrl, getErrorMessage } from '@ledova/shared';
@@ -413,7 +413,7 @@ function SharesContent({
   theme,
 }: {
   token: { totalSupply: string; decimals: number; isTransferable: boolean; isDivisible: boolean };
-  capitalIncreases: CapitalIncreaseRequest[];
+  capitalIncreases: CapitalIncreaseListItem[];
   capitalIncreaseCount: number;
   styles: ReturnType<typeof useStyles>;
   theme: ReturnType<typeof useAppTheme>;
@@ -678,7 +678,7 @@ function CapitalIncreaseRow({
   theme,
   isLast,
 }: {
-  request: CapitalIncreaseRequest;
+  request: CapitalIncreaseListItem;
   styles: ReturnType<typeof useStyles>;
   theme: ReturnType<typeof useAppTheme>;
   isLast: boolean;
@@ -701,7 +701,10 @@ function CapitalIncreaseRow({
         {request.dilutionPercentage !== null ? ` · Dilution: ${request.dilutionPercentage}%` : ''}
       </Text>
       <Text style={styles.capitalDate}>{new Date(request.createdAt).toLocaleDateString()}</Text>
-      {request.status === 'superseded' && request.rejectionReason ? (
+      {request.status === 'superseded' &&
+      'rejectionReason' in request &&
+      typeof request.rejectionReason === 'string' &&
+      request.rejectionReason ? (
         <Text style={styles.capitalMeta}>{request.rejectionReason}</Text>
       ) : null}
     </View>

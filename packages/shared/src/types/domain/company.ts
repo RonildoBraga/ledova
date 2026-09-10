@@ -47,12 +47,8 @@ export interface CompanyDocument {
 }
 
 export interface CompanyUserProfile {
-  uuid: string;
-  firstName: string;
-  lastName: string;
   fullName: string;
   email: string;
-  phone: string | null;
 }
 
 export interface Company extends BaseEntity {
@@ -98,6 +94,42 @@ export interface Company extends BaseEntity {
   isOpenToInvestors: boolean;
   primaryContact: CompanyUserProfile | null;
   documents: CompanyDocument[];
+}
+
+export interface CompanyListItem {
+  uuid: string;
+  name: string;
+  tradingName: string;
+  displayName: string;
+  acn: string;
+  companyType: CompanyType;
+  companyTypeDisplay: string;
+  status: CompanyStatus;
+  statusDisplay: string;
+  industry: string;
+  city: string;
+  state: string;
+  isActive: boolean;
+  isApproved: boolean;
+  createdAt: string;
+}
+
+export interface CompanyUpdateResponse {
+  name: string;
+  tradingName: string;
+  companyType: CompanyType;
+  acn: string;
+  abn: string;
+  addressLine1: string;
+  addressLine2: string;
+  city: string;
+  state: string;
+  postcode: string;
+  phone: string;
+  description: string;
+  industry: string;
+  operatorWallet: string | null;
+  isOpenToInvestors: boolean;
 }
 
 export interface CompanyUpdate {

@@ -1,5 +1,3 @@
-import type { BaseEntity } from '../common';
-
 export interface SelectedAccount {
   uuid: string;
   accountNumber: string;
@@ -17,7 +15,8 @@ export interface SelectedPortfolio {
 export type Theme = 'dark' | 'light';
 export type DisplayCurrency = 'AUD' | 'USD';
 
-export interface UserPreferences extends BaseEntity {
+export interface UserPreferences {
+  uuid: string;
   userProfile: string;
   selectedAccount: SelectedAccount | null;
   selectedPortfolio: SelectedPortfolio | null;
