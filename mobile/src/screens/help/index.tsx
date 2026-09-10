@@ -106,7 +106,7 @@ export function HelpScreen() {
               {operator?.name ? <Text style={styles.aboutText}>Operated by {operator.name}</Text> : null}
               <Text style={styles.aboutText}>Version {APP_VERSION}</Text>
               <Text style={styles.aboutText}>© {CURRENT_YEAR} Ledova contributors</Text>
-              <Text style={styles.aboutText}>Licensed under Apache-2.0.</Text>
+              <Text style={styles.aboutText}>Licensed under FSL-1.1-ALv2.</Text>
             </View>
           </ContactCard>
         </View>

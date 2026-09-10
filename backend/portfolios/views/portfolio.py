@@ -11,6 +11,7 @@ from portfolios.models.portfolio import Portfolio
 from portfolios.serializers.portfolio import (
     PortfolioSerializer,
     PortfolioValuePointSerializer,
+    PortfolioWalletResponseSerializer,
 )
 from portfolios.services import PortfolioWalletService, portfolio_value_series
 from shared.utils.querysets import sample_evenly
@@ -48,6 +49,7 @@ class PortfolioViewSet(AuthenticatedModelViewSet):
         instance.is_active = False
         instance.save(update_fields=["is_active"])
 
+    @extend_schema(responses={200: PortfolioWalletResponseSerializer})
     @action(detail=True, methods=["post"], url_path="add-wallet")
     def add_wallet(self, request, *args, **kwargs):
         portfolio = self.get_object()
@@ -62,6 +64,7 @@ class PortfolioViewSet(AuthenticatedModelViewSet):
             status=status.HTTP_200_OK,
         )
 
+    @extend_schema(responses={200: PortfolioWalletResponseSerializer})
     @action(detail=True, methods=["post"], url_path="remove-wallet")
     def remove_wallet(self, request, *args, **kwargs):
         portfolio = self.get_object()

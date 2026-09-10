@@ -24,7 +24,7 @@ WALLET = "0x" + "c4" * 20
 OWNER = Account.from_key("0x" + "5b" * 32)
 STRANGER = Account.from_key("0x" + "7e" * 32)
 SERVER_ASSIGNED = {"wallet", "nonce", "deadline"}
-NOT_SIGNED = {"wallet_uuid", "wallet_address", "token"}
+NOT_SIGNED = {"wallet_address", "token"}
 
 
 class ModifyChallengeCarriesEveryTermTest(TestCase):

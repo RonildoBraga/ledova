@@ -34,11 +34,13 @@ apiClient.interceptors.request.use(async (config) => {
   config.baseURL = config.baseURL ?? getApiBaseUrl();
   validateApiDestination(apiClient.getUri(config));
   if (config.auth) throw new Error('The mobile API uses the stored bearer session.');
+  config.ledovaSubmissionGuard?.();
   if (config.ledovaSessionEpoch !== undefined) assertSessionEpoch(config.ledovaSessionEpoch);
   const accessToken = await getAccessToken();
+  config.ledovaSubmissionGuard?.();
   if (config.ledovaSessionEpoch !== undefined) {
     assertSessionEpoch(config.ledovaSessionEpoch);
-    if (!accessToken) throw new Error('Please sign in again before uploading a document.');
+    if (!accessToken) throw new Error('Please sign in again before continuing.');
   }
   if (accessToken) {
     config.headers.Authorization = `Bearer ${accessToken}`;
@@ -122,6 +124,7 @@ apiClient.interceptors.response.use(
     }
 
     const config = error.config as ReplayableRequestConfig | undefined;
+    config?.ledovaSubmissionGuard?.();
     if (config?.ledovaSessionEpoch !== undefined) assertSessionEpoch(config.ledovaSessionEpoch);
     if (error.response?.status === 401 && config && !config._retry && !REFRESH_EXEMPT_URLS.has(config.url ?? '')) {
       config._retry = true;

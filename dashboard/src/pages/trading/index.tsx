@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { CheckCircleIcon } from '@phosphor-icons/react';
 import type { TransferOrder, CreateOrderRequest, Wallet, SwapOrder } from '@ledova/shared';
-import { DESIGN_TOKENS } from '@ledova/shared';
+import { DESIGN_TOKENS, useOrderSubmissions } from '@ledova/shared';
+import { orderSubmissionStore } from '@services/orderSubmissions';
 import { Modal } from '@components/Modal';
 import {
   useShareTokens,
@@ -26,24 +27,28 @@ function OrderSuccessModal({
   isOpen,
   order,
   onClose,
+  recovered,
 }: {
   isOpen: boolean;
   order: TransferOrder | null;
   onClose: () => void;
+  recovered: boolean;
 }) {
   if (!order) return null;
   const isBuy = order.orderType === 'buy';
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Order Created" size="sm">
+    <Modal isOpen={isOpen} onClose={onClose} title={recovered ? 'Order recovered' : 'Order created'} size="sm">
       <div className="flex flex-col items-center gap-4 py-4">
         <div className="w-16 h-16 rounded-full bg-success-light/10 flex items-center justify-center">
           <CheckCircleIcon size={ICON_XL} className="text-success-light" />
         </div>
         <div className="text-center">
-          <h3 className="text-lg font-semibold text-text-primary">{isBuy ? 'Buy' : 'Sell'} Order Placed</h3>
+          <h3 className="text-lg font-semibold text-text-primary">
+            {isBuy ? 'Buy' : 'Sell'} order {recovered ? 'recovered' : 'placed'}
+          </h3>
           <p className="text-sm text-text-muted mt-1">
-            Your order for {order.quantity} {order.tokenSymbol} shares has been placed.
+            Current status: {order.statusDisplay ?? order.status.replace(/_/g, ' ')}.
           </p>
         </div>
         <div className="w-full p-4 rounded-lg bg-surface-tertiary space-y-2">
@@ -73,6 +78,9 @@ function OrderSuccessModal({
 }
 
 export function TradingPage() {
+  const submissions = useOrderSubmissions(orderSubmissionStore);
+  const signingGeneration = useRef(0);
+  const currentSigningGeneration = signingGeneration.current;
   const { data: tokens, isLoading } = useShareTokens();
   const { data: eligibility } = useInvestorEligibilityQuery();
   const isEligible = eligibility?.isEligible ?? false;
@@ -80,11 +88,11 @@ export function TradingPage() {
 
   const [successModalOpen, setSuccessModalOpen] = useState(false);
   const [createdOrder, setCreatedOrder] = useState<TransferOrder | null>(null);
+  const [recoveredOrder, setRecoveredOrder] = useState(false);
 
   const [selectedSwap, setSelectedSwap] = useState<SwapOrder | null>(null);
   const [isSwapSigningOpen, setIsSwapSigningOpen] = useState(false);
 
-  const [pendingOrderData, setPendingOrderData] = useState<CreateOrderRequest | null>(null);
   const [pendingCancelOrderUuid, setPendingCancelOrderUuid] = useState<string | null>(null);
   const [pendingCancelOrderSymbol, setPendingCancelOrderSymbol] = useState<string | null>(null);
   const [orderSigningWallet, setOrderSigningWallet] = useState<Wallet | null>(null);
@@ -121,15 +129,14 @@ export function TradingPage() {
 
   const { data: orderBookData, isLoading: isLoadingOrderBook } = useOrderBook(selectedTokenUuid || undefined);
 
-  const handleCreateOrder = async (data: CreateOrderRequest): Promise<TransferOrder> => {
+  const handleCreateOrder = (data: CreateOrderRequest): Promise<boolean> => {
     const signingWallet = wallets.find((w) => w.uuid === data.walletUuid);
-    setOrderSigningWallet(signingWallet || null);
-    setPendingOrderData(data);
-    setIsOrderSigningOpen(true);
-    return {} as TransferOrder;
+    return submissions.begin(data, signingWallet ?? null);
   };
 
   const handleCancelOrder = (uuid: string) => {
+    signingGeneration.current++;
+    submissions.close();
     const order = userOrders.find((o) => o.uuid === uuid);
     if (order) {
       const signingWallet = wallets.find((w) => w.address.toLowerCase() === order.walletAddress.toLowerCase());
@@ -173,16 +180,19 @@ export function TradingPage() {
   };
 
   const handleCloseOrderSigningFlow = () => {
+    signingGeneration.current++;
+    submissions.close();
     setIsOrderSigningOpen(false);
-    setPendingOrderData(null);
     setPendingCancelOrderUuid(null);
     setPendingCancelOrderSymbol(null);
     setOrderSigningWallet(null);
   };
 
-  const handleOrderSigningSuccess = (order: TransferOrder) => {
-    if (pendingOrderData) {
+  const handleOrderSigningSuccess = (order: TransferOrder, recovered = false) => {
+    if (signingGeneration.current !== currentSigningGeneration) return;
+    if (submissions.active) {
       setCreatedOrder(order);
+      setRecoveredOrder(recovered);
       setSuccessModalOpen(true);
     }
     handleCloseOrderSigningFlow();
@@ -199,6 +209,38 @@ export function TradingPage() {
             isLoading={isLoading}
             isEligible={isEligible}
           />
+
+          <section className="space-y-2 rounded-lg bg-surface-tertiary p-4" aria-label="Saved orders">
+            <h2 className="font-semibold">Saved orders</h2>
+            <p className="text-sm text-text-muted">
+              Check unfinished orders here. New buy and sell orders are separate orders, even with the same terms.
+            </p>
+            {submissions.error && <p role="alert">{submissions.error}</p>}
+            {submissions.pending.map((record, index) => (
+              <button
+                key={record.submissionId}
+                className="block text-brand-light"
+                onClick={() => {
+                  signingGeneration.current++;
+                  setPendingCancelOrderUuid(null);
+                  setIsOrderSigningOpen(false);
+                  submissions.recover(record);
+                }}
+              >
+                Check saved order {index + 1}
+                {wallets.find((wallet) => wallet.uuid === record.walletUuid)?.name
+                  ? ` — ${wallets.find((wallet) => wallet.uuid === record.walletUuid)?.name}`
+                  : ''}
+              </button>
+            ))}
+            <button
+              onClick={() => void submissions.refresh()}
+              disabled={submissions.isLoading}
+              className="text-sm text-brand-light"
+            >
+              Refresh saved orders
+            </button>
+          </section>
 
           {selectedToken && (
             <>
@@ -221,6 +263,9 @@ export function TradingPage() {
                 wallets={wallets}
                 walletsWithHoldings={getWalletsWithHoldings(selectedToken.uuid)}
                 onSubmit={handleCreateOrder}
+                onNewOrder={handleCloseOrderSigningFlow}
+                onDismiss={handleCloseOrderSigningFlow}
+                submissionError={submissions.error}
                 isWalletWhitelisted={walletAddresses.length > 0 && isWhitelisted(walletAddresses[0])}
                 isWhitelistStatusUnknown={
                   walletAddresses.length > 0 && getWhitelistStatusFor(walletAddresses[0])?.status === 'unknown'
@@ -232,7 +277,12 @@ export function TradingPage() {
         </div>
       </div>
 
-      <OrderSuccessModal isOpen={successModalOpen} order={createdOrder} onClose={() => setSuccessModalOpen(false)} />
+      <OrderSuccessModal
+        isOpen={successModalOpen}
+        order={createdOrder}
+        recovered={recoveredOrder}
+        onClose={() => setSuccessModalOpen(false)}
+      />
 
       <SwapSigningFlow
         isOpen={isSwapSigningOpen}
@@ -247,13 +297,18 @@ export function TradingPage() {
       />
 
       <OrderSigningFlow
-        isOpen={isOrderSigningOpen}
+        isOpen={!!submissions.active || isOrderSigningOpen}
         onClose={handleCloseOrderSigningFlow}
         mode={pendingCancelOrderUuid ? 'cancel' : 'create'}
-        orderData={pendingOrderData || undefined}
+        submission={submissions.active}
+        tokens={tokens ?? []}
         orderUuid={pendingCancelOrderUuid || undefined}
         orderSymbol={pendingCancelOrderSymbol || undefined}
-        wallet={orderSigningWallet}
+        wallet={
+          submissions.active
+            ? (wallets.find((wallet) => wallet.uuid === submissions.active?.record.walletUuid) ?? null)
+            : orderSigningWallet
+        }
         onSuccess={handleOrderSigningSuccess}
       />
 

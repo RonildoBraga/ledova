@@ -9,6 +9,7 @@ from assets.models import Asset, AssetSnapshot
 from assets.serializers import (
     AssetSerializer,
     AssetSnapshotSerializer,
+    ExchangeRateResponseSerializer,
 )
 from assets.services import ExchangeRateService
 from shared.utils.querysets import sample_evenly
@@ -49,6 +50,7 @@ class AssetViewSet(AuthenticatedReadOnlyViewSet):
         serializer = AssetSnapshotSerializer(queryset, many=True)
         return Response(serializer.data)
 
+    @extend_schema(responses={200: ExchangeRateResponseSerializer})
     @action(detail=False, methods=["get"], url_path="exchange-rates")
     def exchange_rates(self, request):
         target = request.query_params.get("currency", "AUD")

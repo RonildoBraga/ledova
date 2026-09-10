@@ -10,9 +10,10 @@ class TaskConversion(NamedTuple):
 SYSTEM_WIDE = {
     "assets.sync_all_assets": "Refreshes the global asset catalogue, which belongs to no tenant.",
     "assets.sync_exchange_rates": "Fetches published rates, identical for every tenant.",
-    "blockchain.tasks.check_pending_transactions": "Polls the chain for every broadcast this deployment made, "
-    "keyed by transaction hash rather than by anyone who owns one.",
-    "blockchain.tasks.cleanup_failed_transactions": "Retires rows the chain has refused, across all of them.",
+    "blockchain.tasks.check_pending_transactions": "Polls recorded hashes of this deployment's pending and "
+    "submitted transactions, across all issuers.",
+    "blockchain.tasks.cleanup_failed_transactions": "Reports overdue unresolved rows across the deployment "
+    "for queued legacy jobs; receipt recovery runs in check_pending_transactions.",
     "compliance.tasks.run_batch_monitoring": "Screens every account against the operator's rules, which is "
     "the operator's question rather than any customer's.",
     "compliance.tasks.check_periodic_reviews": "Finds which reviews are due across every account.",
@@ -31,6 +32,8 @@ SYSTEM_WIDE = {
     "seven years after the date they ceased, which is the only deletion anyone may perform on that "
     "table - the app role's policy refuses all three write commands.",
     "tokens.tasks.signing_challenge.purge_signing_challenges": "Deletes expired challenges regardless of whose.",
+    "tokens.tasks.swap_expiry.expire_unclaimed_matches": "Releases eligible unclaimed expired matches across both "
+    "parties, retaining every swap with a transaction claim or uncertain history.",
     "tokens.tasks.swap_reconciler.resolve_executing_swaps": "Asks the chain about every swap left executing, "
     "and a swap has two parties, so neither one's principal would cover it.",
     "users.tasks.retention.purge_classification_evidence": "Applies the retention clock across every account.",
@@ -38,8 +41,10 @@ SYSTEM_WIDE = {
     "across all uploaders on the operator connection, without a requesting user.",
     "wallets.tasks.sync.sync_all_wallets": "Fans out over every wallet; the per-wallet task it defers is the "
     "one that acts for somebody.",
-    "wallets.tasks.confirmation.check_all_pending_transactions": "Fans out over every pending transaction.",
-    "wallets.tasks.confirmation.cleanup_stale_pending_transactions": "Retires stale rows across all accounts.",
+    "wallets.tasks.confirmation.check_all_pending_transactions": "Requeues pending transactions and unfinished "
+    "balance reconciliation across all accounts.",
+    "wallets.tasks.confirmation.cleanup_stale_pending_transactions": "Reports overdue pending rows across all "
+    "accounts for queued legacy jobs without changing status or balances.",
     "whitelist.tasks.sync.sync_all_entries": "Reconciles the on-chain whitelist, which is one list for the "
     "whole deployment and is staff-only in the API for the same reason.",
     "whitelist.tasks.sync.reconcile_failed_adds": "Asks the chain about every entry recorded failed with a hash "

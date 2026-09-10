@@ -15,7 +15,8 @@ export type TradingEventType =
   | 'order_matched'
   | 'swap_signed'
   | 'swap_completed'
-  | 'swap_failed';
+  | 'swap_failed'
+  | 'swap_expired';
 
 export const TRADING_EVENT_INVALIDATION_MAP: Record<TradingEventType, string[][]> = {
   order_created: [
@@ -48,6 +49,12 @@ export const TRADING_EVENT_INVALIDATION_MAP: Record<TradingEventType, string[][]
     ['trading', 'swaps'],
     ['trading', 'userOrders'],
   ],
+  swap_expired: [
+    ['trading', 'orderBook'],
+    ['trading', 'userOrders'],
+    ['trading', 'swaps'],
+    ['trading', 'orderSwapData'],
+  ],
 };
 
 export const TRADING_ENDPOINTS = {
@@ -62,6 +69,7 @@ export const TRADING_ENDPOINTS = {
     DETAIL: (uuid: string) => `/api/v1/trading/orders/${uuid}/` as const,
     CREATE: '/api/v1/trading/orders/create/',
     CREATE_MESSAGE: '/api/v1/trading/orders/create/message/',
+    SUBMISSION: (uuid: string) => `/api/v1/trading/orders/submissions/${uuid}/` as const,
     CANCEL: (uuid: string) => `/api/v1/trading/orders/${uuid}/cancel/` as const,
     CANCEL_MESSAGE: (uuid: string) => `/api/v1/trading/orders/${uuid}/cancel/message/` as const,
     MODIFY: (uuid: string) => `/api/v1/trading/orders/${uuid}/modify/` as const,

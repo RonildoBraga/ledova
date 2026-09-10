@@ -44,8 +44,8 @@ class ARollbackIsRestoredForEveryAppItTouchedTest(TransactionTestCase):
 
         left = unapplied_migrations()
         self.assertEqual([name for name in left if name.startswith("tokens.")], [], left)
-        self.assertNotEqual([name for name in left if name.startswith("offerings.")], [], left)
-        self.assertNotIn(OFFERINGS_TABLE, tables())
+        self.assertIn("offerings.0006_trigger_follows_and_refuses", left)
+        self.assertIn(OFFERINGS_TABLE, tables())
 
     def test_restoring_every_migration_puts_the_other_app_back(self):
         migrate_to(TOKENS_BEFORE_OFFERINGS)

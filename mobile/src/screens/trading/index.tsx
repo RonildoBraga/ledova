@@ -1,6 +1,8 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
 import { View, Text, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
 import type { ShareToken, TransferOrder, CreateOrderRequest, SwapOrder, Wallet } from '@ledova/shared';
+import { useOrderSubmissions } from '@ledova/shared';
+import { orderSubmissionSession, orderSubmissionStore } from '../../services/orderSubmissions';
 import { GradientBackground } from '../../components/GradientBackground';
 import {
   useShareTokens,
@@ -24,6 +26,9 @@ import { SwapSigningModal } from './components/SwapSigningModal';
 import { useAppTheme, useThemedStyles } from '../../contexts';
 
 export function TradingScreen() {
+  const submissions = useOrderSubmissions(orderSubmissionStore, orderSubmissionSession);
+  const signingGeneration = useRef(0);
+  const currentSigningGeneration = signingGeneration.current;
   const theme = useAppTheme();
   const styles = useThemedStyles((theme) => ({
     container: { flex: 1 },
@@ -62,11 +67,6 @@ export function TradingScreen() {
   const [createOrderType, setCreateOrderType] = useState<'buy' | 'sell'>('buy');
   const [showCreateOrder, setShowCreateOrder] = useState(false);
 
-  const [signingOrderData, setSigningOrderData] = useState<CreateOrderRequest | null>(null);
-  const [signingOrderSymbol, setSigningOrderSymbol] = useState<string | undefined>();
-  const [signingWallet, setSigningWallet] = useState<Wallet | null>(null);
-  const [showOrderSigning, setShowOrderSigning] = useState(false);
-
   const [cancelOrderUuid, setCancelOrderUuid] = useState<string | undefined>();
   const [cancelOrderSymbol, setCancelOrderSymbol] = useState<string | undefined>();
   const [cancelWallet, setCancelWallet] = useState<Wallet | null>(null);
@@ -89,26 +89,26 @@ export function TradingScreen() {
     [wallets],
   );
 
-  const handleBuy = useCallback(() => {
+  const handleBuy = () => {
+    signingGeneration.current++;
+    submissions.close();
     setCreateOrderType('buy');
     setShowCreateOrder(true);
-  }, []);
+  };
 
-  const handleSell = useCallback(() => {
+  const handleSell = () => {
+    signingGeneration.current++;
+    submissions.close();
     setCreateOrderType('sell');
     setShowCreateOrder(true);
-  }, []);
+  };
 
-  const handleCreateOrderSubmit = useCallback(
-    (data: CreateOrderRequest) => {
-      setShowCreateOrder(false);
-      setSigningOrderData(data);
-      setSigningOrderSymbol(selectedToken?.symbol);
-      setSigningWallet(wallets.find((wallet: Wallet) => wallet.uuid === data.walletUuid) || null);
-      setShowOrderSigning(true);
-    },
-    [selectedToken, wallets],
-  );
+  const handleCreateOrderSubmit = async (data: CreateOrderRequest): Promise<boolean> => {
+    const generation = signingGeneration.current;
+    const accepted = await submissions.begin(data, wallets.find((wallet) => wallet.uuid === data.walletUuid) ?? null);
+    if (accepted && generation === signingGeneration.current) setShowCreateOrder(false);
+    return accepted;
+  };
 
   const handleCancelOrder = useCallback(
     (orderUuid: string) => {
@@ -152,10 +152,11 @@ export function TradingScreen() {
     setRefreshing(false);
   }, [refetchTokens, userOrders, tokenBalances, swapOrders]);
 
-  const handleSigningSuccess = useCallback(() => {
+  const handleSigningSuccess = () => {
+    if (signingGeneration.current !== currentSigningGeneration) return;
     userOrders.refetch();
     tokenBalances.refetch();
-  }, [userOrders, tokenBalances]);
+  };
 
   const handleSwapSuccess = useCallback(() => {
     swapOrders.refetch();
@@ -194,6 +195,39 @@ export function TradingScreen() {
               isEligible={isEligible}
             />
 
+            <View style={{ gap: theme.spacing.sm }} accessibilityLabel="Saved orders">
+              <Text style={{ color: theme.colors.text.primary, fontWeight: theme.fontWeight.semibold }}>
+                Saved orders
+              </Text>
+              <Text style={{ color: theme.colors.text.secondary }}>
+                Check unfinished orders here. New buy and sell orders are separate orders, even with the same terms.
+              </Text>
+              {submissions.error && (
+                <Text accessibilityRole="alert" style={{ color: theme.colors.status.error.icon }}>
+                  {submissions.error}
+                </Text>
+              )}
+              {submissions.pending.map((record, index) => (
+                <TouchableOpacity
+                  key={record.submissionId}
+                  accessibilityRole="button"
+                  onPress={() => {
+                    signingGeneration.current++;
+                    submissions.recover(record);
+                  }}
+                >
+                  <Text style={{ color: theme.colors.interactive.default }}>Check saved order {index + 1}</Text>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity
+                accessibilityRole="button"
+                onPress={() => void submissions.refresh()}
+                disabled={submissions.isLoading}
+              >
+                <Text style={{ color: theme.colors.interactive.default }}>Refresh saved orders</Text>
+              </TouchableOpacity>
+            </View>
+
             {selectedToken && (
               <>
                 <OrdersCard
@@ -226,12 +260,17 @@ export function TradingScreen() {
       {selectedToken && (
         <CreateOrderModal
           visible={showCreateOrder}
-          onClose={() => setShowCreateOrder(false)}
+          onClose={() => {
+            signingGeneration.current++;
+            submissions.close();
+            setShowCreateOrder(false);
+          }}
           token={selectedToken}
           orderType={createOrderType}
           wallets={wallets}
           walletsWithHoldings={walletsWithHoldings}
           onSubmit={handleCreateOrderSubmit}
+          submissionError={submissions.error}
           isWalletWhitelisted={whitelistStatus.isWhitelisted}
           getWhitelistStatus={whitelistStatus.getStatus}
           isLoadingWhitelistStatus={whitelistStatus.isLoading}
@@ -239,12 +278,15 @@ export function TradingScreen() {
       )}
 
       <OrderSigningModal
-        visible={showOrderSigning}
-        onClose={() => setShowOrderSigning(false)}
+        visible={!!submissions.active}
+        onClose={() => {
+          signingGeneration.current++;
+          submissions.close();
+        }}
         mode="create"
-        orderData={signingOrderData || undefined}
-        orderSymbol={signingOrderSymbol}
-        wallet={signingWallet}
+        submission={submissions.active}
+        tokens={tokens ?? []}
+        wallet={wallets.find((wallet) => wallet.uuid === submissions.active?.record.walletUuid) ?? null}
         onSuccess={handleSigningSuccess}
       />
 

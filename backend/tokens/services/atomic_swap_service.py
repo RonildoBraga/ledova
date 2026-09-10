@@ -253,7 +253,7 @@ class AtomicSwapService:
         self,
         sell_order: TransferOrder,
         buy_order: TransferOrder,
-        expires_hours: Optional[int] = None,
+        expires_hours: Optional[float] = None,
         share_amount: Optional[int] = None,
         price_per_share=None,
     ) -> SwapOrder:
@@ -283,7 +283,7 @@ class AtomicSwapService:
         nonce = self._generate_nonce()
 
         if expires_hours is None:
-            expires_hours = getattr(settings, "SWAP_ORDER_EXPIRY_HOURS", 24)
+            expires_hours = getattr(settings, "SWAP_ORDER_EXPIRY_HOURS", 0.25)
         expires_at = timezone.now() + timedelta(hours=expires_hours)
 
         swap_order = SwapOrder(
@@ -298,6 +298,7 @@ class AtomicSwapService:
             nonce=nonce,
             order_hash="",
             expires_at=expires_at,
+            expiry_release_eligible=True,
             status=SwapOrderStatus.CREATED,
         )
         swap_order.order_hash = self._compute_order_hash(swap_order)

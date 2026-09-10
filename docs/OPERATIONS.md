@@ -257,7 +257,55 @@ serves requests. Run `make init-local` first; `make dev-up` checks.
 | `SHARE_TOKEN_FACTORY_ADDRESS` | empty | Yes for issuance |
 | `ATOMIC_SWAP_ADDRESS` | empty | Only for settlement |
 | `STABLECOIN_CONTRACT_ADDRESS` | empty | Only for stablecoin payment; seeds the `AUDY` deployment on `base` |
-| `SWAP_ORDER_EXPIRY_HOURS` | `24` | No |
+| `SWAP_ORDER_EXPIRY_HOURS` | `0.25` (15 minutes) | No; finite fractional hours are accepted |
+
+Malformed and non-finite values are refused at settings import. This default
+applies when issuing a new swap without an explicit signing window.
+Existing stored deadlines and signatures are preserved. An explicit operator
+override still takes precedence: remove an older `SWAP_ORDER_EXPIRY_HOURS=24`
+override or set it to `0.25` to use the new default for future swaps. The ordinary
+order-challenge lifetime remains 300 seconds.
+
+Create-order requests use an account-scoped client `submission_id`. A deliberate
+new order gets a new UUID, including another order with equal terms. A retry
+keeps its original UUID. The message route records the original account, wallet,
+terms and signing domain before issuing a challenge whose envelope binds those
+identities. Legacy issued challenges are preserved and require a fresh challenge
+for this protocol; they cannot be attached retroactively to a submission. An old
+request missing the new IDs receives ordinary required-field errors. A new keyed
+request presenting an unlinked legacy challenge receives
+`submission_refresh_required`. Both are refused before challenge spend.
+
+After an uncertain response, read
+`GET /api/v1/trading/orders/submissions/{submission_id}/?owner_account_uuid=...`.
+Current account membership and wallet ownership/address are still required.
+Unknown and inaccessible submissions share a 404; that response does not prove
+that a preceding request failed to commit. Keep the same ID when retrying.
+Changed original terms return `submission_conflict` and never spend a challenge.
+Recovery of a created or refused outcome precedes current deployment, wallet
+verification and challenge-expiry checks. A pending submission still needs an
+eligible token/wallet and a valid, unspent linked signature before creating an
+order. Recovery returns immutable `intent` alongside the current `order` and
+the original `match`; order modification or cancellation does not rewrite intent.
+The immutable intent's `quantity` and `min_quantity` are canonical decimal
+strings. Forward them unchanged when renewing or retrying so JavaScript number
+rounding cannot alter stored terms. New numeric draft inputs and existing order
+detail quantities retain their current formats.
+If a token becomes hidden, its previously authorized display snapshot can still
+describe the owned order without granting visibility to the token itself.
+
+Challenge spend, order creation, matching and the recorded outcome share one
+independent database transaction. An enclosing transaction or disabled autocommit
+is refused. Only an explicit negative whitelist result or insufficient seller
+balance records a terminal business refusal: creation is rolled back to its
+savepoint while spend and refusal commit together. Provider, configuration,
+database and unclassified matching failures remain retryable; a lost commit
+acknowledgement requires recovery. `tokens/0037` protects the account/key, original
+intent, challenge linkage and terminal outcome against direct SQL changes.
+Never delete these identities to retry or reinterpret a refusal as permission
+to create another order. A separate deliberate order still undergoes the ordinary
+creation and matching checks. This protocol adds no aggregate balance policy,
+outgoing signer activation or settlement finality guarantee.
 
 ### Data retention
 
@@ -938,12 +986,82 @@ one.
 
 | Schedule | Task |
 | --- | --- |
+| every minute | `expire_unclaimed_matches` |
 | every 5 min | `check_pending_token_deployments`, `check_executing_issuance_requests`, `offerings.reconcile_subscriptions`, `check_pending_transactions`, `check_all_pending_transactions` |
 | every 10 min | `assets.sync_all_assets`, `assets.sync_exchange_rates` |
 | every 30 min | whitelist `sync_all_entries` |
 | hourly | `sync_all_wallets`, `compliance.tasks.run_batch_monitoring` |
-| daily 03:00 | `cleanup_failed_transactions`, `cleanup_stale_pending_transactions`, `offerings.expire_unpaid_subscriptions`, `users.purge_classification_evidence` |
+| daily 03:00 | `offerings.expire_unpaid_subscriptions`, `users.purge_classification_evidence` |
 | daily 04:00 | `compliance.tasks.check_periodic_reviews` |
+
+`expire_unclaimed_matches` releases the reserved share quantity of an expired
+swap only when the current matching service marked it eligible at creation,
+both orders still name that match, and no execution claim, transaction record,
+hash or other active match exists. The sweep locks both orders in identifier
+order, then the current swap, and commits each release separately. It preserves
+previously filled quantities and signed terms, marks the swap `expired`, and
+publishes `swap_expired` so both clients refresh their orders and swaps. A retry
+cannot release the same reservation twice. Signing still stops at the recorded
+deadline; the worker makes eligible orders available on its next minute sweep.
+The order book and best prices include reopened partially filled orders using
+only their remaining quantity.
+
+`tokens/0036_swap_expiry_eligibility` leaves existing rows ineligible and prevents
+changing the marker on PostgreSQL. Do not backfill it: missing transaction data
+in a legacy row does not establish that nothing was sent. Deploy this code to
+all API and worker processes and stop older processes before permitting new
+matches; the eligibility marker describes the current service's durable claim
+protocol. Claimed, executing, inconsistent and legacy matches retain their
+reservations for reconciliation. This sweep does not inspect the chain, refund
+money, cancel a broadcast or change an existing signature/deadline. Trading
+remains disabled by default.
+
+The two transaction sweeps keep receipt recovery running after 24 hours.
+`check_pending_transactions` checks recorded hashes on pending or submitted
+operator transactions. `check_all_pending_transactions` requeues wallet
+transactions older than two minutes that are still pending, plus rows with
+unfinished balance reconciliation after a status transition. An exhausted
+confirmation job can therefore be queued again by the next sweep. Age, a
+missing receipt or a provider error does not establish failure and does not
+release a wallet's outstanding deductions. Explicit receipt outcomes continue
+through the existing confirmation or failure paths.
+
+Both EVM receipt consumers require the adapter's normalized integer `status`:
+`1` confirms and `0` records a revert. Web3 converts raw JSON-RPC hexadecimal
+statuses before these consumers run. A missing status, boolean, float, string
+or other unsupported value leaves the transaction and outstanding deductions
+unchanged. Wallet confirmation retries the unresolved observation; the platform
+monitor checks it again on the next sweep. Bitcoin's adapter reports success
+with `confirmed: true` and a positive integer confirmation count. Missing,
+unconfirmed or malformed Bitcoin evidence stays unresolved; that adapter does
+not report an explicit failure receipt.
+
+The platform monitor fetches each receipt before locking the current transaction
+row. It applies an outcome only while the UUID, hash, pending/submitted status,
+recorded call and business reference, nonce, gas terms and submission time still
+match the captured row. A newer terminal decision or changed submission is
+retained; duplicate observations do not rewrite its metadata. When a receipt
+supplies `transactionHash`, its bytes or hexadecimal value must match the hash
+requested. If that field is absent, the monitor retains the existing assumption
+that the configured Base provider answered that requested hash. This is not
+proof of canonical inclusion or finality; the record has no chain ID. These
+guards cover the generic monitor, not every specialized transaction writer.
+
+`blockchain.tasks.cleanup_failed_transactions` and
+`wallets.tasks.confirmation.cleanup_stale_pending_transactions` retain their
+names and `timestamp` argument for jobs already queued by older workers. They
+only report overdue unresolved row counts; their legacy `cleaned` or `failed`
+counts are zero. The callable `TransactionMonitorService.cleanup_stale_transactions`
+also retains its `hours` argument and adds an `overdue` count. None of these
+compatibility handlers changes transaction state, balances or reservations,
+and neither task has a recurring schedule. Workers must load the updated code
+for the schedule and behavior changes to take effect; an old process still
+contains the former cleanup implementation.
+
+Operator transactions without a hash remain unresolved. Recovering their
+identity, reviewing rows already failed by historical cleanup, and per-chain
+finality or reorg policy remain separate work. This change does not reopen
+terminal history or infer a compensating balance movement from an old timeout.
 
 `reconcile_subscriptions` is the mirror of `check_executing_issuance_requests`
 on the subscription row. The issuance sweep finishes a request a killed worker

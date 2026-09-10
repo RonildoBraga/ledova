@@ -35,7 +35,7 @@ export function Home() {
             <span className="block text-brand-light">without production claims</span>
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-lg text-text-muted lg:text-xl">
-            Ledova is an open-source developer project. It does not operate a financial service, hold funds, issue
+            Ledova is a source-available developer project. It does not operate a financial service, hold funds, issue
             assets, or identify any live contract deployment.
           </p>
         </div>

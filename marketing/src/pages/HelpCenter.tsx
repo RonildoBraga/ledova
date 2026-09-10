@@ -23,7 +23,7 @@ const FAQ_SECTIONS: FAQSection[] = [
       {
         question: 'What is Ledova?',
         answer:
-          'Ledova is an experimental open-source reference project for local development and public-testnet research. It is not a hosted financial service.',
+          'Ledova is an experimental source-available reference project for local development and public-testnet research. It is not a hosted financial service.',
       },
       {
         question: 'Can I use real accounts or identity data?',

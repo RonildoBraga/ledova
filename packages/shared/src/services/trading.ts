@@ -1,9 +1,10 @@
-import { AxiosInstance } from 'axios';
+import type { AxiosInstance, AxiosRequestConfig } from 'axios';
 import { TRADING_ENDPOINTS } from '../constants';
 import type {
   ShareToken,
   TransferOrder,
-  CreateOrderRequest,
+  OrderSubmissionRequest,
+  OrderSubmissionSnapshot,
   OrderBook,
   GetOrdersParams,
   WhitelistStatus,
@@ -11,7 +12,6 @@ import type {
   SwapDataResponse,
   SubmitSignatureRequest,
   GetSwapDataParams,
-  CreateOrderMessageResponse,
   CancelOrderMessageResponse,
   SignedCreateOrderRequest,
   SignedCancelOrderRequest,
@@ -25,6 +25,12 @@ import type {
   ApprovalStatusResponse,
   ApprovalDataResponse,
 } from '../types';
+
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    ledovaSubmissionGuard?: () => void;
+  }
+}
 
 export const getShareTokens = (apiClient: AxiosInstance) =>
   apiClient.get<PaginatedResponse<ShareToken>>(TRADING_ENDPOINTS.TOKENS.LIST);
@@ -43,32 +49,49 @@ export const getUserOrders = (apiClient: AxiosInstance, walletAddress: string) =
     params: { wallet_address: walletAddress },
   });
 
-export const getOrderCreateMessage = (apiClient: AxiosInstance, data: CreateOrderRequest) =>
-  apiClient.post<CreateOrderMessageResponse>(TRADING_ENDPOINTS.ORDERS.CREATE_MESSAGE, {
-    token: data.token,
-    order_type: data.orderType.toLowerCase(),
-    wallet_uuid: data.walletUuid,
-    wallet_address: data.walletAddress,
-    quantity: data.quantity,
-    min_quantity: data.minQuantity ?? 0,
-    price_per_share: data.pricePerShare,
+const orderSubmissionBody = (data: OrderSubmissionRequest) => ({
+  submission_id: data.submissionId,
+  owner_account_uuid: data.ownerAccountUuid,
+  token: data.token,
+  order_type: data.orderType.toLowerCase(),
+  wallet_uuid: data.walletUuid,
+  wallet_address: data.walletAddress,
+  quantity: data.quantity,
+  min_quantity: data.minQuantity ?? 0,
+  price_per_share: data.pricePerShare,
+});
+
+export const getOrderCreateMessage = (
+  apiClient: AxiosInstance,
+  data: OrderSubmissionRequest,
+  config?: AxiosRequestConfig,
+) =>
+  apiClient.post<OrderSubmissionSnapshot>(TRADING_ENDPOINTS.ORDERS.CREATE_MESSAGE, orderSubmissionBody(data), config);
+
+export const getOrderSubmission = (
+  apiClient: AxiosInstance,
+  submissionId: string,
+  ownerAccountUuid: string,
+  config?: AxiosRequestConfig,
+) =>
+  apiClient.get<OrderSubmissionSnapshot>(TRADING_ENDPOINTS.ORDERS.SUBMISSION(submissionId), {
+    ...config,
+    params: { owner_account_uuid: ownerAccountUuid },
   });
 
 export const getOrderCancelMessage = (apiClient: AxiosInstance, uuid: string) =>
   apiClient.get<CancelOrderMessageResponse>(TRADING_ENDPOINTS.ORDERS.CANCEL_MESSAGE(uuid));
 
-export const createOrder = (apiClient: AxiosInstance, data: SignedCreateOrderRequest) =>
-  apiClient.post<TransferOrder>(TRADING_ENDPOINTS.ORDERS.CREATE, {
-    token: data.token,
-    order_type: data.orderType.toLowerCase(),
-    wallet_uuid: data.walletUuid,
-    wallet_address: data.walletAddress,
-    quantity: data.quantity,
-    min_quantity: data.minQuantity ?? 0,
-    price_per_share: data.pricePerShare,
-    digest: data.digest,
-    signature: data.signature,
-  });
+export const createOrder = (apiClient: AxiosInstance, data: SignedCreateOrderRequest, config?: AxiosRequestConfig) =>
+  apiClient.post<OrderSubmissionSnapshot>(
+    TRADING_ENDPOINTS.ORDERS.CREATE,
+    {
+      ...orderSubmissionBody(data),
+      digest: data.digest,
+      signature: data.signature,
+    },
+    config,
+  );
 
 export const cancelOrder = (apiClient: AxiosInstance, uuid: string, data: SignedCancelOrderRequest) =>
   apiClient.post<TransferOrder>(TRADING_ENDPOINTS.ORDERS.CANCEL(uuid), {

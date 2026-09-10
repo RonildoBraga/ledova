@@ -18,7 +18,8 @@ const ICON_DISPLAY = DESIGN_TOKENS.icon.sizes.display;
 import { useQRScanner, QRScannerView } from '@components/qr';
 import { SeedPhraseInput } from '@components/SeedPhraseInput';
 import type {
-  CreateOrderRequest,
+  OrderSubmission,
+  ShareToken,
   CreateOrderMessageResponse,
   CancelOrderMessageResponse,
   TransferOrder,
@@ -27,7 +28,9 @@ import type {
 import { encodeEthereumTypedData } from '@utils/keystone/urEncoder';
 import { decodeKeystoneMessageSignature } from '@utils/keystone/urDecoder';
 import { signEthereumTypedData, deriveAddress } from '@utils/softwareWallet/localSigner';
-import { useOrderCreateMessage, useOrderCancelMessage, useCreateOrder, useCancelOrder } from '../useTrading';
+import { useOrderCancelMessage, useCancelOrder } from '../useTrading';
+
+import { CreateOrderSigningFlow } from './CreateOrderSigningFlow';
 
 type SigningMode = 'create' | 'cancel';
 
@@ -39,21 +42,37 @@ interface OrderSigningFlowProps {
   onClose: () => void;
   mode: SigningMode;
 
-  orderData?: CreateOrderRequest;
+  submission?: OrderSubmission | null;
+  tokens?: ShareToken[];
 
   orderUuid?: string;
   orderSymbol?: string;
 
   wallet: Wallet | null;
 
-  onSuccess?: (order: TransferOrder) => void;
+  onSuccess?: (order: TransferOrder, recovered?: boolean) => void;
 }
 
-export function OrderSigningFlow({
+export function OrderSigningFlow(props: OrderSigningFlowProps) {
+  if (props.mode === 'create') {
+    return props.isOpen && props.submission ? (
+      <CreateOrderSigningFlow
+        key={props.submission.record.submissionId}
+        submission={props.submission}
+        tokens={props.tokens ?? []}
+        wallet={props.wallet}
+        onClose={props.onClose}
+        onSuccess={props.onSuccess}
+      />
+    ) : null;
+  }
+  return <OrderCancellationFlow {...props} />;
+}
+
+function OrderCancellationFlow({
   isOpen,
   onClose,
   mode,
-  orderData,
   orderUuid,
   orderSymbol,
   wallet,
@@ -68,9 +87,7 @@ export function OrderSigningFlow({
   const isSoftwareWallet =
     wallet?.signingPreference === 'software' || (!wallet?.derivationPath && !wallet?.masterFingerprint);
 
-  const createMessageMutation = useOrderCreateMessage();
   const cancelMessageMutation = useOrderCancelMessage();
-  const createOrderMutation = useCreateOrder();
   const cancelOrderMutation = useCancelOrder();
 
   const isCreating = mode === 'create';
@@ -84,18 +101,7 @@ export function OrderSigningFlow({
       setError(null);
       setSeedPhrase('');
 
-      if (isCreating && orderData) {
-        createMessageMutation.mutate(orderData, {
-          onSuccess: (data) => {
-            setMessageData(data);
-            setSigningStep('instructions');
-          },
-          onError: (err) => {
-            setError(err instanceof Error ? err.message : 'Failed to get signing message');
-            setSigningStep('error');
-          },
-        });
-      } else if (isCancelling && orderUuid) {
+      if (isCancelling && orderUuid) {
         cancelMessageMutation.mutate(orderUuid, {
           onSuccess: (data) => {
             setMessageData(data);
@@ -108,7 +114,7 @@ export function OrderSigningFlow({
         });
       }
     }
-  }, [isOpen, mode, orderData, orderUuid]);
+  }, [isOpen, mode, orderUuid]);
 
   const generateQrCode = useCallback(() => {
     if (!messageData || !wallet) {
@@ -149,25 +155,7 @@ export function OrderSigningFlow({
 
       setSigningStep('submitting');
 
-      if (isCreating && orderData) {
-        createOrderMutation.mutate(
-          {
-            ...orderData,
-            digest: messageData.digest,
-            signature,
-          },
-          {
-            onSuccess: (order) => {
-              setSigningStep('success');
-              onSuccess?.(order);
-            },
-            onError: (err) => {
-              setError(err instanceof Error ? err.message : 'Failed to create order');
-              setSigningStep('error');
-            },
-          },
-        );
-      } else if (isCancelling && orderUuid) {
+      if (isCancelling && orderUuid) {
         cancelOrderMutation.mutate(
           {
             uuid: orderUuid,
@@ -187,7 +175,7 @@ export function OrderSigningFlow({
         );
       }
     },
-    [messageData, isCreating, isCancelling, orderData, orderUuid, createOrderMutation, cancelOrderMutation, onSuccess],
+    [messageData, isCancelling, orderUuid, cancelOrderMutation, onSuccess],
   );
 
   const handleSoftwareSign = useCallback(async () => {

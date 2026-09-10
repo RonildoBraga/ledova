@@ -11,6 +11,8 @@ from operators.settlement import deployment_for
 from shared.db import atomic
 from shared.utils.blockchain import decode_exception_to_message
 from tokens.exceptions import (
+    CreateOrderInsufficientBalanceException,
+    CreateOrderNotWhitelistedException,
     InsufficientBalanceException,
     InvalidRecipientAddressException,
     InvalidTokenAddressException,
@@ -335,7 +337,7 @@ class TokenTransferService:
             raise InvalidRecipientAddressException()
 
         if not self.whitelist_service.is_whitelisted(canonical_wallet_address):
-            raise NotWhitelistedException(canonical_wallet_address)
+            raise CreateOrderNotWhitelistedException(canonical_wallet_address)
 
         if order_type == TransferOrderType.SELL:
             from tokens.services import ShareTokenService
@@ -343,7 +345,7 @@ class TokenTransferService:
             token_service = ShareTokenService()
             balance = token_service.get_token_balance(token.contract_address, canonical_wallet_address)
             if balance < quantity:
-                raise InsufficientBalanceException(balance, quantity)
+                raise CreateOrderInsufficientBalanceException(balance, quantity)
 
         order = TransferOrder.objects.create(
             token=token,

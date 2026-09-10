@@ -27,6 +27,9 @@ class SigningChallenge(DerivesWalletFromOrder, BaseModel):
         null=True,
         blank=True,
     )
+    submission = models.ForeignKey(
+        "tokens.OrderSubmission", on_delete=models.PROTECT, related_name="challenges", null=True, blank=True
+    )
 
     wallet = models.ForeignKey(
         "wallets.Wallet",

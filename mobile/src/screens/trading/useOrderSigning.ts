@@ -1,16 +1,10 @@
 import { useState, useCallback } from 'react';
-import type {
-  CreateOrderRequest,
-  CreateOrderMessageResponse,
-  CancelOrderMessageResponse,
-  TransferOrder,
-  Wallet,
-} from '@ledova/shared';
+import type { CreateOrderMessageResponse, CancelOrderMessageResponse, TransferOrder, Wallet } from '@ledova/shared';
 import { encodeEthereumTypedData } from '../../utils/keystone/urEncoder';
 import { getWalletVerificationEvmChainId } from '@ledova/shared';
 import { getSeedPhrase } from '../../services/secureKeyStorage';
 import { signEthereumTypedData } from '../../utils/softwareWallet/localSigner';
-import { useOrderCreateMessage, useOrderCancelMessage, useCreateOrder, useCancelOrder } from './useTrading';
+import { useOrderCancelMessage, useCancelOrder } from './useTrading';
 
 export type OrderSigningStep =
   | 'idle'
@@ -27,21 +21,18 @@ type SigningMode = 'create' | 'cancel';
 
 interface UseOrderSigningProps {
   mode: SigningMode;
-  orderData?: CreateOrderRequest;
   orderUuid?: string;
   wallet: Wallet | null;
   onSuccess?: (order: TransferOrder) => void;
 }
 
-export function useOrderSigning({ mode, orderData, orderUuid, wallet, onSuccess }: UseOrderSigningProps) {
+export function useOrderSigning({ mode, orderUuid, wallet, onSuccess }: UseOrderSigningProps) {
   const [step, setStep] = useState<OrderSigningStep>('idle');
   const [messageData, setMessageData] = useState<CreateOrderMessageResponse | CancelOrderMessageResponse | null>(null);
   const [qrData, setQrData] = useState<{ cborHex: string; type: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const createMessageMutation = useOrderCreateMessage();
   const cancelMessageMutation = useOrderCancelMessage();
-  const createOrderMutation = useCreateOrder();
   const cancelOrderMutation = useCancelOrder();
 
   const isCreating = mode === 'create';
@@ -53,18 +44,7 @@ export function useOrderSigning({ mode, orderData, orderUuid, wallet, onSuccess 
     setQrData(null);
     setError(null);
 
-    if (isCreating && orderData) {
-      createMessageMutation.mutate(orderData, {
-        onSuccess: (data) => {
-          setMessageData(data);
-          setStep('instructions');
-        },
-        onError: (err) => {
-          setError(err instanceof Error ? err.message : 'Failed to get signing message');
-          setStep('error');
-        },
-      });
-    } else if (!isCreating && orderUuid) {
+    if (!isCreating && orderUuid) {
       cancelMessageMutation.mutate(orderUuid, {
         onSuccess: (data) => {
           setMessageData(data);
@@ -76,7 +56,7 @@ export function useOrderSigning({ mode, orderData, orderUuid, wallet, onSuccess 
         },
       });
     }
-  }, [isCreating, orderData, orderUuid, createMessageMutation, cancelMessageMutation]);
+  }, [isCreating, orderUuid, cancelMessageMutation]);
 
   const generateQrCode = useCallback(() => {
     if (!messageData || !wallet) {
@@ -109,25 +89,7 @@ export function useOrderSigning({ mode, orderData, orderUuid, wallet, onSuccess 
 
       setStep('submitting');
 
-      if (isCreating && orderData) {
-        createOrderMutation.mutate(
-          {
-            ...orderData,
-            digest: messageData.digest,
-            signature,
-          },
-          {
-            onSuccess: (order) => {
-              setStep('success');
-              onSuccess?.(order);
-            },
-            onError: (err) => {
-              setError(err instanceof Error ? err.message : 'Failed to create order');
-              setStep('error');
-            },
-          },
-        );
-      } else if (!isCreating && orderUuid) {
+      if (!isCreating && orderUuid) {
         cancelOrderMutation.mutate(
           {
             uuid: orderUuid,
@@ -147,7 +109,7 @@ export function useOrderSigning({ mode, orderData, orderUuid, wallet, onSuccess 
         );
       }
     },
-    [messageData, isCreating, orderData, orderUuid, createOrderMutation, cancelOrderMutation, onSuccess],
+    [messageData, isCreating, orderUuid, cancelOrderMutation, onSuccess],
   );
 
   const startSoftwareSigning = useCallback(async () => {
@@ -213,7 +175,7 @@ export function useOrderSigning({ mode, orderData, orderUuid, wallet, onSuccess 
     qrData,
     error,
     isSoftwareWallet,
-    isSubmitting: createOrderMutation.isPending || cancelOrderMutation.isPending,
+    isSubmitting: cancelOrderMutation.isPending,
     start,
     proceedToSign,
     handleSignatureReceived,

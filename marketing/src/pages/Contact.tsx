@@ -29,7 +29,7 @@ export function Contact() {
                     business. A deployment owner must publish their own support and contact details.
                   </p>
                   <p className="mt-3 text-sm text-text-muted">
-                    Questions about the open-source project itself:{' '}
+                    Questions about the project itself:{' '}
                     <a href="mailto:hello@ledova.io" className="text-brand-light hover:underline">
                       hello@ledova.io
                     </a>{' '}

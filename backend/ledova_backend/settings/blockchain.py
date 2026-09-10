@@ -1,4 +1,7 @@
+import math
 import os
+
+from django.core.exceptions import ImproperlyConfigured
 
 from ledova_backend.chain_safety import parse_bitcoin_network, parse_evm_chain_id
 from ledova_backend.environment import read_bool
@@ -17,7 +20,12 @@ SHARE_TOKEN_FACTORY_ADDRESS = os.environ.get("SHARE_TOKEN_FACTORY_ADDRESS", "")
 ATOMIC_SWAP_ADDRESS = os.environ.get("ATOMIC_SWAP_ADDRESS", "")
 STABLECOIN_CONTRACT_ADDRESS = os.environ.get("STABLECOIN_CONTRACT_ADDRESS", "")
 
-SWAP_ORDER_EXPIRY_HOURS = int(os.environ.get("SWAP_ORDER_EXPIRY_HOURS", "24"))
+try:
+    SWAP_ORDER_EXPIRY_HOURS = float(os.environ.get("SWAP_ORDER_EXPIRY_HOURS", "0.25"))
+    if not math.isfinite(SWAP_ORDER_EXPIRY_HOURS):
+        raise ValueError
+except ValueError:
+    raise ImproperlyConfigured("SWAP_ORDER_EXPIRY_HOURS must be a finite number of hours") from None
 
 SIGNING_CHALLENGE_TTL_SECONDS = int(os.environ.get("SIGNING_CHALLENGE_TTL_SECONDS", "300"))
 SIGNING_CHALLENGE_RETENTION_SECONDS = int(os.environ.get("SIGNING_CHALLENGE_RETENTION_SECONDS", "86400"))

@@ -80,6 +80,35 @@ the app under the existing wallet recovery procedure. These platform semantics
 are documented by [Expo SecureStore](https://docs.expo.dev/versions/v54.0.0/sdk/securestore/)
 and [Android backup rules](https://developer.android.com/identity/data/autobackup).
 
+## Create-order recovery
+
+Starting a new buy or sell order saves a fresh submission identity in AsyncStorage
+before requesting a signing challenge. Each record contains only the protocol
+version and user, account, wallet and submission UUIDs. Terms, challenges,
+signatures, seeds and bearer tokens are not saved with it. A read/write or
+verification failure prevents the first signing request. Equal terms submitted
+as explicit new orders remain separate orders; the saved-orders list retains
+multiple unresolved submissions for the current user and account.
+
+Closing the draft or signing window, changing account, or retiring the session
+prevents stale seed-read continuations, signing results and authenticated HTTP
+replays. An already sent request can still finish on the server. Its saved
+identity remains available for authenticated recovery after closing or restarting.
+Recovery reads the original terms or recorded outcome before requesting another
+challenge. A missing or inaccessible lookup stays unconfirmed; it never supplies
+invented terms or silently starts a replacement. Confirmed outcomes show the
+order's current state, including later changes or cancellation. A terminal refusal
+requires an explicit new order to try again with a new identity.
+
+The shared hooks use the mobile copies of React and React Query in both Metro and
+Jest. Metro reanchors only those package imports and subpaths to the mobile
+entrypoint, then delegates to Expo's resolver. The earlier dependency-alias check
+established availability, not singleton identity when root and mobile dependencies
+were both installed. `npm --prefix mobile run check:resolution` now also resolves
+those peers from the app and shared hook on iOS and Android and compares their
+actual file paths. This filesystem resolver control complements native builds;
+it does not exercise a physical biometric prompt or hardware wallet.
+
 ## QR scanner permission timing
 
 The shared modal, animated wallet importer and wallet-verification scanner use
@@ -230,13 +259,13 @@ project for build diagnosis.
 
 ## Local build and probe
 
-| Component | Build baseline |
-| --- | --- |
-| Node / npm | 22.15.1 / 11.5.2 |
-| Android | JDK 17, SDK/target 36, minimum API 24, Build Tools 36.0.0 |
-| Android native toolchain | NDK 27.1.12297006, CMake 3.22.1, Gradle 8.14.3, Kotlin 2.1.20 |
-| iOS | Xcode 16.4, minimum deployment target 15.1, ad hoc signed simulator Release |
-| Runtime probes | Android API 36 x86_64 emulator; iOS 18.5 simulator |
+| Component                | Build baseline                                                              |
+| ------------------------ | --------------------------------------------------------------------------- |
+| Node / npm               | 22.15.1 / 11.5.2                                                            |
+| Android                  | JDK 17, SDK/target 36, minimum API 24, Build Tools 36.0.0                   |
+| Android native toolchain | NDK 27.1.12297006, CMake 3.22.1, Gradle 8.14.3, Kotlin 2.1.20               |
+| iOS                      | Xcode 16.4, minimum deployment target 15.1, ad hoc signed simulator Release |
+| Runtime probes           | Android API 36 x86_64 emulator; iOS 18.5 simulator                          |
 
 These minimum platform versions follow [Expo SDK 54](https://docs.expo.dev/versions/v54.0.0/).
 The Android build includes ARM64 and x86_64; only the emulator architecture is
