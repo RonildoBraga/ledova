@@ -359,6 +359,34 @@ class TradingReadIsolationTest(APITestCase):
         service_class.assert_not_called()
 
     @patch("tokens.views.trading_order.AtomicSwapService")
+    def test_a_malformed_newest_swap_is_not_replaced_by_an_older_valid_match(self, service_class):
+        latest = self._make_swap(self.alice_order, self.bob_order, "7")
+        latest.buyer_address = self.alice_wallet.address
+        latest.save(update_fields=["buyer_address"])
+        self.client.force_authenticate(self.bob)
+
+        for path in ("swap/", "swap/approval-status/", "swap/approval-data/"):
+            with self.subTest(path=path):
+                response = self.client.get(
+                    f"/api/v1/trading/orders/{self.bob_order.uuid}/{path}",
+                    {"wallet_address": self.bob_wallet.address},
+                )
+                self.assertEqual(response.status_code, 404)
+                self.assertEqual(response.json()["detail"], "Order not found.")
+        service_class.assert_not_called()
+
+        latest.buyer_address = self.bob_wallet.address
+        latest.save(update_fields=["buyer_address"])
+        service_class.return_value.get_typed_data.return_value = {}
+        response = self.client.get(
+            f"/api/v1/trading/orders/{self.bob_order.uuid}/swap/",
+            {"wallet_address": self.bob_wallet.address},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["swap_order"]["uuid"], str(latest.uuid))
+        self.assertEqual(response.data["user_role"], "buyer")
+
+    @patch("tokens.views.trading_order.AtomicSwapService")
     def test_order_approval_status_uses_exact_order_role(self, service_class):
         service = service_class.return_value
         service.find_swap_order_by_transfer_order.return_value = self.swap

@@ -16,7 +16,7 @@ from shared.utils import get_client_ip
 from shared.views import AuthenticatedReadOnlyViewSet
 from tokens.exceptions import SwapExpiredException
 from tokens.filters import TransferOrderFilter
-from tokens.models import OrderSubmissionStatus, SwapOrder, TransferOrder
+from tokens.models import OrderSubmissionStatus, TransferOrder
 from tokens.serializers import (
     OrderModificationExecuteSerializer,
     OrderModificationRequestSerializer,
@@ -40,6 +40,7 @@ from tokens.services import (
     TradingOrderService,
 )
 from tokens.services.atomic_swap_service import sign_and_execute_swap
+from tokens.services.trading_order_access import resolve_order_swap_context
 from tokens.services.trading_order_cancel import cancel_signed_order
 from tokens.services.trading_order_create import (
     execute_order_submission,
@@ -281,31 +282,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
         authorized_wallets = resolve_verified_evm_wallets(request.user, [wallet_address])
         transfer_order = self.get_object()
 
-        if (
-            transfer_order.wallet_id not in authorized_wallets.wallet_ids
-            or transfer_order.wallet.user_account_id != transfer_order.owner_account_id
-            or transfer_order.wallet.address.casefold() != transfer_order.wallet_address.casefold()
-        ):
-            raise NotFound("Order not found.")
-
-        swap_order = SwapOrder.objects.for_transfer_order(transfer_order)
-        if not swap_order:
-            raise NotFound("No swap order found for this transfer order.")
-
-        if (
-            swap_order.sell_order_id == transfer_order.pk
-            and swap_order.seller_address.casefold() == transfer_order.wallet_address.casefold()
-        ):
-            user_role = "seller"
-            has_signed = swap_order.seller_has_signed
-        elif (
-            swap_order.buy_order_id == transfer_order.pk
-            and swap_order.buyer_address.casefold() == transfer_order.wallet_address.casefold()
-        ):
-            user_role = "buyer"
-            has_signed = swap_order.buyer_has_signed
-        else:
-            raise NotFound("Order not found.")
+        swap_order, user_role, has_signed = resolve_order_swap_context(transfer_order, authorized_wallets)
 
         atomic_swap_service = AtomicSwapService()
         return atomic_swap_service, swap_order, user_role, has_signed

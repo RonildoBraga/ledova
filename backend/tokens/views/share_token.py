@@ -142,7 +142,13 @@ class ShareTokenViewSet(AuthenticatedModelViewSet):
     @action(detail=True, methods=["get"])
     def issuances(self, request, uuid=None):
         token = self.get_object()
-        issuances = ShareIssuance.objects.with_token().with_initiated_by().with_subscription().filter_by_token(token)
+        issuances = (
+            ShareIssuance.objects.filter(token__in=ShareToken.objects.visible_to_user(request.user))
+            .with_token()
+            .with_initiated_by()
+            .with_subscription()
+            .filter_by_token(token)
+        )
         if request.query_params.get("status"):
             issuances = issuances.filter(status=request.query_params["status"])
         page = self.paginate_queryset(issuances.order_by("-completed_at"))

@@ -1,6 +1,13 @@
 from decimal import Decimal
 
 from tokens.models import ShareToken, SwapOrder, TransferOrder
+from users.services.eligibility import investor_eligibility
+
+
+def list_market_tokens(user):
+    if not investor_eligibility(user).is_eligible:
+        return ShareToken.objects.none()
+    return ShareToken.objects.with_company().deployed_with_contract().with_market_summary()
 
 
 class MarketDataService:
