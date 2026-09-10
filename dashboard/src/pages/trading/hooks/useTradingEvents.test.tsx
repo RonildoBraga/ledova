@@ -140,4 +140,23 @@ describe('useTradingEvents', () => {
     expect(FakeEventSource.instances).toHaveLength(2);
     queryClient.clear();
   });
+
+  it('refreshes reserved orders and signing views when a swap expires', () => {
+    const queryClient = new QueryClient();
+    const affected = ['orderBook', 'userOrders', 'swaps', 'orderSwapData'];
+    for (const key of [...affected, 'walletBalances']) {
+      queryClient.setQueryData(['trading', key, 'synthetic'], { status: 'before-expiry' });
+      expect(queryClient.getQueryState(['trading', key, 'synthetic'])?.isInvalidated).toBe(false);
+    }
+    const { unmount } = renderHook(() => useTradingEvents('synthetic'), {
+      wrapper: createWrapper(queryClient),
+    });
+    act(() => FakeEventSource.instances[0].emit('swap_expired'));
+    for (const key of affected) {
+      expect(queryClient.getQueryState(['trading', key, 'synthetic'])?.isInvalidated).toBe(true);
+    }
+    expect(queryClient.getQueryState(['trading', 'walletBalances', 'synthetic'])?.isInvalidated).toBe(false);
+    unmount();
+    queryClient.clear();
+  });
 });

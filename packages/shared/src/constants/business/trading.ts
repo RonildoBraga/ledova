@@ -15,7 +15,8 @@ export type TradingEventType =
   | 'order_matched'
   | 'swap_signed'
   | 'swap_completed'
-  | 'swap_failed';
+  | 'swap_failed'
+  | 'swap_expired';
 
 export const TRADING_EVENT_INVALIDATION_MAP: Record<TradingEventType, string[][]> = {
   order_created: [
@@ -47,6 +48,12 @@ export const TRADING_EVENT_INVALIDATION_MAP: Record<TradingEventType, string[][]
   swap_failed: [
     ['trading', 'swaps'],
     ['trading', 'userOrders'],
+  ],
+  swap_expired: [
+    ['trading', 'orderBook'],
+    ['trading', 'userOrders'],
+    ['trading', 'swaps'],
+    ['trading', 'orderSwapData'],
   ],
 };
 

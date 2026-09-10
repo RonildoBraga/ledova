@@ -2,7 +2,7 @@
   "name": "mobile",
   "version": "1.0.0",
   "private": true,
-  "license": "Apache-2.0",
+  "license": "SEE LICENSE IN LICENSE",
   "packageManager": "npm@11.5.2",
   "engines": {
     "node": "22.15.1",

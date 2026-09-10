@@ -32,6 +32,8 @@ SYSTEM_WIDE = {
     "seven years after the date they ceased, which is the only deletion anyone may perform on that "
     "table - the app role's policy refuses all three write commands.",
     "tokens.tasks.signing_challenge.purge_signing_challenges": "Deletes expired challenges regardless of whose.",
+    "tokens.tasks.swap_expiry.expire_unclaimed_matches": "Releases eligible unclaimed expired matches across both "
+    "parties, retaining every swap with a transaction claim or uncertain history.",
     "tokens.tasks.swap_reconciler.resolve_executing_swaps": "Asks the chain about every swap left executing, "
     "and a swap has two parties, so neither one's principal would cover it.",
     "users.tasks.retention.purge_classification_evidence": "Applies the retention clock across every account.",

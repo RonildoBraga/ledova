@@ -2,7 +2,7 @@
   "name": "@ledova/contracts",
   "version": "1.0.0",
   "private": true,
-  "license": "Apache-2.0",
+  "license": "SEE LICENSE IN LICENSE",
   "description": "Unaudited local and public-testnet token contract examples",
   "scripts": {
     "compile": "hardhat compile",
