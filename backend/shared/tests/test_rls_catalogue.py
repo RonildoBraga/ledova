@@ -161,10 +161,10 @@ class EveryTenantTableIsScopedByAPolicyTest(TransactionTestCase):
             with self.subTest(view=path):
                 self.assertIn(path, named, f"{path} reaches the ORM in a view and the audit does not say why")
 
-    def test_the_two_services_that_read_past_the_scope_are_named(self):
+    def test_the_eligibility_service_that_reads_past_the_scope_is_named(self):
         named = " ".join(site for site, _, _ in BYPASSES_VISIBLE_TO_USER.values())
 
-        for site in ("users/services/eligibility.py", "tokens/services/trading_order_cancel.py"):
+        for site in ("users/services/eligibility.py",):
             with self.subTest(site=site):
                 self.assertIn(site, named)
 

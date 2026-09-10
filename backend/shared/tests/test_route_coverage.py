@@ -163,7 +163,7 @@ def matrix_routes():
     def add(method, path):
         routes.add((method.lower(), TEMPLATE.sub("{}", path.split("?")[0])))
 
-    for route in matrix.ROUTES + matrix.DIRECTORY_ROUTES + matrix.MARKET_ROUTES:
+    for route in matrix.ROUTES + matrix.ACTION_ROUTES + matrix.DIRECTORY_ROUTES + matrix.MARKET_ROUTES:
         add(route.method, route.path)
     for path, _ in matrix.LIST_ROUTES:
         add("get", path)
