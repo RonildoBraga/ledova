@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { CameraView } from 'expo-camera';
 import { QrCodeIcon } from 'phosphor-react-native';
 
 import { useAppTheme, useThemedStyles } from '../../contexts';
 import { CustomModal } from '../modal';
+import { useCameraScanner } from './useCameraScanner';
 
 interface QRScannerProps {
   visible: boolean;
@@ -75,84 +76,16 @@ export function QRScanner({ visible, onClose, onScan, title = 'Scan QR Code', su
       color: theme.colors.text.muted,
       textAlign: 'center',
     },
-    scannedIndicator: {
-      position: 'absolute',
-      top: theme.spacing.md,
-      left: 0,
-      right: 0,
-      alignItems: 'center',
-    },
-    scannedText: {
-      backgroundColor: theme.colors.interactive.default,
-      color: theme.colors.utility.white,
-      paddingHorizontal: theme.spacing.lg,
-      paddingVertical: theme.spacing.sm,
-      borderRadius: theme.borderRadius.md,
-      fontSize: theme.fontSize.sm,
-      fontWeight: theme.fontWeight.semibold,
-    },
   }));
-  const [permission, requestPermission] = useCameraPermissions();
-  const [hasScanned, setHasScanned] = useState(false);
-  const [scanGeneration, setScanGeneration] = useState(0);
-  const [permissionRequestState, setPermissionRequestState] = useState<'idle' | 'requesting' | 'failed'>('idle');
+  const camera = useCameraScanner(visible, (data, finishScan) => {
+    finishScan();
+    onScan(data);
+  });
 
-  const scanLockRef = useRef(false);
-  const scanGenerationRef = useRef(0);
-  const permissionRequestInFlightRef = useRef(false);
-  const permissionAttemptedRef = useRef(false);
-
-  useEffect(() => {
-    if (!visible) {
-      permissionAttemptedRef.current = false;
-      return;
-    }
-    if (permissionRequestInFlightRef.current) {
-      permissionAttemptedRef.current = true;
-      return;
-    }
-    if (!permission || permission.granted || !permission.canAskAgain || permissionAttemptedRef.current) return;
-
-    permissionAttemptedRef.current = true;
-    permissionRequestInFlightRef.current = true;
-    setPermissionRequestState('requesting');
-    void requestPermission()
-      .then(
-        () => setPermissionRequestState('idle'),
-        () => setPermissionRequestState('failed'),
-      )
-      .finally(() => {
-        permissionRequestInFlightRef.current = false;
-      });
-  }, [visible, permission, requestPermission]);
-
-  useEffect(() => {
-    if (visible) {
-      scanGenerationRef.current += 1;
-      setScanGeneration(scanGenerationRef.current);
-      setHasScanned(false);
-      scanLockRef.current = false;
-    }
-    return () => {
-      scanLockRef.current = true;
-      scanGenerationRef.current += 1;
-    };
-  }, [visible]);
-
-  const handleBarCodeScanned = useCallback(
-    ({ data }: { data: string }) => {
-      if (!visible || scanLockRef.current || scanGeneration !== scanGenerationRef.current) return;
-      scanLockRef.current = true;
-      setHasScanned(true);
-      onScan(data);
-    },
-    [visible, onScan, scanGeneration],
-  );
-
-  const handleClose = useCallback(() => {
-    scanLockRef.current = true;
+  const handleClose = () => {
+    camera.stop();
     onClose();
-  }, [onClose]);
+  };
 
   if (!visible) return null;
 
@@ -165,41 +98,26 @@ export function QRScanner({ visible, onClose, onScan, title = 'Scan QR Code', su
       </View>
 
       <View style={styles.cameraContainer}>
-        {!permission || permissionRequestState === 'requesting' ? (
+        {camera.message ? (
           <View style={styles.messageContainer}>
-            <Text style={styles.message}>Requesting camera permission...</Text>
-          </View>
-        ) : permissionRequestState === 'failed' ? (
-          <View style={styles.messageContainer}>
-            <Text style={styles.message}>Unable to request camera permission. Close the scanner and try again.</Text>
-          </View>
-        ) : !permission.granted ? (
-          <View style={styles.messageContainer}>
-            <Text style={styles.message}>
-              Camera permission is required to scan QR codes. Please enable it in settings.
-            </Text>
+            <Text style={styles.message}>{camera.message}</Text>
           </View>
         ) : (
           <>
             <CameraView
               style={StyleSheet.absoluteFillObject}
               facing="back"
-              onBarcodeScanned={hasScanned ? undefined : handleBarCodeScanned}
+              onBarcodeScanned={camera.onBarcodeScanned}
               barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
             />
             <View style={styles.cameraOverlay}>
               <View style={styles.scanArea} />
             </View>
-            {hasScanned && (
-              <View style={styles.scannedIndicator}>
-                <Text style={styles.scannedText}>✓ Scanned!</Text>
-              </View>
-            )}
           </>
         )}
       </View>
 
-      {permission?.granted && <Text style={styles.instructionText}>Position the QR code within the frame</Text>}
+      {camera.status === 'ready' && <Text style={styles.instructionText}>Position the QR code within the frame</Text>}
     </CustomModal>
   );
 }

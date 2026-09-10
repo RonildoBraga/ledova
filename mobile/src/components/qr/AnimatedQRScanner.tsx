@@ -1,15 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { CameraView, useCameraPermissions } from 'expo-camera';
+import { CameraView } from 'expo-camera';
 import { URDecoder, UREncoder } from '@ngraveio/bc-ur';
-import { useAppTheme, useThemedStyles } from '../../contexts';
+import { useThemedStyles } from '../../contexts';
+import { useCameraScanner } from './useCameraScanner';
 
 interface AnimatedQRScannerProps {
   onComplete: (urString: string) => void;
+  active?: boolean;
 }
 
-export function AnimatedQRScanner({ onComplete }: AnimatedQRScannerProps) {
-  const theme = useAppTheme();
+export function AnimatedQRScanner({ onComplete, active = true }: AnimatedQRScannerProps) {
   const styles = useThemedStyles((theme) => ({
     container: {
       width: 300,
@@ -56,29 +57,26 @@ export function AnimatedQRScanner({ onComplete }: AnimatedQRScannerProps) {
       fontWeight: theme.fontWeight.semibold,
     },
   }));
-  const [permission, requestPermission] = useCameraPermissions();
   const [progress, setProgress] = useState<{ received: number; total: number } | null>(null);
   const decoderRef = useRef<URDecoder | null>(null);
   const processedPartsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
+    setProgress(null);
     decoderRef.current = new URDecoder();
     processedPartsRef.current = new Set();
-
-    if (!permission) {
-      requestPermission();
-    }
 
     return () => {
       decoderRef.current = null;
       processedPartsRef.current.clear();
     };
-  }, [permission, requestPermission]);
+  }, [active]);
 
-  const handleBarCodeScanned = ({ data }: { data: string }) => {
+  const camera = useCameraScanner(active, (data, finishScan) => {
     const dataLower = data.toLowerCase();
 
     if (!dataLower.startsWith('ur:')) {
+      finishScan();
       onComplete(data);
       return;
     }
@@ -104,25 +102,16 @@ export function AnimatedQRScanner({ onComplete }: AnimatedQRScannerProps) {
 
         const encoder = new UREncoder(ur, 100000);
         const completeURString = encoder.nextPart();
+        finishScan();
         onComplete(completeURString);
       }
     } catch {}
-  };
+  });
 
-  if (!permission) {
+  if (camera.message) {
     return (
       <View style={styles.container}>
-        <Text style={styles.message}>Requesting camera permission...</Text>
-      </View>
-    );
-  }
-
-  if (!permission.granted) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.message}>
-          Camera permission is required to scan QR codes. Please enable it in settings.
-        </Text>
+        <Text style={styles.message}>{camera.message}</Text>
       </View>
     );
   }
@@ -132,7 +121,7 @@ export function AnimatedQRScanner({ onComplete }: AnimatedQRScannerProps) {
       <CameraView
         style={StyleSheet.absoluteFillObject}
         facing="back"
-        onBarcodeScanned={handleBarCodeScanned}
+        onBarcodeScanned={camera.onBarcodeScanned}
         barcodeScannerSettings={{
           barcodeTypes: ['qr'],
         }}
