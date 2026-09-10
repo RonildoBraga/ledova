@@ -2,21 +2,18 @@ import React from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { CheckCircleIcon, WarningCircleIcon, QrCodeIcon } from 'phosphor-react-native';
 import { CameraView } from 'expo-camera';
-import type { PermissionResponse } from 'expo-camera';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
 
 interface SignatureScanStepProps {
-  permission: PermissionResponse | null;
-  hasScanned: boolean;
+  cameraMessage: string | null;
   isVerifying: boolean;
   verificationSuccess: boolean;
   verificationError: string | null;
-  onBarcodeScanned: (result: { data: string }) => void;
+  onBarcodeScanned?: (result: { data: string }) => void;
 }
 
 export function SignatureScanStep({
-  permission,
-  hasScanned,
+  cameraMessage,
   isVerifying,
   verificationSuccess,
   verificationError,
@@ -69,22 +66,6 @@ export function SignatureScanStep({
       borderColor: theme.colors.interactive.active,
       borderRadius: theme.borderRadius.md,
       backgroundColor: theme.colors.utility.transparent,
-    },
-    scannedIndicator: {
-      position: 'absolute',
-      top: theme.spacing.md,
-      left: 0,
-      right: 0,
-      alignItems: 'center',
-    },
-    scannedText: {
-      backgroundColor: theme.colors.interactive.default,
-      color: theme.colors.utility.white,
-      paddingHorizontal: theme.spacing.lg,
-      paddingVertical: theme.spacing.sm,
-      borderRadius: theme.borderRadius.md,
-      fontSize: theme.fontSize.sm,
-      fontWeight: theme.fontWeight.semibold,
     },
     errorContainer: {
       flexDirection: 'row',
@@ -160,32 +141,21 @@ export function SignatureScanStep({
       <Text style={styles.title}>Scan Signature QR</Text>
 
       <View style={styles.cameraContainer}>
-        {!permission ? (
+        {cameraMessage ? (
           <View style={styles.cameraMessage}>
-            <Text style={styles.cameraMessageText}>Requesting camera permission...</Text>
-          </View>
-        ) : !permission.granted ? (
-          <View style={styles.cameraMessage}>
-            <Text style={styles.cameraMessageText}>
-              Camera permission is required to scan QR codes. Please enable it in settings.
-            </Text>
+            <Text style={styles.cameraMessageText}>{cameraMessage}</Text>
           </View>
         ) : (
           <>
             <CameraView
               style={StyleSheet.absoluteFillObject}
               facing="back"
-              onBarcodeScanned={hasScanned ? undefined : onBarcodeScanned}
+              onBarcodeScanned={onBarcodeScanned}
               barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
             />
             <View style={styles.cameraOverlay}>
               <View style={styles.scanArea} />
             </View>
-            {hasScanned && (
-              <View style={styles.scannedIndicator}>
-                <Text style={styles.scannedText}>✓ Scanned!</Text>
-              </View>
-            )}
           </>
         )}
       </View>

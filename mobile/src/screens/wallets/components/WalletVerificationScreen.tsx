@@ -1,12 +1,12 @@
-import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { View, ScrollView } from 'react-native';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { useCameraPermissions } from 'expo-camera';
+import { useNavigation, useRoute, useIsFocused, RouteProp } from '@react-navigation/native';
+import { useCameraScanner } from '../../../components/qr/useCameraScanner';
 import { GradientBackground } from '../../../components/GradientBackground';
 import { Panel } from '../../../components/panel';
 import { encodeEthereumMessage, encodeBitcoinMessage } from '../../../utils/keystone/urEncoder';
 import { decodeKeystoneMessageSignature } from '../../../utils/keystone/urDecoder';
-import { useAppTheme, useThemedStyles } from '../../../contexts';
+import { useThemedStyles } from '../../../contexts';
 import {
   getChainShortCode,
   BLOCKCHAIN,
@@ -24,7 +24,6 @@ import { SignatureScanStep } from './SignatureScanStep';
 type WalletVerificationRouteProp = RouteProp<WalletsStackParamList, 'WalletVerification'>;
 
 export function WalletVerificationScreen() {
-  const theme = useAppTheme();
   const styles = useThemedStyles((theme) => ({
     container: {
       flex: 1,
@@ -57,9 +56,8 @@ export function WalletVerificationScreen() {
   }));
   const navigation = useNavigation();
   const route = useRoute<WalletVerificationRouteProp>();
-  const [permission, requestPermission] = useCameraPermissions();
-  const [hasScanned, setHasScanned] = useState(false);
-  const scanLockRef = useRef(false);
+  const isFocused = useIsFocused();
+  const [scanError, setScanError] = useState<string | null>(null);
 
   const { wallet } = route.params;
 
@@ -89,14 +87,8 @@ export function WalletVerificationScreen() {
   }, [isSoftwareWallet]);
 
   useEffect(() => {
-    if (verificationStep === 'scan-signature' && !permission) {
-      requestPermission();
-    }
-    if (verificationStep === 'scan-signature') {
-      setHasScanned(false);
-      scanLockRef.current = false;
-    }
-  }, [verificationStep, permission, requestPermission]);
+    setScanError(null);
+  }, [verificationStep]);
 
   useEffect(() => {
     return () => {
@@ -149,18 +141,20 @@ export function WalletVerificationScreen() {
     }
   }, [verificationChallenge, wallet, evmChainId, isBitcoin]);
 
-  const handleSignatureScanned = useCallback(
-    ({ data }: { data: string }) => {
-      if (scanLockRef.current) return;
-      scanLockRef.current = true;
-      setHasScanned(true);
-
+  const camera = useCameraScanner(
+    isFocused && !isSoftwareWallet && verificationStep === 'scan-signature',
+    (data, finishScan) => {
+      if (isVerifying || verificationSuccess) return;
       const decodedSignature = decodeKeystoneMessageSignature(data);
-      if (decodedSignature) {
-        verifySignature(decodedSignature);
+      if (!decodedSignature) {
+        setScanError('This QR code is not a supported signature. Scan the signature shown by your wallet.');
+        return;
       }
+      setScanError(null);
+      finishScan();
+      verifySignature(decodedSignature);
     },
-    [verifySignature],
+    wallet.uuid,
   );
 
   const renderFooter = () => {
@@ -216,7 +210,10 @@ export function WalletVerificationScreen() {
           <ButtonGroup
             primaryButton={{
               label: 'Back',
-              onPress: goBackVerificationStep,
+              onPress: () => {
+                camera.stop();
+                goBackVerificationStep();
+              },
             }}
             size="medium"
           />
@@ -257,12 +254,11 @@ export function WalletVerificationScreen() {
                 )}
                 {verificationStep === 'scan-signature' && (
                   <SignatureScanStep
-                    permission={permission ?? null}
-                    hasScanned={hasScanned}
+                    cameraMessage={camera.message}
                     isVerifying={isVerifying}
                     verificationSuccess={verificationSuccess}
-                    verificationError={verificationError}
-                    onBarcodeScanned={handleSignatureScanned}
+                    verificationError={scanError || verificationError}
+                    onBarcodeScanned={camera.onBarcodeScanned}
                   />
                 )}
               </ScrollView>

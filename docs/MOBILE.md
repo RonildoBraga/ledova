@@ -82,22 +82,32 @@ and [Android backup rules](https://developer.android.com/identity/data/autobacku
 
 ## QR scanner permission timing
 
-The shared modal QR scanner used by sends, transfers and trading checks the
-existing camera permission before requesting it. Hidden scanners never request
-permission or mount a preview. Opening an unpermitted scanner makes one request
-when the platform allows asking again. Denial or a native request failure does
-not automatically retry; a later opening can try again. Closing and reopening
-while a request is outstanding shares that attempt. Closing or unmounting the
-scanner removes the preview and invalidates its scan callbacks, including events
-retained from an earlier opening.
+The shared modal, animated wallet importer and wallet-verification scanner use
+one camera permission controller. Hidden scanners do not read or request
+permission or mount a preview. Opening a scanner checks the current permission
+and makes one request when the platform allows asking again. Concurrent openings
+share an outstanding request. Denial and native getter/request failures do not
+loop; closing and opening the scanner again permits another attempt.
 
-The component tests use Expo's installed permission hook with controlled native
-responses and a camera lifecycle stand-in. They establish JavaScript request and
-mount timing, not OS prompt presentation or physical camera shutdown. Wallet
-import's animated scanner and wallet verification's scan step have separate
-permission handling. Refreshing permission after an external settings change,
-handling a failed initial permission getter, and physical permission
-denial/revocation and camera lifecycle checks remain under #13.
+Leaving the foreground removes the preview and invalidates its callbacks.
+Returning refreshes permission, including changes made in settings, without
+asking again. A pending native response cannot restore an old preview or override
+a newer refresh. Closing, unmounting or leaving the verification scan step also
+retires callbacks. Verification pauses while another navigation route covers it.
+A completed scan retires its callback before delivering the result, removes its
+preview on the next render and stays completed across foreground changes.
+
+The animated importer retains its UR fragments during a permission refresh and
+clears them on a new opening. Wallet verification requests permission at the scan
+step, after the challenge; software-wallet verification does not use the camera.
+An unsupported signature QR displays guidance and leaves scanning available.
+
+Component tests exercise the installed Expo permission methods at a controlled
+native boundary, actual UR encoding/decoding and verification step/mutation
+hooks. They establish JavaScript request, callback and mount timing. OS prompt
+presentation, physical camera shutdown, device settings/OEM behavior and scanning
+behind the separate app-lock overlay are not established by these controls and
+remain under #13.
 
 ## Document upload copies
 

@@ -226,7 +226,7 @@ export function AddWalletModal({
 
               {form.showScanner ? (
                 <View style={styles.scannerContainer}>
-                  <AnimatedQRScanner onComplete={form.handleQRScan} />
+                  <AnimatedQRScanner key={userAccountUuid} active={visible} onComplete={form.handleQRScan} />
                 </View>
               ) : (
                 <>
