@@ -3,6 +3,7 @@ import { View, Text, ActivityIndicator } from 'react-native';
 import { ShieldCheckIcon, WarningCircleIcon } from 'phosphor-react-native';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
 import { useIdentityVerification } from '../../../hooks/useIdentityVerification';
+import { useIsFocused } from '@react-navigation/native';
 import { CustomModal } from '../../../components/modal';
 import { PrimaryButton } from '../../../components/buttons';
 import { StatusBanners } from '../../signup/identity-verification/components/StatusBanners';
@@ -15,6 +16,8 @@ interface VerificationModalProps {
 }
 
 export function VerificationModal({ visible, onClose, onRefresh }: VerificationModalProps) {
+  const isFocused = useIsFocused();
+  const active = visible && isFocused;
   const theme = useAppTheme();
   const styles = useThemedStyles((theme) => ({
     modalHeader: {
@@ -94,7 +97,6 @@ export function VerificationModal({ visible, onClose, onRefresh }: VerificationM
     launchVerification,
     isLaunching,
     sdkError,
-    clearError,
     isPending,
     isOnHold,
     isRejected,
@@ -105,26 +107,27 @@ export function VerificationModal({ visible, onClose, onRefresh }: VerificationM
     resetState,
     accessToken,
     formUrl,
+    formSessionEpoch,
     showVerificationForm,
     handleFormComplete,
     closeFormModal,
-  } = useIdentityVerification();
+  } = useIdentityVerification(active);
 
   useEffect(() => {
-    if (visible) {
+    if (active) {
       resetState();
     }
-  }, [visible, resetState]);
+  }, [active, resetState]);
 
   useEffect(() => {
-    if (justSubmitted && visible) {
+    if (justSubmitted && active) {
       const timer = setTimeout(() => {
         onClose();
         onRefresh();
       }, 3000);
       return () => clearTimeout(timer);
     }
-  }, [justSubmitted, visible, onClose, onRefresh]);
+  }, [justSubmitted, active, onClose, onRefresh]);
 
   const handleStartVerification = async () => {
     try {
@@ -133,7 +136,7 @@ export function VerificationModal({ visible, onClose, onRefresh }: VerificationM
   };
 
   const handleClose = () => {
-    clearError();
+    resetState();
     onClose();
   };
 
@@ -149,7 +152,7 @@ export function VerificationModal({ visible, onClose, onRefresh }: VerificationM
   return (
     <>
       <CustomModal
-        visible={visible && !showVerificationForm}
+        visible={active && !showVerificationForm}
         onClose={handleClose}
         showFooter={showModalFooter}
         cancelLabel="Skip"
@@ -217,9 +220,10 @@ export function VerificationModal({ visible, onClose, onRefresh }: VerificationM
       </CustomModal>
 
       <VerificationFormModal
-        visible={showVerificationForm}
+        visible={active && showVerificationForm}
         accessToken={accessToken}
         formUrl={formUrl}
+        sessionEpoch={formSessionEpoch}
         onComplete={handleFormComplete}
         onClose={closeFormModal}
       />

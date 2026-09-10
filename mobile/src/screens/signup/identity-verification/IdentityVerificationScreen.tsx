@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Alert } fr
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { GradientBackground } from '../../../components/GradientBackground';
 import { PrimaryButton, SecondaryButton } from '../../../components/buttons';
-import { useNavigation, NavigationProp } from '@react-navigation/native';
+import { useIsFocused, useNavigation, NavigationProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../../../navigation/AppNavigator';
 import { useIdentityVerification } from './useIdentityVerification';
 import { StatusBanners } from './components/StatusBanners';
@@ -133,6 +133,7 @@ export function IdentityVerificationScreen() {
     },
   }));
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
+  const isFocused = useIsFocused();
 
   const {
     status,
@@ -147,6 +148,7 @@ export function IdentityVerificationScreen() {
     hasApplicant,
     accessToken,
     formUrl,
+    formSessionEpoch,
     showVerificationForm,
     handleFormComplete,
     closeFormModal,
@@ -157,7 +159,7 @@ export function IdentityVerificationScreen() {
     showForm,
     showContinue,
     showSkip,
-  } = useIdentityVerification();
+  } = useIdentityVerification(isFocused);
 
   const handleContinue = async () => {
     const success = await prepareForNextScreen();
@@ -273,9 +275,10 @@ export function IdentityVerificationScreen() {
       </SafeAreaView>
 
       <VerificationFormModal
-        visible={showVerificationForm}
+        visible={isFocused && showVerificationForm}
         accessToken={accessToken}
         formUrl={formUrl}
+        sessionEpoch={formSessionEpoch}
         onComplete={handleFormComplete}
         onClose={closeFormModal}
       />

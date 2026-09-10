@@ -121,6 +121,32 @@ presentation, physical camera shutdown, device settings/OEM behavior, Android
 Activity versus modal-window focus and global lock-overlay/input stacking are
 not established by these controls and remain under #13.
 
+## Identity-provider WebView lifetime
+
+The signup and profile verification forms mount their provider WebView only
+while their owner is visible and focused, the app is active, and the app-lock
+provider admits camera use. Initialization, foreground lock evaluation and the
+locked overlay remove the WebView. A synchronous admission/session check also
+rejects retained completion, navigation and load callbacks before React removes
+the native view. Returning from a lock or foreground pause mounts a fresh view
+for the same form; a completed or closed form stays retired.
+
+Closing, replacing credentials, leaving the owning screen or retiring the session
+invalidates pending form launches and old callbacks. A later explicit launch can
+open a new form. Normal successful submission and its existing status polling
+continue; hiding the owner alone does not stop submitted-status polling. Provider
+SDK failures and native page-load failures use fixed messages instead of raw
+provider or WebView error payloads. Existing backend initialization error messages
+are still shown.
+
+Mounted JavaScript controls use the locked WebView wrapper, actual app-lock
+provider and owner hooks with synthetic credentials. They establish mount,
+callback and error-display behavior, not physical camera shutdown or native
+permission-dialog cancellation. Provider origin/media grants, Android owning-window
+focus and global modal/lock stacking remain separate #13 checks. Navigation and
+provider media policies are unchanged; playback settings do not establish camera
+capture control, and a form-completion signal is not server verification approval.
+
 ## Document upload copies
 
 Eligibility and company listing use one serialized document picker. A returned
