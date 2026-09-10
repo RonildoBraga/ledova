@@ -1,0 +1,73 @@
+{
+  "package": "expo-camera",
+  "version": "17.0.10",
+  "files": [
+    {
+      "path": "android/src/main/java/expo/modules/camera/ExpoCameraView.kt",
+      "beforeSha256": "9e5bf6c2b46560e855deea46b36b44ef0e5b7bbafc9efc446352ae9c2d3e2c32",
+      "afterSha256": "395ae6aeb3074e71e82362cf2f1caf2e590a463c60637142138ef197589bf5e5",
+      "replacements": [
+        {
+          "before": "import androidx.camera.core.UseCaseGroup",
+          "after": "import androidx.camera.core.UseCase\nimport androidx.camera.core.UseCaseGroup"
+        },
+        {
+          "before": "  private var previewPaused = false",
+          "after": "  private var previewPaused = false\n  private var cameraGeneration = 0L\n  private var cameraDisposed = false\n  private var cameraInitialized = false\n  private var cameraAttached = false\n  private var cameraWindowAllowed = false\n  private var cameraWindowRevoked = false\n  private var cameraUseCases: List<UseCase> = emptyList()"
+        },
+        {
+          "before": "    if (!shouldCreateCamera || previewPaused) {\n      return\n    }\n    shouldCreateCamera = false",
+          "after": "    if (!shouldCreateCamera || previewPaused || !hasCameraWindow()) {\n      return\n    }\n    if (cameraGeneration == Long.MAX_VALUE) {\n      cleanupCamera()\n      return\n    }\n    val generation = ++cameraGeneration\n    shouldCreateCamera = false"
+        },
+        {
+          "before": "    val useCases = UseCaseGroup.Builder().apply {\n      addUseCase(preview)",
+          "after": "    val ownedUseCases = mutableListOf<UseCase>(preview)\n    val useCases = UseCaseGroup.Builder().apply {\n      addUseCase(preview)"
+        },
+        {
+          "before": "          addUseCase(it)\n        }\n        imageAnalysisUseCase?.let {\n          addUseCase(it)",
+          "after": "          addUseCase(it)\n          ownedUseCases.add(it)\n        }\n        imageAnalysisUseCase?.let {\n          addUseCase(it)\n          ownedUseCases.add(it)"
+        },
+        {
+          "before": "        addUseCase(videoCapture)\n      }\n    }.build()\n\n    try {\n      cameraProvider.unbindAll()\n      camera = cameraProvider.bindToLifecycle(currentActivity, cameraSelector, useCases)",
+          "after": "        addUseCase(videoCapture)\n        ownedUseCases.add(videoCapture)\n      }\n    }.build()\n\n    if (generation != cameraGeneration || previewPaused || !hasCameraWindow()) {\n      return\n    }\n\n    try {\n      releaseCamera()\n      camera = cameraProvider.bindToLifecycle(currentActivity, cameraSelector, useCases)\n      this.cameraProvider = cameraProvider\n      cameraUseCases = ownedUseCases"
+        },
+        {
+          "before": "      setCameraZoom(zoom)\n      this.cameraProvider = cameraProvider",
+          "after": "      setCameraZoom(zoom)"
+        },
+        {
+          "before": "  fun pausePreview() {\n    previewPaused = true\n    cameraProvider?.unbindAll()\n  }",
+          "after": "  fun pausePreview() {\n    previewPaused = true\n    invalidateCamera()\n  }"
+        },
+        {
+          "before": "  fun cleanupCamera() {\n    orientationEventListener.disable()\n    cancelCoroutineScope()\n    cameraProvider?.unbindAll()\n    glSurfaceTexture?.release()\n  }",
+          "after": "  private fun hasVisibleCameraWindow(): Boolean =\n    cameraAttached && isAttachedToWindow && windowVisibility == VISIBLE && isShown && hasWindowFocus()\n\n  private fun hasCameraWindow(): Boolean =\n    !cameraDisposed && !cameraWindowRevoked && hasVisibleCameraWindow()\n\n  private fun releaseCamera() {\n    cameraProvider?.unbind(*cameraUseCases.toTypedArray())\n    cameraUseCases = emptyList()\n    cameraProvider = null\n    camera = null\n  }\n\n  private fun invalidateCamera() {\n    if (cameraGeneration < Long.MAX_VALUE) cameraGeneration += 1\n    else cameraDisposed = true\n    releaseCamera()\n  }\n\n  private fun updateCameraWindow() {\n    if (!cameraInitialized) return\n    val allowed = hasVisibleCameraWindow()\n    if (allowed == cameraWindowAllowed) return\n    if (!allowed) {\n      cameraWindowRevoked = true\n      invalidateCamera()\n    } else if (!previewPaused && !cameraWindowRevoked && !cameraDisposed) {\n      shouldCreateCamera = true\n      scope.launch { createCamera() }\n    }\n    cameraWindowAllowed = allowed\n  }\n\n  override fun onAttachedToWindow() {\n    super.onAttachedToWindow()\n    cameraAttached = true\n    updateCameraWindow()\n  }\n\n  override fun onDetachedFromWindow() {\n    cameraAttached = false\n    updateCameraWindow()\n    super.onDetachedFromWindow()\n  }\n\n  override fun onWindowFocusChanged(hasWindowFocus: Boolean) {\n    super.onWindowFocusChanged(hasWindowFocus)\n    updateCameraWindow()\n  }\n\n  override fun onWindowVisibilityChanged(visibility: Int) {\n    super.onWindowVisibilityChanged(visibility)\n    updateCameraWindow()\n  }\n\n  override fun onVisibilityChanged(changedView: View, visibility: Int) {\n    super.onVisibilityChanged(changedView, visibility)\n    updateCameraWindow()\n  }\n\n  init {\n    cameraInitialized = true\n  }\n\n  fun cleanupCamera() {\n    cameraDisposed = true\n    invalidateCamera()\n    orientationEventListener.disable()\n    cancelCoroutineScope()\n    glSurfaceTexture?.release()\n  }"
+        },
+        {
+          "before": "  private fun observeCameraState(cameraInfo: CameraInfo) {\n    cameraInfo.cameraState.observe(currentActivity) {",
+          "after": "  private fun observeCameraState(cameraInfo: CameraInfo) {\n    val generation = cameraGeneration\n    cameraInfo.cameraState.observe(currentActivity) {\n      if (generation != cameraGeneration || previewPaused || !hasCameraWindow() || camera?.cameraInfo !== cameraInfo) {\n        return@observe\n      }"
+        },
+        {
+          "before": "  private fun onBarcodeScanned(barcode: BarCodeScannerResult) {\n    if (shouldScanBarcodes) {",
+          "after": "  private fun onBarcodeScanned(barcode: BarCodeScannerResult) {\n    if (shouldScanBarcodes && !previewPaused && hasCameraWindow() && camera != null) {"
+        }
+      ]
+    },
+    {
+      "path": "android/src/main/java/expo/modules/camera/CameraViewModule.kt",
+      "beforeSha256": "e845933868e33b4799c39c1a4fd4c1ed8cba52cab8092b98f84fcd0f04d30151",
+      "afterSha256": "e845933868e33b4799c39c1a4fd4c1ed8cba52cab8092b98f84fcd0f04d30151",
+      "replacements": []
+    }
+  ],
+  "android": {
+    "modules": ["expo.modules.camera.CameraViewModule"],
+    "publication": {
+      "groupId": "host.exp.exponent",
+      "artifactId": "expo.modules.camera",
+      "version": "17.0.10",
+      "repository": "local-maven-repo"
+    }
+  },
+  "gradleSha256": "684ee20f7352318d744c9406b5cc9bfdc2107705f514469e634552f45ef02a9d"
+}

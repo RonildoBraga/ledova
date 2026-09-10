@@ -1,3 +1,4 @@
+import { prepareCamera } from './prepare-camera-android.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -15,6 +16,7 @@ async function xml(file) {
 }
 
 if (platform !== 'ios') {
+  prepareCamera('verify');
   const manifest = await xml('android/app/src/main/AndroidManifest.xml');
   const application = manifest.manifest.application[0].$;
   assert.equal(application['android:usesCleartextTraffic'], 'false');

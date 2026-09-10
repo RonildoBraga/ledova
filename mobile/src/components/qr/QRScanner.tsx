@@ -6,6 +6,7 @@ import { QrCodeIcon } from 'phosphor-react-native';
 import { useAppTheme, useThemedStyles } from '../../contexts';
 import { CustomModal } from '../modal';
 import { useCameraScanner } from './useCameraScanner';
+import { CameraWindow } from './CameraWindow';
 
 interface QRScannerProps {
   visible: boolean;
@@ -97,7 +98,7 @@ export function QRScanner({ visible, onClose, onScan, title = 'Scan QR Code', su
         {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
       </View>
 
-      <View style={styles.cameraContainer}>
+      <CameraWindow access={camera.windowAccess} style={styles.cameraContainer}>
         {camera.message ? (
           <View style={styles.messageContainer}>
             <Text style={styles.message}>{camera.message}</Text>
@@ -105,6 +106,7 @@ export function QRScanner({ visible, onClose, onScan, title = 'Scan QR Code', su
         ) : (
           <>
             <CameraView
+              key={camera.previewKey}
               style={StyleSheet.absoluteFillObject}
               facing="back"
               onBarcodeScanned={camera.onBarcodeScanned}
@@ -115,7 +117,7 @@ export function QRScanner({ visible, onClose, onScan, title = 'Scan QR Code', su
             </View>
           </>
         )}
-      </View>
+      </CameraWindow>
 
       {camera.status === 'ready' && <Text style={styles.instructionText}>Position the QR code within the frame</Text>}
     </CustomModal>

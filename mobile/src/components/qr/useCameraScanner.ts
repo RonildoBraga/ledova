@@ -1,12 +1,13 @@
-import { useCallback, useContext, useLayoutEffect, useRef, useState } from 'react';
-import { AppState } from 'react-native';
+import { useCallback, useContext, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { AppState, Platform } from 'react-native';
 import { Camera } from 'expo-camera';
 import type { PermissionResponse } from 'expo-camera';
 import { CameraAccessContext } from '../../contexts/cameraAccess';
+import { createCameraWindowAccess } from './cameraWindowAccess';
 
 type CameraStatus = 'inactive' | 'loading' | 'denied' | 'failed' | 'ready' | 'scanned';
 type BarcodeHandler = (result: { data: string }) => void;
-type CameraSnapshot = { status: CameraStatus; onBarcodeScanned?: BarcodeHandler };
+type CameraSnapshot = { status: CameraStatus; previewKey?: string; onBarcodeScanned?: BarcodeHandler };
 
 const messages = {
   inactive: 'Camera paused.',
@@ -44,6 +45,7 @@ export function useCameraScanner(
   sessionKey = '',
 ) {
   const cameraAccess = useContext(CameraAccessContext);
+  const windowAccess = useMemo(() => createCameraWindowAccess(Platform.OS === 'android', sessionKey), [sessionKey]);
   const [snapshot, setSnapshot] = useState<CameraSnapshot>({ status: 'inactive' });
   const onScanRef = useRef(onScan);
   const stopRef = useRef(() => {});
@@ -63,15 +65,20 @@ export function useCameraScanner(
     let revision = 0;
     let completed = false;
     let processing = false;
+    let initialRequest = foreground && cameraAccess.getSnapshot().allowed;
+    let windowAdmitted = windowAccess.getSnapshot().allowed;
 
     const refresh = async (allowRequest: boolean) => {
       const currentRevision = ++revision;
       const access = cameraAccess.getSnapshot();
+      const window = windowAccess.getSnapshot();
       const isCurrent = () =>
         !stopped &&
         foreground &&
         revision === currentRevision &&
         access.allowed &&
+        window.allowed &&
+        windowAccess.getSnapshot() === window &&
         cameraAccess.getSnapshot() === access;
       if (!isCurrent()) {
         if (!stopped) setSnapshot({ status: 'inactive' });
@@ -82,6 +89,7 @@ export function useCameraScanner(
         return;
       }
       setSnapshot({ status: 'loading' });
+      initialRequest = false;
       try {
         const permission = await readPermission(allowRequest, isCurrent);
         if (!isCurrent()) return;
@@ -91,6 +99,7 @@ export function useCameraScanner(
         }
         setSnapshot({
           status: 'ready',
+          previewKey: window.key,
           onBarcodeScanned: ({ data }) => {
             if (!isCurrent() || completed || processing) return;
             processing = true;
@@ -115,10 +124,24 @@ export function useCameraScanner(
       setSnapshot({ status: 'inactive' });
     };
 
+    const unsubscribeWindow = windowAccess.subscribe(() => {
+      if (stopped) return;
+      const admitted = windowAccess.getSnapshot().allowed;
+      if (!admitted) {
+        if (windowAdmitted) initialRequest = false;
+        revision += 1;
+        setSnapshot({ status: 'inactive' });
+      } else {
+        void refresh(initialRequest);
+      }
+      windowAdmitted = admitted;
+    });
+
     const unsubscribeAccess = cameraAccess.subscribe(() => {
       if (stopped) return;
       if (foreground && cameraAccess.getSnapshot().allowed) void refresh(false);
       else {
+        initialRequest = false;
         revision += 1;
         setSnapshot({ status: 'inactive' });
       }
@@ -132,6 +155,7 @@ export function useCameraScanner(
       if (foreground) {
         void refresh(false);
       } else {
+        initialRequest = false;
         revision += 1;
         setSnapshot({ status: 'inactive' });
       }
@@ -146,10 +170,11 @@ export function useCameraScanner(
       stopRef.current = () => {};
       subscription.remove();
       unsubscribeAccess();
+      unsubscribeWindow();
     };
-  }, [cameraAccess, enabled, sessionKey]);
+  }, [cameraAccess, enabled, sessionKey, windowAccess]);
 
   const stop = useCallback(() => stopRef.current(), []);
   const status = enabled ? snapshot.status : 'inactive';
-  return { ...snapshot, status, message: status === 'ready' ? null : messages[status], stop };
+  return { ...snapshot, windowAccess, status, message: status === 'ready' ? null : messages[status], stop };
 }

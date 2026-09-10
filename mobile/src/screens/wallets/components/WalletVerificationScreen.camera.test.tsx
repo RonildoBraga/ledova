@@ -1,6 +1,6 @@
 import React, { useLayoutEffect } from 'react';
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
-import { AppState, type AppStateStatus } from 'react-native';
+import { AppState, Platform, type AppStateStatus } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { PermissionResponse } from 'expo-camera';
 import type { Wallet } from '@ledova/shared';
@@ -21,6 +21,12 @@ const listeners = new Set<(state: AppStateStatus) => void>();
 let client: QueryClient;
 
 jest.mock('uuid', () => ({ v4: () => '11111111-1111-4111-8111-111111111111' }));
+
+jest.mock('expo', () => {
+  const actual = jest.requireActual<typeof import('expo')>('expo');
+  const { View } = jest.requireActual<typeof import('react-native')>('react-native');
+  return { ...actual, requireNativeView: () => View };
+});
 
 jest.mock('expo-camera/build/ExpoCameraManager', () => ({
   getCameraPermissionsAsync: () => mockGetPermission(),
@@ -154,6 +160,39 @@ async function changeAppState(state: AppStateStatus) {
     listeners.forEach((listener) => listener(state));
   });
 }
+
+it('keeps Android verification pending for its own window and rejects a replaced session callback', async () => {
+  jest.replaceProperty(Platform, 'OS', 'android');
+  const view = await openScanner();
+  expect(mockGetPermission).not.toHaveBeenCalled();
+  expect(view.queryByTestId('camera-preview')).toBeNull();
+  const firstOwner = view.getByTestId('camera-window');
+  const update = (owner: typeof firstOwner, generation: number, allowed: boolean) =>
+    fireEvent(owner, 'windowChange', { nativeEvent: { ownerId: owner.props.ownerId, generation, allowed } });
+  await update(firstOwner, 1, true);
+  expect(view.getByTestId('camera-preview')).toBeTruthy();
+  const previous = mockScan!;
+  await update(firstOwner, 2, false);
+  await act(() => previous({ data: signatureQR }));
+  expect(mockVerifySignature).not.toHaveBeenCalled();
+  await fireEvent.press(view.getByText('Back'));
+  await fireEvent.press(view.getByText('Continue'));
+  const currentOwner = view.getByTestId('camera-window');
+  expect(currentOwner.props.ownerId).not.toBe(firstOwner.props.ownerId);
+  await act(() =>
+    firstOwner.props.onWindowChange({
+      nativeEvent: { ownerId: firstOwner.props.ownerId, generation: 3, allowed: true },
+    }),
+  );
+  expect(view.queryByTestId('camera-preview')).toBeNull();
+  await update(currentOwner, 1, true);
+  await act(() => previous({ data: signatureQR }));
+  expect(mockVerifySignature).not.toHaveBeenCalled();
+  await act(() => mockScan!({ data: signatureQR }));
+  await waitFor(() => expect(view.getByText('Verification Successful!')).toBeTruthy());
+  expect(mockVerifySignature).toHaveBeenCalledTimes(1);
+  expect(mockRequestPermission).not.toHaveBeenCalled();
+});
 
 it('requests an undetermined permission only after continuing from the challenge', async () => {
   mockGetPermission.mockResolvedValue(undetermined);

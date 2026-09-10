@@ -1,0 +1,188 @@
+--- a/android/src/main/java/expo/modules/camera/ExpoCameraView.kt
++++ b/android/src/main/java/expo/modules/camera/ExpoCameraView.kt
+@@ -33,6 +33,7 @@
+ import androidx.camera.core.ImageProxy
+ import androidx.camera.core.MirrorMode
+ import androidx.camera.core.Preview
++import androidx.camera.core.UseCase
+ import androidx.camera.core.UseCaseGroup
+ import androidx.camera.core.resolutionselector.ResolutionSelector
+ import androidx.camera.core.resolutionselector.ResolutionStrategy
+@@ -136,6 +137,13 @@
+   private val scope = CoroutineScope(Dispatchers.Main)
+   private var shouldCreateCamera = false
+   private var previewPaused = false
++  private var cameraGeneration = 0L
++  private var cameraDisposed = false
++  private var cameraInitialized = false
++  private var cameraAttached = false
++  private var cameraWindowAllowed = false
++  private var cameraWindowRevoked = false
++  private var cameraUseCases: List<UseCase> = emptyList()
+
+   var lensFacing = CameraType.BACK
+     set(value) {
+@@ -407,9 +415,14 @@
+
+   @SuppressLint("UnsafeOptInUsageError")
+   suspend fun createCamera() {
+-    if (!shouldCreateCamera || previewPaused) {
++    if (!shouldCreateCamera || previewPaused || !hasCameraWindow()) {
+       return
+     }
++    if (cameraGeneration == Long.MAX_VALUE) {
++      cleanupCamera()
++      return
++    }
++    val generation = ++cameraGeneration
+     shouldCreateCamera = false
+     val cameraProvider = ProcessCameraProvider.awaitInstance(context)
+
+@@ -452,29 +465,38 @@
+     val videoCapture = createVideoCapture()
+     imageAnalysisUseCase = createImageAnalyzer()
+
++    val ownedUseCases = mutableListOf<UseCase>(preview)
+     val useCases = UseCaseGroup.Builder().apply {
+       addUseCase(preview)
+       if (cameraMode == CameraMode.PICTURE) {
+         imageCaptureUseCase?.let {
+           addUseCase(it)
++          ownedUseCases.add(it)
+         }
+         imageAnalysisUseCase?.let {
+           addUseCase(it)
++          ownedUseCases.add(it)
+         }
+       } else {
+         addUseCase(videoCapture)
++        ownedUseCases.add(videoCapture)
+       }
+     }.build()
+
++    if (generation != cameraGeneration || previewPaused || !hasCameraWindow()) {
++      return
++    }
++
+     try {
+-      cameraProvider.unbindAll()
++      releaseCamera()
+       camera = cameraProvider.bindToLifecycle(currentActivity, cameraSelector, useCases)
++      this.cameraProvider = cameraProvider
++      cameraUseCases = ownedUseCases
+       camera?.let {
+         observeCameraState(it.cameraInfo)
+       }
+       // Set the previous zoom level after recreating the camera
+       setCameraZoom(zoom)
+-      this.cameraProvider = cameraProvider
+     } catch (_: Exception) {
+       onMountError(
+         CameraMountErrorEvent("Camera component could not be rendered - is there any other instance running?")
+@@ -594,7 +616,11 @@
+   }
+
+   private fun observeCameraState(cameraInfo: CameraInfo) {
++    val generation = cameraGeneration
+     cameraInfo.cameraState.observe(currentActivity) {
++      if (generation != cameraGeneration || previewPaused || !hasCameraWindow() || camera?.cameraInfo !== cameraInfo) {
++        return@observe
++      }
+       when (it.type) {
+         CameraState.Type.OPEN -> {
+           onCameraReady(Unit)
+@@ -625,7 +651,7 @@
+
+   fun pausePreview() {
+     previewPaused = true
+-    cameraProvider?.unbindAll()
++    invalidateCamera()
+   }
+
+   fun setShouldScanBarcodes(shouldScanBarcodes: Boolean) {
+@@ -736,7 +762,7 @@
+   }
+
+   private fun onBarcodeScanned(barcode: BarCodeScannerResult) {
+-    if (shouldScanBarcodes) {
++    if (shouldScanBarcodes && !previewPaused && hasCameraWindow() && camera != null) {
+       transformBarcodeScannerResultToViewCoordinates(barcode)
+       val (cornerPoints, boundingBox) = getCornerPointsAndBoundingBox(
+         barcode.cornerPoints,
+@@ -797,10 +823,75 @@
+     Log.e(CameraViewModule.TAG, "The scope does not have a job in it")
+   }
+
++  private fun hasVisibleCameraWindow(): Boolean =
++    cameraAttached && isAttachedToWindow && windowVisibility == VISIBLE && isShown && hasWindowFocus()
++
++  private fun hasCameraWindow(): Boolean =
++    !cameraDisposed && !cameraWindowRevoked && hasVisibleCameraWindow()
++
++  private fun releaseCamera() {
++    cameraProvider?.unbind(*cameraUseCases.toTypedArray())
++    cameraUseCases = emptyList()
++    cameraProvider = null
++    camera = null
++  }
++
++  private fun invalidateCamera() {
++    if (cameraGeneration < Long.MAX_VALUE) cameraGeneration += 1
++    else cameraDisposed = true
++    releaseCamera()
++  }
++
++  private fun updateCameraWindow() {
++    if (!cameraInitialized) return
++    val allowed = hasVisibleCameraWindow()
++    if (allowed == cameraWindowAllowed) return
++    if (!allowed) {
++      cameraWindowRevoked = true
++      invalidateCamera()
++    } else if (!previewPaused && !cameraWindowRevoked && !cameraDisposed) {
++      shouldCreateCamera = true
++      scope.launch { createCamera() }
++    }
++    cameraWindowAllowed = allowed
++  }
++
++  override fun onAttachedToWindow() {
++    super.onAttachedToWindow()
++    cameraAttached = true
++    updateCameraWindow()
++  }
++
++  override fun onDetachedFromWindow() {
++    cameraAttached = false
++    updateCameraWindow()
++    super.onDetachedFromWindow()
++  }
++
++  override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
++    super.onWindowFocusChanged(hasWindowFocus)
++    updateCameraWindow()
++  }
++
++  override fun onWindowVisibilityChanged(visibility: Int) {
++    super.onWindowVisibilityChanged(visibility)
++    updateCameraWindow()
++  }
++
++  override fun onVisibilityChanged(changedView: View, visibility: Int) {
++    super.onVisibilityChanged(changedView, visibility)
++    updateCameraWindow()
++  }
++
++  init {
++    cameraInitialized = true
++  }
++
+   fun cleanupCamera() {
++    cameraDisposed = true
++    invalidateCamera()
+     orientationEventListener.disable()
+     cancelCoroutineScope()
+-    cameraProvider?.unbindAll()
+     glSurfaceTexture?.release()
+   }
+ }

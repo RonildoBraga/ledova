@@ -4,7 +4,8 @@ The mobile app uses the versions resolved by `mobile/package-lock.json`: Expo
 54.0.33, React Native 0.81.5, React 19.1.0, SecureStore 15.0.8 and Expo Crypto
 15.0.8. Native projects are generated from `app.json` and the local config plugin;
 `android/` and `ios/` are not committed. Use a native development build to test
-these policies. Expo Go does not contain Ledova's native networking overrides.
+these policies. Expo Go does not contain Ledova's native networking overrides or
+Android scanner owning-view module.
 
 ## Transport
 
@@ -142,13 +143,31 @@ pause preserves completed scans, accumulated UR parts and the verification
 challenge/step. The optional lock setting, existing session criterion, absence
 threshold and biometric/passcode fallback remain unchanged.
 
+On Android, each scanner has its own native container in its actual window,
+including the scanner modal's window. Admission requires attachment, window
+visibility, visible ancestors and that window's focus. Activity focus is not a
+proxy: the scanner's own modal legitimately leaves its Activity unfocused.
+The container remains mounted while permission is pending or denied. An explicit
+opening retains its one request opportunity until its first window admission;
+loss and regain caused by that permission dialog only refresh permission.
+Events from an earlier owner or revision cannot admit a replacement scanner.
+
+The source-selected Expo Camera patch releases only the retiring view's use
+cases, fences delayed camera creation and old ready/barcode callbacks, and
+permanently revokes that native camera instance after owning-window loss. A fresh
+window revision acknowledged by the current JavaScript scanner mounts a new
+instance. Native focus returning before JavaScript handles the loss cannot reopen
+the old instance. A completed session stays completed and animated UR progress
+survives a window pause. These Android changes do not change iOS admission.
+
 Component tests exercise the installed Expo permission methods at a controlled
 native boundary, actual UR encoding/decoding and verification step/mutation
 hooks, plus the actual app-lock provider with delayed session/authentication
 responses. They establish JavaScript request, callback and mount timing. OS prompt
-presentation, physical camera shutdown, device settings/OEM behavior, Android
-Activity versus modal-window focus and global lock-overlay/input stacking are
-not established by these controls and remain under #13.
+presentation, physical camera shutdown, device settings/OEM behavior and global
+lock-overlay/input stacking are not established by these controls and remain
+under #13. Android owning-window and use-case release evidence comes from the
+separate native camera probe only when that exact source and artifact run passes.
 
 ## Identity-provider WebView lifetime
 
@@ -248,6 +267,22 @@ lockfile does not itself pin every downloaded Maven/Pod artifact. The ordinary
 APK is checked for both ZIP alignment and every native library's ELF load-segment
 alignment at 16 KiB. [RN 0.81's compatibility statement](https://reactnative.dev/blog/2025/08/12/react-native-0.81)
 does not replace checking third-party binaries.
+
+Android explicitly builds `expo-camera` 17.0.10 from its installed Kotlin source
+with `expo.autolinking.android.buildFromSource`. Its default Maven publication
+would otherwise ignore an installed-source edit. Android prebuild applies
+`mobile/patches/expo-camera-17.0.10.json`; the adjacent unified patch is the
+reviewable difference. Both original and resulting Kotlin hashes, package
+version, module publication configuration and Gradle dependency declarations
+must match. The local `ledova-camera-window` module verifies those inputs on
+direct Gradle configuration too. A changed dependency requires reviewing and
+updating this exact patch, not bypassing the verifier.
+
+Preparation refuses linked external dependency directories. Use a private
+installation or owned copy before prebuild; do not patch another checkout's
+`node_modules`. `node scripts/prepare-camera-android.mjs verify` checks the
+ordinary source without changing it. The upstream package's license and headers
+are retained; no native dependency version is changed by this patch.
 
 RN 0.81.5 can turn an empty app spec search into a codegen dependency on the
 entire iOS project directory, creating a cycle with Expo's generated provider.
@@ -358,6 +393,31 @@ An uncatchable kill or host loss requires a fresh prebuild before using the
 generated project. Remove only the owned emulator/simulator afterward. Deleting
 the iOS simulator also removes its test CA.
 Do not distribute the probe artifact.
+
+Android then builds two additional camera-only probe APKs. The probe installer
+accepts only the exact original or patched camera bodies plus the checked-in
+instrumentation and `native-tests/camera-window.tsx` entrypoint. Ordinary builds
+refuse these test hooks. Each camera probe is saved separately with its digest,
+source hashes, compiled class hashes, state observations and screenshot. The
+ordinary artifact also receives DEX descriptor/guard-marker checks; those markers
+alone are not proof of native behavior. The resolved Gradle graph must select
+`:expo-camera`, and the generated module list must contain the local owner module.
+
+The camera probe grants permission to the owned emulator and opens the actual
+modal preview. It requires bound use cases and an `OPEN` camera as its positive
+control, then actual unbound use cases and `CLOSED` state on window/ancestor loss.
+It injects a fixed synthetic barcode through the compiled camera callback to
+check delivery and retirement; it does not prove optical QR recognition. A gate
+after the real `awaitInstance` holds camera creation. A first-create live control
+is separate from already-open ratio changes, whose real property update enters
+the module-scope body before loss, close, detach, pause or owner replacement.
+This avoids attributing a view-scope cancellation to the post-await guard.
+Quick native focus cycles run while JavaScript delivery is held, including a
+session already completed in JavaScript; an old owner's later cleanup must also
+preserve the replacement's `OPEN` camera. The old compiled body must fail the
+named negative controls, while live continuations and all patched controls pass.
+The runner restores ordinary camera source in `finally`; after an uncatchable
+kill, use a fresh owned dependency copy and prebuild before any ordinary build.
 
 Jest and native probe outcomes are recorded separately. A simulator does not
 establish physical biometric enrollment/change, hardware-backed key properties,

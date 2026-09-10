@@ -255,6 +255,8 @@ export function WalletVerificationScreen() {
                 {verificationStep === 'scan-signature' && (
                   <SignatureScanStep
                     cameraMessage={camera.message}
+                    windowAccess={camera.windowAccess}
+                    previewKey={camera.previewKey}
                     isVerifying={isVerifying}
                     verificationSuccess={verificationSuccess}
                     verificationError={scanError || verificationError}

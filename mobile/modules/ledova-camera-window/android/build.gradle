@@ -1,0 +1,17 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'org.example.ledova'
+version = '0.1.0'
+
+android {
+  namespace 'expo.modules.ledovacamerawindow'
+}
+
+def mobileRoot = projectDir.parentFile.parentFile.parentFile
+providers.exec {
+  commandLine 'node', new File(mobileRoot, 'scripts/prepare-camera-android.mjs').absolutePath, 'verify'
+  workingDir mobileRoot
+}.standardOutput.asText.get()

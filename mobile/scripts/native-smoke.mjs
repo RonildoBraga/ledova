@@ -8,6 +8,8 @@ import { createHash } from 'node:crypto';
 import { spawn, spawnSync, execFileSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { setTimeout, clearTimeout } from 'node:timers';
+import { cameraSources, prepareCamera, installCameraProbe, restoreCameraProbe } from './prepare-camera-android.mjs';
+import { probeEntry } from './camera-probe-source.mjs';
 
 const mobile = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const [platform, output] = process.argv.slice(2);
@@ -251,9 +253,15 @@ async function build(name, environment) {
   }
 }
 
-async function launch(name) {
+async function launch(name, cameraPermission = false) {
   if (platform === 'android') {
     await command(adb, [...adbArgs, 'install', '-r', appPath], `${name}-install`);
+    if (cameraPermission)
+      await command(
+        adb,
+        [...adbArgs, 'shell', 'pm', 'grant', config.android.package, 'android.permission.CAMERA'],
+        `${name}-camera-permission`,
+      );
     await command(adb, [...adbArgs, 'shell', 'am', 'force-stop', config.android.package], `${name}-stop`);
     await command(
       adb,
@@ -409,6 +417,34 @@ try {
     `${createHash('sha256').update(fs.readFileSync(binary)).digest('hex')}  ${path.basename(binary)}\n`,
   );
   if (platform === 'android') {
+    const autolinking = JSON.parse(
+      execFileSync(
+        process.execPath,
+        [
+          path.join(mobile, 'node_modules/expo-modules-autolinking/bin/expo-modules-autolinking.js'),
+          'resolve',
+          '--platform',
+          'android',
+          '--json',
+        ],
+        { cwd: mobile, env: baseEnvironment, encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL' },
+      ),
+    );
+    assert.ok(autolinking.configuration.buildFromSource.includes('expo-camera'));
+    assert.equal(
+      autolinking.modules.find((module) => module.packageName === 'ledova-camera-window')?.projects[0].sourceDir,
+      path.join(mobile, 'modules/ledova-camera-window/android'),
+    );
+    fs.writeFileSync(path.join(directory, 'camera-autolinking.json'), JSON.stringify(autolinking, null, 2));
+    fs.writeFileSync(
+      path.join(directory, 'camera-ordinary-source.json'),
+      JSON.stringify(prepareCamera('verify', mobile, {}), null, 2),
+    );
+    await command(
+      process.env.PYTHON || 'python3',
+      [path.join(mobile, 'scripts/check-camera-binary.py'), artifact],
+      'camera-ordinary-binary',
+    );
     const inventory = execFileSync(
       process.env.PYTHON || 'python3',
       [
@@ -427,6 +463,17 @@ try {
       path.join(mobile, 'android'),
     );
     fs.copyFileSync(path.join(mobile, 'android/build.gradle'), path.join(directory, 'native-repositories.txt'));
+    assert.match(fs.readFileSync(path.join(directory, 'native-dependencies.log'), 'utf8'), /project :expo-camera/);
+    assert.doesNotMatch(
+      fs.readFileSync(path.join(directory, 'native-dependencies.log'), 'utf8'),
+      /host\.exp\.exponent:expo\.modules\.camera:/,
+    );
+    const modules = path.join(
+      mobile,
+      'node_modules/expo/android/build/generated/expo/src/main/java/expo/modules/ExpoModulesPackageList.java',
+    );
+    assert.match(fs.readFileSync(modules, 'utf8'), /LedovaCameraWindowModule/);
+    fs.copyFileSync(modules, path.join(directory, 'camera-module-registration.txt'));
   } else {
     const provider = path.join(mobile, 'ios/build/generated/ios/RCTModulesConformingToProtocolsProvider.mm');
     assert.match(fs.readFileSync(provider, 'utf8'), /LedovaHTTPRequestHandler/);
@@ -502,6 +549,76 @@ try {
     for (const count of ['direct', 'targetControl', 'upload', 'download', 'stream', 'cancelled'])
       assert.ok(result.counts[count] > 0, `${count} needs a positive control.`);
     for (const count of ['http', 'untrusted']) assert.equal(result.counts[count], 0);
+  }
+  if (platform === 'android') {
+    const expectedRed = [
+      'owning window cover releases bound use cases and reaches CLOSED',
+      ...['loss', 'close', 'detach', 'pause'].map(
+        (outcome) => `post-await ${outcome} continuation retains its original admission`,
+      ),
+      'superseded pending owner and its later teardown preserve replacement OPEN',
+      'late teardown and barcode delivery from an opened owner preserve replacement OPEN',
+      ...['completed', 'live'].map(
+        (status) => `quick native focus cycle before JS delivery keeps ${status} old owner revoked`,
+      ),
+    ].sort();
+    let oldCameraClass;
+    for (const mode of ['red', 'green']) {
+      const files = installCameraProbe(mode, mobile);
+      try {
+        const cameraEnvironment = { ...environment, ENTRY_FILE: probeEntry, LEDOVA_CAMERA_PROBE: mode };
+        fs.writeFileSync(
+          path.join(directory, `camera-${mode}-source.json`),
+          JSON.stringify(prepareCamera('verify', mobile, cameraEnvironment), null, 2),
+        );
+        await localRequest(endpoints.apiUrl, '/reset', ca);
+        await build(`camera-${mode}-build`, cameraEnvironment);
+        const cameraArtifact = path.join(directory, `camera-${mode}.apk`);
+        fs.copyFileSync(appPath, cameraArtifact);
+        fs.writeFileSync(
+          path.join(directory, `camera-${mode}-artifact.txt`),
+          `${createHash('sha256').update(fs.readFileSync(cameraArtifact)).digest('hex')}  ${path.basename(cameraArtifact)}\n`,
+        );
+        const { camera } = cameraSources(mobile);
+        const classes = path.join(camera, 'android/build/tmp/kotlin-classes/release/expo/modules/camera');
+        const inputs = ['ExpoCameraView.class', 'CameraViewModule.class', 'LedovaCameraWindowProbe.class'].map(
+          (name) => ({
+            name,
+            sha256: createHash('sha256')
+              .update(fs.readFileSync(path.join(classes, name)))
+              .digest('hex'),
+          }),
+        );
+        if (mode === 'red') oldCameraClass = inputs[0].sha256;
+        else
+          assert.notEqual(
+            inputs[0].sha256,
+            oldCameraClass,
+            'The actual compiled camera class must change between old and patched bodies.',
+          );
+        fs.writeFileSync(path.join(directory, `camera-${mode}-compiled-classes.json`), JSON.stringify(inputs, null, 2));
+        await launch(`camera-${mode}`, true);
+        markStage(`camera-${mode}-report`);
+        const result = await waitFor(path.join(directory, 'server/result.json'), 180000);
+        fs.writeFileSync(path.join(directory, `camera-${mode}.json`), JSON.stringify(result, null, 2));
+        await screenshot(`camera-${mode}`);
+        assert.equal(result.checks.length, 13);
+        assert.equal(new Set(result.checks.map((check) => check.name)).size, 13);
+        assert.deepEqual(
+          result.checks
+            .filter((check) => !check.passed)
+            .map((check) => check.name)
+            .sort(),
+          mode === 'red' ? expectedRed : [],
+        );
+      } finally {
+        restoreCameraProbe(files, mobile);
+      }
+    }
+    fs.writeFileSync(
+      path.join(directory, 'camera-source-restored.json'),
+      JSON.stringify(prepareCamera('verify', mobile, {}), null, 2),
+    );
   }
   console.log('Native Release probe passed with observed redirect failures before the fix.');
 } catch (error) {

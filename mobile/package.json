@@ -126,5 +126,14 @@
         ]
       }
     }
+  },
+  "expo": {
+    "autolinking": {
+      "android": {
+        "buildFromSource": [
+          "expo-camera"
+        ]
+      }
+    }
   }
 }

@@ -4,6 +4,7 @@ import { CameraView } from 'expo-camera';
 import { URDecoder, UREncoder } from '@ngraveio/bc-ur';
 import { useThemedStyles } from '../../contexts';
 import { useCameraScanner } from './useCameraScanner';
+import { CameraWindow } from './CameraWindow';
 
 interface AnimatedQRScannerProps {
   onComplete: (urString: string) => void;
@@ -108,34 +109,33 @@ export function AnimatedQRScanner({ onComplete, active = true }: AnimatedQRScann
     } catch {}
   });
 
-  if (camera.message) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.message}>{camera.message}</Text>
-      </View>
-    );
-  }
-
   return (
-    <View style={styles.container}>
-      <CameraView
-        style={StyleSheet.absoluteFillObject}
-        facing="back"
-        onBarcodeScanned={camera.onBarcodeScanned}
-        barcodeScannerSettings={{
-          barcodeTypes: ['qr'],
-        }}
-      />
-      <View style={styles.overlay}>
-        <View style={styles.scanArea} />
-      </View>
-      {progress && (
-        <View style={styles.progressIndicator}>
-          <Text style={styles.progressText}>
-            Scanning: {progress.received}/{progress.total > 0 ? progress.total : '?'} parts
-          </Text>
-        </View>
+    <CameraWindow access={camera.windowAccess} style={styles.container}>
+      {camera.message ? (
+        <Text style={styles.message}>{camera.message}</Text>
+      ) : (
+        <>
+          <CameraView
+            key={camera.previewKey}
+            style={StyleSheet.absoluteFillObject}
+            facing="back"
+            onBarcodeScanned={camera.onBarcodeScanned}
+            barcodeScannerSettings={{
+              barcodeTypes: ['qr'],
+            }}
+          />
+          <View style={styles.overlay}>
+            <View style={styles.scanArea} />
+          </View>
+          {progress && (
+            <View style={styles.progressIndicator}>
+              <Text style={styles.progressText}>
+                Scanning: {progress.received}/{progress.total > 0 ? progress.total : '?'} parts
+              </Text>
+            </View>
+          )}
+        </>
       )}
-    </View>
+    </CameraWindow>
   );
 }

@@ -54,7 +54,8 @@
           }
         }
       ],
-      "./plugins/withMobileSecurity.cjs"
+      "./plugins/withMobileSecurity.cjs",
+      "./plugins/withCameraWindow.cjs"
     ],
     "experiments": {
       "typedRoutes": true

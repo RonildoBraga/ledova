@@ -11,6 +11,8 @@ function fixture(untrustedEndpoint, check) {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'ledova-probe-tls-')));
   try {
     fs.mkdirSync(path.join(root, 'scripts'));
+    for (const file of ['prepare-camera-android.mjs', 'camera-probe-source.mjs'])
+      fs.copyFileSync(path.join(mobile, 'scripts', file), path.join(root, 'scripts', file));
     fs.mkdirSync(path.join(root, 'bin'));
     fs.copyFileSync(path.join(mobile, 'app.json'), path.join(root, 'app.json'));
     fs.copyFileSync(path.join(mobile, 'scripts/native-smoke.mjs'), path.join(root, 'scripts/native-smoke.mjs'));

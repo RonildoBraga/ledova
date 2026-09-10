@@ -36,6 +36,8 @@ function fixture(context, behavior, check) {
     fs.rmSync(root, { recursive: true, force: true });
   });
   fs.mkdirSync(path.join(root, 'scripts'));
+  for (const file of ['prepare-camera-android.mjs', 'camera-probe-source.mjs'])
+    fs.copyFileSync(path.join(mobile, 'scripts', file), path.join(root, 'scripts', file));
   fs.mkdirSync(path.join(root, 'bin'));
   fs.copyFileSync(path.join(mobile, 'app.json'), path.join(root, 'app.json'));
   let runner = fs.readFileSync(path.join(mobile, 'scripts/native-smoke.mjs'), 'utf8');

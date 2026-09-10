@@ -2,10 +2,14 @@ import React from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { CheckCircleIcon, WarningCircleIcon, QrCodeIcon } from 'phosphor-react-native';
 import { CameraView } from 'expo-camera';
+import { CameraWindow } from '../../../components/qr/CameraWindow';
+import type { CameraWindowAccess } from '../../../components/qr/cameraWindowAccess';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
 
 interface SignatureScanStepProps {
   cameraMessage: string | null;
+  windowAccess: CameraWindowAccess;
+  previewKey?: string;
   isVerifying: boolean;
   verificationSuccess: boolean;
   verificationError: string | null;
@@ -14,6 +18,8 @@ interface SignatureScanStepProps {
 
 export function SignatureScanStep({
   cameraMessage,
+  windowAccess,
+  previewKey,
   isVerifying,
   verificationSuccess,
   verificationError,
@@ -140,7 +146,7 @@ export function SignatureScanStep({
 
       <Text style={styles.title}>Scan Signature QR</Text>
 
-      <View style={styles.cameraContainer}>
+      <CameraWindow access={windowAccess} style={styles.cameraContainer}>
         {cameraMessage ? (
           <View style={styles.cameraMessage}>
             <Text style={styles.cameraMessageText}>{cameraMessage}</Text>
@@ -148,6 +154,7 @@ export function SignatureScanStep({
         ) : (
           <>
             <CameraView
+              key={previewKey}
               style={StyleSheet.absoluteFillObject}
               facing="back"
               onBarcodeScanned={onBarcodeScanned}
@@ -158,7 +165,7 @@ export function SignatureScanStep({
             </View>
           </>
         )}
-      </View>
+      </CameraWindow>
 
       {verificationError && (
         <View style={styles.errorContainer}>
