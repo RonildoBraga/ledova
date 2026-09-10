@@ -6,6 +6,7 @@ from django.conf import settings
 from eth_utils import to_checksum_address
 from rest_framework.test import APITransactionTestCase
 
+from shared.db import atomic
 from shared.utils.typed_data import typed_data_digest
 from tokens.exceptions import ChallengeAlreadyUsedException, ChallengeMismatchException
 from tokens.models import SigningChallenge, SigningChallengePurpose, TransferOrder
@@ -150,7 +151,7 @@ class SignedCancelBindingTest(ActionFixtures, APITransactionTestCase):
 
     def test_a_cancel_challenge_cannot_authorise_another_action(self):
         issued = self.request_challenge()
-        with self.assertRaises(ChallengeMismatchException):
+        with self.assertRaises(ChallengeMismatchException), atomic():
             consume_challenge(
                 issued["challenge"]["digest"],
                 SigningChallengePurpose.ORDER_MODIFY,
@@ -164,16 +165,17 @@ class SignedCancelBindingTest(ActionFixtures, APITransactionTestCase):
     def test_a_challenge_is_spendable_exactly_once_at_the_service_boundary(self):
         issued = self.request_challenge()
         signed = self.sign(issued)
-        challenge = consume_challenge(
-            signed["digest"],
-            SigningChallengePurpose.ORDER_CANCEL,
-            OWNER.address,
-            signed["signature"],
-            order=self.order,
-            action=self.journal(),
-        )
-        challenge.mark_consumed(signed["signature"])
-        with self.assertRaises(ChallengeAlreadyUsedException):
+        with atomic():
+            challenge = consume_challenge(
+                signed["digest"],
+                SigningChallengePurpose.ORDER_CANCEL,
+                OWNER.address,
+                signed["signature"],
+                order=self.order,
+                action=self.journal(),
+            )
+            challenge.mark_consumed(signed["signature"])
+        with self.assertRaises(ChallengeAlreadyUsedException), atomic():
             consume_challenge(
                 signed["digest"],
                 SigningChallengePurpose.ORDER_CANCEL,
