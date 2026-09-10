@@ -382,7 +382,7 @@ function ApplicationStatusView({
   theme,
   styles,
 }: {
-  company: Company;
+  company: NonNullable<ReturnType<typeof useCompanyDocuments>['company']>;
   operatorName: string;
   theme: ReturnType<typeof useAppTheme>;
   styles: ReturnType<typeof useStyles>;

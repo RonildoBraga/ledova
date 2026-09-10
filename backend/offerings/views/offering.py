@@ -54,6 +54,7 @@ class OfferingViewSet(AuthenticatedModelViewSet):
         submit_offering(offering, submitted_by=request.user)
         return Response(OfferingDetailSerializer(offering, context=self.get_serializer_context()).data)
 
+    @extend_schema(responses=IssuerSubscriptionSerializer(many=True), filters=False)
     @action(detail=True, methods=["get"])
     def subscriptions(self, request, uuid=None):
         offering = self.get_object()

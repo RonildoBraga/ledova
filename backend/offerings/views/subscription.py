@@ -1,4 +1,4 @@
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import mixins
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -15,6 +15,7 @@ from offerings.services.subscription import withdraw as withdraw_subscription
 from shared.views import AuthenticatedGenericViewSet
 
 
+@extend_schema_view(create=extend_schema(responses={201: SubscriptionDetailSerializer}))
 class SubscriptionViewSet(
     mixins.CreateModelMixin, mixins.ListModelMixin, mixins.RetrieveModelMixin, AuthenticatedGenericViewSet
 ):

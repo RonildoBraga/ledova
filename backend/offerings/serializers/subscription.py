@@ -73,7 +73,7 @@ class SubscriptionDetailSerializer(SubscriptionListSerializer):
         ]
         read_only_fields = fields
 
-    def get_payment_instruction(self, subscription):
+    def get_payment_instruction(self, subscription) -> dict | None:
         if subscription.status != SubscriptionStatus.AWAITING_PAYMENT:
             return None
         if not subscription.reference:
@@ -119,14 +119,14 @@ class IssuerSubscriptionSerializer(serializers.ModelSerializer):
         fields = ISSUER_SUBSCRIPTION_FIELDS
         read_only_fields = fields
 
-    def get_investor_name(self, subscription):
+    def get_investor_name(self, subscription) -> str:
         names = [
             (profile.full_name or "").strip() or profile.user.email
             for profile in subscription.user_account.user_profiles.all()
         ]
         return " & ".join(name for name in names if name)
 
-    def get_allotment_state(self, subscription):
+    def get_allotment_state(self, subscription) -> str:
         request = subscription.issuance_request
         return NOT_ALLOTTED if request is None else request.get_status_display()
 

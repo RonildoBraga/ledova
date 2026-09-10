@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Panel } from '@components/Panel';
 import { OFFERING_EXEMPTION_LABELS } from '@ledova/shared';
 import type {
-  CompanyShareToken,
+  CompanyShareTokenListItem,
   Offering,
   OfferingExemption,
   OfferingInput,
@@ -16,7 +16,7 @@ const FIELD_CLASS =
   'placeholder:text-text-muted focus:border-brand-mid focus:outline-none focus:ring-1 focus:ring-brand-mid';
 
 interface OfferingFormProps {
-  tokens: CompanyShareToken[];
+  tokens: CompanyShareTokenListItem[];
   busy: boolean;
   settlementAssets: OperatorSettlementAsset[];
   onCreate: (input: OfferingInput) => void;

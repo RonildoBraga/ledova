@@ -1,8 +1,13 @@
+from drf_spectacular.utils import extend_schema
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from shared.views import AuthenticatedGenericViewSet
 from tokens.serializers import BroadcastTransferSerializer, PrepareTransferSerializer
+from tokens.serializers.trading_responses import (
+    PreparedTokenTransferSerializer,
+    TokenTransferReceiptSerializer,
+)
 from tokens.services import TokenTransferService
 from tokens.services.signed_transactions import signer_of
 from tokens.trading_wallet_access import resolve_verified_evm_wallets
@@ -11,6 +16,7 @@ from tokens.trading_wallet_access import resolve_verified_evm_wallets
 class TradingTransferViewSet(AuthenticatedGenericViewSet):
     throttle_scope = "broadcast"
 
+    @extend_schema(responses=PreparedTokenTransferSerializer)
     @action(detail=False, methods=["post"])
     def prepare(self, request):
         serializer = PrepareTransferSerializer(data=request.data)
@@ -44,6 +50,7 @@ class TradingTransferViewSet(AuthenticatedGenericViewSet):
             }
         )
 
+    @extend_schema(responses=TokenTransferReceiptSerializer)
     @action(detail=False, methods=["post"])
     def broadcast(self, request):
         serializer = BroadcastTransferSerializer(data=request.data)

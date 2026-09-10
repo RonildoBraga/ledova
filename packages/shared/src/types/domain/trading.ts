@@ -124,14 +124,19 @@ export interface WalletTokenBalancesResponse {
 }
 
 export interface MarketData {
-  tokenUuid: string;
-  lastPrice: string;
-  priceChange24h: number;
-  volume24h: string;
-  high24h: string;
-  low24h: string;
-  openOrders: number;
-  totalTrades: number;
+  token: string;
+  symbol: string;
+  lastTrade: {
+    price: string;
+    shares: number;
+    paymentAmount: string;
+    paymentToken: string;
+    completedAt: string | null;
+  } | null;
+  lastTradePrice: string | null;
+  bestBid: string | null;
+  bestAsk: string | null;
+  midpointPrice: string | null;
 }
 
 export interface SwapOrder {
@@ -304,7 +309,6 @@ export interface OrderModificationResponse {
 export interface ShareTokenTransferTokenInfo {
   uuid: string;
   symbol: string;
-  name: string;
   contractAddress: string;
 }
 
@@ -331,8 +335,8 @@ export interface ApprovalStatusResponse {
   userRole: string;
   tokenAddress: string;
   tokenSymbol: string;
-  requiredAmount: string;
-  currentAllowance: string;
+  requiredAmount: number;
+  currentAllowance: number;
   needsApproval: boolean;
   spender: string;
 }
@@ -360,6 +364,6 @@ export interface ApprovalDataResponse {
   amount?: string;
   unlimited?: boolean;
   message?: string;
-  currentAllowance?: string;
-  requiredAmount?: string;
+  currentAllowance?: number;
+  requiredAmount?: number;
 }

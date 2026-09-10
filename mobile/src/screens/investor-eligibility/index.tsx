@@ -12,7 +12,7 @@ import {
 } from 'phosphor-react-native';
 import { useQuery } from '@tanstack/react-query';
 import { getCompanies, getErrorMessage, formatDate } from '@ledova/shared';
-import type { Company, CertifierBody, InvestorCategory, InvestorClassification } from '@ledova/shared';
+import type { CompanyListItem, CertifierBody, InvestorCategory, InvestorClassification } from '@ledova/shared';
 import { useAppTheme, useThemedStyles } from '../../contexts';
 import { GradientBackground } from '../../components/GradientBackground';
 import { Panel } from '../../components/panel';
@@ -58,7 +58,7 @@ export function InvestorEligibilityScreen() {
     queryFn: () => getCompanies(apiClient),
     enabled: needsCompany,
   });
-  const companies: Company[] = companiesData?.data?.results ?? [];
+  const companies: CompanyListItem[] = companiesData?.data?.results ?? [];
 
   const reset = useCallback(() => {
     draftGeneration.current++;

@@ -5,7 +5,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { CustomModal } from '../../../components/modal';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
-import type { CompanyShareToken, TokenCreate, TokenStatus, TokenType } from '@ledova/shared';
+import type { CompanyShareTokenListItem, TokenCreate, TokenStatus, TokenType } from '@ledova/shared';
 import type { CompanyStackParamList } from '../../../navigation/CompanyStackNavigator';
 
 const STATUS_LABELS: Record<TokenStatus, string> = {
@@ -38,7 +38,7 @@ function getStatusColors(theme: ReturnType<typeof useAppTheme>): Record<TokenSta
 
 interface TokensSectionProps {
   companyUuid?: string;
-  tokens: CompanyShareToken[];
+  tokens: CompanyShareTokenListItem[];
   totalCount: number;
   page: number;
   totalPages: number;
@@ -115,7 +115,7 @@ export function TokensSection({
         </View>
       ) : (
         <>
-          {tokens.map((token: CompanyShareToken, index: number) => (
+          {tokens.map((token: CompanyShareTokenListItem, index: number) => (
             <React.Fragment key={token.uuid}>
               <TokenRow token={token} />
               {index < tokens.length - 1 && <View style={styles.divider} />}
@@ -221,7 +221,7 @@ export function TokensSection({
   );
 }
 
-function TokenRow({ token }: { token: CompanyShareToken }) {
+function TokenRow({ token }: { token: CompanyShareTokenListItem }) {
   const theme = useAppTheme();
   const navigation = useNavigation<NativeStackNavigationProp<CompanyStackParamList>>();
   const styles = useThemedStyles((theme) => ({

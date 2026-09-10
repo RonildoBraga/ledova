@@ -316,7 +316,7 @@ export function ReviewScreen() {
                       <Text style={styles.infoLabel}>ACN:</Text>
                       <Text style={styles.infoValue}>{company.acn}</Text>
                     </View>
-                    {company.abn ? (
+                    {'abn' in company && typeof company.abn === 'string' && company.abn ? (
                       <View style={styles.infoRow}>
                         <Text style={styles.infoLabel}>ABN:</Text>
                         <Text style={styles.infoValue}>{company.abn}</Text>

@@ -1,6 +1,5 @@
-import type { BaseEntity } from '../common';
-
-export interface FeatureFlag extends BaseEntity {
+export interface FeatureFlag {
+  uuid: string;
   name: string;
   description: string;
   enabled: boolean;

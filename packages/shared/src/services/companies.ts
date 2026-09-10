@@ -2,7 +2,9 @@ import { AxiosInstance, AxiosRequestConfig } from 'axios';
 import { COMPANY_ENDPOINTS } from '../constants';
 import type {
   Company,
+  CompanyListItem,
   CompanyUpdate,
+  CompanyUpdateResponse,
   CompanyStats,
   CompanyRegistration,
   CompanyRegistrationResponse,
@@ -15,7 +17,7 @@ import type {
 } from '../types';
 
 export const getCompanies = (apiClient: AxiosInstance) =>
-  apiClient.get<PaginatedResponse<Company>>(COMPANY_ENDPOINTS.BASE);
+  apiClient.get<PaginatedResponse<CompanyListItem>>(COMPANY_ENDPOINTS.BASE);
 
 export const registerCompany = (apiClient: AxiosInstance, data: CompanyRegistration) =>
   apiClient.post<CompanyRegistrationResponse>(COMPANY_ENDPOINTS.BASE, data);
@@ -24,7 +26,7 @@ export const getCompany = (apiClient: AxiosInstance, uuid: string) =>
   apiClient.get<Company>(COMPANY_ENDPOINTS.DETAIL(uuid));
 
 export const updateCompany = (apiClient: AxiosInstance, uuid: string, data: CompanyUpdate) =>
-  apiClient.patch<Company>(COMPANY_ENDPOINTS.DETAIL(uuid), data);
+  apiClient.patch<CompanyUpdateResponse>(COMPANY_ENDPOINTS.DETAIL(uuid), data);
 
 export const getCompanyStats = (apiClient: AxiosInstance, uuid: string) =>
   apiClient.get<CompanyStats>(COMPANY_ENDPOINTS.STATS(uuid));

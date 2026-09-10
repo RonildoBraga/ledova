@@ -71,12 +71,7 @@ RULES = {
 # decidable from the source. Lowering an entry means giving that action a written
 # shape - by hand, because the spread is why it cannot be read off. A count that
 # only falls is a ratchet; a count with no stated way down is a hiding place.
-LEGACY: dict[str, int] = {
-    "backend/tokens/views/trading_order.py:undeclared-action": 2,
-    "backend/tokens/views/trading_transfer.py:undeclared-action": 2,
-    "backend/users/views/notification.py:undeclared-action": 2,
-    "backend/users/views/user_profile.py:undeclared-action": 1,
-}
+LEGACY: dict[str, int] = {}
 
 
 def decorator_names(node: ast.AST) -> list[str]:

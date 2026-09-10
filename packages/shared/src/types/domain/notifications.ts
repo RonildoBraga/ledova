@@ -2,7 +2,9 @@ import type { BaseEntity } from '../common';
 
 export type DeviceType = 'ios' | 'android';
 
-export interface DeviceToken extends BaseEntity {
+export interface DeviceToken {
+  uuid: string;
+  createdAt: string;
   pushToken: string;
   deviceType: DeviceType;
   isActive: boolean;
