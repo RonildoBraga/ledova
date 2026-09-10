@@ -257,7 +257,14 @@ serves requests. Run `make init-local` first; `make dev-up` checks.
 | `SHARE_TOKEN_FACTORY_ADDRESS` | empty | Yes for issuance |
 | `ATOMIC_SWAP_ADDRESS` | empty | Only for settlement |
 | `STABLECOIN_CONTRACT_ADDRESS` | empty | Only for stablecoin payment; seeds the `AUDY` deployment on `base` |
-| `SWAP_ORDER_EXPIRY_HOURS` | `24` | No |
+| `SWAP_ORDER_EXPIRY_HOURS` | `0.25` (15 minutes) | No; finite fractional hours are accepted |
+
+Malformed and non-finite values are refused at settings import. This default
+applies when issuing a new swap without an explicit signing window.
+Existing stored deadlines and signatures are preserved. An explicit operator
+override still takes precedence: remove an older `SWAP_ORDER_EXPIRY_HOURS=24`
+override or set it to `0.25` to use the new default for future swaps. The ordinary
+order-challenge lifetime remains 300 seconds.
 
 ### Data retention
 
@@ -938,12 +945,35 @@ one.
 
 | Schedule | Task |
 | --- | --- |
+| every minute | `expire_unclaimed_matches` |
 | every 5 min | `check_pending_token_deployments`, `check_executing_issuance_requests`, `offerings.reconcile_subscriptions`, `check_pending_transactions`, `check_all_pending_transactions` |
 | every 10 min | `assets.sync_all_assets`, `assets.sync_exchange_rates` |
 | every 30 min | whitelist `sync_all_entries` |
 | hourly | `sync_all_wallets`, `compliance.tasks.run_batch_monitoring` |
 | daily 03:00 | `cleanup_failed_transactions`, `cleanup_stale_pending_transactions`, `offerings.expire_unpaid_subscriptions`, `users.purge_classification_evidence` |
 | daily 04:00 | `compliance.tasks.check_periodic_reviews` |
+
+`expire_unclaimed_matches` releases the reserved share quantity of an expired
+swap only when the current matching service marked it eligible at creation,
+both orders still name that match, and no execution claim, transaction record,
+hash or other active match exists. The sweep locks both orders in identifier
+order, then the current swap, and commits each release separately. It preserves
+previously filled quantities and signed terms, marks the swap `expired`, and
+publishes `swap_expired` so both clients refresh their orders and swaps. A retry
+cannot release the same reservation twice. Signing still stops at the recorded
+deadline; the worker makes eligible orders available on its next minute sweep.
+The order book and best prices include reopened partially filled orders using
+only their remaining quantity.
+
+`tokens/0036_swap_expiry_eligibility` leaves existing rows ineligible and prevents
+changing the marker on PostgreSQL. Do not backfill it: missing transaction data
+in a legacy row does not establish that nothing was sent. Deploy this code to
+all API and worker processes and stop older processes before permitting new
+matches; the eligibility marker describes the current service's durable claim
+protocol. Claimed, executing, inconsistent and legacy matches retain their
+reservations for reconciliation. This sweep does not inspect the chain, refund
+money, cancel a broadcast or change an existing signature/deadline. Trading
+remains disabled by default.
 
 `reconcile_subscriptions` is the mirror of `check_executing_issuance_requests`
 on the subscription row. The issuance sweep finishes a request a killed worker

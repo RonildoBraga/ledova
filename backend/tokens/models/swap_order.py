@@ -89,6 +89,7 @@ class SwapOrder(DerivesWalletsFromOrders, BaseModel):
         default=SwapOrderStatus.CREATED,
     )
     expires_at = models.DateTimeField()
+    expiry_release_eligible = models.BooleanField(default=False, editable=False)
 
     tx_hash = models.CharField(
         max_length=66,
@@ -165,7 +166,7 @@ class SwapOrder(DerivesWalletsFromOrders, BaseModel):
 
     def save(self, *args, **kwargs):
         if not self.expires_at:
-            default_hours = getattr(settings, "SWAP_ORDER_EXPIRY_HOURS", 24)
+            default_hours = getattr(settings, "SWAP_ORDER_EXPIRY_HOURS", 0.25)
             self.expires_at = timezone.now() + timedelta(hours=default_hours)
         super().save(*args, **kwargs)
 

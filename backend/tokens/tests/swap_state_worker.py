@@ -3,6 +3,7 @@ import logging
 import os
 import sys
 import traceback
+from datetime import datetime
 from unittest.mock import Mock, patch
 
 import django
@@ -137,6 +138,11 @@ def run(mode, row_id, detail):
             ]
             service.chain_client.load_contract.return_value = contract
             result = service.resolve_executing_swap(row)
+    elif mode == "expire":
+        from tokens.services.swap_expiry import expire_unclaimed_swap
+
+        report("expiring")
+        result = expire_unclaimed_swap(row, datetime.fromisoformat(detail))
     elif mode == "match":
         with atomic():
             match = object.__new__(TokenTransferService).find_matching_order(row)
