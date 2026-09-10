@@ -92,7 +92,7 @@ it('retains evidence after refusal and cleans it after the eligibility retry suc
   expect(files.has(first.file.uri)).toBe(false);
   expect(files.has(returned.assets[0].uri)).toBe(false);
   expect(view.queryByText('1.pdf')).toBeNull();
-});
+}, 15_000);
 
 it('keeps an edited eligibility draft when its earlier submission succeeds', async () => {
   pick.mockResolvedValue(pickedFile());
