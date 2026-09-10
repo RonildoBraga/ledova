@@ -1021,7 +1021,7 @@ one.
 | Schedule | Task |
 | --- | --- |
 | every minute | `expire_unclaimed_matches` |
-| every 5 min | `check_pending_token_deployments`, `check_executing_issuance_requests`, `offerings.reconcile_subscriptions`, `check_pending_transactions`, `check_all_pending_transactions` |
+| every 5 min | `check_pending_token_deployments`, `check_executing_issuance_requests`, `offerings.reconcile_subscriptions`, `check_pending_transactions`, `check_all_pending_transactions`, `recover_wallet_submissions` |
 | every 10 min | `assets.sync_all_assets`, `assets.sync_exchange_rates` |
 | every 30 min | whitelist `sync_all_entries` |
 | hourly | `sync_all_wallets`, `compliance.tasks.run_batch_monitoring` |
@@ -1059,6 +1059,48 @@ confirmation job can therefore be queued again by the next sweep. Age, a
 missing receipt or a provider error does not establish failure and does not
 release a wallet's outstanding deductions. Explicit receipt outcomes continue
 through the existing confirmation or failure paths.
+
+User-signed EVM wallet transfers commit a `WalletSubmission` before the first
+send RPC. Its exact signed bytes, locally computed hash, signer, chain ID,
+nonce, asset and deployment identity, recipient, amount, decimals and signed gas
+cap are frozen with the pending transaction and its optimistic deduction. The
+request's declared amount and fee cannot override those signed terms. Retrying
+the same bytes reuses the transaction and deduction. Different bytes at a
+recorded nonce, and hashes represented only by history or legacy transaction
+rows, are refused before broadcast. The submission entry point requires the
+requesting user's wallet membership and an outermost transaction boundary so
+that no caller can roll back the record after sending.
+
+A successful response means durable acceptance, not proof of mining. A timeout,
+provider error or mismatched acknowledgement leaves the locally derived hash
+pending. The five-minute `recover_wallet_submissions` sweep attempts at most 100
+pending submissions, starting with the least recently attempted. It checks the
+original chain ID and exact signed identity before looking for a receipt. A
+matching receipt is left to the confirmation sweep; an unresolved receipt or
+chain identity does not authorize another send. With no receipt, it resends only
+the recorded bytes. Queue failure and a process exit before or after the send do
+not require reconstructing intent from client metadata. A terminal transaction
+is not sent again. This sweep neither allocates another nonce nor signs a
+replacement.
+
+Apply `wallets/0016_wallet_submission` before starting the updated API and worker
+processes, and stop old processes before permitting new transfers. Existing
+transactions are retained without inferred journal records. PostgreSQL protects
+the journal, its wallet identity and its transaction's signed terms against
+direct mutation; delivery timestamps can only advance. Related financial rows
+cannot be cascade-deleted through these protected links, and reversing the
+migration refuses to discard a nonempty journal. Backups of this table contain
+signed transactions that can be broadcast and require the same protection as
+other signed payloads. Do not clear rows to make a migration reversal succeed.
+
+This journal covers native and ERC20 transfers signed by EVM wallet users.
+Bitcoin submission, legacy adoption, replacement policy, canonicality/finality
+and a full accounting ledger remain separate work. It retains the existing
+generation-fenced balance reconciliation and does not activate operator signers
+or disabled trading routes. `make chain-test` includes real local native/ERC20
+submission and settlement checks, including a node acknowledgement lost after
+mining; ordinary tests separately exercise process exits and concurrent retries
+on PostgreSQL.
 
 Both EVM receipt consumers require the adapter's normalized integer `status`:
 `1` confirms and `0` records a revert. Web3 converts raw JSON-RPC hexadecimal

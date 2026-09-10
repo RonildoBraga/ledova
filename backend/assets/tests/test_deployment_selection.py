@@ -10,9 +10,9 @@ from integrations.blockchain.ethereum import EthereumClient
 from shared.tests.tenants import make_tenant
 from wallets.exceptions import InvalidTransactionException
 from wallets.models import Holding, Wallet
+from wallets.services import transfers
 from wallets.services.signed_transfers import plan_signed_transfer
 from wallets.services.transaction_confirmation import TransactionConfirmationService
-from wallets.services.transfers import TransferService
 from wallets.tests.test_broadcast_transfer_guard import (
     RECIPIENT,
     SIGNER,
@@ -79,9 +79,7 @@ class DeploymentSelectionTest(APITestCase):
             encoder, **kwargs
         )
         with patch("wallets.services.transfers.get_blockchain_client", return_value=provider):
-            result = TransferService.prepare_transfer(
-                self.wallet, RECIPIENT, amount_token="3", token_contract=BASE_CONTRACT
-            )
+            result = transfers.prepare_transfer(self.wallet, RECIPIENT, amount_token="3", token_contract=BASE_CONTRACT)
         provider.estimate_erc20_transfer_gas.assert_called_once_with(
             from_address=self.wallet.address,
             contract_address=BASE_CONTRACT,

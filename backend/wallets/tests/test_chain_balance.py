@@ -7,10 +7,10 @@ from assets.models import Asset, AssetChainDeployment
 from assets.services.sync import AssetSyncService
 from users.models import UserAccount
 from wallets.models import Holding, Transaction, Wallet
+from wallets.services import transfers
 from wallets.services.chain import fetch_chain_balance
 from wallets.services.sync import _sync_holdings_from_blockchain
 from wallets.services.transaction_confirmation import TransactionConfirmationService
-from wallets.services.transfers import TransferService
 
 TOKEN = "0x" + "1" * 40
 AUDY_TOKEN = "0x" + "a2" * 20
@@ -117,9 +117,9 @@ class ChainBalanceTest(TestCase):
         self.assertEqual(holding.quantity, Decimal("70"))
 
     def test_native_balance_for_transfers_comes_from_the_chain_native_holding(self):
-        self.assertEqual(TransferService._get_native_balance(self.wallet), Decimal("0"))
+        self.assertEqual(transfers._get_native_balance(self.wallet), Decimal("0"))
         Holding.objects.create(wallet=self.wallet, asset=self.eth, quantity=Decimal("0.25"))
-        self.assertEqual(TransferService._get_native_balance(self.wallet), Decimal("0.25"))
+        self.assertEqual(transfers._get_native_balance(self.wallet), Decimal("0.25"))
 
     def test_pending_transaction_resolves_the_native_asset_by_chain_before_symbol(self):
         with patch("wallets.services.transaction_confirmation.TransactionMonitoringService"):

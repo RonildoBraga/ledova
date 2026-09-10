@@ -43,6 +43,8 @@ SYSTEM_WIDE = {
     "one that acts for somebody.",
     "wallets.tasks.confirmation.check_all_pending_transactions": "Requeues pending transactions and unfinished "
     "balance reconciliation across all accounts.",
+    "wallets.tasks.submissions.recover_wallet_submissions": "Recovers committed pending wallet submissions across "
+    "all accounts using only their recorded signed bytes, including a crash or queue failure before delivery.",
     "wallets.tasks.confirmation.cleanup_stale_pending_transactions": "Reports overdue pending rows across all "
     "accounts for queued legacy jobs without changing status or balances.",
     "whitelist.tasks.sync.sync_all_entries": "Reconciles the on-chain whitelist, which is one list for the "
