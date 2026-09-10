@@ -89,6 +89,7 @@ class SwapOrder(DerivesWalletsFromOrders, BaseModel):
         default=SwapOrderStatus.CREATED,
     )
     expires_at = models.DateTimeField()
+    expiry_release_eligible = models.BooleanField(default=False, editable=False)
 
     tx_hash = models.CharField(
         max_length=66,

@@ -3,9 +3,7 @@ import {
   getShareTokens,
   getInvestorEligibility,
   getUserOrders,
-  getOrderCreateMessage,
   getOrderCancelMessage,
-  createOrder,
   cancelOrder,
   getWallets,
   getWhitelistStatus,
@@ -21,11 +19,9 @@ import {
 } from '@ledova/shared';
 import type {
   TransferOrder,
-  CreateOrderRequest,
   GetOrdersParams,
   Wallet,
   WhitelistStatus,
-  SignedCreateOrderRequest,
   SignedCancelOrderRequest,
   CreateOrderMessageResponse,
   CancelOrderMessageResponse,
@@ -233,28 +229,9 @@ function useUserOrders(walletAddress: string | undefined) {
   });
 }
 
-export function useOrderCreateMessage() {
-  return useMutation({
-    mutationFn: (data: CreateOrderRequest) => getOrderCreateMessage(apiClient, data).then((res) => res.data),
-  });
-}
-
 export function useOrderCancelMessage() {
   return useMutation({
     mutationFn: (uuid: string) => getOrderCancelMessage(apiClient, uuid).then((res) => res.data),
-  });
-}
-
-export function useCreateOrder() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (data: SignedCreateOrderRequest) => createOrder(apiClient, data).then((res) => res.data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['trading', 'orders'] });
-      queryClient.invalidateQueries({ queryKey: ['trading', 'userOrders'] });
-      queryClient.invalidateQueries({ queryKey: ['trading', 'orderBook'] });
-    },
   });
 }
 

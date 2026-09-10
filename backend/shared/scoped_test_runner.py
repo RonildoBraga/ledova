@@ -17,6 +17,8 @@ SCOPED_TEST_LABELS = (
     "shared.tests.test_scoped_requests.LockedUpdatesUseTheAppRoleTest",
     "wallets.tests.test_confirmation_under_split_roles.ConfirmationUsesSeparateRolesTest",
     "tokens.tests.test_modification_refusals.ScopedModificationRefusalTest",
+    "tokens.tests.test_order_submissions.ScopedOrderSubmissionRecoveryTest",
+    "tokens.tests.test_order_submission_processes.ScopedOrderSubmissionProcessTest",
     "wallets.tests.test_confirmation_locking.ScopedConfirmationLockingTest",
     "tokens.tests.test_former_member_privacy.ScopedFormerMemberPrivacyTest",
     "documents.tests.test_evidence_under_scoped_roles.ScopedSupportingEvidenceTest",

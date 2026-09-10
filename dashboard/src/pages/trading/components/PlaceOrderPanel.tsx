@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback } from 'react';
-import type { ShareToken, CreateOrderRequest, TransferOrder, Wallet, OrderType } from '@ledova/shared';
+import type { ShareToken, CreateOrderRequest, Wallet, OrderType } from '@ledova/shared';
 import { ShieldWarningIcon } from '@phosphor-icons/react';
 import { DESIGN_TOKENS } from '@ledova/shared';
 import { Modal } from '@components/Modal';
@@ -12,7 +12,10 @@ interface PlaceOrderPanelProps {
   token: ShareToken;
   wallets: Wallet[];
   walletsWithHoldings: { walletAddress: string; balance: string }[];
-  onSubmit: (data: CreateOrderRequest) => Promise<TransferOrder>;
+  onSubmit: (data: CreateOrderRequest) => Promise<boolean>;
+  onNewOrder: () => void;
+  onDismiss: () => void;
+  submissionError: string | null;
   isWalletWhitelisted: boolean;
   isWhitelistStatusUnknown: boolean;
   isLoadingWhitelistStatus: boolean;
@@ -23,6 +26,9 @@ export function PlaceOrderPanel({
   wallets,
   walletsWithHoldings,
   onSubmit,
+  onNewOrder,
+  onDismiss,
+  submissionError,
   isWalletWhitelisted,
   isWhitelistStatusUnknown,
   isLoadingWhitelistStatus,
@@ -31,6 +37,7 @@ export function PlaceOrderPanel({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFormValid, setIsFormValid] = useState(false);
   const formRef = useRef<OrderFormRef>(null);
+  const transition = useRef({ generation: 0, pending: false });
 
   const isOpen = orderType !== null;
   const isBuy = orderType === 'buy';
@@ -41,25 +48,41 @@ export function PlaceOrderPanel({
   const availableWallets = isBuy ? wallets : sellWallets;
 
   const handleOpen = (type: OrderType) => {
+    transition.current.generation++;
+    transition.current.pending = false;
+    onNewOrder();
+    setIsSubmitting(false);
     setOrderType(type);
     setIsFormValid(false);
   };
 
   const handleClose = () => {
+    transition.current.generation++;
+    transition.current.pending = false;
+    onDismiss();
+    setIsSubmitting(false);
     setOrderType(null);
     setIsFormValid(false);
   };
 
   const handleSubmit = useCallback(
     async (data: CreateOrderRequest) => {
+      if (transition.current.pending) return;
+      transition.current.pending = true;
+      const generation = transition.current.generation;
       setIsSubmitting(true);
       try {
-        await onSubmit(data);
-        handleClose();
+        const accepted = await onSubmit(data);
+        if (accepted && transition.current.generation === generation) {
+          setOrderType(null);
+          setIsFormValid(false);
+        }
       } finally {
-        setIsSubmitting(false);
+        if (transition.current.generation === generation) {
+          transition.current.pending = false;
+          setIsSubmitting(false);
+        }
       }
-      return {} as TransferOrder;
     },
     [onSubmit],
   );
@@ -74,14 +97,14 @@ export function PlaceOrderPanel({
           disabled={wallets.length === 0}
           className="flex-1 py-2.5 px-6 rounded-lg font-semibold text-white bg-surface-tertiary hover:bg-surface-secondary border border-border-subtle disabled:bg-surface-disabled disabled:cursor-not-allowed transition-colors"
         >
-          Sell {token.symbol}
+          New sell order — {token.symbol}
         </button>
         <button
           onClick={() => handleOpen('buy')}
           disabled={wallets.length === 0}
           className="flex-1 py-2.5 px-6 rounded-lg font-semibold text-white bg-brand-mid hover:bg-brand disabled:bg-surface-disabled disabled:cursor-not-allowed transition-colors"
         >
-          Buy {token.symbol}
+          New buy order — {token.symbol}
         </button>
       </div>
 
@@ -97,6 +120,7 @@ export function PlaceOrderPanel({
         onConfirm={() => formRef.current?.submit()}
       >
         <div className="space-y-4">
+          {submissionError && <p role="alert">{submissionError}</p>}
           {!isWalletWhitelisted && !isLoadingWhitelistStatus && (
             <div className="p-4 rounded-lg bg-warning-light/10 border border-warning-light/20">
               <div className="flex items-start gap-3">

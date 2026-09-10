@@ -48,6 +48,7 @@ export {
   getOrderCreateMessage,
   getOrderCancelMessage,
   createOrder,
+  getOrderSubmission,
   cancelOrder,
   getWalletBalances,
   getWhitelistStatus,

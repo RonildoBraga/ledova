@@ -11,8 +11,8 @@ interface BuySellButtonsProps {
 }
 
 export function BuySellButtons({ tokenSymbol, onBuy, onSell, disabled, style }: BuySellButtonsProps) {
-  const buyLabel = tokenSymbol ? `Buy ${tokenSymbol}` : 'Buy';
-  const sellLabel = tokenSymbol ? `Sell ${tokenSymbol}` : 'Sell';
+  const buyLabel = tokenSymbol ? `New buy order — ${tokenSymbol}` : 'New buy order';
+  const sellLabel = tokenSymbol ? `New sell order — ${tokenSymbol}` : 'New sell order';
 
   return (
     <ButtonGroup

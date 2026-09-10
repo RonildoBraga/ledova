@@ -1,30 +1,47 @@
 import React, { useEffect } from 'react';
 import { View, Text, ActivityIndicator } from 'react-native';
 import { CheckCircleIcon, WarningCircleIcon } from 'phosphor-react-native';
-import type { CreateOrderRequest, TransferOrder, Wallet } from '@ledova/shared';
+import type { OrderSubmission, ShareToken, TransferOrder, Wallet } from '@ledova/shared';
 import { CustomModal } from '../../../components/modal';
 import { QRDisplay, QRScanner } from '../../../components/qr';
 import { decodeKeystoneMessageSignature } from '../../../utils/keystone/urDecoder';
 import { useOrderSigning } from '../useOrderSigning';
 import { SoftwareSignMessage } from './SoftwareSignMessage';
+import { CreateOrderSigningModal } from './CreateOrderSigningModal';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
 
 interface OrderSigningModalProps {
   visible: boolean;
   onClose: () => void;
   mode: 'create' | 'cancel';
-  orderData?: CreateOrderRequest;
+  submission?: OrderSubmission | null;
+  tokens?: ShareToken[];
   orderUuid?: string;
   orderSymbol?: string;
   wallet: Wallet | null;
   onSuccess?: (order: TransferOrder) => void;
 }
 
-export function OrderSigningModal({
+export function OrderSigningModal(props: OrderSigningModalProps) {
+  if (props.mode === 'create') {
+    return props.visible && props.submission ? (
+      <CreateOrderSigningModal
+        key={props.submission.record.submissionId}
+        submission={props.submission}
+        tokens={props.tokens ?? []}
+        wallet={props.wallet}
+        onClose={props.onClose}
+        onSuccess={props.onSuccess}
+      />
+    ) : null;
+  }
+  return <OrderCancellationModal {...props} />;
+}
+
+function OrderCancellationModal({
   visible,
   onClose,
   mode,
-  orderData,
   orderUuid,
   orderSymbol,
   wallet,
@@ -108,7 +125,7 @@ export function OrderSigningModal({
       textAlign: 'center',
     },
   }));
-  const signing = useOrderSigning({ mode, orderData, orderUuid, wallet, onSuccess });
+  const signing = useOrderSigning({ mode, orderUuid, wallet, onSuccess });
 
   useEffect(() => {
     if (visible) {

@@ -91,6 +91,8 @@ class TransferOrderDetailSerializer(serializers.ModelSerializer):
 
 
 class TransferOrderCreateSerializer(serializers.Serializer):
+    submission_id = serializers.UUIDField()
+    owner_account_uuid = serializers.UUIDField()
     token = serializers.UUIDField()
     order_type = serializers.ChoiceField(choices=TransferOrderType.choices)
     wallet_uuid = serializers.UUIDField(write_only=True)
@@ -103,17 +105,6 @@ class TransferOrderCreateSerializer(serializers.Serializer):
         help_text="Minimum quantity per fill. 0 means accept any partial fill.",
     )
     price_per_share = serializers.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("0.01"))
-
-    def validate_token(self, value):
-        try:
-            token = ShareToken.objects.get(uuid=value)
-        except ShareToken.DoesNotExist:
-            raise serializers.ValidationError("Token not found")
-
-        if not token.is_deployed:
-            raise serializers.ValidationError("Token is not deployed")
-
-        return token
 
     def validate_wallet_address(self, value):
         if not Web3.is_address(value):
@@ -133,15 +124,14 @@ class TransferOrderCreateSerializer(serializers.Serializer):
 
         wallet = (
             Wallet.objects.visible_to_user(request.user)
-            .verified_evm()
             .select_related("user_account")
-            .filter(uuid=data["wallet_uuid"])
+            .filter(uuid=data["wallet_uuid"], user_account_id=data["owner_account_uuid"])
             .first()
         )
 
         if wallet is None:
             raise serializers.ValidationError(
-                {"wallet_uuid": "Select a verified EVM wallet from one of your accounts."}
+                {"wallet_uuid": "Select a wallet from the specified account that you currently belong to."}
             )
 
         if not Web3.is_address(wallet.address):

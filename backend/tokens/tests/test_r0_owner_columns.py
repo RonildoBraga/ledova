@@ -235,15 +235,9 @@ class AChallengeWithNoOwnerIsNotOfferedForConsumptionTest(TransactionTestCase):
         self.tenant = make_tenant("ownerless")
         self.challenge = orphan(
             issue_challenge(
-                SigningChallengePurpose.ORDER_CREATE,
+                SigningChallengePurpose.ORDER_CANCEL,
                 self.tenant.wallet.address,
-                {
-                    "tokenUuid": str(self.tenant.deployed_token.uuid),
-                    "orderType": "sell",
-                    "quantity": 5,
-                    "minQuantity": 0,
-                    "pricePerShare": "2.50",
-                },
+                {"orderUuid": str(self.tenant.order.pk)},
                 wallet=self.tenant.wallet,
             )
         )
@@ -252,7 +246,7 @@ class AChallengeWithNoOwnerIsNotOfferedForConsumptionTest(TransactionTestCase):
         with transaction.atomic():
             consume_challenge(
                 self.challenge.digest,
-                SigningChallengePurpose.ORDER_CREATE,
+                SigningChallengePurpose.ORDER_CANCEL,
                 self.tenant.wallet.address,
                 SIGNATURE,
             )

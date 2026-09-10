@@ -52,6 +52,30 @@ export interface CreateOrderRequest {
   pricePerShare: string;
 }
 
+export interface OrderSubmissionRequest extends CreateOrderRequest {
+  submissionId: string;
+  ownerAccountUuid: string;
+}
+
+export interface OrderSubmissionSnapshot {
+  submissionId: string;
+  ownerAccountUuid: string;
+  walletUuid: string;
+  status: 'pending' | 'created' | 'refused';
+  intent: {
+    token: string;
+    orderType: OrderType;
+    walletAddress: string;
+    quantity: number;
+    minQuantity: number;
+    pricePerShare: string;
+  };
+  order: TransferOrder | null;
+  match: { matched: true; counterOrder: string; swapOrder: string } | null;
+  refusal: { code: string; detail: string } | null;
+  challenge: CreateOrderMessageResponse | null;
+}
+
 export interface OrderBookEntry {
   price: string;
   quantity: number;
@@ -219,7 +243,7 @@ export interface CreateOrderMessageResponse extends SigningChallengeTypedData {
   expiresAt: string;
 }
 
-export interface SignedCreateOrderRequest extends CreateOrderRequest {
+export interface SignedCreateOrderRequest extends OrderSubmissionRequest {
   digest: string;
   signature: string;
 }
