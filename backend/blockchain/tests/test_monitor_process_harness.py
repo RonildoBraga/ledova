@@ -42,6 +42,16 @@ class MonitorLockObserverTest(SimpleTestCase):
         self.observe([None, (self.query, False, "Lock"), (self.query, True, "Lock")], [0, 0, 0.01, 0.02])
         self.assertEqual(self.cursor.fetchone.call_count, 3)
 
+    def test_a_transitional_begin_waits_for_the_required_select_lock(self):
+        pause = self.observe([("BEGIN", True, "Lock"), (self.query, True, "Lock")], [0, 0, 0.01])
+        pause.assert_called_once_with(0.01)
+        self.assertEqual(self.cursor.fetchone.call_count, 2)
+
+    def test_repeated_begin_observations_expire_at_the_existing_deadline(self):
+        with self.assertRaisesRegex(AssertionError, "Monitor never waited for the current transaction row"):
+            self.observe([("BEGIN", True, "Lock"), ("BEGIN", True, "Lock")], [0, 0, 0.01, 10])
+        self.assertEqual(self.cursor.fetchone.call_count, 2)
+
     def test_a_blocked_update_does_not_prove_the_required_select_lock(self):
         with self.assertRaises(AssertionError):
             self.observe([('UPDATE "blockchain_blockchaintransaction" SET "status" = %s', True, "Lock")], [0, 0])
