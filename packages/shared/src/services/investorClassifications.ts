@@ -1,4 +1,4 @@
-import { AxiosInstance } from 'axios';
+import { AxiosInstance, AxiosRequestConfig } from 'axios';
 import { INVESTOR_CLASSIFICATION_ENDPOINTS } from '../constants';
 import type {
   InvestorClassification,
@@ -13,7 +13,11 @@ export const getInvestorClassifications = (apiClient: AxiosInstance) =>
 export const getInvestorEligibility = (apiClient: AxiosInstance) =>
   apiClient.get<InvestorEligibility>(INVESTOR_CLASSIFICATION_ENDPOINTS.ELIGIBILITY);
 
-export const submitInvestorClassification = (apiClient: AxiosInstance, data: InvestorClassificationSubmission) => {
+export const submitInvestorClassification = (
+  apiClient: AxiosInstance,
+  data: InvestorClassificationSubmission,
+  config?: AxiosRequestConfig,
+) => {
   const formData = new FormData();
   formData.append('evidence_file', data.file);
   formData.append('user_account', data.userAccount);
@@ -29,7 +33,8 @@ export const submitInvestorClassification = (apiClient: AxiosInstance, data: Inv
   }
 
   return apiClient.post<InvestorClassification>(INVESTOR_CLASSIFICATION_ENDPOINTS.BASE, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+    ...config,
+    headers: { ...config?.headers, 'Content-Type': 'multipart/form-data' },
   });
 };
 

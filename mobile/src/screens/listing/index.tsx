@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, TextInput } from 'react-native';
 import {
   CheckCircleIcon,
@@ -12,7 +12,6 @@ import {
   ClockIcon,
   XCircleIcon,
 } from 'phosphor-react-native';
-import * as DocumentPicker from 'expo-document-picker';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { useQuery } from '@tanstack/react-query';
@@ -25,6 +24,7 @@ import { CustomModal } from '../../components/modal';
 import { PrimaryButton, SecondaryButton } from '../../components/buttons';
 import { apiClient } from '../../services/apiClient';
 import { useCompanyDocuments } from './useCompanyDocuments';
+import { useDocumentUpload } from '../../hooks/useDocumentUpload';
 
 const EXTENSION_BY_MIME_TYPE: Record<string, string> = {
   'application/pdf': '.pdf',
@@ -68,6 +68,7 @@ export function ListingScreen() {
   const styles = useStyles();
   const {
     company,
+    companyUuid,
     documents,
     uploadedTypes,
     canEdit,
@@ -83,6 +84,8 @@ export function ListingScreen() {
     withdrawApplication,
     isWithdrawing,
   } = useCompanyDocuments();
+  const document = useDocumentUpload(companyUuid);
+  const documentAttempt = useRef(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [infoResponse, setInfoResponse] = useState('');
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
@@ -106,24 +109,18 @@ export function ListingScreen() {
     Alert.alert('Request Refused', getErrorMessage(error, ACTION_ERROR_FALLBACK) || ACTION_ERROR_FALLBACK);
 
   const handlePickAndUpload = async (documentType: DocumentType) => {
-    const result = await DocumentPicker.getDocumentAsync({
-      type: ['application/pdf', 'image/*'],
-      copyToCacheDirectory: true,
-    });
-
-    if (result.canceled || !result.assets?.[0]) return;
-
-    const asset = result.assets[0];
-    const file = {
-      uri: asset.uri,
-      name: asset.name,
-      type: asset.mimeType || 'application/octet-stream',
-    };
-
+    if (documentAttempt.current) return;
+    documentAttempt.current = true;
     try {
-      await upload({ documentType, name: asset.name, file });
+      if (!canEdit || !(await document.pick())) return;
+      await document.submit(({ file, owner, sessionEpoch }) =>
+        upload({ documentType, name: file.name, file, companyUuid: owner, sessionEpoch }),
+      );
     } catch {
       Alert.alert('Upload Failed', 'Could not upload the document. Please try again.');
+    } finally {
+      document.clear();
+      documentAttempt.current = false;
     }
   };
 
@@ -277,7 +274,7 @@ export function ListingScreen() {
                 uploaded={uploaded}
                 onUpload={() => handlePickAndUpload(doc.type)}
                 onDelete={() => handleDelete(uploaded!.uuid)}
-                isUploading={isUploading}
+                isUploading={isUploading || document.isPicking || document.isSubmitting}
                 isDeleting={isDeleting}
                 canEdit={canEdit}
                 isLast={index === REQUIRED_DOCUMENTS.length - 1}
@@ -297,7 +294,7 @@ export function ListingScreen() {
                 uploaded={uploaded}
                 onUpload={() => handlePickAndUpload(doc.type)}
                 onDelete={() => handleDelete(uploaded!.uuid)}
-                isUploading={isUploading}
+                isUploading={isUploading || document.isPicking || document.isSubmitting}
                 isDeleting={isDeleting}
                 canEdit={canEdit}
                 isLast={index === OPTIONAL_DOCUMENTS.length - 1}
@@ -549,7 +546,13 @@ function DocumentRow({
             )}
           </>
         ) : canEdit ? (
-          <TouchableOpacity onPress={onUpload} disabled={isUploading} hitSlop={8} activeOpacity={0.7}>
+          <TouchableOpacity
+            accessibilityLabel={`Upload ${label}`}
+            onPress={onUpload}
+            disabled={isUploading}
+            hitSlop={8}
+            activeOpacity={0.7}
+          >
             <UploadSimpleIcon size={18} color={theme.colors.interactive.default} weight="bold" />
           </TouchableOpacity>
         ) : null}

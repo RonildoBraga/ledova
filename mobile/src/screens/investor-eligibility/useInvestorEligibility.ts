@@ -8,8 +8,9 @@ import {
 } from '@ledova/shared';
 import type { InvestorClassification, InvestorClassificationSubmission } from '@ledova/shared';
 import { apiClient } from '../../services/apiClient';
+import { getSessionEpoch } from '../../services/sessionScope';
 
-type Submission = Omit<InvestorClassificationSubmission, 'file'> & { file: unknown };
+type Submission = Omit<InvestorClassificationSubmission, 'file'> & { file: unknown; sessionEpoch: number };
 
 export function useInvestorEligibility() {
   const queryClient = useQueryClient();
@@ -32,8 +33,13 @@ export function useInvestorEligibility() {
   };
 
   const submitMutation = useMutation({
-    mutationFn: (data: Submission) => submitInvestorClassification(apiClient, data as InvestorClassificationSubmission),
-    onSuccess: refresh,
+    mutationFn: ({ sessionEpoch, ...data }: Submission) =>
+      submitInvestorClassification(apiClient, data as InvestorClassificationSubmission, {
+        ledovaSessionEpoch: sessionEpoch,
+      }),
+    onSuccess: (_response, variables) => {
+      if (variables.sessionEpoch === getSessionEpoch()) refresh();
+    },
   });
 
   const deleteMutation = useMutation({

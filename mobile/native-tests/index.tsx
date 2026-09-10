@@ -14,6 +14,8 @@ import { verifyMessage } from 'ethers';
 import { deriveAccountsFromMnemonic } from '../src/utils/softwareWallet/seedDerivation';
 import { signEthereumMessage } from '../src/utils/softwareWallet/localSigner';
 import { failureCategory, NativeProbeAssertion } from './diagnostics';
+import { DocumentCopy, pickDocumentCopy } from '../src/services/documentCopies';
+import { getSessionEpoch } from '../src/services/sessionScope';
 
 type Check = { name: string; passed: boolean; failure?: { category: string; stage: string } };
 const pair = { accessToken: 'synthetic-access', refreshToken: 'synthetic-refresh' };
@@ -183,18 +185,41 @@ async function run(): Promise<Check[]> {
   });
   await check('multipart upload and binary download', async () => {
     const file = new File(Paths.cache, 'ledova-native-probe.txt');
+    const picked = new File(Paths.cache, 'DocumentPicker', '11111111-1111-1111-1111-111111111111.txt');
+    let copy: DocumentCopy | null = null;
+    let release: (() => void) | undefined;
     try {
       file.create({ overwrite: true });
       file.write('synthetic-fixture');
+      picked.create({ intermediates: true, overwrite: true });
+      picked.write('synthetic-fixture');
+      copy = await pickDocumentCopy(
+        () => true,
+        async () => ({
+          canceled: false,
+          assets: [{ uri: picked.uri, name: 'synthetic.txt', mimeType: 'text/plain', size: 17, lastModified: 0 }],
+        }),
+      );
+      requireTrue(copy && !picked.info().exists);
+      release = copy.acquire();
+      copy.retire();
+      requireTrue(new File(copy.file.uri).info().exists);
       const form = new FormData();
-      form.append('file', { uri: file.uri, name: 'synthetic.txt', type: 'text/plain' } as unknown as Blob);
+      form.append('file', copy.file as unknown as Blob);
       const uploaded = await apiClient.post<{ valid: boolean }>('/upload', form, {
         headers: { 'Content-Type': 'multipart/form-data' },
+        ledovaSessionEpoch: getSessionEpoch(),
       });
       requireTrue(uploaded.data.valid);
+      release();
+      requireTrue(!new File(copy.file.uri).info().exists);
+      requireTrue((await file.text()) === 'synthetic-fixture');
       const downloaded = await apiClient.get<ArrayBuffer>('/download', { responseType: 'arraybuffer' });
       requireTrue(String.fromCharCode(...new Uint8Array(downloaded.data)) === 'synthetic-fixture');
     } finally {
+      copy?.retire();
+      release?.();
+      if (picked.info().exists) picked.delete();
       if (file.exists) file.delete();
     }
   });

@@ -99,6 +99,52 @@ permission handling. Refreshing permission after an external settings change,
 handling a failed initial permission getter, and physical permission
 denial/revocation and camera lifecycle checks remain under #13.
 
+## Document upload copies
+
+Eligibility and company listing use one serialized document picker. A returned
+file is accepted only when its URI identifies a generated UUID filename directly
+inside Expo's private `DocumentPicker` cache. Provider originals and unrelated
+cache files are never deletion targets. Unexpected multiple results are refused,
+with each recognized private copy retired. Native/provider errors are presented
+without their raw diagnostic text.
+
+Before attachment, the actual copied file must be non-empty, at most 10 MiB,
+and match the provider's reported size when present. This check happens after
+native copying; it cannot bound a cloud-provider download or temporary copy that
+has not returned to JavaScript. The copy moves into one of 16 fixed private
+`ledova-upload-copies-v1/slot-*` files. The original URI is retained separately
+and its retirement verified: Expo's move changes its object's URI, and supported
+Android versions below API 26 can report success without deleting the source.
+
+A selected copy and its admitted upload consumers have separate lifetimes.
+Replacement, abandonment, screen/account changes and session retirement release
+the selection. Bytes remain until every admitted upload promise settles,
+including refresh/replay and mutation completion. Eligibility retains a failed
+submission for retry; listing has no retained-file retry and releases its copy
+after either result. A late picker result or old success cannot replace or reset
+a newer draft. Already sent requests may still complete on the server.
+
+These uploads carry the session epoch captured with their selection. Fresh login,
+biometric entry from an absent session, and logout invalidate it; ordinary token
+rotation preserves it. Credential reads, refresh entry and replay check that
+epoch so an old upload cannot acquire a newer login's credentials. Conditional
+retirement from an obsolete refresh does not invalidate a newer session.
+
+Before another picker opens, cleanup checks only the 16 exact managed paths,
+preserving active selections and consumers. This retires managed copies left by
+a previous process on next use without listing the cache directory. Metadata or
+deletion failure leaves a slot unavailable for reuse; it is not reported as
+verified erasure. Expo copies from before adoption, unreturned partial copies and
+older versions remain a separate cleanup gap. Viewer/sharing copies also need a
+separate external-reader lifetime and are outside this upload cache.
+
+Component tests control native picker and file boundaries while retaining the
+actual upload hooks and React Query mutation lifecycle. The native probe supplies
+a synthetic picker result and exercises actual file move, retention, multipart
+upload and retirement on the emulator/simulator; it does not drive the system
+picker UI. Local/cloud-provider, low-storage and physical-device checks remain
+under #13, alongside the pre-adoption and sharing gaps.
+
 ## Native dependencies and randomness
 
 The RNG entry shim and mnemonic generation use Expo Crypto's native

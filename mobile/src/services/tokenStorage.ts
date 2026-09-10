@@ -1,4 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
+import { invalidateSessionScope } from './sessionScope';
 
 const ACCESS_TOKEN_KEY = 'accessToken';
 const REFRESH_TOKEN_KEY = 'refreshToken';
@@ -122,11 +123,17 @@ export async function storeTokens(
   { accessToken, refreshToken }: TokenPair,
   expectedGeneration?: number,
 ): Promise<void> {
-  if (expectedGeneration === undefined) sessionGeneration++;
+  if (expectedGeneration === undefined) {
+    sessionGeneration++;
+    invalidateSessionScope();
+  }
   await serially(async () => {
     if (expectedGeneration !== undefined) {
       if (expectedGeneration !== sessionGeneration) throw new Error('The saved session changed.');
+      const existing = await readPair();
+      if (expectedGeneration !== sessionGeneration) throw new Error('The saved session changed.');
       sessionGeneration++;
+      if (!existing) invalidateSessionScope();
     }
     const generation = sessionGeneration;
     if (!accessToken || !refreshToken) throw new Error('A complete session is required.');
@@ -140,11 +147,15 @@ export async function storeTokens(
 }
 
 export async function clearTokens(expectedGeneration?: number): Promise<void> {
-  if (expectedGeneration === undefined) sessionGeneration++;
+  if (expectedGeneration === undefined) {
+    sessionGeneration++;
+    invalidateSessionScope();
+  }
   await serially(async () => {
     if (expectedGeneration !== undefined) {
       if (expectedGeneration !== sessionGeneration) return;
       sessionGeneration++;
+      invalidateSessionScope();
     }
     retirementUnavailable = true;
     await SecureStore.setItemAsync(SESSION_RETIRED_KEY, 'true');

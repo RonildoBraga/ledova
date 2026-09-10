@@ -1,4 +1,4 @@
-import { AxiosInstance } from 'axios';
+import { AxiosInstance, AxiosRequestConfig } from 'axios';
 import { COMPANY_ENDPOINTS } from '../constants';
 import type {
   Company,
@@ -32,14 +32,20 @@ export const getCompanyStats = (apiClient: AxiosInstance, uuid: string) =>
 export const getCompanyDocuments = (apiClient: AxiosInstance, companyUuid: string) =>
   apiClient.get<PaginatedResponse<CompanyDocument>>(COMPANY_ENDPOINTS.DOCUMENTS(companyUuid));
 
-export const uploadCompanyDocument = (apiClient: AxiosInstance, companyUuid: string, data: DocumentUpload) => {
+export const uploadCompanyDocument = (
+  apiClient: AxiosInstance,
+  companyUuid: string,
+  data: DocumentUpload,
+  config?: AxiosRequestConfig,
+) => {
   const formData = new FormData();
   formData.append('file', data.file);
   formData.append('document_type', data.documentType);
   formData.append('name', data.name);
 
   return apiClient.post<CompanyDocument>(COMPANY_ENDPOINTS.DOCUMENTS(companyUuid), formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+    ...config,
+    headers: { ...config?.headers, 'Content-Type': 'multipart/form-data' },
   });
 };
 

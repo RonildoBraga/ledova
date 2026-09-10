@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, TextInput } from 'react-native';
 import {
   CheckCircleIcon,
@@ -10,7 +10,6 @@ import {
   WarningIcon,
   XCircleIcon,
 } from 'phosphor-react-native';
-import * as DocumentPicker from 'expo-document-picker';
 import { useQuery } from '@tanstack/react-query';
 import { getCompanies, getErrorMessage, formatDate } from '@ledova/shared';
 import type { Company, CertifierBody, InvestorCategory, InvestorClassification } from '@ledova/shared';
@@ -21,8 +20,7 @@ import { CustomModal } from '../../components/modal';
 import { apiClient } from '../../services/apiClient';
 import { CATEGORIES, CERTIFIER_BODIES, REASON_TEXT, WHOLESALE_ONLY_NOTICE } from './constants';
 import { useInvestorEligibility } from './useInvestorEligibility';
-
-type PickedFile = { uri: string; name: string; type: string };
+import { useDocumentUpload } from '../../hooks/useDocumentUpload';
 
 const CLAIM_ERROR_FALLBACK = 'The claim was refused. Please check the details and try again.';
 
@@ -42,7 +40,9 @@ export function InvestorEligibilityScreen() {
     useInvestorEligibility();
 
   const [category, setCategory] = useState<InvestorCategory | null>(null);
-  const [file, setFile] = useState<PickedFile | null>(null);
+  const document = useDocumentUpload(eligibility?.account);
+  const { file, clear: clearDocument } = document;
+  const draftGeneration = useRef(0);
   const [declaredBasis, setDeclaredBasis] = useState('');
   const [company, setCompany] = useState('');
   const [certificateIssuedAt, setCertificateIssuedAt] = useState('');
@@ -60,25 +60,31 @@ export function InvestorEligibilityScreen() {
   });
   const companies: Company[] = companiesData?.data?.results ?? [];
 
-  const reset = () => {
+  const reset = useCallback(() => {
+    draftGeneration.current++;
     setCategory(null);
-    setFile(null);
+    clearDocument();
     setDeclaredBasis('');
     setCompany('');
     setCertificateIssuedAt('');
     setCertifierName('');
     setCertifierBody('');
     setCertifierMembershipNumber('');
-  };
+  }, [clearDocument]);
+
+  useEffect(reset, [reset]);
+
+  function changeField<T>(setter: (value: T) => void, value: T) {
+    draftGeneration.current++;
+    setter(value);
+  }
 
   const pickFile = async () => {
-    const result = await DocumentPicker.getDocumentAsync({
-      type: ['application/pdf', 'image/*'],
-      copyToCacheDirectory: true,
-    });
-    if (result.canceled || !result.assets?.[0]) return;
-    const asset = result.assets[0];
-    setFile({ uri: asset.uri, name: asset.name, type: asset.mimeType || 'application/octet-stream' });
+    try {
+      await document.pick();
+    } catch (error) {
+      Alert.alert('Cannot attach document', getErrorMessage(error) || 'Please choose the document again.');
+    }
   };
 
   const isComplete =
@@ -95,19 +101,23 @@ export function InvestorEligibilityScreen() {
 
   const handleSubmit = async () => {
     if (!isComplete || !category || !eligibility?.account) return;
+    const generation = draftGeneration.current;
     try {
-      await submitClaim({
-        userAccount: eligibility.account,
-        category,
-        declaredBasis: declaredBasis.trim(),
-        file,
-        company: needsCompany ? company : undefined,
-        certificateIssuedAt: needsCertifier ? certificateIssuedAt : undefined,
-        certifierName: needsCertifier ? certifierName.trim() : undefined,
-        certifierBody: needsCertifier ? (certifierBody as CertifierBody) : undefined,
-        certifierMembershipNumber: needsCertifier ? certifierMembershipNumber.trim() : undefined,
-      });
-      reset();
+      const current = await document.submit(({ file: uploadFile, owner, sessionEpoch }) =>
+        submitClaim({
+          userAccount: owner,
+          sessionEpoch,
+          category,
+          declaredBasis: declaredBasis.trim(),
+          file: uploadFile,
+          company: needsCompany ? company : undefined,
+          certificateIssuedAt: needsCertifier ? certificateIssuedAt : undefined,
+          certifierName: needsCertifier ? certifierName.trim() : undefined,
+          certifierBody: needsCertifier ? (certifierBody as CertifierBody) : undefined,
+          certifierMembershipNumber: needsCertifier ? certifierMembershipNumber.trim() : undefined,
+        }),
+      );
+      if (current && generation === draftGeneration.current) reset();
     } catch (error) {
       Alert.alert('Claim Refused', getErrorMessage(error, CLAIM_ERROR_FALLBACK) || CLAIM_ERROR_FALLBACK);
     }
@@ -172,7 +182,8 @@ export function InvestorEligibilityScreen() {
                 </View>
               </View>
               <TouchableOpacity
-                onPress={() => setCategory(item.category)}
+                accessibilityLabel={`Attach evidence for ${item.label}`}
+                onPress={() => changeField(setCategory, item.category)}
                 disabled={!!openClaim || !eligibility?.account}
                 style={styles.rowAction}
               >
@@ -242,8 +253,8 @@ export function InvestorEligibilityScreen() {
         showFooter
         confirmLabel="Submit for review"
         onConfirm={handleSubmit}
-        confirmDisabled={!isComplete || isSubmitting}
-        confirmLoading={isSubmitting}
+        confirmDisabled={!isComplete || isSubmitting || document.isSubmitting || document.isPicking}
+        confirmLoading={isSubmitting || document.isSubmitting}
       >
         <View style={styles.modalContent}>
           <Text style={styles.modalTitle}>{spec ? `Claim: ${spec.label}` : 'Claim'}</Text>
@@ -255,7 +266,7 @@ export function InvestorEligibilityScreen() {
               {companies.map((item) => (
                 <TouchableOpacity
                   key={item.uuid}
-                  onPress={() => setCompany(item.uuid)}
+                  onPress={() => changeField(setCompany, item.uuid)}
                   style={[styles.optionRow, company === item.uuid && styles.optionRowSelected]}
                 >
                   <Text style={styles.optionText}>{item.name}</Text>
@@ -269,7 +280,7 @@ export function InvestorEligibilityScreen() {
               <Text style={styles.fieldLabel}>Certificate date (YYYY-MM-DD)</Text>
               <TextInput
                 value={certificateIssuedAt}
-                onChangeText={setCertificateIssuedAt}
+                onChangeText={(value) => changeField(setCertificateIssuedAt, value)}
                 placeholder="2026-01-31"
                 placeholderTextColor={theme.colors.text.muted}
                 style={styles.input}
@@ -278,7 +289,7 @@ export function InvestorEligibilityScreen() {
               {CERTIFIER_BODIES.map((body) => (
                 <TouchableOpacity
                   key={body.value}
-                  onPress={() => setCertifierBody(body.value)}
+                  onPress={() => changeField(setCertifierBody, body.value)}
                   style={[styles.optionRow, certifierBody === body.value && styles.optionRowSelected]}
                 >
                   <Text style={styles.optionText}>{body.label}</Text>
@@ -287,14 +298,14 @@ export function InvestorEligibilityScreen() {
               <Text style={styles.fieldLabel}>Accountant name</Text>
               <TextInput
                 value={certifierName}
-                onChangeText={setCertifierName}
+                onChangeText={(value) => changeField(setCertifierName, value)}
                 placeholderTextColor={theme.colors.text.muted}
                 style={styles.input}
               />
               <Text style={styles.fieldLabel}>Membership number</Text>
               <TextInput
                 value={certifierMembershipNumber}
-                onChangeText={setCertifierMembershipNumber}
+                onChangeText={(value) => changeField(setCertifierMembershipNumber, value)}
                 placeholderTextColor={theme.colors.text.muted}
                 style={styles.input}
               />
@@ -304,14 +315,14 @@ export function InvestorEligibilityScreen() {
           <Text style={styles.fieldLabel}>Basis for the claim</Text>
           <TextInput
             value={declaredBasis}
-            onChangeText={setDeclaredBasis}
+            onChangeText={(value) => changeField(setDeclaredBasis, value)}
             placeholder="Describe why this category applies to you"
             placeholderTextColor={theme.colors.text.muted}
             style={styles.textArea}
             multiline
           />
 
-          <TouchableOpacity onPress={pickFile} style={styles.filePicker}>
+          <TouchableOpacity onPress={pickFile} disabled={document.isPicking} style={styles.filePicker}>
             <UploadSimpleIcon size={20} color={theme.colors.interactive.active} />
             <Text style={styles.filePickerText}>{file ? file.name : 'Attach evidence (PDF or image, max 10 MB)'}</Text>
           </TouchableOpacity>
