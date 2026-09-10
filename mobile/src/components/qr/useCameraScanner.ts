@@ -21,7 +21,7 @@ let latestRequest: Promise<PermissionResponse> | null = null;
 async function readPermission(allowRequest: boolean, isCurrent: () => boolean): Promise<PermissionResponse> {
   if (pendingRequest) {
     const response = await pendingRequest;
-    if (allowRequest) return response;
+    if (allowRequest || !isCurrent()) return response;
   }
 
   const previousRequest = latestRequest;

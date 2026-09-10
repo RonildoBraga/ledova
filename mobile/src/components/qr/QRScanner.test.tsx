@@ -365,6 +365,7 @@ it('does not let a pending grant override a later settings revocation', async ()
   expect(view.getByText(/Please enable it in settings/)).toBeTruthy();
   expect(mockCameraMounted).not.toHaveBeenCalled();
   expect(mockRequestPermission).toHaveBeenCalledTimes(1);
+  expect(mockGetPermission).toHaveBeenCalledTimes(2);
 });
 
 it('catches a failed settings refresh without restoring the old preview', async () => {
@@ -437,3 +438,24 @@ it('does not read or prompt while inactive and only refreshes when becoming acti
   await view.rerender(scanner(true));
   expect(view.getByTestId('camera-preview')).toBeTruthy();
 });
+
+it.each(['close', 'background', 'unmount'] as const)(
+  'does not continue a waiting foreground permission read after %s',
+  async (retire) => {
+    const request = deferredPermission();
+    mockRequestPermission.mockReturnValue(request.promise);
+    const view = await render(scanner(true));
+    expect(mockRequestPermission).toHaveBeenCalledTimes(1);
+    expect(mockGetPermission).toHaveBeenCalledTimes(1);
+    await changeAppState('background');
+    await changeAppState('active');
+    if (retire === 'close') await view.rerender(scanner(false));
+    else if (retire === 'background') await changeAppState('background');
+    else await view.unmount();
+
+    await act(() => request.resolve(granted));
+    expect(mockGetPermission).toHaveBeenCalledTimes(1);
+    expect(mockCameraMounted).not.toHaveBeenCalled();
+    expect(mockRequestPermission).toHaveBeenCalledTimes(1);
+  },
+);
