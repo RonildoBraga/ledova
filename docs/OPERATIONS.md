@@ -478,7 +478,14 @@ intent, status, receipt fields or accounting. The import takes the wallet lock
 used by pending creation and confirmation before checking or inserting rows.
 New history rows start `pending`, regardless of the provider's history status,
 and the existing five-minute confirmation sweep obtains a receipt before
-completing them. History imports do not record an optimistic deduction.
+completing them. Migration `wallets.0015_transaction_imported_from_history`
+adds an internal marker for new imports without inferring the origin of existing
+rows. Receipt verification for marked imports preserves block metadata when the
+provider cannot supply it and updates available receipt fields under the wallet
+and transaction locks. It sends no lifecycle notifications and changes no
+holdings or snapshots, including for quarantined assets. The wallet sync still
+refreshes current balances for verified holdings. History imports do not record
+an optimistic deduction.
 Existing historical rows, including legacy `success` statuses, are preserved;
 repairing them and adopting a locally submitted transfer after history imported
 its hash first remain separate work under #7. The transaction table still holds
@@ -499,7 +506,7 @@ until a successful chain refresh. The migration never guesses a refund from an
 old declared amount or fee estimate. Optimistic changes do not advance the last
 successful chain-sync timestamp.
 
-Confirmation, failure and reorg transitions persist a balance-reconciliation
+Local-transfer confirmation, failure and reorg transitions persist a balance-reconciliation
 token before committing. If a worker stops or a balance/snapshot operation fails,
 the five-minute sweep requeues that work even after transaction status changes.
 Retries complete the balance and snapshot work without repeating notifications

@@ -3,7 +3,7 @@ from decimal import Decimal
 from threading import Event
 from time import monotonic, sleep
 from unittest import skipUnless
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from uuid import uuid4
 
 from django.db import ProgrammingError, connections
@@ -17,6 +17,8 @@ from shared.db.aliases import configured
 from shared.tests.scoped import RunsOnTheScopedConnection
 from shared.tests.tenants import make_tenant
 from wallets.models import Holding, HoldingSnapshot, Transaction, Wallet
+from wallets.services.history_receipts import record_history_receipt
+from wallets.services.holdings import sync_holding
 from wallets.services.sync import _process_transactions
 from wallets.services.transaction_confirmation import TransactionConfirmationService
 from wallets.tasks.confirmation import (
@@ -148,6 +150,7 @@ class HistoryPreservationChecks:
                 with use_operator():
                     tx = Transaction.objects.get(wallet=self.wallet, tx_hash=data["tx_hash"])
                     self.assertEqual(tx.status, "pending")
+                    self.assertTrue(tx.imported_from_history)
                     self.assertEqual(
                         (tx.amount, tx.asset, tx.user_account), (Decimal("2"), self.native, self.tenant.account)
                     )
@@ -187,6 +190,119 @@ class HistoryPreservationChecks:
         with use_operator():
             self.holding.refresh_from_db()
         self.assertEqual(self.holding.quantity, Decimal("10"))
+
+    def receipt_client(self, **receipt):
+        client = Mock(spec=["get_transaction_receipt", "w3"])
+        client.get_transaction_receipt.return_value = {"status": 1, "blockNumber": 75, **receipt}
+        client.w3.eth.get_block.return_value = {"timestamp": int(timezone.now().timestamp())}
+        return client
+
+    def check_receipt(self, data, client):
+        with patch("wallets.tasks.confirmation.get_blockchain_client", return_value=client):
+            return confirm_pending_transaction(data["tx_hash"], str(self.wallet.pk), principal_id=self.tenant.user.pk)
+
+    def test_receipt_outage_keeps_imported_block_metadata(self):
+        for index, number in enumerate((75, None)):
+            with self.subTest(receipt_block_number=number):
+                data = self.history(
+                    tx_hash="0x" + f"{index + 100:064x}",
+                    block_timestamp=timezone.now() - timezone.timedelta(days=7),
+                )
+                self.import_history(data)
+                client = self.receipt_client(blockNumber=number)
+                client.w3.eth.get_block.side_effect = TimeoutError("Synthetic block lookup outage")
+                self.assertEqual(self.check_receipt(data, client)["status"], "confirmed")
+                with use_operator():
+                    tx = Transaction.objects.get(wallet=self.wallet, tx_hash=data["tx_hash"])
+                self.assertEqual((tx.block_number, tx.block_timestamp), (75, data["block_timestamp"]))
+
+    def test_history_receipt_updates_available_metadata_without_rewriting_balances_or_snapshots(self):
+        data = self.history(block_timestamp=timezone.now() - timezone.timedelta(days=7))
+        self.import_history(data)
+        before = self.state()[1:]
+        timestamp = data["block_timestamp"].replace(microsecond=0) + timezone.timedelta(seconds=12)
+        client = self.receipt_client(blockNumber=76, gasUsed=21000, effectiveGasPrice=1000000000)
+        client.w3.eth.get_block.return_value = {"timestamp": int(timestamp.timestamp())}
+        with (
+            patch("wallets.services.transaction_confirmation.sync_holding", wraps=sync_holding),
+            patch("wallets.services.holdings.fetch_chain_balance", return_value=Decimal("37")),
+        ):
+            self.assertEqual(self.check_receipt(data, client)["status"], "confirmed")
+        with use_operator():
+            tx = Transaction.objects.get(wallet=self.wallet, tx_hash=data["tx_hash"])
+        self.assertEqual(
+            (tx.block_number, tx.block_timestamp, tx.transaction_fee), (76, timestamp, Decimal("0.000021"))
+        )
+        self.assertIsNone(tx.balance_reconciliation_token)
+        self.assertEqual(self.state()[1:], before)
+        before_retry = self.state()
+        self.assertEqual(self.check_receipt(data, client)["status"], "already_processed")
+        self.assertEqual(self.state(), before_retry)
+        with acting_for(self.tenant.user.pk):
+            with patch("wallets.services.holdings.fetch_chain_balance", return_value=Decimal("37")):
+                sync_holding(self.wallet, self.native)
+        with use_operator():
+            self.holding.refresh_from_db()
+        self.assertEqual(self.holding.quantity, Decimal("37"))
+
+    def test_history_receipts_do_not_notify_but_local_transfers_do(self):
+        with patch("wallets.services.transaction_confirmation.send_transaction_notification.defer") as notification:
+            for status in (0, 1):
+                data = self.history(tx_hash="0x" + f"{status + 200:064x}")
+                self.import_history(data)
+                result = self.check_receipt(data, self.receipt_client(status=status))
+                self.assertEqual(result["status"], "confirmed" if status else "failed")
+            notification.assert_not_called()
+            local = self.pending()
+            self.assertEqual(self.check_receipt(self.history(), self.receipt_client())["status"], "confirmed")
+            notification.assert_called_once_with(
+                user_id=str(self.tenant.user.pk),
+                transaction_id=str(local.pk),
+                event_type="confirmed",
+            )
+
+    def test_quarantined_history_receipt_never_opens_a_holding_or_snapshot(self):
+        data = self.history(contract_address="0x" + "cd" * 20)
+        self.import_history(data)
+        before = self.state()[1:]
+        with (
+            patch("wallets.services.transaction_confirmation.sync_holding", wraps=sync_holding),
+            patch("wallets.services.holdings.fetch_chain_balance", return_value=Decimal("37")),
+        ):
+            self.assertEqual(self.check_receipt(data, self.receipt_client())["status"], "confirmed")
+        self.assertEqual(self.state()[1:], before)
+        with use_operator():
+            self.assertFalse(Holding.objects.filter(wallet=self.wallet, asset=self.other_asset).exists())
+            tx = Transaction.objects.get(wallet=self.wallet, tx_hash=data["tx_hash"])
+            self.assertEqual(tx.asset, self.other_asset)
+            self.assertFalse(tx.asset.is_verified)
+            self.assertIsNone(tx.balance_reconciliation_token)
+
+    def test_history_without_block_metadata_stays_unknown_after_receipt_verification(self):
+        data = self.history(block_timestamp=None, block_number=None)
+        self.import_history(data)
+        self.assertEqual(self.check_receipt(data, self.receipt_client(blockNumber=None))["status"], "confirmed")
+        with use_operator():
+            tx = Transaction.objects.get(wallet=self.wallet, tx_hash=data["tx_hash"])
+        self.assertIsNone(tx.block_timestamp)
+        self.assertIsNone(tx.block_number)
+
+    def test_history_receipt_writer_cannot_change_a_local_transfer_or_a_completed_import(self):
+        local = self.pending()
+        self.assertFalse(local.imported_from_history)
+        before = self.state()
+        with acting_for(self.tenant.user.pk):
+            refused = record_history_receipt(local.tx_hash, wallet=self.wallet, succeeded=False)
+        self.assertEqual(refused["status"], "not_found")
+        self.assertEqual(self.state(), before)
+        data = self.history(tx_hash="0x" + "61" * 32)
+        self.import_history(data)
+        self.assertEqual(self.check_receipt(data, self.receipt_client())["status"], "confirmed")
+        before = self.state()
+        with acting_for(self.tenant.user.pk):
+            stale = record_history_receipt(data["tx_hash"], wallet=self.wallet, succeeded=False, block_number=900)
+        self.assertEqual(stale, {"status": "already_processed", "current_status": "confirmed"})
+        self.assertEqual(self.state(), before)
 
     def test_same_hash_in_another_wallet_is_a_distinct_history_entry(self):
         tx = self.pending()
@@ -319,6 +435,18 @@ class HistoryPreservationTest(HistoryPreservationChecks, APITransactionTestCase)
 
 
 class ScopedHistoryPreservationTest(RunsOnTheScopedConnection, HistoryPreservationChecks, APITransactionTestCase):
+    def test_a_foreign_principal_cannot_verify_an_imported_receipt(self):
+        data = self.history()
+        self.import_history(data)
+        with use_operator():
+            other = make_tenant("foreign-receipt")
+        before = self.state()
+        with acting_for(other.user.pk):
+            with self.assertRaises(Wallet.DoesNotExist):
+                record_history_receipt(data["tx_hash"], wallet=self.wallet, succeeded=True)
+        self.assertEqual(self.state(), before)
+        self.assertEqual(self.check_receipt(data, self.receipt_client())["status"], "confirmed")
+
     def test_a_visible_foreign_operator_wallet_cannot_receive_history(self):
         with use_operator():
             other = make_tenant("foreign-history")

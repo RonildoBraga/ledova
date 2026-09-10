@@ -111,6 +111,7 @@ def _process_single_transaction(wallet: Wallet, tx_data: Dict) -> Dict[str, bool
             "block_number": tx_data.get("block_number"),
             "transaction_fee": tx_data.get("transaction_fee"),
             "status": TRANSACTION_STATUS_PENDING,
+            "imported_from_history": True,
         },
     )
     result["tx"] = created

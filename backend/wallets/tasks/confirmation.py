@@ -14,6 +14,7 @@ from shared.constants import BLOCKCHAIN_BITCOIN, EVM_BLOCKCHAINS
 from shared.db import acting_for
 from wallets.constants import TRANSACTION_STATUS_PENDING
 from wallets.models import Transaction, Wallet
+from wallets.services.history_receipts import record_history_receipt
 from wallets.services.transaction_confirmation import TransactionConfirmationService
 
 logger = logging.getLogger(__name__)
@@ -79,11 +80,11 @@ def _evm_block_timestamp(client: Any, receipt: Dict[str, Any], block_number: Opt
         return None
     try:
         block = client.w3.eth.get_block(block_number)
+        if not block:
+            return None
+        return datetime.fromtimestamp(block["timestamp"], tz=datetime_timezone.utc)
     except Exception:
-        return timezone.now()
-    if not block:
         return None
-    return datetime.fromtimestamp(block["timestamp"], tz=datetime_timezone.utc)
 
 
 def _bitcoin_block_number(receipt: Dict[str, Any]) -> Optional[int]:
@@ -148,7 +149,7 @@ def _confirm_pending_transaction(tx_hash: str, wallet_uuid: str) -> Dict[str, An
             logger.info(f"Transaction already processed: {tx_hash}")
             return {"status": "already_processed", "current_status": tx.status}
     except Transaction.DoesNotExist:
-        pass
+        tx = None
 
     client = get_blockchain_client(wallet.chain)
     receipt = client.get_transaction_receipt(tx_hash)
@@ -165,6 +166,16 @@ def _confirm_pending_transaction(tx_hash: str, wallet_uuid: str) -> Dict[str, An
     block_number = reader.block_number(receipt)
     block_timestamp = reader.block_timestamp(client, receipt, block_number)
     actual_fee = _extract_actual_fee(receipt, wallet.chain)
+
+    if tx is not None and tx.imported_from_history:
+        return record_history_receipt(
+            tx_hash,
+            wallet=wallet,
+            succeeded=succeeded,
+            block_number=block_number,
+            block_timestamp=block_timestamp,
+            actual_fee=actual_fee,
+        )
 
     if succeeded:
         result = TransactionConfirmationService.confirm_transaction(
