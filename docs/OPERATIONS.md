@@ -985,6 +985,16 @@ missing receipt or a provider error does not establish failure and does not
 release a wallet's outstanding deductions. Explicit receipt outcomes continue
 through the existing confirmation or failure paths.
 
+Both EVM receipt consumers require the adapter's normalized integer `status`:
+`1` confirms and `0` records a revert. Web3 converts raw JSON-RPC hexadecimal
+statuses before these consumers run. A missing status, boolean, float, string
+or other unsupported value leaves the transaction and outstanding deductions
+unchanged. Wallet confirmation retries the unresolved observation; the platform
+monitor checks it again on the next sweep. Bitcoin's adapter reports success
+with `confirmed: true` and a positive integer confirmation count. Missing,
+unconfirmed or malformed Bitcoin evidence stays unresolved; that adapter does
+not report an explicit failure receipt.
+
 `blockchain.tasks.cleanup_failed_transactions` and
 `wallets.tasks.confirmation.cleanup_stale_pending_transactions` retain their
 names and `timestamp` argument for jobs already queued by older workers. They

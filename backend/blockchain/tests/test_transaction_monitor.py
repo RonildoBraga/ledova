@@ -112,3 +112,44 @@ class OverdueTransactionMonitorTest(TestCase):
         self.assertEqual(report["cleaned"], 0)
         self.assertEqual(checked, {"checked": 0, "confirmed": 0, "failed": 0})
         client.get_transaction_receipt.assert_not_called()
+
+    def test_a_missing_status_keeps_the_row_until_a_later_valid_success(self):
+        tx = self.transaction()
+        before = self.stored_transactions()
+        receipt = {key: value for key, value in CONFIRMED_RECEIPT.items() if key != "status"}
+        client = Mock(spec=["get_transaction_receipt"])
+        client.get_transaction_receipt.side_effect = [receipt, CONFIRMED_RECEIPT]
+
+        with patch("integrations.base_chain.get_base_chain_client", return_value=client):
+            first = check_pending_transactions(timestamp=0)
+            self.assertEqual(first, {"checked": 1, "confirmed": 0, "failed": 0})
+            self.assertEqual(self.stored_transactions(), before)
+            second = check_pending_transactions(timestamp=0)
+
+        self.assertEqual(second, {"checked": 1, "confirmed": 1, "failed": 0})
+        self.assertEqual(client.get_transaction_receipt.call_args_list, [call(tx.tx_hash), call(tx.tx_hash)])
+        tx.refresh_from_db()
+        self.assertEqual(tx.status, TransactionStatus.CONFIRMED)
+        self.assertEqual((tx.block_number, tx.block_hash, tx.gas_used), (77, BLOCK_HASH, 21000))
+
+    def test_malformed_status_cannot_settle_rows_before_a_valid_revert(self):
+        statuses = (None, -1, 2, True, False, 1.0, 0.0, "0", "1", "0x0", "0x1", "success", "", [], {})
+        for index, receipt_status in enumerate(statuses, start=400):
+            with self.subTest(status=receipt_status):
+                rows = [
+                    self.transaction("0x" + f"{2 * index:064x}", TransactionStatus.PENDING),
+                    self.transaction("0x" + f"{2 * index + 1:064x}", TransactionStatus.SUBMITTED),
+                ]
+                before = self.stored_transactions()
+                client = Mock(spec=["get_transaction_receipt"])
+                client.get_transaction_receipt.return_value = {**CONFIRMED_RECEIPT, "status": receipt_status}
+                with patch("integrations.base_chain.get_base_chain_client", return_value=client):
+                    result = check_pending_transactions(timestamp=0)
+                    self.assertEqual(result, {"checked": 2, "confirmed": 0, "failed": 0})
+                    self.assertEqual(self.stored_transactions(), before)
+                    client.get_transaction_receipt.return_value = {**CONFIRMED_RECEIPT, "status": 0}
+                    result = check_pending_transactions(timestamp=0)
+                self.assertEqual(result, {"checked": 2, "confirmed": 0, "failed": 2})
+                for tx in rows:
+                    tx.refresh_from_db()
+                    self.assertEqual(tx.status, TransactionStatus.REVERTED)

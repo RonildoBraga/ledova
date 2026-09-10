@@ -452,6 +452,78 @@ class ConfirmationChecks:
             self.assertEqual((tx.deducted_amount, tx.deducted_fee), (Decimal("0"), Decimal("0")))
             self.assertIsNotNone(tx.balance_reconciliation_token)
 
+    def test_a_missing_receipt_status_preserves_deductions_until_a_later_success(self):
+        tx = self.pending()
+        receipt = {"blockNumber": 77, "gasUsed": 21000, "effectiveGasPrice": 10**9}
+        client = Mock(spec=["get_transaction_receipt"])
+        client.get_transaction_receipt.side_effect = [receipt, {**receipt, "status": 1}]
+        with use_operator():
+            before = Transaction.objects.filter(pk=tx.pk).values().get()
+            holdings = list(Holding.objects.filter(wallet=self.wallet).order_by("pk").values())
+            snapshots = list(HoldingSnapshot.objects.filter(holding__wallet=self.wallet).order_by("pk").values())
+
+        with patch("wallets.tasks.confirmation.get_blockchain_client", return_value=client):
+            with self.assertRaisesRegex(RuntimeError, "receipt outcome not yet available"):
+                confirm_pending_transaction(tx.tx_hash, str(self.wallet.pk), principal_id=self.tenant.user.pk)
+            with use_operator():
+                self.assertEqual(Transaction.objects.filter(pk=tx.pk).values().get(), before)
+                self.assertEqual(list(Holding.objects.filter(wallet=self.wallet).order_by("pk").values()), holdings)
+                self.assertEqual(
+                    list(HoldingSnapshot.objects.filter(holding__wallet=self.wallet).order_by("pk").values()), snapshots
+                )
+            self.assertEqual(self.quantities(), (Decimal("98.5"), Decimal("4.998")))
+            self.assertEqual(self.balance_observations, [])
+            self.notification.assert_not_called()
+
+            self.chain_available = True
+            self.token_balance = Decimal("98.5")
+            self.native_balance = Decimal("4.999979")
+            result = confirm_pending_transaction(tx.tx_hash, str(self.wallet.pk), principal_id=self.tenant.user.pk)
+
+        self.assertEqual(result["status"], "confirmed")
+        self.assertEqual(self.quantities(), (self.token_balance, self.native_balance))
+        self.assertEqual(client.get_transaction_receipt.call_args_list, [call(tx.tx_hash), call(tx.tx_hash)])
+        self.notification.assert_called_once()
+        with use_operator():
+            tx.refresh_from_db()
+            self.assertEqual(tx.status, "confirmed")
+            self.assertEqual((tx.block_number, tx.transaction_fee), (77, Decimal("0.000021")))
+            self.assertIsNone(tx.balance_reconciliation_token)
+
+    def test_malformed_receipt_status_cannot_confirm_or_refund_before_a_valid_revert(self):
+        statuses = (None, -1, 2, True, False, 1.0, 0.0, "0", "1", "0x0", "0x1", "success", "", [], {})
+        for index, receipt_status in enumerate(statuses, start=400):
+            with self.subTest(status=receipt_status):
+                tx = self.pending("0x" + f"{index:064x}")
+                self.notification.reset_mock()
+                self.balance_observations.clear()
+                client = Mock(spec=["get_transaction_receipt"])
+                client.get_transaction_receipt.side_effect = [
+                    {"status": receipt_status, "blockNumber": 77},
+                    {"status": 0, "blockNumber": 77},
+                ]
+                with use_operator():
+                    before = Transaction.objects.filter(pk=tx.pk).values().get()
+                    holdings = list(Holding.objects.filter(wallet=self.wallet).order_by("pk").values())
+                with patch("wallets.tasks.confirmation.get_blockchain_client", return_value=client):
+                    with self.assertRaisesRegex(RuntimeError, "receipt outcome not yet available"):
+                        confirm_pending_transaction(tx.tx_hash, str(self.wallet.pk), principal_id=None)
+                    with use_operator():
+                        self.assertEqual(Transaction.objects.filter(pk=tx.pk).values().get(), before)
+                        self.assertEqual(
+                            list(Holding.objects.filter(wallet=self.wallet).order_by("pk").values()), holdings
+                        )
+                    self.assertEqual(self.balance_observations, [])
+                    self.notification.assert_not_called()
+                    result = confirm_pending_transaction(tx.tx_hash, str(self.wallet.pk), principal_id=None)
+                self.assertEqual(result["status"], "failed")
+                self.assertEqual(self.quantities(), (Decimal("100"), Decimal("5")))
+                self.notification.assert_called_once()
+                with use_operator():
+                    tx.refresh_from_db()
+                    self.assertEqual(tx.status, "failed")
+                    self.assertEqual((tx.deducted_amount, tx.deducted_fee), (Decimal("0"), Decimal("0")))
+
     def test_a_reorg_after_the_confirmation_sync_restores_chain_truth_once(self):
         tx = self.pending()
         self.chain_available = True

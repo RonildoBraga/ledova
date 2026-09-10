@@ -23,7 +23,10 @@ class TransactionMonitorService:
             try:
                 receipt = chain_client.get_transaction_receipt(tx.tx_hash)
                 if receipt:
-                    if receipt.get("status") == 1:
+                    status = receipt.get("status")
+                    if isinstance(status, bool) or not isinstance(status, int) or status not in (0, 1):
+                        logger.info("Retained tx %s with unavailable receipt outcome", tx.tx_hash[:10])
+                    elif status == 1:
                         tx.mark_confirmed(
                             block_number=receipt["blockNumber"],
                             block_hash=(
