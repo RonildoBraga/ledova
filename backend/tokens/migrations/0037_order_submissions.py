@@ -132,6 +132,7 @@ def remove_guards(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
+        ("shared", "0004_rls_policies"),
         ("tokens", "0036_swap_expiry_eligibility"),
         ("users", "0021_trigger_types_from_the_column"),
         ("wallets", "0014_wallet_network_identity"),
