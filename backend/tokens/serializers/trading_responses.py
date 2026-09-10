@@ -1,6 +1,11 @@
+from drf_spectacular.extensions import OpenApiSerializerExtension
 from drf_spectacular.utils import inline_serializer
 from rest_framework import serializers
 
+from tokens.serializers.swap_order import (
+    SettlementSignatureSerializer,
+    SubmitSignatureSerializer,
+)
 from wallets.serializers.actions import PreparedEvmTransactionSerializer
 
 
@@ -45,6 +50,85 @@ class ApprovalTransactionResponseSerializer(serializers.Serializer):
     spender = serializers.CharField()
     amount = serializers.CharField()
     unlimited = serializers.BooleanField()
+
+
+class SettlementResponseIdentitySerializer(serializers.Serializer):
+    swap_uuid = serializers.UUIDField()
+    order_uuid = serializers.UUIDField()
+    owner_account_uuid = serializers.UUIDField()
+    wallet_uuid = serializers.UUIDField()
+    settlement_digest = serializers.CharField()
+    user_role = serializers.ChoiceField(choices=("buyer", "seller"))
+
+
+class SettlementApprovalStatusSerializer(SettlementResponseIdentitySerializer, ApprovalStatusResponseSerializer):
+    required_amount = serializers.CharField()
+    current_allowance = serializers.CharField()
+
+
+class SettlementSufficientApprovalSerializer(
+    SettlementResponseIdentitySerializer, SufficientApprovalResponseSerializer
+):
+    current_allowance = serializers.CharField()
+    required_amount = serializers.CharField()
+
+
+class SettlementApprovalTransactionSerializer(
+    SettlementResponseIdentitySerializer, ApprovalTransactionResponseSerializer
+):
+    pass
+
+
+class SettlementApprovalReceiptSerializer(SettlementResponseIdentitySerializer):
+    tx_hash = serializers.CharField()
+    block_number = serializers.IntegerField(allow_null=True)
+    gas_used = serializers.IntegerField(allow_null=True)
+
+
+class SettlementApprovalUncertainSerializer(SettlementResponseIdentitySerializer):
+    tx_hash = serializers.CharField()
+    code = serializers.ChoiceField(choices=("swap_approval_unconfirmed",))
+    detail = serializers.CharField()
+
+
+class ApprovalDataResponseSerializer(serializers.Serializer):
+    pass
+
+
+class ApprovalDataResponseSchema(OpenApiSerializerExtension):
+    target_class = ApprovalDataResponseSerializer
+
+    def map_serializer(self, auto_schema, direction):
+        return {
+            "anyOf": [
+                auto_schema.resolve_serializer(serializer(), direction).ref
+                for serializer in (
+                    SufficientApprovalResponseSerializer,
+                    ApprovalTransactionResponseSerializer,
+                    SettlementSufficientApprovalSerializer,
+                    SettlementApprovalTransactionSerializer,
+                )
+            ]
+        }
+
+
+class SwapSignatureRequestSerializer(serializers.Serializer):
+    pass
+
+
+class SwapSignatureRequestSchema(OpenApiSerializerExtension):
+    target_class = SwapSignatureRequestSerializer
+
+    def map_serializer(self, auto_schema, direction):
+        return {
+            "anyOf": [
+                auto_schema.resolve_serializer(serializer(), direction).ref
+                for serializer in (
+                    SubmitSignatureSerializer,
+                    SettlementSignatureSerializer,
+                )
+            ]
+        }
 
 
 class MarketLastTradeSerializer(serializers.Serializer):

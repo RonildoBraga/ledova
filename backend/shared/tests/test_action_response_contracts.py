@@ -2,12 +2,13 @@ from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import Mock, patch
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import override_settings
 from django.urls import resolve, reverse
 from django.utils import timezone
 from drf_spectacular.generators import SchemaGenerator
-from rest_framework.test import APITestCase
+from rest_framework.test import APITransactionTestCase
 
 from feature_flags.models import FeatureFlag
 from offerings.models import Subscription
@@ -16,6 +17,7 @@ from offerings.tests.factories import (
     eligible_subscriber,
     open_offering,
 )
+from shared.tests.schema import migrate_to, restore_every_migration
 from shared.tests.tenants import make_eligible, make_tenant, open_to_investors
 from tokens.models import ShareIssuance, SwapOrder
 from tokens.services.atomic_swap_service import AtomicSwapService
@@ -26,7 +28,7 @@ from wallets.models import Wallet
 
 
 @override_settings(ATOMIC_SWAP_ADDRESS="0x" + "8" * 40)
-class ActionResponseContractTest(APITestCase):
+class ActionResponseContractTest(APITransactionTestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
@@ -107,6 +109,16 @@ class ActionResponseContractTest(APITestCase):
         return service
 
     def approval_request(self, action, sufficient=False):
+        modules = getattr(settings, "MIGRATION_MODULES", {})
+        if "tokens" in modules and modules["tokens"] is None:
+            self.skipTest("Legacy approval response requires actual settlement migrations")
+        self.addCleanup(restore_every_migration)
+        try:
+            migrate_to([("tokens", "0038_order_action_submissions")])
+        finally:
+            restore_every_migration()
+        self.owner.swap.refresh_from_db()
+        self.assertEqual(self.owner.swap.settlement_protocol_version, 0)
         service = self.allowance_service(sufficient)
         with patch("tokens.views.trading_order.AtomicSwapService", return_value=service):
             response = self.client.get(
@@ -122,7 +134,11 @@ class ActionResponseContractTest(APITestCase):
         self.assertEqual((body["requiredAmount"], body["currentAllowance"]), (10, 0))
         self.assertIs(body["needsApproval"], True)
         schema = self.assert_fields(
-            self.response_schema("/api/v1/trading/orders/{uuid}/swap/approval-status/"),
+            next(
+                self.resolved(item)
+                for item in self.response_schema("/api/v1/trading/orders/{uuid}/swap/approval-status/")["oneOf"]
+                if "settlementDigest" not in self.resolved(item)["properties"]
+            ),
             body,
             {
                 "swapUuid": "string",
@@ -139,8 +155,10 @@ class ActionResponseContractTest(APITestCase):
 
     def approval_variants(self):
         schema = self.response_schema("/api/v1/trading/orders/{uuid}/swap/approval-data/")
-        self.assertEqual(len(schema.get("oneOf", ())), 2)
-        variants = [self.resolved(item) for item in schema["oneOf"]]
+        self.assertEqual(len(schema.get("anyOf", ())), 4)
+        variants = [self.resolved(item) for item in schema["anyOf"]]
+        variants = [item for item in variants if "settlementDigest" not in item["properties"]]
+        self.assertEqual(len(variants), 2)
         return {"transaction" in item["properties"]: item for item in variants}
 
     def test_approval_no_transaction_variant_keeps_actual_allowance_values(self):

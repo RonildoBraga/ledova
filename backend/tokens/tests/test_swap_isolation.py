@@ -5,9 +5,10 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework.test import APITestCase
 
-from assets.models import Asset
+from assets.models import Asset, AssetChainDeployment
 from companies.models import Company
 from feature_flags.models import FeatureFlag
+from shared.tests.settlement import save_swap_with_context
 from tokens.models import ShareToken, SwapOrder, TransferOrder
 from tokens.models.choices import (
     ShareTokenStatus,
@@ -59,6 +60,7 @@ class SwapQuerysetIsScopedToTheCallerTest(APITestCase):
             deployment_tx_hash="0x" + "0" * 64,
         )
         asset = Asset.objects.create(name="Scope Dollar", symbol="SUSD", asset_type="stablecoin", decimals=2)
+        AssetChainDeployment.objects.create(asset=asset, chain="base", contract_address="0x" + "88" * 20, decimals=2)
         return token, asset
 
     def _order(self, wallet, order_type):
@@ -78,7 +80,7 @@ class SwapQuerysetIsScopedToTheCallerTest(APITestCase):
     def _swap(self, seller_wallet, buyer_wallet, suffix, status=SwapOrderStatus.CREATED):
         sell_order = self._order(seller_wallet, TransferOrderType.SELL)
         buy_order = self._order(buyer_wallet, TransferOrderType.BUY)
-        return SwapOrder.objects.create(
+        return save_swap_with_context(
             sell_order=sell_order,
             buy_order=buy_order,
             share_token=self.token,

@@ -4,7 +4,6 @@ from unittest.mock import patch
 from django.test import TestCase, override_settings
 
 from shared.tests.tenants import make_tenant
-from tokens.models import SwapOrder
 from tokens.services import AtomicSwapService
 
 CONTRACT = "0x" + "5a" * 20
@@ -28,10 +27,9 @@ class SwapTypedDataIsSignableTest(TestCase):
         asset = self.swap.payment_asset
         asset.decimals = 18
         asset.save(update_fields=["decimals"])
-        SwapOrder.objects.filter(pk=self.swap.pk).update(
-            payment_amount=int(Decimal("2.50") * (10**18)),
+        self.swap = AtomicSwapService().create_swap_order(
+            self.tenant.order, self.tenant.counter_order, share_amount=1, price_per_share=Decimal("2.50")
         )
-        self.swap.refresh_from_db()
 
     def test_the_amounts_the_client_signs_match_the_amounts_sent_to_the_contract(self):
         self.price_an_eighteen_decimal_swap()

@@ -10,6 +10,7 @@ from rest_framework.test import APITransactionTestCase
 
 from shared.db import acting_for, atomic, use_operator
 from shared.tests.scoped import RunsOnTheScopedConnection
+from shared.tests.settlement import save_swap_with_context
 from shared.tests.tenants import make_tenant
 from tokens.models import (
     OrderActionSubmission,
@@ -313,7 +314,7 @@ class OrderActionRecoveryChecks(ActionFixtures):
     def test_a_pending_swap_is_a_recorded_refusal_only_after_validated_execution(self):
         signed = self.signed("modify", self.modify_body())
         with use_operator():
-            swap = SwapOrder.objects.create(
+            swap = save_swap_with_context(
                 sell_order=self.tenant.order,
                 buy_order=self.order,
                 share_token=self.order.token,

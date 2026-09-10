@@ -10,7 +10,7 @@ from shared.tests.signable import (
     unsafe_numbers,
 )
 from shared.tests.tenants import make_tenant
-from tokens.models import SigningChallengePurpose, SwapOrder
+from tokens.models import SigningChallengePurpose
 from tokens.services import AtomicSwapService
 from tokens.services.signing_challenge import (
     CHALLENGE_TYPES,
@@ -99,8 +99,9 @@ class EverySignablePayloadSurvivesJsonParseTest(TestCase):
         asset = swap.payment_asset
         asset.decimals = 18
         asset.save(update_fields=["decimals"])
-        SwapOrder.objects.filter(pk=swap.pk).update(payment_amount=int(Decimal("2.50") * (10**18)))
-        swap.refresh_from_db()
+        swap = AtomicSwapService().create_swap_order(
+            self.tenant.order, self.tenant.counter_order, share_amount=1, price_per_share=Decimal("2.50")
+        )
 
         with patch("tokens.services.atomic_swap_service.get_base_chain_client") as client, patch(
             "tokens.services.atomic_swap_service.WhitelistService"
