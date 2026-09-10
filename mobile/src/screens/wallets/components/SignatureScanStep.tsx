@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { CheckCircleIcon, WarningCircleIcon, QrCodeIcon } from 'phosphor-react-native';
-import { CameraView } from 'expo-camera';
+import { ScannerPreview, type ScannerPreviewProps } from '../../../components/qr/ScannerPreview';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
 
 interface SignatureScanStepProps {
@@ -9,7 +9,7 @@ interface SignatureScanStepProps {
   isVerifying: boolean;
   verificationSuccess: boolean;
   verificationError: string | null;
-  onBarcodeScanned?: (result: { data: string }) => void;
+  preview: ScannerPreviewProps;
 }
 
 export function SignatureScanStep({
@@ -17,7 +17,7 @@ export function SignatureScanStep({
   isVerifying,
   verificationSuccess,
   verificationError,
-  onBarcodeScanned,
+  preview,
 }: SignatureScanStepProps) {
   const theme = useAppTheme();
   const styles = useThemedStyles((theme) => ({
@@ -141,18 +141,13 @@ export function SignatureScanStep({
       <Text style={styles.title}>Scan Signature QR</Text>
 
       <View style={styles.cameraContainer}>
+        <ScannerPreview {...preview} />
         {cameraMessage ? (
           <View style={styles.cameraMessage}>
             <Text style={styles.cameraMessageText}>{cameraMessage}</Text>
           </View>
         ) : (
           <>
-            <CameraView
-              style={StyleSheet.absoluteFillObject}
-              facing="back"
-              onBarcodeScanned={onBarcodeScanned}
-              barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-            />
             <View style={styles.cameraOverlay}>
               <View style={styles.scanArea} />
             </View>

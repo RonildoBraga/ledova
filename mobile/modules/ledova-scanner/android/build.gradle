@@ -1,0 +1,28 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'org.example.ledova'
+version = '1.0.0'
+
+android {
+  namespace 'org.example.ledova.scanner'
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+    testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+  }
+}
+
+dependencies {
+  def cameraxVersion = '1.5.0-rc01'
+  implementation "androidx.camera:camera-core:${cameraxVersion}"
+  implementation "androidx.camera:camera-camera2:${cameraxVersion}"
+  implementation "androidx.camera:camera-lifecycle:${cameraxVersion}"
+  implementation "androidx.camera:camera-view:${cameraxVersion}"
+  implementation 'com.google.mlkit:barcode-scanning:17.3.0'
+  androidTestImplementation 'androidx.test:runner:1.6.2'
+  androidTestImplementation 'androidx.test:rules:1.6.1'
+  androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+}

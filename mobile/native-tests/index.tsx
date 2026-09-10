@@ -1,6 +1,6 @@
 import '../crypto-polyfill';
 import { registerRootComponent } from 'expo';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Platform, Text, View } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { getRandomValues } from 'expo-crypto';
@@ -16,6 +16,7 @@ import { signEthereumMessage } from '../src/utils/softwareWallet/localSigner';
 import { failureCategory, NativeProbeAssertion } from './diagnostics';
 import { DocumentCopy, pickDocumentCopy } from '../src/services/documentCopies';
 import { getSessionEpoch } from '../src/services/sessionScope';
+import { ScannerBridgeProbe } from './ScannerBridgeProbe';
 
 type Check = { name: string; passed: boolean; failure?: { category: string; stage: string } };
 const pair = { accessToken: 'synthetic-access', refreshToken: 'synthetic-refresh' };
@@ -41,8 +42,8 @@ function request(url: string, method = 'GET', body?: string): Promise<XMLHttpReq
   });
 }
 
-async function run(): Promise<Check[]> {
-  const checks: Check[] = [];
+async function run(scannerCheck: Check | null): Promise<Check[]> {
+  const checks: Check[] = scannerCheck ? [scannerCheck] : [];
   async function check(name: string, action: (stage: (name: string) => void) => Promise<void> | void) {
     let stage = 'check';
     try {
@@ -276,13 +277,19 @@ async function run(): Promise<Check[]> {
 
 function NativeProbe() {
   const [status, setStatus] = useState('Native probe running');
+  const [scannerCheck, setScannerCheck] = useState<Check | null>(null);
+  const scannerComplete = useCallback((passed: boolean) => {
+    setScannerCheck({ name: 'Android scanner window bridge', passed });
+  }, []);
   useEffect(() => {
-    run()
+    if (Platform.OS === 'android' && !scannerCheck) return;
+    run(scannerCheck)
       .then((checks) => setStatus(checks.every((check) => check.passed) ? 'NATIVE_PROBE_PASS' : 'NATIVE_PROBE_FAIL'))
       .catch(() => setStatus('NATIVE_PROBE_REPORT_FAILED'));
-  }, []);
+  }, [scannerCheck]);
   return (
     <View>
+      {Platform.OS === 'android' && !scannerCheck && <ScannerBridgeProbe onComplete={scannerComplete} />}
       <Text testID="native-probe-status">{status}</Text>
     </View>
   );

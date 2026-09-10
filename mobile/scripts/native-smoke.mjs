@@ -254,6 +254,13 @@ async function build(name, environment) {
 async function launch(name) {
   if (platform === 'android') {
     await command(adb, [...adbArgs, 'install', '-r', appPath], `${name}-install`);
+    if (name.startsWith('probe-')) {
+      await command(
+        adb,
+        [...adbArgs, 'shell', 'pm', 'grant', config.android.package, 'android.permission.CAMERA'],
+        `${name}-camera-permission`,
+      );
+    }
     await command(adb, [...adbArgs, 'shell', 'am', 'force-stop', config.android.package], `${name}-stop`);
     await command(
       adb,
@@ -434,6 +441,42 @@ try {
   await launch('ordinary');
   await delay(3000);
   await screenshot('ordinary');
+  if (platform === 'android') {
+    await command(
+      './gradlew',
+      [
+        ':ledova-scanner:assembleDebugAndroidTest',
+        '--no-daemon',
+        '--max-workers=2',
+        `-PreactNativeArchitectures=${process.env.NATIVE_ANDROID_ABIS || 'x86_64,arm64-v8a'}`,
+      ],
+      'scanner-window-build',
+      {},
+      path.join(mobile, 'android'),
+    );
+    const testApk = path.join(
+      mobile,
+      'modules/ledova-scanner/android/build/outputs/apk/androidTest/debug/ledova-scanner-debug-androidTest.apk',
+    );
+    await command(adb, [...adbArgs, 'install', '-r', testApk], 'scanner-window-install');
+    await command(
+      adb,
+      [
+        ...adbArgs,
+        'shell',
+        'am',
+        'instrument',
+        '-w',
+        '-r',
+        'org.example.ledova.scanner.test/androidx.test.runner.AndroidJUnitRunner',
+      ],
+      'scanner-window-tests',
+    );
+    const result = fs.readFileSync(path.join(directory, 'scanner-window-tests.log'), 'utf8');
+    assert.match(result, /OK \([1-9]\d* tests\)/);
+    assert.doesNotMatch(result, /FAILURES!!!|INSTRUMENTATION_FAILED|shortMsg=/);
+    await command(adb, [...adbArgs, 'uninstall', 'org.example.ledova.scanner.test'], 'scanner-window-uninstall');
+  }
   let nativeSource;
   if (platform === 'android') {
     const resource = path.join(mobile, 'android/app/src/main/res/xml/ledova_network_security_config.xml');

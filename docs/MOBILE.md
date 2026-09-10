@@ -146,9 +146,61 @@ Component tests exercise the installed Expo permission methods at a controlled
 native boundary, actual UR encoding/decoding and verification step/mutation
 hooks, plus the actual app-lock provider with delayed session/authentication
 responses. They establish JavaScript request, callback and mount timing. OS prompt
-presentation, physical camera shutdown, device settings/OEM behavior, Android
-Activity versus modal-window focus and global lock-overlay/input stacking are
-not established by these controls and remain under #13.
+presentation, physical camera shutdown, device settings/OEM behavior and global
+lock-overlay/input stacking are not established by these controls and remain
+under #13.
+
+### Android scanner windows
+
+The three QR placements use the local Expo module in
+`mobile/modules/ledova-scanner`. Its native view stays mounted while permission
+is pending or the preview is paused, so it can observe its own window's focus,
+attachment and visibility. The iOS placements retain Expo Camera. Android
+requires a rebuilt Ledova app; Expo Go does not contain the local module and
+cannot open these scanners.
+
+The Android view owns a CameraX lifecycle for each admitted scan. Window loss,
+hidden ancestors, detachment, disposal or inactive preview props retire that
+session and unbind only its preview and analysis use cases. Neither Activity
+blur nor JavaScript delivery is needed to close a modal's camera. Provider
+completion and decoded QR results recheck the current native session, including
+after asynchronous work. The QR-only decoder uses the same CameraX 1.5.0-rc01
+and bundled ML Kit 17.3.0 versions already resolved for Expo Camera; upstream
+package source is unchanged.
+
+Every window transition advances a generation. Focus recovery needs fresh
+JavaScript admission for that generation, after the existing app-lock and
+permission checks. An old `active` prop cannot reopen a camera while JavaScript
+is stalled. Scan events also carry an admission ID, so queued results from an
+earlier preview cannot complete a new scan. Focus recovery reads permission
+without prompting again and preserves completed scans and partial UR decoding.
+
+`ScannerWindow.android.test.tsx` exercises each placement through the native
+event boundary. The Android instrumentation suite exercises real Activity and
+Dialog windows, CameraX open/closed state, parent visibility and detachment,
+fully clipped previews, backgrounding, delayed provider completion and real
+decoding of a synthetic QR bitmap. It runs
+inside the Android native CI probe and retains `scanner-window-tests.log`.
+The Release probe also drives nested React Native modal windows through the
+actual Expo bridge with camera permission granted by the emulator runner. That
+check establishes event/admission wiring, not OS permission-prompt behavior.
+These emulator controls do not replace physical-device verification of sensor
+shutdown, OS permission dialogs, settings or OEM behavior. The test APK is a
+separate test application and must not be distributed.
+
+To run only these native controls on an owned emulator after prebuild:
+
+```bash
+cd mobile/android
+./gradlew :ledova-scanner:assembleDebugAndroidTest --no-daemon --max-workers=2
+cd ..
+adb -s "$ANDROID_SERIAL" install -r modules/ledova-scanner/android/build/outputs/apk/androidTest/debug/ledova-scanner-debug-androidTest.apk
+adb -s "$ANDROID_SERIAL" shell am instrument -w -r org.example.ledova.scanner.test/androidx.test.runner.AndroidJUnitRunner
+adb -s "$ANDROID_SERIAL" uninstall org.example.ledova.scanner.test
+```
+
+Use only an explicitly selected emulator, and require the instrumentation's
+nonzero `OK (... tests)` result; `am instrument` can exit zero after test failure.
 
 ## Identity-provider WebView lifetime
 
