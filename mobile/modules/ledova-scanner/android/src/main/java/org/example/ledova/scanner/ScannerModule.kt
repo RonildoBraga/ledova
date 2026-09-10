@@ -16,6 +16,9 @@ class ScannerModule : Module() {
       Prop("active") { view: ScannerExpoView, value: Boolean -> view.active = value }
       Prop("generation") { view: ScannerExpoView, value: Int -> view.generation = value }
       Prop("scanId") { view: ScannerExpoView, value: Int -> view.scanId = value }
+      AsyncFunction("isCurrentScan") { view: ScannerExpoView, generation: Int, scanId: Int ->
+        view.scanner.isCurrentScan(generation, scanId)
+      }
       OnViewDidUpdateProps { view ->
         view.scanner.request(view.active, view.generation, view.scanId)
       }

@@ -12,6 +12,7 @@ jest.mock('react-native', () => {
 
 const mockGetPermission = jest.fn();
 const mockRequestPermission = jest.fn();
+const mockCurrentScan = jest.fn();
 
 jest.mock('expo-camera/build/ExpoCameraManager', () => ({
   getCameraPermissionsAsync: () => mockGetPermission(),
@@ -22,7 +23,11 @@ jest.mock('expo', () => ({
   requireOptionalNativeModule: () => ({}),
   requireNativeView: () => {
     const { View } = jest.requireActual('react-native');
-    return (props: object) => <View testID="native-scanner" {...props} />;
+    const { forwardRef, useImperativeHandle } = jest.requireActual('react');
+    return forwardRef((props: object, ref: React.Ref<unknown>) => {
+      useImperativeHandle(ref, () => ({ isCurrentScan: mockCurrentScan }));
+      return <View testID="native-scanner" {...props} />;
+    });
   },
 }));
 jest.mock('../modal', () => {
@@ -73,6 +78,7 @@ const placements = [
 beforeEach(() => {
   mockGetPermission.mockReset().mockResolvedValue(granted);
   mockRequestPermission.mockReset().mockResolvedValue(granted);
+  mockCurrentScan.mockReset().mockResolvedValue(true);
   AppState.currentState = 'active';
   access = createCameraAccess();
   access.setAllowed(true);
@@ -221,6 +227,40 @@ describe.each(placements)('$name scanner window', ({ element }) => {
     await act(() => windowEvent(view.getByTestId('native-scanner'), true, 3));
     expect(view.getByTestId('native-scanner').props.active).toBe(true);
     expect(mockRequestPermission).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a queued barcode when native focus was lost before JavaScript receives the window event', async () => {
+    const onScan = jest.fn();
+    const view = await render(element(onScan), { wrapper });
+    await act(() => windowEvent(view.getByTestId('native-scanner'), true, 1));
+    const scanner = view.getByTestId('native-scanner');
+    mockCurrentScan.mockResolvedValue(false);
+    await act(() => barcode(scanner, 'queued-before-window-event', 1, scanner.props.scanId));
+    expect(onScan).not.toHaveBeenCalled();
+    mockCurrentScan.mockResolvedValue(true);
+    await act(() => barcode(scanner, 'current-control', 1, scanner.props.scanId));
+    expect(onScan.mock.calls).toEqual([['current-control']]);
+  });
+
+  it('retires a delayed native admission response after a JavaScript lock pause', async () => {
+    let resolve!: (admitted: boolean) => void;
+    const onScan = jest.fn();
+    const view = await render(element(onScan), { wrapper });
+    await act(() => windowEvent(view.getByTestId('native-scanner'), true, 1));
+    const scanner = view.getByTestId('native-scanner');
+    mockCurrentScan.mockReturnValueOnce(
+      new Promise((accept) => {
+        resolve = accept;
+      }),
+    );
+    await act(() => barcode(scanner, 'delayed-admission', 1, scanner.props.scanId));
+    await act(() => access.setAllowed(false));
+    await act(() => resolve(true));
+    expect(onScan).not.toHaveBeenCalled();
+    await act(() => access.setAllowed(true));
+    const resumed = view.getByTestId('native-scanner');
+    await act(() => barcode(resumed, 'current-control', 1, resumed.props.scanId));
+    expect(onScan.mock.calls).toEqual([['current-control']]);
   });
 });
 

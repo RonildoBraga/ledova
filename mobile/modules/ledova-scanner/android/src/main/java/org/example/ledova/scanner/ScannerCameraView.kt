@@ -91,6 +91,11 @@ class ScannerCameraView(
   private fun current(candidate: Session) =
     session === candidate && admitted() && candidate.scanId == scanId && candidate.generation == generation
 
+  fun isCurrentScan(generation: Int, scanId: Int): Boolean {
+    val candidate = session ?: return false
+    return camera != null && current(candidate) && candidate.generation == generation && candidate.scanId == scanId
+  }
+
   private fun reconcile() {
     val existing = session
     if (existing != null && !current(existing)) release()

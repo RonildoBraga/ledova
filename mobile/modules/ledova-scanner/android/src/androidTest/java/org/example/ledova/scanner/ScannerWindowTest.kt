@@ -99,6 +99,11 @@ class ScannerWindowTest {
   private fun start(scanId: Int = 1) {
     main { scanner.request(true, generation, scanId) }
     eventually("camera never opened") { scanner.camera?.cameraInfo?.cameraState?.value?.type == CameraState.Type.OPEN }
+    main {
+      assertTrue(scanner.isCurrentScan(generation, scanId))
+      assertFalse(scanner.isCurrentScan(generation - 1, scanId))
+      assertFalse(scanner.isCurrentScan(generation, scanId - 1))
+    }
   }
 
   private fun cover(): Dialog {
@@ -120,7 +125,12 @@ class ScannerWindowTest {
     val oldGeneration = generation
     val dialog = cover()
     eventually("camera not closed on focus loss") { previous.cameraInfo.cameraState.value?.type == CameraState.Type.CLOSED }
-    main { assertTrue(activity.resumed); assertNull(scanner.camera); dialog.dismiss() }
+    main {
+      assertTrue(activity.resumed)
+      assertNull(scanner.camera)
+      assertFalse(scanner.isCurrentScan(oldGeneration, 1))
+      dialog.dismiss()
+    }
     eventually("focus did not return") { allowed }
     main {
       scanner.request(true, oldGeneration, 1)

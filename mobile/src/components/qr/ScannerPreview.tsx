@@ -6,7 +6,9 @@ import type { ScannerWindow } from './scannerWindow';
 
 type WindowEvent = { allowed: boolean; generation: number };
 type ScanEvent = { data: string; generation: number; scanId: number };
+type NativeScannerHandle = { isCurrentScan: (generation: number, scanId: number) => Promise<boolean> };
 type NativeProps = ViewProps & {
+  ref?: React.Ref<NativeScannerHandle>;
   active: boolean;
   generation: number;
   scanId: number;
@@ -31,6 +33,7 @@ export type ScannerPreviewProps = {
 
 export function ScannerPreview(props: ScannerPreviewProps) {
   const current = useRef<ScannerPreviewProps | null>(null);
+  const native = useRef<NativeScannerHandle | null>(null);
   const lastWindowGeneration = useRef(-1);
   useLayoutEffect(() => {
     current.current = props;
@@ -57,6 +60,7 @@ export function ScannerPreview(props: ScannerPreviewProps) {
 
   return (
     <NativeScanner
+      ref={native}
       style={StyleSheet.absoluteFillObject}
       active={props.active}
       generation={props.generation}
@@ -80,7 +84,7 @@ export function ScannerPreview(props: ScannerPreviewProps) {
           props.window.update(nativeEvent.allowed, nativeEvent.generation);
         }
       }}
-      onBarcodeScanned={({ nativeEvent }) => {
+      onBarcodeScanned={async ({ nativeEvent }) => {
         const latest = current.current;
         const window = props.window.getSnapshot();
         if (
@@ -89,7 +93,18 @@ export function ScannerPreview(props: ScannerPreviewProps) {
           nativeEvent.generation === window.generation &&
           nativeEvent.scanId === latest.scanId
         ) {
-          latest.onBarcodeScanned?.({ data: nativeEvent.data });
+          try {
+            const admitted = await native.current?.isCurrentScan(nativeEvent.generation, nativeEvent.scanId);
+            const active = current.current;
+            if (
+              admitted &&
+              active?.active &&
+              active.scanId === nativeEvent.scanId &&
+              props.window.getSnapshot() === window
+            ) {
+              active.onBarcodeScanned?.({ data: nativeEvent.data });
+            }
+          } catch {}
         }
       }}
     />

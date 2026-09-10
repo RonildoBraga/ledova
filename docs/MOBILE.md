@@ -174,6 +174,10 @@ permission checks. An old `active` prop cannot reopen a camera while JavaScript
 is stalled. Scan events also carry an admission ID, so queued results from an
 earlier preview cannot complete a new scan. Focus recovery reads permission
 without prompting again and preserves completed scans and partial UR decoding.
+Barcode delivery also asks the native view to validate the generation and scan
+ID on the Android UI thread, then rechecks JavaScript admission after the reply.
+This refuses events that waited in the JavaScript queue after native focus loss,
+even when the window-change notification has not reached JavaScript yet.
 
 `ScannerWindow.android.test.tsx` exercises each placement through the native
 event boundary. The Android instrumentation suite exercises real Activity and
