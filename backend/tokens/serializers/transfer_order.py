@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 from django.conf import settings
-from drf_spectacular.utils import extend_schema_field
+from drf_spectacular.utils import extend_schema_field, extend_schema_serializer
 from rest_framework import serializers
 from web3 import Web3
 
@@ -195,6 +195,7 @@ class PrepareTransferSerializer(serializers.Serializer):
         return value
 
 
+@extend_schema_serializer(component_name="TradingBroadcastTransfer")
 class BroadcastTransferSerializer(serializers.Serializer):
 
     signed_transaction = serializers.CharField()

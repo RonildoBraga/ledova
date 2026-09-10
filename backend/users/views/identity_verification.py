@@ -15,15 +15,16 @@ class IdentityVerificationViewSet(SetsThePrincipalOnTheConnection, ViewSet):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        request=None,
         responses=inline_serializer(
             name="IdentityVerificationSession",
             fields={
                 "provider": serializers.CharField(),
-                "applicantId": serializers.CharField(),
-                "accessToken": serializers.CharField(),
-                "formUrl": serializers.CharField(),
+                "applicantId": serializers.CharField(allow_null=True),
+                "accessToken": serializers.CharField(allow_null=True),
+                "formUrl": serializers.CharField(allow_null=True),
             },
-        )
+        ),
     )
     @action(detail=False, methods=["post"], url_path="token")
     def token(self, request):
@@ -45,7 +46,7 @@ class IdentityVerificationViewSet(SetsThePrincipalOnTheConnection, ViewSet):
             fields={
                 "provider": serializers.CharField(),
                 "applicantId": serializers.CharField(allow_null=True),
-                "status": serializers.CharField(),
+                "status": serializers.CharField(allow_null=True),
                 "reviewResult": serializers.CharField(allow_null=True),
                 "reviewAnswer": serializers.CharField(allow_null=True),
                 "isVerified": serializers.BooleanField(),

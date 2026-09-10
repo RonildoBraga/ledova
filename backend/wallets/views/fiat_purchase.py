@@ -10,6 +10,7 @@ from shared.constants import get_native_asset_symbol
 from shared.views.principal import SetsThePrincipalOnTheConnection
 from wallets.exceptions import WalletUuidRequiredException
 from wallets.models import Wallet
+from wallets.serializers.fiat_purchase import FiatPurchaseWidgetRequestSerializer
 from wallets.services.fiat_onramp import generate_transak_widget_url
 
 
@@ -18,6 +19,7 @@ class FiatPurchaseViewSet(SetsThePrincipalOnTheConnection, viewsets.ViewSet):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        request=FiatPurchaseWidgetRequestSerializer,
         responses=inline_serializer(
             name="FiatPurchaseWidget",
             fields={
@@ -26,7 +28,7 @@ class FiatPurchaseViewSet(SetsThePrincipalOnTheConnection, viewsets.ViewSet):
                 "chain": serializers.CharField(),
                 "cryptoCurrency": serializers.CharField(),
             },
-        )
+        ),
     )
     @action(detail=False, methods=["post"], url_path="transak-widget-url")
     def transak_widget_url(self, request):
