@@ -257,7 +257,14 @@ serves requests. Run `make init-local` first; `make dev-up` checks.
 | `SHARE_TOKEN_FACTORY_ADDRESS` | empty | Yes for issuance |
 | `ATOMIC_SWAP_ADDRESS` | empty | Only for settlement |
 | `STABLECOIN_CONTRACT_ADDRESS` | empty | Only for stablecoin payment; seeds the `AUDY` deployment on `base` |
-| `SWAP_ORDER_EXPIRY_HOURS` | `24` | No |
+| `SWAP_ORDER_EXPIRY_HOURS` | `0.25` (15 minutes) | No; finite fractional hours are accepted |
+
+Malformed and non-finite values are refused at settings import. This default
+applies when issuing a new swap without an explicit signing window.
+Existing stored deadlines and signatures are preserved. An explicit operator
+override still takes precedence: remove an older `SWAP_ORDER_EXPIRY_HOURS=24`
+override or set it to `0.25` to use the new default for future swaps. The ordinary
+order-challenge lifetime remains 300 seconds.
 
 ### Data retention
 

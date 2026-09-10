@@ -22,22 +22,3 @@ def verify_signature(message: str, signature: str, expected_address: str) -> boo
     if not recovered:
         return False
     return recovered.lower() == expected_address.lower()
-
-
-def generate_order_cancel_message(order_uuid: str) -> str:
-    return f"Cancel order {order_uuid}"
-
-
-def generate_order_create_message(
-    wallet_address: str,
-    token_uuid: str,
-    order_type: str,
-    quantity: int,
-    price_per_share: str,
-) -> str:
-    return (
-        f"Create {order_type} order: "
-        f"{quantity} tokens of {token_uuid} "
-        f"at {price_per_share} per share "
-        f"from {wallet_address}"
-    )
