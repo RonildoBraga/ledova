@@ -42,7 +42,7 @@ export default function Footer({ minimal = false }: FooterProps) {
         <div className="grid gap-8 sm:grid-cols-2">
           <div>
             <h4 className="mb-3 font-semibold text-text-primary">Project</h4>
-            <p className="text-sm text-text-body">Experimental, unaudited open-source software.</p>
+            <p className="text-sm text-text-body">Experimental, unaudited source-available software.</p>
             {operatorName && <p className="mt-2 text-sm text-text-body">Operated by {operatorName}</p>}
           </div>
           <div>
