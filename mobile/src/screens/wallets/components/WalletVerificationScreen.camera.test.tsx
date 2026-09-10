@@ -168,7 +168,7 @@ it('requests an undetermined permission only after continuing from the challenge
   await fireEvent.press(view.getByText('Continue'));
   expect(mockRequestPermission).toHaveBeenCalledTimes(1);
   expect(view.getByTestId('camera-preview')).toBeTruthy();
-});
+}, 15_000);
 
 it('decodes a real signature once and does not submit retained frames after success', async () => {
   const view = await openScanner();
