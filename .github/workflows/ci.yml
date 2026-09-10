@@ -204,7 +204,7 @@ jobs:
           POSTGRES_PORT: '5432'
           POSTGRES_DB: ledova
           POSTGRES_USER: ledova
-        run: python manage.py test --settings=ledova_backend.settings.test_postgres --noinput
+        run: python manage.py test --settings=ledova_backend.settings.test_postgres --parallel 4 --noinput
       - name: Request path on the scoped connection (the half the ordinary settings cannot see)
         env:
           POSTGRES_HOST: 127.0.0.1
