@@ -15,6 +15,7 @@ vi.mock('@ledova/shared', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@ledova/shared')>()),
   getUserProfiles: vi.fn(async () => ({ data: { results: [{ uuid: 'profile-1' }] } })),
   getCompanies: vi.fn(async () => ({ data: { results: [] } })),
+  getCompany: vi.fn(async () => ({ data: { uuid: 'company-1', abn: '51824753556' } })),
   updateUserProfileCompletion: vi.fn(async () => ({ data: {} })),
   useFinancialProfile: () => ({ financialProfile: { uuid: 'financial-1' }, isLoading: false }),
 }));
