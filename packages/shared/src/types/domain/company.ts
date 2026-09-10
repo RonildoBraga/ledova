@@ -47,8 +47,7 @@ export interface CompanyDocument {
 }
 
 export interface CompanyUserProfile {
-  fullName: string;
-  email: string;
+  fullName: string | null;
 }
 
 export interface Company extends BaseEntity {
