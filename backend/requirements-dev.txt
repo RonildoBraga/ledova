@@ -8,3 +8,4 @@ autoflake>=2.4.0
 debugpy>=1.8.21
 ipython>=9.17.1
 PyYAML>=6.0.3
+tblib==3.2.2

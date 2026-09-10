@@ -16,10 +16,10 @@ class PortfolioSerializer(serializers.ModelSerializer):
         fields["user_account"].queryset = UserAccount.objects.visible_to_user(getattr(request, "user", None))
         return fields
 
-    def get_wallet_uuids(self, obj):
+    def get_wallet_uuids(self, obj) -> list[str]:
         return [str(wallet.uuid) for wallet in obj.account_wallets()]
 
-    def get_wallet_count(self, obj):
+    def get_wallet_count(self, obj) -> int:
         return obj.account_wallets().count()
 
     class Meta:
@@ -41,6 +41,12 @@ class PortfolioSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
+
+
+class PortfolioWalletResponseSerializer(serializers.Serializer):
+    success = serializers.BooleanField()
+    message = serializers.CharField()
+    portfolio = PortfolioSerializer()
 
 
 class PortfolioChainValueSerializer(serializers.Serializer):

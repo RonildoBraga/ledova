@@ -4,7 +4,7 @@ export function PrivacyPolicy() {
       <section className="pb-16 pt-24 lg:pt-32">
         <div className="mx-auto max-w-3xl px-6 text-center">
           <h1 className="text-4xl font-bold text-text-primary sm:text-5xl">Developer preview privacy notice</h1>
-          <p className="mt-4 text-lg text-text-muted">For the open-source repository, not a hosted service</p>
+          <p className="mt-4 text-lg text-text-muted">For the public repository, not a hosted service</p>
         </div>
       </section>
       <section className="border-t border-border-subtle bg-surface-raised/50 py-24">

@@ -9,7 +9,7 @@ export function Footer() {
         <div className="grid gap-8 sm:grid-cols-3">
           <div>
             <h3 className="mb-3 text-sm font-semibold text-text-primary">Project</h3>
-            <p className="text-sm text-text-muted">Experimental, unaudited open-source software.</p>
+            <p className="text-sm text-text-muted">Experimental, unaudited source-available software.</p>
           </div>
           <div>
             <h3 className="mb-3 text-sm font-semibold text-text-primary">Learn</h3>
@@ -32,7 +32,7 @@ export function Footer() {
           </div>
         </div>
         <div className="mt-10 border-t border-border-subtle pt-6 text-center text-xs text-text-muted">
-          <p>&copy; {currentYear} Ledova contributors. Apache-2.0.</p>
+          <p>&copy; {currentYear} Ledova contributors. FSL-1.1-ALv2.</p>
         </div>
       </div>
     </footer>

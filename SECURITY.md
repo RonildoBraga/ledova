@@ -40,7 +40,7 @@ Report vulnerabilities privately through
 for this repository. Do **not** open a public issue for a security problem.
 
 You should receive an acknowledgement within a few days. This is a spare-time
-open-source project, so please allow a reasonable window for a fix before any
+source-available project, so please allow a reasonable window for a fix before any
 public disclosure.
 
 ## Scope and expectations

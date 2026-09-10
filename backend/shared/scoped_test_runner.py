@@ -24,6 +24,7 @@ SCOPED_TEST_LABELS = (
     "documents.tests.test_evidence_under_scoped_roles.ScopedSupportingEvidenceTest",
     "wallets.tests.test_network_identity.ScopedWalletNetworkIdentityTest",
     "companies.tests.test_registry_policy.ReviewedCompanyDeletionOnScopedConnectionTest",
+    "blockchain.tests.test_monitor_scoped.ScopedMonitorObservationsTest",
 )
 
 
