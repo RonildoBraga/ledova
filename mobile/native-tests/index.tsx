@@ -278,8 +278,12 @@ async function run(scannerCheck: Check | null): Promise<Check[]> {
 function NativeProbe() {
   const [status, setStatus] = useState('Native probe running');
   const [scannerCheck, setScannerCheck] = useState<Check | null>(null);
-  const scannerComplete = useCallback((passed: boolean) => {
-    setScannerCheck({ name: 'Android scanner window bridge', passed });
+  const scannerComplete = useCallback((passed: boolean, stage = 'window-generation') => {
+    setScannerCheck({
+      name: 'Android scanner window bridge',
+      passed,
+      ...(!passed && { failure: { category: 'assertion', stage } }),
+    });
   }, []);
   useEffect(() => {
     if (Platform.OS === 'android' && !scannerCheck) return;
