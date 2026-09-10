@@ -147,7 +147,8 @@ CONVERSIONS = {
 OPERATOR_READS = {
     "users.services.accounts.account_members": "R15, and the first catalogue entry whose boundary is a "
     "function rather than a table: what makes it safe is not the operator connection but the account it is "
-    "handed. transaction_confirmation._notify_wallet_users passes tx.wallet.user_account, from a wallet the task already "
+    "handed. transaction_confirmation._notify_wallet_users passes tx.wallet.user_account, from a wallet "
+    "the task already "
     "resolved under its own principal, so a caller cannot ask for an account it could not reach. A future "
     "caller that took the account from a request body would break that without touching this function. "
     "Deciding who to tell about an account's transaction is "
