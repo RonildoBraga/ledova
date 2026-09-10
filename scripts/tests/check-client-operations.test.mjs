@@ -102,6 +102,37 @@ test('new unresolved Axios paths/configs, reassigned URLs, indirect methods and 
   assert.match(result.failures.join('\n'), /:6: Unclassified fetch transport/);
 });
 
+test('ambient overloads retain global fetch ownership without classifying local functions or methods', async (t) => {
+  const result = await fixture(
+    t,
+    {
+      'mobile/src/ambient-fetch.d.ts':
+        'export {}; declare global { function fetch(input: string | URL | Request, init?: RequestInit): Promise<Response>; }',
+      'mobile/src/service.ts':
+        client +
+        [
+          "import './ambient-fetch';",
+          "client.get('/api/items/');",
+          "fetch('/unrecorded/');",
+          "const request = fetch; request('/unrecorded/');",
+          "globalThis.fetch('/unrecorded/');",
+          "window.fetch('/unrecorded/');",
+          'function cached() { function fetch(key: string) { return key; } return fetch("cached"); } cached();',
+          'const store = { fetch(key: string) { return key; } }; store.fetch("cached");',
+        ].join('\n'),
+    },
+    { '/api/items/': { get: good } },
+  );
+  assert.equal(result.operations.length, 1);
+  assert.deepEqual(
+    result.failures,
+    [4, 5, 6, 7].map(
+      (line) =>
+        `mobile/src/service.ts:${line}: Unclassified fetch transport; add explicit method/path coverage before using it.`,
+    ),
+  );
+});
+
 test('valid empty, binary, text, scalar and object responses stay covered', async (t) => {
   const paths = {
     '/empty/': { delete: { responses: { 204: { description: 'Deleted' } } } },

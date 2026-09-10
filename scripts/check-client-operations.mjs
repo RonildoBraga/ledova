@@ -383,7 +383,11 @@ export function checkClientOperations(root, document) {
           else record(node, method, value(node.arguments[0]), 'axios');
         } else {
           const signature = checker.getResolvedSignature(node)?.declaration;
-          if (signature?.name?.text === 'fetch' && signature.getSourceFile().fileName.endsWith('/lib.dom.d.ts'))
+          const definitions = signature?.name && symbol(signature.name)?.declarations;
+          if (
+            signature?.name?.text === 'fetch' &&
+            definitions?.some((definition) => definition.getSourceFile().fileName.endsWith('/lib.dom.d.ts'))
+          )
             fail(node, 'Unclassified fetch transport; add explicit method/path coverage before using it.');
         }
       }
