@@ -227,6 +227,16 @@ runtime. The exact CI setup is in
 [Xcode 16.4 on the macOS 15 runner](https://github.com/actions/runner-images/blob/main/images/macos/macos-15-Readme.md).
 No EAS account or signing credentials are needed.
 
+Pull requests whose complete changes are confined to `backend/` and `docs/`
+skip the two native builds. Ordinary CI still runs, including gates that read
+documentation. Native/configuration/package inputs and unknown paths run both
+platforms; an unavailable comparison, a base ahead of the branch, or an empty
+comparison also runs both. Main pushes and manual runs remain unconditional to
+check external tool and dependency drift. The always-run `Mobile native checks`
+verdict requires successful classification and the expected platform results.
+Require that verdict when configuring branch protection. A new native input
+from an excluded directory must update this boundary when it is introduced.
+
 From a clean checkout:
 
 ```bash
