@@ -8,6 +8,9 @@ import {
   accountUuid,
   deferred,
   draft,
+  largeMinQuantity,
+  largeQuantity,
+  largeSnapshotJson,
   memoryStorage,
   otherAccountUuid,
   owner,
@@ -128,11 +131,52 @@ it('loads original terms before renewing an expired challenge under the original
   ]);
   expect(requests[2]!.body).toMatchObject({
     submission_id: submissionId,
-    quantity: 10,
-    min_quantity: 2,
+    quantity: '10',
+    min_quantity: '2',
     price_per_share: '12.50',
   });
   expect(f.selection.getSnapshot().phase).toBe('ready');
+});
+
+it('recovers and signs exact quantities above the safe integer range after parsing the JSON response', async () => {
+  const f = await setup();
+  const requests: { url: string; body?: Record<string, unknown> }[] = [];
+  f.client.defaults.adapter = async (config) => {
+    const body = config.data ? JSON.parse(config.data) : undefined;
+    requests.push({ url: config.url!, body });
+    if (config.method === 'get') return response(config, largeSnapshotJson('pending', false));
+    if (String(body.quantity) !== largeQuantity || String(body.min_quantity) !== largeMinQuantity)
+      throw new AxiosError(
+        'Conflict',
+        undefined,
+        config,
+        undefined,
+        response(config, { code: 'submission_conflict', detail: 'This order already has different terms.' }, 409),
+      );
+    return response(config, largeSnapshotJson(config.url === endpoints.CREATE ? 'created' : 'pending'));
+  };
+  await f.selection.recover();
+  expect(f.selection.getSnapshot()).toMatchObject({
+    phase: 'ready',
+    snapshot: { intent: { quantity: largeQuantity, minQuantity: largeMinQuantity } },
+  });
+  const signer = jest.fn(async () => 'synthetic-signature');
+  await f.selection.sign(signer);
+  expect(signer).toHaveBeenCalledTimes(1);
+  expect(requests.map(({ url }) => url)).toEqual([
+    endpoints.SUBMISSION(submissionId),
+    endpoints.CREATE_MESSAGE,
+    endpoints.CREATE,
+  ]);
+  for (const sent of requests.slice(1))
+    expect(sent.body).toMatchObject({
+      submission_id: submissionId,
+      quantity: largeQuantity,
+      min_quantity: largeMinQuantity,
+    });
+  expect(f.selection.getSnapshot()).toMatchObject({ phase: 'created', snapshot: { order: { quantity: 7 } } });
+  expect(f.newUuid).toHaveBeenCalledTimes(1);
+  expect(await f.store.list(owner)).toEqual([]);
 });
 
 it('keeps a restarted or expired submission unresolved when lookup says absent or inaccessible', async () => {

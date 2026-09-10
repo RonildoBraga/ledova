@@ -16,6 +16,9 @@ import { invalidateSessionScope } from '../../services/sessionScope';
 import {
   accountUuid,
   deferred,
+  largeMinQuantity,
+  largeQuantity,
+  largeSnapshotJson,
   otherAccountUuid,
   owner,
   response,
@@ -370,4 +373,42 @@ it('keeps the reserved identity when retrying a failed persistence attempt in th
   expect(Crypto.randomUUID).toHaveBeenCalledTimes(1);
   expect(JSON.parse(messages()[0].data).submission_id).toBe(submissionId);
   expect(await orderSubmissionStore.list(owner)).toHaveLength(1);
+});
+
+it('displays and retries exact recovered quantities above the safe integer range', async () => {
+  await orderSubmissionStore.create(owner, wallet.uuid);
+  handler = async (config) => {
+    if (config.url === endpoints.CREATE && creates().length === 1) throw new Error('Response lost');
+    return response(
+      config,
+      largeSnapshotJson(config.url === endpoints.CREATE ? 'created' : 'pending', config.method !== 'get'),
+      config.url === endpoints.CREATE ? 201 : 200,
+    );
+  };
+  const view = await render(<TradingScreen />, { wrapper });
+  await waitFor(() => expect(view.getByText('Check saved order 1')).toBeTruthy());
+  await fireEvent.press(view.getByText('Check saved order 1'));
+  await waitFor(() => expect(view.getByText(`BUY ${largeQuantity} shares`)).toBeTruthy());
+  expect(view.getByText(`Minimum fill: ${largeMinQuantity} shares`)).toBeTruthy();
+  await fireEvent.press(view.getByText('Sign with biometric'));
+  expect(view.getByText('Order status unconfirmed')).toBeTruthy();
+  expect(await orderSubmissionStore.list(owner)).toHaveLength(1);
+  await fireEvent.press(view.getByText('Check order status'));
+  await waitFor(() => expect(view.getByText(`BUY ${largeQuantity} shares`)).toBeTruthy());
+  expect(view.getByText(`Minimum fill: ${largeMinQuantity} shares`)).toBeTruthy();
+  await fireEvent.press(view.getByText('Sign with biometric'));
+  await waitFor(() => expect(view.getByText('Order created')).toBeTruthy());
+  expect(messages()).toHaveLength(2);
+  expect(creates()).toHaveLength(2);
+  for (const config of [...messages(), ...creates()])
+    expect(JSON.parse(config.data)).toMatchObject({
+      submission_id: submissionId,
+      quantity: largeQuantity,
+      min_quantity: largeMinQuantity,
+    });
+  expect(signEthereumTypedData).toHaveBeenCalledTimes(2);
+  for (const call of jest.mocked(signEthereumTypedData).mock.calls)
+    expect(call[4]).toMatchObject({ quantity: largeQuantity, minQuantity: largeMinQuantity });
+  expect(Crypto.randomUUID).toHaveBeenCalledTimes(1);
+  expect(await orderSubmissionStore.list(owner)).toHaveLength(0);
 });

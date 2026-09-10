@@ -41,8 +41,8 @@ export function snapshot(
       token: tokenUuid,
       orderType: 'buy',
       walletAddress: wallet.address,
-      quantity: 10,
-      minQuantity: 2,
+      quantity: '10',
+      minQuantity: '2',
       pricePerShare: '12.50',
     },
     challenge:
@@ -83,6 +83,19 @@ export function snapshot(
       status === 'refused' ? { code: 'insufficient_balance', detail: 'The wallet balance is insufficient.' } : null,
     match: null,
   };
+}
+export const largeQuantity = '9007199254740993';
+export const largeMinQuantity = '9007199254740992';
+export function largeSnapshotJson(status: OrderSubmissionSnapshot['status'] = 'pending', withChallenge = true) {
+  const data = snapshot(submissionId, status);
+  data.intent.quantity = largeQuantity;
+  data.intent.minQuantity = largeMinQuantity;
+  if (data.challenge) {
+    data.challenge.message.quantity = largeQuantity;
+    data.challenge.message.minQuantity = largeMinQuantity;
+  }
+  if (!withChallenge) data.challenge = null;
+  return JSON.stringify(data);
 }
 export function response(config: InternalAxiosRequestConfig, data: unknown, status = 200): AxiosResponse {
   return { config, data, status, statusText: String(status), headers: {} };

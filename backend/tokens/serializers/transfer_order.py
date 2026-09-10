@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.conf import settings
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 from web3 import Web3
 
@@ -90,6 +91,18 @@ class TransferOrderDetailSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+@extend_schema_field({"oneOf": [{"type": "integer", "minimum": 1}, {"type": "string", "pattern": r"^[1-9][0-9]*$"}]})
+class PositiveIntegerInputField(serializers.IntegerField):
+    pass
+
+
+@extend_schema_field(
+    {"oneOf": [{"type": "integer", "minimum": 0}, {"type": "string", "pattern": r"^(0|[1-9][0-9]*)$"}]}
+)
+class NonnegativeIntegerInputField(serializers.IntegerField):
+    pass
+
+
 class TransferOrderCreateSerializer(serializers.Serializer):
     submission_id = serializers.UUIDField()
     owner_account_uuid = serializers.UUIDField()
@@ -97,8 +110,8 @@ class TransferOrderCreateSerializer(serializers.Serializer):
     order_type = serializers.ChoiceField(choices=TransferOrderType.choices)
     wallet_uuid = serializers.UUIDField(write_only=True)
     wallet_address = serializers.CharField(max_length=42)
-    quantity = serializers.IntegerField(min_value=1)
-    min_quantity = serializers.IntegerField(
+    quantity = PositiveIntegerInputField(min_value=1)
+    min_quantity = NonnegativeIntegerInputField(
         required=False,
         min_value=0,
         default=0,

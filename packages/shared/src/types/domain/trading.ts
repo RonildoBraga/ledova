@@ -52,9 +52,11 @@ export interface CreateOrderRequest {
   pricePerShare: string;
 }
 
-export interface OrderSubmissionRequest extends CreateOrderRequest {
+export interface OrderSubmissionRequest extends Omit<CreateOrderRequest, 'quantity' | 'minQuantity'> {
   submissionId: string;
   ownerAccountUuid: string;
+  quantity: number | string;
+  minQuantity?: number | string;
 }
 
 export interface OrderSubmissionSnapshot {
@@ -66,8 +68,8 @@ export interface OrderSubmissionSnapshot {
     token: string;
     orderType: OrderType;
     walletAddress: string;
-    quantity: number;
-    minQuantity: number;
+    quantity: string;
+    minQuantity: string;
     pricePerShare: string;
   };
   order: TransferOrder | null;

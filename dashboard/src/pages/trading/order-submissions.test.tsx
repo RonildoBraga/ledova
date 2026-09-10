@@ -12,6 +12,9 @@ import { orderSubmissionStore } from '@services/orderSubmissions';
 import {
   accountUuid,
   deferred,
+  largeMinQuantity,
+  largeQuantity,
+  largeSnapshotJson,
   otherAccountUuid,
   owner,
   response,
@@ -292,4 +295,41 @@ it('latches duplicate draft callbacks before the first persistence turn', async 
   expect(messagePosts()).toHaveLength(1);
   expect(crypto.randomUUID).toHaveBeenCalledTimes(1);
   expect(await orderSubmissionStore.list(owner)).toHaveLength(1);
+});
+
+it('displays and retries exact recovered quantities above the safe integer range', async () => {
+  await orderSubmissionStore.create(owner, wallet.uuid);
+  handler = async (config) => {
+    if (config.url === endpoints.CREATE && orderPosts().length === 1) throw new Error('Response lost');
+    return response(
+      config,
+      largeSnapshotJson(config.url === endpoints.CREATE ? 'created' : 'pending', config.method !== 'get'),
+      config.url === endpoints.CREATE ? 201 : 200,
+    );
+  };
+  render(<TradingPage />, { wrapper });
+  fireEvent.click(await screen.findByText('Check saved order 1'));
+  await waitFor(() => expect(screen.getByText(`BUY ${largeQuantity} shares`)).toBeTruthy());
+  expect(screen.getByText(`Minimum fill: ${largeMinQuantity} shares`)).toBeTruthy();
+  sign();
+  await waitFor(() => expect(screen.getByText('Order status unconfirmed')).toBeTruthy());
+  expect(await orderSubmissionStore.list(owner)).toHaveLength(1);
+  fireEvent.click(screen.getByText('Check order status'));
+  await waitFor(() => expect(screen.getByText(`BUY ${largeQuantity} shares`)).toBeTruthy());
+  expect(screen.getByText(`Minimum fill: ${largeMinQuantity} shares`)).toBeTruthy();
+  sign();
+  await waitFor(() => expect(screen.getByText('Order created')).toBeTruthy());
+  expect(messagePosts()).toHaveLength(2);
+  expect(orderPosts()).toHaveLength(2);
+  for (const config of [...messagePosts(), ...orderPosts()])
+    expect(JSON.parse(config.data)).toMatchObject({
+      submission_id: submissionId,
+      quantity: largeQuantity,
+      min_quantity: largeMinQuantity,
+    });
+  expect(signEthereumTypedData).toHaveBeenCalledTimes(2);
+  for (const call of vi.mocked(signEthereumTypedData).mock.calls)
+    expect(call[4]).toMatchObject({ quantity: largeQuantity, minQuantity: largeMinQuantity });
+  expect(crypto.randomUUID).toHaveBeenCalledTimes(1);
+  expect(await orderSubmissionStore.list(owner)).toHaveLength(0);
 });

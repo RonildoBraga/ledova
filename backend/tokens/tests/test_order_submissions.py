@@ -9,6 +9,8 @@ from django.core.exceptions import ImproperlyConfigured
 from django.db import DatabaseError, connections
 from django.test import override_settings
 from django.utils import timezone
+from drf_spectacular.generators import SchemaGenerator
+from jsonschema import Draft4Validator
 from rest_framework.test import APITransactionTestCase
 
 from shared.db import acting_for, atomic, current_alias, use_operator
@@ -41,6 +43,24 @@ from wallets.models import Wallet
 
 
 class SubmissionRecoveryChecks(SubmissionFixtures):
+    def test_original_integer_terms_remain_lossless_when_recovering_a_pending_submission(self):
+        body = self.body(quantity="9007199254740993", min_quantity="9007199254740992")
+        issued = self.message(body)
+        self.assertEqual(issued.status_code, 200, issued.content)
+        for response in (issued, self.recover()):
+            self.assertEqual(response.status_code, 200, response.content)
+            intent = response.json()["intent"]
+            self.assertEqual(intent["quantity"], body["quantity"])
+            self.assertEqual(intent["minQuantity"], body["min_quantity"])
+        renewed = self.message({**body, "quantity": intent["quantity"], "min_quantity": intent["minQuantity"]})
+        self.assertEqual(renewed.status_code, 200, renewed.content)
+        message = renewed.json()["challenge"]["message"]
+        self.assertEqual(message["quantity"], body["quantity"])
+        self.assertEqual(message["minQuantity"], body["min_quantity"])
+        self.assertEqual(renewed.json()["intent"], issued.json()["intent"])
+        self.assertEqual(self.submission().status, "pending")
+        self.chain.send_raw_transaction.assert_not_called()
+
     def test_first_created_snapshot_uses_the_current_order_after_matching(self):
         self.counter_order()
         created = self.create(self.signed_body())
@@ -146,7 +166,7 @@ class SubmissionRecoveryChecks(SubmissionFixtures):
             (result["order"]["quantity"], result["order"]["pricePerShare"], result["order"]["status"]),
             (15, "3.00", "cancelled"),
         )
-        self.assertEqual((result["intent"]["quantity"], result["intent"]["pricePerShare"]), (10, "2.50"))
+        self.assertEqual((result["intent"]["quantity"], result["intent"]["pricePerShare"]), ("10", "2.50"))
         self.assertEqual(refreshed.json(), result)
         self.assertIsNone(result["challenge"])
         self.assertEqual(len(self.events), 1)
@@ -246,6 +266,17 @@ class SubmissionBoundaryChecks:
 
 
 class OrderSubmissionProtocolTest(SubmissionBoundaryChecks, SubmissionFixtures, APITransactionTestCase):
+    def test_create_request_schemas_accept_lossless_integer_strings_and_numeric_drafts(self):
+        schema = SchemaGenerator().get_schema(request=None, public=True)
+        for path in ("/api/v1/trading/orders/create/message/", "/api/v1/trading/orders/create/"):
+            request = schema["paths"][path]["post"]["requestBody"]["content"]["application/json"]["schema"]
+            fields = schema["components"]["schemas"][request["$ref"].rsplit("/", 1)[1]]["properties"]
+            for name in ("quantity", "minQuantity"):
+                with self.subTest(path=path, field=name):
+                    validator = Draft4Validator(fields[name])
+                    self.assertTrue(validator.is_valid(10))
+                    self.assertTrue(validator.is_valid("9007199254740993"))
+
     def test_identity_fields_are_required_before_any_submission_is_created(self):
         for field in ("submission_id", "owner_account_uuid"):
             body = self.body()

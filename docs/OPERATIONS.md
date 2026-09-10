@@ -287,6 +287,10 @@ verification and challenge-expiry checks. A pending submission still needs an
 eligible token/wallet and a valid, unspent linked signature before creating an
 order. Recovery returns immutable `intent` alongside the current `order` and
 the original `match`; order modification or cancellation does not rewrite intent.
+The immutable intent's `quantity` and `min_quantity` are canonical decimal
+strings. Forward them unchanged when renewing or retrying so JavaScript number
+rounding cannot alter stored terms. New numeric draft inputs and existing order
+detail quantities retain their current formats.
 If a token becomes hidden, its previously authorized display snapshot can still
 describe the owned order without granting visibility to the token itself.
 

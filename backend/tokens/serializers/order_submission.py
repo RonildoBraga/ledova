@@ -20,8 +20,8 @@ class OrderSubmissionIntentSerializer(serializers.Serializer):
     token = serializers.UUIDField()
     order_type = serializers.ChoiceField(choices=["buy", "sell"])
     wallet_address = serializers.CharField()
-    quantity = serializers.IntegerField()
-    min_quantity = serializers.IntegerField()
+    quantity = serializers.RegexField(r"^[1-9][0-9]*$")
+    min_quantity = serializers.RegexField(r"^(0|[1-9][0-9]*)$")
     price_per_share = serializers.DecimalField(max_digits=18, decimal_places=2)
 
 
@@ -92,8 +92,8 @@ def submission_snapshot(submission, challenge=None):
             "token": str(submission.token_id),
             "order_type": submission.order_type,
             "wallet_address": submission.wallet_address,
-            "quantity": submission.quantity,
-            "min_quantity": submission.min_quantity,
+            "quantity": str(submission.quantity),
+            "min_quantity": str(submission.min_quantity),
             "price_per_share": str(submission.price_per_share),
         },
         "order": order_data,
