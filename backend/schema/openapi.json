@@ -2773,6 +2773,162 @@
         ],
         "type": "object"
       },
+      "FiatPurchaseWidgetRequest": {
+        "properties": {
+          "cryptoCurrencyCode": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "nullable": true,
+                "type": "string"
+              },
+              {
+                "enum": [
+                  0
+                ],
+                "type": "number"
+              },
+              {
+                "enum": [
+                  false
+                ],
+                "type": "boolean"
+              },
+              {
+                "items": {},
+                "maxItems": 0,
+                "type": "array"
+              },
+              {
+                "maxProperties": 0,
+                "type": "object"
+              }
+            ]
+          },
+          "defaultFiatAmount": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "nullable": true,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "items": {},
+                "maxItems": 0,
+                "type": "array"
+              },
+              {
+                "maxProperties": 0,
+                "type": "object"
+              }
+            ]
+          },
+          "defaultFiatCurrency": {
+            "default": "AUD",
+            "nullable": true,
+            "oneOf": [
+              {
+                "nullable": true,
+                "type": "string"
+              },
+              {
+                "enum": [
+                  0
+                ],
+                "type": "number"
+              },
+              {
+                "enum": [
+                  false
+                ],
+                "type": "boolean"
+              },
+              {
+                "items": {},
+                "maxItems": 0,
+                "type": "array"
+              },
+              {
+                "maxProperties": 0,
+                "type": "object"
+              }
+            ]
+          },
+          "fiatAmount": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "nullable": true,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "items": {},
+                "maxItems": 0,
+                "type": "array"
+              },
+              {
+                "maxProperties": 0,
+                "type": "object"
+              }
+            ]
+          },
+          "fiatCurrency": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "nullable": true,
+                "type": "string"
+              },
+              {
+                "enum": [
+                  0
+                ],
+                "type": "number"
+              },
+              {
+                "enum": [
+                  false
+                ],
+                "type": "boolean"
+              },
+              {
+                "items": {},
+                "maxItems": 0,
+                "type": "array"
+              },
+              {
+                "maxProperties": 0,
+                "type": "object"
+              }
+            ]
+          },
+          "redirectUrl": {
+            "nullable": true
+          },
+          "themeColor": {
+            "nullable": true
+          },
+          "walletUuid": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "walletUuid"
+        ],
+        "type": "object"
+      },
       "FieldEnum": {
         "description": "* `quantity` - quantity\n* `min_quantity` - min_quantity\n* `price_per_share` - price_per_share",
         "enum": [
@@ -3041,12 +3197,15 @@
       "IdentityVerificationSession": {
         "properties": {
           "accessToken": {
+            "nullable": true,
             "type": "string"
           },
           "applicantId": {
+            "nullable": true,
             "type": "string"
           },
           "formUrl": {
+            "nullable": true,
             "type": "string"
           },
           "provider": {
@@ -3094,6 +3253,7 @@
             "type": "string"
           },
           "status": {
+            "nullable": true,
             "type": "string"
           },
           "verifiedAt": {
@@ -6912,6 +7072,33 @@
         ],
         "type": "object"
       },
+      "PrepareTransfer": {
+        "properties": {
+          "amount": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "fromAddress": {
+            "maxLength": 42,
+            "type": "string"
+          },
+          "toAddress": {
+            "maxLength": 42,
+            "type": "string"
+          },
+          "token": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "amount",
+          "fromAddress",
+          "toAddress",
+          "token"
+        ],
+        "type": "object"
+      },
       "PrepareWalletTransfer": {
         "properties": {
           "amountBtc": {
@@ -9121,6 +9308,17 @@
         ],
         "type": "object"
       },
+      "TradingBroadcastTransfer": {
+        "properties": {
+          "signedTransaction": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "signedTransaction"
+        ],
+        "type": "object"
+      },
       "TradingWalletBalances": {
         "properties": {
           "balances": {
@@ -11207,6 +11405,26 @@
     "/api/fiat-purchases/transak-widget-url/": {
       "post": {
         "operationId": "api_fiat_purchases_transak_widget_url_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FiatPurchaseWidgetRequest"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/FiatPurchaseWidgetRequest"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/FiatPurchaseWidgetRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -17737,6 +17955,26 @@
     "/api/v1/trading/transfers/broadcast/": {
       "post": {
         "operationId": "api_v1_trading_transfers_broadcast_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TradingBroadcastTransfer"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/TradingBroadcastTransfer"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/TradingBroadcastTransfer"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -17757,6 +17995,26 @@
     "/api/v1/trading/transfers/prepare/": {
       "post": {
         "operationId": "api_v1_trading_transfers_prepare_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrepareTransfer"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/PrepareTransfer"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/PrepareTransfer"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
