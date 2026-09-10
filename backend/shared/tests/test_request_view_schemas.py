@@ -5,12 +5,14 @@ from unittest.mock import Mock, patch
 from django.test import override_settings
 from drf_spectacular.drainage import GENERATOR_STATS
 from drf_spectacular.generators import SchemaGenerator
+from jsonschema import Draft4Validator
 from rest_framework.test import APITestCase
 
 from feature_flags.models import FeatureFlag
 from integrations.kycaid.client import KYCAIDService
 from integrations.sumsub.client import SumSubService
 from integrations.transak.client import TransakClient
+from shared.constants import get_native_asset_symbol
 from shared.tests.tenants import make_tenant
 from tokens.tests.test_signed_transactions import SIGNER, sign_legacy
 from users.models import UserProfile
@@ -128,8 +130,32 @@ class RequestViewSchemaTest(APITestCase):
                 self.assertEqual(body["cryptoCurrency"], "eth")
                 schema = self.request_schema(FIAT)
                 for field in ("fiatAmount", "defaultFiatAmount"):
-                    kinds = {branch["type"] for branch in schema["properties"][field]["oneOf"]}
-                    self.assertEqual(kinds, {"number", "string", "boolean"})
+                    self.assertTrue(Draft4Validator(schema["properties"][field]).is_valid(amount))
+                for field in ("fiatCurrency", "defaultFiatCurrency", "cryptoCurrencyCode"):
+                    self.assertTrue(Draft4Validator(schema["properties"][field]).is_valid(sent[field]))
+
+    def test_widget_empty_amounts_are_omitted_and_admitted_by_the_declared_request(self):
+        for amount in ([], {}):
+            with self.subTest(amount=amount):
+                _, sent = self.widget(
+                    {"walletUuid": str(self.owner.wallet.uuid), "fiatAmount": amount, "defaultFiatAmount": amount}
+                )
+                for field in ("fiatAmount", "defaultFiatAmount"):
+                    self.assertNotIn(field, sent)
+                    self.assertTrue(Draft4Validator(self.request_schema(FIAT)["properties"][field]).is_valid(amount))
+
+    def test_widget_falsy_currencies_keep_the_real_omission_or_native_selection(self):
+        for field in ("fiatCurrency", "defaultFiatCurrency", "cryptoCurrencyCode"):
+            for value in (False, 0, [], {}):
+                with self.subTest(field=field, value=value):
+                    body, sent = self.widget({"walletUuid": str(self.owner.wallet.uuid), field: value})
+                    if field == "cryptoCurrencyCode":
+                        expected = get_native_asset_symbol(self.owner.wallet.chain)
+                        self.assertEqual(body["cryptoCurrency"], expected)
+                        self.assertEqual(sent[field], expected.upper())
+                    else:
+                        self.assertNotIn(field, sent)
+                    self.assertTrue(Draft4Validator(self.request_schema(FIAT)["properties"][field]).is_valid(value))
 
     def test_widget_nulls_and_zero_keep_the_existing_default_and_omission_rules(self):
         for amount in (None, 0, False, ""):
