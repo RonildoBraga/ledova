@@ -1,4 +1,4 @@
-import React, { useRef, useCallback } from 'react';
+import React from 'react';
 import { View, Modal, ActivityIndicator, Text, TouchableOpacity, Pressable } from 'react-native';
 import WebView from 'react-native-webview';
 import type { WebViewMessageEvent, WebViewNavigation } from 'react-native-webview';
@@ -7,11 +7,13 @@ import { overlayColors } from '../../../../contexts';
 import { useAppTheme, useThemedStyles } from '../../../../contexts';
 import { MARKETING_URL } from '../../../../config/publicLinks';
 import { allowWebNavigation } from '../../../../config/networkPolicy';
+import { useVerificationFormLifecycle } from './useVerificationFormLifecycle';
 
 interface VerificationFormModalProps {
   visible: boolean;
   accessToken: string | null;
   formUrl: string | null;
+  sessionEpoch: number | null;
   onComplete: () => void;
   onClose: () => void;
 }
@@ -43,13 +45,13 @@ function buildSumsubHtml(token: string, themeColors: { bg: string; muted: string
   <script>
     var ACCESS_TOKEN = ${JSON.stringify(token)};
 
-    function showError(msg) {
+    function showError() {
       document.getElementById('loading').style.display = 'none';
       var el = document.getElementById('error');
       el.style.display = 'flex';
-      el.textContent = msg;
+      el.textContent = 'Verification could not continue. Close this form and try again.';
       if (window.ReactNativeWebView) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({ event: 'SDK_ERROR', message: msg }));
+        window.ReactNativeWebView.postMessage(JSON.stringify({ event: 'SDK_ERROR' }));
       }
     }
 
@@ -57,7 +59,7 @@ function buildSumsubHtml(token: string, themeColors: { bg: string; muted: string
       try {
         document.getElementById('loading').style.display = 'none';
         if (typeof snsWebSdk === 'undefined') {
-          showError('SDK failed to initialize');
+          showError();
           return;
         }
         var snsWebSdkInstance = snsWebSdk
@@ -68,20 +70,20 @@ function buildSumsubHtml(token: string, themeColors: { bg: string; muted: string
           .on('idCheck.onApplicantSubmitted', function() {
             window.ReactNativeWebView.postMessage(JSON.stringify({ event: 'FORM_COMPLETED' }));
           })
-          .on('idCheck.onError', function(error) {
-            showError('Verification error: ' + (error && error.message ? error.message : 'Unknown error'));
+          .on('idCheck.onError', function() {
+            showError();
           })
           .build();
         snsWebSdkInstance.launch('#sumsub-websdk-container');
       } catch(e) {
-        showError('Failed to start: ' + e.message);
+        showError();
       }
     }
 
     var script = document.createElement('script');
     script.src = 'https://static.sumsub.com/idensic/static/sns-websdk-builder.js';
     script.onload = initSdk;
-    script.onerror = function() { showError('Failed to load verification SDK. Check your internet connection.'); };
+    script.onerror = function() { showError(); };
     document.head.appendChild(script);
   </script>
 </body>
@@ -123,6 +125,7 @@ export function VerificationFormModal({
   visible,
   accessToken,
   formUrl,
+  sessionEpoch,
   onComplete,
   onClose,
 }: VerificationFormModalProps) {
@@ -193,56 +196,56 @@ export function VerificationFormModal({
       color: theme.colors.text.muted,
     },
   }));
-  const completedRef = useRef(false);
-
-  const triggerComplete = useCallback(() => {
-    if (completedRef.current) return;
-    completedRef.current = true;
-    onComplete();
-  }, [onComplete]);
-
-  React.useEffect(() => {
-    if (visible && (accessToken || formUrl)) {
-      completedRef.current = false;
-    }
-  }, [visible, accessToken, formUrl]);
+  const lifecycle = useVerificationFormLifecycle(visible, accessToken, formUrl, sessionEpoch, onComplete, onClose);
 
   const handleMessage = (event: WebViewMessageEvent) => {
+    if (!lifecycle.isCurrent()) return;
     try {
       const data = JSON.parse(event.nativeEvent.data);
       if (data.event === 'FORM_COMPLETED') {
-        triggerComplete();
+        lifecycle.complete();
       } else if (data.event === 'SDK_ERROR') {
-        console.warn(`[VerificationFormModal] SDK error: ${data.message}`);
+        console.warn('Identity verification form reported an error.');
       }
     } catch {}
   };
 
   const handleNavigationStateChange = (navState: WebViewNavigation) => {
-    if (!formUrl) return;
+    if (!formUrl || !lifecycle.isCurrent()) return;
     try {
       const url = new URL(navState.url);
       if (url.hostname === REDIRECT_HOST || url.hostname === `www.${REDIRECT_HOST}`) {
-        triggerComplete();
+        lifecycle.complete();
       }
     } catch {}
   };
 
+  const handleLoadError = () => {
+    if (lifecycle.isCurrent()) console.warn('Identity verification form could not load.');
+  };
+
+  const renderLoadError = () => (
+    <View style={styles.loading}>
+      <Text style={styles.loadingText}>Could not load verification. Close this form and try again.</Text>
+    </View>
+  );
+
   return (
-    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
-      <Pressable style={styles.overlay} onPress={onClose}>
+    <Modal visible={lifecycle.admitted} animationType="fade" transparent onRequestClose={lifecycle.close}>
+      <Pressable style={styles.overlay} onPress={lifecycle.close}>
         <Pressable style={styles.modalContainer} onPress={(e) => e.stopPropagation()}>
           <View style={styles.modal}>
             <View style={styles.header}>
               <Text style={styles.headerTitle}>Identity Verification</Text>
-              <TouchableOpacity onPress={onClose} style={styles.closeButton} hitSlop={16}>
+              <TouchableOpacity onPress={lifecycle.close} style={styles.closeButton} hitSlop={16}>
                 <XIcon size={20} color={theme.colors.text.primary} weight="bold" />
               </TouchableOpacity>
             </View>
 
             <View style={styles.webviewContainer}>
-              {accessToken && allowWebNavigation(MARKETING_URL) ? (
+              {lifecycle.admitted && accessToken && allowWebNavigation(MARKETING_URL) ? (
                 <WebView
+                  key={lifecycle.key}
                   source={{
                     html: buildSumsubHtml(accessToken, {
                       bg: theme.colors.surface.base,
@@ -253,24 +256,29 @@ export function VerificationFormModal({
                   }}
                   style={styles.webview}
                   onMessage={handleMessage}
+                  onError={handleLoadError}
+                  renderError={renderLoadError}
                   javaScriptEnabled
                   domStorageEnabled
                   mediaPlaybackRequiresUserAction={false}
                   mediaCapturePermissionGrantType="grant"
                   allowsInlineMediaPlayback
                   originWhitelist={['*']}
-                  onShouldStartLoadWithRequest={({ url }) => allowWebNavigation(url)}
+                  onShouldStartLoadWithRequest={({ url }) => lifecycle.isCurrent() && allowWebNavigation(url)}
                   mixedContentMode="never"
                 />
-              ) : formUrl && allowWebNavigation(formUrl) ? (
+              ) : lifecycle.admitted && formUrl && allowWebNavigation(formUrl) ? (
                 <WebView
+                  key={lifecycle.key}
                   source={{ uri: formUrl }}
                   originWhitelist={['*']}
-                  onShouldStartLoadWithRequest={({ url }) => allowWebNavigation(url)}
+                  onShouldStartLoadWithRequest={({ url }) => lifecycle.isCurrent() && allowWebNavigation(url)}
                   mixedContentMode="never"
                   style={styles.webview}
                   injectedJavaScript={KYCAID_INJECTED_JS}
                   onMessage={handleMessage}
+                  onError={handleLoadError}
+                  renderError={renderLoadError}
                   onNavigationStateChange={handleNavigationStateChange}
                   mediaPlaybackRequiresUserAction={false}
                   mediaCapturePermissionGrantType="grant"
