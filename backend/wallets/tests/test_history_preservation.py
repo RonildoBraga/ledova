@@ -6,7 +6,7 @@ from unittest import skipUnless
 from unittest.mock import patch
 from uuid import uuid4
 
-from django.db import connections
+from django.db import ProgrammingError, connections
 from django.utils import timezone
 from rest_framework.test import APITransactionTestCase
 
@@ -243,7 +243,7 @@ class HistoryPreservationChecks:
                     deadline = monotonic() + 5
                     observed = None
                     while monotonic() < deadline:
-                        with use_operator(), connections[current_alias()].cursor() as cursor:
+                        with connections["default"].cursor() as cursor:
                             cursor.execute(
                                 "SELECT query, %s = ANY(pg_blocking_pids(pid)), wait_event_type "
                                 "FROM pg_stat_activity WHERE pid = %s",
@@ -319,11 +319,13 @@ class HistoryPreservationTest(HistoryPreservationChecks, APITransactionTestCase)
 
 
 class ScopedHistoryPreservationTest(RunsOnTheScopedConnection, HistoryPreservationChecks, APITransactionTestCase):
-    def test_another_accounts_wallet_is_refused_before_importing_history(self):
+    def test_a_visible_foreign_operator_wallet_cannot_receive_history(self):
         with use_operator():
             other = make_tenant("foreign-history")
             before = list(Transaction.objects.filter(wallet=other.wallet).values())
-        with self.assertRaises(Wallet.DoesNotExist):
+        with acting_for(self.tenant.user.pk):
+            self.assertTrue(Wallet.objects.filter(pk=other.wallet.pk).exists())
+        with self.assertRaisesRegex(ProgrammingError, "row-level security policy"):
             self.import_history(self.history(), wallet=other.wallet)
         with use_operator():
             self.assertEqual(list(Transaction.objects.filter(wallet=other.wallet).values()), before)
