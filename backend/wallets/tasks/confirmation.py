@@ -59,7 +59,7 @@ def _extract_actual_fee(receipt: Dict[str, Any], chain: str) -> Optional[Decimal
 class _ReceiptReader(NamedTuple):
 
     block_number: Callable[[Dict[str, Any]], Optional[int]]
-    succeeded: Callable[[Dict[str, Any]], bool]
+    succeeded: Callable[[Dict[str, Any]], Optional[bool]]
     block_timestamp: Callable[[Any, Dict[str, Any], Optional[int]], Optional[datetime]]
 
 
@@ -67,9 +67,11 @@ def _evm_block_number(receipt: Dict[str, Any]) -> Optional[int]:
     return receipt.get("blockNumber") or receipt.get("block_number")
 
 
-def _evm_succeeded(receipt: Dict[str, Any]) -> bool:
-    status = receipt.get("status", 1)
-    return status == 1 or status is True
+def _evm_succeeded(receipt: Dict[str, Any]) -> Optional[bool]:
+    status = receipt.get("status")
+    if isinstance(status, bool) or not isinstance(status, int) or status not in (0, 1):
+        return None
+    return status == 1
 
 
 def _evm_block_timestamp(client: Any, receipt: Dict[str, Any], block_number: Optional[int]) -> Optional[datetime]:
@@ -88,8 +90,16 @@ def _bitcoin_block_number(receipt: Dict[str, Any]) -> Optional[int]:
     return receipt.get("block_height")
 
 
-def _bitcoin_succeeded(receipt: Dict[str, Any]) -> bool:
-    return bool(receipt.get("confirmed")) and int(receipt.get("confirmations") or 0) > 0
+def _bitcoin_succeeded(receipt: Dict[str, Any]) -> Optional[bool]:
+    confirmations = receipt.get("confirmations")
+    if (
+        receipt.get("confirmed") is True
+        and isinstance(confirmations, int)
+        and not isinstance(confirmations, bool)
+        and confirmations > 0
+    ):
+        return True
+    return None
 
 
 def _bitcoin_block_timestamp(client: Any, receipt: Dict[str, Any], block_number: Optional[int]) -> Optional[datetime]:
@@ -148,11 +158,15 @@ def _confirm_pending_transaction(tx_hash: str, wallet_uuid: str) -> Dict[str, An
         raise RuntimeError(f"receipt not yet available for {tx_hash}")
 
     reader = get_receipt_reader(wallet.chain)
+    succeeded = reader.succeeded(receipt)
+    if succeeded is None:
+        raise RuntimeError(f"receipt outcome not yet available for {tx_hash}")
+
     block_number = reader.block_number(receipt)
     block_timestamp = reader.block_timestamp(client, receipt, block_number)
     actual_fee = _extract_actual_fee(receipt, wallet.chain)
 
-    if reader.succeeded(receipt):
+    if succeeded:
         result = TransactionConfirmationService.confirm_transaction(
             tx_hash=tx_hash,
             wallet=wallet,
@@ -197,31 +211,13 @@ def check_all_pending_transactions(timestamp: int) -> Dict[str, Any]:
     return {"total": total, "queued": queued}
 
 
-@app.periodic(cron="0 3 * * *")
 @app.task
 def cleanup_stale_pending_transactions(timestamp: int) -> Dict[str, Any]:
     stale_cutoff = timezone.now() - timedelta(hours=24)
-    stale_txs = Transaction.objects.filter(
+    overdue = Transaction.objects.filter(
         status=TRANSACTION_STATUS_PENDING,
         created_at__lt=stale_cutoff,
-    ).select_related("wallet")
+    ).count()
 
-    total = stale_txs.count()
-    failed = 0
-
-    for tx in stale_txs:
-        try:
-            result = TransactionConfirmationService.fail_transaction(
-                tx_hash=tx.tx_hash,
-                wallet=tx.wallet,
-                reason="Transaction stale - not confirmed within 24 hours",
-            )
-            if result["status"] == "failed":
-                failed += 1
-        except Exception as e:
-            logger.error(f"Stale cleanup failed {tx.tx_hash}: {e}")
-
-    if total > 0:
-        logger.info(f"Marked {failed}/{total} stale transactions as failed")
-
-    return {"total": total, "failed": failed}
+    logger.info("Retained %s overdue wallet transactions for receipt recovery", overdue)
+    return {"total": overdue, "failed": 0}

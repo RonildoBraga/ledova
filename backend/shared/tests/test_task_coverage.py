@@ -1,6 +1,7 @@
 import json
 import subprocess
 import sys
+from inspect import signature
 
 from django.conf import settings
 from django.test import SimpleTestCase
@@ -152,3 +153,32 @@ class EveryOperatorReadIsNamedAndReachableTest(SimpleTestCase):
         for path, reason in OPERATOR_READS.items():
             with self.subTest(read=path):
                 self.assertTrue(reason.strip(), f"{path} needs its operator read explained")
+
+
+class TransactionRecoveryScheduleTest(SimpleTestCase):
+    legacy_names = (
+        "blockchain.tasks.cleanup_failed_transactions",
+        "wallets.tasks.confirmation.cleanup_stale_pending_transactions",
+    )
+    recovery_names = (
+        "blockchain.tasks.check_pending_transactions",
+        "wallets.tasks.confirmation.check_all_pending_transactions",
+    )
+
+    def test_queued_cleanup_names_still_resolve_and_accept_the_original_timestamp(self):
+        for name in self.legacy_names:
+            with self.subTest(task=name):
+                self.assertIn(name, app.tasks)
+                self.assertEqual(signature(app.tasks[name].func).bind(timestamp=0).arguments, {"timestamp": 0})
+
+    def test_compatibility_reports_no_longer_have_a_periodic_schedule(self):
+        scheduled = {entry.task.name for entry in app.periodic_registry.periodic_tasks.values()}
+        self.assertFalse(set(self.legacy_names) & scheduled)
+
+    def test_both_receipt_recovery_sweeps_remain_scheduled_every_five_minutes(self):
+        for name in self.recovery_names:
+            with self.subTest(task=name):
+                schedules = [
+                    entry.cron for entry in app.periodic_registry.periodic_tasks.values() if entry.task.name == name
+                ]
+                self.assertEqual(schedules, ["*/5 * * * *"])
