@@ -1,5 +1,5 @@
 import React from 'react';
-import { act, render } from '@testing-library/react-native';
+import { act, render as renderComponent } from '@testing-library/react-native';
 import { AppState, type AppStateStatus } from 'react-native';
 import type { PermissionResponse } from 'expo-camera';
 import { UR, UREncoder, URDecoder } from '@ngraveio/bc-ur';
@@ -27,6 +27,18 @@ jest.mock('expo-camera', () => {
 });
 
 import { AnimatedQRScanner } from './AnimatedQRScanner';
+import { CameraAccessContext, createCameraAccess } from '../../contexts/cameraAccess';
+
+const cameraAccess = createCameraAccess();
+cameraAccess.setAllowed(true);
+
+function render(ui: React.ReactElement) {
+  return renderComponent(ui, {
+    wrapper: ({ children }) => (
+      <CameraAccessContext.Provider value={cameraAccess}>{children}</CameraAccessContext.Provider>
+    ),
+  });
+}
 
 const granted: PermissionResponse = {
   status: 'granted' as PermissionResponse['status'],

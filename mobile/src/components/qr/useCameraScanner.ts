@@ -1,7 +1,8 @@
-import { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useContext, useLayoutEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { Camera } from 'expo-camera';
 import type { PermissionResponse } from 'expo-camera';
+import { CameraAccessContext } from '../../contexts/cameraAccess';
 
 type CameraStatus = 'inactive' | 'loading' | 'denied' | 'failed' | 'ready' | 'scanned';
 type BarcodeHandler = (result: { data: string }) => void;
@@ -42,6 +43,7 @@ export function useCameraScanner(
   onScan: (data: string, finishScan: () => void) => void,
   sessionKey = '',
 ) {
+  const cameraAccess = useContext(CameraAccessContext);
   const [snapshot, setSnapshot] = useState<CameraSnapshot>({ status: 'inactive' });
   const onScanRef = useRef(onScan);
   const stopRef = useRef(() => {});
@@ -64,7 +66,17 @@ export function useCameraScanner(
 
     const refresh = async (allowRequest: boolean) => {
       const currentRevision = ++revision;
-      const isCurrent = () => !stopped && foreground && revision === currentRevision;
+      const access = cameraAccess.getSnapshot();
+      const isCurrent = () =>
+        !stopped &&
+        foreground &&
+        revision === currentRevision &&
+        access.allowed &&
+        cameraAccess.getSnapshot() === access;
+      if (!isCurrent()) {
+        if (!stopped) setSnapshot({ status: 'inactive' });
+        return;
+      }
       if (completed) {
         setSnapshot({ status: 'scanned' });
         return;
@@ -103,6 +115,15 @@ export function useCameraScanner(
       setSnapshot({ status: 'inactive' });
     };
 
+    const unsubscribeAccess = cameraAccess.subscribe(() => {
+      if (stopped) return;
+      if (foreground && cameraAccess.getSnapshot().allowed) void refresh(false);
+      else {
+        revision += 1;
+        setSnapshot({ status: 'inactive' });
+      }
+    });
+
     const subscription = AppState.addEventListener('change', (state) => {
       if (stopped) return;
       const nextForeground = state === 'active';
@@ -124,8 +145,9 @@ export function useCameraScanner(
       revision += 1;
       stopRef.current = () => {};
       subscription.remove();
+      unsubscribeAccess();
     };
-  }, [enabled, sessionKey]);
+  }, [cameraAccess, enabled, sessionKey]);
 
   const stop = useCallback(() => stopRef.current(), []);
   const status = enabled ? snapshot.status : 'inactive';
