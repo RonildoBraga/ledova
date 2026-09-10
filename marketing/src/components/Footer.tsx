@@ -9,7 +9,7 @@ export function Footer() {
         <div className="grid gap-8 sm:grid-cols-3">
           <div>
             <h3 className="mb-3 text-sm font-semibold text-text-primary">Project</h3>
-            <p className="text-sm text-text-muted">Experimental, unaudited open-source software.</p>
+            <p className="text-sm text-text-muted">Experimental, unaudited source-available software.</p>
           </div>
           <div>
             <h3 className="mb-3 text-sm font-semibold text-text-primary">Learn</h3>
