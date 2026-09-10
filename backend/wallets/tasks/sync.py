@@ -6,7 +6,7 @@ from procrastinate import RetryStrategy
 from ledova_backend.procrastinate_app import app
 from wallets.constants import WALLET_VERIFICATION_STATUS_VERIFIED
 from wallets.models import Wallet
-from wallets.services.sync import WalletSyncService
+from wallets.services import sync as wallet_sync
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ def sync_wallet(wallet_uuid: str) -> Dict[str, Any]:
         logger.error(f"Wallet not found: {wallet_uuid}")
         return {"status": "error", "error": "Wallet not found"}
 
-    result = WalletSyncService.sync_wallet(wallet)
+    result = wallet_sync.sync_wallet(wallet)
     if result["status"] == "success":
         logger.info(f"{wallet_uuid}: tx={result.get('transactions', 0)}, holdings={result.get('holdings', 0)}")
     return result

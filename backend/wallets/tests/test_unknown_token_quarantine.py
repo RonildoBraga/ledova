@@ -11,7 +11,7 @@ from assets.services.sync import AssetSyncService
 from users.models import FavouriteAsset, UserAccount, UserProfile
 from wallets.exceptions import InvalidTransactionException
 from wallets.models import Holding, Transaction, Wallet
-from wallets.services.sync import WalletSyncService
+from wallets.services.sync import sync_wallet
 from wallets.services.transaction_confirmation import TransactionConfirmationService
 
 User = get_user_model()
@@ -56,7 +56,7 @@ class UnknownTokenQuarantineTest(APITestCase):
         client.get_transaction_history.return_value = list(transfers)
         with patch("wallets.services.sync.get_blockchain_client", return_value=client):
             with patch("wallets.services.holdings.fetch_chain_balance", return_value=None):
-                return WalletSyncService.sync_wallet(wallet or self.wallet)
+                return sync_wallet(wallet or self.wallet)
 
     def base_wallet(self):
         return Wallet.objects.create(
