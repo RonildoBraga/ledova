@@ -7,7 +7,7 @@ export const files = new Map<string, Entry>();
 export const unreadable = new Set<string>();
 export const sticky = new Set<string>();
 export const operations: { kind: string; uri: string }[] = [];
-export const nativeBehavior = { copyOnMove: false };
+export const nativeBehavior = { copyOnMove: false, failManagedConstruction: false };
 export const cache = 'file:///private/cache/';
 
 function join(parts: (string | { uri: string })[]) {
@@ -19,6 +19,9 @@ class File {
 
   constructor(...parts: (string | { uri: string })[]) {
     this.uri = join(parts);
+    if (nativeBehavior.failManagedConstruction && this.uri.includes('/ledova-upload-copies-v1/')) {
+      throw new Error('Synthetic native file construction failed');
+    }
   }
 
   get exists() {
@@ -78,4 +81,5 @@ export function resetFiles() {
   sticky.clear();
   operations.length = 0;
   nativeBehavior.copyOnMove = false;
+  nativeBehavior.failManagedConstruction = false;
 }

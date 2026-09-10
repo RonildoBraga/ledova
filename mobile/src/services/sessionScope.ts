@@ -10,7 +10,13 @@ export function subscribeSession(listener: () => void): () => void {
 
 export function invalidateSessionScope(): void {
   epoch++;
-  for (const listener of listeners) listener();
+  for (const listener of [...listeners]) {
+    try {
+      listener();
+    } catch {
+      console.warn('Session cleanup did not complete.');
+    }
+  }
 }
 
 export function assertSessionEpoch(expected: number): void {

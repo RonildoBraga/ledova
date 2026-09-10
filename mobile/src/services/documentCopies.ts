@@ -76,7 +76,11 @@ export class DocumentCopy {
 
   cleanup(): void {
     if (!this.retired || this.consumers || copies.get(this.slot) !== this) return;
-    if (removeCopy(managedFile(this.slot))) copies.delete(this.slot);
+    try {
+      if (removeCopy(managedFile(this.slot))) copies.delete(this.slot);
+    } catch {
+      console.warn('Document cache cleanup did not complete.');
+    }
   }
 }
 

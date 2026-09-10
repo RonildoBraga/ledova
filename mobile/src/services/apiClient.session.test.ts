@@ -106,11 +106,13 @@ it.each(['success', 'refusal'])(
     const rejected = expect(rotation).rejects.toThrow();
     await server.started;
     await storeTokens({ accessToken: 'new-sign-in-access', refreshToken: 'new-sign-in-refresh' });
+    const newEpoch = getSessionEpoch();
     if (outcome === 'success') server.succeed();
     else server.refuse();
     await rejected;
     await expect(getAccessToken()).resolves.toBe('new-sign-in-access');
     await expect(getRefreshToken()).resolves.toBe('new-sign-in-refresh');
+    expect(getSessionEpoch()).toBe(newEpoch);
   },
 );
 
