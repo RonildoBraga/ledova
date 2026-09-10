@@ -204,11 +204,6 @@ SCHEMA_DEBT: dict[str, tuple[int, str]] = {
         "generator falls back to the viewset's serializer. The interface is correct. Tracked by "
         "#211.",
     ),
-    "ExchangeRate:Asset": (
-        3,
-        "assets/views/asset.py exchange_rates returns a literal body and the generator falls back "
-        "to the viewset's serializer. The interface is correct. Tracked by #211.",
-    ),
     "CapitalIncreaseResponse:CapitalIncreaseList": (
         2,
         "tokens/views/capital_increase.py list returns a literal body carrying count and results, "
