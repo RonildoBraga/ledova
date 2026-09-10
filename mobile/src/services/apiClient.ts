@@ -8,6 +8,13 @@ import {
 } from '@ledova/shared';
 import { captureRefreshSession, clearTokens, getAccessToken, getRefreshToken, storeTokens } from './tokenStorage';
 import { getApiBaseUrl, validateApiDestination } from '../config/networkPolicy';
+import { assertSessionEpoch } from './sessionScope';
+
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    ledovaSessionEpoch?: number;
+  }
+}
 
 export type { UserFriendlyError } from '@ledova/shared';
 
@@ -27,7 +34,12 @@ apiClient.interceptors.request.use(async (config) => {
   config.baseURL = config.baseURL ?? getApiBaseUrl();
   validateApiDestination(apiClient.getUri(config));
   if (config.auth) throw new Error('The mobile API uses the stored bearer session.');
+  if (config.ledovaSessionEpoch !== undefined) assertSessionEpoch(config.ledovaSessionEpoch);
   const accessToken = await getAccessToken();
+  if (config.ledovaSessionEpoch !== undefined) {
+    assertSessionEpoch(config.ledovaSessionEpoch);
+    if (!accessToken) throw new Error('Please sign in again before uploading a document.');
+  }
   if (accessToken) {
     config.headers.Authorization = `Bearer ${accessToken}`;
   } else {
@@ -36,10 +48,16 @@ apiClient.interceptors.request.use(async (config) => {
   return config;
 });
 
-export async function rotateRefreshToken(refresh: string): Promise<void> {
+export async function rotateRefreshToken(refresh: string, expectedEpoch?: number): Promise<void> {
+  if (expectedEpoch !== undefined) assertSessionEpoch(expectedEpoch);
   const generation = await captureRefreshSession(refresh);
+  if (expectedEpoch !== undefined) assertSessionEpoch(expectedEpoch);
   try {
-    const { data } = await requestTokenRefresh(apiClient, { refresh });
+    const { data } = await requestTokenRefresh(
+      apiClient,
+      { refresh },
+      expectedEpoch === undefined ? undefined : { ledovaSessionEpoch: expectedEpoch },
+    );
     await storeTokens({ accessToken: data.access, refreshToken: data.refresh }, generation);
   } catch (error) {
     if (axios.isAxiosError(error) && error.response) {
@@ -57,15 +75,17 @@ const REFRESH_EXEMPT_URLS = new Set<string>([
 
 let refreshInFlight: Promise<boolean> | null = null;
 
-function refreshStoredSession(): Promise<boolean> {
+function refreshStoredSession(expectedEpoch?: number): Promise<boolean> {
+  if (expectedEpoch !== undefined) assertSessionEpoch(expectedEpoch);
   if (!refreshInFlight) {
     refreshInFlight = (async () => {
       const refresh = await getRefreshToken();
+      if (expectedEpoch !== undefined) assertSessionEpoch(expectedEpoch);
       if (!refresh) {
         return false;
       }
       try {
-        await rotateRefreshToken(refresh);
+        await rotateRefreshToken(refresh, expectedEpoch);
         return true;
       } catch {
         return false;
@@ -102,9 +122,10 @@ apiClient.interceptors.response.use(
     }
 
     const config = error.config as ReplayableRequestConfig | undefined;
+    if (config?.ledovaSessionEpoch !== undefined) assertSessionEpoch(config.ledovaSessionEpoch);
     if (error.response?.status === 401 && config && !config._retry && !REFRESH_EXEMPT_URLS.has(config.url ?? '')) {
       config._retry = true;
-      if (await refreshStoredSession()) {
+      if (await refreshStoredSession(config.ledovaSessionEpoch)) {
         return apiClient(config);
       }
     }

@@ -1,4 +1,4 @@
-import { AxiosInstance } from 'axios';
+import { AxiosInstance, AxiosRequestConfig } from 'axios';
 import { AUTH_ENDPOINTS } from '../constants';
 import type {
   SigninRequest,
@@ -32,8 +32,10 @@ export const resendVerificationCode = (apiClient: AxiosInstance, data: ResendVer
   return apiClient.post(AUTH_ENDPOINTS.RESEND_VERIFICATION, data);
 };
 
-export const refreshToken = (apiClient: AxiosInstance, data: TokenRefreshRequest) => {
-  return apiClient.post<TokenRefreshResult>(AUTH_ENDPOINTS.TOKEN_REFRESH, data);
+export const refreshToken = (apiClient: AxiosInstance, data: TokenRefreshRequest, config?: AxiosRequestConfig) => {
+  return config
+    ? apiClient.post<TokenRefreshResult>(AUTH_ENDPOINTS.TOKEN_REFRESH, data, config)
+    : apiClient.post<TokenRefreshResult>(AUTH_ENDPOINTS.TOKEN_REFRESH, data);
 };
 
 export const verifyAuth = (apiClient: AxiosInstance) => {

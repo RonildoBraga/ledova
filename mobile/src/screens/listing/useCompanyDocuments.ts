@@ -10,6 +10,7 @@ import {
 } from '@ledova/shared';
 import type { CompanyDocument, DocumentType } from '@ledova/shared';
 import { apiClient } from '../../services/apiClient';
+import { getSessionEpoch } from '../../services/sessionScope';
 import { useCompanyProfile } from '../../hooks/useCompanyProfile';
 
 export function useCompanyDocuments() {
@@ -27,11 +28,30 @@ export function useCompanyDocuments() {
   const uploadedTypes = new Set(documents.map((d) => d.documentType));
 
   const uploadMutation = useMutation({
-    mutationFn: ({ documentType, name, file }: { documentType: DocumentType; name: string; file: unknown }) =>
-      uploadCompanyDocument(apiClient, companyUuid!, { documentType, name, file } as Parameters<
-        typeof uploadCompanyDocument
-      >[2]),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['company-documents', companyUuid] }),
+    mutationFn: ({
+      documentType,
+      name,
+      file,
+      companyUuid: owner,
+      sessionEpoch,
+    }: {
+      documentType: DocumentType;
+      name: string;
+      file: unknown;
+      companyUuid: string;
+      sessionEpoch: number;
+    }) =>
+      uploadCompanyDocument(
+        apiClient,
+        owner,
+        { documentType, name, file } as Parameters<typeof uploadCompanyDocument>[2],
+        { ledovaSessionEpoch: sessionEpoch },
+      ),
+    onSuccess: (_response, variables) => {
+      if (variables.sessionEpoch === getSessionEpoch()) {
+        return queryClient.invalidateQueries({ queryKey: ['company-documents', variables.companyUuid] });
+      }
+    },
   });
 
   const deleteMutation = useMutation({
