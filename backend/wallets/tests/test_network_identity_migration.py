@@ -8,7 +8,7 @@ from django.test import TransactionTestCase
 from assets.models import Asset
 from shared.tests.schema import migrate_to, restore_every_migration
 from users.models import UserAccount
-from wallets.models import Holding, Transaction, Wallet
+from wallets.models import Holding, Wallet
 
 modules = getattr(settings, "MIGRATION_MODULES", {})
 MIGRATIONS_ENABLED = not ("wallets" in modules and modules["wallets"] is None)
@@ -22,13 +22,14 @@ class WalletNetworkIdentityMigrationTest(TransactionTestCase):
 
     def test_adding_a_network_preserves_the_original_wallet_and_its_financial_records(self):
         OldWallet = self.before()
+        OldTransaction = OldWallet._meta.apps.get_model("wallets", "Transaction")
         account = UserAccount.objects.create(account_number="WALLET-MIGRATION")
         original = OldWallet.objects.create(user_account_id=account.pk, address="0x" + "a" * 40, chain="ethereum")
         asset = Asset.objects.create(symbol="MIG", name="Migration", asset_type="erc20_token")
         holding = Holding.objects.create(wallet_id=original.pk, asset=asset, quantity=Decimal("2.5"))
-        transfer = Transaction.objects.create(
+        transfer = OldTransaction.objects.create(
             wallet_id=original.pk,
-            asset=asset,
+            asset_id=asset.pk,
             tx_hash="old-hash",
             chain="ethereum",
             from_address=original.address,
