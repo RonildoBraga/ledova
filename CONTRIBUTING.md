@@ -140,8 +140,16 @@ vulnerability*). See [SECURITY.md](SECURITY.md).
 ## Licensing of contributions
 
 By submitting a contribution you agree that it is licensed under the project's
-[Apache License 2.0](LICENSE) and that you have the right to submit it under
-that license.
+[Functional Source License, Version 1.1, ALv2 Future License](LICENSE) and that
+you have the right to submit it under that license. Like every other release,
+your contribution becomes available under the Apache License 2.0 two years after
+it is published.
 
-Ledova is an independent open-source project and makes no claim of regulatory
-compliance or legal recognition. Contributions are volunteered on that basis.
+Ledova is source-available rather than open source in the OSI sense: the licence
+permits any use except competing with the project commercially, and converts to
+Apache 2.0 on a fixed two-year schedule. Copyright is held by Ronildo da Rocha
+Braga Junior. The full terms are set out under **License** in
+[README.md](README.md).
+
+Ledova makes no claim of regulatory compliance or legal recognition.
+Contributions are volunteered on that basis.

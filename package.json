@@ -1,7 +1,7 @@
 {
   "name": "ledova-monorepo",
   "private": true,
-  "license": "Apache-2.0",
+  "license": "SEE LICENSE IN LICENSE",
   "workspaces": [
     "packages/shared",
     "dashboard"
