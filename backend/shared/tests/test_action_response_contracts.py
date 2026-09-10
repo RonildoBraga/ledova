@@ -21,7 +21,7 @@ from tokens.models import ShareIssuance, SwapOrder, TransferOrder
 from tokens.services.atomic_swap_service import AtomicSwapService
 from tokens.services.token_transfer_service import TokenTransferService
 from tokens.tests.test_signed_transactions import SIGNER, sign_legacy
-from users.models import FinancialProfile, Notification, UserPreferences
+from users.models import FinancialProfile, Notification, UserPreferences, UserProfile
 from wallets.models import Wallet
 
 
@@ -500,6 +500,47 @@ class ActionResponseContractTest(APITestCase):
         self.assert_fields(
             self.response_schema("/api/v1/companies/{uuid}/stats/"), body, {name: "integer" for name in body}
         )
+
+    def test_company_contact_declares_only_the_actual_owner_profile_fields(self):
+        UserProfile.objects.filter(user=self.owner.user).update(full_name="Synthetic Contact")
+        response = self.client.get(f"/api/v1/companies/{self.owner.company.uuid}/")
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["email"], self.owner.user.email)
+        self.assertEqual(body["primaryContact"], {"fullName": "Synthetic Contact"})
+        schema = self.response_schema("/api/v1/companies/{uuid}/")
+        contact = self.assert_fields(
+            schema["properties"]["primaryContact"], body["primaryContact"], {"fullName": "string"}
+        )
+        self.assertEqual(set(contact["required"]), {"fullName"})
+        self.assertTrue(contact["readOnly"])
+        self.assertTrue(contact["properties"]["fullName"]["readOnly"])
+
+    def test_company_contact_declares_a_nullable_owner_name(self):
+        UserProfile.objects.filter(user=self.owner.user).update(full_name=None)
+        response = self.client.get(f"/api/v1/companies/{self.owner.company.uuid}/")
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["primaryContact"], {"fullName": None})
+        schema = self.response_schema("/api/v1/companies/{uuid}/")
+        contact = self.resolved(schema["properties"]["primaryContact"])
+        self.assertTrue(contact["properties"]["fullName"].get("nullable"))
+        self.assert_fields(contact, body["primaryContact"], {"fullName": "string"})
+
+    def test_company_contact_declares_an_absent_owner_profile(self):
+        endpoint = f"/api/v1/companies/{self.owner.company.uuid}/"
+        present = self.client.get(endpoint)
+        self.assertEqual(present.status_code, 200)
+        self.assertEqual(present.json()["primaryContact"], {"fullName": self.owner.profile.full_name})
+        self.owner.profile.delete()
+        response = self.client.get(endpoint)
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.json()["primaryContact"])
+        schema = self.response_schema("/api/v1/companies/{uuid}/")
+        contact = self.resolved(schema["properties"]["primaryContact"])
+        self.assertTrue(contact.get("nullable"))
+        self.assertTrue(contact["readOnly"])
+        self.assertIn("primaryContact", schema["required"])
 
     def test_notifications_declare_scoped_count(self):
         count = self.client.get("/api/notifications/unread-count/")

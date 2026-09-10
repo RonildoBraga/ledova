@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema_serializer
 from rest_framework import serializers
 
 from companies.models import Company, CompanyStatus
@@ -8,10 +9,11 @@ from companies.validators import checked_abn, checked_acn, with_matching_identif
 from wallets.models import Wallet
 
 
+@extend_schema_serializer(exclude_fields=("email",))
 class _CompanyUserProfileSerializer(serializers.Serializer):
 
     email = serializers.EmailField(read_only=True)
-    full_name = serializers.CharField(read_only=True)
+    full_name = serializers.CharField(read_only=True, allow_null=True)
 
 
 class _CompanyUserProfileCreateSerializer(serializers.Serializer):
@@ -59,7 +61,7 @@ class CompanyDetailSerializer(serializers.ModelSerializer):
         read_only=True,
     )
     email = serializers.EmailField(read_only=True)
-    primary_contact = _CompanyUserProfileSerializer(read_only=True)
+    primary_contact = _CompanyUserProfileSerializer(read_only=True, allow_null=True)
     documents = CompanyDocumentSerializer(many=True, read_only=True)
     operator_wallet = serializers.SlugRelatedField(slug_field="uuid", read_only=True)
 
