@@ -134,3 +134,9 @@ class AssetSnapshotSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
+
+
+class ExchangeRateResponseSerializer(serializers.Serializer):
+    base_currency = serializers.CharField()
+    target_currency = serializers.CharField()
+    rate = serializers.CharField()
