@@ -16,16 +16,15 @@ class MonitorLockObserverTest(SimpleTestCase):
             "test_waiting_receipts_reread_changed_hash_and_business_reference_before_writing"
         )
         self.cursor = MagicMock()
-        self.case.connection = MagicMock()
-        self.case.connection.cursor.return_value.__enter__.return_value = self.cursor
         self.child = SimpleNamespace(database_pid=1234)
         self.query = 'SELECT "blockchain_blockchaintransaction"."uuid" FROM "blockchain_blockchaintransaction"'
 
     def observe(self, samples, clock):
         self.cursor.fetchone.side_effect = samples
-        with patch("blockchain.tests.test_monitor_processes.time.monotonic", side_effect=clock), patch(
-            "blockchain.tests.test_monitor_processes.time.sleep"
-        ) as pause:
+        with patch("blockchain.tests.test_monitor_processes.connections") as connections, patch(
+            "blockchain.tests.test_monitor_processes.time.monotonic", side_effect=clock
+        ), patch("blockchain.tests.test_monitor_processes.time.sleep") as pause:
+            connections.__getitem__.return_value.cursor.return_value.__enter__.return_value = self.cursor
             self.case.wait_for_row_lock(self.child, 5678)
         return pause
 
@@ -67,6 +66,8 @@ class MonitorParallelReportingTest(SimpleTestCase):
         case = monitor.MonitorProcessesTest(
             "test_waiting_receipts_reread_changed_hash_and_business_reference_before_writing"
         )
+        with patch("blockchain.tests.test_monitor_processes.transaction", return_value=None):
+            case.setUp()
         result = RemoteTestResult()
         result.startTest(case)
         case._outcome = _Outcome(result)
@@ -79,7 +80,14 @@ class MonitorParallelReportingTest(SimpleTestCase):
                 with case.subTest(change={"related_model": "synthetic.RepointedIntent"}, status=1):
                     with monitor.MonitorProcess(case, 1) as child:
                         case.fail("Synthetic monitor row-lock observation failure")
-                events = pickle.loads(pickle.dumps(result.events))
+                active_events = pickle.loads(pickle.dumps(result.events))
+            finally:
+                case.doCleanups()
+                case._outcome = None
+                result.stopTest(case)
+
+            completed_events = pickle.loads(pickle.dumps(result.events))
+            for events in (active_events, completed_events):
                 failures = [event for event in events if event[0] == "addSubTest"]
                 self.assertEqual(len(failures), 1)
                 _, index, subtest, error = failures[0]
@@ -91,12 +99,8 @@ class MonitorParallelReportingTest(SimpleTestCase):
                 self.assertIs(error[0], AssertionError)
                 self.assertEqual(str(error[1]), "Synthetic monitor row-lock observation failure")
                 self.assertIsNotNone(error[2])
-                self.assertTrue(child.closed)
-                self.assertTrue(child.errors.closed)
-                process.return_value.stdin.close.assert_called_once_with()
-                process.return_value.stdout.close.assert_called_once_with()
-                self.assertFalse(result.wasSuccessful())
-            finally:
-                case.doCleanups()
-                case._outcome = None
-                result.stopTest(case)
+            self.assertTrue(child.closed)
+            self.assertTrue(child.errors.closed)
+            process.return_value.stdin.close.assert_called_once_with()
+            process.return_value.stdout.close.assert_called_once_with()
+            self.assertFalse(result.wasSuccessful())

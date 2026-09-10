@@ -108,13 +108,12 @@ class MonitorProcess:
 class MonitorProcessesTest(TransactionTestCase):
     def setUp(self):
         self.tx = transaction()
-        self.connection = connections[current_alias()]
 
     def wait_for_row_lock(self, child, blocker_pid=None):
         deadline = time.monotonic() + 10
         observed = None
         while time.monotonic() < deadline:
-            with self.connection.cursor() as cursor:
+            with connections[current_alias()].cursor() as cursor:
                 cursor.execute("SELECT pg_stat_clear_snapshot()")
                 cursor.execute(
                     "SELECT query, COALESCE(%s, pg_backend_pid()) = ANY(pg_blocking_pids(pid)), wait_event_type "
