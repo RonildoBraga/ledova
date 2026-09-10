@@ -19,7 +19,7 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocationWhenInUseUsageDescription": "Ledova uses your location in the optional identity-verification demo.",
-        "NSCameraUsageDescription": "Ledova uses the camera in the optional identity-verification demo."
+        "NSCameraUsageDescription": "Ledova uses the camera to scan wallet QR codes and in the optional identity-verification demo."
       }
     },
     "android": {

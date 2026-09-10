@@ -80,6 +80,23 @@ the app under the existing wallet recovery procedure. These platform semantics
 are documented by [Expo SecureStore](https://docs.expo.dev/versions/v54.0.0/sdk/securestore/)
 and [Android backup rules](https://developer.android.com/identity/data/autobackup).
 
+## QR scanner permission timing
+
+The shared modal QR scanner used by sends, transfers and trading checks the
+existing camera permission before requesting it. Hidden scanners never request
+permission or mount a preview. Opening an unpermitted scanner makes one request
+when the platform allows asking again. Denial or a native request failure does
+not automatically retry; a later opening can try again. Closing and reopening
+while a request is outstanding shares that attempt. Closing removes the preview
+and ignores scan callbacks while closed.
+
+The component tests use Expo's installed permission hook with controlled native
+responses and a camera lifecycle stand-in. They establish JavaScript request and
+mount timing, not OS prompt presentation or physical camera shutdown. Wallet
+import's animated scanner and wallet verification's scan step have separate
+permission handling. Physical permission denial/revocation and camera lifecycle
+checks remain under #13.
+
 ## Native dependencies and randomness
 
 The RNG entry shim and mnemonic generation use Expo Crypto's native
