@@ -23,6 +23,7 @@ SCOPED_TEST_LABELS = (
     "wallets.tests.test_history_preservation.ScopedHistoryPreservationTest",
     "wallets.tests.test_submission_durability.ScopedSubmissionDurabilityTest",
     "wallets.tests.test_submission_recovery.ScopedSubmissionRecoveryTest",
+    "wallets.tests.test_receipt_fencing.ScopedReceiptFencingTest",
     "tokens.tests.test_former_member_privacy.ScopedFormerMemberPrivacyTest",
     "documents.tests.test_evidence_under_scoped_roles.ScopedSupportingEvidenceTest",
     "wallets.tests.test_network_identity.ScopedWalletNetworkIdentityTest",

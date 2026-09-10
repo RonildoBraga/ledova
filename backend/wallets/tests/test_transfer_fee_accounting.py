@@ -6,8 +6,7 @@ from web3 import Web3
 
 from assets.services.identity import native_asset_for_chain
 from wallets.models import Holding, Transaction
-from wallets.services import transfers
-from wallets.services.transaction_confirmation import TransactionConfirmationService
+from wallets.services import transaction_confirmation, transfers
 from wallets.tests.test_broadcast_transfer_guard import (
     RECIPIENT,
     USDC_CONTRACT,
@@ -70,16 +69,16 @@ class TransferFeeAccountingTest(BroadcastTransferGuardTestCase):
     def test_a_failed_transfer_returns_the_fee_it_took_as_well_as_the_amount(self, get_client, schedule):
         self.send_token(get_client)
 
-        with patch.object(TransactionConfirmationService, "_notify_wallet_users"):
-            TransactionConfirmationService.fail_transaction(self.tx_hash, reason="reverted", wallet=self.wallet)
+        with patch.object(transaction_confirmation, "_notify_wallet_users"):
+            transaction_confirmation.fail_transaction(self.tx_hash, reason="reverted", wallet=self.wallet)
 
         self.assertEqual(self.quantities(), (Decimal("100"), Decimal("5")))
 
     def test_a_failed_native_send_returns_both_from_the_one_holding(self, get_client, schedule):
         self.send_native(get_client)
 
-        with patch.object(TransactionConfirmationService, "_notify_wallet_users"):
-            TransactionConfirmationService.fail_transaction(self.tx_hash, reason="reverted", wallet=self.wallet)
+        with patch.object(transaction_confirmation, "_notify_wallet_users"):
+            transaction_confirmation.fail_transaction(self.tx_hash, reason="reverted", wallet=self.wallet)
 
         self.assertEqual(self.quantities(), (Decimal("100"), Decimal("5")))
 
@@ -87,8 +86,8 @@ class TransferFeeAccountingTest(BroadcastTransferGuardTestCase):
         self.send_token(get_client)
 
         with patch("wallets.services.transaction_confirmation.sync_holding") as sync:
-            with patch.object(TransactionConfirmationService, "_notify_wallet_users"):
-                TransactionConfirmationService.confirm_transaction(self.tx_hash, block_number=1, wallet=self.wallet)
+            with patch.object(transaction_confirmation, "_notify_wallet_users"):
+                transaction_confirmation.confirm_transaction(self.tx_hash, block_number=1, wallet=self.wallet)
 
         synced = {call.args[1].symbol for call in sync.call_args_list}
         self.assertEqual(synced, {self.token.symbol, self.native.symbol})
@@ -97,8 +96,8 @@ class TransferFeeAccountingTest(BroadcastTransferGuardTestCase):
         self.send_native(get_client)
 
         with patch("wallets.services.transaction_confirmation.sync_holding") as sync:
-            with patch.object(TransactionConfirmationService, "_notify_wallet_users"):
-                TransactionConfirmationService.confirm_transaction(self.tx_hash, block_number=1, wallet=self.wallet)
+            with patch.object(transaction_confirmation, "_notify_wallet_users"):
+                transaction_confirmation.confirm_transaction(self.tx_hash, block_number=1, wallet=self.wallet)
 
         self.assertEqual([call.args[1].symbol for call in sync.call_args_list], [self.native.symbol])
 

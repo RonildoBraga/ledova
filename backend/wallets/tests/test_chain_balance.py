@@ -7,10 +7,9 @@ from assets.models import Asset, AssetChainDeployment
 from assets.services.sync import AssetSyncService
 from users.models import UserAccount
 from wallets.models import Holding, Transaction, Wallet
-from wallets.services import transfers
+from wallets.services import transaction_confirmation, transfers
 from wallets.services.chain import fetch_chain_balance
 from wallets.services.sync import _sync_holdings_from_blockchain
-from wallets.services.transaction_confirmation import TransactionConfirmationService
 
 TOKEN = "0x" + "1" * 40
 AUDY_TOKEN = "0x" + "a2" * 20
@@ -112,7 +111,7 @@ class ChainBalanceTest(TestCase):
     def test_confirmation_corrects_the_holding_from_the_chain(self):
         holding = Holding.objects.create(wallet=self.wallet, asset=self.usdc, quantity=Decimal("5"))
         with patch("wallets.services.chain.get_blockchain_client", return_value=self.client_mock):
-            TransactionConfirmationService._verify_holding_balance(self.wallet, self.usdc)
+            transaction_confirmation._verify_holding_balance(self.wallet, self.usdc)
         holding.refresh_from_db()
         self.assertEqual(holding.quantity, Decimal("70"))
 
@@ -123,7 +122,7 @@ class ChainBalanceTest(TestCase):
 
     def test_pending_transaction_resolves_the_native_asset_by_chain_before_symbol(self):
         with patch("wallets.services.transaction_confirmation.TransactionMonitoringService"):
-            result = TransactionConfirmationService.create_pending_transaction(
+            result = transaction_confirmation.create_pending_transaction(
                 wallet=self.wallet, tx_hash="0xpending", to_address="0x" + "b" * 40, amount=Decimal("1")
             )
 

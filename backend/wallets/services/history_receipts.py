@@ -5,11 +5,14 @@ from wallets.constants import (
     TRANSACTION_STATUS_PENDING,
 )
 from wallets.models import Transaction, Wallet
+from wallets.services.receipt_targets import capture_receipt_target
 
 
-def record_history_receipt(tx_hash, *, wallet, succeeded, block_number=None, block_timestamp=None, actual_fee=None):
+def record_history_receipt(
+    tx_hash, *, wallet, succeeded, block_number=None, block_timestamp=None, actual_fee=None, expected=None
+):
     with atomic():
-        Wallet.objects.select_for_update().get(pk=wallet.pk)
+        locked_wallet = Wallet.objects.select_for_update().get(pk=wallet.pk)
         tx = (
             Transaction.objects.select_for_update()
             .filter(tx_hash=tx_hash, wallet=wallet, imported_from_history=True)
@@ -17,6 +20,8 @@ def record_history_receipt(tx_hash, *, wallet, succeeded, block_number=None, blo
         )
         if tx is None:
             return {"status": "not_found", "tx_hash": tx_hash}
+        if expected is not None and capture_receipt_target(locked_wallet, tx) != expected:
+            return {"status": "observation_changed", "tx_hash": tx_hash}
         if tx.status != TRANSACTION_STATUS_PENDING:
             return {"status": "already_processed", "current_status": tx.status}
         tx.status = TRANSACTION_STATUS_CONFIRMED if succeeded else TRANSACTION_STATUS_FAILED

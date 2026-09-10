@@ -16,8 +16,9 @@ from shared.constants import BLOCKCHAIN_BITCOIN, EVM_BLOCKCHAINS
 from shared.db import acting_for
 from wallets.constants import TRANSACTION_STATUS_PENDING
 from wallets.models import Transaction, Wallet
+from wallets.services import transaction_confirmation
 from wallets.services.history_receipts import record_history_receipt
-from wallets.services.transaction_confirmation import TransactionConfirmationService
+from wallets.services.receipt_targets import capture_receipt_target
 
 logger = logging.getLogger(__name__)
 
@@ -146,13 +147,14 @@ def _confirm_pending_transaction(tx_hash: str, wallet_uuid: str) -> Dict[str, An
         tx = Transaction.objects.get(tx_hash=tx_hash, wallet=wallet)
         if tx.status != TRANSACTION_STATUS_PENDING:
             if tx.balance_reconciliation_token is not None:
-                repaired = TransactionConfirmationService.reconcile_transaction(tx_hash, wallet=wallet)
+                repaired = transaction_confirmation.reconcile_transaction(tx_hash, wallet=wallet)
                 return {"status": "reconciled" if repaired else "reconciliation_pending", "tx_hash": tx_hash}
             logger.info(f"Transaction already processed: {tx_hash}")
             return {"status": "already_processed", "current_status": tx.status}
     except Transaction.DoesNotExist:
         return {"status": "not_found", "tx_hash": tx_hash}
 
+    expected = capture_receipt_target(wallet, tx)
     client = get_blockchain_client(wallet.chain)
     receipt = client.get_transaction_receipt(tx_hash)
 
@@ -181,24 +183,29 @@ def _confirm_pending_transaction(tx_hash: str, wallet_uuid: str) -> Dict[str, An
             block_number=block_number,
             block_timestamp=block_timestamp,
             actual_fee=actual_fee,
+            expected=expected,
         )
 
     if succeeded:
-        result = TransactionConfirmationService.confirm_transaction(
+        result = transaction_confirmation.confirm_transaction(
             tx_hash=tx_hash,
             wallet=wallet,
             block_number=block_number,
             block_timestamp=block_timestamp,
             actual_fee=actual_fee,
+            expected=expected,
         )
-        logger.info(f"Transaction confirmed: {tx_hash}, actual_fee={actual_fee}")
+        if result["status"] == "confirmed":
+            logger.info(f"Transaction confirmed: {tx_hash}, actual_fee={actual_fee}")
     else:
-        result = TransactionConfirmationService.fail_transaction(
+        result = transaction_confirmation.fail_transaction(
             tx_hash=tx_hash,
             wallet=wallet,
             reason="Transaction reverted on-chain",
+            expected=expected,
         )
-        logger.warning(f"Transaction failed on-chain: {tx_hash}")
+        if result["status"] == "failed":
+            logger.warning(f"Transaction failed on-chain: {tx_hash}")
 
     return result
 

@@ -26,10 +26,9 @@ from shared.tests.scoped import RunsOnTheScopedConnection
 from shared.tests.tenants import make_tenant
 from wallets.exceptions import InvalidTransactionException
 from wallets.models import Holding, Transaction, Wallet, WalletSubmission
-from wallets.services import transfers
+from wallets.services import transaction_confirmation, transfers
 from wallets.services.submissions import attempt_submission
 from wallets.services.sync import _process_transactions
-from wallets.services.transaction_confirmation import TransactionConfirmationService
 from wallets.tasks.submissions import recover_wallet_submissions
 from wallets.tests.test_submission_durability import SubmissionFixture
 
@@ -161,7 +160,7 @@ class SubmissionRecoveryChecks(SubmissionFixture):
             self.assertEqual(self.submit_direct(signed), first)
             self.assertEqual(self.financial_state(), before)
             with acting_for(self.tenant.user.pk):
-                TransactionConfirmationService.fail_transaction(first["txHash"], wallet=self.wallet)
+                transaction_confirmation.fail_transaction(first["txHash"], wallet=self.wallet)
             after_failure = self.financial_state()
             provider.reset_mock()
             self.assertEqual(self.submit_direct(signed)["status"], "failed")

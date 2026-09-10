@@ -86,16 +86,14 @@ def _prepare_erc20_transfer(
     token_contract: str,
 ) -> Dict[str, Any]:
     from wallets.models import Holding
-    from wallets.services.transaction_confirmation import (
-        TransactionConfirmationService,
-    )
+    from wallets.services import transaction_confirmation
 
     if not to_address or not amount_token:
         raise InvalidTransactionException("Both 'toAddress' and 'amountToken' are required for token transfers.")
 
     amount = _parse_amount(amount_token)
 
-    token_asset = TransactionConfirmationService.resolve_transfer_asset(wallet, token_contract)
+    token_asset = transaction_confirmation.resolve_transfer_asset(wallet, token_contract)
 
     token_holding = Holding.objects.filter(wallet=wallet, asset=token_asset).first()
     token_balance = token_holding.quantity if token_holding else Decimal("0")
@@ -145,12 +143,10 @@ def broadcast_transfer(
             logger.warning("Wallet submission retained for confirmation sweep after queue failure")
         return result
 
-    from wallets.services.transaction_confirmation import (
-        TransactionConfirmationService,
-    )
+    from wallets.services import transaction_confirmation
 
     if token_contract:
-        TransactionConfirmationService.resolve_transfer_asset(wallet, token_contract)
+        transaction_confirmation.resolve_transfer_asset(wallet, token_contract)
 
     if chain == BLOCKCHAIN_BITCOIN:
         tx_hash = broadcast_bitcoin_transaction(signed_transaction)
@@ -162,7 +158,7 @@ def broadcast_transfer(
         amount_decimal = Decimal(amount)
         fee_decimal = Decimal(transaction_fee) if transaction_fee else None
 
-        pending_result = TransactionConfirmationService.create_pending_transaction(
+        pending_result = transaction_confirmation.create_pending_transaction(
             wallet=wallet,
             tx_hash=tx_hash,
             to_address=to_address,

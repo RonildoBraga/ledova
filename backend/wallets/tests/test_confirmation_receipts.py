@@ -10,7 +10,7 @@ from assets.services.identity import native_asset_for_chain
 from shared.tests.tenants import make_tenant
 from wallets.constants import TRANSACTION_STATUS_CONFIRMED
 from wallets.models import Holding, HoldingSnapshot, Transaction
-from wallets.services.transaction_confirmation import TransactionConfirmationService
+from wallets.services import transaction_confirmation
 from wallets.tasks.confirmation import confirm_pending_transaction, get_receipt_reader
 
 BITCOIN_HASH = "80" * 32
@@ -80,7 +80,7 @@ class BitcoinConfirmationTaskTest(TestCase):
         self.wallet.save(update_fields=["chain"])
         native = native_asset_for_chain("bitcoin")
         self.holding = Holding.objects.create(wallet=self.wallet, asset=native, quantity=Decimal("2"))
-        TransactionConfirmationService.create_pending_transaction(
+        transaction_confirmation.create_pending_transaction(
             wallet=self.wallet,
             tx_hash=BITCOIN_HASH,
             to_address="tb1qexample",

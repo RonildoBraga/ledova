@@ -14,13 +14,13 @@ from shared.db import atomic
 from tokens.services.signed_transactions import decode_signed_transaction
 from wallets.exceptions import InvalidTransactionException
 from wallets.models import Holding, Transaction, Wallet, WalletSubmission
+from wallets.services import transaction_confirmation
 from wallets.services.chain import token_deployment_decimals
 from wallets.services.signed_transfers import (
     _recordable,
     expected_chain_id,
     plan_signed_transfer,
 )
-from wallets.services.transaction_confirmation import TransactionConfirmationService
 
 logger = logging.getLogger(__name__)
 MAX_RECORDED_NONCE = 2**63 - 1
@@ -108,7 +108,7 @@ def _record_submission(wallet, raw, decoded, tx_hash, declared_contract):
     if plan is None:
         raise InvalidTransactionException("A signed EVM transfer is required.")
     fee = _signed_fee(decoded)
-    recorded = TransactionConfirmationService.create_pending_transaction(
+    recorded = transaction_confirmation.create_pending_transaction(
         wallet, tx_hash, plan.to_address, plan.amount, transaction_fee=fee, token_contract=plan.token_contract
     )
     tx = Transaction.objects.get(pk=recorded["transaction_id"])

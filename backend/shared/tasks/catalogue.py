@@ -135,7 +135,7 @@ CONVERSIONS = {
     ),
     "users.tasks.notifications.send_transaction_notification": TaskConversion(
         status="pending",
-        waiting_reason="TransactionConfirmationService._notify_wallet_users enqueues one recipient "
+        waiting_reason="transaction_confirmation._notify_wallet_users enqueues one recipient "
         "user_id and transaction_id per account member. This delivery task still loads both on the "
         "operator alias even after #327 scoped confirmation. Conversion must run as the recipient, "
         "recheck that recipient's current transaction access before building the notification, and keep "
@@ -147,7 +147,7 @@ CONVERSIONS = {
 OPERATOR_READS = {
     "users.services.accounts.account_members": "R15, and the first catalogue entry whose boundary is a "
     "function rather than a table: what makes it safe is not the operator connection but the account it is "
-    "handed. transaction_confirmation.py:168 passes tx.wallet.user_account, from a wallet the task already "
+    "handed. transaction_confirmation._notify_wallet_users passes tx.wallet.user_account, from a wallet the task already "
     "resolved under its own principal, so a caller cannot ask for an account it could not reach. A future "
     "caller that took the account from a request body would break that without touching this function. "
     "Deciding who to tell about an account's transaction is "

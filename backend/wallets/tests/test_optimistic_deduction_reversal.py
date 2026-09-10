@@ -6,8 +6,7 @@ from web3 import Web3
 
 from assets.services.identity import native_asset_for_chain
 from wallets.models import Holding, Transaction
-from wallets.services import transfers
-from wallets.services.transaction_confirmation import TransactionConfirmationService
+from wallets.services import transaction_confirmation, transfers
 from wallets.tests.test_broadcast_transfer_guard import (
     RECIPIENT,
     USDC_CONTRACT,
@@ -63,8 +62,8 @@ class ReversingOnlyWhatWasDeductedTest(BroadcastTransferGuardTestCase):
         )
 
     def fail_transfer(self, tx_hash):
-        with patch.object(TransactionConfirmationService, "_notify_wallet_users"):
-            return TransactionConfirmationService.fail_transaction(tx_hash, reason="reverted", wallet=self.wallet)
+        with patch.object(transaction_confirmation, "_notify_wallet_users"):
+            return transaction_confirmation.fail_transaction(tx_hash, reason="reverted", wallet=self.wallet)
 
     def test_a_wallet_with_no_native_holding_is_not_given_one_by_a_failed_transfer(self, get_client, schedule):
         self.hold(self.token, "100")

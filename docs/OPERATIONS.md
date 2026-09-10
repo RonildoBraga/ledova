@@ -1112,6 +1112,18 @@ with `confirmed: true` and a positive integer confirmation count. Missing,
 unconfirmed or malformed Bitcoin evidence stays unresolved; that adapter does
 not report an explicit failure receipt.
 
+Wallet receipt tasks capture the pending transaction's stored fields and the
+wallet's account, chain and address before querying the provider. Both the local
+submission writer and the history-only writer then lock the wallet and
+transaction and compare that captured state with the current rows. A changed
+row, a recreated transaction at the same hash or a changed wallet identity
+returns `observation_changed` without applying the stale receipt, notifying
+users or starting balance repair. The value describes the job result and is not
+a persisted transaction status. A pending row can be observed afresh on the
+next sweep; a newer terminal decision remains intact. Provider and balance RPC
+stay outside these locks. This check establishes which local record a receipt
+may affect; it does not establish chain canonicality or finality.
+
 The platform monitor fetches each receipt before locking the current transaction
 row. It applies an outcome only while the UUID, hash, pending/submitted status,
 recorded call and business reference, nonce, gas terms and submission time still
