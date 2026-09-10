@@ -17,7 +17,7 @@ from compliance.services.transaction_monitoring import TransactionMonitoringServ
 from users.models import UserAccount, UserProfile
 from users.services.setup import ensure_defaults
 from wallets.models import Transaction, Wallet
-from wallets.services import WalletSyncService
+from wallets.services.sync import sync_wallet
 from wallets.services.transaction_confirmation import TransactionConfirmationService
 
 User = get_user_model()
@@ -50,7 +50,7 @@ class TransactionMonitoringOnCreateTest(TestCase):
         client = MagicMock()
         client.get_transaction_history.return_value = list(payloads)
         with patch("wallets.services.sync.get_blockchain_client", return_value=client):
-            return WalletSyncService.sync_wallet(self.wallet)
+            return sync_wallet(self.wallet)
 
     def test_sync_screens_each_newly_created_transaction_once(self):
         with patch(CHECK, return_value=[]) as check:

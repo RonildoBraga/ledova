@@ -8,7 +8,7 @@ from shared.tests.tenants import make_tenant
 from tokens.services.register import token_register
 from tokens.services.share_token_service import ShareTokenService
 from wallets.models import Holding
-from wallets.services.sync import WalletSyncService
+from wallets.services.sync import _sync_holdings_from_blockchain, sync_wallet
 
 CACHED = Decimal("12000")
 ON_CHAIN = 11000
@@ -38,7 +38,7 @@ class TheCacheAndTheRegisterReadOneChainTest(TestCase):
     def test_a_transfer_the_platform_did_not_make_is_closed_by_the_next_sync(self):
         self._chain()
 
-        WalletSyncService._sync_holdings_from_blockchain(self.wallet)
+        _sync_holdings_from_blockchain(self.wallet)
 
         self.holding.refresh_from_db()
         self.assertEqual(self.holding.quantity, Decimal(ON_CHAIN))
@@ -47,7 +47,7 @@ class TheCacheAndTheRegisterReadOneChainTest(TestCase):
         AssetChainDeployment.objects.filter(asset=self.asset).update(decimals=2)
         self._chain()
 
-        WalletSyncService._sync_holdings_from_blockchain(self.wallet)
+        _sync_holdings_from_blockchain(self.wallet)
 
         self.holding.refresh_from_db()
         self.assertEqual(self.holding.quantity, Decimal(ON_CHAIN))
@@ -55,7 +55,7 @@ class TheCacheAndTheRegisterReadOneChainTest(TestCase):
     def test_the_register_and_the_holding_state_the_same_number_after_that_sync(self):
         self._chain()
 
-        WalletSyncService._sync_holdings_from_blockchain(self.wallet)
+        _sync_holdings_from_blockchain(self.wallet)
         rows, _ = token_register(self.token)
 
         self.holding.refresh_from_db()
@@ -74,7 +74,7 @@ class TheCacheAndTheRegisterReadOneChainTest(TestCase):
     def test_both_surfaces_call_the_same_reader(self):
         reader = self._chain()
 
-        WalletSyncService._sync_holdings_from_blockchain(self.wallet)
+        _sync_holdings_from_blockchain(self.wallet)
         token_register(self.token)
 
         self.assertEqual(
@@ -105,7 +105,7 @@ class TheWalletDoesNotClaimAFreshnessItDoesNotHaveTest(TestCase):
         patch.object(ShareTokenService, "get_token_balance", side_effect=RuntimeError("rpc down")).start()
 
         with self.assertLogs("wallets.services.sync", level="WARNING") as logs:
-            WalletSyncService.sync_wallet(self.wallet)
+            sync_wallet(self.wallet)
 
         self.wallet.refresh_from_db()
         self.assertIsNone(self.wallet.last_synced_at)
@@ -115,7 +115,7 @@ class TheWalletDoesNotClaimAFreshnessItDoesNotHaveTest(TestCase):
         patch.object(ShareTokenService, "get_token_balance", return_value=ON_CHAIN).start()
         Holding.objects.filter(wallet=self.wallet).exclude(asset=self.asset).delete()
 
-        WalletSyncService.sync_wallet(self.wallet)
+        sync_wallet(self.wallet)
 
         self.wallet.refresh_from_db()
         self.assertIsNotNone(self.wallet.last_synced_at)

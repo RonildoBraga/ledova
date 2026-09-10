@@ -8,7 +8,7 @@ from assets.services.sync import AssetSyncService
 from users.models import UserAccount
 from wallets.models import Holding, Transaction, Wallet
 from wallets.services.chain import fetch_chain_balance
-from wallets.services.sync import WalletSyncService
+from wallets.services.sync import _sync_holdings_from_blockchain
 from wallets.services.transaction_confirmation import TransactionConfirmationService
 from wallets.services.transfers import TransferService
 
@@ -101,7 +101,7 @@ class ChainBalanceTest(TestCase):
         self.client_mock.get_token_balance.return_value = None
 
         with patch("wallets.services.chain.get_blockchain_client", return_value=self.client_mock):
-            self.assertEqual(WalletSyncService._sync_holdings_from_blockchain(self.wallet), (1, 1))
+            self.assertEqual(_sync_holdings_from_blockchain(self.wallet), (1, 1))
 
         eth_holding.refresh_from_db()
         usdc_holding.refresh_from_db()

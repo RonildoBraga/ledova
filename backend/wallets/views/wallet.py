@@ -31,7 +31,7 @@ from wallets.services import (
     start_wallet_verification,
 )
 from wallets.services.registration import register_wallet
-from wallets.services.sync import WalletSyncService
+from wallets.services.sync import sync_wallet
 
 
 class WalletViewSet(AuthenticatedModelViewSet):
@@ -98,7 +98,7 @@ class WalletViewSet(AuthenticatedModelViewSet):
     @action(detail=True, methods=["post"], url_path="sync", url_name="sync")
     def sync(self, request, uuid=None):
         wallet = self.get_object()
-        sync_data = WalletSyncService.sync_wallet(wallet)
+        sync_data = sync_wallet(wallet)
         wallet.refresh_from_db()
         return Response(
             {

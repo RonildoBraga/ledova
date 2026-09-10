@@ -12,7 +12,7 @@ from wallets.constants import (
     SNAPSHOT_REASON_TRANSACTION,
 )
 from wallets.models import Holding, HoldingSnapshot, Transaction, Wallet
-from wallets.services import WalletSyncService
+from wallets.services.sync import sync_wallet
 
 
 class WalletSyncServiceTest(TestCase):
@@ -29,7 +29,7 @@ class WalletSyncServiceTest(TestCase):
         self.wallet.verification_status = "PENDING"
         self.wallet.save(update_fields=["verification_status"])
         with patch("wallets.services.sync.get_blockchain_client") as get_client:
-            self.assertEqual(WalletSyncService.sync_wallet(self.wallet)["status"], "skipped")
+            self.assertEqual(sync_wallet(self.wallet)["status"], "skipped")
         get_client.assert_not_called()
 
     def test_sync_stamps_the_wallet_chain_on_every_fetched_transaction(self):
@@ -45,7 +45,7 @@ class WalletSyncServiceTest(TestCase):
             }
         ]
         with patch("wallets.services.sync.get_blockchain_client", return_value=client) as get_client:
-            result = WalletSyncService.sync_wallet(self.wallet)
+            result = sync_wallet(self.wallet)
 
         get_client.assert_called_once_with("ethereum")
         client.get_transaction_history.assert_called_once_with(self.wallet.address)
@@ -57,7 +57,7 @@ class WalletSyncServiceTest(TestCase):
 
     def test_chain_client_failure_is_reported_not_raised(self):
         with patch("wallets.services.sync.get_blockchain_client", side_effect=RuntimeError("boom")):
-            result = WalletSyncService.sync_wallet(self.wallet)
+            result = sync_wallet(self.wallet)
 
         self.assertEqual(result, {"status": "error", "error": "Wallet sync could not finish. Please try again later."})
         self.assertFalse(Transaction.objects.filter(wallet=self.wallet).exists())
@@ -74,7 +74,7 @@ class WalletSyncServiceTest(TestCase):
         with patch("wallets.services.sync.get_blockchain_client", return_value=client), patch(
             "wallets.services.holdings.fetch_chain_balance", return_value=Decimal(balance)
         ):
-            return WalletSyncService.sync_wallet(self.wallet)
+            return sync_wallet(self.wallet)
 
     def test_hourly_refresh_writes_one_daily_snapshot_per_holding_per_day(self):
         asset = Asset.objects.create(symbol="ETH", name="Ether", asset_type="native_crypto", is_verified=True)

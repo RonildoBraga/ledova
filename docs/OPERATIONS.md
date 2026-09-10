@@ -472,6 +472,19 @@ unreadable response or continuation beyond 100 pages per direction fails the
 sync rather than presenting a truncated history as complete. See the
 [Alchemy pagination contract](https://www.alchemy.com/docs/reference/transfers-api-quickstart).
 
+Wallet history imports create rows only for previously unseen `(wallet, hash)`
+pairs. Repeated or conflicting observations cannot overwrite an existing row's
+intent, status, receipt fields or accounting. The import takes the wallet lock
+used by pending creation and confirmation before checking or inserting rows.
+New history rows start `pending`, regardless of the provider's history status,
+and the existing five-minute confirmation sweep obtains a receipt before
+completing them. History imports do not record an optimistic deduction.
+Existing historical rows, including legacy `success` statuses, are preserved;
+repairing them and adopting a locally submitted transfer after history imported
+its hash first remain separate work under #7. The transaction table still holds
+one row per wallet and hash, so it does not represent multiple transfer events
+within a transaction. This change does not add deeper finality or reorg policy.
+
 Pending-transfer deductions record the holding generation they changed. A failure
 returns each recorded deduction once, and only while that generation is still
 current. An authoritative chain refresh supersedes that deduction; a later
