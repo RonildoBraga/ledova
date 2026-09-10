@@ -205,6 +205,35 @@ credentials, private endpoints, production identifiers and personal data out of
 code, fixtures, screenshots, logs and Git history. Read
 [CONTRIBUTING.md](CONTRIBUTING.md) first.
 
+## Sponsor
+
+Ledova is built and maintained by Ronildo da Rocha Braga Junior, who holds the
+copyright.
+
+[Blueberry Money](https://github.com/RonildoBraga/ledova) sponsors the project
+and intends to be the first company to operate Ledova as hosted infrastructure.
+Sponsorship funds the work; it does not transfer ownership, and it buys no
+control over what the project accepts or where it goes.
+
 ## License
 
-Licensed under the [Apache License 2.0](LICENSE).
+Licensed under the [Functional Source License, Version 1.1, ALv2 Future
+License](LICENSE) — FSL-1.1-ALv2. The full terms are short and worth reading.
+In outline:
+
+| You may, freely and without asking | You may not |
+| --- | --- |
+| Read, fork, modify and redistribute the source | Offer Ledova to others as a commercial product or service that substitutes for it, or for a service offered using it |
+| Run it for your own internal use, including a company operating its own share registry | Offer the same or substantially similar functionality as a commercial product or service |
+| Use it for non-commercial research or education | |
+| Provide professional services to someone else who is using it under these terms | |
+
+**Every release becomes Apache 2.0 two years after it is published.** That grant
+is irrevocable and is part of the licence, so nothing here is enclosed
+permanently — it is delayed, not withheld.
+
+Releases before 2026-09-10 were made under the Apache License 2.0 and stay
+available under it.
+
+The licence does not grant any right to the Ledova or Blueberry Money names,
+trade marks or product names, beyond identifying the origin of the software.
