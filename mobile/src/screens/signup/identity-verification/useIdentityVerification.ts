@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useIdentityVerification as useIdentityVerificationApi } from '../../../hooks/useIdentityVerification';
 
-export const useIdentityVerification = () => {
+export const useIdentityVerification = (enabled = true) => {
   const [isContinuing, setIsContinuing] = useState(false);
   const queryClient = useQueryClient();
 
@@ -23,10 +23,11 @@ export const useIdentityVerification = () => {
     justSubmitted,
     accessToken,
     formUrl,
+    formSessionEpoch,
     showVerificationForm,
     handleFormComplete,
     closeFormModal,
-  } = useIdentityVerificationApi();
+  } = useIdentityVerificationApi(enabled);
 
   const showPendingBanner = (justSubmitted || hasSubmitted) && !isVerified && !isRejected;
   const showOnHoldBanner = isOnHold && !justSubmitted;
@@ -75,6 +76,7 @@ export const useIdentityVerification = () => {
 
     accessToken,
     formUrl,
+    formSessionEpoch,
     showVerificationForm,
     handleFormComplete,
     closeFormModal,
