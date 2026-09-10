@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -5,7 +6,11 @@ from rest_framework.response import Response
 from shared.views.base import AuthenticatedReadOnlyViewSet
 from users.filters import NotificationFilter
 from users.models.notification import Notification
-from users.serializers.notification import NotificationSerializer
+from users.serializers.notification import (
+    MarkAllReadResponseSerializer,
+    NotificationSerializer,
+    UnreadCountResponseSerializer,
+)
 
 
 class NotificationViewSet(AuthenticatedReadOnlyViewSet):
@@ -32,11 +37,13 @@ class NotificationViewSet(AuthenticatedReadOnlyViewSet):
 
         return Response(self.get_serializer(notification).data)
 
+    @extend_schema(responses=UnreadCountResponseSerializer)
     @action(detail=False, methods=["get"], url_path="unread-count")
     def unread_count(self, request):
         count = self.get_queryset().unread().count()
         return Response({"unreadCount": count})
 
+    @extend_schema(responses=MarkAllReadResponseSerializer)
     @action(detail=False, methods=["post"], url_path="mark-all-read")
     def mark_all_read(self, request):
         updated = self.get_queryset().mark_all_read()

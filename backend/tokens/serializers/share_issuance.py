@@ -36,7 +36,7 @@ class ShareIssuanceListSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
-    def get_subscription_reference(self, issuance):
+    def get_subscription_reference(self, issuance) -> str | None:
         request = getattr(issuance, "shareissuancerequest", None)
         subscription = None if request is None else getattr(request, "subscription", None)
         return None if subscription is None else (subscription.reference or str(subscription.uuid))

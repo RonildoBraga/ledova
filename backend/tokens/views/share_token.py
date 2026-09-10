@@ -1,7 +1,8 @@
 import csv
 
 from django.http import HttpResponse
-from drf_spectacular.utils import extend_schema, inline_serializer
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
 from rest_framework import serializers, status
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
@@ -139,6 +140,11 @@ class ShareTokenViewSet(AuthenticatedModelViewSet):
             status=status.HTTP_201_CREATED,
         )
 
+    @extend_schema(
+        responses=ShareIssuanceListSerializer(many=True),
+        filters=False,
+        parameters=[OpenApiParameter("status", OpenApiTypes.STR, OpenApiParameter.QUERY)],
+    )
     @action(detail=True, methods=["get"])
     def issuances(self, request, uuid=None):
         token = self.get_object()
