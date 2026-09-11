@@ -1,46 +1,24 @@
-import { useQuery, useMutation, useQueryClient, useQueries } from '@tanstack/react-query';
+import { useQuery, useQueries } from '@tanstack/react-query';
 import {
   getShareTokens,
   getInvestorEligibility,
   getUserOrders,
-  getOrderCancelMessage,
-  cancelOrder,
   getWallets,
   getWhitelistStatus,
   getWalletBalances,
   parseTradingError,
-  getOrderModificationMessage,
-  modifyOrder,
   getOrderBook,
   BLOCKCHAIN,
   CACHE_TIMING,
   TRADING_CONFIG,
   WALLET_VERIFICATION_STATUS,
 } from '@ledova/shared';
-import type {
-  TransferOrder,
-  GetOrdersParams,
-  Wallet,
-  WhitelistStatus,
-  SignedCancelOrderRequest,
-  CreateOrderMessageResponse,
-  CancelOrderMessageResponse,
-  OrderModificationRequest,
-  OrderModificationMessageResponse,
-  SignedOrderModificationRequest,
-} from '@ledova/shared';
+import type { TransferOrder, GetOrdersParams, Wallet, WhitelistStatus } from '@ledova/shared';
 import apiClient from '@services/apiClient';
 import { useSelectedPortfolio } from '@hooks/useSelectedPortfolio';
 
 export { parseTradingError };
-export type {
-  WhitelistStatus,
-  CreateOrderMessageResponse,
-  CancelOrderMessageResponse,
-  OrderModificationRequest,
-  OrderModificationMessageResponse,
-  SignedOrderModificationRequest,
-};
+export type { WhitelistStatus };
 
 export const tradingQueryKeys = {
   tokens: ['trading', 'tokens'] as const,
@@ -61,17 +39,22 @@ export function useUserTradingWallets() {
     enabled: !!portfolio?.userAccount,
     staleTime: CACHE_TIMING.DEFAULT_STALE_TIME,
     gcTime: CACHE_TIMING.EXTRA_LONG_GC_TIME,
-    select: (data) =>
-      data.data.results.filter(
+    select: (data) => ({
+      wallets: data.data.results.filter(
         (w: Wallet) =>
           w.verificationStatus === WALLET_VERIFICATION_STATUS.VERIFIED &&
           (w.chain === BLOCKCHAIN.ETHEREUM || w.chain === BLOCKCHAIN.BASE),
       ),
+      actionWallets: data.data.results.filter(
+        (wallet: Wallet) => wallet.chain === BLOCKCHAIN.ETHEREUM || wallet.chain === BLOCKCHAIN.BASE,
+      ),
+    }),
   });
 
   return {
-    wallets: walletsQuery.data || ([] as Wallet[]),
-    walletAddresses: (walletsQuery.data || []).map((w: Wallet) => w.address),
+    wallets: walletsQuery.data?.wallets || ([] as Wallet[]),
+    actionWallets: walletsQuery.data?.actionWallets || ([] as Wallet[]),
+    walletAddresses: (walletsQuery.data?.wallets || []).map((w: Wallet) => w.address),
     isLoading: isLoadingPortfolio || walletsQuery.isLoading,
     error: walletsQuery.error,
     refetch: walletsQuery.refetch,
@@ -226,49 +209,6 @@ function useUserOrders(walletAddress: string | undefined) {
     enabled: !!walletAddress,
     staleTime: CACHE_TIMING.DEFAULT_STALE_TIME,
     gcTime: CACHE_TIMING.DEFAULT_GC_TIME,
-  });
-}
-
-export function useOrderCancelMessage() {
-  return useMutation({
-    mutationFn: (uuid: string) => getOrderCancelMessage(apiClient, uuid).then((res) => res.data),
-  });
-}
-
-export function useCancelOrder() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ uuid, ...signatureData }: { uuid: string } & SignedCancelOrderRequest) =>
-      cancelOrder(apiClient, uuid, signatureData).then((res) => res.data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['trading', 'orders'] });
-      queryClient.invalidateQueries({ queryKey: ['trading', 'userOrders'] });
-      queryClient.invalidateQueries({ queryKey: ['trading', 'orderBook'] });
-    },
-  });
-}
-
-export function useOrderModificationMessage() {
-  return useMutation({
-    mutationFn: ({ orderUuid, modifications }: { orderUuid: string; modifications: OrderModificationRequest }) =>
-      getOrderModificationMessage(apiClient, orderUuid, modifications).then((res) => res.data),
-  });
-}
-
-export function useExecuteOrderModification() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ orderUuid, data }: { orderUuid: string; data: SignedOrderModificationRequest }) =>
-      modifyOrder(apiClient, orderUuid, data).then((res) => res.data),
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['trading', 'orders'] });
-      queryClient.invalidateQueries({ queryKey: ['trading', 'userOrders'] });
-      queryClient.invalidateQueries({ queryKey: ['trading', 'orderBook'] });
-      queryClient.invalidateQueries({ queryKey: ['trading', 'allOpenOrders'] });
-      queryClient.invalidateQueries({ queryKey: tradingQueryKeys.orderModifications(variables.orderUuid) });
-    },
   });
 }
 

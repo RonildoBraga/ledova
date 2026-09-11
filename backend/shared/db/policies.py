@@ -107,6 +107,7 @@ POLICIES = {
         f"{_member('owner_account_id')} AND {OWNERSHIP_BOUND}",
     ),
     "tokens_ordersubmission": (_member("owner_account_id"), _member("owner_account_id")),
+    "tokens_orderactionsubmission": (_member("owner_account_id"), _member("owner_account_id")),
     "companies_companydocument": (
         _company("company_id", VISIBLE_COMPANIES),
         _company("company_id", MANAGEABLE_COMPANIES),
@@ -200,12 +201,6 @@ BYPASSES_VISIBLE_TO_USER = {
         "narrower than all(), and both consumers - the directory and the subscription serializer - filter "
         "to companies that are open or listed, so the narrowing is invisible to them",
         "shared/tests/test_cross_tenant_routes_under_rls.py - the directory and market rows",
-    ),
-    "TransferOrder.all in the cancel path": (
-        "tokens/services/trading_order_cancel.py:15",
-        "tokens_transferorder: member account and the ownership_bound predicate; the service is reached "
-        "only from a view that already resolved the order under the principal",
-        "shared/tests/test_cross_tenant_routes_under_rls.py - the cancel rows",
     ),
     "Company.all on the administrative actions": (
         "companies/views/company.py:70",

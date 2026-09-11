@@ -21,6 +21,7 @@ from tokens.services.signing_challenge import (
     purge_expired_challenges,
     spend,
 )
+from tokens.tests.signing_challenge_fixtures import action_fields, pending_action
 
 
 class TradingAmountsAndStatesAreDatabaseRulesTest(TestCase):
@@ -91,11 +92,14 @@ class ChallengeSpendingHasTwoConsistentFieldsTest(TestCase):
 
     def setUp(self):
         self.tenant = make_tenant("challenge-bounds")
+        action = pending_action(self.tenant, order=self.tenant.swap.sell_order)
         self.challenge = issue_challenge(
             SigningChallengePurpose.ORDER_CANCEL,
             self.tenant.wallet.address,
-            {"orderUuid": str(self.tenant.swap.sell_order_id)},
+            action_fields(action),
+            verifying_contract=action.verifying_contract,
             order=self.tenant.swap.sell_order,
+            action=action,
         )
 
     def test_neither_half_of_a_spend_can_be_written_alone(self):

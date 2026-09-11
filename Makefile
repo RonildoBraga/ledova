@@ -9,12 +9,16 @@ PYTHON ?= python3
 # database schema generation touches already exists, and writes it to this same path -
 # two files naming one artefact differently is how `make check-api-types` comes to say
 # no schema exists while CI has just written one.
-SCHEMA ?= /tmp/ledova-schema.yml
+SCHEMA ?= /tmp/ledova-schema.json
+SCHEMA_ENVIRONMENT ?= /tmp/ledova-schema-environment.json
+SCHEMA_COMPARISON ?= /tmp/ledova-schema-comparison.json
+CLIENT_OPERATIONS_REPORT ?= /tmp/ledova-client-operations.json
 
 .PHONY: help install install-backend install-node-if-missing init-local check-local-env build generate-tokens check check-comments check-layers \
 	check-logging check-schema-responses check-test-shadowing check-api-types check-self-imports check-mobile-test-awaits test-gates audit test \
 	dev-up dev-down dev-logs contracts-compile contracts-test contracts-deploy-local \
-	contracts-deploy-testnet chain-test smoke lint check-type-check
+	contracts-deploy-testnet chain-test smoke lint check-type-check \
+	install-schema-environment generate-api-schema check-api-schema update-api-schema check-client-operations
 
 # CHAIN_TEST_PORT is the single knob for the local chain: it moves the Hardhat node, the backend's
 # BLOCKCHAIN_RPC_URL and, through LOCALHOST_RPC_URL, the `localhost` network in contracts/hardhat.config.ts
@@ -51,6 +55,11 @@ help:
 	@echo "  make check-test-shadowing     Fail on a test helper that shadows a TestCase method"
 	@echo "  make check-connection-binding  Fail on a transaction or cursor bound to the default connection"
 	@echo "  make check-api-types          Fail on a shared type that requires a field the API never sends"
+	@echo "  make install-schema-environment Install development dependencies with the schema toolchain constraints"
+	@echo "  make generate-api-schema      Generate JSON from an already migrated isolated PostgreSQL database"
+	@echo "  make check-api-schema         Generate and compare the complete committed OpenAPI snapshot"
+	@echo "  make update-api-schema        Generate, check contracts and explicitly replace the snapshot"
+	@echo "  make check-client-operations  Check shared, dashboard and mobile HTTP operations against the snapshot"
 	@echo "  make check-error-bodies       Fail on an API error body built from an exception's text"
 	@echo "  make test-gates               Run the unit tests of the gate scripts"
 	@echo "  make audit                    Fail on a new production dependency advisory"
@@ -71,6 +80,9 @@ install:
 
 install-backend:
 	$(PYTHON) -m pip install -r backend/requirements-dev.txt
+
+install-schema-environment:
+	$(PYTHON) -m pip install -r backend/requirements-dev.txt -c backend/schema/requirements.txt
 
 # Each workspace resolves from its own node_modules. mobile's type-check reads
 # expo/tsconfig.base, so without mobile's own install tsc fails before it reads a
@@ -129,10 +141,26 @@ check-test-shadowing:
 check-api-types:
 	@test -f $(SCHEMA) || { \
 	  echo "No schema at $(SCHEMA). Generate one first:"; \
-	  echo "  cd backend && python manage.py spectacular --file $(SCHEMA)"; \
+	  echo "  make generate-api-schema SCHEMA=$(SCHEMA)"; \
 	  echo "or pass SCHEMA=<path>. CI generates it in the Django job."; \
 	  exit 1; }
 	$(PYTHON) scripts/check-api-types.py --schema $(SCHEMA)
+
+generate-api-schema:
+	cd backend && $(PYTHON) manage.py export_api_schema --settings=ledova_backend.settings.test_postgres \
+	  --file "$(abspath $(SCHEMA))" --report "$(abspath $(SCHEMA_ENVIRONMENT))"
+
+check-api-schema: generate-api-schema
+	$(PYTHON) scripts/check-api-schema.py --schema "$(SCHEMA)" --report "$(SCHEMA_COMPARISON)"
+
+update-api-schema: generate-api-schema
+	$(PYTHON) scripts/check-api-types.py --schema "$(SCHEMA)"
+	node scripts/check-client-operations.mjs --schema "$(SCHEMA)" --report "$(CLIENT_OPERATIONS_REPORT)"
+	$(PYTHON) scripts/check-api-schema.py --schema "$(SCHEMA)" --report "$(SCHEMA_COMPARISON)" --update
+
+check-client-operations:
+	node --test scripts/tests/check-client-operations.test.mjs
+	node scripts/check-client-operations.mjs --report "$(CLIENT_OPERATIONS_REPORT)"
 
 check-logging:
 	$(PYTHON) scripts/check-logging.py

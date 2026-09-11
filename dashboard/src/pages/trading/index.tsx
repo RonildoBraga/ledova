@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef } from 'react';
 import { CheckCircleIcon } from '@phosphor-icons/react';
 import type { TransferOrder, CreateOrderRequest, Wallet, SwapOrder } from '@ledova/shared';
-import { DESIGN_TOKENS, useOrderSubmissions } from '@ledova/shared';
+import { DESIGN_TOKENS, useOrderSubmissions, useOrderActions } from '@ledova/shared';
 import { orderSubmissionStore } from '@services/orderSubmissions';
 import { Modal } from '@components/Modal';
 import {
@@ -14,7 +14,8 @@ import {
 import { useSwapOrdersMulti } from './hooks/useAtomicSwaps';
 import { SwapSigningFlow } from './components/SwapSigningFlow';
 import { OrderSigningFlow } from './components/OrderSigningFlow';
-import { OrderModificationModal } from './components/OrderModificationModal';
+import { OrderActionFlow } from './components/OrderActionFlow';
+import { orderActionStore } from '@services/orderActions';
 import { MarketOverview } from './components/MarketOverview';
 import { OrdersPanel } from './components/OrdersPanel';
 import { PlaceOrderPanel } from './components/PlaceOrderPanel';
@@ -79,6 +80,7 @@ function OrderSuccessModal({
 
 export function TradingPage() {
   const submissions = useOrderSubmissions(orderSubmissionStore);
+  const actions = useOrderActions(orderActionStore);
   const signingGeneration = useRef(0);
   const currentSigningGeneration = signingGeneration.current;
   const { data: tokens, isLoading } = useShareTokens();
@@ -93,17 +95,9 @@ export function TradingPage() {
   const [selectedSwap, setSelectedSwap] = useState<SwapOrder | null>(null);
   const [isSwapSigningOpen, setIsSwapSigningOpen] = useState(false);
 
-  const [pendingCancelOrderUuid, setPendingCancelOrderUuid] = useState<string | null>(null);
-  const [pendingCancelOrderSymbol, setPendingCancelOrderSymbol] = useState<string | null>(null);
-  const [orderSigningWallet, setOrderSigningWallet] = useState<Wallet | null>(null);
-  const [isOrderSigningOpen, setIsOrderSigningOpen] = useState(false);
-
-  const [orderToModify, setOrderToModify] = useState<TransferOrder | null>(null);
-  const [isModificationModalOpen, setIsModificationModalOpen] = useState(false);
-
   useTradingEvents(selectedTokenUuid);
 
-  const { wallets, walletAddresses } = useUserTradingWallets();
+  const { wallets, actionWallets, walletAddresses } = useUserTradingWallets();
   const {
     isWhitelisted,
     getStatus: getWhitelistStatusFor,
@@ -130,6 +124,7 @@ export function TradingPage() {
   const { data: orderBookData, isLoading: isLoadingOrderBook } = useOrderBook(selectedTokenUuid || undefined);
 
   const handleCreateOrder = (data: CreateOrderRequest): Promise<boolean> => {
+    actions.close();
     const signingWallet = wallets.find((w) => w.uuid === data.walletUuid);
     return submissions.begin(data, signingWallet ?? null);
   };
@@ -137,22 +132,13 @@ export function TradingPage() {
   const handleCancelOrder = (uuid: string) => {
     signingGeneration.current++;
     submissions.close();
-    const order = userOrders.find((o) => o.uuid === uuid);
-    if (order) {
-      const signingWallet = wallets.find((w) => w.address.toLowerCase() === order.walletAddress.toLowerCase());
-      setOrderSigningWallet(signingWallet || wallets[0] || null);
-      setPendingCancelOrderSymbol(order.tokenSymbol);
-    } else {
-      setOrderSigningWallet(wallets[0] || null);
-      setPendingCancelOrderSymbol(null);
-    }
-    setPendingCancelOrderUuid(uuid);
-    setIsOrderSigningOpen(true);
+    actions.open(uuid, 'cancel');
   };
 
   const handleEditOrder = (order: TransferOrder) => {
-    setOrderToModify(order);
-    setIsModificationModalOpen(true);
+    signingGeneration.current++;
+    submissions.close();
+    actions.open(order.uuid, 'modify');
   };
 
   const handleSignSwap = (swap: SwapOrder) => {
@@ -174,18 +160,9 @@ export function TradingPage() {
     return wallets.find((w) => w.address.toLowerCase() === address.toLowerCase()) || null;
   };
 
-  const getModificationWallet = (order: TransferOrder | null): Wallet | null => {
-    if (!order) return null;
-    return wallets.find((w) => w.address.toLowerCase() === order.walletAddress.toLowerCase()) || null;
-  };
-
   const handleCloseOrderSigningFlow = () => {
     signingGeneration.current++;
     submissions.close();
-    setIsOrderSigningOpen(false);
-    setPendingCancelOrderUuid(null);
-    setPendingCancelOrderSymbol(null);
-    setOrderSigningWallet(null);
   };
 
   const handleOrderSigningSuccess = (order: TransferOrder, recovered = false) => {
@@ -222,8 +199,7 @@ export function TradingPage() {
                 className="block text-brand-light"
                 onClick={() => {
                   signingGeneration.current++;
-                  setPendingCancelOrderUuid(null);
-                  setIsOrderSigningOpen(false);
+                  actions.close();
                   submissions.recover(record);
                 }}
               >
@@ -239,6 +215,34 @@ export function TradingPage() {
               className="text-sm text-brand-light"
             >
               Refresh saved orders
+            </button>
+          </section>
+
+          <section
+            className="space-y-2 rounded-lg bg-surface-tertiary p-4"
+            aria-label="Saved cancellations and changes"
+          >
+            <h2 className="font-semibold">Saved cancellations and changes</h2>
+            {actions.error && <p role="alert">{actions.error}</p>}
+            {actions.pending.map((record, index) => (
+              <button
+                key={record.actionId}
+                className="block text-brand-light"
+                onClick={() => {
+                  signingGeneration.current++;
+                  submissions.close();
+                  actions.recover(record);
+                }}
+              >
+                Check {record.purpose === 'cancel' ? 'cancellation' : 'change'} {index + 1}
+              </button>
+            ))}
+            <button
+              className="text-sm text-brand-light"
+              disabled={actions.isLoading}
+              onClick={() => void actions.refresh()}
+            >
+              Refresh saved actions
             </button>
           </section>
 
@@ -297,34 +301,21 @@ export function TradingPage() {
       />
 
       <OrderSigningFlow
-        isOpen={!!submissions.active || isOrderSigningOpen}
+        isOpen={!!submissions.active}
         onClose={handleCloseOrderSigningFlow}
-        mode={pendingCancelOrderUuid ? 'cancel' : 'create'}
         submission={submissions.active}
         tokens={tokens ?? []}
-        orderUuid={pendingCancelOrderUuid || undefined}
-        orderSymbol={pendingCancelOrderSymbol || undefined}
-        wallet={
-          submissions.active
-            ? (wallets.find((wallet) => wallet.uuid === submissions.active?.record.walletUuid) ?? null)
-            : orderSigningWallet
-        }
+        wallet={wallets.find((wallet) => wallet.uuid === submissions.active?.record.walletUuid) ?? null}
         onSuccess={handleOrderSigningSuccess}
       />
-
-      <OrderModificationModal
-        isOpen={isModificationModalOpen}
-        onClose={() => {
-          setIsModificationModalOpen(false);
-          setOrderToModify(null);
-        }}
-        order={orderToModify}
-        wallet={getModificationWallet(orderToModify)}
-        onSuccess={() => {
-          setIsModificationModalOpen(false);
-          setOrderToModify(null);
-        }}
-      />
+      {actions.active && (
+        <OrderActionFlow
+          key={actions.active.record?.actionId ?? `${actions.active.orderUuid}/${actions.active.purpose}`}
+          action={actions.active}
+          wallets={actionWallets}
+          onClose={actions.close}
+        />
+      )}
     </main>
   );
 }

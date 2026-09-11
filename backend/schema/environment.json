@@ -1,0 +1,5 @@
+{
+  "postgresql_major": 16,
+  "python": "3.13.15",
+  "settings": "ledova_backend.settings.test_postgres"
+}

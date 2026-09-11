@@ -945,14 +945,34 @@ runs. Both mechanisms hold at once on purpose:
   would silently undo, turning a spent challenge back into a replayable one. With
   no connection reuse there is no stale principal to leak, so the `RESET` in the
   middleware's `finally` is hygiene rather than the load-bearing part.
-- **Order modification spends survive business refusals.** A valid challenge is
-  checked in a short transaction before any advisory balance RPC. The order lock
-  and a second challenge check follow the RPC, so a concurrent fill, cancellation,
-  expiry or spend is seen before writing. `validate_modifications` receives the
-  advisory balance; it does not call the chain. `act_under_row_lock` commits a
-  business refusal's spend before raising it. A provider failure before this
-  block leaves the signature retryable. The scoped transaction tests exercise
-  this with real signatures and no surrounding test transaction.
+- **Cancel and modify actions have their own durable identity.** A read-only
+  action-context request returns canonical decimal strings for the current
+  quantities and price. It allocates no journal or challenge. A deliberate
+  action receives a fresh account-scoped UUID; retries keep that UUID, even when
+  another deliberate action chooses equal terms. `tokens/0038` records immutable
+  order, account, wallet, token, purpose, domain and full replacement values.
+  `OrderCancelV1` and `OrderModifyV1` bind those identities in the signature.
+- **Provider reads stay outside action transactions.** Registration commits a
+  pending intent before issuance preflight. Execution first authenticates and
+  checks the pending challenge in a short transaction, then performs any
+  advisory balance RPC. The final durable transaction rechecks authorization,
+  domain, challenge and current business state, and commits spend, local order
+  changes, modification logs and the recorded outcome together. Only the
+  existing cancellation/modification business refusals at that final decision
+  record a refusal. A provider or unexpected failure before the durable commit
+  leaves the action pending and unspent; a lost response after commit recovers
+  the recorded outcome. Issuance checks do not record terminal refusals.
+  Enclosing transactions and disabled autocommit are refused.
+- **Recovery returns history alongside current state.** An authorized terminal
+  action is read before checking pending-only credentials or current deployment.
+  Recovery uses the owned plain order and can fall back to recorded token display
+  metadata; it does not grant access to a now-hidden token. The original result
+  remains immutable while the returned order can change. A terminal replay
+  performs no second mutation or event publication. Events use the existing
+  after-commit mechanism; there is no outbox or exactly-once delivery guarantee.
+  The new journal participates in account RLS, and PostgreSQL guards protect its
+  identity, challenge linkage and terminal outcome. Actual API, scoped-role and
+  same-action process controls cover the boundaries.
 - **Issued trading intent is immutable.** `tokens/0035` adds database bounds for
   order/swap amounts and their existing status/type values. Partial settlement
   may still leave an OPEN order with nonzero fills, and a minimum fill may exceed

@@ -10,7 +10,7 @@ from django.urls import get_resolver
 from rest_framework.generics import GenericAPIView
 from rest_framework.serializers import FileField
 
-from shared.tests.test_route_coverage import _walk
+from shared.api.routes import _walk
 from shared.upload_gateway import (
     BoundedUploadASGI,
     BoundedUploadInput,

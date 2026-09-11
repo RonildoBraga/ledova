@@ -356,15 +356,15 @@ class Company(BaseModel):
         self._save_transition(update_fields=["status", "delisted_at", "delisting_reason", "updated_at"])
 
     @property
-    def is_active(self):
+    def is_active(self) -> bool:
         return self.status == CompanyStatus.ACTIVE
 
     @property
-    def is_approved(self):
+    def is_approved(self) -> bool:
         return self.status in [CompanyStatus.APPROVED, CompanyStatus.ACTIVE]
 
     @property
-    def is_pending_review(self):
+    def is_pending_review(self) -> bool:
         return self.status in [
             CompanyStatus.SUBMITTED,
             CompanyStatus.REVIEW,
@@ -372,11 +372,11 @@ class Company(BaseModel):
         ]
 
     @property
-    def can_issue_tokens(self):
+    def can_issue_tokens(self) -> bool:
         return self.status == CompanyStatus.ACTIVE
 
     @property
-    def display_name(self):
+    def display_name(self) -> str:
         return self.trading_name or self.name
 
     @property

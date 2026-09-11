@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from assets.models import Asset
@@ -23,6 +24,15 @@ class SettlementAssetSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class OperatorPaymentInstructionsSerializer(serializers.Serializer):
+    bank_account_name = serializers.CharField(required=False)
+    bank_bsb = serializers.CharField(required=False)
+    bank_account_number = serializers.CharField(required=False)
+    payment_reference_prefix = serializers.CharField(required=False)
+    receiving_wallet_address = serializers.CharField(required=False)
+    receiving_wallet_chain = serializers.CharField(required=False)
+
+
 class OperatorSerializer(serializers.ModelSerializer):
 
     supported_settlement_assets = SettlementAssetSerializer(many=True, read_only=True)
@@ -46,6 +56,7 @@ class OperatorSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = fields
 
+    @extend_schema_field(OperatorPaymentInstructionsSerializer(allow_null=True))
     def get_payment_instructions(self, operator):
         if not self._may_see_payment_instructions():
             return None

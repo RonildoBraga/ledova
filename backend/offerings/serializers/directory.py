@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from companies.models import Company
@@ -25,6 +26,10 @@ class DirectoryOpenOfferingSerializer(serializers.Serializer):
     closes_at = serializers.DateTimeField(source="open_offering_closes_at", read_only=True)
 
 
+class DirectoryOpenOfferingResponseSerializer(DirectoryOpenOfferingSerializer):
+    closes_at = serializers.DateTimeField(source="open_offering_closes_at", read_only=True, allow_null=True)
+
+
 class DirectoryTokenListSerializer(ShareTokenListSerializer):
 
     company = DirectoryCompanySerializer(read_only=True)
@@ -35,6 +40,7 @@ class DirectoryTokenListSerializer(ShareTokenListSerializer):
         fields = ShareTokenListSerializer.Meta.fields + ["issued_shares", "open_offering"]
         read_only_fields = fields
 
+    @extend_schema_field(DirectoryOpenOfferingResponseSerializer(allow_null=True))
     def get_open_offering(self, obj):
         if obj.open_offering_uuid is None:
             return None
