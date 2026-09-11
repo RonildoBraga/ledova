@@ -1193,8 +1193,12 @@ height, timestamp and actual native fee. Imported-history receipts use the same
 metadata rules without balance or notification effects. An unavailable block
 timestamp remains unknown; confirmation never substitutes the current time.
 EVM timestamps come from a lookup by the receipt's block hash, and the returned
-header must match both that hash and the receipt height. Bitcoin header times
-must identify the requested block. These checks follow the
+header must match both that hash and the receipt height. Bitcoin header heights
+and times must identify the requested block. Its transaction receipt requests
+`getrawtransaction` verbosity2 and converts the optional BTC-denominated fee to
+exact integral satoshis. Missing undo data or an invalid fee leaves the actual
+fee unknown; the estimate is retained separately. Transaction-level `height`
+fields cannot substitute for a matching block header. These checks follow the
 [Ethereum block contract](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_getblockbyhash)
 and [Bitcoin Core header contract](https://bitcoincore.org/en/doc/30.0.0/rpc/blockchain/getblockheader/).
 They validate provider metadata consistency, not independent chain truth.
