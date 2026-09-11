@@ -1,7 +1,7 @@
 import { useContext, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from 'react';
 import { AppState } from 'react-native';
-import { CameraAccessContext } from '../../../../contexts/cameraAccess';
-import { getSessionEpoch, subscribeSession } from '../../../../services/sessionScope';
+import { CameraAccessContext } from '../contexts/cameraAccess';
+import { getSessionEpoch, subscribeSession } from '../services/sessionScope';
 
 function subscribeAppState(listener: () => void) {
   const subscription = AppState.addEventListener('change', listener);
@@ -10,7 +10,7 @@ function subscribeAppState(listener: () => void) {
 
 const getAppState = () => AppState.currentState;
 
-function createFormLifetime() {
+export function createProviderLifetime() {
   let retired = false;
   let disposed = false;
   return {
@@ -27,7 +27,7 @@ function createFormLifetime() {
   };
 }
 
-export function useVerificationFormLifecycle(
+export function useProviderViewLifecycle(
   visible: boolean,
   accessToken: string | null,
   formUrl: string | null,
@@ -41,7 +41,7 @@ export function useVerificationFormLifecycle(
   useSyncExternalStore(subscribeSession, getSessionEpoch, getSessionEpoch);
   const [, render] = useReducer((value: number) => value + 1, 0);
   const form = useMemo(
-    () => ({ visible, sessionEpoch, lifetime: createFormLifetime() }),
+    () => ({ visible, sessionEpoch, lifetime: createProviderLifetime() }),
     [visible, accessToken, formUrl, sessionEpoch],
   );
   const [view, setView] = useState({ form, admission, appState, key: 0 });

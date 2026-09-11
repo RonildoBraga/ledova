@@ -7,13 +7,17 @@ import { test } from 'node:test';
 
 const mobile = path.resolve(import.meta.dirname, '../..');
 
-function fixture(untrustedEndpoint, check) {
+function fixture(untrustedEndpoint, check, { withoutShell = false } = {}) {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'ledova-probe-tls-')));
   try {
     fs.mkdirSync(path.join(root, 'scripts'));
     fs.mkdirSync(path.join(root, 'bin'));
     fs.copyFileSync(path.join(mobile, 'app.json'), path.join(root, 'app.json'));
     fs.copyFileSync(path.join(mobile, 'scripts/native-smoke.mjs'), path.join(root, 'scripts/native-smoke.mjs'));
+    fs.copyFileSync(
+      path.join(mobile, 'scripts/android-test-packages.mjs'),
+      path.join(root, 'scripts/android-test-packages.mjs'),
+    );
     let server = fs.readFileSync(path.join(mobile, 'scripts/native-probe-server.mjs'), 'utf8');
     if (untrustedEndpoint) {
       const original = `https.createServer(credentials, handler('${untrustedEndpoint}'))`;
@@ -26,6 +30,9 @@ function fixture(untrustedEndpoint, check) {
     }
     fs.writeFileSync(path.join(root, 'scripts/native-probe-server.mjs'), server);
     fs.writeFileSync(path.join(root, 'bin/xcodebuild'), '#!/bin/sh\ntouch build-reached\nexit 73\n', { mode: 0o700 });
+    if (withoutShell) {
+      fs.writeFileSync(path.join(root, 'bin/sh'), '#!/bin/sh\ntouch shell-invoked\nexit 97\n', { mode: 0o700 });
+    }
     const ambient = path.join(root, 'ambient-openssl.cnf');
     fs.writeFileSync(
       ambient,
@@ -46,7 +53,12 @@ function fixture(untrustedEndpoint, check) {
     });
     assert.equal(result.error, undefined);
     assert.equal(result.status, 1);
-    check({ output, result, buildReached: fs.existsSync(path.join(root, 'build-reached')) });
+    check({
+      output,
+      result,
+      buildReached: fs.existsSync(path.join(root, 'build-reached')),
+      shellInvoked: fs.existsSync(path.join(root, 'shell-invoked')),
+    });
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -81,6 +93,20 @@ test('strict CA and wrong-CA controls pass before a native build despite ambient
     }
     assert.ok(!fs.readdirSync(output).some((name) => name.endsWith('.key')));
   });
+});
+
+test('probe certificates and TLS controls do not require an extra shell process', () => {
+  fixture(
+    null,
+    ({ output, result, buildReached, shellInvoked }) => {
+      assert.equal(buildReached, true, result.stderr);
+      assert.equal(shellInvoked, false);
+      assert.match(result.stderr, /ordinary-release-build failed \(73\)/);
+      const { controls } = JSON.parse(fs.readFileSync(path.join(output, 'host-tls-controls.json'), 'utf8'));
+      assert.equal(controls.length, 7);
+    },
+    { withoutShell: true },
+  );
 });
 
 for (const [endpoint, stage] of [

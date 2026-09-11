@@ -11,13 +11,20 @@ import { setTimeout, clearTimeout, setInterval, clearInterval } from 'node:timer
 const directory = path.resolve(process.argv[2]);
 const host = process.argv[3] === 'ios' ? 'localhost' : '10.0.2.2';
 fs.mkdirSync(directory, { recursive: true });
-const executable = fs.realpathSync(
-  execFileSync('sh', ['-c', 'command -v openssl'], {
-    encoding: 'utf8',
-    timeout: 5000,
-    killSignal: 'SIGKILL',
-  }).trim(),
-);
+function certificateTool() {
+  for (const directory of (process.env.PATH ?? '').split(path.delimiter)) {
+    const candidate = path.resolve(directory, 'openssl');
+    try {
+      if (!fs.statSync(candidate).isFile()) continue;
+      fs.accessSync(candidate, fs.constants.X_OK);
+      return fs.realpathSync(candidate);
+    } catch {
+      continue;
+    }
+  }
+  throw new Error('The native probe requires an executable OpenSSL on PATH.');
+}
+const executable = certificateTool();
 const configuration = path.join(directory, 'openssl.cnf');
 fs.writeFileSync(configuration, '[req]\ndistinguished_name=probe_name\n[probe_name]\n');
 

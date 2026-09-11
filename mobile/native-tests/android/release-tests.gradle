@@ -1,0 +1,20 @@
+allprojects { project ->
+  project.plugins.withId('com.android.application') {
+    project.android {
+      testBuildType 'release'
+      defaultConfig {
+        testApplicationId 'org.example.ledova.releaseprobe.test'
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+      }
+      sourceSets.androidTest.java.srcDir new File(project.rootDir, '../native-tests/android')
+    }
+    project.dependencies {
+      androidTestImplementation 'androidx.test:runner:1.6.2'
+      androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+      androidTestImplementation 'androidx.test.uiautomator:uiautomator:2.3.0'
+      androidTestImplementation 'androidx.camera:camera-core:1.5.0-rc01'
+      androidTestImplementation 'androidx.camera:camera-camera2:1.5.0-rc01'
+      androidTestImplementation 'androidx.camera:camera-lifecycle:1.5.0-rc01'
+    }
+  }
+}

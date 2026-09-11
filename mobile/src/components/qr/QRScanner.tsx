@@ -1,11 +1,11 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { CameraView } from 'expo-camera';
 import { QrCodeIcon } from 'phosphor-react-native';
 
 import { useAppTheme, useThemedStyles } from '../../contexts';
 import { CustomModal } from '../modal';
 import { useCameraScanner } from './useCameraScanner';
+import { ScannerPreview } from './ScannerPreview';
 
 interface QRScannerProps {
   visible: boolean;
@@ -98,18 +98,13 @@ export function QRScanner({ visible, onClose, onScan, title = 'Scan QR Code', su
       </View>
 
       <View style={styles.cameraContainer}>
+        <ScannerPreview {...camera.preview} />
         {camera.message ? (
           <View style={styles.messageContainer}>
             <Text style={styles.message}>{camera.message}</Text>
           </View>
         ) : (
           <>
-            <CameraView
-              style={StyleSheet.absoluteFillObject}
-              facing="back"
-              onBarcodeScanned={camera.onBarcodeScanned}
-              barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-            />
             <View style={styles.cameraOverlay}>
               <View style={styles.scanArea} />
             </View>

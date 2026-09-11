@@ -7,7 +7,7 @@ import { overlayColors } from '../../../../contexts';
 import { useAppTheme, useThemedStyles } from '../../../../contexts';
 import { MARKETING_URL } from '../../../../config/publicLinks';
 import { allowWebNavigation } from '../../../../config/networkPolicy';
-import { useVerificationFormLifecycle } from './useVerificationFormLifecycle';
+import { useProviderViewLifecycle } from '../../../../hooks/useProviderViewLifecycle';
 
 interface VerificationFormModalProps {
   visible: boolean;
@@ -196,7 +196,7 @@ export function VerificationFormModal({
       color: theme.colors.text.muted,
     },
   }));
-  const lifecycle = useVerificationFormLifecycle(visible, accessToken, formUrl, sessionEpoch, onComplete, onClose);
+  const lifecycle = useProviderViewLifecycle(visible, accessToken, formUrl, sessionEpoch, onComplete, onClose);
 
   const handleMessage = (event: WebViewMessageEvent) => {
     if (!lifecycle.isCurrent()) return;
