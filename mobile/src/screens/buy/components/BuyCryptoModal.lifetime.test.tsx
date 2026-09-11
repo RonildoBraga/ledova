@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { AppState, type AppStateStatus } from 'react-native';
+import { CameraAccessContext, createCameraAccess } from '../../../contexts/cameraAccess';
 import { getSessionEpoch, invalidateSessionScope } from '../../../services/sessionScope';
 
 const mockWidget = jest.fn();
 const mockNavigate = jest.fn();
 const mockWallets = [{ uuid: 'synthetic-wallet', chain: 'base' }];
 const pending: ((value: { data: { url: string } }) => void)[] = [];
+const appStateListeners = new Set<(state: AppStateStatus) => void>();
+let access: ReturnType<typeof createCameraAccess>;
 
 jest.mock('@ledova/shared', () => ({
   ...jest.requireActual('@ledova/shared'),
@@ -53,23 +57,33 @@ let client: QueryClient;
 function Harness({ account = 'synthetic-account', shown = true }: { account?: string; shown?: boolean }) {
   const [open, setOpen] = useState(true);
   return (
-    <QueryClientProvider client={client}>
-      <BuyCryptoModal
-        visible={open && shown}
-        initialAsset="ETH"
-        userAccountUuid={account}
-        onClose={() => setOpen(false)}
-        onNavigateToProfile={jest.fn()}
-        onNavigateToWebView={(url, epoch) => {
-          setOpen(false);
-          mockNavigate(url, epoch);
-        }}
-      />
-    </QueryClientProvider>
+    <CameraAccessContext.Provider value={access}>
+      <QueryClientProvider client={client}>
+        <BuyCryptoModal
+          visible={open && shown}
+          initialAsset="ETH"
+          userAccountUuid={account}
+          onClose={() => setOpen(false)}
+          onNavigateToProfile={jest.fn()}
+          onNavigateToWebView={(url, epoch) => {
+            setOpen(false);
+            mockNavigate(url, epoch);
+          }}
+        />
+      </QueryClientProvider>
+    </CameraAccessContext.Provider>
   );
 }
 
 beforeEach(() => {
+  access = createCameraAccess();
+  access.setAllowed(true);
+  AppState.currentState = 'active';
+  appStateListeners.clear();
+  jest.spyOn(AppState, 'addEventListener').mockImplementation((event, listener) => {
+    if (event === 'change') appStateListeners.add(listener);
+    return { remove: () => appStateListeners.delete(listener) };
+  });
   client = new QueryClient({ defaultOptions: { mutations: { retry: false, gcTime: Infinity } } });
   pending.length = 0;
   mockWidget.mockImplementation(() => new Promise((resolve) => pending.push(resolve)));
@@ -77,11 +91,17 @@ beforeEach(() => {
 
 afterEach(async () => {
   await cleanup();
+  expect(appStateListeners.size).toBe(0);
   await act(() =>
     pending.splice(0).forEach((resolve) => resolve({ data: { url: 'https://provider.example.test/late' } })),
   );
   client.clear();
 });
+
+function emitAppState(state: AppStateStatus) {
+  AppState.currentState = state;
+  for (const listener of [...appStateListeners]) listener(state);
+}
 
 async function respond(url = 'https://provider.example.test/current') {
   await act(async () => {
@@ -139,3 +159,72 @@ it('does not navigate after the requesting screen unmounts', async () => {
   await waitFor(() => expect(client.isMutating()).toBe(0));
   expect(mockNavigate).not.toHaveBeenCalled();
 });
+
+it('waits for app-lock admission before requesting a widget URL', async () => {
+  access.setAllowed(false);
+  await render(<Harness />);
+  expect(mockWidget).not.toHaveBeenCalled();
+  await act(() => access.setAllowed(true));
+  await waitFor(() => expect(mockWidget).toHaveBeenCalledTimes(1));
+  await respond();
+  await waitFor(() => expect(mockNavigate).toHaveBeenCalledTimes(1));
+});
+
+it.each(['inactive', 'background'] as const)(
+  'waits until the %s app becomes active before requesting',
+  async (state) => {
+    AppState.currentState = state;
+    await render(<Harness />);
+    expect(mockWidget).not.toHaveBeenCalled();
+    await act(() => emitAppState('active'));
+    await waitFor(() => expect(mockWidget).toHaveBeenCalledTimes(1));
+    await respond();
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledTimes(1));
+  },
+);
+
+it.each(['lock', 'background'] as const)(
+  'rejects the pending URL after %s and accepts a fresh request after resume',
+  async (loss) => {
+    await render(<Harness />);
+    await waitFor(() => expect(mockWidget).toHaveBeenCalledTimes(1));
+    await act(() => (loss === 'lock' ? access.setAllowed(false) : emitAppState('background')));
+    await respond('https://provider.example.test/retired');
+    await waitFor(() => expect(client.isMutating()).toBe(0));
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(mockWidget).toHaveBeenCalledTimes(1);
+    await act(() => (loss === 'lock' ? access.setAllowed(true) : emitAppState('active')));
+    await waitFor(() => expect(mockWidget).toHaveBeenCalledTimes(2));
+    await respond();
+    await waitFor(() =>
+      expect(mockNavigate).toHaveBeenCalledWith('https://provider.example.test/current', getSessionEpoch()),
+    );
+    expect(mockNavigate).toHaveBeenCalledTimes(1);
+  },
+);
+
+it.each(['lock', 'background'] as const)(
+  'refuses a late URL through quick %s loss and regain before rendering',
+  async (loss) => {
+    await render(<Harness />);
+    await waitFor(() => expect(mockWidget).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      if (loss === 'lock') {
+        access.setAllowed(false);
+        access.setAllowed(true);
+      } else {
+        emitAppState('background');
+        emitAppState('active');
+      }
+      pending.shift()!({ data: { url: 'https://provider.example.test/retired' } });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(mockNavigate).not.toHaveBeenCalled();
+    await waitFor(() => expect(mockWidget).toHaveBeenCalledTimes(2));
+    await respond();
+    await waitFor(() =>
+      expect(mockNavigate).toHaveBeenCalledWith('https://provider.example.test/current', getSessionEpoch()),
+    );
+    expect(mockNavigate).toHaveBeenCalledTimes(1);
+  },
+);

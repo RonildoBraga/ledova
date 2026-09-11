@@ -211,11 +211,18 @@ has the same 20-second wait and requires all four release conditions. Failure
 artifacts record the last stage, captured camera ID, each use-case binding flag,
 CameraX state, selected-camera availability, native view attachment/presence and
 JavaScript scanner state. These are observations, not inferred failure causes.
+Window observations deduplicate native view identities: React Native's modal host
+also exposes the dialog's children from the activity tree. Distinct checkpoint
+views remain distinct and still refuse an ambiguous JavaScript state.
 This exercises the loaded bridge with a synthetic event; it does not
 reproduce natural JavaScript queue timing or scan a physical camera image.
 
-The temporary recorder locates only the locked Expo `BoolAsyncFunctionComponent`
-for this view's `isCurrentScan`. Both its original function body and the exact
+The temporary recorder locates the loaded Expo `UntypedAsyncFunctionComponent`
+for this view's `isCurrentScan`. Expo registers the same view definition under
+its name and a compatibility default key; function lookup deduplicates those
+object identities while still rejecting distinct matching functions. It requires
+the original call to return a Boolean and returns that same result unchanged.
+Both its original function body and the exact
 view window callback are restored in `finally`, including a deliberate-throw
 restoration control. A missing reflection shape or an unobserved query fails the
 test. No product module API or scanner source is patched. The ordinary Release
@@ -291,6 +298,10 @@ capture control, and a form-completion signal is not server verification approva
 The buy-crypto provider uses the same admission and session lifetime. A widget
 URL carries the session epoch captured before its request; a late response after
 logout, cancellation, account change or owner unmount cannot open the provider.
+Widget requests also require active, unlocked admission before they start.
+Backgrounding or losing app-lock admission retires a pending response, including
+quick loss/regain before React renders. Resuming starts a fresh request for the
+current selection; the old response cannot navigate after access returns.
 The native WebView wrapper is removed during app lock, backgrounding or navigation
 blur. A blur revision also rejects queued callbacks across a quick blur/return
 before React commits a new view. Completion and close are each delivered at most
