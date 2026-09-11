@@ -490,6 +490,41 @@ test.each(['close', 'account change'])('%s retires the reminder-removal control'
   expect(f.requests).toHaveLength(before);
 });
 
+test.each(['rejected preparation', 'recorded outcome'])(
+  'confirmed deletion after closing a %s refreshes records without updating the retired action',
+  async (reason) => {
+    const f = setup();
+    if (reason === 'rejected preparation') await rejectedPreparation(f);
+    else await prepare(f);
+    f.changed.mockClear();
+    const pause = deferred<void>();
+    const started = deferred<void>();
+    const remove = f.storage.removeItem;
+    f.storage.removeItem = async (key) => {
+      started.resolve();
+      await pause.promise;
+      await remove(key);
+    };
+    const pending =
+      reason === 'rejected preparation' ? f.action.removeReminder() : f.action.sign(async () => 'synthetic signature');
+    await started.promise;
+    expect(f.values.size).toBe(1);
+    expect(f.changed).not.toHaveBeenCalled();
+    f.action.close();
+    const snapshot = f.action.getSnapshot();
+    const count = f.requests.length;
+    const published = jest.fn();
+    f.action.subscribe(published);
+    pause.resolve();
+    await pending;
+    expect(f.values.size).toBe(0);
+    expect(f.changed).toHaveBeenCalledTimes(1);
+    expect(f.action.getSnapshot()).toBe(snapshot);
+    expect(published).not.toHaveBeenCalled();
+    expect(f.requests).toHaveLength(count);
+  },
+);
+
 test('no-change modification remains a recorded result distinct from later current order fields', async () => {
   const f = setup();
   await prepare(f);

@@ -181,6 +181,7 @@ export class OrderAction {
         if (this.current(generation)) this.publish({ canRemoveReminder: true });
         throw error;
       }
+      this.dependencies.onRecordsChanged();
       if (!this.current(generation)) return;
       this.record = null;
       this.known = null;
@@ -194,7 +195,6 @@ export class OrderAction {
         recovered: false,
         notice: 'Saved reminder removed. Review the current order before signing another action.',
       });
-      this.dependencies.onRecordsChanged();
       await this.loadContext(generation);
     });
   };
@@ -294,15 +294,17 @@ export class OrderAction {
     this.publish({ phase: snapshot.status, snapshot, challenge: null, error: null, recovered });
     this.dependencies.onSettled(snapshot);
     if (!this.current(generation)) return;
+    let removed = false;
     try {
       await this.dependencies.store.remove(this.record!);
+      removed = true;
     } catch {
       if (this.current(generation))
         this.publish({
           notice: 'This result is recorded. Its saved reminder could not be cleared; checking it again is safe.',
         });
     }
-    if (this.current(generation)) this.dependencies.onRecordsChanged();
+    if (removed || this.current(generation)) this.dependencies.onRecordsChanged();
   }
 
   recover = (): Promise<void> => {

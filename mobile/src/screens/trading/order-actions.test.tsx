@@ -356,6 +356,43 @@ it('a rejected preparation can remove its reminder and review a new change after
   expect(signEthereumTypedData).not.toHaveBeenCalled();
 });
 
+it('removes a confirmed reminder from the parent list after its modal closes during deletion', async () => {
+  handler = async (config) => {
+    const reply = await ordinary(config);
+    if (config.url === endpoints.MODIFY_MESSAGE(orderUuid))
+      return fail(config, { detail: 'This synthetic change is no longer valid.' }, 400);
+    return reply;
+  };
+  const view = await render(<TradingScreen />, { wrapper });
+  await fireEvent.press(view.getByText('Change synthetic order'));
+  await view.findByLabelText('New quantity');
+  await fireEvent.press(view.getByText('Review change'));
+  await view.findByText('This synthetic change is no longer valid.');
+  await view.findByText('Check change 1');
+  const pause = deferred<void>();
+  const originalRemove = orderActionStore.remove;
+  const remove = jest.spyOn(orderActionStore, 'remove').mockImplementation(async (record) => {
+    await pause.promise;
+    return originalRemove(record);
+  });
+  await fireEvent.press(view.getByRole('button', { name: 'Remove saved reminder' }));
+  expect(remove).toHaveBeenCalledTimes(1);
+  await fireEvent.press(view.getByText('Dismiss window'));
+  expect(view.getByText('Check change 1')).toBeTruthy();
+  expect(await orderActionStore.list(owner)).toHaveLength(1);
+  const count = requests.length;
+  await act(async () => {
+    pause.resolve();
+    await pause.promise;
+  });
+  await waitFor(() => expect(view.queryByText('Check change 1')).toBeNull());
+  expect(await orderActionStore.list(owner)).toHaveLength(0);
+  expect(stored.get(actionId)?.status).toBe('pending');
+  expect(requests).toHaveLength(count);
+  expect(executes()).toHaveLength(0);
+  expect(signEthereumTypedData).not.toHaveBeenCalled();
+});
+
 it('recovers a lost response with its original change and separate current order without executing twice', async () => {
   const view = await render(<TradingScreen />, { wrapper });
   await begin(view);
