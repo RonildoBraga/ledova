@@ -23,7 +23,8 @@
     "check:resolution": "node scripts/check-resolution.mjs",
     "native:prebuild": "expo prebuild --clean --no-install --platform all",
     "check:native": "node scripts/check-native-projects.mjs",
-    "test:native": "node scripts/native-smoke.mjs"
+    "test:native": "node scripts/native-smoke.mjs",
+    "test:native:lan": "node scripts/native-lan-probe.mjs"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",

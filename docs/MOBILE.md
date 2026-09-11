@@ -504,3 +504,49 @@ establish physical biometric enrollment/change, hardware-backed key properties,
 OEM backup/transfer, store distribution or behavior on every supported OS.
 Record those limits, any failed native build and the exact tested head in the PR;
 JavaScript tests alone do not close a native hardening claim.
+
+## iOS Debug LAN handler probe
+
+A separate local probe checks the configured private IPv4 allowance through the
+compiled `LedovaHTTPRequestHandler`, alongside the stock React Native handler as
+a reachability and ATS control. Choose an address assigned to a local interface
+and a booted, dedicated simulator with no Ledova installation:
+
+```bash
+cd mobile
+EXPO_PUBLIC_DEV_API_HOST=192.168.50.10 \
+IOS_SIMULATOR_UDID=your-owned-simulator-uuid \
+npm run test:native:lan -- /absolute/fresh/ios-lan-results
+```
+
+The runner preserves an existing generated `ios/` directory, generates a fresh
+configured project, adds an XCTest target and bundles a small test host. It uses
+the actual native HTTP handler source. Configured Debug must reach the local
+server, unconfigured Debug must refuse without reaching it, and Release must
+refuse HTTP. The stock handler must reach the server in both Debug cases; its
+Release result is recorded because numeric-host ATS behavior depends on the OS
+and linked SDK. A timeout or unrelated network error cannot count as a refusal.
+
+An intentional change to the generated Debug allowlist guard must produce the
+four expected refusal assertion failures and exactly one unwanted server
+request. The runner restores that source before requiring the normal Debug and
+Release results. Each case has a new identity that must match the native report,
+so an earlier result cannot satisfy a later run. Evidence includes XCTest logs
+and result bundles, actual server counts, compiled plists, OS/Xcode/SDK versions,
+linked build versions, architecture and binary/source hashes.
+
+SIGINT/SIGTERM and command deadlines stop and reap the owned build processes
+before restoring the generated project. The runner removes its test app; remove
+the dedicated simulator after inspecting the evidence. Keep the checkout idle
+while this probe runs. An uncatchable kill requires recovery from the retained
+`native-before` directory before using the generated project again. The output
+contains the selected local address and synthetic test configuration; publish a
+sanitized result record rather than committing the output directory.
+
+This probe invokes the compiled handler directly. It does not establish React
+Native dispatcher selection, which the separate Release app probe exercises,
+or physical local-network permission behavior. Apple documents that the
+[simulator does not implement local-network privacy](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy).
+The configured-host result must be repeated on a physical iPhone, with
+permission/reachability recorded separately from
+[ATS local-network policy](https://developer.apple.com/documentation/bundleresources/information-property-list/nsapptransportsecurity/nsallowslocalnetworking).
