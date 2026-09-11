@@ -211,6 +211,16 @@ try {
     'Use an owned simulator without an existing Ledova installation.',
   );
   fs.mkdirSync(output, { recursive: true });
+  const filesystem = fs.statSync(mobile).dev;
+  assert.equal(
+    fs.statSync(output).dev,
+    filesystem,
+    'Keep the output on the checkout filesystem so the original iOS project can be restored atomically.',
+  );
+  if (fs.existsSync(ios)) {
+    assert.ok(!fs.lstatSync(ios).isSymbolicLink(), 'Preserve the generated iOS project as a directory.');
+    assert.equal(fs.statSync(ios).dev, filesystem, 'Keep the generated iOS project on the checkout filesystem.');
+  }
   const tracked = sync('git', ['ls-files', '-z']).split('\0').filter(Boolean);
   const before = Object.fromEntries(tracked.map((name) => [name, hash(path.join(mobile, name))]));
   save('source-before.json', before);
@@ -235,7 +245,6 @@ try {
   assert.equal(hostControl.status, 200);
   assert.equal(await hostControl.text(), 'ledova-local-network-control');
   if (fs.existsSync(ios)) {
-    assert.ok(!fs.lstatSync(ios).isSymbolicLink(), 'Preserve the generated iOS project as a directory.');
     fs.renameSync(ios, saved);
     movedOriginal = true;
   }

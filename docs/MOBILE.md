@@ -522,6 +522,11 @@ IOS_SIMULATOR_UDID=your-owned-simulator-uuid \
 npm run test:native:lan -- /absolute/fresh/ios-lan-results
 ```
 
+The output and any existing generated `ios/` directory must share the checkout's
+filesystem. Preflight checks this before starting the server or moving the
+project, so its preservation and restoration use atomic renames. Copy retained
+evidence to an external volume after the command completes if needed.
+
 The runner preserves an existing generated `ios/` directory, generates a fresh
 configured project, adds an XCTest target and bundles a small test host. It uses
 the actual native HTTP handler source. Configured Debug must reach the local
