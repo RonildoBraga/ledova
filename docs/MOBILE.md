@@ -192,13 +192,37 @@ separate instrumentation APK waits for bound preview/analysis use cases and
 CameraX OPEN before covering the window. It checks both use cases are unbound,
 CameraX is CLOSED and the selected camera becomes available before returning.
 Refocus must open fresh use cases on the same view, and completion must release
-them again. The ordinary Release APK is checked for absence of the test class
+them again. The Release test retains the native window notifications while it
+delivers a synthetic pre-loss barcode through the existing Expo event callback.
+A recorder in the separate instrumentation APK observes the real native
+admission function, always delegating its arguments and Boolean result unchanged.
+The test requires that exact queued tuple to return false during loss and after
+quick regain, then a fresh tuple to return true and call the real scanner finish
+once. The completed scanner stays mounted and unbound through another focus
+cycle. This exercises the loaded bridge with a synthetic event; it does not
+reproduce natural JavaScript queue timing or scan a physical camera image.
+
+The temporary recorder locates only the locked Expo `BoolAsyncFunctionComponent`
+for this view's `isCurrentScan`. Both its original function body and the exact
+view window callback are restored in `finally`, including a deliberate-throw
+restoration control. A missing reflection shape or an unobserved query fails the
+test. No product module API or scanner source is patched. The ordinary Release
+APK is checked for absence of the test class
 and probe controls; the test uses reflection rather than product test hooks.
 This establishes Release adapter behavior, not OS permission-prompt behavior.
+An additional native control holds the selected camera through Camera2 and
+requires CameraX `PENDING_OPEN` before releasing the holder. Recovery must reach
+OPEN with the same native session, camera object, generation and scan ID; a
+platform that does not establish that precondition fails the control.
 These emulator controls do not replace physical-device verification of sensor
 shutdown, OS permission dialogs, settings or OEM behavior. The runner retains
 APK hashes, instrumentation logs, screenshots and window diagnostics, including
 failed runs, and removes both owned instrumentation packages during cleanup.
+The cleanup tracker includes attempted installs and uses bounded adb commands
+outside the cancelled command runner. Node controls cover install, instrumentation
+and cancellation failures, absent packages and a cleanup error alongside another
+owned package. Only completed emulator logs establish native results; JavaScript
+and script controls do not certify Kotlin compilation or camera hardware behavior.
 The test APKs and synthetic probe apps must not be distributed.
 
 To run only these native controls on an owned emulator after prebuild:

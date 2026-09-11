@@ -21,7 +21,11 @@ const InactiveProbe =
     : null;
 
 function WindowProbe({ onComplete }: Props) {
-  const camera = useCameraScanner(true, () => {});
+  const [scans, setScans] = useState(0);
+  const camera = useCameraScanner(true, (_data, finish) => {
+    setScans((count) => count + 1);
+    finish();
+  });
   const [stage, setStage] = useState<'opening' | 'covered' | 'returning'>('opening');
   const [firstGeneration, setFirstGeneration] = useState(-1);
   const [methodReady, setMethodReady] = useState(false);
@@ -54,21 +58,24 @@ function WindowProbe({ onComplete }: Props) {
         <ScannerPreview {...camera.preview} />
         <Text>{camera.status}</Text>
       </View>
-      {stage === 'opening' && camera.status === 'ready' && methodReady && (
+      <Text accessibilityLabel="scanner-probe-state">
+        {`${camera.status}|${camera.preview.generation}|${camera.preview.scanId}|${scans}`}
+      </Text>
+      {stage !== 'covered' && (camera.status === 'ready' || camera.status === 'scanned') && methodReady && (
         <Button
           title="Cover scanner"
           accessibilityLabel="scanner-probe-cover"
           onPress={() => {
-            setFirstGeneration(camera.preview.generation);
+            if (stage === 'opening') setFirstGeneration(camera.preview.window.getSnapshot().generation);
             setStage('covered');
           }}
         />
       )}
-      {stage === 'returning' && camera.status === 'ready' && (
+      {stage === 'returning' && camera.status === 'scanned' && (
         <Button
           title="Complete scanner check"
           accessibilityLabel="scanner-probe-complete"
-          onPress={() => onComplete(camera.preview.generation > firstGeneration)}
+          onPress={() => onComplete(scans === 1 && camera.preview.window.getSnapshot().generation > firstGeneration)}
         />
       )}
       {InactiveProbe && (
@@ -84,13 +91,11 @@ function WindowProbe({ onComplete }: Props) {
       <Modal visible={stage === 'covered'} transparent animationType="none">
         <View style={{ paddingTop: 64 }}>
           <Text>Synthetic scanner window cover</Text>
-          {camera.status === 'inactive' && (
-            <Button
-              title="Return to scanner"
-              accessibilityLabel="scanner-probe-return"
-              onPress={() => setStage('returning')}
-            />
-          )}
+          <Button
+            title="Return to scanner"
+            accessibilityLabel="scanner-probe-return"
+            onPress={() => setStage('returning')}
+          />
         </View>
       </Modal>
     </Modal>

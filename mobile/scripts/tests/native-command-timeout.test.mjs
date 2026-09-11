@@ -38,6 +38,10 @@ function fixture(context, behavior, check) {
   fs.mkdirSync(path.join(root, 'scripts'));
   fs.mkdirSync(path.join(root, 'bin'));
   fs.copyFileSync(path.join(mobile, 'app.json'), path.join(root, 'app.json'));
+  fs.copyFileSync(
+    path.join(mobile, 'scripts/android-test-packages.mjs'),
+    path.join(root, 'scripts/android-test-packages.mjs'),
+  );
   let runner = fs.readFileSync(path.join(mobile, 'scripts/native-smoke.mjs'), 'utf8');
   assert.equal(runner.match(/\* 60 \* 1000/g)?.length, 1);
   runner = runner.replace('* 60 * 1000', '* 100');
