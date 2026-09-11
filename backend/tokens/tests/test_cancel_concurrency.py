@@ -3,7 +3,7 @@ from decimal import Decimal
 from unittest import skipUnless
 
 from django.db import close_old_connections, connection
-from django.test import TestCase, TransactionTestCase
+from django.test import TransactionTestCase
 from eth_account import Account
 
 from feature_flags.models import FeatureFlag
@@ -12,8 +12,10 @@ from shared.utils.typed_data import signable_message
 from tokens.exceptions import OrderCancellationException
 from tokens.models import SigningChallenge, TransferOrder
 from tokens.models.choices import TransferOrderStatus, TransferOrderType
-from tokens.services.trading_order_cancel import cancel_signed_order
-from tokens.services.trading_order_service import TradingOrderService
+from tokens.tests.order_action_fixtures import (
+    cancel_for_order,
+    cancel_message_for_order,
+)
 
 OWNER = Account.from_key("0x" + "3f" * 32)
 JOIN_TIMEOUT = 30.0
@@ -39,17 +41,17 @@ class TwoCancelsOfOneOrderProduceOneCancellationTest(TransactionTestCase):
         )
 
     def a_signed_cancel(self):
-        issued = TradingOrderService.get_order_cancel_message(self.order)
+        issued = cancel_message_for_order(self.tenant.user, self.order)
         signature = OWNER.sign_message(
             signable_message(issued["domain"], issued["types"], issued["message"])
-        ).signature.hex()
+        ).signature.to_0x_hex()
         return issued["digest"], signature
 
     def cancelling(self, signed):
         digest, signature = signed
 
         def work():
-            return cancel_signed_order(TransferOrder.objects.get(pk=self.order.pk), digest, signature)
+            return cancel_for_order(self.tenant.user, TransferOrder.objects.get(pk=self.order.pk), digest, signature)
 
         return work
 
@@ -99,7 +101,7 @@ class TwoCancelsOfOneOrderProduceOneCancellationTest(TransactionTestCase):
             self.assertIsNotNone(SigningChallenge.objects.get(digest=digest).consumed_at, digest)
 
 
-class ACancelFromAStaleReadDoesNotOverwriteAMatchTest(TestCase):
+class ACancelFromAStaleReadDoesNotOverwriteAMatchTest(TransactionTestCase):
 
     def setUp(self):
         FeatureFlag.objects.update_or_create(name="trading_enabled", defaults={"enabled": True})
@@ -118,10 +120,10 @@ class ACancelFromAStaleReadDoesNotOverwriteAMatchTest(TestCase):
         )
 
     def a_signed_cancel(self):
-        issued = TradingOrderService.get_order_cancel_message(self.order)
+        issued = cancel_message_for_order(self.tenant.user, self.order)
         signature = OWNER.sign_message(
             signable_message(issued["domain"], issued["types"], issued["message"])
-        ).signature.hex()
+        ).signature.to_0x_hex()
         return issued["digest"], signature
 
     def test_a_cancel_decided_on_a_read_taken_before_the_match_is_refused(self):
@@ -130,7 +132,7 @@ class ACancelFromAStaleReadDoesNotOverwriteAMatchTest(TestCase):
         TransferOrder.objects.filter(pk=self.order.pk).update(status=TransferOrderStatus.MATCHED)
 
         with self.assertRaises(OrderCancellationException):
-            cancel_signed_order(read_before_the_match, digest, signature)
+            cancel_for_order(self.tenant.user, read_before_the_match, digest, signature)
 
         self.assertEqual(TransferOrder.objects.get(pk=self.order.pk).status, TransferOrderStatus.MATCHED)
 
@@ -140,6 +142,6 @@ class ACancelFromAStaleReadDoesNotOverwriteAMatchTest(TestCase):
         TransferOrder.objects.filter(pk=self.order.pk).update(status=TransferOrderStatus.MATCHED)
 
         with self.assertRaises(OrderCancellationException):
-            cancel_signed_order(read_before_the_match, digest, signature)
+            cancel_for_order(self.tenant.user, read_before_the_match, digest, signature)
 
         self.assertIsNotNone(SigningChallenge.objects.get(digest=digest).consumed_at)

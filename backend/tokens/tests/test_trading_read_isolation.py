@@ -2,14 +2,21 @@ from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.test import override_settings
 from django.utils import timezone
-from rest_framework.test import APITestCase
+from rest_framework.test import APITransactionTestCase
 from web3 import Web3
 
 from assets.models import Asset, AssetChainDeployment
 from companies.models import Company
 from feature_flags.models import FeatureFlag
+from shared.tests.schema import migrate_to, restore_every_migration
+from shared.tests.settlement import (
+    SYNTHETIC_SETTLEMENT_CONTRACT,
+    save_swap_with_context,
+)
 from tokens.models import (
     ShareToken,
     SwapOrder,
@@ -28,7 +35,15 @@ from wallets.models import Wallet
 User = get_user_model()
 
 
-class TradingReadIsolationTest(APITestCase):
+@override_settings(ATOMIC_SWAP_ADDRESS=SYNTHETIC_SETTLEMENT_CONTRACT)
+class TradingReadIsolationTest(APITransactionTestCase):
+    legacy_cases = {
+        "test_malformed_address_snapshots_do_not_grant_swap_visibility",
+        "test_order_swap_reads_reject_malformed_order_snapshot_before_service",
+        "test_order_swap_reads_reject_malformed_swap_snapshot_before_service",
+        "test_a_malformed_newest_swap_is_not_replaced_by_an_older_valid_match",
+    }
+
     def _make_tenant(self, email, address):
         user = User.objects.create_user(email=email, password="pw-12345678")
         profile = UserProfile.objects.create(user=user)
@@ -42,7 +57,7 @@ class TradingReadIsolationTest(APITestCase):
         )
         return user, account, wallet
 
-    def _make_order(self, wallet, order_type):
+    def _make_order(self, wallet, order_type, wallet_address=None):
         return TransferOrder.objects.create(
             token=self.share_token,
             payment_asset=self.stablecoin,
@@ -50,7 +65,7 @@ class TradingReadIsolationTest(APITestCase):
             status=TransferOrderStatus.MATCHED,
             wallet=wallet,
             owner_account=wallet.user_account,
-            wallet_address=wallet.address,
+            wallet_address=wallet_address or wallet.address,
             quantity=10,
             filled_quantity=10,
             price_per_share=Decimal("1.50"),
@@ -58,7 +73,7 @@ class TradingReadIsolationTest(APITestCase):
 
     def _make_swap(self, sell_order, buy_order, suffix, status=SwapOrderStatus.CREATED):
         completed_at = timezone.now() if status == SwapOrderStatus.COMPLETED else None
-        return SwapOrder.objects.create(
+        fields = dict(
             sell_order=sell_order,
             buy_order=buy_order,
             share_token=self.share_token,
@@ -74,6 +89,33 @@ class TradingReadIsolationTest(APITestCase):
             completed_at=completed_at,
             expires_at=timezone.now() + timedelta(hours=1),
         )
+        if self._testMethodName not in self.legacy_cases:
+            return save_swap_with_context(**fields)
+        modules = getattr(settings, "MIGRATION_MODULES", {})
+        if "tokens" in modules and modules["tokens"] is None:
+            self.skipTest("Legacy malformed rows require actual pre-context migration setup")
+        old_apps = migrate_to([("tokens", "0038_order_action_submissions")])
+        self.addCleanup(restore_every_migration)
+        for key in ("sell_order", "buy_order", "share_token", "payment_asset"):
+            fields[key + "_id"] = fields.pop(key).pk
+        fields["seller_wallet_id"] = sell_order.wallet_id
+        fields["buyer_wallet_id"] = buy_order.wallet_id
+        try:
+            legacy = old_apps.get_model("tokens", "SwapOrder").objects.create(**fields)
+        finally:
+            restore_every_migration()
+        return SwapOrder.objects.get(pk=legacy.pk)
+
+    def swap_query(self, swap=None):
+        swap = swap or self.swap
+        if not swap.settlement_protocol_version:
+            return {"wallet_address": self.bob_case_variant}
+        return {
+            "swap_uuid": str(swap.pk),
+            "owner_account_uuid": str(self.bob_account.pk),
+            "wallet_uuid": str(self.bob_wallet.pk),
+            "settlement_digest": swap.settlement_digest,
+        }
 
     def setUp(self):
         FeatureFlag.objects.update_or_create(name="trading_enabled", defaults={"enabled": True})
@@ -110,7 +152,12 @@ class TradingReadIsolationTest(APITestCase):
             asset=self.stablecoin, chain="base", contract_address="0x" + "e" * 40, decimals=2
         )
         self.alice_order = self._make_order(self.alice_wallet, TransferOrderType.SELL)
-        self.bob_order = self._make_order(self.bob_wallet, TransferOrderType.BUY)
+        address = (
+            self.alice_wallet.address
+            if self._testMethodName == "test_order_swap_reads_reject_malformed_order_snapshot_before_service"
+            else self.bob_wallet.address
+        )
+        self.bob_order = self._make_order(self.bob_wallet, TransferOrderType.BUY, address)
         self.swap = self._make_swap(self.alice_order, self.bob_order, "1")
 
     @property
@@ -198,23 +245,25 @@ class TradingReadIsolationTest(APITestCase):
         self.assertNotIn(alice_charlie_swap.uuid, visible.values_list("uuid", flat=True))
 
     def test_malformed_address_snapshots_do_not_grant_swap_visibility(self):
-        malformed_order = self._make_order(self.bob_wallet, TransferOrderType.BUY)
-        malformed_order.wallet_address = self.alice_wallet.address
-        malformed_order.save(update_fields=["wallet_address"])
+        malformed_order = self._make_order(self.bob_wallet, TransferOrderType.BUY, self.alice_wallet.address)
         malformed_swap = self._make_swap(self.alice_order, malformed_order, "5")
 
         visible = SwapOrder.objects.pending_for_wallet_ids([self.bob_wallet.uuid])
 
         self.assertNotIn(malformed_swap.uuid, visible.values_list("uuid", flat=True))
 
-        malformed_order.wallet_address = self.bob_wallet.address
-        malformed_order.save(update_fields=["wallet_address"])
-        malformed_swap.buyer_address = self.alice_wallet.address
-        malformed_swap.save(update_fields=["buyer_address"])
+        valid_order = self._make_order(self.bob_wallet, TransferOrderType.BUY)
+        changed_swap = self._make_swap(self.alice_order, valid_order, "8")
+        self.assertIn(
+            changed_swap.uuid,
+            SwapOrder.objects.pending_for_wallet_ids([self.bob_wallet.uuid]).values_list("uuid", flat=True),
+        )
+        changed_swap.buyer_address = self.alice_wallet.address
+        changed_swap.save(update_fields=["buyer_address"])
 
         visible = SwapOrder.objects.pending_for_wallet_ids([self.bob_wallet.uuid])
 
-        self.assertNotIn(malformed_swap.uuid, visible.values_list("uuid", flat=True))
+        self.assertNotIn(changed_swap.uuid, visible.values_list("uuid", flat=True))
 
     @patch("tokens.views.trading_transfer.TokenTransferService")
     def test_transfer_prepare_rejects_foreign_from_address_before_service_construction(self, service_class):
@@ -300,7 +349,7 @@ class TradingReadIsolationTest(APITestCase):
 
         response = self.client.get(
             f"/api/v1/trading/orders/{self.bob_order.uuid}/swap/",
-            {"wallet_address": self.bob_case_variant},
+            self.swap_query(),
         )
 
         self.assertEqual(response.status_code, 200)
@@ -328,15 +377,13 @@ class TradingReadIsolationTest(APITestCase):
 
     @patch("tokens.views.trading_order.AtomicSwapService")
     def test_order_swap_reads_reject_malformed_order_snapshot_before_service(self, service_class):
-        self.bob_order.wallet_address = self.alice_wallet.address
-        self.bob_order.save(update_fields=["wallet_address"])
         self.client.force_authenticate(self.bob)
 
         for path in ("swap/", "swap/approval-status/", "swap/approval-data/"):
             with self.subTest(path=path):
                 response = self.client.get(
                     f"/api/v1/trading/orders/{self.bob_order.uuid}/{path}",
-                    {"wallet_address": self.bob_wallet.address},
+                    self.swap_query(),
                 )
                 self.assertEqual(response.status_code, 404)
 
@@ -352,7 +399,7 @@ class TradingReadIsolationTest(APITestCase):
             with self.subTest(path=path):
                 response = self.client.get(
                     f"/api/v1/trading/orders/{self.bob_order.uuid}/{path}",
-                    {"wallet_address": self.bob_wallet.address},
+                    self.swap_query(),
                 )
                 self.assertEqual(response.status_code, 404)
 
@@ -369,7 +416,7 @@ class TradingReadIsolationTest(APITestCase):
             with self.subTest(path=path):
                 response = self.client.get(
                     f"/api/v1/trading/orders/{self.bob_order.uuid}/{path}",
-                    {"wallet_address": self.bob_wallet.address},
+                    self.swap_query(),
                 )
                 self.assertEqual(response.status_code, 404)
                 self.assertEqual(response.json()["detail"], "Order not found.")
@@ -380,7 +427,7 @@ class TradingReadIsolationTest(APITestCase):
         service_class.return_value.get_typed_data.return_value = {}
         response = self.client.get(
             f"/api/v1/trading/orders/{self.bob_order.uuid}/swap/",
-            {"wallet_address": self.bob_wallet.address},
+            self.swap_query(),
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["swap_order"]["uuid"], str(latest.uuid))
@@ -407,11 +454,12 @@ class TradingReadIsolationTest(APITestCase):
             },
         }
         service.contract_address = "0x" + "8" * 40
+        service.settlement_contract.return_value = service.contract_address
         self.client.force_authenticate(self.bob)
 
         response = self.client.get(
             f"/api/v1/trading/orders/{self.bob_order.uuid}/swap/approval-status/",
-            {"wallet_address": self.bob_case_variant},
+            self.swap_query(),
         )
 
         self.assertEqual(response.status_code, 200)

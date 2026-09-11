@@ -2,9 +2,34 @@ from rest_framework import serializers
 
 from operators.settlement import deployment_for
 from tokens.models import SwapOrder
+from tokens.services.settlement_context import recorded_settlement_context
 
 
-class SwapOrderListSerializer(serializers.ModelSerializer):
+class RecordedSwapDisplay:
+    def to_representation(self, instance):
+        if not instance.settlement_protocol_version:
+            return super().to_representation(instance)
+        context = recorded_settlement_context(instance)
+        display = {
+            "share_token_symbol": context["share_token"]["symbol"],
+            "share_token_name": context["share_token"]["name"],
+            "share_token_address": context["share_token"]["address"],
+            "payment_token_symbol": context["payment_asset"]["symbol"],
+            "payment_token_address": context["payment_asset"]["deployment_address"],
+            "sell_order_uuid": str(instance.sell_order_id),
+            "buy_order_uuid": str(instance.buy_order_id),
+        }
+        result = {}
+        for name, field in self.fields.items():
+            if name in display:
+                result[name] = display[name]
+            else:
+                value = field.get_attribute(instance)
+                result[name] = None if value is None else field.to_representation(value)
+        return result
+
+
+class SwapOrderListSerializer(RecordedSwapDisplay, serializers.ModelSerializer):
 
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     share_token_symbol = serializers.CharField(source="share_token.symbol", read_only=True)
@@ -38,7 +63,7 @@ class SwapOrderListSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class SwapOrderDetailSerializer(serializers.ModelSerializer):
+class SwapOrderDetailSerializer(RecordedSwapDisplay, serializers.ModelSerializer):
 
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     share_token_symbol = serializers.CharField(source="share_token.symbol", read_only=True)
@@ -74,6 +99,9 @@ class SwapOrderDetailSerializer(serializers.ModelSerializer):
             "payment_amount",
             "nonce",
             "order_hash",
+            "settlement_protocol_version",
+            "settlement_context",
+            "settlement_digest",
             "seller_has_signed",
             "buyer_has_signed",
             "is_expired",
@@ -111,3 +139,22 @@ class SubmitSignatureSerializer(serializers.Serializer):
         if not value.startswith("0x") or len(value) != 42:
             raise serializers.ValidationError("Invalid Ethereum address format")
         return value
+
+
+class SettlementIdentitySerializer(serializers.Serializer):
+    swap_uuid = serializers.UUIDField()
+    owner_account_uuid = serializers.UUIDField()
+    wallet_uuid = serializers.UUIDField()
+    settlement_digest = serializers.RegexField(r"^0x[0-9a-f]{64}$", required=False)
+
+
+class SettlementWriteIdentitySerializer(SettlementIdentitySerializer):
+    settlement_digest = serializers.RegexField(r"^0x[0-9a-f]{64}$")
+
+
+class SettlementSignatureSerializer(SettlementWriteIdentitySerializer, SubmitSignatureSerializer):
+    signer_address = serializers.RegexField(r"^0x[0-9a-fA-F]{40}$")
+
+
+class SettlementApprovalBroadcastSerializer(SettlementWriteIdentitySerializer):
+    signed_transaction = serializers.RegexField(r"^(0x)?[0-9a-fA-F]+$", max_length=32768)

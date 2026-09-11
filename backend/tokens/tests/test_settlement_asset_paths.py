@@ -2,7 +2,7 @@ from decimal import Decimal
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from assets.models import AssetChainDeployment
 from operators.models import Operator, ReceivingChain
@@ -11,6 +11,10 @@ from tokens.filters import TransferOrderFilter
 from tokens.models import TransferOrder
 from tokens.serializers import PrepareTransferSerializer
 from tokens.services.atomic_swap_service import AtomicSwapService, payment_address
+from tokens.services.settlement_context import (
+    SettlementContextChanged,
+    assert_current_settlement,
+)
 from tokens.services.token_transfer_service import TokenTransferService
 
 BASE_ADDRESS = "0x" + "5" * 40
@@ -26,7 +30,7 @@ class SwapSettlementAddressTest(TestCase):
             asset=self.asset, chain="ethereum", contract_address=ETHEREUM_ADDRESS, decimals=2
         )
 
-    def test_the_swap_payment_address_follows_the_receiving_chain(self):
+    def test_a_new_swap_keeps_its_original_payment_address_after_receiving_chain_changes(self):
         self.assertEqual(self.asset.chain_deployments.first().contract_address, BASE_ADDRESS)
         self.assertEqual(payment_address(self.tenant.swap), BASE_ADDRESS)
 
@@ -34,7 +38,9 @@ class SwapSettlementAddressTest(TestCase):
         operator.receiving_wallet_chain = ReceivingChain.ETHEREUM
         operator.save(update_fields=["receiving_wallet_chain"])
 
-        self.assertEqual(payment_address(self.tenant.swap), ETHEREUM_ADDRESS)
+        self.assertEqual(payment_address(self.tenant.swap), BASE_ADDRESS)
+        with self.assertRaises(SettlementContextChanged):
+            assert_current_settlement(self.tenant.swap)
 
     @patch("whitelist.services.whitelist.get_base_chain_client")
     @patch("tokens.services.atomic_swap_service.get_base_chain_client")
@@ -44,7 +50,7 @@ class SwapSettlementAddressTest(TestCase):
         )
         service = AtomicSwapService()
 
-        with patch.object(AtomicSwapService, "contract_address", RECIPIENT):
+        with override_settings(ATOMIC_SWAP_ADDRESS=RECIPIENT):
             swap = service.create_swap_order(
                 sell_order=self.tenant.order,
                 buy_order=self.tenant.counter_order,

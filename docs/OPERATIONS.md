@@ -326,6 +326,111 @@ not a replacement for the membership, wallet address, verification or deployment
 checks. They do not establish aggregate buying power or the complete trading
 lock graph.
 
+Cancel and modify requests use a separate account-scoped `action_id`, introduced
+by `tokens/0038`. Coordinate backend, shared package, dashboard and mobile
+releases for this protocol change. Before preparing a fresh action, read
+`GET /api/v1/trading/orders/{order_uuid}/action-context/?owner_account_uuid=...`.
+This request is read-only. Use its canonical quantity/minimum/price strings for
+all absolute replacement values, including unchanged values in a price-only
+modification; ordinary order-detail numeric quantities are not a lossless source.
+Persist and verify a fresh action UUID before the first message POST. A deliberate
+second action gets another UUID even if its terms are equal.
+
+`POST /orders/{order_uuid}/cancel/message/` takes `action_id` and
+`owner_account_uuid`; `POST /orders/{order_uuid}/modify/message/` additionally
+requires all three `new_quantity`, `new_min_quantity` and `new_price_per_share`
+strings. These paths are relative to `/api/v1/trading`. Issuance freezes the
+authoritative identity and domain. A client must compare those values with its
+reviewed context before signing. A mismatch may already have created a pending
+action: retain its ID, discard the stale review/challenge and recover the recorded
+intent before asking for a new review. Do not attach that ID to different terms.
+
+For an existing reminder or uncertain response, read
+`GET /api/v1/trading/orders/actions/{action_id}/?owner_account_uuid=...` directly.
+A 404 means absent or currently inaccessible; it does not authorize deleting the
+reminder, generating a replacement ID or claiming recovered terms. The execute
+POST identifies the action before checking a pending signature, so an authorized
+recorded result remains recoverable with absent, expired or irrelevant old
+credentials. Current account membership and wallet/order ownership still apply.
+The response separates immutable `intent`, `review`, `result` and `refusal` from
+the current `order`. HTTP responses use the existing camel-case renderer.
+
+A stored business refusal returns the complete snapshot with `status: refused`
+and `refusal.httpStatus` 400 or 409. Its allowed codes are
+`order_cancellation_failed`, `order_modification_failed` and
+`order_modification_conflict`. Ordinary `action_intent_conflict` or
+`action_context_conflict` errors are not terminal snapshots. Provider/preflight,
+validation and infrastructure errors also leave the reminder unresolved; recover
+before retrying. Terminal replay does not repeat an order change or publish a
+second event. The existing event mechanism has no outbox, so database recovery
+is not a guarantee of event delivery.
+
+Old unlinked cancel/modify challenges and modification logs remain unchanged.
+The retired GET cancel-message route returns `action_refresh_required`; old
+POSTs without the new identity fields receive ordinary required-field errors.
+A keyed pending action presenting an unlinked legacy challenge also receives
+`action_refresh_required` before spend. There is no automatic rebinding or legacy
+execution fallback. Existing settlement signatures and stored swap deadlines are
+unchanged. This protocol neither changes balance eligibility nor enables trading,
+activates signers, broadcasts transactions or establishes settlement finality.
+
+New matches use the immutable settlement context introduced by `tokens/0039`.
+Coordinate backend, shared package, dashboard and mobile before deploying this
+protocol: this backend phase alone does not complete the client recovery flow.
+New-context swap requests require the exact swap, order, account and verified
+wallet identity; signing and approval requests also require the recorded full
+settlement digest. The existing unqualified request form remains for legacy
+rows and returns `swap_context_refresh_required` for new-context rows. Exact
+lookup preserves the original review display and decimal-string typed values
+after expiry or configuration drift; it does not authorize a new signature or
+approval under changed terms. Ordinary numeric order/swap fields are not a
+lossless source for rebuilding those signed values.
+
+The scoped approval-broadcast route verifies the actual signed bytes against
+the captured party, chain, token, spender and existing unlimited approval value.
+A confirmed result requires both the provider's returned hash and the receipt's
+transaction hash to equal the computed signed-byte hash. Missing or conflicting
+identity, or a send/receipt exception, returns `swap_approval_unconfirmed` with
+HTTP 503, the original scoped identity and computed hash. Retain that identity
+and check the original outcome; this is not confirmation, a new journal or
+permission to rebroadcast. A matching receipt remains attributed to its original
+context if the deadline or configuration changes during the wait. The general
+transfer service is unchanged. Local signature-request and approval-data schema
+envelopes use `anyOf` because valid scoped objects extend their legacy forms.
+
+Provider admission uses the inherited cached `assert_expected_chain` result;
+it is not a fresh endpoint-identity observation on every call. New claims retain
+complete signed arguments and their original domain. A receipt that cannot be
+attributed to that original chain/context leaves the claim unresolved.
+`tokens/0040` permits a captured-party signature through either currently
+authorized participant while the other order and wallet stay private. It first
+refuses existing swap/parent identity drift without rewriting history, freezes
+the order's owner tuple, and prevents replacing the two referenced order rows.
+Case-only address spelling, economic/status updates, unreferenced order deletion
+and legacy child-first deletion remain available. An unchanged V1 update must
+prove one current captured participant to avoid both-parent derivation; INSERT,
+legacy and the original operator/both-visible path retain their checks.
+This resolves the recorded first-signature 503 without completing swap-row RLS,
+private cross-account matching, or outcome writes requiring both parent objects.
+Such unresolved claims and reservations remain retained for existing operator
+reconciliation; a successful signature response does not establish settlement.
+Trading and outgoing signer activation remain unchanged.
+
+Share-token deployment records the computed transaction hash and its token
+association in one independent database transaction before broadcasting. An
+enclosing transaction, disabled autocommit, failed persistence or competing
+binding refuses that broadcast. The transaction row is marked submitted at this
+boundary; that label and the hash identify the prepared transaction and do not
+prove that the provider accepted it.
+
+A lost send acknowledgement leaves the token Deploying with its original hash.
+Retry and reconciliation use the recorded transaction; an unavailable receipt
+does not authorize another create. Failures before the persistence callback can
+return an unbound token to Draft. Existing confirmed-revert and factory-adoption
+paths remain. Do not clear a hash to retry. This boundary does not persist signed
+bytes, freeze all deployment terms or historical identities, activate the
+outgoing signer foundation, or establish all-writer cutover or finality.
+
 ### Data retention
 
 | Variable | Default | Required |
@@ -1472,6 +1577,15 @@ and a policy on every tenant table. Four things about running that deployment:
   neither timeout metadata nor nonce use alone resolves them. The current swap
   transaction UUID prevents competing preparation but does not provide signed
   transaction recovery after a process dies; #6 remains separate.
+- `tokens/0039_swap_settlement_context` marks pre-existing swaps as legacy
+  without changing their old fields, signatures or deadlines. It then requires
+  a context on new inserts and refuses explicit legacy inserts, context changes
+  and new-context identity replacement on PostgreSQL. Stop old API/worker writers and coordinate
+  all consumers before permitting new matches; do not backfill historical
+  domains, erase prior fields or bypass the cutover guard. Existing 24-hour
+  signatures, the 15-minute new-match default, finite overrides and distinct
+  equal orders retain their existing meaning. Full composed PostgreSQL/scoped
+  and chain validation remains required before this phase can be integrated.
 - `whitelist/0002_whitelistentry_treasury_addresses` makes
   `WhitelistEntry.wallet` nullable and adds `address` and `label` with a check
   constraint; `whitelist/0003` adds the partial unique constraint on `address`

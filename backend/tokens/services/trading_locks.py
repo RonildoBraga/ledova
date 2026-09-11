@@ -22,6 +22,9 @@ def swap_terms(swap):
         swap.order_hash,
         swap.expires_at,
         swap.expiry_release_eligible,
+        swap.settlement_protocol_version,
+        swap.settlement_context,
+        swap.settlement_digest,
     )
 
 
@@ -70,4 +73,18 @@ def lock_current_claim(expected_swap, expected_transaction, *, with_orders=False
         or hash_identity(swap.tx_hash) != hash_identity(transaction.tx_hash)
     ):
         return None
+    if swap.settlement_protocol_version:
+        from tokens.services.settlement_context import (
+            recorded_settlement_context,
+            settlement_execution_arguments,
+        )
+
+        context = recorded_settlement_context(swap)
+        if (
+            transaction.function_args != settlement_execution_arguments(swap)
+            or expected_transaction.function_args != transaction.function_args
+            or transaction.to_address != context["typed_data"]["domain"]["verifyingContract"]
+            or expected_transaction.to_address != transaction.to_address
+        ):
+            return None
     return swap, transaction

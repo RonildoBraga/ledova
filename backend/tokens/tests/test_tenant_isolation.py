@@ -281,17 +281,6 @@ class TransferOrderOwnershipBindingTest(APITestCase):
             quantity=10,
             price_per_share=Decimal("2.00"),
         )
-        TransferOrder.objects.create(
-            token=self.token,
-            order_type=TransferOrderType.SELL,
-            status=TransferOrderStatus.OPEN,
-            wallet=self.pending_wallet,
-            owner_account=self.account,
-            wallet_address=self.pending_wallet.address,
-            quantity=10,
-            price_per_share=Decimal("1.10"),
-        )
-
         counter_user = User.objects.create_user(email="counter@example.test", password="pw-12345678")
         counter_profile = UserProfile.objects.create(user=counter_user)
         counter_account = UserAccount.objects.create()
@@ -313,9 +302,16 @@ class TransferOrderOwnershipBindingTest(APITestCase):
             price_per_share=Decimal("1.20"),
         )
 
-        mismatched = TransferOrder.objects.filter(price_per_share=Decimal("1.10")).get()
-        mismatched.owner_account = counter_account
-        mismatched.save(update_fields=["owner_account"])
+        TransferOrder.objects.create(
+            token=self.token,
+            order_type=TransferOrderType.SELL,
+            status=TransferOrderStatus.OPEN,
+            wallet=self.pending_wallet,
+            owner_account=counter_account,
+            wallet_address=self.pending_wallet.address,
+            quantity=10,
+            price_per_share=Decimal("1.10"),
+        )
 
         service = TokenTransferService.__new__(TokenTransferService)
         match = service.find_matching_order(incoming)
