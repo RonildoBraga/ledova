@@ -23,7 +23,8 @@
     "check:resolution": "node scripts/check-resolution.mjs",
     "native:prebuild": "expo prebuild --clean --no-install --platform all",
     "check:native": "node scripts/check-native-projects.mjs",
-    "test:native": "node scripts/native-smoke.mjs"
+    "test:native": "node scripts/native-smoke.mjs",
+    "test:native:lan": "node scripts/native-lan-probe.mjs"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",
@@ -92,6 +93,7 @@
     "@expo/plist": "0.4.9",
     "@testing-library/react-native": "^14.0.1",
     "@types/jest": "^30.0.0",
+    "@types/jsdom": "20.0.1",
     "@types/react": "~19.1.10",
     "@types/uuid": "^10.0.0",
     "eslint": "^9.39.0",
@@ -103,6 +105,7 @@
     "eslint-plugin-react-native": "^5.0.0",
     "jest": "^30.5.1",
     "jest-expo": "~54.0.18",
+    "jsdom": "20.0.3",
     "prettier": "^3.6.2",
     "react-test-renderer": "^19.1.0",
     "typescript": "~5.9.3",

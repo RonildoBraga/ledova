@@ -290,12 +290,25 @@ SDK failures and native page-load failures use fixed messages instead of raw
 provider or WebView error payloads. Existing backend initialization error messages
 are still shown.
 
+Sumsub access tokens remain opaque strings when embedded in the initial HTML.
+The serialized value escapes less-than characters so HTML parsing cannot end the
+script or enter a script escape state inside a token. Parser controls use the
+mounted WebView's actual HTML and verify that the SDK receives the original token,
+including quotes, closing-script text and Unicode separators. These controls use
+synthetic tokens and do not contact the provider.
+
+KYCAID completion redirects must retain the configured marketing URL's scheme and
+port and match its hostname or existing `www` alias. The shared navigation policy
+also rejects credentials and fragments before a redirect can retire the form.
+Mounted controls retain ordinary completion and reject changed origins; this
+callback check does not constrain the provider's full navigation or media origins.
+
 Mounted JavaScript controls use the locked WebView wrapper, actual app-lock
 provider and owner hooks with synthetic credentials. They establish mount,
 callback and error-display behavior, not physical camera shutdown or native
 permission-dialog cancellation. Provider origin/media grants, Android owning-window
-focus and global modal/lock stacking remain separate #13 checks. Navigation and
-provider media policies are unchanged; playback settings do not establish camera
+focus and global modal/lock stacking remain separate #13 checks. Provider browsing
+and media policies remain unchanged; playback settings do not establish camera
 capture control, and a form-completion signal is not server verification approval.
 
 The buy-crypto provider uses the same admission and session lifetime. A widget
@@ -507,3 +520,54 @@ establish physical biometric enrollment/change, hardware-backed key properties,
 OEM backup/transfer, store distribution or behavior on every supported OS.
 Record those limits, any failed native build and the exact tested head in the PR;
 JavaScript tests alone do not close a native hardening claim.
+
+## iOS Debug LAN handler probe
+
+A separate local probe checks the configured private IPv4 allowance through the
+compiled `LedovaHTTPRequestHandler`, alongside the stock React Native handler as
+a reachability and ATS control. Choose an address assigned to a local interface
+and a booted, dedicated simulator with no Ledova installation:
+
+```bash
+cd mobile
+EXPO_PUBLIC_DEV_API_HOST=192.168.50.10 \
+IOS_SIMULATOR_UDID=your-owned-simulator-uuid \
+npm run test:native:lan -- /absolute/fresh/ios-lan-results
+```
+
+The output and any existing generated `ios/` directory must share the checkout's
+filesystem. Preflight checks this before starting the server or moving the
+project, so its preservation and restoration use atomic renames. Copy retained
+evidence to an external volume after the command completes if needed.
+
+The runner preserves an existing generated `ios/` directory, generates a fresh
+configured project, adds an XCTest target and bundles a small test host. It uses
+the actual native HTTP handler source. Configured Debug must reach the local
+server, unconfigured Debug must refuse without reaching it, and Release must
+refuse HTTP. The stock handler must reach the server in both Debug cases; its
+Release result is recorded because numeric-host ATS behavior depends on the OS
+and linked SDK. A timeout or unrelated network error cannot count as a refusal.
+
+An intentional change to the generated Debug allowlist guard must produce the
+four expected refusal assertion failures and exactly one unwanted server
+request. The runner restores that source before requiring the normal Debug and
+Release results. Each case has a new identity that must match the native report,
+so an earlier result cannot satisfy a later run. Evidence includes XCTest logs
+and result bundles, actual server counts, compiled plists, OS/Xcode/SDK versions,
+linked build versions, architecture and binary/source hashes.
+
+SIGINT/SIGTERM and command deadlines stop and reap the owned build processes
+before restoring the generated project. The runner removes its test app; remove
+the dedicated simulator after inspecting the evidence. Keep the checkout idle
+while this probe runs. An uncatchable kill requires recovery from the retained
+`native-before` directory before using the generated project again. The output
+contains the selected local address and synthetic test configuration; publish a
+sanitized result record rather than committing the output directory.
+
+This probe invokes the compiled handler directly. It does not establish React
+Native dispatcher selection, which the separate Release app probe exercises,
+or physical local-network permission behavior. Apple documents that the
+[simulator does not implement local-network privacy](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy).
+The configured-host result must be repeated on a physical iPhone, with
+permission/reachability recorded separately from
+[ATS local-network policy](https://developer.apple.com/documentation/bundleresources/information-property-list/nsapptransportsecurity/nsallowslocalnetworking).
