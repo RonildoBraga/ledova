@@ -217,10 +217,11 @@ views remain distinct and still refuse an ambiguous JavaScript state.
 This exercises the loaded bridge with a synthetic event; it does not
 reproduce natural JavaScript queue timing or scan a physical camera image.
 
-The temporary recorder locates only the locked Expo `BoolAsyncFunctionComponent`
+The temporary recorder locates the loaded Expo `UntypedAsyncFunctionComponent`
 for this view's `isCurrentScan`. Expo registers the same view definition under
 its name and a compatibility default key; function lookup deduplicates those
-object identities while still rejecting distinct matching functions.
+object identities while still rejecting distinct matching functions. It requires
+the original call to return a Boolean and returns that same result unchanged.
 Both its original function body and the exact
 view window callback are restored in `finally`, including a deliberate-throw
 restoration control. A missing reflection shape or an unobserved query fails the

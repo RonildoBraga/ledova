@@ -107,7 +107,7 @@ class ScannerReleaseTest {
     val functions = definitions.values.flatMap { getter(requireNotNull(it), "getAsyncFunctions") as List<*> }
     val seen = Collections.newSetFromMap(IdentityHashMap<Any, Boolean>())
     return functions.filterNotNull().filter { seen.add(it) }.single { member(it, "name").get(it) == "isCurrentScan" }.also {
-      assertEquals("expo.modules.kotlin.functions.BoolAsyncFunctionComponent", it.javaClass.name)
+      assertEquals("expo.modules.kotlin.functions.UntypedAsyncFunctionComponent", it.javaClass.name)
     }
   }
 
@@ -115,14 +115,15 @@ class ScannerReleaseTest {
   private inner class NativeQueries(scanner: View) : AutoCloseable {
     private val owner = scanner.parent
     private val lease = FieldLease(queryFunction(scanner), "body")
-    private val original = lease.original as (Array<out Any?>) -> Boolean
+    private val original = lease.original as (Array<out Any?>) -> Any?
     val observed = mutableListOf<Query>()
     init {
-      val recorder: (Array<out Any?>) -> Boolean = { args ->
+      val recorder: (Array<out Any?>) -> Any? = { args ->
         val admitted = original(args)
+        assertTrue(admitted is Boolean)
         if (args[0] === owner) {
           assertSame(Looper.getMainLooper(), Looper.myLooper())
-          observed.add(Query(args[1] as Int, args[2] as Int, admitted))
+          observed.add(Query(args[1] as Int, args[2] as Int, admitted as Boolean))
         }
         admitted
       }
@@ -329,6 +330,7 @@ class ScannerReleaseTest {
       enterStage("remount-open")
       val first = openCamera()
       assertNotSame(active.scanner, first.scanner)
+      enterStage("recorder-restoration-control")
       restoredAfterFailure(first.scanner)
       withNativeQueries(first.scanner) { queries ->
         lateinit var before: JsState
