@@ -1124,6 +1124,27 @@ next sweep; a newer terminal decision remains intact. Provider and balance RPC
 stay outside these locks. This check establishes which local record a receipt
 may affect; it does not establish chain canonicality or finality.
 
+Successful and reverted wallet receipts retain available observed block hash,
+height, timestamp and actual native fee. Imported-history receipts use the same
+metadata rules without balance or notification effects. An unavailable block
+timestamp remains unknown; confirmation never substitutes the current time.
+EVM timestamps come from a lookup by the receipt's block hash, and the returned
+header must match both that hash and the receipt height. Bitcoin header times
+must identify the requested block. These checks follow the
+[Ethereum block contract](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_getblockbyhash)
+and [Bitcoin Core header contract](https://bitcoincore.org/en/doc/30.0.0/rpc/blockchain/getblockheader/).
+They validate provider metadata consistency, not independent chain truth.
+
+Boolean, negative, fractional and oversized numeric values do not become heights
+or fees. Zero is valid. Unavailable or malformed fields preserve existing
+evidence for the same block context. If a new observed hash or height differs
+from the stored context, including a previously unknown identity, unavailable
+fields are cleared so an older block's time
+or fee cannot be carried into the new observation. Receipt metadata does not
+change signed intent or estimated fees. Missing metadata does not itself change
+the existing outcome admission policy; finality depth, canonicality, replacement
+discovery and subsequent enrichment of terminal records remain separate work.
+
 The platform monitor fetches each receipt before locking the current transaction
 row. It applies an outcome only while the UUID, hash, pending/submitted status,
 recorded call and business reference, nonce, gas terms and submission time still

@@ -5,11 +5,20 @@ from wallets.constants import (
     TRANSACTION_STATUS_PENDING,
 )
 from wallets.models import Transaction, Wallet
+from wallets.services.receipt_metadata import apply_receipt_metadata
 from wallets.services.receipt_targets import capture_receipt_target
 
 
 def record_history_receipt(
-    tx_hash, *, wallet, succeeded, block_number=None, block_timestamp=None, actual_fee=None, expected=None
+    tx_hash,
+    *,
+    wallet,
+    succeeded,
+    block_number=None,
+    block_hash=None,
+    block_timestamp=None,
+    actual_fee=None,
+    expected=None
 ):
     with atomic():
         locked_wallet = Wallet.objects.select_for_update().get(pk=wallet.pk)
@@ -25,11 +34,8 @@ def record_history_receipt(
         if tx.status != TRANSACTION_STATUS_PENDING:
             return {"status": "already_processed", "current_status": tx.status}
         tx.status = TRANSACTION_STATUS_CONFIRMED if succeeded else TRANSACTION_STATUS_FAILED
-        if block_number is not None:
-            tx.block_number = block_number
-        if block_timestamp is not None:
-            tx.block_timestamp = block_timestamp
-        if actual_fee is not None:
-            tx.transaction_fee = actual_fee
-        tx.save(update_fields=["status", "block_number", "block_timestamp", "transaction_fee", "updated_at"])
+        fields = apply_receipt_metadata(
+            tx, block_hash=block_hash, block_number=block_number, block_timestamp=block_timestamp, actual_fee=actual_fee
+        )
+        tx.save(update_fields=["status", "updated_at", *fields])
         return {"status": tx.status, "tx_hash": tx_hash, "block_number": tx.block_number}

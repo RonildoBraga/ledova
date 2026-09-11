@@ -27,6 +27,7 @@ from wallets.constants import (
 from wallets.exceptions import InvalidTransactionException
 from wallets.models import Holding, HoldingSnapshot, Transaction, Wallet
 from wallets.services.holdings import sync_holding
+from wallets.services.receipt_metadata import apply_receipt_metadata
 from wallets.services.receipt_targets import capture_receipt_target
 
 logger = logging.getLogger(__name__)
@@ -120,6 +121,7 @@ def confirm_transaction(
     *,
     wallet: Wallet,
     block_number: Optional[int] = None,
+    block_hash: Optional[str] = None,
     block_timestamp: Optional[timezone.datetime] = None,
     actual_fee: Optional[Decimal] = None,
     expected=None,
@@ -128,20 +130,11 @@ def confirm_transaction(
         if tx.status == TRANSACTION_STATUS_CONFIRMED:
             return {"status": "already_confirmed", "tx_hash": tx_hash}, None
         tx.status = TRANSACTION_STATUS_CONFIRMED
-        tx.block_number = block_number
-        tx.block_timestamp = block_timestamp or timezone.now()
-        tx.balance_reconciliation_token = uuid4()
-        if actual_fee is not None:
-            tx.transaction_fee = actual_fee
-        tx.save(
-            update_fields=[
-                "status",
-                "block_number",
-                "block_timestamp",
-                "transaction_fee",
-                "balance_reconciliation_token",
-            ]
+        fields = apply_receipt_metadata(
+            tx, block_hash=block_hash, block_number=block_number, block_timestamp=block_timestamp, actual_fee=actual_fee
         )
+        tx.balance_reconciliation_token = uuid4()
+        tx.save(update_fields=["status", "balance_reconciliation_token", *fields])
         _invalidate_balance_reads(tx)
 
         _notify_wallet_users(tx, "confirmed")
@@ -155,11 +148,24 @@ def confirm_transaction(
     return result
 
 
-def fail_transaction(tx_hash: str, reason: Optional[str] = None, *, wallet: Wallet, expected=None) -> Dict[str, Any]:
+def fail_transaction(
+    tx_hash: str,
+    reason: Optional[str] = None,
+    *,
+    wallet: Wallet,
+    block_number: Optional[int] = None,
+    block_hash: Optional[str] = None,
+    block_timestamp: Optional[timezone.datetime] = None,
+    actual_fee: Optional[Decimal] = None,
+    expected=None,
+) -> Dict[str, Any]:
     def fail_once(tx):
         if tx.status != TRANSACTION_STATUS_PENDING:
             return {"status": "not_pending", "tx_hash": tx_hash, "current_status": tx.status}, None
-        _settle_the_optimistic_debit(tx, TRANSACTION_STATUS_FAILED)
+        fields = apply_receipt_metadata(
+            tx, block_hash=block_hash, block_number=block_number, block_timestamp=block_timestamp, actual_fee=actual_fee
+        )
+        _settle_the_optimistic_debit(tx, TRANSACTION_STATUS_FAILED, fields)
         _notify_wallet_users(tx, "failed")
         logger.info(f"Transaction marked as failed: tx_hash={tx_hash}, reason={reason}")
         return {"status": "failed", "tx_hash": tx_hash, "reason": reason}, None

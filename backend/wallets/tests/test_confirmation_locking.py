@@ -291,7 +291,9 @@ class ConfirmationChecks:
         with acting_for(self.tenant.user.pk):
             with patch.object(transaction_confirmation, boundary, side_effect=RuntimeError("Synthetic interruption")):
                 with self.assertRaises(RuntimeError):
-                    transaction_confirmation.confirm_transaction(tx.tx_hash, wallet=self.wallet, block_number=77)
+                    transaction_confirmation.confirm_transaction(
+                        tx.tx_hash, wallet=self.wallet, block_number=77, block_timestamp=timezone.now()
+                    )
             tx.refresh_from_db()
             self.assertEqual(tx.status, "confirmed")
             self.assertIsNotNone(tx.balance_reconciliation_token)

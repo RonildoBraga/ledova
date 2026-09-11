@@ -230,8 +230,13 @@ class HistoryPreservationChecks:
         self.import_history(data)
         before = self.state()[1:]
         timestamp = data["block_timestamp"].replace(microsecond=0) + timezone.timedelta(seconds=12)
-        client = self.receipt_client(blockNumber=76, gasUsed=21000, effectiveGasPrice=1000000000)
-        client.w3.eth.get_block.return_value = {"timestamp": int(timestamp.timestamp())}
+        block_hash = "0x" + "83" * 32
+        client = self.receipt_client(blockNumber=76, blockHash=block_hash, gasUsed=21000, effectiveGasPrice=1000000000)
+        client.w3.eth.get_block.return_value = {
+            "hash": block_hash,
+            "number": 76,
+            "timestamp": int(timestamp.timestamp()),
+        }
         with (
             patch("wallets.services.transaction_confirmation.sync_holding", wraps=sync_holding),
             patch("wallets.services.holdings.fetch_chain_balance", return_value=Decimal("37")),

@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timezone
 from decimal import Decimal
 from unittest import skipUnless
 from unittest.mock import patch
@@ -58,6 +59,13 @@ class SubmissionChainTest(SubmissionFixture, APITransactionTestCase):
         with patch("wallets.services.transaction_confirmation.sync_holding", wraps=sync_holding):
             return confirm_pending_transaction(tx_hash, str(self.wallet.pk), principal_id=self.tenant.user.pk)
 
+    def assert_block_metadata(self, tx, receipt):
+        block = self.w3.eth.get_block(receipt.blockHash)
+        self.assertEqual(tx.block_hash, receipt.blockHash.to_0x_hex())
+        self.assertEqual(tx.block_number, receipt.blockNumber)
+        self.assertEqual(tx.block_timestamp, datetime.fromtimestamp(block.timestamp, tz=timezone.utc))
+        self.assertEqual(tx.transaction_fee, Decimal(receipt.gasUsed * receipt.effectiveGasPrice) / Decimal(10**18))
+
     def test_a_lost_node_acknowledgement_reconciles_the_original_mined_hash(self):
         signed = self.signed(nonce=0, gas=90000)
         send = EthereumClient.broadcast_transaction
@@ -87,6 +95,26 @@ class SubmissionChainTest(SubmissionFixture, APITransactionTestCase):
             self.holding.refresh_from_db()
         actual_fee = Decimal(receipt.gasUsed * receipt.effectiveGasPrice) / Decimal(10**18)
         self.assertEqual(tx.transaction_fee, actual_fee)
+        self.assert_block_metadata(tx, receipt)
+        self.assertEqual(self.holding.quantity, Decimal(self.w3.eth.get_balance(self.signer.address)) / Decimal(10**18))
+        self.assertIsNone(tx.balance_reconciliation_token)
+        before = self.financial_state()
+        self.assertEqual(self.confirm(submission.tx_hash)["status"], "already_processed")
+        self.assertEqual(self.financial_state(), before)
+
+    def test_a_mined_revert_retains_its_real_block_and_fee_after_reconciliation(self):
+        signed = self.signed(nonce=0, to=Web3.to_checksum_address(TOKEN_ADDRESS), gas=90000)
+        result = self.submit_direct(signed)
+        self.assertEqual(result["txHash"], signed.hash.to_0x_hex())
+        submission = self.submission()
+        receipt = self.w3.eth.get_transaction_receipt(submission.tx_hash)
+        self.assertEqual(receipt.status, 0)
+        self.assertEqual(self.confirm(submission.tx_hash)["status"], "failed")
+        with use_operator():
+            tx = Transaction.objects.get(pk=submission.transaction_id)
+            self.holding.refresh_from_db()
+        self.assert_block_metadata(tx, receipt)
+        self.assertEqual(tx.amount, Decimal("2"))
         self.assertEqual(self.holding.quantity, Decimal(self.w3.eth.get_balance(self.signer.address)) / Decimal(10**18))
         self.assertIsNone(tx.balance_reconciliation_token)
         before = self.financial_state()

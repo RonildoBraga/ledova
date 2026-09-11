@@ -14,13 +14,14 @@ from wallets.services import transaction_confirmation
 from wallets.tasks.confirmation import confirm_pending_transaction, get_receipt_reader
 
 BITCOIN_HASH = "80" * 32
+BITCOIN_BLOCK_HASH = "81" * 32
 
 BITCOIN_RECEIPT = {
     "tx_hash": BITCOIN_HASH,
     "confirmed": True,
     "confirmations": 3,
     "block_height": 812345,
-    "block_hash": "0000block",
+    "block_hash": BITCOIN_BLOCK_HASH,
 }
 
 
@@ -42,7 +43,7 @@ class BitcoinReceiptReaderTest(TestCase):
 
         stamp = reader.block_timestamp(client, BITCOIN_RECEIPT, 812345)
 
-        client.get_block_timestamp.assert_called_once_with("0000block")
+        client.get_block_timestamp.assert_called_once_with(BITCOIN_BLOCK_HASH)
         self.assertEqual(stamp, datetime.fromtimestamp(1700000000, tz=datetime_timezone.utc))
 
     def test_bitcoin_reader_tolerates_a_missing_block_hash(self):
@@ -60,9 +61,11 @@ class BitcoinReceiptReaderTest(TestCase):
 
     def test_evm_reader_reads_the_timestamp_from_web3(self):
         reader = get_receipt_reader("ethereum")
-        client = SimpleNamespace(w3=SimpleNamespace(eth=Mock(get_block=Mock(return_value={"timestamp": 1600000000}))))
+        block_hash = "0x" + "82" * 32
+        header = {"hash": block_hash, "number": 42, "timestamp": 1600000000}
+        client = SimpleNamespace(w3=SimpleNamespace(eth=Mock(get_block=Mock(return_value=header))))
 
-        stamp = reader.block_timestamp(client, {"blockNumber": 42}, 42)
+        stamp = reader.block_timestamp(client, {"blockNumber": 42, "blockHash": block_hash}, 42)
 
         self.assertEqual(stamp, datetime.fromtimestamp(1600000000, tz=datetime_timezone.utc))
 
@@ -110,6 +113,7 @@ class BitcoinConfirmationTaskTest(TestCase):
         self.tx.refresh_from_db()
         self.assertEqual(self.tx.status, TRANSACTION_STATUS_CONFIRMED)
         self.assertEqual(self.tx.block_number, 812345)
+        self.assertEqual(self.tx.block_hash, BITCOIN_BLOCK_HASH)
         self.assertEqual(self.tx.block_timestamp, datetime.fromtimestamp(1700000000, tz=datetime_timezone.utc))
         self.holding.refresh_from_db()
         self.assertEqual(self.holding.quantity, Decimal("0.9999"))
