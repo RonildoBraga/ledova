@@ -258,7 +258,7 @@ export function WalletVerificationScreen() {
                     isVerifying={isVerifying}
                     verificationSuccess={verificationSuccess}
                     verificationError={scanError || verificationError}
-                    onBarcodeScanned={camera.onBarcodeScanned}
+                    preview={camera.preview}
                   />
                 )}
               </ScrollView>
