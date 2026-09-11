@@ -212,9 +212,15 @@ export function OrderActionFlow({ action, wallets, onClose }: Props) {
         )}
         {state.phase === 'error' && (
           <div role="alert" className="space-y-2">
-            <h3>{action.record ? 'Action status unconfirmed' : 'Order details unavailable'}</h3>
+            <h3>
+              {state.canRemoveReminder
+                ? 'Signing request rejected'
+                : action.record
+                  ? 'Action status unconfirmed'
+                  : 'Order details unavailable'}
+            </h3>
             <p>{state.error}</p>
-            {action.record && (
+            {action.record && !state.canRemoveReminder && (
               <p>
                 Check the saved action before signing again. An unavailable result does not start a replacement action.
               </p>
@@ -222,6 +228,14 @@ export function OrderActionFlow({ action, wallets, onClose }: Props) {
             <button className={button} onClick={() => void action.recover()}>
               {action.record ? `Check ${label} status` : 'Retry order details'}
             </button>
+            {state.canRemoveReminder && (
+              <>
+                <p>Removing this reminder does not cancel an action you already submitted.</p>
+                <button className={button} onClick={() => void action.removeReminder()}>
+                  Remove saved reminder
+                </button>
+              </>
+            )}
           </div>
         )}
         {state.notice && <p>{state.notice}</p>}

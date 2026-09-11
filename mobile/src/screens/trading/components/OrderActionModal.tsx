@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, ActivityIndicator, Pressable } from 'react-native';
 import { useOrderActionSigning, type OrderAction, type Wallet } from '@ledova/shared';
 import { CustomModal } from '../../../components/modal';
 import { QRDisplay, QRScanner } from '../../../components/qr';
@@ -23,6 +23,12 @@ export function OrderActionModal({ action, wallets, onClose }: Props) {
     text: { fontSize: theme.fontSize.sm, color: theme.colors.text.secondary },
     input: {
       color: theme.colors.text.primary,
+      borderColor: theme.colors.border.default,
+      borderWidth: 1,
+      borderRadius: theme.borderRadius.md,
+      padding: theme.spacing.sm,
+    },
+    reminderButton: {
       borderColor: theme.colors.border.default,
       borderWidth: 1,
       borderRadius: theme.borderRadius.md,
@@ -229,16 +235,34 @@ export function OrderActionModal({ action, wallets, onClose }: Props) {
           {state.phase === 'error' && (
             <>
               <Text style={styles.title}>
-                {action.record ? 'Action status unconfirmed' : 'Order details unavailable'}
+                {state.canRemoveReminder
+                  ? 'Signing request rejected'
+                  : action.record
+                    ? 'Action status unconfirmed'
+                    : 'Order details unavailable'}
               </Text>
               <Text accessibilityRole="alert" style={styles.text}>
                 {state.error}
               </Text>
-              {action.record && (
+              {action.record && !state.canRemoveReminder && (
                 <Text style={styles.text}>
                   Check the saved action before signing again. An unavailable result does not start a replacement
                   action.
                 </Text>
+              )}
+              {state.canRemoveReminder && (
+                <>
+                  <Text style={styles.text}>
+                    Removing this reminder does not cancel an action you already submitted.
+                  </Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    style={styles.reminderButton}
+                    onPress={() => void action.removeReminder()}
+                  >
+                    <Text style={styles.text}>Remove saved reminder</Text>
+                  </Pressable>
+                </>
               )}
             </>
           )}
