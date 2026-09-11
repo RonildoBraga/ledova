@@ -87,6 +87,10 @@ CHAIN_TO_NATIVE_ASSET = {
 NATIVE_ASSET_DECIMALS = {"BTC": 8, "ETH": 18, "POL": 18, "SOL": 9, "AVAX": 18}
 
 
+def supported_chain_choices() -> list[str]:
+    return sorted(SUPPORTED_CHAINS)
+
+
 def normalize_chain(chain: str) -> str:
     if not chain:
         return ""

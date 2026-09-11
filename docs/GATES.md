@@ -585,6 +585,14 @@ The `POSTGRES_*` variables select that database. The generator refuses another
 toolchain, SQLite, or pending migrations and records the measured environment.
 It does not migrate a database itself.
 
+Schema generation also refuses warnings and errors before writing the generated
+document. Fix ambiguous enum names through `ENUM_NAME_OVERRIDES` using the
+existing choice definitions, and give request-scoped views a model declaration
+or explicit schema metadata. Do not silence diagnostics or bypass live row
+authorization to make introspection succeed. Each export starts fresh diagnostic
+accounting, so warnings from an earlier generation in the same process do not
+contaminate a clean run.
+
 CI generates a fresh JSON document, compares it and runs the real field and SSE
 gate against that same document. `make update-api-schema` is the explicit update
 command: it generates and checks the contracts before writing the snapshot.
@@ -621,12 +629,12 @@ The browser stream's configured-origin template and mobile stream URL builder
 are checked explicitly, alongside the existing event-name comparison below.
 
 Reproducibility and route coverage do not imply generated-client readiness.
-The untyped method-field diagnostics, authentication/request/security metadata,
-enum/component identities and company-document introspection warning remain
-tracked in #115. Diagnostics are preserved rather than suppressed, and no new
-type or schema allowance is added. B7e still requires trustworthy remaining
-declarations and fields plus a recorded clean release before the separate change
-that generates shared API types and retires their handwritten counterparts.
+Schema tests cover declared method fields, authentication requests and security,
+enum identities and company-document introspection. Diagnostics remain visible
+and no new type or schema allowance is added. #115's B7e still requires trustworthy
+declarations and fields for every client-facing endpoint plus a recorded clean
+release before the separate change that generates shared API types and retires
+their handwritten counterparts.
 
 `scripts/check-api-types.py` fails when a shared TypeScript type declares a field
 **required** that the endpoint it is used for never sends. CI runs it in the

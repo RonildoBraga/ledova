@@ -37,7 +37,7 @@ class Command(BaseCommand):
             raise CommandError("Apply all migrations to the isolated schema database before generation.")
         destination = options["file"]
         destination.parent.mkdir(parents=True, exist_ok=True)
-        call_command("spectacular", format="openapi-json", file=str(destination))
+        call_command("spectacular", format="openapi-json", file=str(destination), fail_on_warn=True)
         document = json.loads(destination.read_text())
         registered = registered_routes()
         findings = schema_route_drift(document, registered)

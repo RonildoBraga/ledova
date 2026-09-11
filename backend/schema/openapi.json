@@ -157,7 +157,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/Status5a8Enum"
+                "$ref": "#/components/schemas/CompanyStatusEnum"
               }
             ],
             "readOnly": true
@@ -593,6 +593,17 @@
         ],
         "type": "string"
       },
+      "AuthCookieRefreshed": {
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "type": "object"
+      },
       "AuthEmailVerified": {
         "properties": {
           "email": {
@@ -653,6 +664,63 @@
           "message"
         ],
         "type": "object"
+      },
+      "AuthRefreshError": {
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
+      "AuthRefreshRequest": {
+        "properties": {
+          "refresh": {
+            "description": "Refresh JWT. In cookie transport, an omitted or falsy value falls back to the refresh cookie. Using a refresh cookie without an Authorization header requires CSRF validation. Bearer transport does not fall back to a refresh cookie.",
+            "nullable": true,
+            "oneOf": [
+              {
+                "nullable": true,
+                "type": "string"
+              },
+              {
+                "enum": [
+                  0
+                ],
+                "type": "number"
+              },
+              {
+                "enum": [
+                  false
+                ],
+                "type": "boolean"
+              },
+              {
+                "items": {},
+                "maxItems": 0,
+                "type": "array"
+              },
+              {
+                "maxProperties": 0,
+                "type": "object"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "AuthRefreshResponse": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/AuthTokensRefreshed"
+          },
+          {
+            "$ref": "#/components/schemas/AuthCookieRefreshed"
+          }
+        ]
       },
       "AuthSession": {
         "properties": {
@@ -719,6 +787,42 @@
         ],
         "type": "object"
       },
+      "AuthSignoutRequest": {
+        "properties": {
+          "refresh": {
+            "description": "Refresh JWT to revoke when the request authenticates with a live access token. If omitted, authenticated signout revokes the access token's session. Anonymous signout only clears cookies; it does not revoke a supplied refresh token.",
+            "nullable": true,
+            "oneOf": [
+              {
+                "nullable": true,
+                "type": "string"
+              },
+              {
+                "enum": [
+                  0
+                ],
+                "type": "number"
+              },
+              {
+                "enum": [
+                  false
+                ],
+                "type": "boolean"
+              },
+              {
+                "items": {},
+                "maxItems": 0,
+                "type": "array"
+              },
+              {
+                "maxProperties": 0,
+                "type": "object"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
       "AuthTokenPair": {
         "properties": {
           "accessToken": {
@@ -772,7 +876,7 @@
             "type": "array"
           },
           "chain": {
-            "$ref": "#/components/schemas/Chain3edEnum"
+            "$ref": "#/components/schemas/SupportedWalletChainEnum"
           },
           "userAccount": {
             "format": "uuid",
@@ -796,7 +900,7 @@
             "type": "object"
           },
           "chain": {
-            "$ref": "#/components/schemas/Chain3edEnum"
+            "$ref": "#/components/schemas/SupportedWalletChainEnum"
           },
           "errors": {
             "items": {
@@ -1026,7 +1130,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/Status207Enum"
+                "$ref": "#/components/schemas/CapitalRequestStatusEnum"
               }
             ],
             "readOnly": true
@@ -1143,7 +1247,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/Status207Enum"
+                "$ref": "#/components/schemas/CapitalRequestStatusEnum"
               }
             ],
             "readOnly": true
@@ -1262,6 +1366,21 @@
         ],
         "type": "object"
       },
+      "CapitalRequestStatusEnum": {
+        "description": "* `draft` - Draft\n* `submitted` - Submitted\n* `under_review` - Under Review\n* `approved` - Approved\n* `rejected` - Rejected\n* `executing` - Executing\n* `executed` - Executed\n* `failed` - Failed\n* `superseded` - Superseded",
+        "enum": [
+          "draft",
+          "submitted",
+          "under_review",
+          "approved",
+          "rejected",
+          "executing",
+          "executed",
+          "failed",
+          "superseded"
+        ],
+        "type": "string"
+      },
       "CategoryEnum": {
         "description": "* `product_value` - Product value of at least AUD 500,000 (s708(8)(a))\n* `accountant_certificate` - Qualified accountant's certificate (s708(8)(c))\n* `professional_investor` - Professional investor (s708(11) / s761G(7)(d))\n* `associated_person` - Person associated with the issuer (s708(12))",
         "enum": [
@@ -1281,14 +1400,30 @@
         ],
         "type": "string"
       },
-      "Chain3edEnum": {
-        "description": "* `base` - base\n* `bitcoin` - bitcoin\n* `ethereum` - ethereum",
-        "enum": [
-          "base",
-          "bitcoin",
-          "ethereum"
+      "ChangePassword": {
+        "properties": {
+          "currentPassword": {
+            "maxLength": 255,
+            "type": "string",
+            "writeOnly": true
+          },
+          "newPassword": {
+            "maxLength": 255,
+            "type": "string",
+            "writeOnly": true
+          },
+          "newPasswordConfirm": {
+            "maxLength": 255,
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "currentPassword",
+          "newPassword",
+          "newPasswordConfirm"
         ],
-        "type": "string"
+        "type": "object"
       },
       "CodeEnum": {
         "description": "* `order_cancellation_failed` - order_cancellation_failed\n* `order_modification_failed` - order_modification_failed\n* `order_modification_conflict` - order_modification_conflict",
@@ -1525,7 +1660,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/Status5a8Enum"
+                "$ref": "#/components/schemas/CompanyStatusEnum"
               }
             ],
             "readOnly": true
@@ -1742,7 +1877,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/Status5a8Enum"
+                "$ref": "#/components/schemas/CompanyStatusEnum"
               }
             ],
             "readOnly": true
@@ -1856,6 +1991,23 @@
         ],
         "type": "object"
       },
+      "CompanyStatusEnum": {
+        "description": "* `draft` - Draft\n* `submitted` - Submitted for Review\n* `review` - Under Review\n* `info_required` - Additional Information Required\n* `approved` - Approved\n* `active` - Active\n* `warning` - Compliance Warning\n* `suspended` - Suspended\n* `delisted` - Delisted\n* `rejected` - Rejected\n* `withdrawn` - Withdrawn",
+        "enum": [
+          "draft",
+          "submitted",
+          "review",
+          "info_required",
+          "approved",
+          "active",
+          "warning",
+          "suspended",
+          "delisted",
+          "rejected",
+          "withdrawn"
+        ],
+        "type": "string"
+      },
       "CompanyStatusUpdate": {
         "properties": {
           "attestOfficeholder": {
@@ -1873,7 +2025,7 @@
             "type": "string"
           },
           "status": {
-            "$ref": "#/components/schemas/Status5a8Enum"
+            "$ref": "#/components/schemas/CompanyStatusEnum"
           }
         },
         "required": [
@@ -2211,7 +2363,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/Status12dEnum"
+                "$ref": "#/components/schemas/ShareTokenStatusEnum"
               }
             ],
             "readOnly": true
@@ -2305,7 +2457,7 @@
           "documentType": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/DocumentTypeF54Enum"
+                "$ref": "#/components/schemas/UserDocumentTypeEnum"
               }
             ],
             "readOnly": true
@@ -2480,16 +2632,6 @@
         ],
         "type": "string"
       },
-      "DocumentTypeF54Enum": {
-        "description": "* `payslip` - Payslip\n* `bank_statement` - Bank Statement\n* `tax_return` - Tax Return\n* `other` - Other",
-        "enum": [
-          "payslip",
-          "bank_statement",
-          "tax_return",
-          "other"
-        ],
-        "type": "string"
-      },
       "DocumentUpload": {
         "properties": {
           "classification": {
@@ -2498,7 +2640,7 @@
             "type": "string"
           },
           "documentType": {
-            "$ref": "#/components/schemas/DocumentTypeF54Enum"
+            "$ref": "#/components/schemas/UserDocumentTypeEnum"
           },
           "file": {
             "format": "uri",
@@ -2512,6 +2654,22 @@
         },
         "required": [
           "file"
+        ],
+        "type": "object"
+      },
+      "EmailVerification": {
+        "properties": {
+          "email": {
+            "maxLength": 254,
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "token"
         ],
         "type": "object"
       },
@@ -3211,21 +3369,6 @@
         ],
         "type": "object"
       },
-      "FromStatusEnum": {
-        "description": "* `open` - Open\n* `partially_filled` - Partially Filled\n* `matched` - Matched\n* `pending_signature` - Pending Signature\n* `executing` - Executing\n* `completed` - Completed\n* `cancelled` - Cancelled\n* `expired` - Expired\n* `failed` - Failed",
-        "enum": [
-          "open",
-          "partially_filled",
-          "matched",
-          "pending_signature",
-          "executing",
-          "completed",
-          "cancelled",
-          "expired",
-          "failed"
-        ],
-        "type": "string"
-      },
       "Holding": {
         "properties": {
           "asset": {
@@ -3710,7 +3853,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/StatusE2bEnum"
+                "$ref": "#/components/schemas/SubscriptionStatusEnum"
               }
             ],
             "readOnly": true
@@ -4104,7 +4247,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/Status2bfEnum"
+                "$ref": "#/components/schemas/OfferingStatusEnum"
               }
             ],
             "readOnly": true
@@ -4280,7 +4423,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/Status2bfEnum"
+                "$ref": "#/components/schemas/OfferingStatusEnum"
               }
             ],
             "readOnly": true
@@ -4338,6 +4481,19 @@
           "uuid"
         ],
         "type": "object"
+      },
+      "OfferingStatusEnum": {
+        "description": "* `draft` - Draft\n* `submitted` - Submitted for Review\n* `under_review` - Under Review\n* `approved` - Approved\n* `rejected` - Rejected\n* `closed` - Closed\n* `withdrawn` - Withdrawn",
+        "enum": [
+          "draft",
+          "submitted",
+          "under_review",
+          "approved",
+          "rejected",
+          "closed",
+          "withdrawn"
+        ],
+        "type": "string"
       },
       "OfferingWithdraw": {
         "properties": {
@@ -4555,7 +4711,7 @@
       "OrderActionCancelResult": {
         "properties": {
           "fromStatus": {
-            "$ref": "#/components/schemas/FromStatusEnum"
+            "$ref": "#/components/schemas/TransferOrderStatusEnum"
           },
           "kind": {
             "$ref": "#/components/schemas/OrderActionCancelResultKindEnum"
@@ -4700,7 +4856,7 @@
             "type": "integer"
           },
           "orderType": {
-            "$ref": "#/components/schemas/OrderType920Enum"
+            "$ref": "#/components/schemas/TransferOrderTypeEnum"
           },
           "pricePerShare": {
             "format": "decimal",
@@ -4716,7 +4872,7 @@
             "type": "string"
           },
           "status": {
-            "$ref": "#/components/schemas/Status49fEnum"
+            "$ref": "#/components/schemas/TransferOrderStatusEnum"
           }
         },
         "required": [
@@ -5300,14 +5456,6 @@
           "pending",
           "created",
           "refused"
-        ],
-        "type": "string"
-      },
-      "OrderType920Enum": {
-        "description": "* `buy` - Buy\n* `sell` - Sell",
-        "enum": [
-          "buy",
-          "sell"
         ],
         "type": "string"
       },
@@ -6611,7 +6759,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/Status12dEnum"
+                "$ref": "#/components/schemas/ShareTokenStatusEnum"
               }
             ],
             "readOnly": true
@@ -6850,7 +6998,7 @@
             "nullable": true,
             "oneOf": [
               {
-                "$ref": "#/components/schemas/SumsubVerificationStatusEnum"
+                "$ref": "#/components/schemas/UserVerificationStatusEnum"
               },
               {
                 "$ref": "#/components/schemas/NullEnum"
@@ -6869,7 +7017,7 @@
             "nullable": true,
             "oneOf": [
               {
-                "$ref": "#/components/schemas/VerificationStatusF94Enum"
+                "$ref": "#/components/schemas/UserVerificationStatusEnum"
               },
               {
                 "$ref": "#/components/schemas/NullEnum"
@@ -6900,7 +7048,7 @@
             "type": "integer"
           },
           "chain": {
-            "$ref": "#/components/schemas/Chain3edEnum"
+            "$ref": "#/components/schemas/SupportedWalletChainEnum"
           },
           "createdAt": {
             "format": "date-time",
@@ -6971,7 +7119,7 @@
             "nullable": true,
             "oneOf": [
               {
-                "$ref": "#/components/schemas/SigningPreferenceEnum"
+                "$ref": "#/components/schemas/WalletSigningPreferenceEnum"
               },
               {
                 "$ref": "#/components/schemas/NullEnum"
@@ -7021,7 +7169,7 @@
             "nullable": true,
             "oneOf": [
               {
-                "$ref": "#/components/schemas/WalletTypeEnum"
+                "$ref": "#/components/schemas/WalletSigningPreferenceEnum"
               },
               {
                 "$ref": "#/components/schemas/NullEnum"
@@ -7531,6 +7679,15 @@
         ],
         "type": "string"
       },
+      "ResendVerification": {
+        "properties": {
+          "email": {
+            "maxLength": 254,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "ReviewResultEnum": {
         "description": "* `GREEN` - Approved\n* `RED` - Rejected\n* `YELLOW` - Retry",
         "enum": [
@@ -7855,7 +8012,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/Status207Enum"
+                "$ref": "#/components/schemas/CapitalRequestStatusEnum"
               }
             ],
             "readOnly": true
@@ -8193,7 +8350,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/Status12dEnum"
+                "$ref": "#/components/schemas/ShareTokenStatusEnum"
               }
             ],
             "readOnly": true
@@ -8331,7 +8488,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/Status12dEnum"
+                "$ref": "#/components/schemas/ShareTokenStatusEnum"
               }
             ],
             "readOnly": true
@@ -8392,6 +8549,16 @@
         ],
         "type": "object"
       },
+      "ShareTokenStatusEnum": {
+        "description": "* `draft` - Draft\n* `deploying` - Deploying\n* `deployed` - Deployed\n* `paused` - Paused",
+        "enum": [
+          "draft",
+          "deploying",
+          "deployed",
+          "paused"
+        ],
+        "type": "string"
+      },
       "SignedOrderSubmission": {
         "properties": {
           "digest": {
@@ -8412,7 +8579,7 @@
             ]
           },
           "orderType": {
-            "$ref": "#/components/schemas/OrderType920Enum"
+            "$ref": "#/components/schemas/TransferOrderTypeEnum"
           },
           "ownerAccountUuid": {
             "format": "uuid",
@@ -8468,113 +8635,6 @@
         ],
         "type": "object"
       },
-      "SigningPreferenceEnum": {
-        "description": "* `hardware` - Hardware\n* `software` - Software",
-        "enum": [
-          "hardware",
-          "software"
-        ],
-        "type": "string"
-      },
-      "Status12dEnum": {
-        "description": "* `draft` - Draft\n* `deploying` - Deploying\n* `deployed` - Deployed\n* `paused` - Paused",
-        "enum": [
-          "draft",
-          "deploying",
-          "deployed",
-          "paused"
-        ],
-        "type": "string"
-      },
-      "Status207Enum": {
-        "description": "* `draft` - Draft\n* `submitted` - Submitted\n* `under_review` - Under Review\n* `approved` - Approved\n* `rejected` - Rejected\n* `executing` - Executing\n* `executed` - Executed\n* `failed` - Failed\n* `superseded` - Superseded",
-        "enum": [
-          "draft",
-          "submitted",
-          "under_review",
-          "approved",
-          "rejected",
-          "executing",
-          "executed",
-          "failed",
-          "superseded"
-        ],
-        "type": "string"
-      },
-      "Status2bfEnum": {
-        "description": "* `draft` - Draft\n* `submitted` - Submitted for Review\n* `under_review` - Under Review\n* `approved` - Approved\n* `rejected` - Rejected\n* `closed` - Closed\n* `withdrawn` - Withdrawn",
-        "enum": [
-          "draft",
-          "submitted",
-          "under_review",
-          "approved",
-          "rejected",
-          "closed",
-          "withdrawn"
-        ],
-        "type": "string"
-      },
-      "Status49fEnum": {
-        "description": "* `open` - Open\n* `partially_filled` - Partially Filled\n* `matched` - Matched\n* `pending_signature` - Pending Signature\n* `executing` - Executing\n* `completed` - Completed\n* `cancelled` - Cancelled\n* `expired` - Expired\n* `failed` - Failed",
-        "enum": [
-          "open",
-          "partially_filled",
-          "matched",
-          "pending_signature",
-          "executing",
-          "completed",
-          "cancelled",
-          "expired",
-          "failed"
-        ],
-        "type": "string"
-      },
-      "Status57bEnum": {
-        "description": "* `created` - Created\n* `seller_signed` - Seller Signed\n* `buyer_signed` - Buyer Signed\n* `ready` - Ready for Execution\n* `executing` - Executing\n* `completed` - Completed\n* `failed` - Failed\n* `expired` - Expired",
-        "enum": [
-          "created",
-          "seller_signed",
-          "buyer_signed",
-          "ready",
-          "executing",
-          "completed",
-          "failed",
-          "expired"
-        ],
-        "type": "string"
-      },
-      "Status5a8Enum": {
-        "description": "* `draft` - Draft\n* `submitted` - Submitted for Review\n* `review` - Under Review\n* `info_required` - Additional Information Required\n* `approved` - Approved\n* `active` - Active\n* `warning` - Compliance Warning\n* `suspended` - Suspended\n* `delisted` - Delisted\n* `rejected` - Rejected\n* `withdrawn` - Withdrawn",
-        "enum": [
-          "draft",
-          "submitted",
-          "review",
-          "info_required",
-          "approved",
-          "active",
-          "warning",
-          "suspended",
-          "delisted",
-          "rejected",
-          "withdrawn"
-        ],
-        "type": "string"
-      },
-      "StatusE2bEnum": {
-        "description": "* `draft` - Draft\n* `submitted` - Submitted\n* `accepted` - Accepted\n* `awaiting_payment` - Awaiting Payment\n* `paid` - Paid\n* `allotted` - Allotted\n* `rejected` - Rejected\n* `withdrawn` - Withdrawn\n* `refunded` - Refunded",
-        "enum": [
-          "draft",
-          "submitted",
-          "accepted",
-          "awaiting_payment",
-          "paid",
-          "allotted",
-          "rejected",
-          "withdrawn",
-          "refunded"
-        ],
-        "type": "string"
-      },
       "SubmissionOrder": {
         "properties": {
           "canBeModified": {
@@ -8627,7 +8687,7 @@
           "orderType": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/OrderType920Enum"
+                "$ref": "#/components/schemas/TransferOrderTypeEnum"
               }
             ],
             "readOnly": true
@@ -8659,7 +8719,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/Status49fEnum"
+                "$ref": "#/components/schemas/TransferOrderStatusEnum"
               }
             ],
             "readOnly": true
@@ -8905,7 +8965,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/StatusE2bEnum"
+                "$ref": "#/components/schemas/SubscriptionStatusEnum"
               }
             ],
             "readOnly": true
@@ -9042,7 +9102,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/StatusE2bEnum"
+                "$ref": "#/components/schemas/SubscriptionStatusEnum"
               }
             ],
             "readOnly": true
@@ -9092,6 +9152,21 @@
         ],
         "type": "object"
       },
+      "SubscriptionStatusEnum": {
+        "description": "* `draft` - Draft\n* `submitted` - Submitted\n* `accepted` - Accepted\n* `awaiting_payment` - Awaiting Payment\n* `paid` - Paid\n* `allotted` - Allotted\n* `rejected` - Rejected\n* `withdrawn` - Withdrawn\n* `refunded` - Refunded",
+        "enum": [
+          "draft",
+          "submitted",
+          "accepted",
+          "awaiting_payment",
+          "paid",
+          "allotted",
+          "rejected",
+          "withdrawn",
+          "refunded"
+        ],
+        "type": "string"
+      },
       "SubscriptionWithdraw": {
         "properties": {
           "reason": {
@@ -9123,15 +9198,12 @@
         ],
         "type": "object"
       },
-      "SumsubVerificationStatusEnum": {
-        "description": "* `init` - Initialized\n* `pending` - Pending Review\n* `queued` - Queued for Review\n* `completed` - Review Completed\n* `onHold` - On Hold\n* `prechecked` - Pre-checked",
+      "SupportedWalletChainEnum": {
+        "description": "* `base` - base\n* `bitcoin` - bitcoin\n* `ethereum` - ethereum",
         "enum": [
-          "init",
-          "pending",
-          "queued",
-          "completed",
-          "onHold",
-          "prechecked"
+          "base",
+          "bitcoin",
+          "ethereum"
         ],
         "type": "string"
       },
@@ -9234,7 +9306,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/Status57bEnum"
+                "$ref": "#/components/schemas/SwapOrderStatusEnum"
               }
             ],
             "readOnly": true
@@ -9374,7 +9446,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/Status57bEnum"
+                "$ref": "#/components/schemas/SwapOrderStatusEnum"
               }
             ],
             "readOnly": true
@@ -9409,6 +9481,20 @@
           "uuid"
         ],
         "type": "object"
+      },
+      "SwapOrderStatusEnum": {
+        "description": "* `created` - Created\n* `seller_signed` - Seller Signed\n* `buyer_signed` - Buyer Signed\n* `ready` - Ready for Execution\n* `executing` - Executing\n* `completed` - Completed\n* `failed` - Failed\n* `expired` - Expired",
+        "enum": [
+          "created",
+          "seller_signed",
+          "buyer_signed",
+          "ready",
+          "executing",
+          "completed",
+          "failed",
+          "expired"
+        ],
+        "type": "string"
       },
       "ThemeEnum": {
         "description": "* `dark` - Dark\n* `light` - Light",
@@ -9735,7 +9821,7 @@
             ]
           },
           "orderType": {
-            "$ref": "#/components/schemas/OrderType920Enum"
+            "$ref": "#/components/schemas/TransferOrderTypeEnum"
           },
           "ownerAccountUuid": {
             "format": "uuid",
@@ -9840,7 +9926,7 @@
           "orderType": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/OrderType920Enum"
+                "$ref": "#/components/schemas/TransferOrderTypeEnum"
               }
             ],
             "readOnly": true
@@ -9872,7 +9958,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/Status49fEnum"
+                "$ref": "#/components/schemas/TransferOrderStatusEnum"
               }
             ],
             "readOnly": true
@@ -9975,7 +10061,7 @@
           "orderType": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/OrderType920Enum"
+                "$ref": "#/components/schemas/TransferOrderTypeEnum"
               }
             ],
             "readOnly": true
@@ -10001,7 +10087,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/Status49fEnum"
+                "$ref": "#/components/schemas/TransferOrderStatusEnum"
               }
             ],
             "readOnly": true
@@ -10060,6 +10146,29 @@
           "walletAddress"
         ],
         "type": "object"
+      },
+      "TransferOrderStatusEnum": {
+        "description": "* `open` - Open\n* `partially_filled` - Partially Filled\n* `matched` - Matched\n* `pending_signature` - Pending Signature\n* `executing` - Executing\n* `completed` - Completed\n* `cancelled` - Cancelled\n* `expired` - Expired\n* `failed` - Failed",
+        "enum": [
+          "open",
+          "partially_filled",
+          "matched",
+          "pending_signature",
+          "executing",
+          "completed",
+          "cancelled",
+          "expired",
+          "failed"
+        ],
+        "type": "string"
+      },
+      "TransferOrderTypeEnum": {
+        "description": "* `buy` - Buy\n* `sell` - Sell",
+        "enum": [
+          "buy",
+          "sell"
+        ],
+        "type": "string"
       },
       "TransferTokenInfo": {
         "properties": {
@@ -10137,6 +10246,16 @@
           "uuid"
         ],
         "type": "object"
+      },
+      "UserDocumentTypeEnum": {
+        "description": "* `payslip` - Payslip\n* `bank_statement` - Bank Statement\n* `tax_return` - Tax Return\n* `other` - Other",
+        "enum": [
+          "payslip",
+          "bank_statement",
+          "tax_return",
+          "other"
+        ],
+        "type": "string"
       },
       "UserPreferences": {
         "properties": {
@@ -10306,7 +10425,7 @@
             "nullable": true,
             "oneOf": [
               {
-                "$ref": "#/components/schemas/SumsubVerificationStatusEnum"
+                "$ref": "#/components/schemas/UserVerificationStatusEnum"
               },
               {
                 "$ref": "#/components/schemas/NullEnum"
@@ -10325,7 +10444,7 @@
             "nullable": true,
             "oneOf": [
               {
-                "$ref": "#/components/schemas/VerificationStatusF94Enum"
+                "$ref": "#/components/schemas/UserVerificationStatusEnum"
               },
               {
                 "$ref": "#/components/schemas/NullEnum"
@@ -10370,17 +10489,49 @@
         ],
         "type": "string"
       },
-      "ValueSourceEnum": {
-        "description": "* `market` - Market price\n* `nav` - NAV\n* `par` - Par\n* `unpriced` - Unpriced",
-        "enum": [
-          "market",
-          "nav",
-          "par",
-          "unpriced"
+      "UserSignin": {
+        "properties": {
+          "email": {
+            "maxLength": 254,
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 255,
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "email",
+          "password"
         ],
-        "type": "string"
+        "type": "object"
       },
-      "VerificationStatusF94Enum": {
+      "UserSignup": {
+        "properties": {
+          "email": {
+            "maxLength": 254,
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 255,
+            "type": "string",
+            "writeOnly": true
+          },
+          "passwordConfirm": {
+            "maxLength": 255,
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "email",
+          "password",
+          "passwordConfirm"
+        ],
+        "type": "object"
+      },
+      "UserVerificationStatusEnum": {
         "description": "* `init` - Initialized\n* `pending` - Pending Review\n* `queued` - Queued for Review\n* `completed` - Review Completed\n* `onHold` - On Hold\n* `prechecked` - Pre-checked",
         "enum": [
           "init",
@@ -10389,6 +10540,16 @@
           "completed",
           "onHold",
           "prechecked"
+        ],
+        "type": "string"
+      },
+      "ValueSourceEnum": {
+        "description": "* `market` - Market price\n* `nav` - NAV\n* `par` - Par\n* `unpriced` - Unpriced",
+        "enum": [
+          "market",
+          "nav",
+          "par",
+          "unpriced"
         ],
         "type": "string"
       },
@@ -10406,7 +10567,7 @@
             "type": "integer"
           },
           "chain": {
-            "$ref": "#/components/schemas/Chain3edEnum"
+            "$ref": "#/components/schemas/SupportedWalletChainEnum"
           },
           "createdAt": {
             "format": "date-time",
@@ -10477,7 +10638,7 @@
             "nullable": true,
             "oneOf": [
               {
-                "$ref": "#/components/schemas/SigningPreferenceEnum"
+                "$ref": "#/components/schemas/WalletSigningPreferenceEnum"
               },
               {
                 "$ref": "#/components/schemas/NullEnum"
@@ -10527,7 +10688,7 @@
             "nullable": true,
             "oneOf": [
               {
-                "$ref": "#/components/schemas/WalletTypeEnum"
+                "$ref": "#/components/schemas/WalletSigningPreferenceEnum"
               },
               {
                 "$ref": "#/components/schemas/NullEnum"
@@ -10552,6 +10713,14 @@
           "verifiedAt"
         ],
         "type": "object"
+      },
+      "WalletSigningPreferenceEnum": {
+        "description": "* `hardware` - Hardware\n* `software` - Software",
+        "enum": [
+          "hardware",
+          "software"
+        ],
+        "type": "string"
       },
       "WalletSyncResponse": {
         "properties": {
@@ -10601,14 +10770,6 @@
           "success",
           "skipped",
           "error"
-        ],
-        "type": "string"
-      },
-      "WalletTypeEnum": {
-        "description": "* `hardware` - Hardware\n* `software` - Software",
-        "enum": [
-          "hardware",
-          "software"
         ],
         "type": "string"
       },
@@ -10896,6 +11057,38 @@
         ],
         "type": "object"
       }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "bearerFormat": "JWT",
+        "description": "A live session access JWT in the Authorization header.",
+        "scheme": "bearer",
+        "type": "http"
+      },
+      "cookieAuth": {
+        "description": "A live session access JWT in the configured cookie. Unsafe cookie-authenticated requests must pass Django's CSRF token and origin checks.",
+        "in": "cookie",
+        "name": "access",
+        "type": "apiKey"
+      },
+      "csrfCookie": {
+        "description": "CSRF cookie set by /api/auth/verify/ or cookie sign-in. Its token can be sent in the CSRF header.",
+        "in": "cookie",
+        "name": "csrftoken",
+        "type": "apiKey"
+      },
+      "csrfHeader": {
+        "description": "CSRF token matching the CSRF cookie or session secret. Cookie-authenticated unsafe JSON requests require this header. POST form and multipart requests may instead supply csrfmiddlewaretoken in the body. The header alternative works for every unsafe method.",
+        "in": "header",
+        "name": "X-CSRFTOKEN",
+        "type": "apiKey"
+      },
+      "refreshCookie": {
+        "description": "Refresh JWT used by /api/token/refresh/ when no truthy refresh body value is supplied and X-Auth-Transport is not bearer. No access cookie is required. Cookie refresh without an Authorization header enforces CSRF independently of access authentication.",
+        "in": "cookie",
+        "name": "refresh",
+        "type": "apiKey"
+      }
     }
   },
   "info": {
@@ -10967,6 +11160,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -10987,6 +11188,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11019,6 +11228,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11091,6 +11308,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11112,6 +11337,12 @@
           }
         },
         "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
           {}
         ],
         "tags": [
@@ -11122,6 +11353,26 @@
     "/api/change-password/": {
       "post": {
         "operationId": "api_change_password_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePassword"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePassword"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePassword"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -11134,6 +11385,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11174,6 +11435,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11212,6 +11481,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11252,6 +11531,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11295,6 +11584,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11327,6 +11626,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11335,6 +11642,36 @@
     "/api/email-verification/": {
       "post": {
         "operationId": "api_email_verification_create",
+        "parameters": [
+          {
+            "description": "The value bearer, ignoring case and surrounding whitespace, selects bearer transport. Omitting the header or sending any other value uses cookie transport. This chooses how tokens are read or returned; it does not authenticate the request.",
+            "in": "header",
+            "name": "X-Auth-Transport",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailVerification"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailVerification"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailVerification"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -11348,6 +11685,14 @@
           }
         },
         "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          },
           {}
         ],
         "tags": [
@@ -11429,6 +11774,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11467,6 +11820,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11492,6 +11855,16 @@
             "description": "No response body"
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11522,6 +11895,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11562,6 +11943,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11594,6 +11983,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11634,6 +12031,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11674,6 +12081,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11711,6 +12126,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11743,6 +12168,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11792,6 +12225,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11841,6 +12284,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11881,6 +12334,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11919,6 +12380,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11939,6 +12410,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11964,6 +12443,16 @@
             "description": "No response body"
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11994,6 +12483,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12027,6 +12524,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12067,6 +12572,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12104,6 +12617,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12136,6 +12659,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12185,6 +12716,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12246,6 +12787,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12285,6 +12834,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12305,6 +12864,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12337,6 +12904,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12386,6 +12961,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12406,6 +12991,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12469,6 +13062,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12507,6 +13108,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12532,6 +13143,16 @@
             "description": "No response body"
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12562,6 +13183,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12611,6 +13240,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12661,6 +13300,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12713,6 +13362,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12765,6 +13424,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12832,6 +13501,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12839,7 +13516,27 @@
     },
     "/api/resend-verification/": {
       "post": {
+        "description": "Email is optional for authenticated requests. Anonymous requests must include email.",
         "operationId": "api_resend_verification_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResendVerification"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/ResendVerification"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/ResendVerification"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
@@ -12853,6 +13550,14 @@
           }
         },
         "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          },
           {}
         ],
         "tags": [
@@ -12863,6 +13568,36 @@
     "/api/signin/": {
       "post": {
         "operationId": "api_signin_create",
+        "parameters": [
+          {
+            "description": "The value bearer, ignoring case and surrounding whitespace, selects bearer transport. Omitting the header or sending any other value uses cookie transport. This chooses how tokens are read or returned; it does not authenticate the request.",
+            "in": "header",
+            "name": "X-Auth-Transport",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserSignin"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/UserSignin"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/UserSignin"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -12876,6 +13611,14 @@
           }
         },
         "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          },
           {}
         ],
         "tags": [
@@ -12898,6 +13641,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12905,7 +13658,37 @@
     },
     "/api/signout/": {
       "post": {
+        "description": "Clears authentication cookies. Server-side session revocation requires a live access token. Anonymous requests still clear cookies but do not revoke refresh sessions.",
         "operationId": "api_signout_create",
+        "parameters": [
+          {
+            "description": "The value bearer, ignoring case and surrounding whitespace, selects bearer transport. Omitting the header or sending any other value uses cookie transport. This chooses how tokens are read or returned; it does not authenticate the request.",
+            "in": "header",
+            "name": "X-Auth-Transport",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthSignoutRequest"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthSignoutRequest"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthSignoutRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
@@ -12919,6 +13702,14 @@
           }
         },
         "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          },
           {}
         ],
         "tags": [
@@ -12929,8 +13720,28 @@
     "/api/signup/": {
       "post": {
         "operationId": "api_signup_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserSignup"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/UserSignup"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/UserSignup"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
-          "200": {
+          "201": {
             "content": {
               "application/json": {
                 "schema": {
@@ -12942,6 +13753,14 @@
           }
         },
         "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          },
           {}
         ],
         "tags": [
@@ -12952,12 +13771,61 @@
     "/api/token/refresh/": {
       "post": {
         "operationId": "api_token_refresh_create",
+        "parameters": [
+          {
+            "description": "The value bearer, ignoring case and surrounding whitespace, selects bearer transport. Omitting the header or sending any other value uses cookie transport. This chooses how tokens are read or returned; it does not authenticate the request.",
+            "in": "header",
+            "name": "X-Auth-Transport",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthRefreshRequest"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthRefreshRequest"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthRefreshRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AuthTokensRefreshed"
+                  "$ref": "#/components/schemas/AuthRefreshResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthRefreshError"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthRefreshError"
                 }
               }
             },
@@ -12965,6 +13833,14 @@
           }
         },
         "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "csrfCookie": [],
+            "csrfHeader": [],
+            "refreshCookie": []
+          },
           {}
         ],
         "tags": [
@@ -13060,6 +13936,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13092,6 +13976,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13132,6 +14024,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13169,6 +14069,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13201,6 +14111,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13250,6 +14168,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13299,6 +14227,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13339,6 +14277,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13376,6 +14322,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13401,6 +14357,16 @@
             "description": "No response body"
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13431,6 +14397,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13480,6 +14454,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13529,6 +14513,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13569,6 +14563,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13607,6 +14609,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13647,6 +14659,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13667,6 +14689,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13699,6 +14729,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13748,6 +14786,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13798,6 +14846,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13818,6 +14876,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13838,6 +14904,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13913,6 +14989,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13951,6 +15035,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13967,6 +15061,28 @@
             "schema": {
               "format": "uuid",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "company_uuid",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "document_type",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "is_verified",
+            "schema": {
+              "type": "boolean"
             }
           },
           {
@@ -14000,6 +15116,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14049,6 +15173,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14072,6 +15206,8 @@
             "name": "uuid",
             "required": true,
             "schema": {
+              "description": "Unique identifier (primary key)",
+              "format": "uuid",
               "type": "string"
             }
           }
@@ -14081,6 +15217,16 @@
             "description": "No response body"
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14102,6 +15248,8 @@
             "name": "uuid",
             "required": true,
             "schema": {
+              "description": "Unique identifier (primary key)",
+              "format": "uuid",
               "type": "string"
             }
           }
@@ -14118,6 +15266,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14141,6 +15297,8 @@
             "name": "uuid",
             "required": true,
             "schema": {
+              "description": "Unique identifier (primary key)",
+              "format": "uuid",
               "type": "string"
             }
           }
@@ -14158,6 +15316,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14183,6 +15349,16 @@
             "description": "No response body"
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14213,6 +15389,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14262,6 +15446,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14312,6 +15506,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14344,6 +15548,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14393,6 +15605,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14425,6 +15647,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14477,6 +15707,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14509,6 +15749,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14561,6 +15809,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14612,6 +15870,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14663,6 +15931,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14703,6 +15981,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14735,6 +16021,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14775,6 +16069,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14813,6 +16115,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14838,6 +16150,16 @@
             "description": "No response body"
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14868,6 +16190,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14920,6 +16250,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14953,6 +16293,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14993,6 +16341,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15031,6 +16387,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15056,6 +16422,16 @@
             "description": "No response body"
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15086,6 +16462,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15135,6 +16519,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15185,6 +16579,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15236,6 +16640,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15277,6 +16691,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15328,6 +16750,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15368,6 +16800,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15406,6 +16846,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15438,6 +16888,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15489,6 +16947,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15540,6 +17008,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15616,6 +17094,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15654,6 +17140,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15724,6 +17220,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15762,6 +17266,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15787,6 +17301,16 @@
             "description": "No response body"
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15817,6 +17341,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15866,6 +17398,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15916,6 +17458,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15967,6 +17519,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -16030,6 +17592,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -16062,6 +17632,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -16087,6 +17665,16 @@
             "description": "No response body"
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -16117,6 +17705,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -16166,6 +17762,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -16215,6 +17821,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -16266,6 +17882,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -16298,6 +17924,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -16346,6 +17980,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -16398,6 +18040,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -16449,6 +18101,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -16481,6 +18143,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -16532,6 +18202,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -16683,6 +18363,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -16723,6 +18411,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -16868,6 +18564,16 @@
             "description": "Service failure; recover before retrying."
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -16974,6 +18680,16 @@
             "description": "Service failure; retain the submission ID."
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -17069,6 +18785,14 @@
             "description": "Service temporarily unavailable."
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -17101,6 +18825,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -17142,6 +18874,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -17296,6 +19036,16 @@
             "description": "Service unavailable; recover before retrying."
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -17329,6 +19079,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -17481,6 +19239,16 @@
             "description": "Service unavailable; recover before retrying."
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -17513,6 +19281,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -17667,6 +19443,16 @@
             "description": "Service unavailable; recover before retrying."
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -17821,6 +19607,16 @@
             "description": "Service unavailable; recover before retrying."
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -17853,6 +19649,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -17885,6 +19689,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -17917,6 +19729,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -17968,6 +19788,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18008,6 +19838,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18048,6 +19886,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18080,6 +19926,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18112,6 +19966,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18144,6 +20006,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18184,6 +20054,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18224,6 +20104,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18254,6 +20144,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18284,6 +20182,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18354,6 +20260,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18393,6 +20307,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18432,6 +20356,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18463,6 +20397,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18483,6 +20425,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18522,6 +20472,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18572,6 +20532,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18604,6 +20574,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18673,6 +20651,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18711,6 +20697,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18751,6 +20747,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18776,6 +20782,16 @@
             "description": "No response body"
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18806,6 +20822,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18855,6 +20879,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18905,6 +20939,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18957,6 +21001,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -19030,6 +21084,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -19082,6 +21144,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -19114,6 +21186,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -19146,6 +21228,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -19198,6 +21290,16 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
+          }
+        ],
         "tags": [
           "api"
         ]
