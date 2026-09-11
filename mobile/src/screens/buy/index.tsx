@@ -31,9 +31,9 @@ export function BuyScreen() {
     }
   };
 
-  const handleNavigateToWebView = (url: string) => {
+  const handleNavigateToWebView = (url: string, sessionEpoch: number) => {
     setShowModal(false);
-    navigation.navigate('OnRampWebView', { url });
+    navigation.navigate('OnRampWebView', { url, sessionEpoch });
   };
 
   const handleNavigateToProfile = () => {

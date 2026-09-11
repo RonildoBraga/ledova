@@ -277,6 +277,23 @@ focus and global modal/lock stacking remain separate #13 checks. Navigation and
 provider media policies are unchanged; playback settings do not establish camera
 capture control, and a form-completion signal is not server verification approval.
 
+The buy-crypto provider uses the same admission and session lifetime. A widget
+URL carries the session epoch captured before its request; a late response after
+logout, cancellation, account change or owner unmount cannot open the provider.
+The native WebView wrapper is removed during app lock, backgrounding or navigation
+blur. A blur revision also rejects queued callbacks across a quick blur/return
+before React commits a new view. Completion and close are each delivered at most
+once, and a completed URL stays retired when focus returns. A current purchase
+completion only refreshes wallet/dashboard queries; it does not establish payment
+settlement. Native load errors use a fixed message without the provider URL or
+error details.
+
+These on-ramp controls exercise the installed WebView JavaScript adapter and real
+query mutation callbacks with a synthetic native host and provider response. They
+do not establish physical WebView media release or validate vendor origins,
+iframe message provenance, third-party payment redirects or media permissions.
+Those policies and native/device observations remain part of #13.
+
 ## Document upload copies
 
 Eligibility and company listing use one serialized document picker. A returned
