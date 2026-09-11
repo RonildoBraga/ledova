@@ -1359,10 +1359,11 @@ notify nobody. Only the Issue Warning action says so in its admin copy
 (`companies/admin/company.py`); resolve-warning and reinstate have no intro copy
 at all.
 
-Delivery to a phone additionally needs `extra.eas.projectId` in
-`mobile/app.json` plus a development or production build. It is not set in this
-repository, and Expo Go cannot receive remote push on SDK 54. The inbox works
-without it.
+Push registration needs `extra.eas.projectId` in `mobile/app.json`, which is
+not set in this repository. On Android, remote push is unavailable in Expo Go
+from SDK 53 onward and needs a development or production build; see the
+[SDK 54 notification documentation](https://docs.expo.dev/versions/v54.0.0/sdk/notifications/).
+The inbox works without push configuration.
 
 ## Row-level security roles
 
@@ -1613,9 +1614,10 @@ and a policy on every tenant table. Four things about running that deployment:
 
 ## Pre-release device checks
 
-Four flows cannot be exercised in CI or a simulator and need real hardware
-before any release. The first needs a Keystone; the rest need a development or
-production build on a device:
+Complete these four flows on physical hardware before release. The first needs
+a Keystone; use a development or production build on a device for the mobile
+checks. Emulator and simulator checks can supplement this release acceptance
+work.
 
 - **The Keystone QR round trip.** Nothing in CI scans a QR code, so the whole
   air-gapped path — UR encoding, the animated fragments, the camera decoder and
@@ -1637,8 +1639,10 @@ production build on a device:
   when the prompt is cancelled or the app is backgrounded, so the next sign-in
   is typed once; iOS writes silently.
 
-- **Push delivery.** It needs `extra.eas.projectId` in `mobile/app.json` and a
-  real build; Expo Go cannot receive remote push on SDK 54.
+- **Push delivery.** Configure `extra.eas.projectId` in `mobile/app.json` and
+  verify delivery in the device build. Supported emulators and simulators can
+  also exercise delivery; the [SDK 54 notification documentation](https://docs.expo.dev/versions/v54.0.0/sdk/notifications/)
+  describes their requirements and the Android Expo Go restriction.
 
 ## Legal
 
