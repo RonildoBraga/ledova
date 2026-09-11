@@ -75,6 +75,10 @@ carry changes through testing, pull requests and merge without repeated owner
 permission. This applies to all engineering paths, including authentication,
 wallets and payments.
 
+This workflow records the required reviews and checks on the PR without requiring
+enforced branch-protection or approval settings; revisit enforcement if the team
+grows.
+
 1. **Everything lands through a pull request.** Nothing is pushed to `main`
    directly, documentation included.
 2. **The author records what they checked** in the description before asking for
