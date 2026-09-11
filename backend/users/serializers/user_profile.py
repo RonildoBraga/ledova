@@ -1,3 +1,4 @@
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from shared.models.country import Country
@@ -63,22 +64,26 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "sumsub_verification_status",
         )
 
+    @extend_schema_field(serializers.BooleanField())
     def get_is_active(self, obj):
         return obj.user.is_active if obj.user else None
 
+    @extend_schema_field(serializers.BooleanField())
     def get_is_staff(self, obj):
         return obj.user.is_staff if obj.user else None
 
+    @extend_schema_field(serializers.DateTimeField())
     def get_date_joined(self, obj):
         return obj.user.date_joined if obj.user else None
 
+    @extend_schema_field(serializers.DateTimeField(allow_null=True))
     def get_last_login(self, obj):
         return obj.user.last_login if obj.user else None
 
-    def get_citizenship_country_name(self, obj):
+    def get_citizenship_country_name(self, obj) -> str | None:
         return obj.citizenship_country.name if obj.citizenship_country else None
 
-    def get_residence_country_name(self, obj):
+    def get_residence_country_name(self, obj) -> str | None:
         return obj.residence_country.name if obj.residence_country else None
 
     def validate(self, attrs):

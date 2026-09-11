@@ -39,7 +39,7 @@ class CompanyDocumentSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["uuid", "is_verified", "verified_at", "created_at"]
 
-    def get_file_url(self, obj):
+    def get_file_url(self, obj) -> str:
         if not obj.file:
             return obj.external_url
         url = reverse(
