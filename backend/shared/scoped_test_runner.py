@@ -27,6 +27,7 @@ SCOPED_TEST_LABELS = (
     "wallets.tests.test_receipt_metadata.ScopedReceiptMetadataTest",
     "wallets.tests.test_bitcoin_submission.ScopedBitcoinSubmissionTest",
     "wallets.tests.test_bitcoin_submission_recovery.ScopedBitcoinSubmissionRecoveryTest",
+    "wallets.tests.test_global_submission_identity.ScopedGlobalSubmissionIdentityTest",
     "tokens.tests.test_former_member_privacy.ScopedFormerMemberPrivacyTest",
     "documents.tests.test_evidence_under_scoped_roles.ScopedSupportingEvidenceTest",
     "wallets.tests.test_network_identity.ScopedWalletNetworkIdentityTest",

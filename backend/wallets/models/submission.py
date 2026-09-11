@@ -41,6 +41,10 @@ class WalletSubmission(BaseModel):
         constraints = [
             models.UniqueConstraint(fields=["wallet", "tx_hash"], name="unique_wallet_submission_hash"),
             models.UniqueConstraint(fields=["wallet", "chain_id", "nonce"], name="unique_wallet_submission_nonce"),
+            models.UniqueConstraint(fields=["chain_id", "tx_hash"], name="unique_submission_chain_hash"),
+            models.UniqueConstraint(
+                fields=["chain_id", "sender_address", "nonce"], name="unique_submission_sender_nonce"
+            ),
             models.CheckConstraint(condition=models.Q(chain_id__gt=0), name="wallet_submission_chain_id"),
             models.CheckConstraint(
                 condition=models.Q(tx_hash__regex=r"^0x[0-9a-f]{64}$"), name="wallet_submission_hash"

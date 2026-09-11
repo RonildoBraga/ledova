@@ -2,6 +2,7 @@ import logging
 from collections.abc import Mapping
 from decimal import Decimal, localcontext
 
+from django.db import IntegrityError
 from django.db.models import Q
 from django.utils import timezone
 from web3 import Web3
@@ -115,7 +116,7 @@ def _record_submission(wallet, raw, decoded, tx_hash, declared_contract):
     tx.nonce = decoded.nonce
     tx.save(update_fields=["nonce", "updated_at"])
     decimals = token_deployment_decimals(tx.asset, wallet.chain, plan.token_contract) if plan.token_contract else 18
-    return WalletSubmission.objects.create(
+    return _store_submission(
         wallet=wallet,
         user_account_id=wallet.user_account_id,
         transaction=tx,
@@ -145,6 +146,13 @@ def _record_submission(wallet, raw, decoded, tx_hash, declared_contract):
             ),
         },
     )
+
+
+def _store_submission(**fields):
+    try:
+        return WalletSubmission.objects.create(**fields)
+    except IntegrityError:
+        raise InvalidTransactionException("This signed transaction or sender nonce is already recorded.") from None
 
 
 def attempt_submission(submission_id):

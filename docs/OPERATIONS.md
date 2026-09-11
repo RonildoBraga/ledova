@@ -1071,6 +1071,21 @@ rows, are refused before broadcast. The submission entry point requires the
 requesting user's wallet membership and an outermost transaction boundary so
 that no caller can roll back the record after sending.
 
+EVM wallet submissions reserve both `(chain_id, tx_hash)` and
+`(chain_id, sender_address, nonce)` across account wallets. Another wallet cannot
+adopt the recorded spend or create a second deduction by submitting different
+terms at that nonce. The requesting account receives a generic conflict without
+another account's identity or payload. The original wallet can retry the exact
+bytes, and distinct nonces or networks remain separate spends. These constraints
+cover wallet submissions; operator signer allocation and writer cutover remain
+part of the separate operation-identity work.
+
+Apply `wallets/0018_global_submission_identity` with old transfer writers stopped.
+If existing EVM journal rows share a chain transaction or signer nonce, migration
+stops without rewriting, deleting or choosing an owner for them. Preserve the
+records and resolve their ownership/accounting before retrying the migration.
+The migration does not infer intent from legacy transaction/history rows.
+
 A successful response means durable acceptance, not proof of mining. A timeout,
 provider error or mismatched acknowledgement leaves the locally derived hash
 pending. The five-minute `recover_wallet_submissions` sweep attempts at most 100
