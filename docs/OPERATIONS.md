@@ -1080,6 +1080,11 @@ includes the calldata floor from
 wallet even when an older local test node would accept a lower limit. A limit
 below the minimum is refused before a journal, deduction or send RPC. Passing
 this check does not establish that contract execution will succeed.
+The signed maximum fee must be positive and the gas limit must fit its unsigned
+64-bit envelope field. A zero priority fee remains allowed with a positive fee
+cap. The decoder also rejects high-s transaction signatures, as required by
+[EIP-2](https://eips.ethereum.org/EIPS/eip-2), even when ordinary signer recovery
+would return the wallet address.
 
 EVM wallet submissions reserve both `(chain_id, tx_hash)` and
 `(chain_id, sender_address, nonce)` across account wallets. Another wallet cannot

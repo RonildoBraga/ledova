@@ -79,7 +79,7 @@ def _decode(signed_transaction):
 
 def _signed_fee(decoded):
     price = decoded.max_fee_per_gas if decoded.envelope_type == 2 else decoded.gas_price
-    if decoded.gas_limit <= 0 or price is None or price < 0:
+    if not 0 < decoded.gas_limit < 2**64 or price is None or price <= 0:
         raise InvalidTransactionException("The signed gas limit and fee cap are invalid.")
     calldata_tokens = sum(1 if byte == 0 else 4 for byte in decoded.data)
     access_list_gas = sum(2400 + 1900 * len(keys) for _, keys in decoded.access_list)

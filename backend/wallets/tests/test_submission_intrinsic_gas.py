@@ -1,6 +1,11 @@
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest.mock import patch
 
+import rlp
+from eth_account import Account
+from eth_keys.constants import SECPK1_N
+from hexbytes import HexBytes
 from rest_framework.test import APITransactionTestCase
 from web3 import Web3
 
@@ -35,14 +40,14 @@ class SubmissionIntrinsicGasChecks(SubmissionFixture):
             return {"type": 2, "maxFeePerGas": 2 * 10**9, "maxPriorityFeePerGas": 10**9}
         return {"type": 1} if kind == 1 else {}
 
-    def reject_without_effects(self, signed):
+    def reject_without_effects(self, signed, expected="intrinsic gas"):
         before = self.financial_state()
         with use_operator():
             journals = list(WalletSubmission.objects.order_by("pk").values())
         with patch("wallets.services.submissions.get_blockchain_client") as connect:
             response = self.broadcast(signed)
         self.assertEqual(response.status_code, 400, response.content)
-        self.assertIn("intrinsic gas", response.json()["detail"].lower())
+        self.assertIn(expected, response.json()["detail"].lower())
         connect.assert_not_called()
         self.assertEqual(self.financial_state(), before)
         with use_operator():
@@ -62,6 +67,48 @@ class SubmissionIntrinsicGasChecks(SubmissionFixture):
                 self.reject_without_effects(
                     self.signed(nonce=kind, gas=33399, accessList=self.access_list, **self.envelope(kind))
                 )
+
+    def test_zero_fee_caps_cannot_reserve_native_or_erc20_transfers(self):
+        for kind in (None, 1, 2):
+            for token in (False, True):
+                with self.subTest(kind=kind, token=token):
+                    fields = {"gasPrice": 0} if kind != 2 else {"maxFeePerGas": 0, "maxPriorityFeePerGas": 0}
+                    if token:
+                        fields.update(to=self.contract, value=0, data=self.data)
+                    signed = self.signed(
+                        **{"nonce": (kind or 0) * 2 + token, "gas": 90000, **self.envelope(kind), **fields}
+                    )
+                    self.reject_without_effects(signed, "fee cap")
+
+    def test_gas_limits_above_the_unsigned_64_bit_envelope_bound_are_refused(self):
+        for kind in (None, 1, 2):
+            with self.subTest(kind=kind):
+                fields = {"gasPrice": 1} if kind != 2 else {"maxFeePerGas": 1, "maxPriorityFeePerGas": 0}
+                signed = self.signed(**{"nonce": kind or 0, "gas": 2**64, **self.envelope(kind), **fields})
+                self.reject_without_effects(signed, "gas limit")
+
+    def test_high_s_signatures_are_refused_even_when_recovery_matches_the_wallet(self):
+        for kind in (None, 1, 2):
+            with self.subTest(kind=kind):
+                signed = self.signed(nonce=kind or 0, **self.envelope(kind))
+                raw = bytes(signed.raw_transaction)
+                fields = rlp.decode(raw[1:] if kind is not None else raw)
+                v = int.from_bytes(fields[-3], "big")
+                v = v ^ 1 if kind is not None else v + (1 if v % 2 else -1)
+                fields[-3] = v.to_bytes((v.bit_length() + 7) // 8, "big")
+                fields[-1] = (SECPK1_N - int.from_bytes(fields[-1], "big")).to_bytes(32, "big")
+                changed = (raw[:1] if kind is not None else b"") + rlp.encode(fields)
+                self.assertEqual(Account.recover_transaction(changed), self.signer.address)
+                changed = SimpleNamespace(raw_transaction=HexBytes(changed), hash=Web3.keccak(changed))
+                self.reject_without_effects(changed, "could not be decoded")
+
+    def test_zero_priority_fee_remains_valid_with_a_positive_maximum_fee(self):
+        signed = self.signed(type=2, maxFeePerGas=2 * 10**9, maxPriorityFeePerGas=0)
+        provider = self.provider(signed)
+        with patch("wallets.services.submissions.get_blockchain_client", return_value=provider):
+            response = self.broadcast(signed)
+        self.assertEqual(response.status_code, 200, response.content)
+        provider.broadcast_transaction.assert_called_once_with(signed.raw_transaction.to_0x_hex())
 
     def test_erc20_calldata_and_floor_gas_are_required_for_every_supported_envelope(self):
         for kind in (None, 1, 2):
