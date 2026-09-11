@@ -135,6 +135,25 @@ class SubmissionChainTest(SubmissionFixture, APITransactionTestCase):
         self.assertEqual(self.confirm(submission.tx_hash)["status"], "already_processed")
         self.assertEqual(self.financial_state(), before)
 
+    def test_zero_fee_caps_are_rejected_while_zero_priority_fee_can_mine(self):
+        before = self.financial_state()
+        for fields in (
+            {"gasPrice": 0},
+            {"type": 1, "gasPrice": 0},
+            {"type": 2, "maxFeePerGas": 0, "maxPriorityFeePerGas": 0},
+        ):
+            with self.subTest(fields=fields):
+                signed = self.signed(nonce=0, **fields)
+                with self.assertRaisesRegex(Web3RPCError, "fee|Fee|gasPrice"):
+                    self.w3.eth.send_raw_transaction(signed.raw_transaction)
+                with self.assertRaisesRegex(InvalidTransactionException, "fee cap"):
+                    self.submit_direct(signed)
+                self.assertEqual(self.financial_state(), before)
+        signed = self.signed(nonce=0, type=2, maxFeePerGas=2 * 10**9, maxPriorityFeePerGas=0)
+        result = self.submit_direct(signed)
+        receipt = self.w3.eth.get_transaction_receipt(result["txHash"])
+        self.assertEqual(receipt.status, 1)
+
     def test_a_mined_revert_retains_its_real_block_and_fee_after_reconciliation(self):
         signed = self.signed(nonce=0, to=Web3.to_checksum_address(TOKEN_ADDRESS), gas=90000)
         result = self.submit_direct(signed)
