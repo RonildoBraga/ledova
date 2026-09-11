@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 SCRIPT = Path(__file__).resolve().parents[1] / "native-build-scope.py"
 SPEC = importlib.util.spec_from_file_location("native_build_scope", SCRIPT)
@@ -44,9 +45,15 @@ class NativeBuildScopeTest(unittest.TestCase):
         return self.git("rev-parse", "HEAD")
 
     def decision(self, head, base=None, event="pull_request"):
+        base = self.base if base is None else base
+        payload = (
+            {"before": base, "after": head}
+            if event == "push"
+            else {"pull_request": {"base": {"sha": base}, "head": {"sha": head}}}
+        )
         return SCOPE.native_scope(
             event,
-            {"pull_request": {"base": {"sha": base or self.base}, "head": {"sha": head}}},
+            payload,
             self.repository,
         )
 
@@ -55,10 +62,11 @@ class NativeBuildScopeTest(unittest.TestCase):
         self.assertEqual(self.decision(head)["required"], False)
         self.assertEqual(self.decision(head)["changed_files"], 3)
 
-    def test_config_native_and_unknown_inputs_run_both_platforms(self):
+    def test_mobile_shared_and_build_inputs_run_both_platforms(self):
         paths = (
             "package.json",
             "package-lock.json",
+            "npm-shrinkwrap.json",
             "dashboard/package.json",
             ".gitattributes",
             ".npmrc",
@@ -68,20 +76,49 @@ class NativeBuildScopeTest(unittest.TestCase):
             "mobile/plugins/withMobileSecurity.cjs",
             "mobile/native-tests/index.tsx",
             "scripts/native-build-scope.py",
+            "scripts/tests/test_native_build_scope.py",
             ".github/workflows/mobile-native.yml",
-            "new-input/file.txt",
-            "backend-other/file.py",
-            "README.md",
         )
         for path in paths:
             with self.subTest(path=path):
                 head = self.commit({path: "changed"})
                 self.assertTrue(self.decision(head)["required"])
+                self.assertTrue(self.decision(head, event="push")["required"])
+                self.git("reset", "--hard", self.base)
+
+    def test_root_documentation_does_not_require_native_builds(self):
+        head = self.commit({"README.md": "updated", "CONTRIBUTING.md": "updated", "docs/PRACTICES.md": "updated"})
+        for event in ("pull_request", "push"):
+            with self.subTest(event=event):
+                self.assertFalse(self.decision(head, event=event)["required"])
+                self.assertEqual(self.decision(head, event=event)["changed_files"], 3)
+
+    def test_unrelated_paths_skip_without_partial_prefix_or_filename_matches(self):
+        paths = (
+            "backend/new.py",
+            "dashboard/src/index.tsx",
+            "dashboard/package-lock.json",
+            "marketing/index.html",
+            ".github/workflows/ci.yml",
+            ".gitignore",
+            "new-input/file.txt",
+            "backend-other/file.py",
+            "mobile-other/file.ts",
+            "packages/shared-other/file.ts",
+            "scripts/native-build-scope.py.txt",
+            "nested/package.json",
+        )
+        for path in paths:
+            with self.subTest(path=path):
+                head = self.commit({path: "changed"})
+                self.assertFalse(self.decision(head)["required"])
+                self.assertFalse(self.decision(head, event="push")["required"])
                 self.git("reset", "--hard", self.base)
 
     def test_rename_from_mobile_to_docs_includes_removed_native_input(self):
         head = self.commit({"docs/retired.ts": "app"}, removed=("mobile/app.ts",))
         self.assertTrue(self.decision(head)["required"])
+        self.assertTrue(self.decision(head, event="push")["required"])
         self.assertEqual(self.decision(head)["changed_files"], 2)
 
     def test_rename_from_docs_to_mobile_runs_native(self):
@@ -91,6 +128,14 @@ class NativeBuildScopeTest(unittest.TestCase):
     def test_native_deletion_runs_native(self):
         head = self.commit({}, removed=("mobile/app.ts",))
         self.assertTrue(self.decision(head)["required"])
+        self.assertTrue(self.decision(head, event="push")["required"])
+
+    def test_unrelated_rename_and_deletion_skip(self):
+        head = self.commit({"README.md": "guide"}, removed=("docs/guide.md", "backend/base.py"))
+        for event in ("pull_request", "push"):
+            with self.subTest(event=event):
+                self.assertFalse(self.decision(head, event=event)["required"])
+                self.assertEqual(self.decision(head, event=event)["changed_files"], 3)
 
     def test_nul_delimited_unrelated_names_do_not_become_extra_paths(self):
         head = self.commit({"docs/a b\tc\nd.md": "unrelated"})
@@ -104,51 +149,132 @@ class NativeBuildScopeTest(unittest.TestCase):
         self.assertTrue(self.decision(head)["required"])
         self.assertEqual(self.decision(head)["changed_files"], 302)
 
-    def test_main_push_and_manual_dispatch_run_even_for_unrelated_diff(self):
+    def test_push_compares_all_commits_including_earlier_mobile_changes(self):
+        mobile_head = self.commit({"mobile/app.ts": "updated"})
+        head = self.commit({"backend/base.py": "updated"})
+        self.assertTrue(self.decision(head, event="push")["required"])
+        self.assertEqual(self.decision(head, event="push").get("changed_files"), 2)
+        self.assertFalse(self.decision(head, base=mobile_head, event="push")["required"])
+
+    def test_push_with_only_unrelated_commits_skips(self):
+        self.commit({"backend/base.py": "updated"})
+        head = self.commit({"dashboard/src/index.ts": "new"})
+        self.assertFalse(self.decision(head, event="push")["required"])
+        self.assertEqual(self.decision(head, event="push")["changed_files"], 2)
+
+    def test_manual_dispatch_and_unknown_events_run_even_for_unrelated_diff(self):
         head = self.commit({"backend/base.py": "updated"})
         self.assertFalse(self.decision(head)["required"])
-        for event in ("push", "workflow_dispatch", "unknown", None):
+        for event in ("workflow_dispatch", "unknown", "pull_request_target", None):
             with self.subTest(event=event):
                 self.assertTrue(self.decision(head, event=event)["required"])
 
-    def test_missing_revision_empty_diff_and_invalid_event_run_native(self):
-        for head in ("0" * 40, "not-a-revision", self.base):
-            with self.subTest(head=head):
-                self.assertTrue(self.decision(head)["required"])
-        for payload in (None, [], {}, {"pull_request": {"base": None}}):
-            with self.subTest(payload=payload):
-                self.assertTrue(SCOPE.native_scope("pull_request", payload, self.repository)["required"])
+    def test_verified_empty_diff_skips(self):
+        empty_head = self.commit({})
+        for event in ("pull_request", "push"):
+            for head in (self.base, empty_head):
+                with self.subTest(event=event, head=head):
+                    self.assertFalse(self.decision(head, event=event)["required"])
+                    self.assertEqual(self.decision(head, event=event)["changed_files"], 0)
+
+    def test_invalid_zero_missing_or_noncommit_revisions_require_native(self):
+        tree = self.git("rev-parse", "HEAD^{tree}")
+        blob = self.git("rev-parse", "HEAD:mobile/app.ts")
+        revisions = ("0" * 40, "f" * 40, "not-a-revision", "", 12, [], {}, tree, blob)
+        for event in ("pull_request", "push"):
+            for revision in revisions:
+                with self.subTest(event=event, revision=revision):
+                    self.assertTrue(self.decision(revision, event=event)["required"])
+                    self.assertTrue(self.decision(self.base, base=revision, event=event)["required"])
+
+    def test_malformed_payload_requires_native(self):
+        payloads = (
+            None,
+            [],
+            {},
+            {"pull_request": {"base": None}},
+            {"before": self.base},
+            {"after": self.base},
+            {"before": None, "after": self.base},
+            {"before": self.base, "after": None},
+        )
+        for event in ("pull_request", "push"):
+            for payload in payloads:
+                with self.subTest(event=event, payload=payload):
+                    self.assertTrue(SCOPE.native_scope(event, payload, self.repository)["required"])
+
+    def test_malformed_diff_evidence_requires_native(self):
+        for diff in (b"docs/file", b"\0", b"/file\0", b"docs//file\0", b"docs/../file\0", b"./file\0", b"\xff\0"):
+            with self.subTest(diff=diff):
+                results = (
+                    subprocess.CompletedProcess([], 0),
+                    subprocess.CompletedProcess([], 0, stdout=diff),
+                )
+                with patch.object(SCOPE.subprocess, "run", side_effect=results):
+                    self.assertTrue(self.decision(self.base)["required"])
 
     def test_base_advancement_outside_head_requires_native(self):
         head = self.commit({"backend/base.py": "updated"})
         self.git("checkout", "--detach", self.base)
         advanced_base = self.commit({"mobile/app.ts": "new base"})
         self.assertTrue(self.decision(head, base=advanced_base)["required"])
+        self.assertTrue(self.decision(head, base=advanced_base, event="push")["required"])
+
+    def test_reversed_push_history_requires_native(self):
+        head = self.commit({"backend/base.py": "updated"})
+        self.assertTrue(self.decision(self.base, base=head, event="push")["required"])
+
+    def test_shallow_history_requires_native_until_base_comparison_is_available(self):
+        head = self.commit({"backend/base.py": "updated"})
+        with tempfile.TemporaryDirectory() as directory:
+            clone = Path(directory) / "clone"
+            subprocess.run(
+                ["git", "clone", "--quiet", "--depth", "1", self.repository.as_uri(), str(clone)],
+                check=True,
+                capture_output=True,
+            )
+            payloads = (
+                ("pull_request", {"pull_request": {"base": {"sha": self.base}, "head": {"sha": head}}}),
+                ("push", {"before": self.base, "after": head}),
+            )
+            for event, payload in payloads:
+                with self.subTest(event=event):
+                    self.assertTrue(SCOPE.native_scope(event, payload, clone)["required"])
+            subprocess.run(["git", "fetch", "--quiet", "--deepen=1"], cwd=clone, check=True, capture_output=True)
+            for event, payload in payloads:
+                with self.subTest(event=event):
+                    self.assertFalse(SCOPE.native_scope(event, payload, clone)["required"])
 
     def test_route_cli_writes_only_the_boolean_output(self):
         head = self.commit({"docs/new.md": "guide"})
-        event = self.repository / "event.json"
-        event.write_text(json.dumps({"pull_request": {"base": {"sha": self.base}, "head": {"sha": head}}}))
-        output = self.repository / "github-output"
-        result = subprocess.run(
-            [
-                sys.executable,
-                str(SCRIPT),
-                "route",
-                "--event",
-                "pull_request",
-                "--event-file",
-                str(event),
-                "--repository",
-                str(self.repository),
-            ],
-            env={**os.environ, "GITHUB_OUTPUT": str(output)},
-            check=True,
-            capture_output=True,
-            text=True,
+        events = (
+            ("pull_request", {"pull_request": {"base": {"sha": self.base}, "head": {"sha": head}}}),
+            ("push", {"before": self.base, "after": head}),
         )
-        self.assertFalse(json.loads(result.stdout)["required"])
-        self.assertEqual(output.read_text(), "required=false\n")
+        for event_name, payload in events:
+            with self.subTest(event=event_name):
+                event = self.repository / f"{event_name}-event.json"
+                event.write_text(json.dumps(payload))
+                output = self.repository / f"{event_name}-github-output"
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        str(SCRIPT),
+                        "route",
+                        "--event",
+                        event_name,
+                        "--event-file",
+                        str(event),
+                        "--repository",
+                        str(self.repository),
+                    ],
+                    env={**os.environ, "GITHUB_OUTPUT": str(output)},
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertFalse(json.loads(result.stdout)["required"])
+                self.assertEqual(output.read_text(), "required=false\n")
 
 
 class NativeBuildVerdictTest(unittest.TestCase):

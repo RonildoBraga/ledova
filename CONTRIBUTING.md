@@ -28,7 +28,15 @@ before opening your first pull request.
   [open issues](https://github.com/RonildoBraga/ledova/issues); the ones labeled
   [`deferred-hardening`](https://github.com/RonildoBraga/ledova/issues?q=is%3Aopen+label%3Adeferred-hardening) are the known high-risk work, each naming
   where it lives in the code. They need redesigns, not patches.
-- For anything substantial, open an issue to discuss the approach first.
+- Every work item, including owner-requested changes, is tracked in a GitHub
+  issue. Reuse an existing issue when its scope fits; otherwise create one before
+  implementation.
+- Keep issues concise: the problem or context, intended outcome, and short
+  completion checks. The assistant may open, update and triage issues without a
+  separate approval step.
+- Link pull requests to their issues and close an issue only when its work is
+  complete. Record distinct problems discovered along the way in follow-up
+  issues, checking for an existing issue first.
 
 ## Development setup
 
@@ -48,7 +56,8 @@ Local compilation and the contract tests need no credentials.
 
 ## Making changes
 
-1. Fork, and branch from `main` (`fix/whitelist-check`, `docs/quickstart`).
+1. Branch from `main` (`fix/whitelist-check`, `docs/quickstart`). Contributors
+   without repository write access use a fork.
 2. Keep pull requests small and focused: one logical change each.
 3. Add or update tests for any behaviour change. Security and correctness fixes
    come with a regression test. A new detail route or custom action also needs a
@@ -63,28 +72,37 @@ Local compilation and the contract tests need no credentials.
    fails on anything else, so run it before you push. Configuration and
    documentation files keep their comments.
 5. Write a clear pull request description: what changed, why, and how you
-   verified it. Reference the issue it addresses (`Closes #12`).
+   verified it. Link the issue it addresses (`Closes #12` when the PR completes
+   the issue, otherwise `Refs #12`).
 
 ## Review and merge
+
+The owner and assistant work as a small team. Within agreed work, the assistant
+may choose implementation details, branches and task-specific delegation, and
+carry changes through testing, pull requests and merge without repeated owner
+permission. This applies to all engineering paths, including authentication,
+wallets and payments.
+
+This workflow records the required reviews and checks on the PR without requiring
+enforced branch-protection or approval settings; revisit enforcement if the team
+grows.
 
 1. **Everything lands through a pull request.** Nothing is pushed to `main`
    directly, documentation included.
 2. **The author records what they checked** in the description before asking for
    review: the commands run and their results, what could not be reproduced, and
    what was deliberately not checked. An unstated gap reads as a checked one.
-3. **One independent review, at the commit that will merge.** Independent means
-   somebody other than the author; two passes by the same author are not two
-   approvals. A review approves a named head, and does not follow the branch: if
-   the branch moves, either show the content is unchanged or have the delta read.
+3. **One independent review, at the commit that will merge.** The reviewer is
+   another human or agent, not the author. A PR comment recording the reviewer's
+   identity, verdict and head SHA is sufficient; a separate GitHub account or
+   formal GitHub approval is not required by project policy. If the branch
+   moves, either show the content is unchanged or have the delta read.
 4. **Required CI green, on a branch up to date with `main`.** Green on the branch
    and green on `main` separately do not establish that the two are green
    together.
-5. **Product and legal decisions are the repository owner's**, not a reviewer's.
-   So are merges to the paths the owner reserves, currently
-   `backend/wallets/services/transfers.py`,
-   `backend/wallets/services/signed_transfers.py`,
-   `backend/offerings/services/payments.py` and anything under
-   `backend/authentication/`.
+5. **Product and legal decisions remain the repository owner's.** Live
+   deployment, live database migrations, signer activation and real-funds use
+   also require the owner's explicit direction.
 
 How to establish that a change does what it claims is a separate question, and is
 in [docs/PRACTICES.md](docs/PRACTICES.md).
