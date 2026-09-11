@@ -120,7 +120,21 @@ beforeEach(() => {
       config.params?.wallet_uuid === captured.swapOrder.settlementContext.seller.walletUuid ? 'seller' : 'buyer';
     const party = captured.swapOrder.settlementContext[userRole];
     const swapOrder = state.swaps.find((swap) => swap.uuid === config.params?.swap_uuid) ?? captured.swapOrder;
-    const body = { ...captured, swapOrder, userRole, orderUuid: party.orderUuid, walletUuid: party.walletUuid };
+    const hasSigned = userRole === 'seller' ? swapOrder.sellerHasSigned : swapOrder.buyerHasSigned;
+    const body = {
+      ...captured,
+      swapOrder,
+      userRole,
+      orderUuid: party.orderUuid,
+      walletUuid: party.walletUuid,
+      hasSigned,
+      canSign: !hasSigned,
+    };
+    if (config.method === 'post') {
+      const order = { ...swapOrder, buyerHasSigned: true, status: 'buyer_signed' as const };
+      state.swaps = state.swaps.map((candidate) => (candidate.uuid === order.uuid ? order : candidate));
+      return response(config, order);
+    }
     if (config.url.endsWith('/approval-status/'))
       return response(config, {
         ...body,
@@ -254,3 +268,57 @@ it.each(['wallet', 'account'] as const)(
     expect(screen.queryByText('You are the buyer.')).toBeNull();
   },
 );
+
+it('latches a wallet cache change and restoration within one React batch before a signer finishes', async () => {
+  const key = ['wallets', owner.ownerAccountUuid, 'trading'];
+  const original = { data: { results: state.wallets } };
+  client.setQueryData(key, original);
+  const signed = deferred<string>();
+  const signer = vi.spyOn(localSigner, 'signEthereumTypedData').mockReturnValue(signed.promise);
+  render(<TradingPage />, { wrapper });
+  fireEvent.click(screen.getByTitle('Sign swap'));
+  await waitFor(() => expect(screen.getByText('You are the buyer.')).toBeTruthy());
+  fireEvent.click(screen.getByText('Check token approval'));
+  await waitFor(() => expect(screen.getByText('Continue to sign')).toBeTruthy());
+  fireEvent.click(screen.getByText('Continue to sign'));
+  fireEvent.change(screen.getByLabelText('Synthetic seed'), { target: { value: fixture.mnemonic } });
+  fireEvent.click(screen.getByText('Sign trade'));
+  await waitFor(() => expect(signer).toHaveBeenCalledOnce());
+  act(() => {
+    client.setQueryData(key, { data: { results: [{ ...state.wallets[0]!, masterFingerprint: '87654321' }] } });
+    client.setQueryData(key, original);
+  });
+  await act(async () => {
+    signed.resolve(fixture.signatures[1]!);
+    await signed.promise;
+  });
+  expect(requests.filter((request) => request.method === 'post')).toEqual([]);
+  expect(screen.queryByText('You are the buyer.')).toBeNull();
+});
+
+it('keeps a reviewed signer current through balance-only and unrelated-account cache changes', async () => {
+  const key = ['wallets', owner.ownerAccountUuid, 'trading'];
+  client.setQueryData(key, { data: { results: state.wallets } });
+  const signed = deferred<string>();
+  const signer = vi.spyOn(localSigner, 'signEthereumTypedData').mockReturnValue(signed.promise);
+  render(<TradingPage />, { wrapper });
+  fireEvent.click(screen.getByTitle('Sign swap'));
+  await waitFor(() => expect(screen.getByText('You are the buyer.')).toBeTruthy());
+  fireEvent.click(screen.getByText('Check token approval'));
+  await waitFor(() => expect(screen.getByText('Continue to sign')).toBeTruthy());
+  fireEvent.click(screen.getByText('Continue to sign'));
+  fireEvent.change(screen.getByLabelText('Synthetic seed'), { target: { value: fixture.mnemonic } });
+  fireEvent.click(screen.getByText('Sign trade'));
+  await waitFor(() => expect(signer).toHaveBeenCalledOnce());
+  act(() => {
+    client.setQueryData(key, { data: { results: [{ ...state.wallets[0]!, nativeBalance: '5' }] } });
+    client.setQueryData(['wallets', '20000000-0000-4000-8000-000000000099', 'trading'], { data: { results: [] } });
+  });
+  await act(async () => {
+    signed.resolve(fixture.signatures[1]!);
+    await signed.promise;
+  });
+  await waitFor(() => expect(screen.getByText('Your signature is recorded. Trade status: buyer_signed.')).toBeTruthy());
+  expect(requests.filter((request) => request.method === 'post')).toHaveLength(1);
+  expect(await swapSettlementStore.list(owner)).toEqual([]);
+});

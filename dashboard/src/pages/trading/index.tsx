@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { CheckCircleIcon } from '@phosphor-icons/react';
+import { useQueryClient } from '@tanstack/react-query';
 import type { TransferOrder, CreateOrderRequest, Wallet, SwapOrder } from '@ledova/shared';
 import {
   DESIGN_TOKENS,
@@ -88,9 +89,18 @@ function OrderSuccessModal({
 }
 
 export function TradingPage() {
+  const queryClient = useQueryClient();
   const submissions = useOrderSubmissions(orderSubmissionStore);
   const actions = useOrderActions(orderActionStore);
   const settlements = useSwapSettlements(swapSettlementStore, swapSettlementCrypto);
+  const closeSettlement = useRef(settlements.close);
+  closeSettlement.current = settlements.close;
+  const settlementWalletGuard = useRef<{
+    walletUuid: string;
+    ownerAccountUuid: string;
+    key: string;
+    retired: boolean;
+  } | null>(null);
   const signingGeneration = useRef(0);
   const currentSigningGeneration = signingGeneration.current;
   const { data: tokens, isLoading } = useShareTokens();
@@ -114,6 +124,33 @@ export function TradingPage() {
   useEffect(() => {
     if (settlements.active && !settlements.active.isCurrent()) settlements.close();
   }, [settlements.active, settlements.close, wallets]);
+  useEffect(
+    () =>
+      queryClient.getQueryCache().subscribe((event) => {
+        const guard = settlementWalletGuard.current;
+        const key = event.query.queryKey;
+        if (
+          !guard ||
+          guard.retired ||
+          !['updated', 'removed'].includes(event.type) ||
+          key.length !== 3 ||
+          key[0] !== 'wallets' ||
+          key[1] !== guard.ownerAccountUuid ||
+          key[2] !== 'trading'
+        )
+          return;
+        const data = event.query.state.data as { data?: { results?: Wallet[] } } | undefined;
+        const rows = event.type === 'removed' ? null : data?.data?.results;
+        const observed = Array.isArray(rows)
+          ? (rows.find((candidate) => candidate.uuid === guard.walletUuid) ?? null)
+          : null;
+        if (settlementWalletKey(observed) !== guard.key) {
+          guard.retired = true;
+          closeSettlement.current();
+        }
+      }),
+    [queryClient],
+  );
   const {
     isWhitelisted,
     getStatus: getWhitelistStatusFor,
@@ -161,6 +198,8 @@ export function TradingPage() {
   };
 
   const closeSwapSigning = () => {
+    if (settlementWalletGuard.current) settlementWalletGuard.current.retired = true;
+    settlementWalletGuard.current = null;
     settlements.close();
     setSelectedSwap(null);
     setIsSwapSigningOpen(false);
@@ -170,7 +209,11 @@ export function TradingPage() {
   const walletCurrent = (walletUuid: string) => {
     const selected = latestWallets.current.find((candidate) => candidate.uuid === walletUuid) ?? null;
     const key = settlementWalletKey(selected);
+    const guard = { walletUuid, ownerAccountUuid: settlements.owner?.ownerAccountUuid ?? '', key, retired: false };
+    settlementWalletGuard.current = guard;
     return () =>
+      !guard.retired &&
+      settlementWalletGuard.current === guard &&
       key === settlementWalletKey(latestWallets.current.find((candidate) => candidate.uuid === walletUuid) ?? null);
   };
 
@@ -406,7 +449,7 @@ export function TradingPage() {
         />
       )}
       {settlements.active && (
-        <SwapSettlementFlow settlement={settlements.active} wallets={wallets} onClose={settlements.close} />
+        <SwapSettlementFlow settlement={settlements.active} wallets={wallets} onClose={closeSwapSigning} />
       )}
 
       <OrderSigningFlow

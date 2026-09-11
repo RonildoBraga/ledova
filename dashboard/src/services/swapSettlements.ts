@@ -4,7 +4,7 @@ import { createSwapSettlementStore, type SwapSettlementCrypto, type Wallet } fro
 type ApprovalTransaction = Awaited<ReturnType<SwapSettlementCrypto['inspectSignedApproval']>>['transaction'];
 
 export function settlementWalletKey(wallet: Wallet | null): string {
-  return wallet
+  return wallet && typeof wallet.address === 'string'
     ? JSON.stringify([
         wallet.uuid,
         wallet.userAccount,
@@ -14,6 +14,10 @@ export function settlementWalletKey(wallet: Wallet | null): string {
         wallet.signingPreference,
         wallet.derivationPath,
         wallet.masterFingerprint,
+        wallet.addressIndex,
+        wallet.parentPublicKey,
+        wallet.parentChainCode,
+        wallet.parentDerivationPath,
       ])
     : '';
 }
