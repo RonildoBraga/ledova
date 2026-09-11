@@ -507,6 +507,16 @@ its hash first remain separate work under #7. The transaction table still holds
 one row per wallet and hash, so it does not represent multiple transfer events
 within a transaction. This change does not add deeper finality or reorg policy.
 
+The wallet receipt task requires the response to identify the requested
+transaction before it changes status or accounting. EVM `transactionHash` values
+may be 32-byte Web3 values or their hexadecimal text representation. Bitcoin
+receipts preserve the RPC response's `txid`; they never substitute the requested
+hash or the distinct witness transaction hash. Missing, malformed or conflicting
+identities leave the transaction pending for retry, including history imports.
+This follows the [Ethereum receipt contract](https://ethereum.org/en/developers/docs/apis/json-rpc/#eth_gettransactionreceipt)
+and [Bitcoin Core transaction contract](https://bitcoincore.org/en/doc/30.0.0/rpc/rawtransactions/getrawtransaction/).
+Matching identity alone does not establish deeper finality or canonicality.
+
 Pending-transfer deductions record the holding generation they changed. A failure
 returns each recorded deduction once, and only while that generation is still
 current. An authoritative chain refresh supersedes that deduction; a later

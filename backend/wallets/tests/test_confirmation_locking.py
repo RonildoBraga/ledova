@@ -357,7 +357,13 @@ class ConfirmationChecks:
         client = Mock(spec=["get_transaction_receipt"])
         client.get_transaction_receipt.side_effect = [
             None,
-            {"status": 1, "blockNumber": 77, "gasUsed": 21000, "effectiveGasPrice": 10**9},
+            {
+                "status": 1,
+                "blockNumber": 77,
+                "gasUsed": 21000,
+                "effectiveGasPrice": 10**9,
+                "transactionHash": tx.tx_hash,
+            },
         ]
 
         with patch("wallets.tasks.confirmation.get_blockchain_client", return_value=client):
@@ -434,7 +440,7 @@ class ConfirmationChecks:
         with use_operator():
             Transaction.objects.filter(pk=tx.pk).update(created_at=timezone.now() - timedelta(hours=48))
         client = Mock(spec=["get_transaction_receipt"])
-        client.get_transaction_receipt.return_value = {"status": 0, "blockNumber": 77}
+        client.get_transaction_receipt.return_value = {"status": 0, "blockNumber": 77, "transactionHash": tx.tx_hash}
 
         with patch("wallets.tasks.confirmation.get_blockchain_client", return_value=client):
             result = confirm_pending_transaction(tx.tx_hash, str(self.wallet.pk), principal_id=None)
@@ -454,7 +460,7 @@ class ConfirmationChecks:
 
     def test_a_missing_receipt_status_preserves_deductions_until_a_later_success(self):
         tx = self.pending()
-        receipt = {"blockNumber": 77, "gasUsed": 21000, "effectiveGasPrice": 10**9}
+        receipt = {"blockNumber": 77, "gasUsed": 21000, "effectiveGasPrice": 10**9, "transactionHash": tx.tx_hash}
         client = Mock(spec=["get_transaction_receipt"])
         client.get_transaction_receipt.side_effect = [receipt, {**receipt, "status": 1}]
         with use_operator():
@@ -490,6 +496,87 @@ class ConfirmationChecks:
             self.assertEqual((tx.block_number, tx.transaction_fee), (77, Decimal("0.000021")))
             self.assertIsNone(tx.balance_reconciliation_token)
 
+    def test_unidentified_or_conflicting_receipts_preserve_every_debit_until_a_matching_receipt(self):
+        for status in (0, 1):
+            with self.subTest(status=status):
+                tx = self.pending("0x" + f"{700 + status:064x}")
+                self.notification.reset_mock()
+                self.balance_observations.clear()
+                client = Mock(spec=["get_transaction_receipt", "w3"])
+                client.w3.eth.get_block.return_value = {"timestamp": 1700000000}
+                with use_operator():
+                    before = Transaction.objects.filter(pk=tx.pk).values().get()
+                    holdings = list(Holding.objects.filter(wallet=self.wallet).order_by("pk").values())
+                    snapshots = list(
+                        HoldingSnapshot.objects.filter(holding__wallet=self.wallet).order_by("pk").values()
+                    )
+                for identity in (
+                    {},
+                    {"transactionHash": None},
+                    {"transactionHash": True},
+                    {"transactionHash": 1},
+                    {"transactionHash": []},
+                    {"transactionHash": {}},
+                    {"transactionHash": ""},
+                    {"transactionHash": "0x" + "ff" * 32},
+                    {"tx_hash": tx.tx_hash},
+                ):
+                    with self.subTest(identity=identity):
+                        client.get_transaction_receipt.return_value = {"status": status, "blockNumber": 77, **identity}
+                        with patch("wallets.tasks.confirmation.get_blockchain_client", return_value=client):
+                            with self.assertRaisesRegex(RuntimeError, "receipt identity not yet available"):
+                                confirm_pending_transaction(
+                                    tx.tx_hash, str(self.wallet.pk), principal_id=self.tenant.user.pk
+                                )
+                        with use_operator():
+                            self.assertEqual(Transaction.objects.filter(pk=tx.pk).values().get(), before)
+                            self.assertEqual(
+                                list(Holding.objects.filter(wallet=self.wallet).order_by("pk").values()), holdings
+                            )
+                            self.assertEqual(
+                                list(
+                                    HoldingSnapshot.objects.filter(holding__wallet=self.wallet).order_by("pk").values()
+                                ),
+                                snapshots,
+                            )
+                        client.w3.eth.get_block.assert_not_called()
+                        self.notification.assert_not_called()
+                        self.assertEqual(self.balance_observations, [])
+                client.get_transaction_receipt.return_value = {
+                    "status": status,
+                    "blockNumber": 77,
+                    "transactionHash": tx.tx_hash,
+                }
+                with patch("wallets.tasks.confirmation.get_blockchain_client", return_value=client):
+                    result = confirm_pending_transaction(
+                        tx.tx_hash, str(self.wallet.pk), principal_id=self.tenant.user.pk
+                    )
+                self.assertEqual(result["status"], "confirmed" if status else "failed")
+                self.notification.assert_called_once()
+                self.assertEqual(
+                    self.quantities(), (Decimal("98.5"), Decimal("4.998")) if status else (Decimal("100"), Decimal("5"))
+                )
+
+    def test_matching_receipt_identity_accepts_web3_bytes_and_hex_forms(self):
+        for index, form in enumerate(
+            (
+                lambda value: value,
+                lambda value: value.upper(),
+                lambda value: value[2:],
+                lambda value: bytes.fromhex(value[2:]),
+            )
+        ):
+            with self.subTest(form=index):
+                tx = self.pending("0x" + "ab" * 31 + f"{index:02x}")
+                client = Mock(spec=["get_transaction_receipt"])
+                client.get_transaction_receipt.return_value = {"status": 0, "transactionHash": form(tx.tx_hash)}
+                with patch("wallets.tasks.confirmation.get_blockchain_client", return_value=client):
+                    self.assertEqual(
+                        confirm_pending_transaction(tx.tx_hash, str(self.wallet.pk), principal_id=None)["status"],
+                        "failed",
+                    )
+                self.assertEqual(self.quantities(), (Decimal("100"), Decimal("5")))
+
     def test_malformed_receipt_status_cannot_confirm_or_refund_before_a_valid_revert(self):
         statuses = (None, -1, 2, True, False, 1.0, 0.0, "0", "1", "0x0", "0x1", "success", "", [], {})
         for index, receipt_status in enumerate(statuses, start=400):
@@ -499,8 +586,8 @@ class ConfirmationChecks:
                 self.balance_observations.clear()
                 client = Mock(spec=["get_transaction_receipt"])
                 client.get_transaction_receipt.side_effect = [
-                    {"status": receipt_status, "blockNumber": 77},
-                    {"status": 0, "blockNumber": 77},
+                    {"status": receipt_status, "blockNumber": 77, "transactionHash": tx.tx_hash},
+                    {"status": 0, "blockNumber": 77, "transactionHash": tx.tx_hash},
                 ]
                 with use_operator():
                     before = Transaction.objects.filter(pk=tx.pk).values().get()

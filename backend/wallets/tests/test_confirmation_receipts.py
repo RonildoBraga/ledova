@@ -13,8 +13,10 @@ from wallets.models import Holding, HoldingSnapshot, Transaction
 from wallets.services.transaction_confirmation import TransactionConfirmationService
 from wallets.tasks.confirmation import confirm_pending_transaction, get_receipt_reader
 
+BITCOIN_HASH = "80" * 32
+
 BITCOIN_RECEIPT = {
-    "tx_hash": "btc-hash",
+    "tx_hash": BITCOIN_HASH,
     "confirmed": True,
     "confirmations": 3,
     "block_height": 812345,
@@ -80,12 +82,12 @@ class BitcoinConfirmationTaskTest(TestCase):
         self.holding = Holding.objects.create(wallet=self.wallet, asset=native, quantity=Decimal("2"))
         TransactionConfirmationService.create_pending_transaction(
             wallet=self.wallet,
-            tx_hash="btc-hash",
+            tx_hash=BITCOIN_HASH,
             to_address="tb1qexample",
             amount=Decimal("1"),
             transaction_fee=Decimal("0.0001"),
         )
-        self.tx = Transaction.objects.get(tx_hash="btc-hash", wallet=self.wallet)
+        self.tx = Transaction.objects.get(tx_hash=BITCOIN_HASH, wallet=self.wallet)
 
     def stored_accounting(self):
         return (
@@ -101,7 +103,7 @@ class BitcoinConfirmationTaskTest(TestCase):
 
         with patch("wallets.tasks.confirmation.get_blockchain_client", return_value=client):
             result = confirm_pending_transaction(
-                tx_hash="btc-hash", wallet_uuid=str(self.wallet.uuid), principal_id=None
+                tx_hash=BITCOIN_HASH, wallet_uuid=str(self.wallet.uuid), principal_id=None
             )
 
         self.assertEqual(result["status"], "confirmed")
@@ -116,17 +118,34 @@ class BitcoinConfirmationTaskTest(TestCase):
 
     def test_an_unconfirmed_bitcoin_receipt_is_not_treated_as_success(self):
         client = Mock(spec=["get_transaction_receipt", "get_block_timestamp"])
-        client.get_transaction_receipt.return_value = {"confirmed": False, "confirmations": 0}
+        client.get_transaction_receipt.return_value = {"confirmed": False, "confirmations": 0, "tx_hash": BITCOIN_HASH}
         before = self.stored_accounting()
 
         with patch("wallets.tasks.confirmation.get_blockchain_client", return_value=client):
             with self.assertRaisesRegex(RuntimeError, "receipt outcome not yet available"):
-                confirm_pending_transaction(tx_hash="btc-hash", wallet_uuid=str(self.wallet.uuid), principal_id=None)
+                confirm_pending_transaction(tx_hash=BITCOIN_HASH, wallet_uuid=str(self.wallet.uuid), principal_id=None)
 
         self.assertEqual(self.stored_accounting(), before)
         client.get_block_timestamp.assert_not_called()
         self.balance.assert_not_called()
         self.notification.assert_not_called()
+
+    def test_a_conflicting_bitcoin_receipt_cannot_confirm_until_the_matching_txid_arrives(self):
+        client = Mock(spec=["get_transaction_receipt", "get_block_timestamp"])
+        client.get_transaction_receipt.side_effect = [{**BITCOIN_RECEIPT, "tx_hash": "81" * 32}, BITCOIN_RECEIPT]
+        client.get_block_timestamp.return_value = 1700000000
+        before = self.stored_accounting()
+        with patch("wallets.tasks.confirmation.get_blockchain_client", return_value=client):
+            with self.assertRaisesRegex(RuntimeError, "receipt identity not yet available"):
+                confirm_pending_transaction(BITCOIN_HASH, str(self.wallet.pk), principal_id=None)
+            self.assertEqual(self.stored_accounting(), before)
+            client.get_block_timestamp.assert_not_called()
+            self.notification.assert_not_called()
+            self.balance.assert_not_called()
+            self.assertEqual(
+                confirm_pending_transaction(BITCOIN_HASH, str(self.wallet.pk), principal_id=None)["status"], "confirmed"
+            )
+        self.notification.assert_called_once()
 
     def test_unsupported_bitcoin_confirmation_values_retain_the_debit_until_a_valid_receipt(self):
         unsupported = (
@@ -149,10 +168,14 @@ class BitcoinConfirmationTaskTest(TestCase):
         with patch("wallets.tasks.confirmation.get_blockchain_client", return_value=client):
             for fields in unsupported:
                 with self.subTest(fields=fields):
-                    client.get_transaction_receipt.return_value = {"block_hash": "0000block", **fields}
+                    client.get_transaction_receipt.return_value = {
+                        "block_hash": "0000block",
+                        "tx_hash": BITCOIN_HASH,
+                        **fields,
+                    }
                     with self.assertRaisesRegex(RuntimeError, "receipt outcome not yet available"):
                         confirm_pending_transaction(
-                            tx_hash="btc-hash", wallet_uuid=str(self.wallet.uuid), principal_id=None
+                            tx_hash=BITCOIN_HASH, wallet_uuid=str(self.wallet.uuid), principal_id=None
                         )
                     self.assertEqual(self.stored_accounting(), before)
                     client.get_block_timestamp.assert_not_called()
@@ -161,7 +184,7 @@ class BitcoinConfirmationTaskTest(TestCase):
             client.get_transaction_receipt.return_value = BITCOIN_RECEIPT
             client.get_block_timestamp.return_value = 1700000000
             result = confirm_pending_transaction(
-                tx_hash="btc-hash", wallet_uuid=str(self.wallet.uuid), principal_id=None
+                tx_hash=BITCOIN_HASH, wallet_uuid=str(self.wallet.uuid), principal_id=None
             )
 
         self.assertEqual(result["status"], "confirmed")
