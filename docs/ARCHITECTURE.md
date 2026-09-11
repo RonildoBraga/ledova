@@ -4,9 +4,12 @@ How Ledova is put together: the contracts, the backend apps and their layers,
 the clients, the shared package, the issuance data flow, the auth and tenancy
 models, and the admin and identifier surfaces.
 
-The rules and the gates that enforce them are in [GATES.md](GATES.md); the
-failures behind them are in [TRAPS.md](TRAPS.md); how work is done is in
-[PRACTICES.md](PRACTICES.md).
+**This document is where a mechanism is described once.** Running a deployment
+is [OPERATIONS.md](OPERATIONS.md); the rules and the gates that enforce them are
+[GATES.md](GATES.md); the failures behind those rules are
+[TRAPS.md](TRAPS.md); how work is done is [PRACTICES.md](PRACTICES.md); where
+the project is going is [ROADMAP.md](ROADMAP.md). Those link here rather than
+repeating what is here.
 
 ## Pieces
 
@@ -253,6 +256,12 @@ them after `make build` and fails on any drift.
    result cannot overwrite a later cap or reopen a terminal request.
 9. Pause and unpause read `paused()` first and reconcile the database when the
    chain is already in the target state.
+10. Allotted shares reach the portfolio. Deployment writes a verified
+    `assets.Asset` (`tokenized_security`, `decimals` 0) and an
+    `AssetChainDeployment` at the address the factory attests; completing an
+    issuance writes the recipient's `Holding` from `balanceOf`. Share tokens
+    deployed before this existed are bridged by `manage.py bridge_share_assets`,
+    which is idempotent and never runs on its own.
 
 Review and execution notes have separate ownership. Reviewers write
 `review_notes`; execution attempts append timestamped entries to
@@ -282,11 +291,12 @@ reconstruct overwritten reviewer notes or infer missing execution events.
 
 ## Data flow of an offering
 
-1. The owner sets `Company.is_open_to_investors` from the dashboard through
-   `CompanyUpdateSerializer`. It defaults to `False`, so the directory is empty
-   until an owner opts in; the operator can force it off in the admin. It is a
-   flag, not a `CompanyStatus`, so a suspension and a reinstatement do not drop
-   the listing.
+1. The owner sets `Company.is_open_to_investors` from `/company/offering` in the
+   dashboard, through `CompanyUpdateSerializer`. It defaults to `False`, so the
+   directory is empty on day one and stays empty until an owner opts in — the
+   empty state says so rather than looking broken. The operator can force the
+   flag off in the admin but never on. It is a flag, not a `CompanyStatus`, so a
+   suspension and a reinstatement do not drop the listing.
 2. The issuer creates an `Offering` against one deployed share class at `POST
    /api/v1/offerings/`, with the price, the bounds in whole shares, the window,
    the exemption relied on, the payment rails and the `CompanyDocument`s to
@@ -330,7 +340,11 @@ reconstruct overwritten reviewer notes or infer missing execution events.
    the act that publishes the terms — which is what the admin's approve dialog
    says it does. The annotation carries no status, because only one status can
    ever reach it.
-8. `UniqueConstraint(token)` `WHERE status IN (submitted, under_review,
+8. A rejected offering can be withdrawn by its issuer. Withdrawal keeps the
+   reviewer, the review time, the notes and the rejection reason; the row stays
+   visible as a record of what happened and offers no further edit, resubmit or
+   delete.
+9. `UniqueConstraint(token)` `WHERE status IN (submitted, under_review,
    approved)` allows one live offering per share class. `submit_offering`
    refuses the second submission by name before the write, so the ordinary
    second-tranche path is a 400 that names the offering in flight rather than
@@ -353,7 +367,13 @@ reconstruct overwritten reviewer notes or infer missing execution events.
    lapse between submission and acceptance and the law cares about status at
    acceptance. Both calls name the subscription's own account, never the request
    user's first one, because a user with two investor accounts earns a
-   qualification on one and must not spend it on the other.
+   qualification on one and must not spend it on the other. An account may hold
+   several live claims, so the question is whether *any* of them supports the
+   offer, not what the newest one says: a live `professional_investor` claim
+   qualifies a AUD 1,000 subscription even where a `product_value` claim was
+   recorded more recently, and the AUD 500,000 floor still refuses an account
+   whose only live claim is `product_value`. Where no amount is in play the
+   newest live claim is the one reported.
 3. Accepting issues the payment instruction in the same click.
    `offerings.services.payments.generate_reference` builds
    `Operator.payment_reference_prefix` plus an eight-character Crockford base32
@@ -488,8 +508,16 @@ holds it, because its subject is one share class and its two callers are the two
 2. Every balance is confirmed with `get_token_balance`. **The chain wins.** An
    address whose allotment record says a hundred and whose `balanceOf` says
    forty-two is on the register for forty-two, and a former member whose
-   balance is now zero is off it. Only when no balance can be read at all does
-   the register fall back to the allotment record, and it says so in `source`.
+   balance is now zero is off it. **The chain read is all or nothing**: one
+   unreadable `balanceOf` discards the whole read for that share class and every
+   holder falls back to the allotment record, logged at `ERROR`. It never omits
+   the address it could not read and never recomputes the percentage column over
+   the survivors — a register that silently drops a member on a transient RPC
+   error and then asserts the rest own the remainder is a false record. The
+   fallback is stated in the artefact rather than inferred: every API row carries
+   `source`, the CSV's `Balance source` column reads `Confirmed on chain` or
+   `Allotment record, not confirmed on chain`, and an export that is not
+   chain-confirmed logs a `WARNING` beside the export line.
    The chain winning the share count is exactly why it also has to win the
    amount paid: a hundred shares' worth of consideration against a balance of
    forty-two would read as the price of the forty-two. Point 5 blanks it.
@@ -571,6 +599,21 @@ trail: there is no export audit model, nothing queryable, and no retention
 beyond whatever the deployment keeps its logs for. Every download is a full
 sheet of members' residential addresses, so a durable record of who took one is
 owed; it is a Phase 2 item, not a Phase 1 claim.
+
+**The export neutralises anything that opens like a formula.** Name and
+residential address come from `users.UserProfile`, which the investor sets
+themselves, and the treasury label from `WhitelistEntry`. `shared.utils.csv_cell`
+prefixes an apostrophe to any cell starting `=`, `+`, `-`, `@`, a tab or a
+carriage return, so opening `register-<SYMBOL>.csv` cannot run a member's
+formula against a sheet of everyone else's home address.
+
+**`company_stats.totalShareholders` deliberately does not run the chain read.**
+`GET /api/v1/companies/{uuid}/stats/` is on the dashboard company page and the
+mobile company screen, so putting the register behind it would put one
+sequential `balanceOf` per member on a hot path and make a headline number move
+with RPC reachability. The tile is one `COUNT(DISTINCT recipient_address)` over
+completed allotments — an allotment count, not a register count. The register is
+the statutory artefact; the tile is not.
 
 ### Former members
 
@@ -887,8 +930,8 @@ each lane does not re-derive it:
   `AbstractBaseUser` rather than `BaseModel` — so a hard-coded `uuid` is right
   four times and wrong the fifth, and `users/0020`'s hard-coded `integer` is
   right until an id passes 2^31 and then raises `integer out of range` inside
-  a trigger, on a write that has nothing to do with ids ([#323](
-  https://github.com/RonildoBraga/ledova/issues/323)). **Neither spelling is
+  a trigger, on a write that has nothing to do with ids
+  ([#323](https://github.com/RonildoBraga/ledova/issues/323)). **Neither spelling is
   safe to copy: the type belongs to the column.**
 - Python supplies as well as the database enforcing: a small model mixin fills
   the column in `save()`, because the trigger is PostgreSQL-only and `make test`
@@ -1336,7 +1379,18 @@ and the operator form refuses conversion while unpurged payslips remain.
   resolves the row through the app's own owner-scoped queryset and then calls
   `shared.views.stream_stored_file`. A foreign row is the same 404 as a phantom
   uuid; an anonymous caller is 401. The serializer's `file_url` is that route,
-  never a media path.
+  never a media path. **Staff read a company document through the admin, never
+  through the API**: `CompanyQuerySet.visible_to_user` is `filter(owner=user)`
+  with no staff exception, so the staff-only `POST
+  /api/v1/companies/{uuid}/status/` response nests document payloads whose
+  `fileUrl` a staff caller cannot fetch. That is deliberate — widening the
+  queryset to make it work would undo the tenant scoping.
+- Mobile cannot open these with `Linking.openURL`: it authenticates with a
+  bearer token and the OS browser sends neither that nor a cookie, so it fetches
+  through `apiClient`, writes to the cache directory and hands the file to
+  `expo-sharing`. The dashboard's `<a target="_blank">` is a top-level
+  navigation that carries the `SameSite=Lax` session cookie and needs no
+  equivalent.
 - **A streaming admin route is registered with
   `shared.utils.admin_files.admin_file_path`, never with a bare
   `self.admin_site.admin_view(...)`.** `admin_view` checks only that the caller

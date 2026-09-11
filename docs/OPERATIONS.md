@@ -4,6 +4,10 @@ Everything needed to configure, seed, run and upgrade a Ledova deployment:
 the operator row, the environment variables, key management, chain
 configuration, background jobs, migration notes and the pre-release checks.
 
+**What an operator does and needs to know, not how the code works.** Where a
+feature needs explaining rather than running, it is described in
+[ARCHITECTURE.md](ARCHITECTURE.md) and linked from here.
+
 Ledova is experimental and unaudited. Run it on a local chain or a supported
 public testnet only.
 
@@ -45,7 +49,11 @@ no model, no URL namespace and no `AdminSite` subclass: it is
   applications submitted, in review or
   needing information; classifications awaiting verification; offerings
   submitted or under review; offerings whose paid and allotted subscriptions
-  have reached the cap while the offering is still open; subscriptions awaiting
+  have reached the cap while the offering is still open — that row reads
+  `Subscription.paid_or_allotted()`, money in, rather than
+  `committed_to_shares()`, which additionally requires an issuance request and
+  so would only fire after the operator had already done the thing the row
+  exists to prompt; subscriptions awaiting
   payment; subscriptions paid and not allotted; subscriptions whose mint is
   broadcast and unresolved; whitelist entries pending; issuance and
   capital-increase requests submitted, approved-not-executed or failed; share
@@ -324,6 +332,7 @@ lock graph.
 | --- | --- | --- |
 | `CLASSIFICATION_EVIDENCE_RETENTION_DAYS` | `2557` | No; `0` retains indefinitely and purges nothing |
 | `UNATTACHED_DOCUMENT_RETENTION_DAYS` | `30` | No; lifetime of an unattached payslip from upload; `0` retains indefinitely |
+| `FORMER_MEMBER_RETENTION_DAYS` | `2557` | No; a value **below** 2557 refuses the fold and the purge |
 
 Days an investor classification's evidence file is kept, measured from
 `reviewed_at` for a rejected, revoked or withdrawn claim and from `expires_at`
@@ -334,6 +343,13 @@ the constraints to confirm it against. Set `0` while the period is undecided —
 the retention deadline remains unset and nothing is deleted. Attached payslips
 inherit this same claim clock; unattached uploads use their separate, shorter
 lifetime. Neither setting changes an eligibility decision.
+
+`FORMER_MEMBER_RETENTION_DAYS` is independent of it and behaves the opposite
+way: `retention_cutoff` raises `ImproperlyConfigured` below 2557 days, so the
+floor cannot be configured away and `0` is not a valid value. The purge measures
+from the cessation date, and a later full-history fold cannot recreate what it
+removed. It implements the accepted seven-year assumption for s169(3); the legal
+basis is unadvised, and is question 1 in [COUNSEL.md](COUNSEL.md).
 
 ### Media storage
 
@@ -540,50 +556,6 @@ or refunds. A reorg after a successful confirmation sync retains superseded
 deductions until an authoritative refresh succeeds. Unavailable providers leave
 the repair pending; a later transition prevents an older repair from completing
 over it.
-
-### Former-member records
-
-The periodic former-member fold reads every deployed or paused share class every
-six hours. It reads through the provider's `finalized` block, using the
-[Base RPC block tag](https://docs.base.org/base-chain/api-reference/ethereum-json-rpc-api/eth_getBlockByNumber).
-An unavailable finality reading leaves the last successful fold unchanged.
-It replays ordered Transfer events from deployment and records each
-cessation under that class. If a holder ceases more than once in one block, the
-last cessation in that block supplies that record. Incomplete, repeated or
-unreadable history leaves the previous successful timestamp intact. Database
-writes and the new timestamp commit together after provider reads finish.
-A class failure does not stop other classes being processed, but fails the task
-after the batch so its retry policy runs again after five minutes, within its
-configured retry limit. Refolding a class already processed does not rewrite its records.
-
-The register API and CSV carry a separate former-members section with the last
-successful read time, block and stale indicator (24 hours). A class never read
-successfully is explicitly stale. The dashboard permits CSV export when all
-current holders have left. GET requests do not run or write the fold.
-
-Names and addresses are frozen on the first recorded cessation and are not
-looked up again on a refold. The source and recording time accompany those
-particulars. A current profile is identified as the profile at recording time;
-if it is unavailable, an allotment record dated no later than the cessation may
-supply the particulars. Otherwise the identity is marked unknown. This does not
-claim to reconstruct profile changes before the first fold.
-
-Former-member rows are readable by the company owner and operator only. Public
-visibility of the parent share class does not reveal these rows. The application
-role cannot insert, update or delete them. Owner-transfer support would need to
-propagate the derived owner column before such a feature is enabled.
-
-`FORMER_MEMBER_RETENTION_DAYS` defaults to 2557, independently of classification
-evidence retention. The sweep measures from the cessation date, and a later
-full-history fold cannot recreate expired records. A value below 2557 refuses
-the fold and purge. This implements the accepted seven-year retention assumption
-for s169(3); counsel must settle the legal basis and responsibility for the
-register before public use.
-
-Rejected offerings can be withdrawn by their issuer. Withdrawal retains the
-reviewer, review time, notes and rejection reason. A withdrawn row remains
-visible as a record, including its previous rejection, and offers no further
-edit, resubmit or delete action.
 
 ### Company registry verification
 
@@ -1033,12 +1005,17 @@ one.
 | Schedule | Task |
 | --- | --- |
 | every minute | `expire_unclaimed_matches` |
-| every 5 min | `check_pending_token_deployments`, `check_executing_issuance_requests`, `offerings.reconcile_subscriptions`, `check_pending_transactions`, `check_all_pending_transactions` |
-| every 10 min | `assets.sync_all_assets`, `assets.sync_exchange_rates` |
-| every 30 min | whitelist `sync_all_entries` |
-| hourly | `sync_all_wallets`, `compliance.tasks.run_batch_monitoring` |
-| daily 03:00 | `offerings.expire_unpaid_subscriptions`, `users.purge_classification_evidence` |
-| daily 04:00 | `compliance.tasks.check_periodic_reviews` |
+| every 5 min | `check_pending_token_deployments`, `check_executing_issuance_requests`, `resolve_executing_swaps`, `reconcile_subscriptions`, `check_pending_transactions`, `check_all_pending_transactions` |
+| every 10 min | `sync_all_assets`, `sync_exchange_rates` |
+| every 30 min | `sync_all_entries`, `reconcile_failed_adds` |
+| hourly, on the hour | `sync_all_wallets`, `run_batch_monitoring` |
+| hourly, at :15 | `purge_signing_challenges` |
+| every 6 hours, at :20 | `fold_every_share_class` |
+| daily 03:00 | `expire_unpaid_subscriptions`, `purge_classification_evidence` |
+| daily 03:15 | `purge_document_evidence` |
+| daily 03:30 | `sweep_private_uploads` |
+| daily 03:40 | `purge_former_members_past_the_clock` |
+| daily 04:00 | `check_periodic_reviews` |
 
 `expire_unclaimed_matches` releases the reserved share quantity of an expired
 swap only when the current matching service marked it eligible at creation,
@@ -1109,6 +1086,16 @@ identity, reviewing rows already failed by historical cleanup, and per-chain
 finality or reorg policy remain separate work. This change does not reopen
 terminal history or infer a compensating balance movement from an old timeout.
 
+`fold_every_share_class` reads every deployed or paused share class through the
+provider's `finalized` block. What it writes and why is in
+[ARCHITECTURE.md](ARCHITECTURE.md#former-members); what an operator needs to
+know is that an unreadable class leaves its last successful timestamp and block
+standing rather than writing a partial fold, that the task still fails after the
+batch so its retry runs, and that the register then reports the date it last
+succeeded. Past 24 hours the register marks the fold stale, and a class never
+read successfully is explicitly stale. `GET` requests never run or write it, so
+a stale marker clears only when the periodic succeeds.
+
 `reconcile_subscriptions` is the mirror of `check_executing_issuance_requests`
 on the subscription row. The issuance sweep finishes a request a killed worker
 left mid-execution; without the mirror the subscription that request belongs to
@@ -1151,12 +1138,77 @@ transaction history and record its hash so the sweep can reconcile it. The old
 evidence for issuing again. Legacy rows that already identify a transaction
 continue receipt-based reconciliation and cannot replay without a saved payload.
 
-`blockchain.services.outgoing` provides the durable outgoing transaction
-foundation for the next signer migration. It has no production send callers yet;
-existing transfer, deployment and mint paths keep their current behavior. Its
-nonce coordination applies only to operations that use this service. Adopting
-every signer path and importing or quarantining existing signed transactions are
-required before claiming coordination across the application.
+`purge_classification_evidence` deletes the evidence file of an investor
+classification once it is past its retention horizon, leaving the row, its
+status and its review outcome untouched. There is one horizon and two things
+enforce it, deliberately: the four serving paths — the API evidence route, the
+admin evidence view, the admin link and the serializer's `evidenceUrl` — all
+refuse past it, so a claim stops being readable the moment it crosses, without
+waiting up to twenty-four hours for the sweep and without depending on the
+worker being alive; and the sweep then actually deletes the bytes, because
+deletion is a side effect and cannot be derived the way `expires_at` is. No
+status column records the purge: a cleared `evidence_file` is the record, which
+is the same choice `expires_at` makes in not storing an expired status. The
+clock is `RETENTION_CLOCK` in `users/models/investor_classification.py`:
+`reviewed_at` for a rejected, revoked or withdrawn claim and `expires_at` for a
+verified one. A submitted claim has no clock and is never swept.
+`evidence_file_size`
+and `evidence_mime_type` survive, being content-free metadata rather than the
+document. See `CLASSIFICATION_EVIDENCE_RETENTION_DAYS` above; `0` retains
+indefinitely.
+
+Deleting an account does **not** purge evidence early. `delete_account` is a
+tombstone that never touches `InvestorClassification`, and that is now a
+deliberate position rather than an oversight: the point of a fixed retention
+period is that it outlives the subject's wishes, which is usually why the
+record-keeping obligation exists. The period itself is the part that needs
+counsel.
+
+`GET /health/` is answered by middleware before any database access.
+
+## Supporting payslips
+
+Migration `documents/0003` preserves existing uploads as unattached documents
+and creates an empty **Document operations** group with document, extraction
+and classification view permissions. Assign the group only to the platform
+staff who need to review this evidence. It grants no classification verification
+or editing permission and assigns no users automatically. Staff must be active;
+company owners and accounts with a company role cannot use the cross-customer
+document review paths, even if granted a document permission. Registry platform
+superusers retain the same read access; single-issuer mode disables it.
+
+On Profile, an investor can choose an existing submitted classification claim
+when uploading a payslip, or attach an existing unattached payslip afterward.
+Attachment is final and is refused once a human has reviewed or the investor
+has withdrawn the claim. The claim's admin page links the retained supporting
+payslips for permitted reviewers. The document page links its original file
+and extraction history, including the raw output. Extraction is material for a
+human to check; it neither verifies the claim nor replaces its required evidence.
+
+Every operations read of a document page, file, extraction page or corresponding
+changelist writes a `DocumentRead` with reader ID, document and claim UUIDs, read
+kind and time. A failed audit write prevents delivery. These records omit file
+names and extracted figures, remain after content purge, and are read-only in
+admin; reading the audit itself additionally requires `view_documentread`.
+
+`purge_document_evidence` runs daily at 03:15 UTC in batches of 200. Attached
+payslips use the claim's `evidence_horizon`: `reviewed_at` for rejected, revoked
+or withdrawn claims, and `expires_at` for verified claims. Submitted claims and
+claims without a clock retain their supporting evidence. The task deletes the
+file and every extraction, including `raw_output`, and clears filenames and
+notes while retaining the claim link and read audit. Storage failures retain the
+reference for a later retry. File and extraction serving stop at the horizon
+without waiting for the sweep, and a late extraction cannot recreate purged
+content. Unattached documents retain the ordinary user-delete and orphan-file
+cleanup behavior. Attached files live under `users/supporting-documents/`, and
+neither row cascades nor the generic orphan sweep can delete them early.
+
+## Outgoing transaction foundation
+
+Not in use yet: `blockchain.services.outgoing` is the durable signing
+foundation the next signer migration will adopt, and it has no production
+send callers. Existing transfer, deployment and mint paths are unchanged.
+Read this before activating it, not to operate what runs today.
 
 The foundation now requires explicit signer admission. Existing and new
 `SigningAccount` rows start `closed`, and a missing row is also closed. A nonce
@@ -1289,71 +1341,6 @@ guarded import/activation. Application requests will also need scoped
 authorization before a narrow operator handoff, with transaction-boundary checks
 on the originating connection. Those adapter changes remain future work, and
 trading stays disabled.
-
-`purge_classification_evidence` deletes the evidence file of an investor
-classification once it is past its retention horizon, leaving the row, its
-status and its review outcome untouched. There is one horizon and two things
-enforce it, deliberately: the four serving paths — the API evidence route, the
-admin evidence view, the admin link and the serializer's `evidenceUrl` — all
-refuse past it, so a claim stops being readable the moment it crosses, without
-waiting up to twenty-four hours for the sweep and without depending on the
-worker being alive; and the sweep then actually deletes the bytes, because
-deletion is a side effect and cannot be derived the way `expires_at` is. No
-status column records the purge: a cleared `evidence_file` is the record, which
-is the same choice `expires_at` makes in not storing an expired status. The
-clock is `RETENTION_CLOCK` in `users/models/investor_classification.py`:
-`reviewed_at` for a rejected, revoked or withdrawn claim and `expires_at` for a
-verified one. A submitted claim has no clock and is never swept.
-`evidence_file_size`
-and `evidence_mime_type` survive, being content-free metadata rather than the
-document. See `CLASSIFICATION_EVIDENCE_RETENTION_DAYS` above; `0` retains
-indefinitely.
-
-Deleting an account does **not** purge evidence early. `delete_account` is a
-tombstone that never touches `InvestorClassification`, and that is now a
-deliberate position rather than an oversight: the point of a fixed retention
-period is that it outlives the subject's wishes, which is usually why the
-record-keeping obligation exists. The period itself is the part that needs
-counsel.
-
-`GET /health/` is answered by middleware before any database access.
-
-### Supporting payslips
-
-Migration `documents/0003` preserves existing uploads as unattached documents
-and creates an empty **Document operations** group with document, extraction
-and classification view permissions. Assign the group only to the platform
-staff who need to review this evidence. It grants no classification verification
-or editing permission and assigns no users automatically. Staff must be active;
-company owners and accounts with a company role cannot use the cross-customer
-document review paths, even if granted a document permission. Registry platform
-superusers retain the same read access; single-issuer mode disables it.
-
-On Profile, an investor can choose an existing submitted classification claim
-when uploading a payslip, or attach an existing unattached payslip afterward.
-Attachment is final and is refused once a human has reviewed or the investor
-has withdrawn the claim. The claim's admin page links the retained supporting
-payslips for permitted reviewers. The document page links its original file
-and extraction history, including the raw output. Extraction is material for a
-human to check; it neither verifies the claim nor replaces its required evidence.
-
-Every operations read of a document page, file, extraction page or corresponding
-changelist writes a `DocumentRead` with reader ID, document and claim UUIDs, read
-kind and time. A failed audit write prevents delivery. These records omit file
-names and extracted figures, remain after content purge, and are read-only in
-admin; reading the audit itself additionally requires `view_documentread`.
-
-`purge_document_evidence` runs daily at 03:15 UTC in batches of 200. Attached
-payslips use the claim's `evidence_horizon`: `reviewed_at` for rejected, revoked
-or withdrawn claims, and `expires_at` for verified claims. Submitted claims and
-claims without a clock retain their supporting evidence. The task deletes the
-file and every extraction, including `raw_output`, and clears filenames and
-notes while retaining the claim link and read audit. Storage failures retain the
-reference for a later retry. File and extraction serving stop at the horizon
-without waiting for the sweep, and a late extraction cannot recreate purged
-content. Unattached documents retain the ordinary user-delete and orphan-file
-cleanup behavior. Attached files live under `users/supporting-documents/`, and
-neither row cascades nor the generic orphan sweep can delete them early.
 
 ## Notifications and push
 
@@ -1532,6 +1519,14 @@ and a policy on every tenant table. Four things about running that deployment:
   it `STABLECOIN_CONTRACT_ADDRESS`. Any `AUDY` `Holding` keyed to the ethereum
   deployment stops resolving until the wallet sync runs again: count them
   before applying, and run `sync_all_wallets` (or wait one hour) after.
+- `wallets/0013` renames `wallet_type` to `signing_preference` and preserves
+  each recorded value; new unspecified wallets default to null. The API keeps
+  `walletType` as a legacy alias, and supplying different values under both
+  names is a validation error. Apply the migration and release its API before
+  updating the clients: older clients keep using the alias against the updated
+  backend, and the new clients require an API that serves `signingPreference`.
+  The field is a self-declared hint, not custody assurance — see
+  [Wallet ownership and signing](ARCHITECTURE.md#wallet-ownership-and-signing).
 
 ## Deploy checklist
 
@@ -1613,13 +1608,9 @@ and a policy on every tenant table. Four things about running that deployment:
    sweeps appear in its log.
 10. Confirm `GET /health/` answers 200 and `GET /api/operator/` returns 401
    anonymously.
-11. Leave the `trading_enabled` feature flag off; while it is off the
-    middleware refuses with 403 any request, of any method, whose path starts
-    with one of five prefixes
-    (`/api/v1/trading/{orders,wallets,transfers,swaps,events}/`). The read-only
-    market route (`tokens/`) and the whitelist status route sit
-    outside the gate by design. Enabling the flag does not make the trading
-    implementation safe.
+11. Leave the `trading_enabled` feature flag off. What it refuses while off is
+    in [README.md](../README.md#safety-defaults); enabling it does not make the
+    trading implementation safe.
 
 ## Pre-release device checks
 
@@ -1656,18 +1647,3 @@ The operator's obligations under securities, AML/CTF, privacy and company-law
 regimes are out of scope for this repository and must be settled with counsel
 before any real issuance.
 
-
-### Wallet signing preference migration
-
-`wallets/0013` renames `wallet_type` to `signing_preference` and preserves each
-recorded value. New unspecified wallets default to null. The field and imported
-key metadata are self-declared hints; operators must not use either as custody
-assurance. The API continues to accept and return `walletType` as a legacy alias,
-while current clients use `signingPreference`. Supplying different values under
-both names is a validation error. A matching address signature does not attest
-which device held the key, and changing this preference does not verify an
-address or remove an existing verification.
-
-Apply the backend migration and release its API before updating the clients.
-Older clients continue to use the legacy alias with the updated backend; the
-new clients require an API that serves `signingPreference`.
