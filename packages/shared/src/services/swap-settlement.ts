@@ -3,7 +3,8 @@ import { TRADING_ENDPOINTS } from '../constants';
 import type {
   SettlementSwapOrder,
   SwapSettlementApprovalConfirmed,
-  SwapSettlementApprovalData,
+  SwapSettlementApprovalRequired,
+  SwapSettlementApprovalSufficient,
   SwapSettlementApprovalStatus,
   SwapSettlementIdentity,
   SwapSettlementLookup,
@@ -55,10 +56,13 @@ export const getSwapSettlementApprovalData = (
   identity: SwapSettlementIdentity,
   config?: AxiosRequestConfig,
 ) =>
-  apiClient.get<SwapSettlementApprovalData>(TRADING_ENDPOINTS.ORDERS.SWAP_APPROVAL_DATA(identity.orderUuid), {
-    ...config,
-    params: { ...config?.params, ...identityBody(identity) },
-  });
+  apiClient.get<SwapSettlementApprovalSufficient | SwapSettlementApprovalRequired>(
+    TRADING_ENDPOINTS.ORDERS.SWAP_APPROVAL_DATA(identity.orderUuid),
+    {
+      ...config,
+      params: { ...config?.params, ...identityBody(identity) },
+    },
+  );
 
 export const broadcastSwapSettlementApproval = (
   apiClient: AxiosInstance,

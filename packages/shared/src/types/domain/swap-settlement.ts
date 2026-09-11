@@ -97,20 +97,25 @@ export interface SwapSettlementApprovalStatus extends SwapSettlementApprovalIden
   spender: string;
 }
 
-export type SwapSettlementApprovalData = SwapSettlementApprovalIdentity &
-  (
-    | { needsApproval: false; message: string; requiredAmount: string; currentAllowance: string }
-    | {
-        needsApproval: true;
-        transaction: ApprovalTransaction;
-        description: string;
-        tokenAddress: string;
-        tokenSymbol: string;
-        spender: string;
-        amount: string;
-        unlimited: true;
-      }
-  );
+export interface SwapSettlementApprovalSufficient extends SwapSettlementApprovalIdentity {
+  needsApproval: false;
+  message: string;
+  requiredAmount: string;
+  currentAllowance: string;
+}
+
+export interface SwapSettlementApprovalRequired extends SwapSettlementApprovalIdentity {
+  needsApproval: true;
+  transaction: ApprovalTransaction;
+  description: string;
+  tokenAddress: string;
+  tokenSymbol: string;
+  spender: string;
+  amount: string;
+  unlimited: true;
+}
+
+export type SwapSettlementApprovalData = SwapSettlementApprovalSufficient | SwapSettlementApprovalRequired;
 
 export interface SwapSettlementApprovalConfirmed extends SwapSettlementApprovalIdentity {
   txHash: string;
