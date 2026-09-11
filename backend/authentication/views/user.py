@@ -4,7 +4,11 @@ from django.conf import settings
 from django.middleware.csrf import get_token
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
-from drf_spectacular.utils import extend_schema, inline_serializer
+from drf_spectacular.utils import (
+    PolymorphicProxySerializer,
+    extend_schema,
+    inline_serializer,
+)
 from rest_framework import serializers, status
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -13,6 +17,12 @@ from rest_framework.viewsets import ViewSet
 from rest_framework_simplejwt.exceptions import TokenError
 
 from authentication.classes import HybridJWTAuthentication
+from authentication.schema import (
+    AUTH_TRANSPORT_PARAMETER,
+    AuthRefreshErrorSerializer,
+    AuthRefreshRequestSerializer,
+    AuthTokenPairSerializer,
+)
 from authentication.serializers.user import (
     ChangePasswordSerializer,
     EmailVerificationSerializer,
@@ -96,14 +106,17 @@ class AuthViewSet(SetsThePrincipalOnTheConnection, TokenCookieMixin, ViewSet):
         return [AllowAny()]
 
     @extend_schema(
-        responses=inline_serializer(
-            name="AuthIdentity",
-            fields={
-                "uuid": serializers.UUIDField(allow_null=True),
-                "email": serializers.EmailField(),
-                "is_email_verified": serializers.BooleanField(),
-            },
-        )
+        request=UserSignupSerializer,
+        responses={
+            201: inline_serializer(
+                name="AuthIdentity",
+                fields={
+                    "uuid": serializers.UUIDField(allow_null=True),
+                    "email": serializers.EmailField(),
+                    "is_email_verified": serializers.BooleanField(),
+                },
+            )
+        },
     )
     @action(detail=False, methods=["post"], url_path="signup")
     def signup(self, request):
@@ -121,6 +134,8 @@ class AuthViewSet(SetsThePrincipalOnTheConnection, TokenCookieMixin, ViewSet):
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
     @extend_schema(
+        request=UserSigninSerializer,
+        parameters=[AUTH_TRANSPORT_PARAMETER],
         responses=inline_serializer(
             name="AuthSession",
             fields={
@@ -128,14 +143,11 @@ class AuthViewSet(SetsThePrincipalOnTheConnection, TokenCookieMixin, ViewSet):
                 "email": serializers.EmailField(),
                 "is_email_verified": serializers.BooleanField(),
                 "tokens": serializers.ListField(
-                    child=inline_serializer(
-                        name="AuthTokenPair",
-                        fields={"access_token": serializers.CharField(), "refresh_token": serializers.CharField()},
-                    ),
+                    child=AuthTokenPairSerializer(),
                     required=False,
                 ),
             },
-        )
+        ),
     )
     @action(detail=False, methods=["post"], url_path="signin")
     def signin(self, request):
@@ -150,10 +162,12 @@ class AuthViewSet(SetsThePrincipalOnTheConnection, TokenCookieMixin, ViewSet):
         return self.session_response(request, UserSigninSerializer(instance=user).data, access_token, refresh_token)
 
     @extend_schema(
+        request=AuthRefreshRequestSerializer,
+        parameters=[AUTH_TRANSPORT_PARAMETER],
         responses=inline_serializer(
             name="AuthSignedOut",
             fields={"message": serializers.CharField()},
-        )
+        ),
     )
     @action(detail=False, methods=["post"], url_path="signout")
     def signout(self, request):
@@ -165,10 +179,11 @@ class AuthViewSet(SetsThePrincipalOnTheConnection, TokenCookieMixin, ViewSet):
         return self.clear_token_cookies(response)
 
     @extend_schema(
+        request=None,
         responses=inline_serializer(
             name="AuthSignedOutEverywhere",
             fields={"message": serializers.CharField()},
-        )
+        ),
     )
     @action(detail=False, methods=["post"], url_path="signout-all")
     def signout_all(self, request):
@@ -178,10 +193,23 @@ class AuthViewSet(SetsThePrincipalOnTheConnection, TokenCookieMixin, ViewSet):
         return self.clear_token_cookies(response)
 
     @extend_schema(
-        responses=inline_serializer(
-            name="AuthTokensRefreshed",
-            fields={"access": serializers.CharField(), "refresh": serializers.CharField()},
-        )
+        request=AuthRefreshRequestSerializer,
+        parameters=[AUTH_TRANSPORT_PARAMETER],
+        responses={
+            200: PolymorphicProxySerializer(
+                component_name="AuthRefreshResponse",
+                serializers=[
+                    inline_serializer(
+                        name="AuthTokensRefreshed",
+                        fields={"access": serializers.CharField(), "refresh": serializers.CharField()},
+                    ),
+                    inline_serializer(name="AuthCookieRefreshed", fields={"message": serializers.CharField()}),
+                ],
+                resource_type_field_name=None,
+            ),
+            400: AuthRefreshErrorSerializer,
+            401: AuthRefreshErrorSerializer,
+        },
     )
     @action(detail=False, methods=["post"], url_path="token/refresh")
     def token_refresh(self, request):
@@ -208,6 +236,8 @@ class AuthViewSet(SetsThePrincipalOnTheConnection, TokenCookieMixin, ViewSet):
         return self.set_token_cookies(response, access_token, refresh_token)
 
     @extend_schema(
+        request=EmailVerificationSerializer,
+        parameters=[AUTH_TRANSPORT_PARAMETER],
         responses=inline_serializer(
             name="AuthEmailVerified",
             fields={
@@ -215,14 +245,11 @@ class AuthViewSet(SetsThePrincipalOnTheConnection, TokenCookieMixin, ViewSet):
                 "email": serializers.EmailField(),
                 "is_email_verified": serializers.BooleanField(),
                 "tokens": serializers.ListField(
-                    child=inline_serializer(
-                        name="AuthTokenPair",
-                        fields={"access_token": serializers.CharField(), "refresh_token": serializers.CharField()},
-                    ),
+                    child=AuthTokenPairSerializer(),
                     required=False,
                 ),
             },
-        )
+        ),
     )
     @action(detail=False, methods=["post"], url_path="email-verification")
     def email_verification(self, request):
@@ -246,10 +273,12 @@ class AuthViewSet(SetsThePrincipalOnTheConnection, TokenCookieMixin, ViewSet):
         )
 
     @extend_schema(
+        request=ResendVerificationSerializer,
+        description="Email is optional for authenticated requests. Anonymous requests must include email.",
         responses=inline_serializer(
             name="AuthVerificationResent",
             fields={"message": serializers.CharField()},
-        )
+        ),
     )
     @action(detail=False, methods=["post"], url_path="resend-verification")
     def resend_verification(self, request):
@@ -276,7 +305,7 @@ class AuthViewSet(SetsThePrincipalOnTheConnection, TokenCookieMixin, ViewSet):
         responses=inline_serializer(
             name="AuthSessionValidity",
             fields={"valid": serializers.BooleanField(), "expiresAt": serializers.DateTimeField(required=False)},
-        )
+        ),
     )
     @action(detail=False, methods=["get"], url_path="auth/verify")
     @method_decorator(ensure_csrf_cookie)
@@ -291,10 +320,11 @@ class AuthViewSet(SetsThePrincipalOnTheConnection, TokenCookieMixin, ViewSet):
         return Response({"valid": False}, status=status.HTTP_200_OK)
 
     @extend_schema(
+        request=ChangePasswordSerializer,
         responses=inline_serializer(
             name="AuthPasswordChanged",
             fields={"message": serializers.CharField()},
-        )
+        ),
     )
     @action(detail=False, methods=["post"], url_path="change-password")
     def change_password(self, request):

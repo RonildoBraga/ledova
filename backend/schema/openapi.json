@@ -593,6 +593,17 @@
         ],
         "type": "string"
       },
+      "AuthCookieRefreshed": {
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "type": "object"
+      },
       "AuthEmailVerified": {
         "properties": {
           "email": {
@@ -653,6 +664,63 @@
           "message"
         ],
         "type": "object"
+      },
+      "AuthRefreshError": {
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
+      "AuthRefreshRequest": {
+        "properties": {
+          "refresh": {
+            "description": "Refresh JWT. In cookie transport, an omitted or falsy value falls back to the refresh cookie. Using a refresh cookie without an Authorization header requires CSRF validation. Bearer transport does not fall back to a refresh cookie.",
+            "nullable": true,
+            "oneOf": [
+              {
+                "nullable": true,
+                "type": "string"
+              },
+              {
+                "enum": [
+                  0
+                ],
+                "type": "number"
+              },
+              {
+                "enum": [
+                  false
+                ],
+                "type": "boolean"
+              },
+              {
+                "items": {},
+                "maxItems": 0,
+                "type": "array"
+              },
+              {
+                "maxProperties": 0,
+                "type": "object"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "AuthRefreshResponse": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/AuthTokensRefreshed"
+          },
+          {
+            "$ref": "#/components/schemas/AuthCookieRefreshed"
+          }
+        ]
       },
       "AuthSession": {
         "properties": {
@@ -1289,6 +1357,31 @@
           "ethereum"
         ],
         "type": "string"
+      },
+      "ChangePassword": {
+        "properties": {
+          "currentPassword": {
+            "maxLength": 255,
+            "type": "string",
+            "writeOnly": true
+          },
+          "newPassword": {
+            "maxLength": 255,
+            "type": "string",
+            "writeOnly": true
+          },
+          "newPasswordConfirm": {
+            "maxLength": 255,
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "currentPassword",
+          "newPassword",
+          "newPasswordConfirm"
+        ],
+        "type": "object"
       },
       "CodeEnum": {
         "description": "* `order_cancellation_failed` - order_cancellation_failed\n* `order_modification_failed` - order_modification_failed\n* `order_modification_conflict` - order_modification_conflict",
@@ -2512,6 +2605,22 @@
         },
         "required": [
           "file"
+        ],
+        "type": "object"
+      },
+      "EmailVerification": {
+        "properties": {
+          "email": {
+            "maxLength": 254,
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "token"
         ],
         "type": "object"
       },
@@ -7531,6 +7640,15 @@
         ],
         "type": "string"
       },
+      "ResendVerification": {
+        "properties": {
+          "email": {
+            "maxLength": 254,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "ReviewResultEnum": {
         "description": "* `GREEN` - Approved\n* `RED` - Rejected\n* `YELLOW` - Retry",
         "enum": [
@@ -10370,6 +10488,48 @@
         ],
         "type": "string"
       },
+      "UserSignin": {
+        "properties": {
+          "email": {
+            "maxLength": 254,
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 255,
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "type": "object"
+      },
+      "UserSignup": {
+        "properties": {
+          "email": {
+            "maxLength": 254,
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 255,
+            "type": "string",
+            "writeOnly": true
+          },
+          "passwordConfirm": {
+            "maxLength": 255,
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "email",
+          "password",
+          "passwordConfirm"
+        ],
+        "type": "object"
+      },
       "ValueSourceEnum": {
         "description": "* `market` - Market price\n* `nav` - NAV\n* `par` - Par\n* `unpriced` - Unpriced",
         "enum": [
@@ -10896,6 +11056,20 @@
         ],
         "type": "object"
       }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "bearerFormat": "JWT",
+        "description": "A live session access JWT in the Authorization header.",
+        "scheme": "bearer",
+        "type": "http"
+      },
+      "cookieAuth": {
+        "description": "A live session access JWT in the configured cookie. Unsafe cookie-authenticated requests must pass Django's CSRF token and origin checks.",
+        "in": "cookie",
+        "name": "access",
+        "type": "apiKey"
+      }
     }
   },
   "info": {
@@ -10967,6 +11141,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -10987,6 +11169,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11019,6 +11209,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11091,6 +11289,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11112,6 +11318,12 @@
           }
         },
         "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
           {}
         ],
         "tags": [
@@ -11122,6 +11334,26 @@
     "/api/change-password/": {
       "post": {
         "operationId": "api_change_password_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePassword"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePassword"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePassword"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -11134,6 +11366,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11174,6 +11414,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11212,6 +11460,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11252,6 +11508,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11295,6 +11559,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11327,6 +11599,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11335,6 +11615,36 @@
     "/api/email-verification/": {
       "post": {
         "operationId": "api_email_verification_create",
+        "parameters": [
+          {
+            "description": "The value bearer, ignoring case and surrounding whitespace, selects bearer transport. Omitting the header or sending any other value uses cookie transport. This chooses how tokens are read or returned; it does not authenticate the request.",
+            "in": "header",
+            "name": "X-Auth-Transport",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailVerification"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailVerification"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailVerification"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -11348,6 +11658,12 @@
           }
         },
         "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
           {}
         ],
         "tags": [
@@ -11429,6 +11745,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11467,6 +11791,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11492,6 +11824,14 @@
             "description": "No response body"
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11522,6 +11862,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11562,6 +11910,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11594,6 +11950,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11634,6 +11998,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11674,6 +12046,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11711,6 +12091,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11743,6 +12131,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11792,6 +12188,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11841,6 +12245,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11881,6 +12293,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11919,6 +12339,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11939,6 +12367,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11964,6 +12400,14 @@
             "description": "No response body"
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -11994,6 +12438,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12027,6 +12479,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12067,6 +12527,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12104,6 +12572,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12136,6 +12612,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12185,6 +12669,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12246,6 +12738,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12285,6 +12785,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12305,6 +12813,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12337,6 +12853,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12386,6 +12910,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12406,6 +12938,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12469,6 +13009,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12507,6 +13055,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12532,6 +13088,14 @@
             "description": "No response body"
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12562,6 +13126,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12611,6 +13183,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12661,6 +13241,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12713,6 +13301,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12765,6 +13361,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12832,6 +13436,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12839,7 +13451,27 @@
     },
     "/api/resend-verification/": {
       "post": {
+        "description": "Email is optional for authenticated requests. Anonymous requests must include email.",
         "operationId": "api_resend_verification_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResendVerification"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/ResendVerification"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/ResendVerification"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
@@ -12853,6 +13485,12 @@
           }
         },
         "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
           {}
         ],
         "tags": [
@@ -12863,6 +13501,36 @@
     "/api/signin/": {
       "post": {
         "operationId": "api_signin_create",
+        "parameters": [
+          {
+            "description": "The value bearer, ignoring case and surrounding whitespace, selects bearer transport. Omitting the header or sending any other value uses cookie transport. This chooses how tokens are read or returned; it does not authenticate the request.",
+            "in": "header",
+            "name": "X-Auth-Transport",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserSignin"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/UserSignin"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/UserSignin"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -12876,6 +13544,12 @@
           }
         },
         "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
           {}
         ],
         "tags": [
@@ -12898,6 +13572,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -12906,6 +13588,35 @@
     "/api/signout/": {
       "post": {
         "operationId": "api_signout_create",
+        "parameters": [
+          {
+            "description": "The value bearer, ignoring case and surrounding whitespace, selects bearer transport. Omitting the header or sending any other value uses cookie transport. This chooses how tokens are read or returned; it does not authenticate the request.",
+            "in": "header",
+            "name": "X-Auth-Transport",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthRefreshRequest"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthRefreshRequest"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthRefreshRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
@@ -12919,6 +13630,12 @@
           }
         },
         "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
           {}
         ],
         "tags": [
@@ -12929,8 +13646,28 @@
     "/api/signup/": {
       "post": {
         "operationId": "api_signup_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserSignup"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/UserSignup"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/UserSignup"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
-          "200": {
+          "201": {
             "content": {
               "application/json": {
                 "schema": {
@@ -12942,6 +13679,12 @@
           }
         },
         "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
           {}
         ],
         "tags": [
@@ -12952,12 +13695,61 @@
     "/api/token/refresh/": {
       "post": {
         "operationId": "api_token_refresh_create",
+        "parameters": [
+          {
+            "description": "The value bearer, ignoring case and surrounding whitespace, selects bearer transport. Omitting the header or sending any other value uses cookie transport. This chooses how tokens are read or returned; it does not authenticate the request.",
+            "in": "header",
+            "name": "X-Auth-Transport",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthRefreshRequest"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthRefreshRequest"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthRefreshRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AuthTokensRefreshed"
+                  "$ref": "#/components/schemas/AuthRefreshResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthRefreshError"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthRefreshError"
                 }
               }
             },
@@ -12965,6 +13757,12 @@
           }
         },
         "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          },
           {}
         ],
         "tags": [
@@ -13060,6 +13858,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13092,6 +13898,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13132,6 +13946,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13169,6 +13991,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13201,6 +14031,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13250,6 +14088,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13299,6 +14145,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13339,6 +14193,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13376,6 +14238,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13401,6 +14271,14 @@
             "description": "No response body"
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13431,6 +14309,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13480,6 +14366,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13529,6 +14423,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13569,6 +14471,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13607,6 +14517,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13647,6 +14565,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13667,6 +14593,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13699,6 +14633,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13748,6 +14690,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13798,6 +14748,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13818,6 +14776,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13838,6 +14804,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13913,6 +14887,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -13951,6 +14933,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14000,6 +14990,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14049,6 +15047,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14081,6 +15087,14 @@
             "description": "No response body"
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14118,6 +15132,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14158,6 +15180,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14183,6 +15213,14 @@
             "description": "No response body"
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14213,6 +15251,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14262,6 +15308,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14312,6 +15366,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14344,6 +15406,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14393,6 +15463,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14425,6 +15503,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14477,6 +15563,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14509,6 +15603,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14561,6 +15663,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14612,6 +15722,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14663,6 +15781,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14703,6 +15829,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14735,6 +15869,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14775,6 +15917,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14813,6 +15963,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14838,6 +15996,14 @@
             "description": "No response body"
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14868,6 +16034,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14920,6 +16094,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14953,6 +16135,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -14993,6 +16183,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15031,6 +16229,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15056,6 +16262,14 @@
             "description": "No response body"
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15086,6 +16300,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15135,6 +16357,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15185,6 +16415,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15236,6 +16474,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15277,6 +16523,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15328,6 +16582,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15368,6 +16630,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15406,6 +16676,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15438,6 +16716,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15489,6 +16775,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15540,6 +16834,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15616,6 +16918,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15654,6 +16964,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15724,6 +17042,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15762,6 +17088,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15787,6 +17121,14 @@
             "description": "No response body"
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15817,6 +17159,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15866,6 +17216,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15916,6 +17274,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -15967,6 +17333,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -16030,6 +17404,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -16062,6 +17444,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -16087,6 +17477,14 @@
             "description": "No response body"
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -16117,6 +17515,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -16166,6 +17572,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -16215,6 +17629,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -16266,6 +17688,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -16298,6 +17728,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -16346,6 +17784,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -16398,6 +17844,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -16449,6 +17903,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -16481,6 +17943,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -16532,6 +18002,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -16683,6 +18161,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -16723,6 +18209,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -16868,6 +18362,14 @@
             "description": "Service failure; recover before retrying."
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -16974,6 +18476,14 @@
             "description": "Service failure; retain the submission ID."
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -17069,6 +18579,14 @@
             "description": "Service temporarily unavailable."
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -17101,6 +18619,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -17142,6 +18668,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -17296,6 +18830,14 @@
             "description": "Service unavailable; recover before retrying."
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -17329,6 +18871,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -17481,6 +19031,14 @@
             "description": "Service unavailable; recover before retrying."
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -17513,6 +19071,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -17667,6 +19233,14 @@
             "description": "Service unavailable; recover before retrying."
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -17821,6 +19395,14 @@
             "description": "Service unavailable; recover before retrying."
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -17853,6 +19435,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -17885,6 +19475,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -17917,6 +19515,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -17968,6 +19574,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18008,6 +19622,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18048,6 +19670,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18080,6 +19710,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18112,6 +19750,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18144,6 +19790,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18184,6 +19838,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18224,6 +19886,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18254,6 +19924,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18284,6 +19962,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18354,6 +20040,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18393,6 +20087,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18432,6 +20134,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18463,6 +20173,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18483,6 +20201,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18522,6 +20248,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18572,6 +20306,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18604,6 +20346,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18673,6 +20423,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18711,6 +20469,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18751,6 +20517,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18776,6 +20550,14 @@
             "description": "No response body"
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18806,6 +20588,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18855,6 +20645,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18905,6 +20703,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -18957,6 +20763,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -19030,6 +20844,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -19082,6 +20904,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -19114,6 +20944,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -19146,6 +20984,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
@@ -19198,6 +21044,14 @@
             "description": ""
           }
         },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
         "tags": [
           "api"
         ]
