@@ -8,10 +8,17 @@ import android.os.Bundle
 import android.view.View
 import android.widget.FrameLayout
 import androidx.camera.core.CameraState
+import androidx.camera.core.CameraSelector
 import androidx.camera.core.UseCase
+import androidx.camera.camera2.interop.Camera2CameraInfo
+import androidx.camera.camera2.interop.ExperimentalCamera2Interop
+import androidx.camera.core.impl.CameraInternal
+import androidx.camera.lifecycle.LifecycleCamera
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.concurrent.futures.CallbackToFutureAdapter
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -331,5 +338,61 @@ class ScannerWindowTest {
       previous.cameraInfo.cameraState.value?.type == CameraState.Type.CLOSED
     }
     start(2)
+  }
+
+  @androidx.annotation.OptIn(ExperimentalCamera2Interop::class)
+  @Test fun pendingBindingOpensWhenAnotherCameraReleasesTheCameraXSlot() {
+    val provider = ProcessCameraProvider.getInstance(activity).get(15, TimeUnit.SECONDS)
+    val info = CameraSelector.DEFAULT_BACK_CAMERA.filter(provider.availableCameraInfos).first()
+    val id = Camera2CameraInfo.from(info).cameraId
+    val owner = object : LifecycleOwner {
+      val registry = LifecycleRegistry(this)
+      override val lifecycle: Lifecycle get() = registry
+    }
+    var holder: CameraInternal? = null
+    try {
+      main {
+        owner.registry.currentState = Lifecycle.State.CREATED
+        val camera = provider.bindToLifecycle(owner, CameraSelector.DEFAULT_FRONT_CAMERA) as LifecycleCamera
+        val adapter = camera.cameraUseCaseAdapter
+        holder = adapter.javaClass.getDeclaredField("mCameraInternal").apply { isAccessible = true }.get(adapter) as CameraInternal
+        assertNotEquals(id, Camera2CameraInfo.from(holder!!.cameraInfo).cameraId)
+        holder!!.open()
+      }
+      eventually("other CameraX camera did not open") { holder!!.cameraInfo.cameraState.value?.type == CameraState.Type.OPEN }
+      attach()
+      main { scanner.request(true, generation, 1) }
+      eventually("scanner did not wait for the occupied CameraX slot") {
+        holder!!.cameraInfo.cameraState.value?.type == CameraState.Type.OPEN &&
+          scanner.camera?.cameraInfo?.cameraState?.value?.type == CameraState.Type.PENDING_OPEN
+      }
+      val pending = scanner.camera!!
+      lateinit var pendingSession: Any
+      main { pendingSession = ScannerCameraView::class.java.getDeclaredField("session").apply { isAccessible = true }.get(scanner)!! }
+      val pendingGeneration = generation
+      val pendingUseCases = useCases(scanner)
+      main {
+        assertEquals(id, Camera2CameraInfo.from(pending.cameraInfo).cameraId)
+        assertTrue(pendingUseCases.all { provider.isBound(it) })
+        holder!!.close()
+      }
+      eventually("pending camera did not open after the other CameraX camera closed") {
+        holder!!.cameraInfo.cameraState.value?.type == CameraState.Type.CLOSED &&
+          pending.cameraInfo.cameraState.value?.type == CameraState.Type.OPEN
+      }
+      main {
+        assertSame(pending, scanner.camera)
+        assertSame(pendingSession, ScannerCameraView::class.java.getDeclaredField("session").apply { isAccessible = true }.get(scanner))
+        assertEquals(pendingUseCases, useCases(scanner))
+        assertTrue(pendingUseCases.all { provider.isBound(it) })
+        assertEquals(pendingGeneration, generation)
+        assertTrue(scanner.isCurrentScan(pendingGeneration, 1))
+      }
+    } finally {
+      main {
+        holder?.close()
+        owner.registry.currentState = Lifecycle.State.DESTROYED
+      }
+    }
   }
 }

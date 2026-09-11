@@ -242,6 +242,30 @@ describe.each(placements)('$name scanner window', ({ element }) => {
     expect(onScan.mock.calls).toEqual([['current-control']]);
   });
 
+  it('refuses the old native generation after quick loss and regain before either JavaScript window event', async () => {
+    const onScan = jest.fn();
+    const view = await render(element(onScan), { wrapper });
+    await act(() => windowEvent(view.getByTestId('native-scanner'), true, 1));
+    const old = view.getByTestId('native-scanner');
+    const oldId = old.props.scanId;
+    const nativeGeneration = 3;
+    mockCurrentScan.mockImplementation(async (generation: number) => generation === nativeGeneration);
+    await act(() => barcode(old, 'queued-through-quick-regain', 1, oldId));
+    expect(onScan).not.toHaveBeenCalled();
+    expect(mockCurrentScan).toHaveBeenLastCalledWith(1, oldId);
+    expect(view.getByTestId('native-scanner').props.generation).toBe(1);
+    expect(view.getByTestId('native-scanner').props.active).toBe(true);
+    await act(() => {
+      windowEvent(old, false, 2);
+      windowEvent(old, true, 3);
+    });
+    const current = view.getByTestId('native-scanner');
+    expect(current.props.generation).toBe(3);
+    expect(current.props.scanId).not.toBe(oldId);
+    await act(() => barcode(current, 'fresh-native-generation', 3, current.props.scanId));
+    expect(onScan.mock.calls).toEqual([['fresh-native-generation']]);
+  });
+
   it('retires a delayed native admission response after a JavaScript lock pause', async () => {
     let resolve!: (admitted: boolean) => void;
     const onScan = jest.fn();
