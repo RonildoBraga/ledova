@@ -207,6 +207,7 @@ chain-test:
 	CHAIN_TEST_RPC_URL=$(CHAIN_TEST_RPC_URL) BLOCKCHAIN_RPC_URL=$(CHAIN_TEST_RPC_URL) BLOCKCHAIN_CHAIN_ID=31337 \
 	BLOCKCHAIN_OPERATOR_KEY=$(CHAIN_TEST_OPERATOR_KEY) SECRET_KEY=chain-test STORAGE_BACKEND=local \
 	$(PYTHON) manage.py test tokens.tests.test_chain_integration offerings.tests.test_chain_allotment \
+	    wallets.tests.test_submission_chain \
 	--settings=$(CHAIN_TEST_SETTINGS) --noinput
 
 .DEFAULT_GOAL := help

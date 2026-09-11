@@ -34,9 +34,9 @@ class ThePrincipalIsRequiredRatherThanDefaultedTest(TestCase):
         self.assertIs(parameter.kind, inspect.Parameter.KEYWORD_ONLY)
 
     def test_the_transfer_service_takes_it_keyword_only_with_no_default(self):
-        from wallets.services.transfers import TransferService
+        from wallets.services import transfers
 
-        parameter = inspect.signature(TransferService.broadcast_transfer).parameters["principal_id"]
+        parameter = inspect.signature(transfers.broadcast_transfer).parameters["principal_id"]
 
         self.assertIs(parameter.default, inspect.Parameter.empty)
         self.assertIs(parameter.kind, inspect.Parameter.KEYWORD_ONLY)

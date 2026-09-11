@@ -1,6 +1,7 @@
 import logging
+from collections.abc import Mapping
 from datetime import datetime, timezone
-from decimal import Decimal
+from decimal import Decimal, localcontext
 from typing import Any, Dict, List, Optional
 
 import base58
@@ -9,9 +10,24 @@ import requests
 from django.conf import settings
 
 from .base import BlockchainClient
-from .receipts import transaction_hash_matches
+from .bitcoin_transactions import MAX_MONEY
+from .receipts import nonnegative_integer, normalized_hash, transaction_hash_matches
 
 logger = logging.getLogger(__name__)
+
+
+def _receipt_fee_satoshis(value):
+    if isinstance(value, bool) or not isinstance(value, (Decimal, int)):
+        return None
+    amount = Decimal(value)
+    if not amount.is_finite() or len(amount.as_tuple().digits) > 40 or abs(amount.as_tuple().exponent) > 40:
+        return None
+    with localcontext() as context:
+        context.prec = 50
+        amount *= 100_000_000
+        if amount != amount.to_integral_value() or not 0 <= amount <= MAX_MONEY:
+            return None
+        return int(amount)
 
 
 def is_bitcoin_address_valid(address: str, network: str) -> bool:
@@ -63,7 +79,7 @@ class BitcoinClient(BlockchainClient):
         try:
             response = self.session.post(self.rpc_url, json=payload, timeout=30)
             response.raise_for_status()
-            data = response.json()
+            data = response.json(parse_float=Decimal)
 
             if "error" in data and data["error"]:
                 error_msg = data["error"].get("message", "Unknown error")
@@ -88,9 +104,9 @@ class BitcoinClient(BlockchainClient):
             logger.error(f"Error getting current block: {str(e)}")
             raise
 
-    def get_transaction(self, tx_hash: str) -> Dict[str, Any]:
+    def get_transaction(self, tx_hash: str, *, verbosity: int = 1) -> Dict[str, Any]:
         try:
-            tx_data = self._rpc_call("getrawtransaction", [tx_hash, True])
+            tx_data = self._rpc_call("getrawtransaction", [tx_hash, verbosity])
             logger.debug(f"Retrieved transaction: {tx_hash}")
             return tx_data
         except Exception as e:
@@ -99,7 +115,9 @@ class BitcoinClient(BlockchainClient):
 
     def get_transaction_receipt(self, tx_hash: str) -> Optional[Dict[str, Any]]:
         try:
-            tx = self.get_transaction(tx_hash)
+            tx = self.get_transaction(tx_hash, verbosity=2)
+            if not isinstance(tx, Mapping):
+                return None
             confirmations = tx.get("confirmations", 0)
             txid = tx.get("txid")
 
@@ -110,25 +128,52 @@ class BitcoinClient(BlockchainClient):
                 and not isinstance(confirmations, bool)
                 and confirmations > 0
             ):
+                block_hash = normalized_hash(tx.get("blockhash"))
+                header = self._get_block_header(block_hash)
                 return {
                     "tx_hash": txid,
                     "confirmed": True,
                     "confirmations": confirmations,
-                    "block_height": tx.get("height"),
-                    "block_hash": tx.get("blockhash"),
+                    "block_height": (
+                        nonnegative_integer(header.get("height"), maximum=2**63 - 1) if header is not None else None
+                    ),
+                    "block_hash": block_hash,
+                    "fee": _receipt_fee_satoshis(tx.get("fee")),
                 }
             return None
         except Exception as e:
             logger.error(f"Error getting receipt for {tx_hash}: {str(e)}")
             return None
 
-    def get_block_timestamp(self, block_hash: str) -> Optional[int]:
+    def _get_block_header(self, block_hash):
+        if not transaction_hash_matches(block_hash, block_hash):
+            return None
         try:
             header = self._rpc_call("getblockheader", [block_hash])
-            return header.get("time") if header else None
-        except Exception as e:
-            logger.error(f"Error getting block header {block_hash}: {str(e)}")
+            if not isinstance(header, Mapping) or not transaction_hash_matches(header.get("hash"), block_hash):
+                return None
+            return header
+        except Exception:
+            logger.warning("Bitcoin block header unavailable")
             return None
+
+    def get_block_timestamp(self, block_hash: str) -> Optional[int]:
+        header = self._get_block_header(block_hash)
+        if header is None:
+            return None
+        return nonnegative_integer(header.get("time"), maximum=253402300799)
+
+    def get_genesis_hash(self):
+        return self._rpc_call("getblockhash", [0])
+
+    def get_previous_output(self, tx_hash, output_index):
+        return self._rpc_call("gettxout", [tx_hash, output_index, False])
+
+    def check_mempool_acceptance(self, raw_transaction):
+        return self._rpc_call("testmempoolaccept", [[raw_transaction]])
+
+    def get_mempool_entry(self, tx_hash):
+        return self._rpc_call("getmempoolentry", [tx_hash])
 
     def broadcast_transaction(self, signed_tx: str) -> str:
         try:
