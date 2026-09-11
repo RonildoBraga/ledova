@@ -152,6 +152,13 @@ def collect_chain_evidence(client, *, chain, network, tx_hash, previous_block, p
         evidence["complete"] = True
         previous_orphaned = previous is not None and canonical_previous is not None and previous != canonical_previous
         evidence["previous_orphaned"] = previous_orphaned
+        if previous is not None and receipt_block is not None and previous != receipt_block and not previous_orphaned:
+            reason = (
+                "previous_inclusion_still_canonical"
+                if canonical_previous == previous
+                else "previous_canonicality_unavailable"
+            )
+            return _unknown(reason, evidence)
         if receipt_block is None or receipt["succeeded"] is None or canonical_receipt is None:
             if previous_orphaned:
                 return {

@@ -110,6 +110,58 @@ class ChainEvidenceTest(SimpleTestCase):
         self.assertEqual(result["evidence"]["receipt"]["hash"], BLOCK_HASH)
         self.assertEqual(result["evidence"]["previous_block"]["hash"], OLD_HASH)
 
+    def test_new_inclusion_requires_proof_that_the_previous_block_left_the_canonical_chain(self):
+        previous = {"hash": FINALIZED_HASH, "height": 102}
+        for canonical, reason in (
+            ({"hash": FINALIZED_HASH, "number": 102}, "previous_inclusion_still_canonical"),
+            (None, "previous_canonicality_unavailable"),
+        ):
+            with self.subTest(canonical=canonical):
+                self.client.w3.eth.get_block.side_effect = lambda identifier: (
+                    canonical if identifier == 102 else self.get_block(identifier)
+                )
+                result = self.observe({"mode": "depth", "depth": 1}, previous=previous)
+                self.assertEqual(
+                    (result["result"], result["finality"], result["reason"]), ("unknown", "unknown", reason)
+                )
+                self.assertEqual(result["evidence"]["previous_block"], previous)
+                self.assertEqual(result["evidence"]["canonical_receipt"], {"hash": BLOCK_HASH, "height": 103})
+
+    @override_settings(BITCOIN_NETWORK="regtest")
+    def test_bitcoin_cannot_claim_two_canonical_inclusions_for_the_same_spend(self):
+        client = object.__new__(BitcoinClient)
+        client.expected_network = "regtest"
+        heights = {OLD_HASH[2:]: 103, BLOCK_HASH[2:]: 104, HEAD_HASH[2:]: 109}
+
+        def rpc(method, params=None):
+            if method == "getblockchaininfo":
+                return {"chain": "regtest"}
+            if method == "getblockhash":
+                if params == [0]:
+                    return GENESIS_HASHES["regtest"]
+                return OLD_HASH[2:] if params == [103] else BLOCK_HASH[2:]
+            if method == "getbestblockhash":
+                return HEAD_HASH[2:]
+            if method == "getblockheader":
+                return {"hash": params[0], "height": heights[params[0]], "time": BLOCK_TIME}
+            if method == "getrawtransaction":
+                return {"txid": TX_HASH[2:], "blockhash": BLOCK_HASH[2:], "confirmations": 6}
+            raise AssertionError(method)
+
+        client._rpc_call = Mock(side_effect=rpc)
+        result = collect_chain_evidence(
+            client,
+            chain="bitcoin",
+            network="bitcoin:" + GENESIS_HASHES["regtest"],
+            tx_hash=TX_HASH[2:],
+            previous_block={"hash": OLD_HASH[2:], "height": 103},
+            policy={"mode": "depth", "depth": 6},
+        )
+        self.assertEqual(
+            (result["result"], result["finality"], result["reason"]),
+            ("unknown", "unknown", "previous_inclusion_still_canonical"),
+        )
+
     def test_foreign_identity_unknown_outcome_and_invalid_height_remain_unknown(self):
         original = self.client.get_transaction_receipt.return_value
         for changes in (

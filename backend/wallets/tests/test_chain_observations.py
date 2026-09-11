@@ -83,6 +83,27 @@ class ChainObservationFixture(SubmissionFixture):
 
 
 class ChainObservationChecks(ChainObservationFixture):
+    def test_conflicting_inclusion_remains_unknown_and_keeps_the_last_validated_context(self):
+        network = f"evm:{settings.BLOCKCHAIN_CHAIN_ID}"
+        before = self.financial_state()
+        with override_settings(WALLET_CHAIN_FINALITY_POLICIES={network: {"mode": "depth", "depth": 1}}):
+            self.assertEqual(observe_wallet_chain(self.tx_id), "recorded")
+            first = self.observations()[0]
+            self.assertEqual(first["finality"], "satisfied")
+            changed_hash = "0x" + "33" * 32
+            changed = {**self.block, "number": 101, "hash": changed_hash}
+            self.observer.get_transaction_receipt.return_value.update(blockHash=changed_hash, blockNumber=101)
+            self.observer.w3.eth.get_block.side_effect = lambda identifier: (
+                self.head if identifier == "latest" else changed if identifier in (101, changed_hash) else self.block
+            )
+            self.assertEqual(observe_wallet_chain(self.tx_id), "recorded")
+        rows = self.observations()
+        self.assertEqual(rows[0], first)
+        self.assertEqual((rows[1]["result"], rows[1]["finality"]), ("unknown", "unknown"))
+        self.assertEqual(rows[1]["reason"], "previous_inclusion_still_canonical")
+        self.assertEqual(claim_chain_observation(self.tx_id).previous_block["hash"], BLOCK_HASH)
+        self.assertEqual(self.financial_state(), before)
+
     def test_successive_reads_keep_inclusion_then_unknown_without_financial_effects(self):
         before = self.financial_state()
         self.assertEqual(observe_wallet_chain(self.tx_id), "recorded")
