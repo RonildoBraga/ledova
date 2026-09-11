@@ -799,7 +799,7 @@ unavailable marker when a required rate cannot be read.
 
 There is one database and one operator per deployment. Isolation is enforced in
 the ORM today, and PostgreSQL row-level security is being added underneath it in
-stages, tracked on [issue #115](https://github.com/RonildoBraga/ledova/issues/115).
+stages, tracked on [issue #520](https://github.com/RonildoBraga/ledova/issues/520).
 The ORM rules below are the live mechanism and stay the live mechanism; RLS is a
 second floor under them, not a replacement.
 
@@ -1217,6 +1217,21 @@ task: a task with three enqueue sites has three answers, and one omissible
 argument would let a caller silently downgrade to the operator connection. A
 required one turns that into an error at author time — the first conversion
 found seven existing callers that way.
+
+Two shapes satisfy that rule and the difference is worth knowing before
+converting. The principal can be **its own argument**, as
+`confirm_pending_transaction` carries `principal_id` and its webhook and sweep
+pass `None` deliberately. Or the task's **existing required argument already is
+the principal**, as both notification tasks take the recipient's `user_id` and
+act for exactly that recipient; there is nothing a second argument could say,
+and adding one would only create a way for the two to disagree.
+
+The second shape keeps the rule and loses the author-time error, because the
+argument is required for its own reasons rather than for this one. A caller
+passing `None` reaches `acting_for(None)`, which means the operator connection.
+Tasks of that shape therefore **refuse a missing principal** instead of
+proceeding — the same guarantee, obtained at run time because it could not be
+obtained at author time.
 
 The failure direction is worth stating because it is **invisible from the task's
 own code**. The worker process sets its ambient alias to the operator one, so a
