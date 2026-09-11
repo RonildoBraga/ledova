@@ -26,6 +26,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
 import java.lang.reflect.Field
+import java.util.Collections
+import java.util.IdentityHashMap
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.regex.Pattern
@@ -166,8 +168,13 @@ class ScannerReleaseTest {
   private fun descendants(view: View): List<View> =
     listOf(view) + if (view is ViewGroup) (0 until view.childCount).flatMap { descendants(view.getChildAt(it)) } else emptyList()
 
+  private fun windowViews(): List<View> {
+    val seen = Collections.newSetFromMap(IdentityHashMap<View, Boolean>())
+    return WindowInspector.getGlobalWindowViews().flatMap { descendants(it) }.filter { seen.add(it) }
+  }
+
   private fun jsState(): JsState? {
-    val value = WindowInspector.getGlobalWindowViews().flatMap { descendants(it) }.filterIsInstance<TextView>()
+    val value = windowViews().filterIsInstance<TextView>()
       .singleOrNull { it.contentDescription?.toString() == "scanner-probe-state" }?.text?.toString() ?: return null
     val parts = value.split('|')
     if (parts.size != 4) return null
@@ -209,7 +216,7 @@ class ScannerReleaseTest {
   }
 
   private fun session(): Session? {
-    for (view in WindowInspector.getGlobalWindowViews().flatMap { descendants(it) }) {
+    for (view in windowViews()) {
       if (view.javaClass.name != "org.example.ledova.scanner.ScannerCameraView") continue
       val camera = field(view, "camera") as? Camera ?: continue
       val session = field(view, "session") ?: continue
@@ -225,7 +232,7 @@ class ScannerReleaseTest {
 
   private fun observe(previous: Session): CameraObservation {
     val cameraId = Camera2CameraInfo.from(previous.camera.cameraInfo).cameraId
-    val views = WindowInspector.getGlobalWindowViews().flatMap { descendants(it) }
+    val views = windowViews()
     return CameraObservation(
       cameraId, previous.provider.isBound(previous.preview), previous.provider.isBound(previous.analysis),
       previous.camera.cameraInfo.cameraState.value?.type, available[cameraId], previous.scanner.isAttachedToWindow,
@@ -272,7 +279,7 @@ class ScannerReleaseTest {
     enterStage("$kind-js-unmount-ack")
     eventually("JavaScript did not acknowledge $kind scanner unmount") {
       observe(previous)
-      WindowInspector.getGlobalWindowViews().flatMap { descendants(it) }.any {
+      windowViews().any {
         it.contentDescription?.toString() == "scanner-probe-$kind-unmounted"
       }
     }
@@ -429,7 +436,7 @@ class ScannerReleaseTest {
         device.dumpWindowHierarchy(File(context.getExternalFilesDir(null), "scanner-release-$mode.xml"))
         instrumentation.runOnMainSync {
           val statuses = setOf("inactive", "loading", "denied", "failed", "ready", "scanned")
-          val current = WindowInspector.getGlobalWindowViews().flatMap { descendants(it) }
+          val current = windowViews()
             .filterIsInstance<TextView>().map { it.text.toString() }.filter { it in statuses }
           File(context.getExternalFilesDir(null), "scanner-release-$mode-status.txt").writeText(
             (current + checkpoints + "lastStage=$stage" + "lastObservation=$lastObservation").joinToString("\n")
