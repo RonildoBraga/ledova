@@ -61,7 +61,7 @@ jobs:
       - name: Check probe TLS and command deadlines before native setup
         working-directory: mobile
         run: |
-          node --test scripts/tests/native-probe-tls.test.mjs scripts/tests/native-command-timeout.test.mjs scripts/tests/android-test-packages.test.mjs
+          node --test scripts/tests/native-probe-tls.test.mjs scripts/tests/native-command-timeout.test.mjs scripts/tests/android-test-packages.test.mjs scripts/tests/native-probe-report.test.mjs
           npx jest --runInBand --testMatch '<rootDir>/native-tests/ScannerBridgeProbe.test.tsx'
       - name: Install native tools and prepare the emulator
         run: |
@@ -131,7 +131,7 @@ jobs:
           npm ci --ignore-scripts --no-audit --no-fund
           npm --prefix mobile ci --ignore-scripts --no-audit --no-fund
       - name: Check probe TLS and command deadlines before native setup
-        run: node --test mobile/scripts/tests/native-probe-tls.test.mjs mobile/scripts/tests/native-command-timeout.test.mjs
+        run: node --test mobile/scripts/tests/native-probe-tls.test.mjs mobile/scripts/tests/native-command-timeout.test.mjs mobile/scripts/tests/native-probe-report.test.mjs
       - name: Generate native projects and resolve Pods
         working-directory: mobile
         run: |

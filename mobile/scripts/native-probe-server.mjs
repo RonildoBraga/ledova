@@ -168,6 +168,34 @@ const counts = {
   untrusted: 0,
 };
 let destination;
+const failureCategories = new Set(['assertion', 'native-keychain', 'native-function', 'unknown']);
+const failureStages = new Set([
+  'check',
+  'initial-sign-out',
+  'retired-marker-removal',
+  'legacy-access-write',
+  'legacy-refresh-write',
+  'migrated-access-read',
+  'migrated-refresh-read',
+  'legacy-access-removal',
+  'legacy-refresh-removal',
+  'ordinary-session-write',
+  'authenticated-request',
+  'authenticated-response',
+  'session-rotation',
+  'rotated-refresh-read',
+  'sign-out',
+  'signed-out-session-read',
+  'missing-ref',
+  'missing-method',
+  'inactive-admitted',
+  'window-timeout',
+  'window-generation',
+  'method-assertion',
+  'method-native-keychain',
+  'method-native-function',
+  'method-unknown',
+]);
 
 function handler(kind) {
   return (request, response) => {
@@ -227,7 +255,15 @@ function handler(kind) {
       }
       if (route === '/report') {
         const parsed = JSON.parse(body);
-        const checks = parsed.checks.map(({ name, passed }) => ({ name: String(name), passed: passed === true }));
+        const checks = parsed.checks.map(({ name, passed, failure }) => ({
+          name: String(name),
+          passed: passed === true,
+          ...(passed === false &&
+            failureCategories.has(failure?.category) &&
+            failureStages.has(failure?.stage) && {
+              failure: { category: failure.category, stage: failure.stage },
+            }),
+        }));
         fs.writeFileSync(path.join(directory, 'result.json'), JSON.stringify({ checks, counts }, null, 2));
         response.end('{}');
         return;

@@ -592,51 +592,58 @@ try {
     fs.writeFileSync(nativeSource, source);
     markStage(`probe-${name}-reset`);
     await localRequest(endpoints.apiUrl, '/reset', ca);
-    await build(`probe-${name}-build`, environment);
-    if (platform === 'android') archiveAndroidArtifact(appPath, `probe-${name}.apk`);
-    await launch(`probe-${name}`);
-    if (platform === 'android') {
-      try {
-        await command(
-          adb,
-          [
-            ...adbArgs,
-            'shell',
-            'am',
-            'instrument',
-            '-w',
-            '-r',
-            '-e',
-            'reportMode',
-            name,
-            'org.example.ledova.releaseprobe.test/androidx.test.runner.AndroidJUnitRunner',
-          ],
-          `scanner-release-${name}`,
-        );
-      } finally {
-        collectScannerEvidence(name);
+    let result;
+    try {
+      await build(`probe-${name}-build`, environment);
+      if (platform === 'android') archiveAndroidArtifact(appPath, `probe-${name}.apk`);
+      await launch(`probe-${name}`);
+      if (platform === 'android') {
+        try {
+          await command(
+            adb,
+            [
+              ...adbArgs,
+              'shell',
+              'am',
+              'instrument',
+              '-w',
+              '-r',
+              '-e',
+              'reportMode',
+              name,
+              'org.example.ledova.releaseprobe.test/androidx.test.runner.AndroidJUnitRunner',
+            ],
+            `scanner-release-${name}`,
+          );
+        } finally {
+          collectScannerEvidence(name);
+        }
+        const nativeResult = fs.readFileSync(path.join(directory, `scanner-release-${name}.log`), 'utf8');
+        assert.match(nativeResult, /OK \(1 test\)/);
+        assert.doesNotMatch(nativeResult, /FAILURES!!!|INSTRUMENTATION_FAILED|shortMsg=/);
       }
-      const nativeResult = fs.readFileSync(path.join(directory, `scanner-release-${name}.log`), 'utf8');
-      assert.match(nativeResult, /OK \(1 test\)/);
-      assert.doesNotMatch(nativeResult, /FAILURES!!!|INSTRUMENTATION_FAILED|shortMsg=/);
+      markStage(`probe-${name}-report`);
+      result = await waitFor(path.join(directory, 'server/result.json'), 120000);
+      await delay(500);
+      await screenshot(`probe-${name}`);
+      const failed = result.checks
+        .filter((check) => !check.passed)
+        .map((check) => check.name)
+        .sort();
+      assert.ok(result.checks.length >= 12);
+      assert.deepEqual(failed, name === 'red' ? ['native 307 refusal', 'native 308 refusal'] : []);
+      assert.equal(result.counts.redirectTarget, name === 'red' ? 2 : 0);
+      assert.equal(result.counts.redirectBody, name === 'red' ? 2 : 0);
+      if (name === 'green') assert.equal(result.counts.redirectBearer, 0);
+      for (const count of ['direct', 'targetControl', 'upload', 'download', 'stream', 'cancelled'])
+        assert.ok(result.counts[count] > 0, `${count} needs a positive control.`);
+      for (const count of ['http', 'untrusted']) assert.equal(result.counts[count], 0);
+    } finally {
+      const report = path.join(directory, 'server/result.json');
+      const artifact = path.join(directory, `native-${name}.json`);
+      if (result !== undefined) fs.writeFileSync(artifact, JSON.stringify(result, null, 2));
+      else if (fs.existsSync(report)) fs.copyFileSync(report, artifact);
     }
-    markStage(`probe-${name}-report`);
-    const result = await waitFor(path.join(directory, 'server/result.json'), 120000);
-    fs.writeFileSync(path.join(directory, `native-${name}.json`), JSON.stringify(result, null, 2));
-    await delay(500);
-    await screenshot(`probe-${name}`);
-    const failed = result.checks
-      .filter((check) => !check.passed)
-      .map((check) => check.name)
-      .sort();
-    assert.ok(result.checks.length >= 12);
-    assert.deepEqual(failed, name === 'red' ? ['native 307 refusal', 'native 308 refusal'] : []);
-    assert.equal(result.counts.redirectTarget, name === 'red' ? 2 : 0);
-    assert.equal(result.counts.redirectBody, name === 'red' ? 2 : 0);
-    if (name === 'green') assert.equal(result.counts.redirectBearer, 0);
-    for (const count of ['direct', 'targetControl', 'upload', 'download', 'stream', 'cancelled'])
-      assert.ok(result.counts[count] > 0, `${count} needs a positive control.`);
-    for (const count of ['http', 'untrusted']) assert.equal(result.counts[count], 0);
   }
   console.log('Native Release probe passed with observed redirect failures before the fix.');
 } catch (error) {
