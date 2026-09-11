@@ -32,7 +32,7 @@ TREES = (
     ("dashboard/src", TS + CSS, True),
     ("mobile/src", TS, True),
     ("mobile/scripts", TS + PY, True),
-    ("mobile/native-tests", TS, True),
+    ("mobile/native-tests", TS + NATIVE, True),
     ("mobile/plugins", TS + NATIVE, True),
     ("mobile", TS, False),
     ("packages/shared", TS, True),

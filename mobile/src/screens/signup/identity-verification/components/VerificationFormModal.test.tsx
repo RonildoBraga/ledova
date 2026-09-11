@@ -1,4 +1,5 @@
 import React from 'react';
+import { JSDOM } from 'jsdom';
 import { act, cleanup, fireEvent, render } from '@testing-library/react-native';
 import { AppState, type AppStateStatus } from 'react-native';
 import type { NativeProps } from 'react-native-webview/lib/RNCWebViewNativeComponent';
@@ -18,6 +19,7 @@ const listeners = new Set<(state: AppStateStatus) => void>();
 const settleOutstanding: (() => void)[] = [];
 let fakeClock = false;
 
+jest.mock('../../../../config/publicLinks', () => ({ MARKETING_URL: 'https://marketing.example.test' }));
 jest.mock('expo-secure-store', () => ({ getItemAsync: () => mockReadPreference() }));
 jest.mock('expo-local-authentication', () => ({
   AuthenticationType: { FINGERPRINT: 1, FACIAL_RECOGNITION: 2 },
@@ -289,10 +291,35 @@ it('retains the current KYCAID redirect convention without accepting an old navi
   await act(() => navigate(old, 'https://unrelated.example.test/'));
   expect(complete).not.toHaveBeenCalled();
   await view.rerender(form({ accessToken: null, formUrl: `${formUrl}-new` }));
-  await act(() => navigate(old, 'https://localhost/verification-result'));
+  await act(() => navigate(old, 'https://marketing.example.test/verification-result'));
   expect(complete).not.toHaveBeenCalled();
-  await act(() => navigate(nativeView(), 'https://localhost/verification-result'));
+  await act(() => navigate(nativeView(), 'https://marketing.example.test/verification-result'));
   expect(complete).toHaveBeenCalledTimes(1);
+});
+
+it.each([
+  'http://marketing.example.test/verification-result',
+  'https://marketing.example.test:8443/verification-result',
+  'https://synthetic:credential@marketing.example.test/verification-result',
+  'https://marketing.example.test/verification-result#untrusted',
+  'https://marketing.example.test.unrelated.test/verification-result',
+  'https://www.marketing.example.test:8443/verification-result',
+])('does not complete from an untrusted redirect %s', async (url) => {
+  await render(form({ accessToken: null, formUrl }));
+  const current = nativeView();
+  await act(() => navigate(current, url));
+  expect(complete).not.toHaveBeenCalled();
+  expect(mockViews.size).toBe(1);
+  await act(() => navigate(current, 'https://marketing.example.test/verification-result?status=complete'));
+  expect(complete).toHaveBeenCalledTimes(1);
+  expect(mockViews.size).toBe(0);
+});
+
+it('accepts the configured website www redirect with its original scheme and port', async () => {
+  await render(form({ accessToken: null, formUrl }));
+  await act(() => navigate(nativeView(), 'https://www.marketing.example.test/verification-result'));
+  expect(complete).toHaveBeenCalledTimes(1);
+  expect(mockViews.size).toBe(0);
 });
 
 it('keeps raw SDK errors out of native logs', async () => {
@@ -506,3 +533,52 @@ it.each(['sdk', 'startup', 'script-load'] as const)(
     expect(JSON.stringify([elements, posted.mock.calls])).not.toContain(secret);
   },
 );
+
+it.each([
+  ['ordinary token', 'synthetic-provider-token'],
+  ['quoted token', 'synthetic-"\\\n\r\t&>'],
+  ['closing script', 'synthetic</script><p id="token-boundary">changed</p><script>'],
+  ['mixed-case closing script', 'synthetic</ScRiPt><script>window.tokenBoundary = true</script><script>'],
+  ['HTML script escape state', 'synthetic<!--<script>'],
+  ['Unicode separators', 'synthetic\u2028token\u2029end'],
+])('passes the opaque %s to the SDK without changing the HTML document', async (_label, opaqueToken) => {
+  await render(form({ accessToken: opaqueToken }));
+  const html = nativeView().newSource?.html;
+  expect(typeof html).toBe('string');
+  const dom = new JSDOM(html);
+  try {
+    const document = dom.window.document;
+    const scripts = document.querySelectorAll('script');
+    expect(scripts).toHaveLength(1);
+    expect(document.getElementById('token-boundary')).toBeNull();
+    const init = jest.fn();
+    const launch = jest.fn();
+    const posted = jest.fn();
+    const sdk = {
+      init: (value: string) => {
+        init(value);
+        return {
+          withConf() {
+            return this;
+          },
+          on() {
+            return this;
+          },
+          build: () => ({ launch }),
+        };
+      },
+    };
+    const execute = new Function('document', 'window', 'snsWebSdk', scripts[0].textContent!);
+    execute(document, { ReactNativeWebView: { postMessage: posted } }, sdk);
+    const loader = document.head.querySelector('script');
+    expect(loader?.src).toBe('https://static.sumsub.com/idensic/static/sns-websdk-builder.js');
+    loader!.dispatchEvent(new dom.window.Event('load'));
+    expect(init).toHaveBeenCalledTimes(1);
+    expect(init).toHaveBeenCalledWith(opaqueToken);
+    expect(launch).toHaveBeenCalledTimes(1);
+    expect(launch).toHaveBeenCalledWith('#sumsub-websdk-container');
+    expect(posted).not.toHaveBeenCalled();
+  } finally {
+    dom.window.close();
+  }
+});
