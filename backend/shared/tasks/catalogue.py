@@ -72,8 +72,17 @@ PRINCIPAL_BEARING = {
     "knows the gap is proportional to it.",
     "wallets.tasks.sync.sync_wallet": "Reads and writes the holdings of exactly one wallet.",
     "documents.tasks.extract.extract_document": "Reads one uploader's document and writes an extraction against it.",
-    "users.tasks.notifications.send_push_notification": "Sends to one user's device tokens.",
-    "users.tasks.notifications.send_transaction_notification": "Sends to one user about one transaction.",
+    "users.tasks.notifications.send_push_notification": "Sends to one user's device tokens. Converted: "
+    "the required user_id was already the recipient principal, so the enqueue payload is unchanged and "
+    "the whole body - lookup, preferences, inbox insert, device read and invalid-device deactivation - "
+    "runs inside acting_for that recipient. A None recipient is refused rather than run as the operator, "
+    "because acting_for(None) means operator and nothing in the payload would say that was unintended.",
+    "users.tasks.notifications.send_transaction_notification": "Sends to one user about one transaction. "
+    "Converted the same way, and the transaction lookup moved inside the recipient context, so a "
+    "transaction the recipient cannot reach is refused instead of described to them. The gap between "
+    "enqueue and run is up to four attempts at sixty seconds: _notify_wallet_users fans out one job per "
+    "account member on the operator connection, and a member removed in between resolves no transaction "
+    'and answers "Transaction not found" while the remaining members are notified normally.',
 }
 
 CONVERSIONS = {
@@ -123,23 +132,8 @@ CONVERSIONS = {
         "locked content-retention rechecks on the chosen alias. The documents policy already scopes "
         "reads and writes by uploaded_by_id; the extraction table is reached through that document.",
     ),
-    "users.tasks.notifications.send_push_notification": TaskConversion(
-        status="pending",
-        waiting_reason="Company and offering transitions and identity verification already enqueue the "
-        "recipient user_id, but this task never enters acting_for that recipient. Conversion still needs "
-        "recipient-scoped notification-preference and device-token reads, notification creation and "
-        "device-token deactivation, with cross-user refusal tests. The corresponding user_id policies "
-        "already exist; no owner-column migration is outstanding for this task.",
-    ),
-    "users.tasks.notifications.send_transaction_notification": TaskConversion(
-        status="pending",
-        waiting_reason="TransactionConfirmationService._notify_wallet_users enqueues one recipient "
-        "user_id and transaction_id per account member. This delivery task still loads both on the "
-        "operator alias even after #327 scoped confirmation. Conversion must run as the recipient, "
-        "recheck that recipient's current transaction access before building the notification, and keep "
-        "preference/device/notification access under the same principal. Account membership can disappear "
-        "while delivery is queued; the parent task's principal cannot stand in for each recipient.",
-    ),
+    "users.tasks.notifications.send_push_notification": TaskConversion(status="converted", converted_pr=523),
+    "users.tasks.notifications.send_transaction_notification": TaskConversion(status="converted", converted_pr=523),
 }
 
 OPERATOR_READS = {
