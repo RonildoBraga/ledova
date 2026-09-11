@@ -105,7 +105,8 @@ class ScannerReleaseTest {
     val holder = requireNotNull(registry.javaClass.getMethod("getModuleHolder", String::class.java).invoke(registry, "LedovaScanner"))
     val definitions = getter(getter(holder, "getDefinition"), "getViewManagerDefinitions") as Map<*, *>
     val functions = definitions.values.flatMap { getter(requireNotNull(it), "getAsyncFunctions") as List<*> }
-    return functions.filterNotNull().single { member(it, "name").get(it) == "isCurrentScan" }.also {
+    val seen = Collections.newSetFromMap(IdentityHashMap<Any, Boolean>())
+    return functions.filterNotNull().filter { seen.add(it) }.single { member(it, "name").get(it) == "isCurrentScan" }.also {
       assertEquals("expo.modules.kotlin.functions.BoolAsyncFunctionComponent", it.javaClass.name)
     }
   }
