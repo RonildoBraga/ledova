@@ -1,5 +1,5 @@
 from decimal import Decimal
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -14,6 +14,7 @@ from companies.models import Company, CompanyType
 from tokens.models import ShareToken, ShareTokenStatus
 from users.models import UserAccount, UserProfile
 from wallets.models import Holding, Transaction, Wallet
+from wallets.services import transfers
 from wallets.services.signed_transfers import (
     AMOUNT_OUT_OF_RANGE,
     AMOUNT_TOO_PRECISE,
@@ -26,7 +27,6 @@ from wallets.services.signed_transfers import (
     WRONG_NETWORK,
 )
 from wallets.services.transaction_confirmation import NOT_TRANSFERABLE
-from wallets.services.transfers import TransferService
 
 SIGNER = Account.from_key("0x" + "42" * 32)
 WALLET_ADDRESS = SIGNER.address
@@ -39,12 +39,12 @@ BITCOIN_RECIPIENT = "tb1qrecipient"
 ERC20_TRANSFER_SELECTOR = "a9059cbb"
 
 
-def sign(to=None, value=0, data=b"", chain_id=None, nonce=0):
+def sign(to=None, value=0, data=b"", chain_id=None, nonce=0, gas=90000, gas_price=10**9):
     fields = {
         "nonce": nonce,
         "value": value,
-        "gas": 90000,
-        "gasPrice": 10**9,
+        "gas": gas,
+        "gasPrice": gas_price,
         "chainId": settings.BLOCKCHAIN_CHAIN_ID if chain_id is None else chain_id,
         "data": data,
     }
@@ -95,6 +95,13 @@ class BroadcastTransferGuardTestCase(APITestCase):
             user_account=self.account, address=WALLET_ADDRESS, chain="base", verification_status="VERIFIED"
         )
         self.client.force_authenticate(self.user)
+        self.evm_provider = Mock(spec=["assert_expected_chain", "get_transaction_receipt", "broadcast_transaction"])
+        self.evm_provider.assert_expected_chain.return_value = settings.BLOCKCHAIN_CHAIN_ID
+        self.evm_provider.get_transaction_receipt.return_value = None
+        self.evm_provider.broadcast_transaction.side_effect = lambda raw: Web3.keccak(hexstr=raw).to_0x_hex()
+        factory = patch("wallets.services.submissions.get_blockchain_client", return_value=self.evm_provider)
+        self.evm_connect = factory.start()
+        self.addCleanup(factory.stop)
 
     def broadcast(self, wallet=None, **payload):
         wallet = wallet or self.wallet
@@ -144,8 +151,8 @@ class BroadcastTransferGuardTestCase(APITestCase):
         )
 
 
-@patch.object(TransferService, "_schedule_confirmation_checks")
-@patch("wallets.services.transfers.get_blockchain_client")
+@patch.object(transfers, "_schedule_confirmation_checks")
+@patch("wallets.services.submissions.get_blockchain_client")
 class BroadcastTransferRefusalTest(BroadcastTransferGuardTestCase):
     def test_a_share_token_transfer_is_refused_when_the_caller_omits_the_contract_field(self, get_client, schedule):
         token = self.share_token()
@@ -310,21 +317,25 @@ class BroadcastTransferRefusalTest(BroadcastTransferGuardTestCase):
         get_client.assert_not_called()
 
 
-@patch.object(TransferService, "_schedule_confirmation_checks")
+@patch.object(transfers, "_schedule_confirmation_checks")
 @patch("wallets.services.transfers.get_blockchain_client")
 class BroadcastTransferRecordingTest(BroadcastTransferGuardTestCase):
     def test_an_ordinary_native_send_still_broadcasts(self, get_client, schedule):
-        get_client.return_value.broadcast_transaction.return_value = "0xnative"
+        signed = sign(to=RECIPIENT, value=25 * 10**16)
+        tx_hash = Web3.keccak(hexstr=signed).to_0x_hex()
+        get_client.return_value.broadcast_transaction.return_value = tx_hash
 
         response = self.broadcast(
-            signed_transaction=sign(to=RECIPIENT, value=25 * 10**16),
+            signed_transaction=signed,
             to_address=RECIPIENT,
             amount="0.25",
             transaction_fee="0.000021",
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["txHash"], "0xnative")
+        self.assertEqual(response.json()["txHash"], tx_hash)
+        self.evm_connect.assert_called_once_with("base")
+        self.evm_provider.broadcast_transaction.assert_called_once_with(signed)
 
         recorded = Transaction.objects.get(wallet=self.wallet)
         self.assertEqual(recorded.to_address, RECIPIENT)
@@ -348,17 +359,21 @@ class BroadcastTransferRecordingTest(BroadcastTransferGuardTestCase):
 
     def test_an_ordinary_erc20_send_still_broadcasts(self, get_client, schedule):
         self.usdc()
-        get_client.return_value.broadcast_transaction.return_value = "0xerc20"
+        signed = sign(to=USDC_CONTRACT, data=erc20_transfer_data(RECIPIENT, 1_500_000))
+        tx_hash = Web3.keccak(hexstr=signed).to_0x_hex()
+        get_client.return_value.broadcast_transaction.return_value = tx_hash
 
         response = self.broadcast(
-            signed_transaction=sign(to=USDC_CONTRACT, data=erc20_transfer_data(RECIPIENT, 1_500_000)),
+            signed_transaction=signed,
             to_address=RECIPIENT,
             amount="1.5",
             token_contract=USDC_CONTRACT,
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["txHash"], "0xerc20")
+        self.assertEqual(response.json()["txHash"], tx_hash)
+        self.evm_connect.assert_called_once_with("base")
+        self.evm_provider.broadcast_transaction.assert_called_once_with(signed)
 
         recorded = Transaction.objects.get(wallet=self.wallet)
         self.assertEqual(recorded.to_address, RECIPIENT)
@@ -417,7 +432,7 @@ class BroadcastTransferRecordingTest(BroadcastTransferGuardTestCase):
 
 
 class BroadcastTransferThrottleTest(BroadcastTransferGuardTestCase):
-    @patch("wallets.views.wallet.TransferService")
+    @patch("wallets.views.wallet.transfers")
     def test_the_route_allows_ten_broadcasts_a_minute(self, transfer_service):
         transfer_service.broadcast_transfer.return_value = {"success": True}
 

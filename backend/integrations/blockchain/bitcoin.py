@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
@@ -9,7 +10,7 @@ import requests
 from django.conf import settings
 
 from .base import BlockchainClient
-from .receipts import transaction_hash_matches
+from .receipts import nonnegative_integer, transaction_hash_matches
 
 logger = logging.getLogger(__name__)
 
@@ -123,11 +124,15 @@ class BitcoinClient(BlockchainClient):
             return None
 
     def get_block_timestamp(self, block_hash: str) -> Optional[int]:
+        if not transaction_hash_matches(block_hash, block_hash):
+            return None
         try:
             header = self._rpc_call("getblockheader", [block_hash])
-            return header.get("time") if header else None
-        except Exception as e:
-            logger.error(f"Error getting block header {block_hash}: {str(e)}")
+            if not isinstance(header, Mapping) or not transaction_hash_matches(header.get("hash"), block_hash):
+                return None
+            return nonnegative_integer(header.get("time"), maximum=253402300799)
+        except Exception:
+            logger.warning("Bitcoin block header unavailable")
             return None
 
     def broadcast_transaction(self, signed_tx: str) -> str:

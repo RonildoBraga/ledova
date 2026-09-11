@@ -26,187 +26,186 @@ from wallets.services.chain import token_deployment_decimals
 logger = logging.getLogger(__name__)
 
 
-class TransferService:
+def prepare_transfer(
+    wallet,
+    to_address: str,
+    amount_eth: Optional[str] = None,
+    amount_btc: Optional[str] = None,
+    amount_token: Optional[str] = None,
+    token_contract: Optional[str] = None,
+) -> Dict[str, Any]:
+    chain = normalize_chain(wallet.chain)
 
-    @staticmethod
-    def prepare_transfer(
-        wallet,
-        to_address: str,
-        amount_eth: Optional[str] = None,
-        amount_btc: Optional[str] = None,
-        amount_token: Optional[str] = None,
-        token_contract: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        chain = normalize_chain(wallet.chain)
+    if chain not in SUPPORTED_CHAINS:
+        raise UnsupportedChainException(wallet.chain.upper())
 
-        if chain not in SUPPORTED_CHAINS:
-            raise UnsupportedChainException(wallet.chain.upper())
-
-        if chain in EVM_BLOCKCHAINS and token_contract:
-            return TransferService._prepare_erc20_transfer(
-                wallet=wallet,
-                chain=chain,
-                to_address=to_address,
-                amount_token=amount_token,
-                token_contract=token_contract,
-            )
-
-        if chain in EVM_BLOCKCHAINS:
-            if not to_address or not amount_eth:
-                raise InvalidTransactionException(
-                    "Both 'toAddress' and 'amountEth' are required for Ethereum transfers."
-                )
-            amount = TransferService._parse_amount(amount_eth)
-            current_balance = TransferService._get_native_balance(wallet)
-
-            return prepare_ethereum_transaction(
-                chain=chain,
-                from_address=wallet.address,
-                to_address=to_address,
-                amount_eth=amount,
-                current_balance=current_balance,
-            )
-
-        if chain == BLOCKCHAIN_BITCOIN:
-            if not to_address or not amount_btc:
-                raise InvalidTransactionException(
-                    "Both 'toAddress' and 'amountBtc' are required for Bitcoin transfers."
-                )
-            amount = TransferService._parse_amount(amount_btc)
-            current_balance = TransferService._get_native_balance(wallet)
-
-            return prepare_bitcoin_transaction(
-                from_address=wallet.address,
-                to_address=to_address,
-                amount_btc=amount,
-                current_balance=current_balance,
-            )
-
-        raise UnsupportedChainException(chain.upper())
-
-    @staticmethod
-    def _prepare_erc20_transfer(
-        wallet,
-        chain: str,
-        to_address: str,
-        amount_token: Optional[str],
-        token_contract: str,
-    ) -> Dict[str, Any]:
-        from wallets.models import Holding
-        from wallets.services.transaction_confirmation import (
-            TransactionConfirmationService,
+    if chain in EVM_BLOCKCHAINS and token_contract:
+        return _prepare_erc20_transfer(
+            wallet=wallet,
+            chain=chain,
+            to_address=to_address,
+            amount_token=amount_token,
+            token_contract=token_contract,
         )
 
-        if not to_address or not amount_token:
-            raise InvalidTransactionException("Both 'toAddress' and 'amountToken' are required for token transfers.")
+    if chain in EVM_BLOCKCHAINS:
+        if not to_address or not amount_eth:
+            raise InvalidTransactionException("Both 'toAddress' and 'amountEth' are required for Ethereum transfers.")
+        amount = _parse_amount(amount_eth)
+        current_balance = _get_native_balance(wallet)
 
-        amount = TransferService._parse_amount(amount_token)
-
-        token_asset = TransactionConfirmationService.resolve_transfer_asset(wallet, token_contract)
-
-        token_holding = Holding.objects.filter(wallet=wallet, asset=token_asset).first()
-        token_balance = token_holding.quantity if token_holding else Decimal("0")
-
-        eth_balance = TransferService._get_native_balance(wallet)
-
-        return prepare_erc20_transaction(
+        return prepare_ethereum_transaction(
             chain=chain,
             from_address=wallet.address,
             to_address=to_address,
-            amount=amount,
-            token_balance=token_balance,
-            eth_balance=eth_balance,
-            contract_address=token_contract,
-            token_symbol=token_asset.symbol,
-            token_decimals=token_deployment_decimals(token_asset, chain, token_contract),
+            amount_eth=amount,
+            current_balance=current_balance,
         )
 
-    @staticmethod
-    def broadcast_transfer(
-        wallet,
-        signed_transaction: str,
-        to_address: Optional[str] = None,
-        amount: Optional[str] = None,
-        transaction_fee: Optional[str] = None,
-        token_contract: Optional[str] = None,
-        *,
-        principal_id,
-    ) -> Dict[str, Any]:
-        chain = normalize_chain(wallet.chain)
+    if chain == BLOCKCHAIN_BITCOIN:
+        if not to_address or not amount_btc:
+            raise InvalidTransactionException("Both 'toAddress' and 'amountBtc' are required for Bitcoin transfers.")
+        amount = _parse_amount(amount_btc)
+        current_balance = _get_native_balance(wallet)
 
-        if chain not in SUPPORTED_CHAINS:
-            raise UnsupportedChainException(wallet.chain.upper())
-
-        if not signed_transaction:
-            raise InvalidTransactionException("'signedTransaction' is required.")
-
-        from wallets.services.transaction_confirmation import (
-            TransactionConfirmationService,
+        return prepare_bitcoin_transaction(
+            from_address=wallet.address,
+            to_address=to_address,
+            amount_btc=amount,
+            current_balance=current_balance,
         )
 
-        if token_contract:
-            TransactionConfirmationService.resolve_transfer_asset(wallet, token_contract)
+    raise UnsupportedChainException(chain.upper())
 
-        if chain in EVM_BLOCKCHAINS:
-            tx_hash = broadcast_ethereum_transaction(chain, signed_transaction)
-        elif chain == BLOCKCHAIN_BITCOIN:
-            tx_hash = broadcast_bitcoin_transaction(signed_transaction)
-        else:
-            raise UnsupportedChainException(chain.upper())
 
-        pending_result = None
-        if to_address is not None and amount is not None:
-            amount_decimal = Decimal(amount)
-            fee_decimal = Decimal(transaction_fee) if transaction_fee else None
+def _prepare_erc20_transfer(
+    wallet,
+    chain: str,
+    to_address: str,
+    amount_token: Optional[str],
+    token_contract: str,
+) -> Dict[str, Any]:
+    from wallets.models import Holding
+    from wallets.services import transaction_confirmation
 
-            pending_result = TransactionConfirmationService.create_pending_transaction(
-                wallet=wallet,
-                tx_hash=tx_hash,
-                to_address=to_address,
-                amount=amount_decimal,
-                transaction_fee=fee_decimal,
-                token_contract=token_contract,
-            )
+    if not to_address or not amount_token:
+        raise InvalidTransactionException("Both 'toAddress' and 'amountToken' are required for token transfers.")
 
-        TransferService._schedule_confirmation_checks(tx_hash, str(wallet.uuid), principal_id)
+    amount = _parse_amount(amount_token)
 
-        return {
-            "success": True,
-            "txHash": tx_hash,
-            "status": "pending",
-            "message": f"Transaction broadcast successfully! Transaction hash: {tx_hash}",
-            "pendingTransaction": pending_result,
-        }
+    token_asset = transaction_confirmation.resolve_transfer_asset(wallet, token_contract)
 
-    @staticmethod
-    def _schedule_confirmation_checks(tx_hash: str, wallet_uuid: str, principal_id) -> None:
-        from wallets.tasks import confirm_pending_transaction
+    token_holding = Holding.objects.filter(wallet=wallet, asset=token_asset).first()
+    token_balance = token_holding.quantity if token_holding else Decimal("0")
 
-        confirm_pending_transaction.configure(schedule_in={"seconds": 30}).defer(
-            tx_hash=tx_hash, wallet_uuid=wallet_uuid, principal_id=principal_id
+    eth_balance = _get_native_balance(wallet)
+
+    return prepare_erc20_transaction(
+        chain=chain,
+        from_address=wallet.address,
+        to_address=to_address,
+        amount=amount,
+        token_balance=token_balance,
+        eth_balance=eth_balance,
+        contract_address=token_contract,
+        token_symbol=token_asset.symbol,
+        token_decimals=token_deployment_decimals(token_asset, chain, token_contract),
+    )
+
+
+def broadcast_transfer(
+    wallet,
+    signed_transaction: str,
+    to_address: Optional[str] = None,
+    amount: Optional[str] = None,
+    transaction_fee: Optional[str] = None,
+    token_contract: Optional[str] = None,
+    *,
+    principal_id,
+) -> Dict[str, Any]:
+    chain = normalize_chain(wallet.chain)
+
+    if chain not in SUPPORTED_CHAINS:
+        raise UnsupportedChainException(wallet.chain.upper())
+
+    if not signed_transaction:
+        raise InvalidTransactionException("'signedTransaction' is required.")
+
+    if chain in EVM_BLOCKCHAINS:
+        from wallets.services.submissions import submit_evm_transfer
+
+        result = submit_evm_transfer(
+            wallet, signed_transaction, principal_id=principal_id, token_contract=token_contract
         )
-
-        confirm_pending_transaction.configure(schedule_in={"seconds": 120}).defer(
-            tx_hash=tx_hash, wallet_uuid=wallet_uuid, principal_id=principal_id
-        )
-
-    @staticmethod
-    def _parse_amount(amount_str: str) -> Decimal:
         try:
-            return Decimal(amount_str)
-        except (ValueError, TypeError, InvalidOperation):
-            raise InvalidTransactionException("Invalid amount format. Must be a valid decimal number.")
+            _schedule_confirmation_checks(result["txHash"], str(wallet.uuid), principal_id)
+        except Exception:
+            logger.warning("Wallet submission retained for confirmation sweep after queue failure")
+        return result
 
-    @staticmethod
-    def _get_native_balance(wallet) -> Decimal:
-        from assets.models import Asset
-        from wallets.models import Holding
+    from wallets.services import transaction_confirmation
 
-        native_asset = Asset.objects.native_for_chain(wallet.chain)
-        if native_asset is None:
-            raise NativeAssetUnavailableException()
-        quantity = Holding.objects.filter(wallet=wallet, asset=native_asset).values_list("quantity", flat=True).first()
-        return quantity or Decimal("0")
+    if token_contract:
+        transaction_confirmation.resolve_transfer_asset(wallet, token_contract)
+
+    if chain == BLOCKCHAIN_BITCOIN:
+        tx_hash = broadcast_bitcoin_transaction(signed_transaction)
+    else:
+        raise UnsupportedChainException(chain.upper())
+
+    pending_result = None
+    if to_address is not None and amount is not None:
+        amount_decimal = Decimal(amount)
+        fee_decimal = Decimal(transaction_fee) if transaction_fee else None
+
+        pending_result = transaction_confirmation.create_pending_transaction(
+            wallet=wallet,
+            tx_hash=tx_hash,
+            to_address=to_address,
+            amount=amount_decimal,
+            transaction_fee=fee_decimal,
+            token_contract=token_contract,
+        )
+
+    _schedule_confirmation_checks(tx_hash, str(wallet.uuid), principal_id)
+
+    return {
+        "success": True,
+        "txHash": tx_hash,
+        "status": "pending",
+        "message": f"Transaction broadcast successfully! Transaction hash: {tx_hash}",
+        "pendingTransaction": pending_result,
+    }
+
+
+def _schedule_confirmation_checks(tx_hash: str, wallet_uuid: str, principal_id) -> None:
+    from wallets.tasks import confirm_pending_transaction
+
+    confirm_pending_transaction.configure(schedule_in={"seconds": 30}).defer(
+        tx_hash=tx_hash, wallet_uuid=wallet_uuid, principal_id=principal_id
+    )
+
+    confirm_pending_transaction.configure(schedule_in={"seconds": 120}).defer(
+        tx_hash=tx_hash, wallet_uuid=wallet_uuid, principal_id=principal_id
+    )
+
+
+def _parse_amount(amount_str: str) -> Decimal:
+    try:
+        return Decimal(amount_str)
+    except (ValueError, TypeError, InvalidOperation):
+        raise InvalidTransactionException("Invalid amount format. Must be a valid decimal number.")
+
+
+def _get_native_balance(wallet) -> Decimal:
+    from assets.models import Asset
+    from wallets.models import Holding
+
+    native_asset = Asset.objects.native_for_chain(wallet.chain)
+    if native_asset is None:
+        raise NativeAssetUnavailableException()
+    quantity = Holding.objects.filter(wallet=wallet, asset=native_asset).values_list("quantity", flat=True).first()
+    return quantity or Decimal("0")
 
 
 def prepare_ethereum_transaction(

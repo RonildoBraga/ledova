@@ -23,6 +23,11 @@ class DecodedSignedTransaction:
     value: int
     data: bytes
     envelope_type: Optional[int]
+    nonce: int
+    gas_limit: int
+    gas_price: Optional[int]
+    max_fee_per_gas: Optional[int]
+    max_priority_fee_per_gas: Optional[int]
 
 
 def decode_signed_transaction(raw_transaction: bytes) -> DecodedSignedTransaction:
@@ -53,6 +58,11 @@ def decode_signed_transaction(raw_transaction: bytes) -> DecodedSignedTransactio
         value=int(fields.get("value") or 0),
         data=bytes(fields.get("data") or b""),
         envelope_type=envelope_type,
+        nonce=int(fields["nonce"]),
+        gas_limit=int(fields["gas"]),
+        gas_price=int(fields["gasPrice"]) if "gasPrice" in fields else None,
+        max_fee_per_gas=int(fields["maxFeePerGas"]) if "maxFeePerGas" in fields else None,
+        max_priority_fee_per_gas=int(fields["maxPriorityFeePerGas"]) if "maxPriorityFeePerGas" in fields else None,
     )
 
 
