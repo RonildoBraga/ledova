@@ -18,7 +18,7 @@ interface VerificationFormModalProps {
   onClose: () => void;
 }
 
-const REDIRECT_HOST = new URL(MARKETING_URL).hostname;
+const REDIRECT_URL = new URL(MARKETING_URL);
 
 function buildSumsubHtml(token: string, themeColors: { bg: string; muted: string; error: string }): string {
   return `<!DOCTYPE html>
@@ -211,10 +211,14 @@ export function VerificationFormModal({
   };
 
   const handleNavigationStateChange = (navState: WebViewNavigation) => {
-    if (!formUrl || !lifecycle.isCurrent()) return;
+    if (!formUrl || !lifecycle.isCurrent() || !allowWebNavigation(navState.url)) return;
     try {
       const url = new URL(navState.url);
-      if (url.hostname === REDIRECT_HOST || url.hostname === `www.${REDIRECT_HOST}`) {
+      if (
+        url.protocol === REDIRECT_URL.protocol &&
+        url.port === REDIRECT_URL.port &&
+        (url.hostname === REDIRECT_URL.hostname || url.hostname === `www.${REDIRECT_URL.hostname}`)
+      ) {
         lifecycle.complete();
       }
     } catch {}

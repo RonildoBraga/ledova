@@ -19,6 +19,7 @@ const listeners = new Set<(state: AppStateStatus) => void>();
 const settleOutstanding: (() => void)[] = [];
 let fakeClock = false;
 
+jest.mock('../../../../config/publicLinks', () => ({ MARKETING_URL: 'https://marketing.example.test' }));
 jest.mock('expo-secure-store', () => ({ getItemAsync: () => mockReadPreference() }));
 jest.mock('expo-local-authentication', () => ({
   AuthenticationType: { FINGERPRINT: 1, FACIAL_RECOGNITION: 2 },
@@ -290,10 +291,35 @@ it('retains the current KYCAID redirect convention without accepting an old navi
   await act(() => navigate(old, 'https://unrelated.example.test/'));
   expect(complete).not.toHaveBeenCalled();
   await view.rerender(form({ accessToken: null, formUrl: `${formUrl}-new` }));
-  await act(() => navigate(old, 'https://localhost/verification-result'));
+  await act(() => navigate(old, 'https://marketing.example.test/verification-result'));
   expect(complete).not.toHaveBeenCalled();
-  await act(() => navigate(nativeView(), 'https://localhost/verification-result'));
+  await act(() => navigate(nativeView(), 'https://marketing.example.test/verification-result'));
   expect(complete).toHaveBeenCalledTimes(1);
+});
+
+it.each([
+  'http://marketing.example.test/verification-result',
+  'https://marketing.example.test:8443/verification-result',
+  'https://synthetic:credential@marketing.example.test/verification-result',
+  'https://marketing.example.test/verification-result#untrusted',
+  'https://marketing.example.test.unrelated.test/verification-result',
+  'https://www.marketing.example.test:8443/verification-result',
+])('does not complete from an untrusted redirect %s', async (url) => {
+  await render(form({ accessToken: null, formUrl }));
+  const current = nativeView();
+  await act(() => navigate(current, url));
+  expect(complete).not.toHaveBeenCalled();
+  expect(mockViews.size).toBe(1);
+  await act(() => navigate(current, 'https://marketing.example.test/verification-result?status=complete'));
+  expect(complete).toHaveBeenCalledTimes(1);
+  expect(mockViews.size).toBe(0);
+});
+
+it('accepts the configured website www redirect with its original scheme and port', async () => {
+  await render(form({ accessToken: null, formUrl }));
+  await act(() => navigate(nativeView(), 'https://www.marketing.example.test/verification-result'));
+  expect(complete).toHaveBeenCalledTimes(1);
+  expect(mockViews.size).toBe(0);
 });
 
 it('keeps raw SDK errors out of native logs', async () => {

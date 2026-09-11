@@ -297,12 +297,18 @@ mounted WebView's actual HTML and verify that the SDK receives the original toke
 including quotes, closing-script text and Unicode separators. These controls use
 synthetic tokens and do not contact the provider.
 
+KYCAID completion redirects must retain the configured marketing URL's scheme and
+port and match its hostname or existing `www` alias. The shared navigation policy
+also rejects credentials and fragments before a redirect can retire the form.
+Mounted controls retain ordinary completion and reject changed origins; this
+callback check does not constrain the provider's full navigation or media origins.
+
 Mounted JavaScript controls use the locked WebView wrapper, actual app-lock
 provider and owner hooks with synthetic credentials. They establish mount,
 callback and error-display behavior, not physical camera shutdown or native
 permission-dialog cancellation. Provider origin/media grants, Android owning-window
-focus and global modal/lock stacking remain separate #13 checks. Navigation and
-provider media policies are unchanged; playback settings do not establish camera
+focus and global modal/lock stacking remain separate #13 checks. Provider browsing
+and media policies remain unchanged; playback settings do not establish camera
 capture control, and a form-completion signal is not server verification approval.
 
 The buy-crypto provider uses the same admission and session lifetime. A widget
