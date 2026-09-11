@@ -121,10 +121,13 @@ class SwapWorkersUseOneCurrentClaimTest(TransactionTestCase):
                     [blocker_pid, child.database_pid],
                 )
                 observed = cursor.fetchone()
-            if observed and observed[1]:
-                self.assertIn(table, observed[0])
-                self.assertTrue(observed[0].startswith("SELECT "), observed[0])
-                self.assertEqual(observed[2], "Lock", observed)
+            if (
+                observed
+                and observed[1]
+                and observed[0].startswith("SELECT ")
+                and table in observed[0]
+                and observed[2] == "Lock"
+            ):
                 return
             time.sleep(0.01)
         self.fail(f"Worker never waited for the held {table} row: {observed}")

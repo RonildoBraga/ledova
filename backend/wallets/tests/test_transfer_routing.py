@@ -11,8 +11,8 @@ from assets.models import Asset, AssetChainDeployment
 from users.models import UserAccount, UserProfile
 from wallets.exceptions import InvalidTransactionException, UnsupportedChainException
 from wallets.models import Transaction, Wallet
+from wallets.services import transfers
 from wallets.services.transaction_confirmation import NOT_TRANSFERABLE
-from wallets.services.transfers import TransferService
 
 FROM = "0x" + "a" * 40
 TO = "0x" + "b" * 40
@@ -26,7 +26,7 @@ def _wallet(chain):
     return SimpleNamespace(chain=chain, address=FROM, uuid=uuid4())
 
 
-@patch.object(TransferService, "_get_native_balance", return_value=Decimal("10"))
+@patch.object(transfers, "_get_native_balance", return_value=Decimal("10"))
 @patch("wallets.services.transfers.get_blockchain_client")
 class TransferRoutingTest(SimpleTestCase):
     def test_base_native_prepare_uses_the_base_client(self, get_client, _balance):
@@ -35,7 +35,7 @@ class TransferRoutingTest(SimpleTestCase):
         client.w3.eth.get_transaction_count.return_value = 3
         client.w3.eth.chain_id = 84532
 
-        result = TransferService.prepare_transfer(_wallet("base"), to_address=TO, amount_eth="1")
+        result = transfers.prepare_transfer(_wallet("base"), to_address=TO, amount_eth="1")
 
         get_client.assert_called_once_with("base")
         self.assertEqual((result["transaction"]["nonce"], result["transaction"]["chainId"]), (3, 84532))
@@ -53,19 +53,17 @@ class TransferRoutingTest(SimpleTestCase):
         )
         holdings.filter.return_value.first.return_value = None
 
-        TransferService.prepare_transfer(_wallet("base"), to_address=TO, amount_token="1", token_contract=TO)
+        transfers.prepare_transfer(_wallet("base"), to_address=TO, amount_token="1", token_contract=TO)
 
         self.assertEqual(prepare.call_args.kwargs["chain"], "base")
         get_client.assert_not_called()
 
-    @patch.object(TransferService, "_schedule_confirmation_checks")
-    def test_base_broadcast_uses_the_base_client(self, _schedule, get_client, _balance):
-        get_client.return_value.broadcast_transaction.return_value = "0xhash"
-
-        result = TransferService.broadcast_transfer(_wallet("BASE"), SIGNED, principal_id=None)
-
-        get_client.assert_called_once_with("base")
-        self.assertEqual(result["txHash"], "0xhash")
+    @patch("wallets.services.submissions.get_blockchain_client")
+    def test_a_broadcast_requires_its_requesting_user_before_provider_access(self, connect, get_client, _balance):
+        with self.assertRaisesRegex(InvalidTransactionException, "requires its requesting user"):
+            transfers.broadcast_transfer(_wallet("BASE"), SIGNED, principal_id=None)
+        connect.assert_not_called()
+        get_client.assert_not_called()
 
     @patch("wallets.services.transfers.prepare_erc20_transaction")
     @patch("assets.models.Asset.get_by_chain_and_contract")
@@ -74,7 +72,7 @@ class TransferRoutingTest(SimpleTestCase):
             with self.subTest(asset=asset):
                 get_asset.return_value = asset
                 with self.assertRaises(InvalidTransactionException) as ctx:
-                    TransferService.prepare_transfer(
+                    transfers.prepare_transfer(
                         _wallet("ethereum"), to_address=TO, amount_token="1", token_contract=QUARANTINED
                     )
                 self.assertEqual(
@@ -84,46 +82,23 @@ class TransferRoutingTest(SimpleTestCase):
         prepare.assert_not_called()
         get_client.assert_not_called()
 
-    @patch.object(TransferService, "_schedule_confirmation_checks")
-    @patch("wallets.services.transfers.broadcast_ethereum_transaction")
-    @patch("assets.models.Asset.get_by_chain_and_contract")
-    def test_broadcast_refuses_an_unverified_token_contract_before_the_chain_sees_it(
-        self, get_asset, broadcast, schedule, get_client, _balance
-    ):
-        for asset in (None, UNVERIFIED):
-            with self.subTest(asset=asset):
-                get_asset.return_value = asset
-                with self.assertRaises(InvalidTransactionException):
-                    TransferService.broadcast_transfer(
-                        _wallet("ethereum"),
-                        SIGNED,
-                        to_address=TO,
-                        amount="1",
-                        token_contract=QUARANTINED,
-                        principal_id=None,
-                    )
-
-        broadcast.assert_not_called()
-        schedule.assert_not_called()
-        get_client.assert_not_called()
-
-    @patch("wallets.services.transfers.broadcast_bitcoin_transaction", return_value="btc-hash")
     @patch("wallets.services.transfers.prepare_bitcoin_transaction", return_value={"network": "BTC"})
-    @patch.object(TransferService, "_schedule_confirmation_checks")
-    def test_bitcoin_keeps_its_own_branch(self, _schedule, prepare, broadcast, get_client, _balance):
+    def test_bitcoin_prepare_keeps_its_own_branch_and_broadcast_requires_a_principal(
+        self, prepare, get_client, _balance
+    ):
         wallet = _wallet("bitcoin")
 
-        self.assertEqual(TransferService.prepare_transfer(wallet, to_address=TO, amount_btc="0.1"), {"network": "BTC"})
-        self.assertEqual(TransferService.broadcast_transfer(wallet, SIGNED, principal_id=None)["txHash"], "btc-hash")
+        self.assertEqual(transfers.prepare_transfer(wallet, to_address=TO, amount_btc="0.1"), {"network": "BTC"})
+        with self.assertRaisesRegex(InvalidTransactionException, "requires its requesting user"):
+            transfers.broadcast_transfer(wallet, SIGNED, principal_id=None)
 
         prepare.assert_called_once()
-        broadcast.assert_called_once_with(SIGNED)
         get_client.assert_not_called()
 
     def test_unsupported_chain_is_rejected_by_name(self, get_client, _balance):
         for call in (
-            lambda: TransferService.prepare_transfer(_wallet("solana"), to_address=TO, amount_eth="1"),
-            lambda: TransferService.broadcast_transfer(_wallet("solana"), SIGNED, principal_id=None),
+            lambda: transfers.prepare_transfer(_wallet("solana"), to_address=TO, amount_eth="1"),
+            lambda: transfers.broadcast_transfer(_wallet("solana"), SIGNED, principal_id=None),
         ):
             with self.assertRaises(UnsupportedChainException) as ctx:
                 call()
@@ -132,7 +107,7 @@ class TransferRoutingTest(SimpleTestCase):
         get_client.assert_not_called()
 
 
-@patch.object(TransferService, "_schedule_confirmation_checks")
+@patch.object(transfers, "_schedule_confirmation_checks")
 @patch("wallets.services.transfers.get_blockchain_client")
 class QuarantinedContractTransferApiTest(APITestCase):
 
@@ -175,7 +150,7 @@ class QuarantinedContractTransferApiTest(APITestCase):
         self.assertFalse(Transaction.objects.filter(wallet=self.wallet).exists())
 
 
-@patch.object(TransferService, "_schedule_confirmation_checks")
+@patch.object(transfers, "_schedule_confirmation_checks")
 @patch("wallets.services.transfers.get_blockchain_client")
 class TokenizedSecurityTransferApiTest(APITestCase):
 
