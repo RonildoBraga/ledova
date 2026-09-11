@@ -4,6 +4,7 @@ from unittest.mock import Mock, patch
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
+from django.test import override_settings
 from eth_account import Account
 from rest_framework.test import APITestCase
 from web3 import Web3
@@ -27,6 +28,7 @@ from wallets.services.signed_transfers import (
     WRONG_NETWORK,
 )
 from wallets.services.transaction_confirmation import NOT_TRANSFERABLE
+from wallets.tests.test_bitcoin_submission import FIXTURE, REGTEST_GENESIS
 
 SIGNER = Account.from_key("0x" + "42" * 32)
 WALLET_ADDRESS = SIGNER.address
@@ -380,23 +382,41 @@ class BroadcastTransferRecordingTest(BroadcastTransferGuardTestCase):
         self.assertEqual(recorded.amount, Decimal("1.5"))
         self.assertEqual(recorded.asset.symbol, "USDC")
 
+    @override_settings(BITCOIN_NETWORK="regtest")
     def test_an_ordinary_bitcoin_send_still_broadcasts(self, get_client, schedule):
         wallet = self.bitcoin_wallet()
-        get_client.return_value.broadcast_transaction.return_value = "btc-hash"
-
-        response = self.broadcast(
-            wallet=wallet,
-            signed_transaction="0200000001deadbeef",
-            to_address=BITCOIN_RECIPIENT,
-            amount="0.001",
-            transaction_fee="0.00001",
+        wallet.address = FIXTURE["sender"]
+        wallet.save(update_fields=["address"])
+        Holding.objects.create(wallet=wallet, asset=native_asset_for_chain("bitcoin"), quantity=Decimal("50"))
+        provider = Mock(
+            spec=[
+                "assert_expected_network",
+                "get_genesis_hash",
+                "get_previous_output",
+                "check_mempool_acceptance",
+                "get_transaction_receipt",
+                "broadcast_transaction",
+            ]
         )
+        provider.assert_expected_network.return_value = "regtest"
+        provider.get_genesis_hash.return_value = REGTEST_GENESIS
+        provider.get_previous_output.return_value = {
+            "value": Decimal("50"),
+            "scriptPubKey": {"hex": FIXTURE["input"]["script"]},
+            "bestblock": "48" * 32,
+        }
+        provider.check_mempool_acceptance.return_value = [FIXTURE["preflight"]]
+        provider.get_transaction_receipt.return_value = None
+        provider.broadcast_transaction.return_value = FIXTURE["txid"]
+        with patch("wallets.services.bitcoin_submissions.get_blockchain_client", return_value=provider):
+            response = self.broadcast(wallet=wallet, signed_transaction=FIXTURE["raw_transaction"])
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["txHash"], "btc-hash")
+        self.assertEqual(response.json()["txHash"], FIXTURE["txid"])
+        provider.broadcast_transaction.assert_called_once_with(FIXTURE["raw_transaction"])
 
         recorded = Transaction.objects.get(wallet=wallet)
-        self.assertEqual((recorded.to_address, recorded.amount), (BITCOIN_RECIPIENT, Decimal("0.001")))
+        self.assertEqual((recorded.to_address, recorded.amount), (FIXTURE["recipient"], Decimal("2")))
         self.assertEqual(recorded.asset.symbol, "BTC")
 
     def test_the_recorded_row_follows_the_signed_transaction_not_the_body(self, get_client, schedule):

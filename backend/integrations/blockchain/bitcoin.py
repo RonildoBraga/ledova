@@ -64,7 +64,7 @@ class BitcoinClient(BlockchainClient):
         try:
             response = self.session.post(self.rpc_url, json=payload, timeout=30)
             response.raise_for_status()
-            data = response.json()
+            data = response.json(parse_float=Decimal)
 
             if "error" in data and data["error"]:
                 error_msg = data["error"].get("message", "Unknown error")
@@ -134,6 +134,18 @@ class BitcoinClient(BlockchainClient):
         except Exception:
             logger.warning("Bitcoin block header unavailable")
             return None
+
+    def get_genesis_hash(self):
+        return self._rpc_call("getblockhash", [0])
+
+    def get_previous_output(self, tx_hash, output_index):
+        return self._rpc_call("gettxout", [tx_hash, output_index, False])
+
+    def check_mempool_acceptance(self, raw_transaction):
+        return self._rpc_call("testmempoolaccept", [[raw_transaction]])
+
+    def get_mempool_entry(self, tx_hash):
+        return self._rpc_call("getmempoolentry", [tx_hash])
 
     def broadcast_transaction(self, signed_tx: str) -> str:
         try:

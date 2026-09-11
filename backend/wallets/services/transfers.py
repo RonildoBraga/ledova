@@ -143,39 +143,19 @@ def broadcast_transfer(
             logger.warning("Wallet submission retained for confirmation sweep after queue failure")
         return result
 
-    from wallets.services import transaction_confirmation
-
-    if token_contract:
-        transaction_confirmation.resolve_transfer_asset(wallet, token_contract)
-
     if chain == BLOCKCHAIN_BITCOIN:
-        tx_hash = broadcast_bitcoin_transaction(signed_transaction)
-    else:
-        raise UnsupportedChainException(chain.upper())
+        from wallets.services.bitcoin_submissions import submit_bitcoin_transfer
 
-    pending_result = None
-    if to_address is not None and amount is not None:
-        amount_decimal = Decimal(amount)
-        fee_decimal = Decimal(transaction_fee) if transaction_fee else None
+        if token_contract:
+            raise InvalidTransactionException("Bitcoin submissions cannot contain a token contract.")
+        result = submit_bitcoin_transfer(wallet, signed_transaction, principal_id=principal_id)
+        try:
+            _schedule_confirmation_checks(result["txHash"], str(wallet.uuid), principal_id)
+        except Exception:
+            logger.warning("Bitcoin submission retained for confirmation sweep after queue failure")
+        return result
 
-        pending_result = transaction_confirmation.create_pending_transaction(
-            wallet=wallet,
-            tx_hash=tx_hash,
-            to_address=to_address,
-            amount=amount_decimal,
-            transaction_fee=fee_decimal,
-            token_contract=token_contract,
-        )
-
-    _schedule_confirmation_checks(tx_hash, str(wallet.uuid), principal_id)
-
-    return {
-        "success": True,
-        "txHash": tx_hash,
-        "status": "pending",
-        "message": f"Transaction broadcast successfully! Transaction hash: {tx_hash}",
-        "pendingTransaction": pending_result,
-    }
+    raise UnsupportedChainException(chain.upper())
 
 
 def _schedule_confirmation_checks(tx_hash: str, wallet_uuid: str, principal_id) -> None:

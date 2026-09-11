@@ -95,6 +95,8 @@ POLICIES = {
     "wallets": (f"{_member('user_account_id')} OR {SIGNS_FOR_A_COMPANY}", _member("user_account_id")),
     "transactions": (_member("user_account_id"), _member("user_account_id")),
     "wallets_walletsubmission": (_member("user_account_id"), _member("user_account_id")),
+    "wallets_bitcoinsubmission": (_member("user_account_id"), _member("user_account_id")),
+    "wallets_bitcoinsubmissioninput": (_member("user_account_id"), _member("user_account_id")),
     "portfolios": (_member("user_account_id"), _member("user_account_id")),
     "favourite_assets": (_member("user_account_id"), _member("user_account_id")),
     "users_investorclassification": (_member("user_account_id"), _member("user_account_id")),

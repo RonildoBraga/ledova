@@ -82,17 +82,17 @@ class TransferRoutingTest(SimpleTestCase):
         prepare.assert_not_called()
         get_client.assert_not_called()
 
-    @patch("wallets.services.transfers.broadcast_bitcoin_transaction", return_value="btc-hash")
     @patch("wallets.services.transfers.prepare_bitcoin_transaction", return_value={"network": "BTC"})
-    @patch.object(transfers, "_schedule_confirmation_checks")
-    def test_bitcoin_keeps_its_own_branch(self, _schedule, prepare, broadcast, get_client, _balance):
+    def test_bitcoin_prepare_keeps_its_own_branch_and_broadcast_requires_a_principal(
+        self, prepare, get_client, _balance
+    ):
         wallet = _wallet("bitcoin")
 
         self.assertEqual(transfers.prepare_transfer(wallet, to_address=TO, amount_btc="0.1"), {"network": "BTC"})
-        self.assertEqual(transfers.broadcast_transfer(wallet, SIGNED, principal_id=None)["txHash"], "btc-hash")
+        with self.assertRaisesRegex(InvalidTransactionException, "requires its requesting user"):
+            transfers.broadcast_transfer(wallet, SIGNED, principal_id=None)
 
         prepare.assert_called_once()
-        broadcast.assert_called_once_with(SIGNED)
         get_client.assert_not_called()
 
     def test_unsupported_chain_is_rejected_by_name(self, get_client, _balance):
