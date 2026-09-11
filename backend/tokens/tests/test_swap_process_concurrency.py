@@ -281,9 +281,8 @@ class SwapWorkersUseOneCurrentClaimTest(TransactionTestCase):
         self.assertEqual(persisted_outcome(self.swap), before)
 
     def test_order_locks_use_primary_key_order_while_selection_keeps_best_price(self):
-        tenant = make_tenant("match-locks")
+        tenant = make_tenant("match-locks", with_swap=False)
         template = TransferOrder.objects.filter(pk=tenant.order.pk).values().get()
-        tenant.swap.delete()
         tenant.order.cancel()
         wallet = Wallet.objects.create(user_account=tenant.account, address=BUYER.address, chain="base")
         incoming = TransferOrder.objects.create(

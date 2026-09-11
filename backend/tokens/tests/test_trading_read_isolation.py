@@ -39,6 +39,7 @@ User = get_user_model()
 class TradingReadIsolationTest(APITransactionTestCase):
     legacy_cases = {
         "test_malformed_address_snapshots_do_not_grant_swap_visibility",
+        "test_order_swap_reads_reject_malformed_order_snapshot_before_service",
         "test_order_swap_reads_reject_malformed_swap_snapshot_before_service",
         "test_a_malformed_newest_swap_is_not_replaced_by_an_older_valid_match",
     }
@@ -56,7 +57,7 @@ class TradingReadIsolationTest(APITransactionTestCase):
         )
         return user, account, wallet
 
-    def _make_order(self, wallet, order_type):
+    def _make_order(self, wallet, order_type, wallet_address=None):
         return TransferOrder.objects.create(
             token=self.share_token,
             payment_asset=self.stablecoin,
@@ -64,7 +65,7 @@ class TradingReadIsolationTest(APITransactionTestCase):
             status=TransferOrderStatus.MATCHED,
             wallet=wallet,
             owner_account=wallet.user_account,
-            wallet_address=wallet.address,
+            wallet_address=wallet_address or wallet.address,
             quantity=10,
             filled_quantity=10,
             price_per_share=Decimal("1.50"),
@@ -151,7 +152,12 @@ class TradingReadIsolationTest(APITransactionTestCase):
             asset=self.stablecoin, chain="base", contract_address="0x" + "e" * 40, decimals=2
         )
         self.alice_order = self._make_order(self.alice_wallet, TransferOrderType.SELL)
-        self.bob_order = self._make_order(self.bob_wallet, TransferOrderType.BUY)
+        address = (
+            self.alice_wallet.address
+            if self._testMethodName == "test_order_swap_reads_reject_malformed_order_snapshot_before_service"
+            else self.bob_wallet.address
+        )
+        self.bob_order = self._make_order(self.bob_wallet, TransferOrderType.BUY, address)
         self.swap = self._make_swap(self.alice_order, self.bob_order, "1")
 
     @property
@@ -239,23 +245,25 @@ class TradingReadIsolationTest(APITransactionTestCase):
         self.assertNotIn(alice_charlie_swap.uuid, visible.values_list("uuid", flat=True))
 
     def test_malformed_address_snapshots_do_not_grant_swap_visibility(self):
-        malformed_order = self._make_order(self.bob_wallet, TransferOrderType.BUY)
-        malformed_order.wallet_address = self.alice_wallet.address
-        malformed_order.save(update_fields=["wallet_address"])
+        malformed_order = self._make_order(self.bob_wallet, TransferOrderType.BUY, self.alice_wallet.address)
         malformed_swap = self._make_swap(self.alice_order, malformed_order, "5")
 
         visible = SwapOrder.objects.pending_for_wallet_ids([self.bob_wallet.uuid])
 
         self.assertNotIn(malformed_swap.uuid, visible.values_list("uuid", flat=True))
 
-        malformed_order.wallet_address = self.bob_wallet.address
-        malformed_order.save(update_fields=["wallet_address"])
-        malformed_swap.buyer_address = self.alice_wallet.address
-        malformed_swap.save(update_fields=["buyer_address"])
+        valid_order = self._make_order(self.bob_wallet, TransferOrderType.BUY)
+        changed_swap = self._make_swap(self.alice_order, valid_order, "8")
+        self.assertIn(
+            changed_swap.uuid,
+            SwapOrder.objects.pending_for_wallet_ids([self.bob_wallet.uuid]).values_list("uuid", flat=True),
+        )
+        changed_swap.buyer_address = self.alice_wallet.address
+        changed_swap.save(update_fields=["buyer_address"])
 
         visible = SwapOrder.objects.pending_for_wallet_ids([self.bob_wallet.uuid])
 
-        self.assertNotIn(malformed_swap.uuid, visible.values_list("uuid", flat=True))
+        self.assertNotIn(changed_swap.uuid, visible.values_list("uuid", flat=True))
 
     @patch("tokens.views.trading_transfer.TokenTransferService")
     def test_transfer_prepare_rejects_foreign_from_address_before_service_construction(self, service_class):
@@ -369,8 +377,6 @@ class TradingReadIsolationTest(APITransactionTestCase):
 
     @patch("tokens.views.trading_order.AtomicSwapService")
     def test_order_swap_reads_reject_malformed_order_snapshot_before_service(self, service_class):
-        self.bob_order.wallet_address = self.alice_wallet.address
-        self.bob_order.save(update_fields=["wallet_address"])
         self.client.force_authenticate(self.bob)
 
         for path in ("swap/", "swap/approval-status/", "swap/approval-data/"):

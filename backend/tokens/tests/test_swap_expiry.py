@@ -12,7 +12,13 @@ from shared.db import atomic
 from shared.tests.tenants import make_tenant
 from tokens.events import publish_trading_event
 from tokens.exceptions import SwapNotReadyException
-from tokens.models import SwapOrder, SwapOrderStatus, TransferOrder, TransferOrderStatus, TransferOrderType
+from tokens.models import (
+    SwapOrder,
+    SwapOrderStatus,
+    TransferOrder,
+    TransferOrderStatus,
+    TransferOrderType,
+)
 from tokens.services.swap_expiry import expire_unclaimed_swap, expire_unclaimed_swaps
 from tokens.services.token_transfer_service import TokenTransferService
 from tokens.tasks.swap_expiry import expire_unclaimed_matches

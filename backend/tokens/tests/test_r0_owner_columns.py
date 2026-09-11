@@ -175,6 +175,11 @@ class TheTriggerRefusesWhatTheServiceDidNotSupplyTest(TransactionTestCase):
     def test_a_swap_cannot_name_a_wallet_its_order_does_not(self):
         other = make_tenant("stranger").wallet
         swap = self.tenant.swap
+        self.addCleanup(restore_every_migration)
+        migrate_to([("tokens", "0038_order_action_submissions")])
+        restore_every_migration()
+        swap.refresh_from_db()
+        self.assertEqual(swap.settlement_protocol_version, 0)
 
         with self.assertRaises(Exception) as refusal:
             with transaction.atomic():

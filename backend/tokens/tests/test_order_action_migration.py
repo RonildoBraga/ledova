@@ -15,12 +15,12 @@ MIGRATIONS_ENABLED = not ("tokens" in _migration_modules and _migration_modules[
 class OrderActionMigrationPreservesLegacyHistoryTest(TransactionTestCase):
     def test_legacy_pending_spent_and_audit_bytes_survive_without_invented_actions(self):
         tenant = make_tenant("action-migration")
-        tenant.wallet.address = OWNER.address
-        tenant.wallet.save(update_fields=["address"])
-        tenant.order.wallet_address = OWNER.address
-        tenant.order.save(update_fields=["wallet_address"])
         before = migrate_to([("tokens", "0037_order_submissions")])
         self.addCleanup(restore_every_migration)
+        before.get_model("wallets", "Wallet").objects.filter(pk=tenant.wallet.pk).update(address=OWNER.address)
+        before.get_model("tokens", "TransferOrder").objects.filter(pk=tenant.order.pk).update(
+            wallet_address=OWNER.address
+        )
         challenges = before.get_model("tokens", "SigningChallenge").objects
         logs = before.get_model("tokens", "OrderModificationLog").objects
         swaps = before.get_model("tokens", "SwapOrder").objects
