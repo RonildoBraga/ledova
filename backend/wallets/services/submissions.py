@@ -9,7 +9,11 @@ from web3 import Web3
 
 from assets.models import Asset, AssetChainDeployment
 from integrations.blockchain import get_blockchain_client
-from integrations.blockchain.receipts import transaction_hash_matches
+from integrations.blockchain.receipts import (
+    nonnegative_integer,
+    normalized_hash,
+    transaction_hash_matches,
+)
 from shared.constants import normalize_chain
 from shared.db import atomic
 from tokens.services.signed_transactions import decode_signed_transaction
@@ -33,20 +37,27 @@ def submit_evm_transfer(wallet, signed_transaction, *, principal_id, token_contr
     raw, decoded = _decode(signed_transaction)
     tx_hash = Web3.keccak(raw).to_0x_hex()
     with atomic(durable=True):
-        locked_wallet = (
-            Wallet.objects.select_for_update(of=("self",))
-            .filter(user_account__user_profiles__user_id=principal_id)
-            .get(pk=wallet.pk)
-        )
-        chain = normalize_chain(locked_wallet.chain)
-        if decoded.sender.lower() != locked_wallet.address.lower() or decoded.chain_id != expected_chain_id(chain):
-            raise InvalidTransactionException("The signed submission does not match this wallet and chain.")
-        submission = WalletSubmission.objects.filter(wallet=locked_wallet, tx_hash=tx_hash).first()
-        if submission is not None:
-            if bytes(submission.raw_transaction) != raw:
-                raise InvalidTransactionException("The recorded submission does not match these signed bytes.")
-        else:
-            submission = _record_submission(locked_wallet, raw, decoded, tx_hash, token_contract)
+        locked_wallet = _lock_wallet(wallet.pk, principal_id, decoded)
+        target = _wallet_identity(locked_wallet)
+        submission = _existing_submission(locked_wallet, tx_hash, raw)
+        if submission is None:
+            _submission_plan(locked_wallet, raw, decoded, tx_hash, token_contract)
+    if submission is None:
+        observation = _mined_nonce(normalize_chain(locked_wallet.chain), decoded)
+        with atomic(durable=True):
+            try:
+                locked_wallet = _lock_wallet(wallet.pk, principal_id, decoded)
+            except Wallet.DoesNotExist:
+                raise InvalidTransactionException(
+                    "This wallet is no longer available to the requesting user."
+                ) from None
+            if _wallet_identity(locked_wallet) != target:
+                raise InvalidTransactionException("The wallet changed during the nonce observation. Retry the request.")
+            submission = _existing_submission(locked_wallet, tx_hash, raw)
+            if submission is None:
+                if decoded.nonce < observation["nonce"]:
+                    raise InvalidTransactionException("The signed nonce has already been consumed on-chain.")
+                submission = _record_submission(locked_wallet, raw, decoded, tx_hash, token_contract, observation)
     attempt_submission(submission.pk)
     tx = Transaction.objects.get(pk=submission.transaction_id)
     quantity = (
@@ -64,6 +75,46 @@ def submit_evm_transfer(wallet, signed_transaction, *, principal_id, token_contr
             "holding_quantity": str(quantity if quantity is not None else Decimal("0")),
         },
     }
+
+
+def _lock_wallet(wallet_id, principal_id, decoded):
+    wallet = (
+        Wallet.objects.select_for_update(of=("self",))
+        .filter(user_account__user_profiles__user_id=principal_id)
+        .get(pk=wallet_id)
+    )
+    if decoded.sender.lower() != wallet.address.lower() or decoded.chain_id != expected_chain_id(wallet.chain):
+        raise InvalidTransactionException("The signed submission does not match this wallet and chain.")
+    return wallet
+
+
+def _wallet_identity(wallet):
+    return wallet.pk, wallet.user_account_id, wallet.address, wallet.chain, wallet.verification_status
+
+
+def _existing_submission(wallet, tx_hash, raw):
+    submission = WalletSubmission.objects.filter(wallet=wallet, tx_hash=tx_hash).first()
+    if submission is not None and bytes(submission.raw_transaction) != raw:
+        raise InvalidTransactionException("The recorded submission does not match these signed bytes.")
+    return submission
+
+
+def _mined_nonce(chain, decoded):
+    try:
+        client = get_blockchain_client(chain)
+        if client.assert_expected_chain() != decoded.chain_id:
+            raise ValueError("Unexpected chain")
+        observed = client.get_mined_nonce(decoded.sender)
+        if not isinstance(observed, Mapping) or observed.get("chain_id") != decoded.chain_id:
+            raise ValueError("Invalid nonce observation")
+        nonce = nonnegative_integer(observed.get("nonce"), maximum=2**64 - 1)
+        height = nonnegative_integer(observed.get("block_number"), maximum=2**63 - 1)
+        block_hash = normalized_hash(observed.get("block_hash"))
+        if nonce is None or height is None or block_hash is None:
+            raise ValueError("Invalid nonce observation")
+    except Exception:
+        raise InvalidTransactionException("The mined sender nonce could not be verified. Retry the request.") from None
+    return {"chain_id": decoded.chain_id, "nonce": nonce, "block_number": height, "block_hash": "0x" + block_hash}
 
 
 def _decode(signed_transaction):
@@ -96,7 +147,7 @@ def _signed_fee(decoded):
         return _recordable(Decimal(fee_units).scaleb(-18))
 
 
-def _record_submission(wallet, raw, decoded, tx_hash, declared_contract):
+def _submission_plan(wallet, raw, decoded, tx_hash, declared_contract):
     if Transaction.objects.filter(wallet=wallet, tx_hash=tx_hash).exists():
         raise InvalidTransactionException("This transaction already has history without a signed submission record.")
     if WalletSubmission.objects.filter(wallet=wallet, chain_id=decoded.chain_id, nonce=decoded.nonce).exists():
@@ -114,6 +165,11 @@ def _record_submission(wallet, raw, decoded, tx_hash, declared_contract):
     if plan is None:
         raise InvalidTransactionException("A signed EVM transfer is required.")
     fee = _signed_fee(decoded)
+    return deployment, plan, fee
+
+
+def _record_submission(wallet, raw, decoded, tx_hash, declared_contract, observation):
+    deployment, plan, fee = _submission_plan(wallet, raw, decoded, tx_hash, declared_contract)
     recorded = transaction_confirmation.create_pending_transaction(
         wallet, tx_hash, plan.to_address, plan.amount, transaction_fee=fee, token_contract=plan.token_contract
     )
@@ -134,6 +190,7 @@ def _record_submission(wallet, raw, decoded, tx_hash, declared_contract):
         tx_hash=tx_hash,
         raw_transaction=raw,
         intent={
+            "mined_nonce_observation": observation,
             "to_address": plan.to_address,
             "amount": str(plan.amount),
             "token_contract": plan.token_contract,

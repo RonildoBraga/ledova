@@ -39,12 +39,20 @@ def terminate_submission(wallet_id, principal_id, signed_raw, phase, sent_path):
     connections.close_all()
     with acting_for(principal_id):
         wallet = Wallet.objects.get(pk=wallet_id)
-        provider = Mock(spec=["assert_expected_chain", "get_transaction_receipt", "broadcast_transaction"])
+        provider = Mock(
+            spec=["assert_expected_chain", "get_mined_nonce", "get_transaction_receipt", "broadcast_transaction"]
+        )
         provider.assert_expected_chain.return_value = settings.BLOCKCHAIN_CHAIN_ID
         provider.get_transaction_receipt.return_value = None
+        provider.get_mined_nonce.side_effect = lambda address: {
+            "chain_id": provider.assert_expected_chain.return_value,
+            "nonce": 0,
+            "block_number": 100,
+            "block_hash": "0x" + "ab" * 32,
+        }
 
         def connect(chain):
-            if phase == "before_send":
+            if phase == "before_send" and WalletSubmission.objects.filter(wallet=wallet).exists():
                 os._exit(23)
             return provider
 
@@ -118,13 +126,14 @@ class SubmissionRecoveryChecks(SubmissionFixture):
     def test_recovery_never_sends_to_another_chain_or_past_a_visible_receipt(self):
         signed = self.signed()
         provider = self.provider(signed)
-        provider.assert_expected_chain.return_value = settings.BLOCKCHAIN_CHAIN_ID + 1
+        provider.assert_expected_chain.side_effect = [settings.BLOCKCHAIN_CHAIN_ID, settings.BLOCKCHAIN_CHAIN_ID + 1]
         with patch("wallets.services.submissions.get_blockchain_client", return_value=provider):
             self.submit_direct(signed)
             provider.broadcast_transaction.assert_not_called()
             submission = self.submission()
             self.assertIsNone(submission.acknowledged_at)
             before = self.financial_state()
+            provider.assert_expected_chain.side_effect = None
             provider.assert_expected_chain.return_value = settings.BLOCKCHAIN_CHAIN_ID
             for receipt, expected in (
                 ({"transactionHash": signed.hash.to_0x_hex(), "status": 1}, "receipt_available"),
