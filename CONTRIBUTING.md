@@ -114,7 +114,7 @@ exceptions are noted below the table.
 
 | Area | Command |
 | --- | --- |
-| All eight source gates at once | `make check` from the root, which also type-checks every workspace |
+| All source gates at once | `make check` from the root, which also type-checks every workspace; see the [gate inventory](docs/GATES.md#every-gate-and-where-its-rule-is-written) |
 | Comments and docstrings | `make check-comments` from the root (no dependencies needed) |
 | Type-check scripts | `make check-type-check` from the root (no dependencies needed) |
 | Backend layers | `make check-layers` from the root (no dependencies needed) |
@@ -123,8 +123,11 @@ exceptions are noted below the table.
 | Error bodies | `make check-error-bodies` from the root |
 | Schema responses | `make check-schema-responses` from the root |
 | Test shadowing | `make check-test-shadowing` from the root |
+| Documentation | `make check-docs` from the root |
 | Self-imports and mobile resolution | `make check-self-imports`, `npm --prefix mobile run check:resolution` |
-| API schema and type drift | `make check-api-schema`, `make check-api-types`, `make check-client-operations` (these need the schema environment; see [docs/GATES.md](docs/GATES.md#the-api-type-drift-gate)) |
+| API schema snapshot | `make check-api-schema` generates the schema using the [pinned schema environment](docs/GATES.md#the-api-type-drift-gate) |
+| API type drift | `make check-api-types` reads an existing generated schema at `SCHEMA`; it does not generate one |
+| Client operation coverage | `make check-client-operations` uses Node and the committed schema after root dependencies are installed |
 | Dependency advisories | `make audit` from the root |
 | Everything JavaScript | `make build`, `make check`, `make test` from the root. `make check` installs any workspace whose `node_modules` is missing before it runs |
 | Design tokens | `make generate-tokens`, then confirm `dashboard/src/styles/tokens.css` and `marketing/src/tokens.css` are unchanged |
@@ -152,9 +155,10 @@ CI runs `make lint`, `make test` (dashboard, `packages/shared`, mobile and
 contracts) and `make smoke` on every pull request. It additionally runs the whole Django suite
 on PostgreSQL, the SQLite migration tests, and `make chain-test` twice, the
 second time on PostgreSQL. The source gates are their own CI job, running the
-eight `check-*` scripts directly and then `make test-gates`, so a stray comment,
-a new layer violation or a log line that can carry a credential fails the
-pipeline without waiting for anything to be built.
+scripts assigned to it in the [gate inventory](docs/GATES.md#every-gate-and-where-its-rule-is-written)
+and then `make test-gates`, so a stray comment, a new layer violation or a log
+line that can carry a credential fails the pipeline without waiting for
+anything to be built.
 
 ## Reporting security issues
 
