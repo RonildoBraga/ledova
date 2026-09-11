@@ -14,17 +14,21 @@ against are in [TRAPS.md](TRAPS.md). How the system is put together is in
 
 **A rule belongs here only with two things attached: the file that is its
 reference implementation, and the gate that enforces it.** A rule that can get
-neither is demoted to a documented exception or deleted. This is the standard
-this document is being held to, and the sections above now cite a reference for
-each layer; the gates are landing behind them.
+neither is demoted to a documented exception or deleted. The layer table this
+document gates is in
+[Backend layers](ARCHITECTURE.md#backend-layers), which cites a reference per
+layer.
 
 The reason is stated plainly rather than hidden: most of these rules were held
 by review, and a rule held by review means a green pipeline means nobody
-checked. Three are gated today — the comment rule through `make
-check-comments`, the "one migration per model change" half of the migrations
-rule through CI's `makemigrations --check --dry-run`, and the generated design
-tokens through the `git diff --exit-code` step (stated under [Clients and the
-shared package](ARCHITECTURE.md#clients-and-the-shared-package)).
+checked. Eleven `check-*` scripts are gated today; `make check` runs eight of
+them and CI's source-gates job runs the same eight, with the API schema and type
+gates in the Django job and the client gates in the JavaScript job. Two rules
+are gated without a script of their own: "one migration per model change",
+through CI's `makemigrations --check --dry-run`, and the generated design
+tokens, through `git diff --exit-code` (stated under [Clients and the shared
+package](ARCHITECTURE.md#clients-and-the-shared-package)). What each script
+refuses is its own section below.
 
 A new gate ships with an explicit allowlist of the offenders that exist on the
 day it lands, so it is green immediately and blocks only new violations. That
@@ -35,13 +39,10 @@ convergence this enables is tracked in
 ### Why the codebase diverges from these rules
 
 The divergence is generational, not architectural, and knowing that changes
-what to do about it. Every one of the 27 `XService` classes dates from the
-initial seed commit; every one of the service modules added since is plain
-`verb_noun` functions, and none has been added as a class. Post-seed view
-modules average about 35 lines, while every view module over 140 lines is
-seed-era. `tokens/services/register.py` escapes CSV cells with `shared.utils.csv_cell`;
-`whitelist/views/entry.py` writes them straight from the view with no escaping
-at all.
+what to do about it. Every `XService` class dates from the initial seed commit;
+every service module added since is plain `verb_noun` functions, and none has
+been added as a class. Post-seed view modules average about 35 lines, while
+every view module over 140 lines is seed-era.
 
 So this is a half-finished migration whose destination already exists in the
 tree, not an absent standard. The consequence for how to finish it: **do not
@@ -302,10 +303,11 @@ rule against a snippet, so the decisions below are executable rather than prose.
 is the gate. `ALLOWED` sits beside it for the opposite kind of entry: a finding
 that is correct and permanent rather than owed. It carries a reason and a count —
 a reason so nobody has to rediscover why, and a count because an exception that
-excused a whole file would reopen the hole `LEGACY`'s counts close. Today it holds
-one: `CompanyViewSet.get_queryset` returning `Company.objects.all()` for the
-administrative actions, which #119 already pins from the route side. Keeping it out
-of `LEGACY` is what lets `LEGACY` reach zero and mean it. Keyed per file, an already-excused file could gain any number of new
+excused a whole file would reopen the hole `LEGACY`'s counts close. It holds two:
+`CompanyViewSet.get_queryset` returning `Company.objects.all()` for the
+administrative actions, which #119 already pins from the route side, and the one
+sanctioned signal receiver in `shared/apps.py`. Keeping them out of `LEGACY` is
+what lets `LEGACY` reach zero and mean it. Keyed per file, an already-excused file could gain any number of new
 violations while only an informational total moved; the run stayed green. Now a
 count that rises fails, a count that falls fails as stale, and the message names
 both numbers. `python3 scripts/check-layers.py --show-legacy` prints the entries
@@ -362,7 +364,7 @@ authorization decisions in services; the per-expression rule remains unchanged.
 The `bare-admin-view` rule is the one rule outside that table's "Never
 contains" column, and it needed the walker widened before it could exist:
 `layer_of` recognised `views`, `models` and `tasks`, so **no admin module was
-parsed at all** — 136 files scanned became 190. Adding the layer on its own
+parsed at all**. Adding the layer on its own
 found nothing, because no other rule applies to `admin`, which is what let the
 rule land with an empty `LEGACY`.
 
@@ -381,10 +383,11 @@ URLconf and fails when any custom admin route is served by a callback from
 outside the two `shared.utils` helpers, whatever syntax registered it.
 
 The `django-signals` rule is the second rule outside that column, and it needed
-a second walk rather than a wider one. The four-layer walker opens 191 files;
-signals can be connected from any of them and from `apps.py`, which is in no
-layer at all, so the rule walks every `backend/**/*.py` outside `migrations/`
-and `tests/` — 522 files. It flags all three import shapes,
+a second walk rather than a wider one. Signals can be connected from any layer
+and from `apps.py`, which is in no layer at all, so the rule walks every
+`backend/**/*.py` outside `migrations/` and `tests/` — roughly three times what
+the layer walk opens, and the gate prints both counts on every run. It flags all
+three import shapes,
 `from django.db.models.signals import ...`, `import django.db.models.signals`
 and `from django.db.models import signals`, aliased or not.
 
@@ -410,7 +413,7 @@ outside `django` is somebody else's and is not this rule's business. Like
 
 ### The seed-era service classes
 
-The 27 `XService` classes from the initial seed commit are the accepted exception
+The `XService` classes from the initial seed commit are the accepted exception
 to "a service is a module of plain functions". They are not backlog and not a
 LEGACY entry: no gate flags them, converting them in a batch would conflict with
 everything in flight, and every service written since is already plain functions.
@@ -890,8 +893,7 @@ entry cannot quietly become false as serializers change. This checks the named
 field's visibility, not the receiver's runtime identity.
 
 The subclass set is collected from the source, following `APIException` through
-subclassing, so a new exception module is covered without an edit. It is 70
-classes today.
+subclassing, so a new exception module is covered without an edit.
 
 `LEGACY` is empty, and the way it emptied is the point of it being there. It
 held the five sites in `wallets/services/transfers.py` — the native and ERC-20

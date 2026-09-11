@@ -98,8 +98,9 @@ console are all shipped.
   issuer CRUD plus submit and withdraw and nothing else, so there is no staff
   API surface to mis-permission. Reaching the cap does not close an offering:
   closing is a deliberate operator act, and nothing closes an offering on its
-  own. **Planned, not built:** a "cap reached, not closed" row in the operator
-  console. There is no operator console yet; the row arrives with it.
+  own. The operator console carries a "cap reached and still open" row so a
+  fully subscribed offering left open is caught; it counts money in rather than
+  allotments out, for the reason given under the console below.
 - The economics of an offering are frozen once it leaves draft. The admin change
   form keeps the share class, the exemption, the price, the bounds, the payment
   rails and the window editable only while the row is a draft, because the
@@ -207,7 +208,7 @@ console are all shipped.
   cookie. It now fetches through `apiClient`, writes to the cache directory and
   hands the file to `expo-sharing`. The dashboard needed no such change — its
   `<a target="_blank">` is a top-level navigation that carries the `SameSite=Lax`
-  session cookie. Mobile has no test runner, so that half ships unverified.
+  session cookie.
 - Rejected, revoked and expired classifications keep their evidence for a fixed
   period and are then purged automatically, leaving the classification record and
   its outcome behind. Shipped. One horizon, two enforcers: the four serving paths
@@ -218,11 +219,13 @@ console are all shipped.
   then deletes the bytes nightly, because deletion is a side effect and cannot be
   derived the way `expires_at` is. No status column records the purge — a cleared
   `evidence_file` is the record, matching the choice `expires_at` makes in
-  storing no expired status. The clock is `reviewed_at` for a rejected or revoked
-  claim and `expires_at` for one that expired, so a revoked claim runs from its
-  review and not from the stale expiry `verify` left on it; a claim with no clock
-  stamped is never swept. `evidence_file_size` and `evidence_mime_type` survive,
-  being content-free metadata rather than the document.
+  storing no expired status. The clock is `reviewed_at` for a rejected, revoked
+  or withdrawn claim and `expires_at` for a verified one, so a revoked claim runs
+  from its review and not from the stale expiry `verify` left on it; a claim with
+  no clock stamped — a submitted one — is never swept. `RETENTION_CLOCK` in
+  `users/models/investor_classification.py` is that mapping.
+  `evidence_file_size` and `evidence_mime_type` survive, being content-free
+  metadata rather than the document.
 - **The retention period is configuration, and its value is still open.**
   `CLASSIFICATION_EVIDENCE_RETENTION_DAYS` is a deploy-time setting rather than an
   admin-editable field, because purging is irreversible and shortening a statutory
@@ -440,15 +443,18 @@ console are all shipped.
   a full sheet of members' residential addresses, so a durable and queryable
   record of who took one is owed. It is deliberately not built in Phase 1 and
   is not claimed to be: Phase 2 carries it.
-- **Past members are not retained, and that is a gap.** The register drops a
-  holder whose balance reaches zero, which is right for a list of current
-  members. Section 169(3) also wants members who ceased in the last seven years
-  kept on the register with the date they ceased. Phase 1 does not meet that
-  and nothing here builds it: the read-model has no record of a holding that
-  ended, only of allotments that happened. Whether a derived register can
-  satisfy 169(3) at all, or whether it forces the Phase 2 `Transfer` log
-  indexer and a stored ceased-on date, is the question. Counsel question,
-  stated for the brief in [COUNSEL.md](COUNSEL.md).
+- **Past members are stored, because a derived register cannot express them.**
+  Section 169(3) wants members who ceased in the last seven years kept with the
+  date they ceased, and a current-holders read-model has no record of a holding
+  that ended. `FormerHolder` is that record:
+  `tokens/services/former_holders.py` replays the `Transfer` log to the
+  provider's `finalized` block every six hours, and writes each balance that
+  reached zero with its date, block, shares at cessation and particulars frozen
+  at that moment. The register API and CSV carry them as their own section with
+  the read time, block and a stale marker past 24 hours.
+  `FORMER_MEMBER_RETENTION_DAYS` defaults to 2557 and refuses to fold or purge
+  below it. That seven years is the right period is assumed, not advised —
+  question 1 in [COUNSEL.md](COUNSEL.md).
 - **The operator console is one page and costs nothing structural.** It replaces
   the dead redirect at `/admin/operators/operator/` — no `AdminSite` subclass,
   no URL namespace, no model. It carries a configuration health strip that
@@ -478,8 +484,9 @@ console are all shipped.
 
 ## Phase 2 — Eligibility and the register
 
-Not started, except that the Phase 1 predicate already reads the investor
-switch.
+Part shipped. The eligibility predicate, its enforcing readers and the
+former-member fold landed with Phase 1; the authoritative current-members
+register and the model-level company checks have not started.
 
 - `investor_kyc_required` is now read, by
   `users.services.eligibility.investor_eligibility`: while it is on, an account
@@ -503,14 +510,13 @@ switch.
   the subscription flow is where it belongs. `OperatorSerializer` is the third
   reader, through `eligible_for_any_company(user)`, and the whitelist admin's
   read-only column and add-form warning remain the fourth.
-- A share register that is the authoritative record, reconciled against the
-  chain rather than derived from it ad hoc. The Phase 1 register is derived, and
-  the trigger for replacing it with a `Transfer` log indexer is written above:
-  the moment a share can move by anything other than allotment, a transferee who
-  never received one is invisible to it. Two more things wait on the same work:
-  section 169(3) retention of members who ceased in the last seven years, which
-  a derived current-holders read-model cannot express, and a durable queryable
-  record of every register export, which today is one application log line.
+- A current-members register that is the authoritative record rather than
+  derived. The trigger is written above: the moment a share can move by anything
+  other than allotment, a transferee who never received one is invisible to it.
+  The `Transfer` fold that Phase 1 built for former members is the half of this
+  that exists; current holders still come from allotments reconciled against
+  `balanceOf`. A durable queryable record of every register export waits on the
+  same work — today it is one application log line.
 - Director authority, ownership immutability, ACN and ABN validation and
   authorized-capital limits, none of which the models check today.
 

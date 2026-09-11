@@ -19,7 +19,7 @@ failures behind them are in [TRAPS.md](TRAPS.md); how work is done is in
 | `packages/shared/` | `@ledova/shared`: TypeScript constants, types, API services, utilities used by both clients |
 | `packages/scripts/` | `generate-css-tokens.mjs`, the CSS design-token generator |
 | `marketing/` | Static React + Vite public site |
-| `scripts/` | `init-local-env.py`, the local environment bootstrapper, and the gates: `check-comments.py`, `check-layers.py`, `check-logging.py`, with their unit tests in `scripts/tests/` |
+| `scripts/` | `init-local-env.py`, the local environment bootstrapper, and the eleven `check-*` gate scripts documented in [GATES.md](GATES.md), with their unit tests in `scripts/tests/` |
 
 ## Contracts
 
@@ -74,9 +74,9 @@ subpackage per provider), and `blockchain/`, `compliance/`,
 lines. Delete before abstracting; add a layer only when a second caller needs
 the same logic.
 
-`offerings/` is the reference app for the whole shape: about 924 lines of
-service against 138 of view. When a rule below and an existing file disagree,
-the rule wins and the file is the backlog.
+`offerings/` is the reference app for the whole shape: roughly six times as much
+service as view. When a rule below and an existing file disagree, the rule wins
+and the file is the backlog.
 
 | Layer | Owns | Never contains | Reference |
 | --- | --- | --- | --- |
@@ -572,7 +572,31 @@ beyond whatever the deployment keeps its logs for. Every download is a full
 sheet of members' residential addresses, so a durable record of who took one is
 owed; it is a Phase 2 item, not a Phase 1 claim.
 
-**The register is complete only while allotment is the sole way shares move.**
+### Former members
+
+Current members are derived; former members are stored, because a
+current-holders read-model has no record of a holding that ended and section
+169(3) wants one. `tokens/services/former_holders.py` replays the `Transfer`
+log from the deployment block to the provider's `finalized` block every six
+hours and writes each balance that reached zero to `FormerHolder`.
+
+- **Particulars are frozen at the first recorded cessation** and never looked up
+  again on a refold, so a later profile edit cannot rewrite a historical record.
+  The identity is the profile at recording time, else an allotment record dated
+  no later than the cessation, else `unknown` — and the row says which.
+- **The fold is all or nothing per class.** Incomplete, repeated or unreadable
+  history raises rather than writing a partial fold, and the last successful
+  timestamp and block stand. A class failure does not stop the other classes.
+- `FORMER_MEMBER_RETENTION_DAYS` defaults to 2557 and `retention_cutoff` raises
+  `ImproperlyConfigured` below it, so the floor cannot be configured away. The
+  purge measures from the cessation date, and a later full-history fold cannot
+  recreate what it removed.
+- The rows are readable by the company owner and the operator only; the parent
+  share class being publicly visible does not expose them, and the application
+  role cannot write them.
+
+**The current-members register is complete only while allotment is the sole way
+shares move.**
 That holds in Phase 1 because the trading write prefixes are flag-gated and
 `resolve_transfer_asset` refuses a `tokenized_security`. The second guard is
 conditional and worth stating plainly: `WalletService.broadcast_transfer` calls
