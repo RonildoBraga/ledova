@@ -162,6 +162,33 @@ class AuthSchemaTest(LegacyAuthProtocolTestCase):
         self.assertFalse(validator.is_valid({"access": response.json()["access"]}))
         self.assertTrue(Draft4Validator(self.request_schema(path)).is_valid({"refresh": refresh}))
 
+    def test_refresh_cookie_security_works_without_access_and_access_alone_cannot_refresh(self):
+        cookie_settings = {**settings.AUTH_COOKIE, "access": "schema_access", "refresh": "schema_refresh"}
+        with override_settings(AUTH_COOKIE=cookie_settings):
+            GENERATOR_STATS.reset()
+            with redirect_stderr(StringIO()):
+                document = SchemaGenerator().get_schema(request=None, public=True)
+            client, csrf = self.cookie_client(self.create_completed_user())
+            del client.cookies[cookie_settings["access"]]
+            path = "/api/token/refresh/"
+            refused = client.post(path, {}, format="json")
+            self.assertEqual(refused.status_code, 403, refused.content)
+            response = client.post(path, {}, format="json", HTTP_X_CSRFTOKEN=csrf)
+            self.assertEqual(response.status_code, 200, response.content)
+            self.response_validator(path, response)
+            self.assertIn(cookie_settings["access"], response.cookies)
+            self.assertIn(cookie_settings["refresh"], response.cookies)
+            del client.cookies[cookie_settings["refresh"]]
+            access_only = client.post(path, {}, format="json", HTTP_X_CSRFTOKEN=csrf)
+            self.assertEqual(access_only.status_code, 400, access_only.content)
+            self.assertEqual(access_only.json(), {"error": "Refresh token not found."})
+            schemes = document["components"]["securitySchemes"]
+            self.assertEqual(schemes["refreshCookie"]["in"], "cookie")
+            self.assertEqual(schemes["refreshCookie"]["name"], cookie_settings["refresh"])
+            alternatives = document["paths"][path]["post"]["security"]
+            self.assertIn({"refreshCookie": [], "csrfHeader": [], "csrfCookie": []}, alternatives)
+            self.assertFalse(any("cookieAuth" in alternative for alternative in alternatives))
+
     def test_refresh_metadata_keeps_falsy_body_values_that_fall_back_to_the_cookie(self):
         path = "/api/token/refresh/"
         user = self.create_completed_user()

@@ -11117,6 +11117,12 @@
         "in": "header",
         "name": "X-CSRFTOKEN",
         "type": "apiKey"
+      },
+      "refreshCookie": {
+        "description": "Refresh JWT used by /api/token/refresh/ when no truthy refresh body value is supplied and X-Auth-Transport is not bearer. No access cookie is required. Cookie refresh without an Authorization header enforces CSRF independently of access authentication.",
+        "in": "cookie",
+        "name": "refresh",
+        "type": "apiKey"
       }
     }
   },
@@ -13866,9 +13872,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": [],
             "csrfCookie": [],
-            "csrfHeader": []
+            "csrfHeader": [],
+            "refreshCookie": []
           },
           {}
         ],

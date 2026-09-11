@@ -7,10 +7,11 @@ from rest_framework.permissions import SAFE_METHODS
 
 class HybridJWTAuthenticationScheme(OpenApiAuthenticationExtension):
     target_class = "authentication.classes.HybridJWTAuthentication"
-    name = ["bearerAuth", "cookieAuth", "csrfHeader", "csrfCookie"]
+    name = ["bearerAuth", "cookieAuth", "csrfHeader", "csrfCookie", "refreshCookie"]
 
     def get_security_requirement(self, auto_schema):
-        cookie = {"cookieAuth": []}
+        cookie_name = "refreshCookie" if getattr(auto_schema.view, "action", None) == "token_refresh" else "cookieAuth"
+        cookie = {cookie_name: []}
         if auto_schema.method not in SAFE_METHODS:
             cookie.update(csrfHeader=[], csrfCookie=[])
         return [{"bearerAuth": []}, cookie]
@@ -53,6 +54,16 @@ class HybridJWTAuthenticationScheme(OpenApiAuthenticationExtension):
                         "CSRF cookie set by /api/auth/verify/ or cookie sign-in. "
                         "Its token can be sent in the CSRF header."
                     )
+                ),
+            },
+            {
+                "type": "apiKey",
+                "in": "cookie",
+                "name": settings.AUTH_COOKIE["refresh"],
+                "description": (
+                    "Refresh JWT used by /api/token/refresh/ when no truthy refresh body value is supplied "
+                    "and X-Auth-Transport is not bearer. No access cookie is required. Cookie refresh without "
+                    "an Authorization header enforces CSRF independently of access authentication."
                 ),
             },
         ]
