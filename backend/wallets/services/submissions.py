@@ -57,6 +57,11 @@ def submit_evm_transfer(wallet, signed_transaction, *, principal_id, token_contr
             if submission is None:
                 if decoded.nonce < observation["nonce"]:
                     raise InvalidTransactionException("The signed nonce has already been consumed on-chain.")
+                price = decoded.max_fee_per_gas if decoded.envelope_type == 2 else decoded.gas_price
+                if decoded.value + decoded.gas_limit * price > int(observation["balance_wei"]):
+                    raise InvalidTransactionException(
+                        "The observed native balance cannot cover the signed value and maximum gas cost."
+                    )
                 submission = _record_submission(locked_wallet, raw, decoded, tx_hash, token_contract, observation)
     attempt_submission(submission.pk)
     tx = Transaction.objects.get(pk=submission.transaction_id)
@@ -108,13 +113,20 @@ def _mined_nonce(chain, decoded):
         if not isinstance(observed, Mapping) or observed.get("chain_id") != decoded.chain_id:
             raise ValueError("Invalid nonce observation")
         nonce = nonnegative_integer(observed.get("nonce"), maximum=2**64 - 1)
+        balance = nonnegative_integer(observed.get("balance_wei"), maximum=2**256 - 1, encoded=True)
         height = nonnegative_integer(observed.get("block_number"), maximum=2**63 - 1)
         block_hash = normalized_hash(observed.get("block_hash"))
-        if nonce is None or height is None or block_hash is None:
+        if nonce is None or balance is None or height is None or block_hash is None:
             raise ValueError("Invalid nonce observation")
     except Exception:
-        raise InvalidTransactionException("The mined sender nonce could not be verified. Retry the request.") from None
-    return {"chain_id": decoded.chain_id, "nonce": nonce, "block_number": height, "block_hash": "0x" + block_hash}
+        raise InvalidTransactionException("The mined sender state could not be verified. Retry the request.") from None
+    return {
+        "chain_id": decoded.chain_id,
+        "nonce": nonce,
+        "balance_wei": str(balance),
+        "block_number": height,
+        "block_hash": "0x" + block_hash,
+    }
 
 
 def _decode(signed_transaction):

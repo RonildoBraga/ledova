@@ -105,6 +105,7 @@ class BroadcastTransferGuardTestCase(APITestCase):
         self.evm_provider.get_mined_nonce.side_effect = lambda address: {
             "chain_id": self.evm_provider.assert_expected_chain.return_value,
             "nonce": 0,
+            "balance_wei": str(10**32),
             "block_number": 100,
             "block_hash": "0x" + "ab" * 32,
         }

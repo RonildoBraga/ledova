@@ -42,7 +42,7 @@ class GlobalSubmissionMigrationTest(GlobalSubmissionFixture, APITransactionTestC
         raw = bytes(signed.raw_transaction)
         decoded = decode_signed_transaction(raw)
         with acting_for(self.other.user.pk), atomic():
-            _record_submission(self.other_wallet, raw, decoded, signed.hash.to_0x_hex(), None)
+            _record_submission(self.other_wallet, raw, decoded, signed.hash.to_0x_hex(), None, None)
             before = self.all_financial_state()
             with use_operator():
                 journals = list(WalletSubmission.objects.order_by("pk").values())

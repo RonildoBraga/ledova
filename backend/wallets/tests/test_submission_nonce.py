@@ -1,6 +1,7 @@
 from unittest.mock import Mock, patch
 
 from django.conf import settings
+from django.core.cache import cache
 from django.db import connections
 from django.test import SimpleTestCase
 from rest_framework.test import APITransactionTestCase
@@ -13,6 +14,30 @@ from wallets.tests.test_submission_durability import SubmissionFixture
 
 
 class SubmissionNonceChecks(SubmissionFixture):
+    def test_native_balance_covers_the_exact_signed_cost_before_any_reservation(self):
+        for index, fields, price in (
+            (0, {}, 2 * 10**9),
+            (1, {"type": 1, "accessList": []}, 2 * 10**9),
+            (2, {"type": 2, "maxFeePerGas": 4 * 10**9, "maxPriorityFeePerGas": 10**9}, 4 * 10**9),
+        ):
+            with self.subTest(envelope=index):
+                signed = self.signed(nonce=3 + index, **fields)
+                cost = 2 * 10**18 + 21000 * price
+                provider = self.provider(signed)
+                observed = provider.get_mined_nonce(self.signer.address)
+                provider.get_mined_nonce.side_effect = None
+                provider.get_mined_nonce.return_value = {**observed, "balance_wei": str(cost - 1)}
+                before = self.financial_state()
+                with patch("wallets.services.submissions.get_blockchain_client", return_value=provider):
+                    response = self.broadcast(signed)
+                    self.assertEqual(response.status_code, 400)
+                    self.assertIn("native balance", response.json()["detail"])
+                    self.assertEqual(self.financial_state(), before)
+                    provider.broadcast_transaction.assert_not_called()
+                    provider.get_mined_nonce.return_value = {**observed, "balance_wei": str(cost)}
+                    self.assertEqual(self.broadcast(signed).status_code, 200)
+                    provider.broadcast_transaction.assert_called_once_with(signed.raw_transaction.to_0x_hex())
+
     def test_consumed_nonce_is_refused_without_a_journal_debit_or_send(self):
         signed = self.signed(nonce=3)
         provider = self.provider(signed)
@@ -38,12 +63,14 @@ class SubmissionNonceChecks(SubmissionFixture):
             False,
             {"nonce": 0},
             *({**observed, "nonce": value} for value in (True, -1, 2**64)),
+            *({**observed, "balance_wei": value} for value in (None, True, "-1", str(2**256))),
             {**observed, "block_number": True},
             {**observed, "block_hash": "0x1234"},
             {**observed, "chain_id": settings.BLOCKCHAIN_CHAIN_ID + 1},
             TimeoutError("Synthetic nonce outage"),
         ):
             with self.subTest(invalid=invalid):
+                cache.clear()
                 provider = self.provider(signed)
                 provider.get_mined_nonce.side_effect = invalid if isinstance(invalid, Exception) else None
                 provider.get_mined_nonce.return_value = invalid
@@ -151,6 +178,7 @@ class MinedNonceReaderTest(SimpleTestCase):
         client.w3.eth.chain_id = 31337
         client.w3.eth.get_block.return_value = {"number": 7, "hash": bytes.fromhex("ab" * 32)}
         client.w3.eth.get_transaction_count.return_value = 3
+        client.w3.eth.get_balance.return_value = 10**19
         return client
 
     def test_nonce_uses_the_captured_mined_height_and_keeps_its_block_identity(self):
@@ -158,13 +186,30 @@ class MinedNonceReaderTest(SimpleTestCase):
         address = "0x" + "12" * 20
         self.assertEqual(
             client.get_mined_nonce(address),
-            {"chain_id": 31337, "nonce": 3, "block_number": 7, "block_hash": "0x" + "ab" * 32},
+            {
+                "chain_id": 31337,
+                "nonce": 3,
+                "balance_wei": str(10**19),
+                "block_number": 7,
+                "block_hash": "0x" + "ab" * 32,
+            },
         )
         client.w3.eth.get_transaction_count.assert_called_once_with(address, 7)
+        client.w3.eth.get_balance.assert_called_once_with(address, 7)
         self.assertEqual([c.args for c in client.w3.eth.get_block.call_args_list], [("latest",), ("latest",)])
 
     def test_changing_head_network_or_invalid_nonce_is_not_usable(self):
-        for scenario in ("head", "network", "boolean", "negative", "overflow", "missing_head"):
+        for scenario in (
+            "head",
+            "network",
+            "boolean",
+            "negative",
+            "overflow",
+            "missing_head",
+            "balance_boolean",
+            "balance_negative",
+            "balance_overflow",
+        ):
             with self.subTest(scenario=scenario):
                 client = self.make_chain_client()
                 if scenario == "head":
@@ -181,6 +226,12 @@ class MinedNonceReaderTest(SimpleTestCase):
                     client.w3.eth.get_transaction_count.side_effect = changed_chain
                 elif scenario == "missing_head":
                     client.w3.eth.get_block.return_value = {"number": 7}
+                elif scenario.startswith("balance_"):
+                    client.w3.eth.get_balance.return_value = {
+                        "balance_boolean": True,
+                        "balance_negative": -1,
+                        "balance_overflow": 2**256,
+                    }[scenario]
                 else:
                     client.w3.eth.get_transaction_count.return_value = {
                         "boolean": True,
