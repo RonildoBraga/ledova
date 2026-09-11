@@ -158,3 +158,45 @@ it('a failed native readiness check retains its failure without a successful unm
   expect(view.queryByLabelText('scanner-probe-completed-unmounted')).toBeNull();
   expect(view.queryByLabelText('scanner-probe-report')).toBeNull();
 });
+
+it('keeps the initial active scanner bounded by its original one-minute deadline', async () => {
+  jest.useFakeTimers();
+  const onComplete = jest.fn();
+  const view = await render(<ScannerBridgeProbe onComplete={onComplete} />);
+  try {
+    await act(() => jest.advanceTimersByTime(59_999));
+    expect(onComplete).not.toHaveBeenCalled();
+    await act(() => jest.advanceTimersByTime(1));
+    expect(onComplete.mock.calls).toEqual([[false, 'window-timeout']]);
+  } finally {
+    await view.unmount();
+    jest.useRealTimers();
+  }
+});
+
+it('allows the expanded continuation past one minute but still refuses a stalled sequence', async () => {
+  jest.useFakeTimers();
+  const onComplete = jest.fn();
+  const view = await render(<ScannerBridgeProbe onComplete={onComplete} />);
+  try {
+    const scanner = () => view.getAllByTestId('native-scanner').find((item) => item.props.onWindowChanged)!;
+    const inactive = () => view.getAllByTestId('native-scanner').find((item) => !item.props.onWindowChanged)!;
+    await act(() => inactive().props.onLayout());
+    await act(() => scanner().props.onWindowChanged({ nativeEvent: { allowed: true, generation: 1 } }));
+    await act(() => jest.advanceTimersByTime(30_000));
+    await fireEvent.press(view.getByLabelText('scanner-probe-unmount-active'));
+    await fireEvent.press(view.getByLabelText('scanner-probe-remount'));
+    await act(() => inactive().props.onLayout());
+    await act(() => scanner().props.onWindowChanged({ nativeEvent: { allowed: true, generation: 1 } }));
+    await act(() => jest.advanceTimersByTime(90_000));
+    expect(onComplete).not.toHaveBeenCalled();
+    expect(scanner().props.active).toBe(true);
+    await act(() => jest.advanceTimersByTime(269_999));
+    expect(onComplete).not.toHaveBeenCalled();
+    await act(() => jest.advanceTimersByTime(1));
+    expect(onComplete.mock.calls).toEqual([[false, 'window-timeout']]);
+  } finally {
+    await view.unmount();
+    jest.useRealTimers();
+  }
+});
