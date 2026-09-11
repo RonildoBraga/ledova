@@ -273,16 +273,26 @@ class EthereumClient(BlockchainClient):
         nonce = nonnegative_integer(
             self.w3.eth.get_transaction_count(Web3.to_checksum_address(address), height), maximum=2**64 - 1
         )
+        balance = nonnegative_integer(
+            self.w3.eth.get_balance(Web3.to_checksum_address(address), height), maximum=2**256 - 1
+        )
         after = self.w3.eth.get_block("latest")
         if (
             nonce is None
+            or balance is None
             or not isinstance(after, Mapping)
             or nonnegative_integer(after.get("number"), maximum=2**63 - 1) != height
             or normalized_hash(after.get("hash")) != block_hash
             or self.assert_expected_chain() != chain_id
         ):
             raise ValueError("A stable mined nonce observation is unavailable.")
-        return {"chain_id": chain_id, "nonce": nonce, "block_number": height, "block_hash": "0x" + block_hash}
+        return {
+            "chain_id": chain_id,
+            "nonce": nonce,
+            "balance_wei": str(balance),
+            "block_number": height,
+            "block_hash": "0x" + block_hash,
+        }
 
     def get_transaction_history(
         self, address: str, from_block: Optional[int] = None, to_block: Optional[int] = None
