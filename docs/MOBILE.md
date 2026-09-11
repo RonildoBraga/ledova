@@ -235,8 +235,11 @@ must remain bound in `PENDING_OPEN` while that front camera is OPEN. Closing the
 holder must let the same scanner session, camera, use cases, generation and scan
 ID reach OPEN without another request. The holder is closed in `finally`; only
 the separate test APK reads the pinned adapter field. This exercises CameraX
-resource availability, not camera contention with another application. A previous
-same-process Camera2 holder was invalid: opening the same camera again disconnects
+resource availability, not camera contention with another application. The owned
+emulator must expose both front and back cameras; CI starts it with
+`-camera-front emulated`. All pending-state and recovery assertions remain
+required. A previous same-process Camera2 holder was invalid: opening the same
+camera again disconnects
 the first handle, so it cannot establish the required pending state. Its failed
 emulator run is retained. Cross-application camera priority remains device work.
 The initial JavaScript mount retains its one-minute deadline. The expanded
