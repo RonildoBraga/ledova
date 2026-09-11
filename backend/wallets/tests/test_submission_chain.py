@@ -1,10 +1,12 @@
 import os
 from datetime import datetime, timezone
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest import skipUnless
 from unittest.mock import patch
 
 from django.test import override_settings
+from hexbytes import HexBytes
 from rest_framework.test import APITransactionTestCase
 from web3 import Web3
 from web3.exceptions import Web3RPCError
@@ -13,6 +15,7 @@ from assets.models import Asset, AssetChainDeployment
 from integrations.blockchain import BlockchainClientFactory
 from integrations.blockchain.ethereum import EthereumClient
 from shared.db import acting_for, use_operator
+from shared.tests.signed_transactions import high_s_transaction
 from wallets.exceptions import InvalidTransactionException
 from wallets.models import Holding, Transaction, WalletChainObservation
 from wallets.services.chain_observations import observe_wallet_chain
@@ -71,6 +74,30 @@ class SubmissionChainTest(SubmissionFixture, APITransactionTestCase):
         self.assertEqual(tx.block_number, receipt.blockNumber)
         self.assertEqual(tx.block_timestamp, datetime.fromtimestamp(block.timestamp, tz=timezone.utc))
         self.assertEqual(tx.transaction_fee, Decimal(receipt.gasUsed * receipt.effectiveGasPrice) / Decimal(10**18))
+
+    def test_node_rejected_high_s_signatures_cannot_reserve_funds_and_canonical_twins_mine(self):
+        for nonce, fields in (
+            (0, {}),
+            (1, {"type": 1}),
+            (2, {"type": 2, "maxFeePerGas": 2 * 10**9, "maxPriorityFeePerGas": 10**9}),
+        ):
+            with self.subTest(nonce=nonce):
+                valid = self.signed(nonce=nonce, value=1, **fields)
+                altered = HexBytes(high_s_transaction(bytes(valid.raw_transaction)))
+                before = self.financial_state()
+                with self.assertRaisesRegex(Web3RPCError, "signature|Signature|sender"):
+                    self.w3.eth.send_raw_transaction(altered)
+                self.assertEqual(self.w3.eth.get_transaction_count(self.signer.address), nonce)
+                with patch("wallets.services.submissions.get_blockchain_client") as connect:
+                    with self.assertRaisesRegex(InvalidTransactionException, "could not be decoded"):
+                        self.submit_direct(SimpleNamespace(raw_transaction=altered))
+                    connect.assert_not_called()
+                self.assertEqual(self.financial_state(), before)
+                result = self.submit_direct(valid)
+                self.assertEqual(result["txHash"], valid.hash.to_0x_hex())
+                receipt = self.w3.eth.get_transaction_receipt(result["txHash"])
+                self.assertEqual(receipt.status, 1)
+                self.assertEqual(self.w3.eth.get_transaction_count(self.signer.address), nonce + 1)
 
     def test_intrinsically_invalid_gas_is_refused_before_reserving_funds_and_exact_limits_mine(self):
         access_list = [
