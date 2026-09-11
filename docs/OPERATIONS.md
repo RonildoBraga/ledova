@@ -307,6 +307,17 @@ to create another order. A separate deliberate order still undergoes the ordinar
 creation and matching checks. This protocol adds no aggregate balance policy,
 outgoing signer activation or settlement finality guarantee.
 
+Order-submission admission and matching lock the current wallet with PostgreSQL
+`FOR NO KEY UPDATE`. Wallet changes and deletion still wait, while the foreign-key
+checks for a counterparty's swap may proceed. Two members of one account can
+therefore submit through different wallets without each transaction waiting for
+the other wallet at commit. The current membership row remains locked through
+the decision; removing membership waits and prevents a fresh submission afterward.
+These are [PostgreSQL row-lock semantics](https://www.postgresql.org/docs/16/explicit-locking.html#LOCKING-ROWS),
+not a replacement for the membership, wallet address, verification or deployment
+checks. They do not establish aggregate buying power or the complete trading
+lock graph.
+
 ### Data retention
 
 | Variable | Default | Required |
