@@ -218,7 +218,10 @@ This exercises the loaded bridge with a synthetic event; it does not
 reproduce natural JavaScript queue timing or scan a physical camera image.
 
 The temporary recorder locates only the locked Expo `BoolAsyncFunctionComponent`
-for this view's `isCurrentScan`. Both its original function body and the exact
+for this view's `isCurrentScan`. Expo registers the same view definition under
+its name and a compatibility default key; function lookup deduplicates those
+object identities while still rejecting distinct matching functions.
+Both its original function body and the exact
 view window callback are restored in `finally`, including a deliberate-throw
 restoration control. A missing reflection shape or an unobserved query fails the
 test. No product module API or scanner source is patched. The ordinary Release
