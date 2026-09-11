@@ -13,10 +13,9 @@ contract AtomicSwap is EIP712, ReentrancyGuard, Ownable {
     using SafeERC20 for IERC20;
     using ECDSA for bytes32;
 
-    bytes32 public constant SWAP_ORDER_TYPEHASH =
-        keccak256(
-            "SwapOrder(address seller,address buyer,address shareToken,address paymentToken,uint256 shareAmount,uint256 paymentAmount,uint256 nonce,uint256 deadline)"
-        );
+    bytes32 public constant SWAP_ORDER_TYPEHASH = keccak256(
+        "SwapOrder(address seller,address buyer,address shareToken,address paymentToken,uint256 shareAmount,uint256 paymentAmount,uint256 nonce,uint256 deadline)"
+    );
 
     WhitelistRegistry public immutable whitelist;
 
@@ -88,7 +87,6 @@ contract AtomicSwap is EIP712, ReentrancyGuard, Ownable {
         bytes calldata sellerSignature,
         bytes calldata buyerSignature
     ) external nonReentrant onlyRelayer {
-
         if (seller == buyer) revert SameParty();
         if (shareAmount == 0 || paymentAmount == 0) revert InvalidAmount();
         if (block.timestamp > deadline) revert OrderExpired();
