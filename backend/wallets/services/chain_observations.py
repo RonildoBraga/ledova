@@ -22,6 +22,7 @@ from wallets.models import (
     WalletSubmission,
 )
 from wallets.services.chain_evidence import collect_chain_evidence
+from wallets.services.nonce_evidence import collect_nonce_evidence
 from wallets.services.receipt_readers import MAX_BLOCK_NUMBER
 from wallets.services.receipt_targets import ReceiptTarget, capture_receipt_target
 
@@ -39,6 +40,8 @@ class ChainObservationClaim(NamedTuple):
     started_at: datetime
     previous_block: dict | None
     policy: dict
+    signed_transaction: bytes | None
+    nonce_admission: dict | None
 
 
 def finality_policy(network, chain):
@@ -74,7 +77,7 @@ def _journal_identity(wallet, tx):
     ):
         return None
     network = f"evm:{evm.chain_id}" if evm is not None else "bitcoin:" + bitcoin.genesis_hash
-    return chain, network, journal.tx_hash
+    return chain, network, journal.tx_hash, evm
 
 
 def claim_chain_observation(transaction_id):
@@ -87,7 +90,7 @@ def claim_chain_observation(transaction_id):
         identity = _journal_identity(wallet, tx)
         if identity is None:
             return None
-        chain, network, tx_hash = identity
+        chain, network, tx_hash, evm = identity
         watch, _ = WalletChainWatch.objects.select_for_update().get_or_create(
             transaction=tx,
             defaults={
@@ -129,6 +132,8 @@ def claim_chain_observation(transaction_id):
             watch.last_started_at,
             previous_block,
             finality_policy(network, chain),
+            bytes(evm.raw_transaction) if evm is not None else None,
+            evm.intent.get("mined_nonce_observation") if evm is not None else None,
         )
 
 
@@ -178,6 +183,21 @@ def observe_wallet_chain(transaction_id):
             previous_block=claim.previous_block,
             policy=claim.policy,
         )
+        if (
+            claim.signed_transaction is not None
+            and result["evidence"].get("complete") is True
+            and result["reason"] in ("receipt_unavailable", "previous_block_replaced", "receipt_block_replaced")
+        ):
+            nonce = collect_nonce_evidence(client, claim.signed_transaction, admission=claim.nonce_admission)
+            if nonce["result"] in ("candidate", "unconsumed") and (
+                nonce["evidence"].get("head") != result["evidence"].get("head")
+            ):
+                nonce = {
+                    "result": "unknown",
+                    "reason": "observation_head_changed",
+                    "evidence": {**nonce["evidence"], "complete": False},
+                }
+            result["evidence"]["nonce_spend"] = nonce
     except Exception:
         result = {"result": "unknown", "finality": "unknown", "reason": "provider_unavailable", "evidence": {}}
     return complete_chain_observation(claim, result)

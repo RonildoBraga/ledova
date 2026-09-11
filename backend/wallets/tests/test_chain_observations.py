@@ -83,6 +83,54 @@ class ChainObservationFixture(SubmissionFixture):
 
 
 class ChainObservationChecks(ChainObservationFixture):
+    def test_nonce_evidence_uses_the_immutable_signed_journal_without_financial_effects(self):
+        self.observer.get_transaction_receipt.return_value = None
+        candidate = {
+            "result": "candidate",
+            "reason": "",
+            "candidate": {"tx_hash": "0x" + "55" * 32},
+            "evidence": {"complete": True, "head": {"hash": HEAD_HASH, "height": 104}},
+        }
+        before = self.financial_state()
+        with patch("wallets.services.chain_observations.collect_nonce_evidence", return_value=candidate) as read:
+            self.assertEqual(observe_wallet_chain(self.tx_id), "recorded")
+            read.assert_called_once_with(
+                self.observer,
+                bytes(self.signed_transfer.raw_transaction),
+                admission=self.submission().intent["mined_nonce_observation"],
+            )
+        self.assertEqual(self.observations()[0]["evidence"]["nonce_spend"], candidate)
+        self.assertEqual(self.financial_state(), before)
+
+    def test_nonce_evidence_from_a_different_head_remains_unknown(self):
+        self.observer.get_transaction_receipt.return_value = None
+        candidate = {
+            "result": "candidate",
+            "reason": "",
+            "candidate": {"tx_hash": "0x" + "55" * 32},
+            "evidence": {"complete": True, "head": {"hash": "0x" + "66" * 32, "height": 104}},
+        }
+        before = self.financial_state()
+        with patch("wallets.services.chain_observations.collect_nonce_evidence", return_value=candidate):
+            self.assertEqual(observe_wallet_chain(self.tx_id), "recorded")
+        nonce = self.observations()[0]["evidence"]["nonce_spend"]
+        self.assertEqual((nonce["result"], nonce["reason"]), ("unknown", "observation_head_changed"))
+        self.assertFalse(nonce["evidence"]["complete"])
+        self.assertNotIn("candidate", nonce)
+        self.assertEqual(self.financial_state(), before)
+
+    def test_wallet_state_changed_during_nonce_search_discards_the_observation(self):
+        self.observer.get_transaction_receipt.return_value = None
+
+        def change_state(address, height):
+            with use_operator():
+                Transaction.objects.filter(pk=self.tx_id).update(status="failed")
+            return 0
+
+        self.observer.w3.eth.get_transaction_count.side_effect = change_state
+        self.assertEqual(observe_wallet_chain(self.tx_id), "observation_changed")
+        self.assertEqual(self.observations(), [])
+
     def test_conflicting_inclusion_remains_unknown_and_keeps_the_last_validated_context(self):
         network = f"evm:{settings.BLOCKCHAIN_CHAIN_ID}"
         before = self.financial_state()

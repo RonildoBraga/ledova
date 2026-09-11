@@ -176,6 +176,69 @@ class SubmissionChainTest(SubmissionFixture, APITransactionTestCase):
             nonce_read.assert_not_called()
         self.assertEqual(self.financial_state(), before)
 
+    def test_external_fee_bumps_and_zero_value_self_calls_have_bound_observation_evidence(self):
+        entries = [{"address": self.recipient, "storageKeys": ["0x" + "00" * 32] * 2}] * 2
+        envelopes = (
+            ({}, {"gasPrice": 4 * 10**9}),
+            ({"type": 1, "accessList": entries}, {"gasPrice": 4 * 10**9}),
+            (
+                {"type": 2, "maxFeePerGas": 2 * 10**9, "maxPriorityFeePerGas": 10**9, "accessList": entries},
+                {"maxFeePerGas": 4 * 10**9, "maxPriorityFeePerGas": 2 * 10**9},
+            ),
+        )
+        nonce = 0
+        for kind in ("fee_bump", "zero_value_self_call"):
+            for fields, bumped in envelopes:
+                with self.subTest(kind=kind, envelope=fields.get("type", 0)):
+                    original = self.signed(nonce=nonce, gas=90000, value=10**17, **fields)
+                    replacement_fields = {**fields, **bumped}
+                    if kind == "zero_value_self_call":
+                        replacement_fields.update(to=self.signer.address, value=0)
+                    else:
+                        replacement_fields["value"] = 10**17
+                    replacement = self.signed(nonce=nonce, gas=90000, **replacement_fields)
+                    self.w3.manager.request_blocking("evm_setAutomine", [False])
+                    try:
+                        self.submit_direct(original)
+                        before = self.financial_state()
+                        self.w3.eth.send_raw_transaction(replacement.raw_transaction)
+                        self.w3.manager.request_blocking("evm_mine", [])
+                    finally:
+                        self.w3.manager.request_blocking("evm_setAutomine", [True])
+                    receipt = self.w3.eth.get_transaction_receipt(replacement.hash)
+                    self.assertEqual(receipt.status, 1)
+                    with use_operator():
+                        tx = Transaction.objects.get(wallet=self.wallet, tx_hash=original.hash.to_0x_hex())
+                    with patch.object(EthereumClient, "broadcast_transaction") as send:
+                        self.assertEqual(observe_wallet_chain(tx.pk), "recorded")
+                        send.assert_not_called()
+                    with use_operator():
+                        observation = WalletChainObservation.objects.get(watch__transaction=tx)
+                    evidence = observation.evidence["nonce_spend"]
+                    self.assertEqual(evidence["result"], "candidate", evidence)
+                    self.assertEqual(evidence["candidate"]["tx_hash"], replacement.hash.to_0x_hex())
+                    self.assertEqual(evidence["candidate"]["intent_kind"], kind)
+                    self.assertEqual(evidence["candidate"]["block"]["hash"], receipt.blockHash.to_0x_hex())
+                    self.assertEqual(self.financial_state(), before)
+                    nonce += 1
+
+    def test_insufficient_funds_rejection_does_not_prove_the_signed_transaction_cannot_later_mine(self):
+        signed = self.signed(nonce=0)
+        self.w3.manager.request_blocking("hardhat_setBalance", [self.signer.address, "0x0"])
+        with self.assertRaisesRegex(Web3RPCError, "funds|balance|enough"):
+            self.w3.eth.send_raw_transaction(signed.raw_transaction)
+        result = self.submit_direct(signed)
+        self.assertEqual(result["status"], "pending")
+        submission = self.submission()
+        self.assertIsNone(submission.acknowledged_at)
+        before = self.financial_state()
+        self.w3.manager.request_blocking("hardhat_setBalance", [self.signer.address, hex(10 * 10**18)])
+        with acting_for(self.tenant.user.pk):
+            self.assertEqual(attempt_submission(submission.pk), "acknowledged")
+        self.assertEqual(self.w3.eth.get_transaction_receipt(signed.hash).status, 1)
+        self.assertEqual(self.financial_state(), before)
+        self.assertEqual(bytes(self.submission().raw_transaction), bytes(signed.raw_transaction))
+
     def test_a_mined_revert_retains_its_real_block_and_fee_after_reconciliation(self):
         signed = self.signed(nonce=0, to=Web3.to_checksum_address(TOKEN_ADDRESS), gas=90000)
         result = self.submit_direct(signed)
