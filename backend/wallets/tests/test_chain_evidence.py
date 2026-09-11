@@ -93,6 +93,35 @@ class ChainEvidenceTest(SimpleTestCase):
         result = self.observe({"mode": "depth", "depth": 1})
         self.assertEqual((result["result"], result["reason"]), ("unknown", "network_changed"))
 
+    def test_finality_rpc_failures_preserve_verified_inclusion_but_still_require_a_stable_head(self):
+        for unavailable in ("finalized", 102):
+            with self.subTest(unavailable=unavailable):
+                heads = []
+                move_head = False
+
+                def unavailable_finality(identifier):
+                    if identifier == unavailable:
+                        raise ConnectionError("Synthetic finality-only RPC failure")
+                    if identifier == "latest":
+                        heads.append(identifier)
+                        if move_head and len(heads) == 2:
+                            return {**self.head, "hash": OLD_HASH}
+                    return self.get_block(identifier)
+
+                self.client.w3.eth.get_block.side_effect = unavailable_finality
+                result = self.observe({"mode": "finalized"})
+                self.assertEqual(
+                    (result["result"], result["finality"], result["reason"]),
+                    ("included", "unknown", "finality_unavailable"),
+                )
+                self.assertTrue(result["evidence"]["finality_read_failed"])
+                self.assertEqual(result["evidence"]["receipt"]["hash"], BLOCK_HASH)
+                self.assertEqual(result["evidence"]["canonical_receipt"], {"hash": BLOCK_HASH, "height": 103})
+                heads.clear()
+                move_head = True
+                result = self.observe({"mode": "finalized"})
+                self.assertEqual((result["result"], result["reason"]), ("unknown", "head_changed"))
+
     def test_missing_receipt_is_not_orphan_proof_but_a_different_canonical_block_is(self):
         self.client.get_transaction_receipt.return_value = None
         result = self.observe(previous={"hash": BLOCK_HASH, "height": 103})
