@@ -217,9 +217,18 @@ class ReviewRequestPolicyMigrationTest(TransactionTestCase):
     def migrate_to(self, target):
         MigrationExecutor(connections[MIGRATE_ALIAS]).migrate(target)
 
+    def check_catalogue_at_the_applied_migration_state(self):
+        executor = MigrationExecutor(connections[MIGRATE_ALIAS])
+        state = executor.loader.project_state(list(executor.loader.applied_migrations))
+        tables = {model._meta.db_table for model in state.apps.get_models(include_auto_created=True)}
+        catalogue = {table: policy for table, policy in POLICIES.items() if table in tables}
+        with patch("shared.management.commands.check_rls_catalogue.POLICIES", catalogue):
+            call_command("check_rls_catalogue")
+
     def test_an_existing_installation_gains_the_request_policies_without_losing_them_on_reversal(self):
         latest = MigrationExecutor(connections[MIGRATE_ALIAS]).loader.graph.leaf_nodes()
         self.addCleanup(self.migrate_to, latest)
+        call_command("check_rls_catalogue")
         self.migrate_to([("shared", "0006_account_insert_by_director")])
         with connections[MIGRATE_ALIAS].cursor() as cursor:
             for table in ("tokens_capitalincreaserequest", "tokens_shareissuancerequest"):
@@ -228,11 +237,16 @@ class ReviewRequestPolicyMigrationTest(TransactionTestCase):
                 cursor.execute(f"ALTER TABLE {table} DISABLE ROW LEVEL SECURITY")
                 cursor.execute(f"ALTER TABLE {table} NO FORCE ROW LEVEL SECURITY")
 
-        with self.assertRaises(CommandError):
-            call_command("check_rls_catalogue")
+        with self.assertRaises(CommandError) as missing:
+            self.check_catalogue_at_the_applied_migration_state()
+        for table in ("tokens_capitalincreaserequest", "tokens_shareissuancerequest"):
+            self.assertIn(table, str(missing.exception))
 
         self.migrate_to([("shared", "0007_review_request_policies")])
-        call_command("check_rls_catalogue")
+        self.check_catalogue_at_the_applied_migration_state()
 
         self.migrate_to([("shared", "0006_account_insert_by_director")])
+        self.check_catalogue_at_the_applied_migration_state()
+
+        self.migrate_to(latest)
         call_command("check_rls_catalogue")

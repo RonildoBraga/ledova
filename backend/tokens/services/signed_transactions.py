@@ -4,6 +4,7 @@ from typing import Optional
 from eth_account import Account
 from eth_account._utils.legacy_transactions import Transaction as LegacyTransaction
 from eth_account.typed_transactions import TypedTransaction
+from eth_keys.constants import SECPK1_N
 from eth_utils import to_checksum_address
 from hexbytes import HexBytes
 
@@ -23,6 +24,12 @@ class DecodedSignedTransaction:
     value: int
     data: bytes
     envelope_type: Optional[int]
+    nonce: int
+    gas_limit: int
+    gas_price: Optional[int]
+    max_fee_per_gas: Optional[int]
+    max_priority_fee_per_gas: Optional[int]
+    access_list: tuple[tuple[str, tuple[int, ...]], ...] = ()
 
 
 def decode_signed_transaction(raw_transaction: bytes) -> DecodedSignedTransaction:
@@ -44,6 +51,8 @@ def decode_signed_transaction(raw_transaction: bytes) -> DecodedSignedTransactio
 
     if envelope_type is not None and envelope_type not in SUPPORTED_ENVELOPE_TYPES:
         raise UnsupportedEnvelopeError(f"Transaction envelope type {envelope_type} is not supported")
+    if not 0 < int(fields["s"]) <= SECPK1_N // 2:
+        raise ValueError("Transaction signatures must use a canonical s value")
 
     to = bytes(fields.get("to") or b"")
     return DecodedSignedTransaction(
@@ -53,6 +62,15 @@ def decode_signed_transaction(raw_transaction: bytes) -> DecodedSignedTransactio
         value=int(fields.get("value") or 0),
         data=bytes(fields.get("data") or b""),
         envelope_type=envelope_type,
+        nonce=int(fields["nonce"]),
+        gas_limit=int(fields["gas"]),
+        gas_price=int(fields["gasPrice"]) if "gasPrice" in fields else None,
+        max_fee_per_gas=int(fields["maxFeePerGas"]) if "maxFeePerGas" in fields else None,
+        max_priority_fee_per_gas=int(fields["maxPriorityFeePerGas"]) if "maxPriorityFeePerGas" in fields else None,
+        access_list=tuple(
+            (to_checksum_address(entry["address"]), tuple(entry["storageKeys"]))
+            for entry in fields.get("accessList", ())
+        ),
     )
 
 

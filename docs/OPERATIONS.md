@@ -1005,7 +1005,7 @@ one.
 | Schedule | Task |
 | --- | --- |
 | every minute | `expire_unclaimed_matches` |
-| every 5 min | `check_pending_token_deployments`, `check_executing_issuance_requests`, `resolve_executing_swaps`, `reconcile_subscriptions`, `check_pending_transactions`, `check_all_pending_transactions` |
+| every 5 min | `check_pending_token_deployments`, `check_executing_issuance_requests`, `resolve_executing_swaps`, `reconcile_subscriptions`, `check_pending_transactions`, `check_all_pending_transactions`, `recover_wallet_submissions`, `observe_wallet_chains` |
 | every 10 min | `sync_all_assets`, `sync_exchange_rates` |
 | every 30 min | `sync_all_entries`, `reconcile_failed_adds` |
 | hourly, on the hour | `sync_all_wallets`, `run_batch_monitoring` |
@@ -1164,6 +1164,66 @@ period is that it outlives the subject's wishes, which is usually why the
 record-keeping obligation exists.
 
 `GET /health/` is answered by middleware before any database access.
+
+### Wallet journal recovery
+
+The [wallet journals](ARCHITECTURE.md#wallet-transfer-journals-and-chain-evidence)
+make a successful send response durable acceptance, not proof of mining. A
+timeout, provider error or mismatched acknowledgement leaves the locally derived
+hash pending. Uncertain delivery does not authorize releasing its deduction or
+allocating a new nonce.
+
+`recover_wallet_submissions` attempts at most 100 pending EVM and Bitcoin journals
+every five minutes, oldest attempt first. It revalidates saved signed identity
+and network. EVM recovery leaves matching receipts to confirmation; unavailable
+chain or receipt identity does not authorize sending. With no receipt it resends
+only saved bytes. Bitcoin also revalidates inputs and node admission; matching
+raw bytes and witness hash in the mempool resolve a lost acknowledgement without
+resending. Queue failure or process exit does not erase accepted intent. Terminal
+transactions are not sent again by this sweep.
+
+`observe_wallet_chains` reads at most 25 durable journals every five minutes,
+including confirmed and failed transactions. Never-observed journals come first,
+then the least recently started; a start within two minutes is deferred. A newer
+claim supersedes an abandoned one, while a late response cannot overwrite newer
+evidence. Preserve inclusion, orphan and reinclusion history when investigating
+chain changes. Missing or inconsistent provider data stays unknown.
+
+`WALLET_CHAIN_FINALITY_POLICIES` defaults to an empty mapping. Explicit entries
+use `evm:<chain_id>` or `bitcoin:<genesis_hash>` and either
+`{"mode": "depth", "depth": <positive integer>}` or EVM `{"mode": "finalized"}`.
+Each observation retains its normalized policy version. Unavailable finality can
+leave verified inclusion intact with unknown finality; closing head/network
+checks must still pass. No public policy is selected by local fixture settings,
+and recorded finality does not itself settle or refund a wallet.
+
+Apply `wallets/0016_wallet_submission` through `0019_chain_observations` before
+starting updated API and workers, with old transfer writers stopped before
+admitting sends. Existing transactions remain intact without invented journals.
+`0018_global_submission_identity` refuses conflicting EVM chain/hash or
+sender/nonce history rather than deleting it or choosing an owner. Preserve
+records and resolve ownership/accounting before retrying a blocked migration.
+`0017_bitcoin_submission` requires all input reservations at commit. Request-role
+policies protect signed bytes and inputs. Only the operator role writes watches
+and observations; members can read their own evidence.
+
+Protected journal links preserve signed terms, wallet identity and financial
+records. Bitcoin inputs and observation history cannot be rewritten or deleted,
+and populated journal/watch migrations refuse rollback. Do not clear records to
+make rollback succeed. Backups contain signed payloads that can be broadcast and
+need the same protection as other signed transactions. These changes do not
+activate operator signers or disabled trading.
+
+`make chain-test` includes local EVM native/ERC20 submissions, settlement,
+lost-acknowledgement and canonical-signature controls on PostgreSQL.
+`python scripts/test-bitcoin-chain.py` uses an isolated Bitcoin Core 31.1 regtest
+node without peers or external networking. Its Linux x86_64 official archive is
+checksum-pinned; `BITCOIN_TEST_BINARY` can select an installed 31.1 daemon and
+`--port` selects a free local RPC port. The runner owns its temporary data,
+cookie and process. Controls cover signature refusal, process exits around sends,
+recovery, mining, duplicate confirmation and reorg observations. Notification and
+external balance-refresh boundaries are isolated; live providers, physical
+wallets and public finality policy are not certified by these tests.
 
 ## Supporting payslips
 
@@ -1648,4 +1708,3 @@ issuance. The four positions the code already depends on are written down in
 [LEGAL.md](LEGAL.md), each with what would show it wrong. None of them has been
 put to anyone qualified, and none is engaged while the platform runs on testnet
 with synthetic data.
-

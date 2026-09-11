@@ -57,7 +57,7 @@ package of per-concern modules re-exported by `settings/__init__.py`.
 | `tokens` | `ShareToken`, `ShareIssuanceRequest`, `ShareIssuance`, `CapitalIncreaseRequest`, `MintRequest`, `YieldToken`, and the trading models |
 | `offerings` | `Offering`, `Subscription`, their review and payment lifecycles, allotment, and the eligibility-gated investor directory at `/api/v1/directory/` |
 | `whitelist` | `WhitelistEntry` and the on-chain allowlist sync |
-| `wallets` | `Wallet`, `Holding`, `HoldingSnapshot`, `Transaction`, balance sync and transfer confirmation |
+| `wallets` | `Wallet`, holdings and snapshots, transactions, signed submission journals and continuing chain evidence |
 | `assets` | `Asset`, `AssetChainDeployment`, `AssetSnapshot`, `ExchangeRate`, price sync, asset identity |
 | `portfolios` | `Portfolio` and the value series computed on read |
 | `blockchain` | `BlockchainTransaction` and transaction monitoring |
@@ -1663,3 +1663,63 @@ Reference: `backend/wallets/services/verification.py`,
 `dashboard/src/pages/wallets/hooks/useWalletVerification.test.tsx`, whose
 signature assertion recovers the signer with `ethers.verifyMessage` rather than
 re-deriving it through the code that produced the signature.
+
+## Wallet transfer journals and chain evidence
+
+User-signed sends commit exact signed bytes, locally derived hash, signed intent
+and pending deduction before broadcasting. `WalletSubmission` records EVM
+attempts; `BitcoinSubmission` and `BitcoinSubmissionInput` record Bitcoin attempts
+and every spent outpoint. Request amounts and fees cannot override signed terms.
+Exact retries reuse the original identity and deduction. History without an
+authoritative signed journal cannot be adopted as permission to send.
+
+EVM admission checks canonical signature scalars, intrinsic gas including repeated
+access-list entries and the calldata floor, and positive maximum fee caps; zero
+priority fee is permitted. Nonce and native balance come from one captured mined
+block with network and closing-head checks outside database transactions. Under
+the wallet lock the service rechecks identity and current requesting membership,
+then commits through an outermost durable transaction. A consumed mined nonce or
+balance below signed value plus maximum gas cost cannot create a reservation.
+A later node refusal does not prove that saved bytes can never execute.
+
+EVM chain/hash and chain/sender/nonce uniqueness spans account wallets; Bitcoin
+network/transaction and network/outpoint uniqueness likewise prevents duplicate
+spends. PostgreSQL freezes journal-linked signed terms, wallet identity and
+Bitcoin inputs while delivery evidence advances monotonically. Different signed
+bytes at an existing EVM nonce remain refused. Linked speed-ups and cancellations
+sharing one reservation are still required. Distinct nonces remain independent,
+including deliberately identical transfers.
+
+Bitcoin admission requires the configured approved testnet or regtest genesis,
+confirmed wallet-owned previous outputs, exact satoshi values and matching
+`testmempoolaccept` identities and fee. It supports one external recipient with
+optional same-wallet change using P2PKH, P2SH or witness-v0 scripts. Taproot,
+arbitrary scripts, multiple recipients, self-consolidations and unconfirmed
+inputs are refused. The decoder derives txid without witness and wtxid from the
+complete serialization. Input reservations survive terminal states pending a
+separate replacement/release policy.
+
+Receipt readers capture wallet and transaction identity before RPC. Local and
+history writers compare that target under wallet-then-transaction locks; stale
+evidence returns `observation_changed` without balance, notification or metadata
+effects. Success and revert retain valid block hash, height, time and actual fee.
+Header hash and height must match; zero is valid, missing time stays unknown and
+a new block context cannot inherit unavailable metadata from an older block.
+History-only completion leaves holdings and notifications untouched.
+
+`WalletChainWatch` claims and append-only `WalletChainObservation` rows continue
+after terminal states. Claims commit before RPC; generation and complete target
+must still match when evidence is written. Inclusion, canonicality and configured
+finality remain separate. Missing data does not prove a reorg. These observations
+change no balances, transaction statuses, notifications or broadcasts.
+
+Consumed EVM nonce attribution reconstructs candidate signed bytes and requires
+derived hash/signer and receipt/block/network/closing-head agreement. Reads are
+bounded to 66 nonce queries, 10,000 block transactions, 128 KiB input and 4,096
+combined access-list entries/storage keys. Compact evidence distinguishes the
+original, matching higher-fee call, other intent and zero-value self-call. A
+self-call does not prove cancellation intent; nonce advancement alone cannot
+identify a replacement. Unsupported or inconsistent evidence stays unknown.
+Winner accounting, rollup fee reconciliation and operator-writer cutover remain
+separate work. See [wallet recovery](OPERATIONS.md#wallet-journal-recovery) for
+cadence, deployment and backup requirements.

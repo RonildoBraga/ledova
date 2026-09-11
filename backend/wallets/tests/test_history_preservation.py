@@ -17,10 +17,10 @@ from shared.db.aliases import configured
 from shared.tests.scoped import RunsOnTheScopedConnection
 from shared.tests.tenants import make_tenant
 from wallets.models import Holding, HoldingSnapshot, Transaction, Wallet
+from wallets.services import transaction_confirmation
 from wallets.services.history_receipts import record_history_receipt
 from wallets.services.holdings import sync_holding
 from wallets.services.sync import _process_transactions
-from wallets.services.transaction_confirmation import TransactionConfirmationService
 from wallets.tasks.confirmation import (
     check_all_pending_transactions,
     confirm_pending_transaction,
@@ -71,7 +71,7 @@ class HistoryPreservationChecks:
     def pending(self):
         with acting_for(self.tenant.user.pk):
             data = self.history()
-            TransactionConfirmationService.create_pending_transaction(
+            transaction_confirmation.create_pending_transaction(
                 self.wallet, data["tx_hash"], data["to_address"], Decimal("2"), Decimal("0.01")
             )
             return Transaction.objects.get(wallet=self.wallet, tx_hash=data["tx_hash"])
@@ -132,8 +132,8 @@ class HistoryPreservationChecks:
         self.assertEqual(self.holding.quantity, Decimal("7.99"))
         self.import_history(self.history(amount="900", status="success"))
         with acting_for(self.tenant.user.pk):
-            first = TransactionConfirmationService.fail_transaction(tx.tx_hash, wallet=self.wallet)
-            second = TransactionConfirmationService.fail_transaction(tx.tx_hash, wallet=self.wallet)
+            first = transaction_confirmation.fail_transaction(tx.tx_hash, wallet=self.wallet)
+            second = transaction_confirmation.fail_transaction(tx.tx_hash, wallet=self.wallet)
         self.assertEqual((first["status"], second["status"]), ("failed", "not_pending"))
         with use_operator():
             tx.refresh_from_db()
@@ -230,8 +230,13 @@ class HistoryPreservationChecks:
         self.import_history(data)
         before = self.state()[1:]
         timestamp = data["block_timestamp"].replace(microsecond=0) + timezone.timedelta(seconds=12)
-        client = self.receipt_client(blockNumber=76, gasUsed=21000, effectiveGasPrice=1000000000)
-        client.w3.eth.get_block.return_value = {"timestamp": int(timestamp.timestamp())}
+        block_hash = "0x" + "83" * 32
+        client = self.receipt_client(blockNumber=76, blockHash=block_hash, gasUsed=21000, effectiveGasPrice=1000000000)
+        client.w3.eth.get_block.return_value = {
+            "hash": block_hash,
+            "number": 76,
+            "timestamp": int(timestamp.timestamp()),
+        }
         with (
             patch("wallets.services.transaction_confirmation.sync_holding", wraps=sync_holding),
             patch("wallets.services.holdings.fetch_chain_balance", return_value=Decimal("37")),
@@ -331,12 +336,12 @@ class HistoryPreservationChecks:
     def test_a_receipt_for_a_still_missing_row_cannot_enter_the_local_transfer_writer(self):
         with (
             patch(
-                "wallets.tasks.confirmation.TransactionConfirmationService.confirm_transaction",
-                wraps=TransactionConfirmationService.confirm_transaction,
+                "wallets.tasks.confirmation.transaction_confirmation.confirm_transaction",
+                wraps=transaction_confirmation.confirm_transaction,
             ) as confirm,
             patch(
-                "wallets.tasks.confirmation.TransactionConfirmationService.fail_transaction",
-                wraps=TransactionConfirmationService.fail_transaction,
+                "wallets.tasks.confirmation.transaction_confirmation.fail_transaction",
+                wraps=transaction_confirmation.fail_transaction,
             ) as fail,
         ):
             for status in (0, 1):
@@ -532,7 +537,7 @@ class HistoryPreservationChecks:
         timestamp = timezone.now()
 
         def confirm():
-            return TransactionConfirmationService.confirm_transaction(
+            return transaction_confirmation.confirm_transaction(
                 tx.tx_hash, wallet=self.wallet, block_number=80, block_timestamp=timestamp, actual_fee=Decimal("0.003")
             )
 
