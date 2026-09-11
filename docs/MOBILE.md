@@ -438,15 +438,30 @@ runtime. The exact CI setup is in
 [Xcode 16.4 on the macOS 15 runner](https://github.com/actions/runner-images/blob/main/images/macos/macos-15-Readme.md).
 No EAS account or signing credentials are needed.
 
-Pull requests whose complete changes are confined to `backend/` and `docs/`
-skip the two native builds. Ordinary CI still runs, including gates that read
-documentation. Native/configuration/package inputs and unknown paths run both
-platforms; an unavailable comparison, a base ahead of the branch, or an empty
-comparison also runs both. Main pushes and manual runs remain unconditional to
-check external tool and dependency drift. The always-run `Mobile native checks`
-verdict requires successful classification and the expected platform results.
-Require that verdict when configuring branch protection. A new native input
-from an excluded directory must update this boundary when it is introduced.
+Pull requests and pushes to `main` run both native builds when their complete
+change includes one of these inputs:
+
+- Anything under `mobile/` or `packages/shared/`.
+- Root `package.json`, `package-lock.json`, `npm-shrinkwrap.json` or `.npmrc`,
+  and `dashboard/package.json`: the native jobs install the root workspace
+  dependency graph before installing mobile dependencies.
+- `.gitattributes`, which can affect checked-out source and assets.
+- `.github/workflows/mobile-native.yml`, `scripts/native-build-scope.py` or
+  `scripts/tests/test_native_build_scope.py`.
+
+Other paths, including backend, dashboard application code, marketing and
+documentation, skip both native builds. Ordinary CI still runs. The router
+compares the full PR base-to-head range or the full push before-to-after range,
+including deleted and renamed inputs. A verified empty diff skips; unavailable
+or malformed comparisons, a PR base ahead of its branch, and non-ancestor push
+ranges conservatively run both platforms. Manual runs always build both and can
+check external tool or dependency drift without a mobile change.
+
+The lightweight scope job and `Mobile native checks` verdict always run. The
+verdict requires successful classification and the expected platform results;
+require that verdict when configuring branch protection. When adding a native
+dependency outside the listed paths, update the router and its tests as part of
+that change.
 
 From a clean checkout:
 
