@@ -130,8 +130,11 @@ def collect_chain_evidence(client, *, chain, network, tx_hash, previous_block, p
         finalized = None
         canonical_finalized = None
         if isinstance(policy, Mapping) and policy.get("mode") == "finalized" and chain != BLOCKCHAIN_BITCOIN:
-            finalized = _block(client, chain, "finalized")
-            canonical_finalized = _canonical_context(client, chain, finalized, head)
+            try:
+                finalized = _block(client, chain, "finalized")
+                canonical_finalized = _canonical_context(client, chain, finalized, head)
+            except Exception:
+                evidence["finality_read_failed"] = True
         last_head = _block(client, chain, "latest")
         evidence.update(
             {

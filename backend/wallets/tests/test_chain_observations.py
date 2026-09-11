@@ -131,6 +131,24 @@ class ChainObservationChecks(ChainObservationFixture):
         self.assertEqual(observe_wallet_chain(self.tx_id), "observation_changed")
         self.assertEqual(self.observations(), [])
 
+    def test_finality_provider_failure_retains_inclusion_without_financial_effects(self):
+        network = f"evm:{settings.BLOCKCHAIN_CHAIN_ID}"
+        before = self.financial_state()
+
+        def unavailable_finality(identifier):
+            if identifier == "finalized":
+                raise ConnectionError("Synthetic unsupported finalized tag")
+            return self.head if identifier == "latest" else self.block
+
+        self.observer.w3.eth.get_block.side_effect = unavailable_finality
+        with override_settings(WALLET_CHAIN_FINALITY_POLICIES={network: {"mode": "finalized"}}):
+            self.assertEqual(observe_wallet_chain(self.tx_id), "recorded")
+        row = self.observations()[0]
+        self.assertEqual(
+            (row["result"], row["finality"], row["reason"]), ("included", "unknown", "finality_unavailable")
+        )
+        self.assertEqual(self.financial_state(), before)
+
     def test_conflicting_inclusion_remains_unknown_and_keeps_the_last_validated_context(self):
         network = f"evm:{settings.BLOCKCHAIN_CHAIN_ID}"
         before = self.financial_state()
