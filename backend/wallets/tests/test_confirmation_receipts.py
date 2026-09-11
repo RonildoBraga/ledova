@@ -11,7 +11,8 @@ from shared.tests.tenants import make_tenant
 from wallets.constants import TRANSACTION_STATUS_CONFIRMED
 from wallets.models import Holding, HoldingSnapshot, Transaction
 from wallets.services import transaction_confirmation
-from wallets.tasks.confirmation import confirm_pending_transaction, get_receipt_reader
+from wallets.services.receipt_readers import get_receipt_reader
+from wallets.tasks.confirmation import confirm_pending_transaction
 
 BITCOIN_HASH = "80" * 32
 BITCOIN_BLOCK_HASH = "81" * 32

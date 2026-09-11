@@ -14,7 +14,8 @@ from integrations.blockchain import BlockchainClientFactory
 from integrations.blockchain.ethereum import EthereumClient
 from shared.db import acting_for, use_operator
 from wallets.exceptions import InvalidTransactionException
-from wallets.models import Holding, Transaction
+from wallets.models import Holding, Transaction, WalletChainObservation
+from wallets.services.chain_observations import observe_wallet_chain
 from wallets.services.holdings import sync_holding
 from wallets.services.submissions import attempt_submission
 from wallets.tasks.confirmation import confirm_pending_transaction
@@ -179,3 +180,38 @@ class SubmissionChainTest(SubmissionFixture, APITransactionTestCase):
             token_holding.refresh_from_db()
         self.assertEqual(token_holding.quantity, Decimal("1.5"))
         self.assertEqual(self.holding.quantity, Decimal(self.w3.eth.get_balance(self.signer.address)) / Decimal(10**18))
+
+    @override_settings(WALLET_CHAIN_FINALITY_POLICIES={"evm:31337": {"mode": "depth", "depth": 1}})
+    def test_continuing_observations_keep_real_reorg_and_new_inclusion_history(self):
+        before_send = self.w3.manager.request_blocking("evm_snapshot", [])
+        signed = self.signed(nonce=0, gas=90000)
+        self.submit_direct(signed)
+        submission = self.submission()
+        self.assertEqual(self.confirm(submission.tx_hash)["status"], "confirmed")
+        before = self.financial_state()
+        with patch.object(EthereumClient, "broadcast_transaction") as sent:
+            self.assertEqual(observe_wallet_chain(submission.transaction_id), "recorded")
+            sent.assert_not_called()
+        with use_operator():
+            first = WalletChainObservation.objects.get(watch__transaction_id=submission.transaction_id)
+        original = dict(first.evidence)
+        self.assertEqual((first.result, first.finality), ("included", "satisfied"))
+        self.assertTrue(self.w3.manager.request_blocking("evm_revert", [before_send]))
+        self.w3.manager.request_blocking("evm_mine", [])
+        with patch.object(EthereumClient, "broadcast_transaction") as sent:
+            self.assertEqual(observe_wallet_chain(submission.transaction_id), "recorded")
+            sent.assert_not_called()
+        self.w3.eth.send_raw_transaction(signed.raw_transaction)
+        self.assertEqual(observe_wallet_chain(submission.transaction_id), "recorded")
+        with use_operator():
+            rows = list(
+                WalletChainObservation.objects.filter(watch__transaction_id=submission.transaction_id).order_by(
+                    "generation"
+                )
+            )
+        self.assertEqual([row.result for row in rows], ["included", "orphaned", "included"])
+        self.assertEqual(rows[0].evidence, original)
+        self.assertTrue(rows[1].evidence["previous_orphaned"])
+        self.assertTrue(rows[2].evidence["previous_orphaned"])
+        self.assertNotEqual(rows[2].evidence["receipt"]["hash"], first.evidence["receipt"]["hash"])
+        self.assertEqual(self.financial_state(), before)

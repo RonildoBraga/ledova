@@ -13,4 +13,6 @@ __all__ = [
     "check_all_pending_transactions",
     "cleanup_stale_pending_transactions",
     "recover_wallet_submissions",
+    "observe_wallet_chains",
 ]
+from wallets.tasks.chain_observations import observe_wallet_chains

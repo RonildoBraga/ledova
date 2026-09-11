@@ -97,6 +97,8 @@ POLICIES = {
     "wallets_walletsubmission": (_member("user_account_id"), _member("user_account_id")),
     "wallets_bitcoinsubmission": (_member("user_account_id"), _member("user_account_id")),
     "wallets_bitcoinsubmissioninput": (_member("user_account_id"), _member("user_account_id")),
+    "wallets_walletchainwatch": (_member("user_account_id"), "false"),
+    "wallets_walletchainobservation": (_member("user_account_id"), "false"),
     "portfolios": (_member("user_account_id"), _member("user_account_id")),
     "favourite_assets": (_member("user_account_id"), _member("user_account_id")),
     "users_investorclassification": (_member("user_account_id"), _member("user_account_id")),

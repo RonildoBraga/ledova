@@ -1109,6 +1109,41 @@ not require reconstructing intent from client metadata. A terminal transaction
 is not sent again. This sweep neither allocates another nonce nor signs a
 replacement.
 
+The five-minute `observe_wallet_chains` task continues reading durable EVM and
+Bitcoin wallet journals after confirmation or failure. Each run checks at most
+25 journals, preferring those never checked and then the least recently started;
+a start within two minutes is deferred. It records a durable generation before
+RPC, then appends normalized evidence only if the entire wallet/transaction
+target and generation still match. A later reader supersedes an abandoned claim,
+and a delayed result cannot overwrite that reader's evidence.
+
+`WalletChainObservation` records inclusion, unknown evidence or an orphaned block
+separately from whether an explicit finality policy is satisfied. A missing
+receipt alone cannot establish a reorg. The observer compares canonical blocks
+at captured heights, retains prior inclusion when later data is unknown, and
+keeps both old and new contexts when a transaction moves to another block.
+Tip and network checks before and after the read detect inconsistent provider
+responses; they do not independently establish chain consensus. These records
+do not change transaction status, holdings, refunds, notifications or broadcasts.
+
+`WALLET_CHAIN_FINALITY_POLICIES` is an empty Django settings mapping by default.
+No public-testnet finality policy is selected. An explicitly configured policy
+is keyed by the recorded identity (`evm:<chain_id>` or `bitcoin:<genesis_hash>`)
+and uses `{"mode": "finalized"}` for EVM or
+`{"mode": "depth", "depth": <positive integer>}`. Each observation retains its
+normalized policy version. EVM finalized blocks must match the canonical block
+at their height; depth is derived inclusively from a stable tip. Missing or
+invalid policies retain unknown finality. Local fixture depth settings are not
+public-testnet acceptance decisions.
+
+Apply `wallets/0019_chain_observations` before starting the new worker. Existing
+journals and financial rows remain unchanged; legacy rows without authoritative
+journals are not adopted. Only the operator role writes watches and observations;
+account members can read their own evidence under RLS. PostgreSQL binds every
+watch to its journal, protects claim generations and observation links, and
+refuses evidence rewrites, deletion or migration rollback with retained watches.
+Preserve this history when investigating reorgs or recovering a stopped worker.
+
 Apply `wallets/0016_wallet_submission` before starting the updated API and worker
 processes, and stop old processes before permitting new transfers. Existing
 transactions are retained without inferred journal records. PostgreSQL protects

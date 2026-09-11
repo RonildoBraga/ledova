@@ -11,11 +11,8 @@ from shared.db import acting_for, use_operator
 from shared.tests.scoped import RunsOnTheScopedConnection
 from wallets.models import Transaction
 from wallets.services import transaction_confirmation
-from wallets.tasks.confirmation import (
-    _extract_actual_fee,
-    confirm_pending_transaction,
-    get_receipt_reader,
-)
+from wallets.services.receipt_readers import extract_actual_fee, get_receipt_reader
+from wallets.tasks.confirmation import confirm_pending_transaction
 from wallets.tests.test_submission_durability import SubmissionFixture
 
 BLOCK_HASH = "0x" + "ab" * 32
@@ -172,19 +169,19 @@ class ReceiptMetadataReaderTest(SimpleTestCase):
         for value in (True, -1, 1.5, "-1", "NaN", "Infinity", [], {}, 2**256):
             with self.subTest(value=value):
                 self.assertIsNone(reader.block_number({"blockNumber": value}))
-                self.assertIsNone(_extract_actual_fee({"gasUsed": value, "effectiveGasPrice": 1}, "base"))
-                self.assertIsNone(_extract_actual_fee({"gasUsed": 1, "effectiveGasPrice": value}, "base"))
+                self.assertIsNone(extract_actual_fee({"gasUsed": value, "effectiveGasPrice": 1}, "base"))
+                self.assertIsNone(extract_actual_fee({"gasUsed": 1, "effectiveGasPrice": value}, "base"))
         self.assertIsNone(reader.block_number({"blockNumber": 2**63}))
-        self.assertIsNone(_extract_actual_fee({"gasUsed": 2**255, "effectiveGasPrice": 1}, "base"))
+        self.assertIsNone(extract_actual_fee({"gasUsed": 2**255, "effectiveGasPrice": 1}, "base"))
         self.assertEqual(reader.block_number({"blockNumber": 0}), 0)
         self.assertEqual(reader.block_number({"blockNumber": "0x11"}), 17)
-        self.assertEqual(_extract_actual_fee({"gasUsed": 0, "effectiveGasPrice": 0}, "base"), Decimal("0"))
+        self.assertEqual(extract_actual_fee({"gasUsed": 0, "effectiveGasPrice": 0}, "base"), Decimal("0"))
         self.assertEqual(
-            _extract_actual_fee({"gas_used": "0x5208", "effective_gas_price": "2000000000"}, "base"),
+            extract_actual_fee({"gas_used": "0x5208", "effective_gas_price": "2000000000"}, "base"),
             Decimal("0.000042"),
         )
         self.assertEqual(
-            _extract_actual_fee({"gasUsed": 1, "effectiveGasPrice": 10**30 - 1}, "base"),
+            extract_actual_fee({"gasUsed": 1, "effectiveGasPrice": 10**30 - 1}, "base"),
             Decimal("999999999999.999999999999999999"),
         )
 
@@ -226,12 +223,12 @@ class ReceiptMetadataReaderTest(SimpleTestCase):
         for value in (True, -1, 1.5, "2", [], 2**256):
             with self.subTest(value=value):
                 self.assertIsNone(reader.block_number({"block_height": value}))
-                self.assertIsNone(_extract_actual_fee({"fee": value}, "bitcoin"))
+                self.assertIsNone(extract_actual_fee({"fee": value}, "bitcoin"))
                 client.get_block_timestamp.return_value = value
                 self.assertIsNone(reader.block_timestamp(client, {"block_hash": BLOCK_HASH[2:]}, 17))
         client.get_block_timestamp.return_value = 0
         self.assertEqual(reader.block_number({"block_height": 0}), 0)
-        self.assertEqual(_extract_actual_fee({"fee": 1000}, "bitcoin"), Decimal("0.00001"))
+        self.assertEqual(extract_actual_fee({"fee": 1000}, "bitcoin"), Decimal("0.00001"))
         self.assertEqual(
             reader.block_timestamp(client, {"block_hash": BLOCK_HASH[2:]}, 0), datetime(1970, 1, 1, tzinfo=timezone.utc)
         )

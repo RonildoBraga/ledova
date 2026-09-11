@@ -129,7 +129,7 @@ class BitcoinClient(BlockchainClient):
                 and confirmations > 0
             ):
                 block_hash = normalized_hash(tx.get("blockhash"))
-                header = self._get_block_header(block_hash)
+                header = self.get_block_header(block_hash)
                 return {
                     "tx_hash": txid,
                     "confirmed": True,
@@ -145,7 +145,7 @@ class BitcoinClient(BlockchainClient):
             logger.error(f"Error getting receipt for {tx_hash}: {str(e)}")
             return None
 
-    def _get_block_header(self, block_hash):
+    def get_block_header(self, block_hash):
         if not transaction_hash_matches(block_hash, block_hash):
             return None
         try:
@@ -158,7 +158,7 @@ class BitcoinClient(BlockchainClient):
             return None
 
     def get_block_timestamp(self, block_hash: str, *, expected_height: Optional[int] = None) -> Optional[int]:
-        header = self._get_block_header(block_hash)
+        header = self.get_block_header(block_hash)
         if header is None:
             return None
         if expected_height is not None and (
@@ -170,6 +170,12 @@ class BitcoinClient(BlockchainClient):
 
     def get_genesis_hash(self):
         return self._rpc_call("getblockhash", [0])
+
+    def get_block_hash(self, height):
+        return self._rpc_call("getblockhash", [height])
+
+    def get_best_block_hash(self):
+        return self._rpc_call("getbestblockhash")
 
     def get_previous_output(self, tx_hash, output_index):
         return self._rpc_call("gettxout", [tx_hash, output_index, False])

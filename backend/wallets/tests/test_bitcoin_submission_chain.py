@@ -23,9 +23,11 @@ from wallets.models import (
     Holding,
     Transaction,
     Wallet,
+    WalletChainObservation,
 )
 from wallets.services import transfers
 from wallets.services.bitcoin_submissions import attempt_bitcoin_submission
+from wallets.services.chain_observations import observe_wallet_chain
 from wallets.tasks.confirmation import confirm_pending_transaction
 
 RPC_URL = os.environ.get("BITCOIN_TEST_RPC_URL", "")
@@ -202,6 +204,40 @@ class BitcoinSubmissionChainTest(APITransactionTestCase):
             self.assertEqual(Transaction.objects.filter(wallet=self.wallet).count(), 0)
             self.holding.refresh_from_db()
         self.assertEqual(self.holding.quantity, self.starting_amount)
+
+    def test_continuing_observations_retain_real_orphan_and_remined_block_evidence(self):
+        self.submit_direct()
+        self.mine_and_confirm()
+        submission = self.submission()
+        before = self.financial_state()
+        with patch.object(self.provider, "broadcast_transaction") as sent:
+            self.assertEqual(observe_wallet_chain(submission.transaction_id), "recorded")
+            sent.assert_not_called()
+        with use_operator():
+            first = WalletChainObservation.objects.get(watch__transaction_id=submission.transaction_id)
+        self.assertEqual((first.result, first.finality), ("included", "unknown"))
+        old_hash = first.evidence["receipt"]["hash"]
+        original = dict(first.evidence)
+        self.provider._rpc_call("invalidateblock", [old_hash])
+        empty = self.provider._rpc_call("generateblock", [self.miner, []])["hash"]
+        self.assertNotEqual(empty, old_hash)
+        with patch.object(self.provider, "broadcast_transaction") as sent:
+            self.assertEqual(observe_wallet_chain(submission.transaction_id), "recorded")
+            sent.assert_not_called()
+        self.provider._rpc_call("generatetoaddress", [1, self.miner])
+        self.assertEqual(observe_wallet_chain(submission.transaction_id), "recorded")
+        with use_operator():
+            rows = list(
+                WalletChainObservation.objects.filter(watch__transaction_id=submission.transaction_id).order_by(
+                    "generation"
+                )
+            )
+        self.assertEqual([row.result for row in rows], ["included", "orphaned", "included"])
+        self.assertEqual(rows[0].evidence, original)
+        self.assertTrue(rows[1].evidence["previous_orphaned"])
+        self.assertTrue(rows[2].evidence["previous_orphaned"])
+        self.assertNotEqual(rows[2].evidence["receipt"]["hash"], old_hash)
+        self.assertEqual(self.financial_state(), before)
 
     def test_process_exit_before_or_after_actual_send_keeps_recoverable_durable_intent(
         self,
