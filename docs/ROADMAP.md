@@ -90,8 +90,9 @@ retention settings and background jobs. The choices behind them are under
 ## Phase 2 — Eligibility and the register
 
 Part shipped. The eligibility predicate, its enforcing readers and the
-former-member fold landed with Phase 1; the authoritative current-members
-register and the model-level company checks have not started.
+former-member fold landed with Phase 1. Company models already have ACN and ABN
+validation hooks. The authoritative current-members register and the remaining
+company checks are unfinished.
 
 - `investor_kyc_required` is now read, by
   `users.services.eligibility.investor_eligibility`: while it is on, an account
@@ -123,8 +124,10 @@ register and the model-level company checks have not started.
   half of this that exists; current holders still come from allotments
   reconciled against `balanceOf`. A durable queryable record of every register
   export waits on the same work — today it is one application log line.
-- Director authority, ownership immutability, ACN and ABN validation and
-  authorized-capital limits, none of which the models check today.
+- Company model validation includes ACN and ABN field validators and their
+  consistency check in `Company.clean()`. These hooks do not make every ORM
+  write run validation. Director authority, ownership immutability and
+  authorized-capital limits remain separate completion checks.
 
 ## Phase 3 — Settlement automation
 
