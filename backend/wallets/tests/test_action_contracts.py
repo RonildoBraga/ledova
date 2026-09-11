@@ -1,5 +1,5 @@
 from decimal import Decimal
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -185,7 +185,7 @@ class WalletActionContractTest(APITestCase):
     @patch("wallets.services.transfers._schedule_confirmation_checks")
     @patch("wallets.services.submissions.get_blockchain_client")
     def test_broadcast_documents_the_real_pending_transaction_fields(self, get_client, schedule):
-        get_client.return_value.assert_expected_chain.return_value = settings.BLOCKCHAIN_CHAIN_ID
+        get_client.return_value.assert_expected_chain = Mock(return_value=settings.BLOCKCHAIN_CHAIN_ID)
         get_client.return_value.get_mined_nonce.return_value = {
             "chain_id": settings.BLOCKCHAIN_CHAIN_ID,
             "nonce": 0,
