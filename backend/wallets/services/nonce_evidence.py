@@ -218,8 +218,14 @@ def _candidate(client, block, decoded, known_hash):
         ):
             raise ValueError("Receipt fee disagrees with the transaction limits")
     observed["succeeded"] = receipt["status"] == 1
-    observed["actual_fee"] = str(fee) if fee is not None else None
+    observed["execution_fee"] = str(fee) if fee is not None else None
     observed["intent_kind"] = "original" if tx_hash == known_hash else _intent_kind(decoded, observed)
+    observed.pop("input")
+    observed["input_hash"] = Web3.keccak(signed.data).to_0x_hex()
+    observed["input_size"] = len(signed.data)
+    for field in ("fee_cap", "priority_cap", "gas_limit"):
+        if observed[field] is not None:
+            observed[field] = str(observed[field])
     return observed
 
 

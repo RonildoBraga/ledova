@@ -133,7 +133,7 @@ def claim_chain_observation(transaction_id):
             previous_block,
             finality_policy(network, chain),
             bytes(evm.raw_transaction) if evm is not None else None,
-            evm.intent.get("mined_nonce_observation") if evm is not None else None,
+            evm.intent.get("mined_nonce_observation") if evm is not None and isinstance(evm.intent, Mapping) else None,
         )
 
 

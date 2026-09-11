@@ -1851,3 +1851,12 @@ address or remove an existing verification.
 Apply the backend migration and release its API before updating the clients.
 Older clients continue to use the legacy alias with the updated backend; the
 new clients require an API that serves `signingPreference`.
+
+
+### EVM nonce-spend evidence
+
+When a journalled EVM transfer lacks usable inclusion evidence, the wallet observer also looks for the transaction that consumed its sender nonce. It uses the journal's signed bytes and, when available, its canonical admission block as a search anchor. A bounded binary search over mined account nonces identifies the consuming block. The reader reconstructs supported legacy/type-1/type-2 signed envelopes, checks their hash and recovered signer, and requires a matching canonical block and receipt. The closing network/head and the existing fresh wallet/transaction claim checks still apply.
+
+The evidence identifies the original transaction, a matching payload with increased fee caps, another payload, or a zero-value self-call. A self-call's shape does not prove cancellation intent or exclude contract execution. Revert status is recorded separately. Account nonces can also advance through delegated-account authorizations; an increase without an attributable supported sender transaction stays unknown. This reader collects evidence and does not admit replacements, release reservations or settle a wallet.
+
+Each read permits at most 66 distinct nonce queries, 10,000 transactions in the returned block, 128 KiB of input and 4,096 combined access-list entries/storage keys. Stored candidate evidence contains the input hash and length, not another copy of large calldata. Missing/pruned historical state, unsupported envelopes and inconsistent provider responses remain unknown. This checks one provider's internally consistent evidence; it is not an independent consensus proof. The receipt's execution charge is recorded separately from complete fee accounting; additional rollup fees still need the ledger reconciliation work in #7. Bitcoin replacement discovery is not part of this EVM reader.

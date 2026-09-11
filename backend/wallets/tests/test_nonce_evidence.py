@@ -209,3 +209,35 @@ class NonceEvidenceTest(SimpleTestCase):
         self.provider.assert_expected_chain.side_effect = [84532, 1]
         result = self.observe()
         self.assertEqual((result["result"], result["reason"]), ("unknown", "network_changed"))
+
+    def test_correlated_rpc_hash_labels_cannot_replace_the_hash_of_the_signed_bytes(self):
+        forged = "0x" + "99" * 32
+        self.tx["hash"] = forged
+        self.provider.get_transaction_receipt.return_value["transactionHash"] = forged
+        self.assertEqual(self.observe()["result"], "unknown")
+
+    def test_correlated_rpc_sender_labels_cannot_replace_the_recovered_signer(self):
+        other = Account.create().sign_transaction(
+            {
+                "chainId": 84532,
+                "nonce": 3,
+                "to": self.recipient,
+                "value": 10**18,
+                "gas": 90000,
+                "gasPrice": 4 * 10**9,
+            }
+        )
+        self.set_candidate(other)
+        self.assertEqual(self.tx["from"], self.signer.address)
+        self.assertEqual(self.provider.get_transaction_receipt.return_value["from"], self.signer.address)
+        self.assertEqual(self.observe()["result"], "unknown")
+
+    def test_the_largest_supported_height_keeps_a_bounded_search_and_compact_payload_evidence(self):
+        self.head["number"] = 2**63 - 1
+        result = self.observe()
+        self.assertEqual(result["result"], "candidate", result)
+        self.assertLessEqual(len(result["evidence"]["nonce_probes"]), MAX_PROBES)
+        self.assertNotIn("input", result["candidate"])
+        self.assertEqual(result["candidate"]["input_size"], 0)
+        self.assertEqual(result["candidate"]["input_hash"], Web3.keccak(b"").to_0x_hex())
+        self.assertEqual(result["candidate"]["fee_cap"], "4000000000")
