@@ -222,10 +222,21 @@ test. No product module API or scanner source is patched. The ordinary Release
 APK is checked for absence of the test class
 and probe controls; the test uses reflection rather than product test hooks.
 This establishes Release adapter behavior, not OS permission-prompt behavior.
-An additional native control holds the selected camera through Camera2 and
-requires CameraX `PENDING_OPEN` before releasing the holder. Recovery must reach
-OPEN with the same native session, camera object, generation and scan ID; a
-platform that does not establish that precondition fails the control.
+An additional native control opens the front camera through the pinned CameraX
+internal camera interface to occupy its opening slot. The back-camera scanner
+must remain bound in `PENDING_OPEN` while that front camera is OPEN. Closing the
+holder must let the same scanner session, camera, use cases, generation and scan
+ID reach OPEN without another request. The holder is closed in `finally`; only
+the separate test APK reads the pinned adapter field. This exercises CameraX
+resource availability, not camera contention with another application. A previous
+same-process Camera2 holder was invalid: opening the same camera again disconnects
+the first handle, so it cannot establish the required pending state. Its failed
+emulator run is retained. Cross-application camera priority remains device work.
+The initial JavaScript mount retains its one-minute deadline. The expanded
+continuation has a bounded six-minute deadline to accommodate its independent
+native stages; each native poll retains its existing 15- or 20-second limit.
+Mounted controls require progress past one minute and refusal at the continuation
+deadline, and confirm the initial deadline still applies.
 These emulator controls do not replace physical-device verification of sensor
 shutdown, OS permission dialogs, settings or OEM behavior. The runner retains
 APK hashes, instrumentation logs, screenshots and window diagnostics, including

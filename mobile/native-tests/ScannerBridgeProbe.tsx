@@ -31,6 +31,7 @@ function WindowProbe({ onComplete, onActiveUnmount }: Props & { onActiveUnmount?
   const [methodReady, setMethodReady] = useState(false);
   const native = useRef<NativeHandle | null>(null);
   const queryStarted = useRef(false);
+  const timeoutMs = onActiveUnmount ? 60_000 : 360_000;
   const checkNativeMethod = () => {
     if (queryStarted.current) return;
     queryStarted.current = true;
@@ -48,9 +49,9 @@ function WindowProbe({ onComplete, onActiveUnmount }: Props & { onActiveUnmount?
       .catch((error) => onComplete(false, `method-${failureCategory(error)}`));
   };
   useEffect(() => {
-    const deadline = setTimeout(() => onComplete(false, 'window-timeout'), 60000);
+    const deadline = setTimeout(() => onComplete(false, 'window-timeout'), timeoutMs);
     return () => clearTimeout(deadline);
-  }, [onComplete]);
+  }, [onComplete, timeoutMs]);
 
   return (
     <Modal visible animationType="none">
