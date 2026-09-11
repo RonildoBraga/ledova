@@ -211,6 +211,9 @@ has the same 20-second wait and requires all four release conditions. Failure
 artifacts record the last stage, captured camera ID, each use-case binding flag,
 CameraX state, selected-camera availability, native view attachment/presence and
 JavaScript scanner state. These are observations, not inferred failure causes.
+Window observations deduplicate native view identities: React Native's modal host
+also exposes the dialog's children from the activity tree. Distinct checkpoint
+views remain distinct and still refuse an ambiguous JavaScript state.
 This exercises the loaded bridge with a synthetic event; it does not
 reproduce natural JavaScript queue timing or scan a physical camera image.
 
