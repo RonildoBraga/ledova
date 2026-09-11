@@ -54,9 +54,8 @@ layer.
 
 The reason is stated plainly rather than hidden: most of these rules were held
 by review, and a rule held by review means a green pipeline means nobody
-checked. Eleven `check-*` scripts are gated today; `make check` runs eight of
-them and CI's source-gates job runs the same eight, with the API schema and type
-gates in the Django job and the client gates in the JavaScript job. Two rules
+checked. The [gate inventory](#every-gate-and-where-its-rule-is-written) lists
+each script, whether `make check` runs it, and its CI job. Two rules
 are gated without a script of their own: "one migration per model change",
 through CI's `makemigrations --check --dry-run`, and the generated design
 tokens, through `git diff --exit-code` (stated under [Clients and the shared

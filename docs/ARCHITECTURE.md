@@ -22,7 +22,7 @@ repeating what is here.
 | `packages/shared/` | `@ledova/shared`: TypeScript constants, types, API services, utilities used by both clients |
 | `packages/scripts/` | `generate-css-tokens.mjs`, the CSS design-token generator |
 | `marketing/` | Static React + Vite public site |
-| `scripts/` | `init-local-env.py`, the local environment bootstrapper, and the eleven `check-*` gate scripts documented in [GATES.md](GATES.md), with their unit tests in `scripts/tests/` |
+| `scripts/` | `init-local-env.py`, the local environment bootstrapper, and the gate scripts listed in the [gate inventory](GATES.md#every-gate-and-where-its-rule-is-written), with their unit tests in `scripts/tests/` |
 
 ## Contracts
 
