@@ -1194,7 +1194,8 @@ metadata rules without balance or notification effects. An unavailable block
 timestamp remains unknown; confirmation never substitutes the current time.
 EVM timestamps come from a lookup by the receipt's block hash, and the returned
 header must match both that hash and the receipt height. Bitcoin header heights
-and times must identify the requested block. Its transaction receipt requests
+and times must identify the requested block, and the timestamp lookup must also
+return the receipt's captured height. Its transaction receipt requests
 `getrawtransaction` verbosity2 and converts the optional BTC-denominated fee to
 exact integral satoshis. Missing undo data or an invalid fee leaves the actual
 fee unknown; the estimate is retained separately. Transaction-level `height`

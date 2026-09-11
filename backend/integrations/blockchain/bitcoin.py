@@ -157,9 +157,14 @@ class BitcoinClient(BlockchainClient):
             logger.warning("Bitcoin block header unavailable")
             return None
 
-    def get_block_timestamp(self, block_hash: str) -> Optional[int]:
+    def get_block_timestamp(self, block_hash: str, *, expected_height: Optional[int] = None) -> Optional[int]:
         header = self._get_block_header(block_hash)
         if header is None:
+            return None
+        if expected_height is not None and (
+            nonnegative_integer(expected_height, maximum=2**63 - 1) is None
+            or nonnegative_integer(header.get("height"), maximum=2**63 - 1) != expected_height
+        ):
             return None
         return nonnegative_integer(header.get("time"), maximum=253402300799)
 

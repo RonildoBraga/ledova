@@ -235,3 +235,30 @@ class ReceiptMetadataReaderTest(SimpleTestCase):
         self.assertEqual(
             reader.block_timestamp(client, {"block_hash": BLOCK_HASH[2:]}, 0), datetime(1970, 1, 1, tzinfo=timezone.utc)
         )
+
+    def test_bitcoin_timestamp_header_must_match_the_captured_receipt_height(self):
+        reader = get_receipt_reader("bitcoin")
+        client = object.__new__(BitcoinClient)
+        client._rpc_call = Mock()
+        for height in (18, None, True, "17", -1, 1.5, 2**63):
+            with self.subTest(height=height):
+                client._rpc_call.return_value = {"hash": BLOCK_HASH[2:], "height": height, "time": BLOCK_SECONDS}
+                self.assertIsNone(reader.block_timestamp(client, {"block_hash": BLOCK_HASH[2:]}, 17))
+        client._rpc_call.return_value = {"hash": BLOCK_HASH[2:], "height": 17, "time": BLOCK_SECONDS}
+        self.assertEqual(reader.block_timestamp(client, {"block_hash": BLOCK_HASH[2:]}, 17), BLOCK_TIME)
+        self.assertIsNone(reader.block_timestamp(client, {"block_hash": BLOCK_HASH[2:]}, None))
+
+    def test_bitcoin_timestamp_cannot_combine_conflicting_header_observations(self):
+        client = object.__new__(BitcoinClient)
+        tx_hash = "63" * 32
+        client._rpc_call = Mock(
+            side_effect=[
+                {"txid": tx_hash, "confirmations": 2, "blockhash": BLOCK_HASH[2:]},
+                {"hash": BLOCK_HASH[2:], "height": 203, "time": BLOCK_SECONDS},
+                {"hash": BLOCK_HASH[2:], "height": 204, "time": BLOCK_SECONDS + 1},
+            ]
+        )
+        receipt = client.get_transaction_receipt(tx_hash)
+        self.assertEqual(receipt["block_height"], 203)
+        self.assertIsNone(get_receipt_reader("bitcoin").block_timestamp(client, receipt, receipt["block_height"]))
+        self.assertEqual(client._rpc_call.call_count, 3)

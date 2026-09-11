@@ -43,7 +43,7 @@ class BitcoinReceiptReaderTest(TestCase):
 
         stamp = reader.block_timestamp(client, BITCOIN_RECEIPT, 812345)
 
-        client.get_block_timestamp.assert_called_once_with(BITCOIN_BLOCK_HASH)
+        client.get_block_timestamp.assert_called_once_with(BITCOIN_BLOCK_HASH, expected_height=812345)
         self.assertEqual(stamp, datetime.fromtimestamp(1700000000, tz=datetime_timezone.utc))
 
     def test_bitcoin_reader_tolerates_a_missing_block_hash(self):

@@ -133,10 +133,10 @@ def _bitcoin_succeeded(receipt: Dict[str, Any]) -> Optional[bool]:
 
 def _bitcoin_block_timestamp(client: Any, receipt: Dict[str, Any], block_number: Optional[int]) -> Optional[datetime]:
     block_hash = _bitcoin_block_hash(receipt)
-    if block_hash is None or not hasattr(client, "get_block_timestamp"):
+    if block_hash is None or block_number is None or not hasattr(client, "get_block_timestamp"):
         return None
     try:
-        seconds = client.get_block_timestamp(block_hash)
+        seconds = client.get_block_timestamp(block_hash, expected_height=block_number)
     except Exception:
         return None
     return _block_time(seconds)
