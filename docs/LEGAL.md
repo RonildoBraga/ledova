@@ -1,26 +1,30 @@
 # Legal positions taken without advice
 
-Four questions the code's behaviour depends on. **Nobody qualified has been
-asked any of them.** This document records the position the project takes on
-each, what it is built on, and what would show it wrong — so that the position
-is a decision rather than a silence, and so that the day advice is affordable
+Five questions the project depends on — four on how it must behave, one on the
+licence it is published under. **Nobody qualified has been asked any of them.**
+This document records the position the project takes on each, what it is built
+on, and what would show it wrong — so that the position is a decision rather
+than a silence, and so that the day advice is affordable
 the questions are already written.
 
 Nothing here is legal advice or a legal opinion. It is the owner's reading of
 primary sources, written down.
 
-Statute references are to the Corporations Act 2001 (Cth). Read the section
-before relying on a summary of it:
-[the Act on the Federal Register of Legislation](https://www.legislation.gov.au/C2004A00818/latest/text).
+Questions 1 to 4 arise under the Corporations Act 2001 (Cth) and question 5
+under the project's own licence. Read the provision before relying on a summary
+of it: [the Act on the Federal Register of
+Legislation](https://www.legislation.gov.au/C2004A00818/latest/text), and
+[LICENSE](../LICENSE), which is short.
 
 ## What bites now, and what does not
 
-**None of these bite today**, and the reason is one fact rather than four
-arguments: the platform runs on a local chain or a supported testnet, with
-synthetic data, and has never held a real security, a real investor's money or
-a real company's register. The chain guards refuse any mainnet chain id and
-mainnet configuration is absent from the repository. A question about how a
-register must be kept is not engaged by a register of fictional members.
+**The first four do not reach their stated triggers today**: the platform runs
+on a local chain or a supported
+testnet, with synthetic data, and has never held a real security, a real
+investor's money or a real company's register. The chain guards refuse any
+mainnet chain id and mainnet configuration is absent from the repository. A
+question about how a register must be kept is not engaged by a register of
+fictional members.
 
 Each question therefore has a **trigger** — the thing that would have to happen
 before it matters — and they are not the same thing:
@@ -31,11 +35,17 @@ before it matters — and they are not the same thing:
 | 2 | s168, who is obliged to keep the register | The same moment, plus the terms between operator and issuer |
 | 3 | Evidence retention period | The first real identity document held |
 | 4 | Operating without an AFSL | The first offer of a real security to a real investor |
+| 5 | Who "we" is in the licence's Competing Use test | Someone offering a competing service, or Blueberry Money beginning to operate |
+
+Question 5 does not wait on real investors: the repository is already published
+under the licence. A fork alone does not establish a Competing Use; the question
+concerns the use made of the software and the relationship between its
+Licensor and operator.
 
 Questions 1 to 3 are ones a careful reader can settle from primary sources, and
-the positions below do that. **Question 4 is not**, and it is the one where
-being wrong is an offence rather than a defect. The position on it is to not
-reach its trigger.
+the positions below do that. Question 5 is not settled by this document.
+**Question 4 is the one where being wrong is an offence rather than a defect**,
+and the position on it is to not reach its trigger.
 
 ## 1. Section 169(3): members who ceased in the last seven years
 
@@ -176,6 +186,48 @@ is the guide, and the thresholds a certificate attests to are in it. If the
 remade instrument changes who may certify, this category's evidence rules change
 with it.
 
+## 5. The licence's Competing Use test, and who "we" is
+
+**The question.** The Functional Source License defines a Competing Use as
+making the Software available to others in a commercial product or service
+that: (1) substitutes for the Software; (2) substitutes for any other product
+or service *we* offer using the Software **that exists as of the date we make
+the Software available**; or (3) offers the same or substantially similar
+functionality as the Software. In each, *we* is the Licensor. The Licensor named
+in [LICENSE](../LICENSE) is an individual. The company expected to operate
+Ledova as hosted infrastructure is Blueberry Money, a separate legal person
+described in the README as a prospective operator. The relationship between
+them and the existence of the relevant service at publication are separate
+questions under limb (2).
+
+**What the documents do today.** `LICENSE` is FSL-1.1-ALv2 with
+`Copyright 2026 Ronildo da Rocha Braga Junior`. The README names Blueberry Money
+as sponsor and prospective first operator, and says sponsorship transfers no
+ownership and no control. The repository contains no separate licence,
+assignment or service agreement between the individual and the company. That
+does not establish whether private agreements exist or determine ownership of
+every contribution. The licence's trademark clause remains unchanged.
+
+**The position recorded here.** The existing licence and named individual
+Licensor remain unchanged. Limbs (1) and (3) provide separate tests from limb
+(2), but this document does not decide whether a particular competing service
+meets any of them. The question is retained for review before relying on that
+interpretation or changing the operating arrangement.
+
+**What remains unresolved.** The relationship between the individual and the
+operator needs an explicit account. A written agreement could record the
+company's rights and responsibilities; this document does not establish that
+it would make the company's service one the Licensor offers. Limb (2)'s
+publication-date condition is a separate question and cannot simply be omitted
+because an agreement is later written. The terms must be considered for the
+version of the Software concerned.
+
+**Decisions this does not make.** A licence to the company and an assignment of
+copyright are different arrangements. No assignment, new company licence or
+change to the existing future Apache grant is made here. Any such proposal
+needs the owner's decision on its actual terms and its effect on existing
+rights; it should not be inferred from a documentation cleanup.
+
 ## Free and low-cost sources
 
 None of these is advice, and none of them knows anything about this deployment.
@@ -202,3 +254,6 @@ legal centres and legal aid do not take commercial financial-services work.
   retention settings and the account-deletion position.
 - [ARCHITECTURE.md](ARCHITECTURE.md) — the register's shape, the former-member
   fold, and the `PROTECT` spine that stops the register being deleted.
+- [LICENSE](../LICENSE) and [README.md](../README.md) — the FSL terms, the
+  Licensor named in them, and Blueberry Money's stated role as sponsor and
+  prospective operator.
