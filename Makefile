@@ -15,7 +15,7 @@ SCHEMA_COMPARISON ?= /tmp/ledova-schema-comparison.json
 CLIENT_OPERATIONS_REPORT ?= /tmp/ledova-client-operations.json
 
 .PHONY: help install install-backend install-node-if-missing init-local check-local-env build generate-tokens check check-comments check-layers \
-	check-logging check-schema-responses check-test-shadowing check-api-types check-self-imports check-mobile-test-awaits test-gates audit test \
+	check-logging check-schema-responses check-test-shadowing check-docs check-api-types check-self-imports check-mobile-test-awaits test-gates audit test \
 	dev-up dev-down dev-logs contracts-compile contracts-test contracts-deploy-local \
 	contracts-deploy-testnet chain-test smoke lint check-type-check \
 	install-schema-environment generate-api-schema check-api-schema update-api-schema check-client-operations
@@ -53,6 +53,7 @@ help:
 	@echo "  make check-logging            Fail on a log line that can carry a credential or an email"
 	@echo "  make check-schema-responses   Fail on a view whose response the schema does not know"
 	@echo "  make check-test-shadowing     Fail on a test helper that shadows a TestCase method"
+	@echo "  make check-docs               Fail when a document disagrees with the tree it describes"
 	@echo "  make check-connection-binding  Fail on a transaction or cursor bound to the default connection"
 	@echo "  make check-api-types          Fail on a shared type that requires a field the API never sends"
 	@echo "  make install-schema-environment Install development dependencies with the schema toolchain constraints"
@@ -106,7 +107,7 @@ build:
 generate-tokens:
 	$(NPM) exec -- tsx packages/scripts/generate-css-tokens.mjs
 
-check: check-comments check-layers check-logging check-connection-binding check-error-bodies check-type-check check-schema-responses check-test-shadowing install-backend install-node-if-missing
+check: check-comments check-layers check-logging check-connection-binding check-error-bodies check-type-check check-schema-responses check-test-shadowing check-docs install-backend install-node-if-missing
 	$(MAKE) check-self-imports
 	$(NPM) run typecheck
 	$(NPM) --prefix mobile run check:resolution
@@ -138,6 +139,9 @@ check-error-bodies:
 
 check-test-shadowing:
 	$(PYTHON) scripts/check-test-shadowing.py
+
+check-docs:
+	$(PYTHON) scripts/check-docs.py
 check-api-types:
 	@test -f $(SCHEMA) || { \
 	  echo "No schema at $(SCHEMA). Generate one first:"; \

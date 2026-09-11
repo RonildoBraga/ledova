@@ -10,6 +10,39 @@ The method for establishing that a change is correct is in
 against are in [TRAPS.md](TRAPS.md). How the system is put together is in
 [ARCHITECTURE.md](ARCHITECTURE.md).
 
+## Every gate, and where its rule is written
+
+`check-docs.py` holds this table to `scripts/`: a gate script with no entry
+fails, and an entry naming no script fails.
+
+| Script | Rule | `make check` | CI job |
+| --- | --- | --- | --- |
+| `check-comments.py` | [The comment gate](#the-comment-gate) | yes | source gates |
+| `check-type-check.py` | [The type-check gate](#the-type-check-gate) | yes | source gates |
+| `check-layers.py` | [The layer gate](#the-layer-gate) | yes | source gates |
+| `check-connection-binding.py` | [The connection-binding gate](#the-connection-binding-gate) | yes | source gates |
+| `check-schema-responses.py` | [The schema response gate](#the-schema-response-gate) | yes | source gates |
+| `check-test-shadowing.py` | [The test shadowing gate](#the-test-shadowing-gate) | yes | source gates |
+| `check-error-bodies.py` | [The error body gate](#the-error-body-gate) | yes | source gates |
+| `check-logging.py` | [The logging privacy gate](#the-logging-privacy-gate) | yes | source gates |
+| `check-docs.py` | [The documentation gate](#the-documentation-gate) | yes | source gates |
+| `check-api-schema.py` | [The API type drift gate](#the-api-type-drift-gate) | no | Django |
+| `check-api-types.py` | [The API type drift gate](#the-api-type-drift-gate) | no | Django |
+| `check-client-operations.mjs` | [The API type drift gate](#the-api-type-drift-gate) | no | JavaScript |
+| `check-self-imports.mjs` | [Clients and the shared package](ARCHITECTURE.md#clients-and-the-shared-package) | yes | JavaScript |
+
+`check-port-free.py` is in `scripts/` and is not on this table: it refuses to
+start the chain test when its port is taken, which is Makefile plumbing rather
+than a rule anything is held to. `check-docs.py` carries it in `NOT_A_GATE`
+with that reason, so its absence is a recorded decision rather than an
+oversight, and documenting it here would fail the gate.
+
+Two rules are gated without a script of their own: one migration per model
+change, through CI's `makemigrations --check --dry-run`, and the generated
+design tokens, through `git diff --exit-code` after `make build`. Two more
+checks run from the Makefile rather than from `scripts/`:
+`make check-mobile-test-awaits` and `npm --prefix mobile run check:resolution`.
+
 ## The rules
 
 **A rule belongs here only with two things attached: the file that is its
@@ -1049,6 +1082,58 @@ return an id as easily as a dossier; only `str`, `repr`, `json.dumps`,
 `pprint`, `pformat` and `.format` are followed through. Both are false
 negatives that a reviewer has to catch, and both are stated here rather than
 left for the next person to rediscover.
+
+## The documentation gate
+
+`scripts/check-docs.py` fails when a document disagrees with the tree it
+describes. `make check-docs` runs it, `make check` includes it, and CI runs it
+in the source-gates job. Python 3 and a checkout are enough.
+
+**Every other gate here protects source from drifting away from a rule. This one
+protects the documents, because they drifted and nothing said so.** An audit
+against the tree found a register feature that three documents called unbuilt
+while a fourth documented it working; a schedule table missing seven periodic
+tasks, two of which exist only to delete personal data on a retention clock; a
+gate list that said three while `make check` ran eight; and a link whose
+destination was wrapped onto a second line, which markdown does not join, so it
+had been rendering as literal text. None of it was visible from a green
+pipeline.
+
+Three rules, each decidable from the files alone:
+
+- **dead-link** — every relative link and `#anchor` in `docs/`, `README.md`,
+  `CONTRIBUTING.md`, `SECURITY.md` and `CODE_OF_CONDUCT.md` resolves.
+- **periodic-task** — the schedule table under [Background
+  jobs](OPERATIONS.md#background-jobs) is exactly the set of `@app.periodic`
+  tasks under `backend/`.
+- **gate-list** — the table above matches `scripts/check-*`.
+
+**All three are checked in both directions**, which is what makes them worth
+having. A list that only refuses removals still lets a new thing go
+undocumented, and the symptom is identical either way: a green line reporting a
+number that looks like coverage and is a numerator. That is the argument
+`check-comments.py` makes for `NOT_SCANNED` and `check-type-check.py` makes for
+`NOT_A_WORKSPACE`, applied to prose.
+
+**What it deliberately does not cover.** It compares names and paths, never
+claims. A row naming the right task with the wrong cron passes; so does a
+paragraph describing a function's behaviour incorrectly, and so does a stale
+count. Those need a reader, and [Documents against
+code](PRACTICES.md#documents-against-code) is how that reading is done. The
+gate's scope is narrower and mechanical: a thing that exists is mentioned, and a
+thing mentioned exists. Most of what the audit found was that shape.
+
+Two calibrations, both of which reported the tree as broken when it was not, and
+both kept as regression tests:
+
+- **An anchor turns each space into a hyphen, not each run of them.** GitHub
+  strips the punctuation from `## Phase 2 — Eligibility and the register` and
+  keeps both surrounding spaces, so the anchor carries two hyphens. Collapsing
+  whitespace in the slug reports every such heading as a dead anchor while the
+  rendered page is fine.
+- **A gate name is matched only where it is not part of a longer word.** The
+  route `POST /api/wallets/batch-check-balances/` otherwise reads as a
+  reference to a gate called `check-balances`.
 
 ## Shared TypeScript types
 
