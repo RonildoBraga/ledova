@@ -1,5 +1,9 @@
 # Mobile builds and security
 
+**What is specific to the native app**: transport policy, device secret storage,
+the native build baseline and the probes that check them. Everything the two
+clients share is in [ARCHITECTURE.md](ARCHITECTURE.md#clients-and-the-shared-package).
+
 The mobile app uses the versions resolved by `mobile/package-lock.json`: Expo
 54.0.33, React Native 0.81.5, React 19.1.0, SecureStore 15.0.8 and Expo Crypto
 15.0.8. Native projects are generated from `app.json` and the local config plugin;
