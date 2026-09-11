@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type Ref } from 'react';
+import { useCallback, useEffect, useRef, useState, type Ref } from 'react';
 import { Button, Modal, View, Text, Platform, type ViewProps } from 'react-native';
 import { requireNativeView } from 'expo';
 import { CameraAccessContext, createCameraAccess } from '../src/contexts/cameraAccess';
@@ -20,7 +20,7 @@ const InactiveProbe =
       >('LedovaScanner')
     : null;
 
-function WindowProbe({ onComplete }: Props) {
+function WindowProbe({ onComplete, onActiveUnmount }: Props & { onActiveUnmount?: () => void }) {
   const [scans, setScans] = useState(0);
   const camera = useCameraScanner(true, (_data, finish) => {
     setScans((count) => count + 1);
@@ -61,16 +61,26 @@ function WindowProbe({ onComplete }: Props) {
       <Text accessibilityLabel="scanner-probe-state">
         {`${camera.status}|${camera.preview.generation}|${camera.preview.scanId}|${scans}`}
       </Text>
-      {stage !== 'covered' && (camera.status === 'ready' || camera.status === 'scanned') && methodReady && (
+      {onActiveUnmount && camera.status === 'ready' && methodReady && (
         <Button
-          title="Cover scanner"
-          accessibilityLabel="scanner-probe-cover"
-          onPress={() => {
-            if (stage === 'opening') setFirstGeneration(camera.preview.window.getSnapshot().generation);
-            setStage('covered');
-          }}
+          title="Unmount active scanner"
+          accessibilityLabel="scanner-probe-unmount-active"
+          onPress={onActiveUnmount}
         />
       )}
+      {!onActiveUnmount &&
+        stage !== 'covered' &&
+        (camera.status === 'ready' || camera.status === 'scanned') &&
+        methodReady && (
+          <Button
+            title="Cover scanner"
+            accessibilityLabel="scanner-probe-cover"
+            onPress={() => {
+              if (stage === 'opening') setFirstGeneration(camera.preview.window.getSnapshot().generation);
+              setStage('covered');
+            }}
+          />
+        )}
       {stage === 'returning' && camera.status === 'scanned' && (
         <Button
           title="Complete scanner check"
@@ -102,15 +112,49 @@ function WindowProbe({ onComplete }: Props) {
   );
 }
 
-export function ScannerBridgeProbe(props: Props) {
+export function ScannerBridgeProbe({ onComplete }: Props) {
+  const [stage, setStage] = useState<'active' | 'unmounted' | 'continuation' | 'completed'>('active');
   const [access] = useState(() => {
     const value = createCameraAccess();
     value.setAllowed(true);
     return value;
   });
+  const completeWindow = useCallback(
+    (passed: boolean, failureStage?: string) => {
+      if (passed) setStage('completed');
+      else onComplete(false, failureStage);
+    },
+    [onComplete],
+  );
   return (
     <CameraAccessContext.Provider value={access}>
-      <WindowProbe {...props} />
+      {(stage === 'active' || stage === 'continuation') && (
+        <WindowProbe
+          key={stage}
+          onComplete={completeWindow}
+          onActiveUnmount={stage === 'active' ? () => setStage('unmounted') : undefined}
+        />
+      )}
+      {stage === 'unmounted' && (
+        <>
+          <Text accessibilityLabel="scanner-probe-active-unmounted">Active scanner unmounted</Text>
+          <Button
+            title="Remount scanner"
+            accessibilityLabel="scanner-probe-remount"
+            onPress={() => setStage('continuation')}
+          />
+        </>
+      )}
+      {stage === 'completed' && (
+        <>
+          <Text accessibilityLabel="scanner-probe-completed-unmounted">Completed scanner unmounted</Text>
+          <Button
+            title="Report scanner check"
+            accessibilityLabel="scanner-probe-report"
+            onPress={() => onComplete(true)}
+          />
+        </>
+      )}
     </CameraAccessContext.Provider>
   );
 }

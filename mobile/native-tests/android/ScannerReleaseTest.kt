@@ -36,6 +36,9 @@ class ScannerReleaseTest {
   private val instrumentation = InstrumentationRegistry.getInstrumentation()
   private val device = UiDevice.getInstance(instrumentation)
   private val available = ConcurrentHashMap<String, Boolean>()
+  private var stage = "launch"
+  private var lastObservation = "not sampled"
+  private val checkpoints = mutableListOf<String>()
 
   private data class Session(
     val scanner: View,
@@ -47,6 +50,24 @@ class ScannerReleaseTest {
 
   private data class JsState(val status: String, val generation: Int, val scanId: Int, val scans: Int)
   private data class Query(val generation: Int, val scanId: Int, val admitted: Boolean)
+  private data class CameraObservation(
+    val cameraId: String,
+    val previewBound: Boolean,
+    val analysisBound: Boolean,
+    val state: CameraState.Type?,
+    val available: Boolean?,
+    val attached: Boolean,
+    val capturedViewPresent: Boolean,
+    val nativeViews: Int,
+    val js: JsState?
+  )
+
+  private fun enterStage(value: String) {
+    stage = value
+    lastObservation = "not sampled"
+    checkpoints.add("stage=$value")
+    println("SCANNER_PROOF stage=$value")
+  }
 
   private fun member(value: Any, name: String): Field {
     var type: Class<*>? = value.javaClass
@@ -202,15 +223,29 @@ class ScannerReleaseTest {
     return null
   }
 
+  private fun observe(previous: Session): CameraObservation {
+    val cameraId = Camera2CameraInfo.from(previous.camera.cameraInfo).cameraId
+    val views = WindowInspector.getGlobalWindowViews().flatMap { descendants(it) }
+    return CameraObservation(
+      cameraId, previous.provider.isBound(previous.preview), previous.provider.isBound(previous.analysis),
+      previous.camera.cameraInfo.cameraState.value?.type, available[cameraId], previous.scanner.isAttachedToWindow,
+      views.any { it === previous.scanner },
+      views.count { it.javaClass.name == "org.example.ledova.scanner.ScannerCameraView" }, jsState()
+    ).also { lastObservation = it.toString() }
+  }
+
   private fun eventually(message: String, condition: () -> Boolean) {
     val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20)
     do {
       var done = false
       instrumentation.runOnMainSync { done = condition() }
-      if (done) return
+      if (done) {
+        checkpoints.add("stage=$stage conditionSatisfied=true observed=$lastObservation")
+        return
+      }
       Thread.sleep(30)
     } while (System.nanoTime() < deadline)
-    fail(message)
+    fail("stage=$stage: $message; observed=$lastObservation")
   }
 
   private fun openCamera(): Session {
@@ -218,25 +253,42 @@ class ScannerReleaseTest {
     eventually("Release Expo view never bound and opened a camera") {
       observed = session()
       observed?.let {
-        it.provider.isBound(it.preview) && it.provider.isBound(it.analysis) &&
-          it.camera.cameraInfo.cameraState.value?.type == CameraState.Type.OPEN &&
-          available[Camera2CameraInfo.from(it.camera.cameraInfo).cameraId] == false
+        val current = observe(it)
+        current.previewBound && current.analysisBound && current.state == CameraState.Type.OPEN &&
+          current.available == false
       } == true
     }
     return observed!!
   }
 
   private fun released(previous: Session) {
-    val cameraId = Camera2CameraInfo.from(previous.camera.cameraInfo).cameraId
     eventually("Release camera retained a use case, remained open, or did not become available") {
-      !previous.provider.isBound(previous.preview) && !previous.provider.isBound(previous.analysis) &&
-        previous.camera.cameraInfo.cameraState.value?.type == CameraState.Type.CLOSED && available[cameraId] == true
+      val current = observe(previous)
+      !current.previewBound && !current.analysisBound && current.state == CameraState.Type.CLOSED && current.available == true
     }
+  }
+
+  private fun unmounted(previous: Session, kind: String) {
+    enterStage("$kind-js-unmount-ack")
+    eventually("JavaScript did not acknowledge $kind scanner unmount") {
+      observe(previous)
+      WindowInspector.getGlobalWindowViews().flatMap { descendants(it) }.any {
+        it.contentDescription?.toString() == "scanner-probe-$kind-unmounted"
+      }
+    }
+    enterStage("$kind-native-view-absence")
+    eventually("$kind scanner view remained attached or present after JavaScript acknowledgement") {
+      val current = observe(previous)
+      !current.attached && !current.capturedViewPresent && current.nativeViews == 0
+    }
+    enterStage("$kind-unmount-release")
+    released(previous)
+    println("SCANNER_PROOF $kind scanner unmounted and released; observed=$lastObservation")
   }
 
   private fun press(label: String) {
     val button = device.wait(Until.findObject(By.desc(label)), 15000)
-    assertNotNull("Missing Release probe checkpoint: $label", button)
+    assertNotNull("stage=$stage: Missing Release probe checkpoint: $label", button)
     button.click()
   }
 
@@ -253,7 +305,22 @@ class ScannerReleaseTest {
     var scenario: ActivityScenario<Activity>? = null
     try {
       scenario = ActivityScenario.launch<Activity>(intent)
+      enterStage("active-unmount-open")
+      val active = openCamera()
+      instrumentation.runOnMainSync {
+        val ready = requireNotNull(jsState())
+        assertEquals("ready", ready.status)
+        assertEquals(0, ready.scans)
+        assertEquals(true, field(active.scanner, "active"))
+      }
+      enterStage("active-unmount-request")
+      press("scanner-probe-unmount-active")
+      unmounted(active, "active")
+      enterStage("remount-request")
+      press("scanner-probe-remount")
+      enterStage("remount-open")
       val first = openCamera()
+      assertNotSame(active.scanner, first.scanner)
       restoredAfterFailure(first.scanner)
       withNativeQueries(first.scanner) { queries ->
         lateinit var before: JsState
@@ -265,8 +332,11 @@ class ScannerReleaseTest {
           queued = capturedBarcode(first)
         }
         withHeldWindows(first.scanner) { windows ->
+          enterStage("queued-cover-request")
           press("scanner-probe-cover")
+          enterStage("queued-cover-release")
           released(first)
+          enterStage("queued-delivery-loss")
           instrumentation.runOnMainSync {
             assertTrue(windows.events.any { !it.first })
             assertEquals(before, jsState())
@@ -278,7 +348,9 @@ class ScannerReleaseTest {
             assertEquals(before, jsState())
           }
           println("SCANNER_PROOF queued pre-loss tuple native=false before JavaScript window notification")
+          enterStage("queued-return-request")
           press("scanner-probe-return")
+          enterStage("queued-native-regain")
           eventually("native quick regain did not retire the old admission") {
             first.scanner.hasWindowFocus() && windows.events.lastOrNull()?.first == true &&
               (field(first.scanner, "generation") as Int) >= before.generation + 2
@@ -289,6 +361,7 @@ class ScannerReleaseTest {
             assertEquals(before, jsState())
             queued()
           }
+          enterStage("queued-delivery-regain")
           eventually("queued regain event did not finish the actual native admission query") { queries.observed.size == 2 }
           instrumentation.runOnMainSync {
             assertEquals(Query(before.generation, before.scanId, false), queries.observed.last())
@@ -297,9 +370,11 @@ class ScannerReleaseTest {
           }
           println("SCANNER_PROOF quick native loss/regain still refuses the original tuple")
         }
+        enterStage("fresh-open")
         val second = openCamera()
         lateinit var fresh: JsState
         lateinit var live: () -> Unit
+        enterStage("live-delivery-finish")
         instrumentation.runOnMainSync {
           assertSame(first.scanner, second.scanner)
           assertNotSame(first.preview, second.preview)
@@ -317,11 +392,15 @@ class ScannerReleaseTest {
         instrumentation.runOnMainSync {
           assertEquals(Query(fresh.generation, fresh.scanId, true), queries.observed.last())
         }
+        enterStage("live-finish-release")
         released(second)
         println("SCANNER_PROOF unchanged live tuple native=true finishes once and releases")
+        enterStage("completed-cover-request")
         press("scanner-probe-cover")
         eventually("completed native scanner did not observe window loss") { !first.scanner.hasWindowFocus() }
+        enterStage("completed-return-request")
         press("scanner-probe-return")
+        enterStage("completed-refocus")
         eventually("completed scanner did not preserve finish after refocus") {
           first.scanner.hasWindowFocus() && jsState()?.let { it.status == "scanned" && it.scans == 1 } == true
         }
@@ -334,9 +413,13 @@ class ScannerReleaseTest {
           assertEquals(CameraState.Type.CLOSED, second.camera.cameraInfo.cameraState.value?.type)
         }
         println("SCANNER_PROOF completed scanner remains mounted and unbound after refocus")
+        enterStage("completed-unmount-request")
         press("scanner-probe-complete")
-        released(second)
+        unmounted(second, "completed")
       }
+      enterStage("network-report-request")
+      press("scanner-probe-report")
+      enterStage("network-report")
       val result = device.wait(Until.findObject(By.text(Pattern.compile("NATIVE_PROBE_(PASS|FAIL|REPORT_FAILED)"))), 90000)
       assertNotNull("Release networking probe did not report", result)
       assertEquals(if (mode == "red") "NATIVE_PROBE_FAIL" else "NATIVE_PROBE_PASS", result.text)
@@ -348,7 +431,9 @@ class ScannerReleaseTest {
           val statuses = setOf("inactive", "loading", "denied", "failed", "ready", "scanned")
           val current = WindowInspector.getGlobalWindowViews().flatMap { descendants(it) }
             .filterIsInstance<TextView>().map { it.text.toString() }.filter { it in statuses }
-          File(context.getExternalFilesDir(null), "scanner-release-$mode-status.txt").writeText(current.joinToString("\n"))
+          File(context.getExternalFilesDir(null), "scanner-release-$mode-status.txt").writeText(
+            (current + checkpoints + "lastStage=$stage" + "lastObservation=$lastObservation").joinToString("\n")
+          )
         }
       } finally {
         try { scenario?.close() } finally { manager.unregisterAvailabilityCallback(observer) }

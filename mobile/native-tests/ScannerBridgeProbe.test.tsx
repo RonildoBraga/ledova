@@ -33,12 +33,59 @@ beforeEach(() => {
 });
 afterEach(async () => cleanup());
 
+it('acknowledges removal of an active scanner before remounting without accepting its pending barcode', async () => {
+  const onComplete = jest.fn();
+  const view = await render(<ScannerBridgeProbe onComplete={onComplete} />);
+  const scanner = () => view.getAllByTestId('native-scanner').find((item) => item.props.onWindowChanged)!;
+  const inactive = () => view.getAllByTestId('native-scanner').find((item) => !item.props.onWindowChanged)!;
+  expect(view.queryByLabelText('scanner-probe-unmount-active')).toBeNull();
+  await act(() => inactive().props.onLayout());
+  await act(() => scanner().props.onWindowChanged({ nativeEvent: { allowed: true, generation: 1 } }));
+  const first = scanner();
+  expect(first.props.active).toBe(true);
+  expect(view.getByLabelText('scanner-probe-state').props.children).toBe(`ready|1|${first.props.scanId}|0`);
+  let resolveAdmission!: (value: boolean) => void;
+  mockCurrentScan.mockReturnValueOnce(new Promise<boolean>((resolve) => (resolveAdmission = resolve)));
+  const pending = first.props.onBarcodeScanned({
+    nativeEvent: { data: 'synthetic-pending-proof', generation: 1, scanId: first.props.scanId },
+  });
+  try {
+    await fireEvent.press(view.getByLabelText('scanner-probe-unmount-active'));
+    expect(view.getByLabelText('scanner-probe-active-unmounted')).toBeTruthy();
+    expect(view.queryAllByTestId('native-scanner')).toEqual([]);
+    expect(view.queryByLabelText('scanner-probe-state')).toBeNull();
+    expect(onComplete).not.toHaveBeenCalled();
+    await fireEvent.press(view.getByLabelText('scanner-probe-remount'));
+    expect(view.queryByLabelText('scanner-probe-active-unmounted')).toBeNull();
+    await act(() => inactive().props.onLayout());
+    await act(() => scanner().props.onWindowChanged({ nativeEvent: { allowed: true, generation: 1 } }));
+    const fresh = scanner();
+    expect(fresh.props.active).toBe(true);
+    expect(fresh.props.scanId).not.toBe(first.props.scanId);
+    await act(async () => {
+      resolveAdmission(true);
+      await pending;
+    });
+    expect(view.getByLabelText('scanner-probe-state').props.children).toBe(`ready|1|${fresh.props.scanId}|0`);
+    expect(onComplete).not.toHaveBeenCalled();
+  } finally {
+    await act(async () => {
+      resolveAdmission(true);
+      await pending;
+    });
+  }
+});
+
 it('the live native admission calls the real finish callback once and stays complete while mounted', async () => {
   const onComplete = jest.fn();
   const view = await render(<ScannerBridgeProbe onComplete={onComplete} />);
   const scanner = () => view.getAllByTestId('native-scanner').find((item) => item.props.onWindowChanged)!;
-  const inactive = view.getAllByTestId('native-scanner').find((item) => !item.props.onWindowChanged)!;
-  await act(() => inactive.props.onLayout());
+  const inactive = () => view.getAllByTestId('native-scanner').find((item) => !item.props.onWindowChanged)!;
+  await act(() => inactive().props.onLayout());
+  await act(() => scanner().props.onWindowChanged({ nativeEvent: { allowed: true, generation: 1 } }));
+  await fireEvent.press(view.getByLabelText('scanner-probe-unmount-active'));
+  await fireEvent.press(view.getByLabelText('scanner-probe-remount'));
+  await act(() => inactive().props.onLayout());
   await act(() => scanner().props.onWindowChanged({ nativeEvent: { allowed: true, generation: 1 } }));
   const first = scanner();
   await act(() =>
@@ -63,8 +110,12 @@ it('the same unchanged bridge refuses the queued tuple and admits a fresh tuple 
   const onComplete = jest.fn();
   const view = await render(<ScannerBridgeProbe onComplete={onComplete} />);
   const scanner = () => view.getAllByTestId('native-scanner').find((item) => item.props.onWindowChanged)!;
-  const inactive = view.getAllByTestId('native-scanner').find((item) => !item.props.onWindowChanged)!;
-  await act(() => inactive.props.onLayout());
+  const inactive = () => view.getAllByTestId('native-scanner').find((item) => !item.props.onWindowChanged)!;
+  await act(() => inactive().props.onLayout());
+  await act(() => scanner().props.onWindowChanged({ nativeEvent: { allowed: true, generation: 1 } }));
+  await fireEvent.press(view.getByLabelText('scanner-probe-unmount-active'));
+  await fireEvent.press(view.getByLabelText('scanner-probe-remount'));
+  await act(() => inactive().props.onLayout());
   await act(() => scanner().props.onWindowChanged({ nativeEvent: { allowed: true, generation: 1 } }));
   const old = scanner();
   await fireEvent.press(view.getByLabelText('scanner-probe-cover'));
@@ -86,6 +137,24 @@ it('the same unchanged bridge refuses the queued tuple and admits a fresh tuple 
     }),
   );
   expect(view.getByText('scanned')).toBeTruthy();
+  expect(view.queryByLabelText('scanner-probe-completed-unmounted')).toBeNull();
   await fireEvent.press(view.getByLabelText('scanner-probe-complete'));
+  expect(view.getByLabelText('scanner-probe-completed-unmounted')).toBeTruthy();
+  expect(view.queryAllByTestId('native-scanner')).toEqual([]);
+  expect(view.queryByLabelText('scanner-probe-state')).toBeNull();
+  expect(onComplete).not.toHaveBeenCalled();
+  await fireEvent.press(view.getByLabelText('scanner-probe-report'));
   expect(onComplete.mock.calls).toEqual([[true]]);
+});
+
+it('a failed native readiness check retains its failure without a successful unmount checkpoint', async () => {
+  const onComplete = jest.fn();
+  const view = await render(<ScannerBridgeProbe onComplete={onComplete} />);
+  const inactive = view.getAllByTestId('native-scanner').find((item) => !item.props.onWindowChanged)!;
+  mockCurrentScan.mockResolvedValueOnce(true);
+  await act(() => inactive.props.onLayout());
+  expect(onComplete.mock.calls).toEqual([[false, 'inactive-admitted']]);
+  expect(view.queryByLabelText('scanner-probe-active-unmounted')).toBeNull();
+  expect(view.queryByLabelText('scanner-probe-completed-unmounted')).toBeNull();
+  expect(view.queryByLabelText('scanner-probe-report')).toBeNull();
 });
