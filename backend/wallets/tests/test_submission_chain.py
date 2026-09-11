@@ -225,17 +225,41 @@ class SubmissionChainTest(SubmissionFixture, APITransactionTestCase):
                     self.assertEqual(self.financial_state(), before)
                     nonce += 1
 
-    def test_insufficient_funds_rejection_does_not_prove_the_signed_transaction_cannot_later_mine(self):
+    def test_funding_reorg_after_admission_preserves_the_journal_until_the_same_bytes_can_mine(self):
         signed = self.signed(nonce=0)
         self.w3.manager.request_blocking("hardhat_setBalance", [self.signer.address, "0x0"])
-        with self.assertRaisesRegex(Web3RPCError, "funds|balance|enough"):
-            self.w3.eth.send_raw_transaction(signed.raw_transaction)
-        result = self.submit_direct(signed)
+        self.w3.manager.request_blocking("evm_mine", [])
+        unfunded = self.w3.manager.request_blocking("evm_snapshot", [])
+        funding = self.w3.eth.send_transaction(
+            {"from": self.w3.eth.accounts[0], "to": self.signer.address, "value": 10 * 10**18}
+        )
+        self.assertEqual(self.w3.eth.wait_for_transaction_receipt(funding).status, 1)
+        send = EthereumClient.broadcast_transaction
+        rejections = []
+        reorgs = []
+
+        def lose_funding(client, raw):
+            reorgs.append(self.w3.manager.request_blocking("evm_revert", [unfunded]))
+            try:
+                return send(client, raw)
+            except Web3RPCError as error:
+                rejections.append(str(error))
+                raise
+
+        with patch.object(EthereumClient, "broadcast_transaction", lose_funding):
+            result = self.submit_direct(signed)
+        self.assertEqual(reorgs, [True])
+        self.assertEqual(len(rejections), 1)
+        self.assertRegex(rejections[0], "funds|balance|enough")
+        self.assertEqual(self.w3.eth.get_balance(self.signer.address), 0)
         self.assertEqual(result["status"], "pending")
         submission = self.submission()
         self.assertIsNone(submission.acknowledged_at)
         before = self.financial_state()
-        self.w3.manager.request_blocking("hardhat_setBalance", [self.signer.address, hex(10 * 10**18)])
+        funded_again = self.w3.eth.send_transaction(
+            {"from": self.w3.eth.accounts[0], "to": self.signer.address, "value": 10 * 10**18}
+        )
+        self.assertEqual(self.w3.eth.wait_for_transaction_receipt(funded_again).status, 1)
         with acting_for(self.tenant.user.pk):
             self.assertEqual(attempt_submission(submission.pk), "acknowledged")
         self.assertEqual(self.w3.eth.get_transaction_receipt(signed.hash).status, 1)
