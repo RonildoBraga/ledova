@@ -57,6 +57,7 @@ class GlobalSubmissionIdentityChecks(GlobalSubmissionFixture):
         before = self.all_financial_state()
         self.client.force_authenticate(self.other.user)
         self.connect.reset_mock()
+        self.chain_provider.broadcast_transaction.reset_mock()
         response = self.client.post(
             f"/api/wallets/{self.other_wallet.pk}/broadcast-transfer/",
             {"signed_transaction": signed.raw_transaction.to_0x_hex()},
@@ -65,7 +66,7 @@ class GlobalSubmissionIdentityChecks(GlobalSubmissionFixture):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["detail"], "This signed transaction or sender nonce is already recorded.")
         self.assertEqual(self.all_financial_state(), before)
-        self.connect.assert_not_called()
+        self.chain_provider.broadcast_transaction.assert_not_called()
         if POSTGRES and current_alias() == APP_ALIAS:
             with acting_for(self.other.user.pk):
                 self.assertEqual(WalletSubmission.objects.count(), 0)
@@ -78,9 +79,10 @@ class GlobalSubmissionIdentityChecks(GlobalSubmissionFixture):
         before = self.all_financial_state()
         changed = self.signed(value=3 * 10**18)
         self.connect.reset_mock()
+        self.chain_provider.broadcast_transaction.reset_mock()
         with self.assertRaisesRegex(InvalidTransactionException, "sender nonce is already recorded"):
             self.submit_as(self.other_wallet, self.other.user, changed)
-        self.connect.assert_not_called()
+        self.chain_provider.broadcast_transaction.assert_not_called()
         self.assertEqual(self.all_financial_state(), before)
 
     def test_own_wallet_retries_and_distinct_nonces_remain_available(self):

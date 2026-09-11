@@ -154,6 +154,28 @@ class SubmissionChainTest(SubmissionFixture, APITransactionTestCase):
         receipt = self.w3.eth.get_transaction_receipt(result["txHash"])
         self.assertEqual(receipt.status, 1)
 
+    def test_an_external_mined_nonce_is_refused_before_reservation_and_the_next_nonce_works(self):
+        external = self.signed(nonce=0, value=0)
+        self.w3.eth.send_raw_transaction(external.raw_transaction)
+        self.assertEqual(self.w3.eth.get_transaction_receipt(external.hash).status, 1)
+        self.assertEqual(self.w3.eth.get_transaction_count(self.signer.address, "latest"), 1)
+        before = self.financial_state()
+        with patch.object(EthereumClient, "broadcast_transaction") as send:
+            with self.assertRaisesRegex(InvalidTransactionException, "already been consumed"):
+                self.submit_direct(self.signed(nonce=0))
+            send.assert_not_called()
+        self.assertEqual(self.financial_state(), before)
+        signed = self.signed(nonce=1)
+        result = self.submit_direct(signed)
+        receipt = self.w3.eth.get_transaction_receipt(result["txHash"])
+        self.assertEqual(receipt.status, 1)
+        self.assertEqual(self.submission().intent["mined_nonce_observation"]["nonce"], 1)
+        before = self.financial_state()
+        with patch.object(EthereumClient, "get_mined_nonce") as nonce_read:
+            self.assertEqual(self.submit_direct(signed), result)
+            nonce_read.assert_not_called()
+        self.assertEqual(self.financial_state(), before)
+
     def test_a_mined_revert_retains_its_real_block_and_fee_after_reconciliation(self):
         signed = self.signed(nonce=0, to=Web3.to_checksum_address(TOKEN_ADDRESS), gas=90000)
         result = self.submit_direct(signed)

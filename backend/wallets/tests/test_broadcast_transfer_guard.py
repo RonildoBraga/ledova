@@ -97,9 +97,17 @@ class BroadcastTransferGuardTestCase(APITestCase):
             user_account=self.account, address=WALLET_ADDRESS, chain="base", verification_status="VERIFIED"
         )
         self.client.force_authenticate(self.user)
-        self.evm_provider = Mock(spec=["assert_expected_chain", "get_transaction_receipt", "broadcast_transaction"])
+        self.evm_provider = Mock(
+            spec=["assert_expected_chain", "get_mined_nonce", "get_transaction_receipt", "broadcast_transaction"]
+        )
         self.evm_provider.assert_expected_chain.return_value = settings.BLOCKCHAIN_CHAIN_ID
         self.evm_provider.get_transaction_receipt.return_value = None
+        self.evm_provider.get_mined_nonce.side_effect = lambda address: {
+            "chain_id": self.evm_provider.assert_expected_chain.return_value,
+            "nonce": 0,
+            "block_number": 100,
+            "block_hash": "0x" + "ab" * 32,
+        }
         self.evm_provider.broadcast_transaction.side_effect = lambda raw: Web3.keccak(hexstr=raw).to_0x_hex()
         factory = patch("wallets.services.submissions.get_blockchain_client", return_value=self.evm_provider)
         self.evm_connect = factory.start()
@@ -336,7 +344,7 @@ class BroadcastTransferRecordingTest(BroadcastTransferGuardTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["txHash"], tx_hash)
-        self.evm_connect.assert_called_once_with("base")
+        self.assertEqual([call.args for call in self.evm_connect.call_args_list], [("base",), ("base",)])
         self.evm_provider.broadcast_transaction.assert_called_once_with(signed)
 
         recorded = Transaction.objects.get(wallet=self.wallet)
@@ -374,7 +382,7 @@ class BroadcastTransferRecordingTest(BroadcastTransferGuardTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["txHash"], tx_hash)
-        self.evm_connect.assert_called_once_with("base")
+        self.assertEqual([call.args for call in self.evm_connect.call_args_list], [("base",), ("base",)])
         self.evm_provider.broadcast_transaction.assert_called_once_with(signed)
 
         recorded = Transaction.objects.get(wallet=self.wallet)

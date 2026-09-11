@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Mapping
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
@@ -11,6 +12,7 @@ from integrations.base_chain.exceptions import GasEstimationError
 from shared.utils.token_amounts import token_base_units
 
 from .base import BlockchainClient
+from .receipts import nonnegative_integer, normalized_hash
 
 logger = logging.getLogger(__name__)
 
@@ -258,6 +260,29 @@ class EthereumClient(BlockchainClient):
         except Exception as e:
             logger.error(f"Error getting nonce for {address}: {str(e)}")
             raise
+
+    def get_mined_nonce(self, address: str) -> dict:
+        chain_id = self.assert_expected_chain()
+        head = self.w3.eth.get_block("latest")
+        if not isinstance(head, Mapping):
+            raise ValueError("The mined nonce block is unavailable.")
+        height = nonnegative_integer(head.get("number"), maximum=2**63 - 1)
+        block_hash = normalized_hash(head.get("hash"))
+        if height is None or block_hash is None:
+            raise ValueError("The mined nonce block is invalid.")
+        nonce = nonnegative_integer(
+            self.w3.eth.get_transaction_count(Web3.to_checksum_address(address), height), maximum=2**64 - 1
+        )
+        after = self.w3.eth.get_block("latest")
+        if (
+            nonce is None
+            or not isinstance(after, Mapping)
+            or nonnegative_integer(after.get("number"), maximum=2**63 - 1) != height
+            or normalized_hash(after.get("hash")) != block_hash
+            or self.assert_expected_chain() != chain_id
+        ):
+            raise ValueError("A stable mined nonce observation is unavailable.")
+        return {"chain_id": chain_id, "nonce": nonce, "block_number": height, "block_hash": "0x" + block_hash}
 
     def get_transaction_history(
         self, address: str, from_block: Optional[int] = None, to_block: Optional[int] = None
