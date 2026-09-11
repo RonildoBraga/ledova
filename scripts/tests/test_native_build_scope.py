@@ -19,6 +19,7 @@ class NativeBuildScopeTest(unittest.TestCase):
         self.addCleanup(directory.cleanup)
         self.repository = Path(directory.name)
         self.git("init", "--quiet")
+        self.git("config", "maintenance.auto", "false")
         self.git("config", "diff.renames", "true")
         self.base = self.commit({"backend/base.py": "base", "docs/guide.md": "guide", "mobile/app.ts": "app"})
 
