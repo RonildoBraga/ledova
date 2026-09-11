@@ -1666,29 +1666,64 @@ re-deriving it through the code that produced the signature.
 
 ## Wallet transfer journals and chain evidence
 
-User-signed sends commit exact signed bytes, locally derived hash, signed intent
-and pending deduction before broadcasting. `WalletSubmission` records EVM
-attempts; `BitcoinSubmission` and `BitcoinSubmissionInput` record Bitcoin attempts
-and every spent outpoint. Request amounts and fees cannot override signed terms.
-Exact retries reuse the original identity and deduction. History without an
-authoritative signed journal cannot be adopted as permission to send.
+User-signed sends commit exact signed bytes, locally derived hash and signed
+intent before broadcasting. `WalletSubmission` records each EVM attempt;
+`BitcoinSubmission` and `BitcoinSubmissionInput` record Bitcoin attempts and every
+spent outpoint. Request amounts and fees cannot override signed terms. Exact
+retries reuse the original attempt; history without a signed journal cannot be
+adopted as permission to send.
 
-EVM admission checks canonical signature scalars, intrinsic gas including repeated
+An EVM `WalletSubmissionFamily` owns one account/wallet/chain/sender/nonce and its
+original economic intent. A speed-up preserves that transfer and advances the
+selected attempt's fee terms. A cancellation is an empty-data, zero-value native
+call to the same sender. Each attempt remains immutable with its own transaction,
+parent and signed bytes. The family has one selected delivery attempt and one
+canonically attributed winner. Distinct nonces remain independent, including
+deliberately identical transfers. Global chain/hash and chain/sender/nonce
+constraints prevent another account from recording the same spend.
+
+Admission checks canonical signature scalars, intrinsic gas including repeated
 access-list entries and the calldata floor, and positive maximum fee caps; zero
-priority fee is permitted. Nonce and native balance come from one captured mined
-block with network and closing-head checks outside database transactions. Under
-the wallet lock the service rechecks identity and current requesting membership,
-then commits through an outermost durable transaction. A consumed mined nonce or
-balance below signed value plus maximum gas cost cannot create a reservation.
-A later node refusal does not prove that saved bytes can never execute.
+priority fee is permitted. Nonce, native balance and relevant token balances come
+from one captured mined block with network and closing-head checks outside
+database transactions. Under the wallet lock, admission rechecks membership,
+wallet identity, family generations, asset/deployment configuration and holding
+versions before committing an outermost durable transaction.
 
-EVM chain/hash and chain/sender/nonce uniqueness spans account wallets; Bitcoin
-network/transaction and network/outpoint uniqueness likewise prevents duplicate
-spends. PostgreSQL freezes journal-linked signed terms, wallet identity and
-Bitcoin inputs while delivery evidence advances monotonically. Different signed
-bytes at an existing EVM nonce remain refused. Linked speed-ups and cancellations
-sharing one reservation are still required. Distinct nonces remain independent,
-including deliberately identical transfers.
+One family reserves the maximum **value plus signed maximum execution fee** of
+its possible attempts, rather than their sum. A token family retains the original
+token quantity while an original or speed-up may still mine. A cancellation does
+not release principal merely by becoming selected. New exposure must fit beside
+all other outstanding families. If an existing family is underfunded, a
+cancellation adding no exposure may proceed only when its own signed maximum
+cost and every other family's commitments fit the observed balances; the original
+family ceiling remains reserved. A consumed nonce cannot admit a new attempt.
+
+EVM holding sync projects raw balances at that same bounded block minus each
+unconsumed family once. `WalletBalanceProjection` preserves each observation,
+reservation set and resulting quantities; affected holdings point to the common
+projection. Availability floors at zero when outside state underfunds existing
+commitments. A consumed but unattributed nonce is already reflected in the raw
+balance and stops delivery, while its transaction history remains unresolved.
+Nonce advancement alone neither selects a winner nor refunds an old debit.
+Unrelated share holdings and legacy transactions keep their existing paths.
+
+Receipt readers capture wallet, transaction and family identity before RPC.
+`WalletChainWatch` claims and immutable `WalletChainObservation` rows continue
+after terminal states. The current watch, complete target and family generation
+must match again before publication. Canonical included evidence for a recorded
+member can select the winner; competitors become replaced without separate
+refunds. Raw chain balances account for the winning principal and actual cost,
+including reverted and self-transfer outcomes. Failed or changed balance reads
+retain the observation and reconciliation token for a later attempt.
+
+A winner can reopen only on current explicit orphan evidence for its accepted
+block, before a later inclusion selects another winner. Historical observations
+cannot be replayed to rewind this transition. Unknown observations preserve the
+accepted winner. Observation-only calls remain available without financial
+changes; confirmation and the periodic observer reconcile EVM families. Inclusion,
+canonicality and configured finality remain separate; no public finality policy
+is selected by this mechanism.
 
 Bitcoin admission requires the configured approved testnet or regtest genesis,
 confirmed wallet-owned previous outputs, exact satoshi values and matching
@@ -1699,27 +1734,18 @@ inputs are refused. The decoder derives txid without witness and wtxid from the
 complete serialization. Input reservations survive terminal states pending a
 separate replacement/release policy.
 
-Receipt readers capture wallet and transaction identity before RPC. Local and
-history writers compare that target under wallet-then-transaction locks; stale
-evidence returns `observation_changed` without balance, notification or metadata
-effects. Success and revert retain valid block hash, height, time and actual fee.
-Header hash and height must match; zero is valid, missing time stays unknown and
-a new block context cannot inherit unavailable metadata from an older block.
-History-only completion leaves holdings and notifications untouched.
+History-only receipt completion leaves holdings and notifications untouched.
+Valid block hash, height, time and actual fee survive success and revert; missing
+data remains unknown, and new block context cannot inherit unavailable metadata
+from an old block. Bounded consumed-nonce attribution reconstructs candidate
+signed bytes and requires hash/signer, receipt/block, network and closing-head
+agreement. An external candidate remains evidence, not an adopted family member.
 
-`WalletChainWatch` claims and append-only `WalletChainObservation` rows continue
-after terminal states. Claims commit before RPC; generation and complete target
-must still match when evidence is written. Inclusion, canonicality and configured
-finality remain separate. Missing data does not prove a reorg. These observations
-change no balances, transaction statuses, notifications or broadcasts.
-
-Consumed EVM nonce attribution reconstructs candidate signed bytes and requires
-derived hash/signer and receipt/block/network/closing-head agreement. Reads are
-bounded to 66 nonce queries, 10,000 block transactions, 128 KiB input and 4,096
-combined access-list entries/storage keys. Compact evidence distinguishes the
-original, matching higher-fee call, other intent and zero-value self-call. A
-self-call does not prove cancellation intent; nonce advancement alone cannot
-identify a replacement. Unsupported or inconsistent evidence stays unknown.
-Winner accounting, rollup fee reconciliation and operator-writer cutover remain
-separate work. See [wallet recovery](OPERATIONS.md#wallet-journal-recovery) for
-cadence, deployment and backup requirements.
+Migration `wallets.0020_submission_families` backfills one family per existing EVM
+journal without changing signed attempts, transaction history or holding values.
+It refuses reversal with any family or projection history. PostgreSQL freezes
+family ownership, economic intent, membership and observation provenance while
+delivery evidence advances monotonically. Public finality configuration, rollup
+fee ceilings and the broader operator/ledger writer cutover remain separate work.
+See [wallet recovery](OPERATIONS.md#wallet-journal-recovery) for deployment and
+backup requirements.

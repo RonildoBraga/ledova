@@ -24,7 +24,7 @@ class SubmissionNonceChecks(SubmissionFixture):
                 signed = self.signed(nonce=3 + index, **fields)
                 cost = 2 * 10**18 + 21000 * price
                 provider = self.provider(signed)
-                observed = provider.get_mined_nonce(self.signer.address)
+                observed = {**provider.get_mined_nonce(self.signer.address), "nonce": 3 + index}
                 provider.get_mined_nonce.side_effect = None
                 provider.get_mined_nonce.return_value = {**observed, "balance_wei": str(cost - 1)}
                 before = self.financial_state()
@@ -105,7 +105,10 @@ class SubmissionNonceChecks(SubmissionFixture):
         with patch("wallets.services.submissions.get_blockchain_client", return_value=provider):
             response = self.broadcast(signed)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(transaction_states, [(False, before)])
+        self.assertEqual(transaction_states[0], (False, before))
+        self.assertEqual(len(transaction_states), 2)
+        self.assertFalse(transaction_states[1][0])
+        self.assertEqual(len(transaction_states[1][1][0]), len(before[0]) + 1)
         self.assertEqual(self.submission().intent["mined_nonce_observation"], observed)
 
     def test_an_exact_retry_uses_its_journal_even_when_the_nonce_is_now_consumed(self):
@@ -138,7 +141,7 @@ class SubmissionNonceChecks(SubmissionFixture):
         with patch("wallets.services.submissions.get_blockchain_client", return_value=provider):
             response = self.broadcast(signed)
         self.assertEqual(response.status_code, 400)
-        self.assertIn("wallet changed", response.json()["detail"])
+        self.assertIn("commitments changed", response.json()["detail"])
         self.assertEqual(self.financial_state(), before)
         provider.broadcast_transaction.assert_not_called()
 
@@ -240,3 +243,32 @@ class MinedNonceReaderTest(SimpleTestCase):
                     }[scenario]
                 with self.assertRaises((ValueError, ConnectionError)):
                     client.get_mined_nonce("0x" + "12" * 20)
+
+    def test_token_balance_reads_use_the_same_bounded_height_as_nonce_and_native_balance(self):
+        client = self.make_chain_client()
+        address = "0x" + "12" * 20
+        token = "0x" + "34" * 20
+        balance_call = client.w3.eth.contract.return_value.functions.balanceOf.return_value.call
+        balance_call.return_value = 1500000
+        observed = client.get_mined_nonce(address, token_contracts=[token])
+        self.assertEqual(observed["token_balances"], {token: "1500000"})
+        self.assertEqual(observed["block_number"], 7)
+        balance_call.assert_called_once_with(block_identifier=7)
+        client.w3.eth.get_transaction_count.assert_called_once_with(address, 7)
+        client.w3.eth.get_balance.assert_called_once_with(address, 7)
+
+    def test_a_token_balance_from_a_changed_head_or_malformed_value_is_refused(self):
+        for changed in (True, False):
+            with self.subTest(changed_head=changed):
+                client = self.make_chain_client()
+                balance_call = client.w3.eth.contract.return_value.functions.balanceOf.return_value.call
+
+                def read(**kwargs):
+                    if changed:
+                        client.w3.eth.get_block.return_value = {"number": 8, "hash": bytes.fromhex("cd" * 32)}
+                        return 1500000
+                    return True
+
+                balance_call.side_effect = read
+                with self.assertRaises(ValueError):
+                    client.get_mined_nonce("0x" + "12" * 20, token_contracts=["0x" + "34" * 20])

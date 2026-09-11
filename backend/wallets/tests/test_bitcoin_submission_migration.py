@@ -52,6 +52,7 @@ class BitcoinSubmissionMigrationTest(BitcoinSubmissionFixture, APITransactionTes
             self.assertEqual(list(Transaction.objects.order_by("pk").values()), before)
             self.assertEqual(BitcoinSubmission.objects.count(), 0)
             self.assertEqual(BitcoinSubmissionInput.objects.count(), 0)
+        restore_every_migration()
         self.assertEqual(self.submit_direct()["status"], "pending")
         self.assertEqual(self.submission().tx_hash, FIXTURE["txid"])
 

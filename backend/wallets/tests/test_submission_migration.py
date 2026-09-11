@@ -11,6 +11,10 @@ from rest_framework.test import APITransactionTestCase
 from shared.db import use_operator
 from shared.tests.schema import restore_every_migration
 from wallets.models import Transaction, WalletSubmission
+from wallets.tests.historical_submissions import (
+    historical_financial_state,
+    native_submission_at,
+)
 from wallets.tests.test_submission_durability import SubmissionFixture
 
 BEFORE = ("wallets", "0015_transaction_imported_from_history")
@@ -54,6 +58,7 @@ class SubmissionMigrationTest(SubmissionFixture, APITransactionTestCase):
         with use_operator():
             self.assertEqual(list(Transaction.objects.order_by("pk").values()), before)
             self.assertEqual(WalletSubmission.objects.count(), 0)
+        restore_every_migration()
         signed = self.signed()
         with patch("wallets.services.submissions.get_blockchain_client", return_value=self.provider(signed)):
             self.assertEqual(self.submit_direct(signed)["status"], "pending")
@@ -61,11 +66,16 @@ class SubmissionMigrationTest(SubmissionFixture, APITransactionTestCase):
 
     def test_rollback_refuses_to_discard_a_committed_signed_submission(self):
         self.addCleanup(restore_every_migration)
+        executor = MigrationExecutor(connection)
+        executor.migrate([AFTER])
+        old = executor.loader.project_state([AFTER]).apps
         signed = self.signed()
-        with patch("wallets.services.submissions.get_blockchain_client", return_value=self.provider(signed)):
-            self.submit_direct(signed)
-        before = self.financial_state()
+        native_submission_at(old, self.wallet, self.native, signed)
+        before = historical_financial_state(old)
         with self.assertRaisesRegex(RuntimeError, "cannot discard recorded intent"):
             MigrationExecutor(connection).migrate([BEFORE])
-        self.assertEqual(self.financial_state(), before)
-        self.assertEqual(bytes(self.submission().raw_transaction), bytes(signed.raw_transaction))
+        self.assertEqual(historical_financial_state(old), before)
+        self.assertEqual(
+            bytes(old.get_model("wallets", "WalletSubmission").objects.get(wallet_id=self.wallet.pk).raw_transaction),
+            bytes(signed.raw_transaction),
+        )

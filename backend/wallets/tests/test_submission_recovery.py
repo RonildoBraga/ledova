@@ -47,7 +47,7 @@ def terminate_submission(wallet_id, principal_id, signed_raw, phase, sent_path):
         provider.get_mined_nonce.side_effect = lambda address: {
             "chain_id": provider.assert_expected_chain.return_value,
             "nonce": 0,
-            "balance_wei": str(10**32),
+            "balance_wei": str(10 * 10**18),
             "block_number": 100,
             "block_hash": "0x" + "ab" * 32,
         }
@@ -169,8 +169,8 @@ class SubmissionRecoveryChecks(SubmissionFixture):
             before = self.financial_state()
             self.assertEqual(self.submit_direct(signed), first)
             self.assertEqual(self.financial_state(), before)
-            with acting_for(self.tenant.user.pk):
-                transaction_confirmation.fail_transaction(first["txHash"], wallet=self.wallet)
+            with use_operator():
+                Transaction.objects.filter(wallet=self.wallet, tx_hash=first["txHash"]).update(status="failed")
             after_failure = self.financial_state()
             provider.reset_mock()
             self.assertEqual(self.submit_direct(signed)["status"], "failed")
@@ -186,7 +186,7 @@ class SubmissionRecoveryChecks(SubmissionFixture):
             self.submit_direct(signed)
             before = self.financial_state()
             connect.reset_mock()
-            with self.assertRaisesRegex(InvalidTransactionException, "recorded for this wallet nonce"):
+            with self.assertRaisesRegex(InvalidTransactionException, "preserve the original transfer"):
                 self.submit_direct(self.signed(value=3 * 10**18))
             connect.assert_not_called()
         self.assertEqual(self.financial_state(), before)

@@ -102,12 +102,28 @@ class BroadcastTransferGuardTestCase(APITestCase):
         )
         self.evm_provider.assert_expected_chain.return_value = settings.BLOCKCHAIN_CHAIN_ID
         self.evm_provider.get_transaction_receipt.return_value = None
-        self.evm_provider.get_mined_nonce.side_effect = lambda address: {
+        self.evm_provider.get_mined_nonce.side_effect = lambda address, token_contracts=(): {
             "chain_id": self.evm_provider.assert_expected_chain.return_value,
             "nonce": 0,
-            "balance_wei": str(10**32),
+            "balance_wei": str(10 * 10**18),
             "block_number": 100,
             "block_hash": "0x" + "ab" * 32,
+            **(
+                {
+                    "token_balances": {
+                        contract: str(
+                            100
+                            * 10
+                            ** AssetChainDeployment.objects.get(
+                                chain="base", contract_address__iexact=contract
+                            ).decimals
+                        )
+                        for contract in token_contracts
+                    }
+                }
+                if token_contracts
+                else {}
+            ),
         }
         self.evm_provider.broadcast_transaction.side_effect = lambda raw: Web3.keccak(hexstr=raw).to_0x_hex()
         factory = patch("wallets.services.submissions.get_blockchain_client", return_value=self.evm_provider)

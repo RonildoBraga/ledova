@@ -94,6 +94,7 @@ class ChainObservationQuerySet(models.QuerySet):
 
 
 class WalletChainObservation(BaseModel):
+    family_generation = models.PositiveBigIntegerField(null=True, editable=False)
     watch = models.ForeignKey(WalletChainWatch, on_delete=models.PROTECT, related_name="observations")
     user_account = models.ForeignKey("users.UserAccount", on_delete=models.PROTECT, related_name="+")
     generation = models.PositiveBigIntegerField(editable=False)

@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest import skipUnless
 from unittest.mock import patch
 
+from django.core.cache import cache
 from django.test import override_settings
 from hexbytes import HexBytes
 from rest_framework.test import APITransactionTestCase
@@ -372,7 +373,11 @@ class SubmissionChainTest(SubmissionFixture, APITransactionTestCase):
             self.assertEqual(observe_wallet_chain(submission.transaction_id), "recorded")
             sent.assert_not_called()
         with use_operator():
-            first = WalletChainObservation.objects.get(watch__transaction_id=submission.transaction_id)
+            first = (
+                WalletChainObservation.objects.filter(watch__transaction_id=submission.transaction_id)
+                .order_by("-generation")
+                .first()
+            )
         original = dict(first.evidence)
         self.assertEqual((first.result, first.finality), ("included", "satisfied"))
         self.assertTrue(self.w3.manager.request_blocking("evm_revert", [before_send]))
@@ -384,9 +389,9 @@ class SubmissionChainTest(SubmissionFixture, APITransactionTestCase):
         self.assertEqual(observe_wallet_chain(submission.transaction_id), "recorded")
         with use_operator():
             rows = list(
-                WalletChainObservation.objects.filter(watch__transaction_id=submission.transaction_id).order_by(
-                    "generation"
-                )
+                WalletChainObservation.objects.filter(
+                    watch__transaction_id=submission.transaction_id, generation__gte=first.generation
+                ).order_by("generation")
             )
         self.assertEqual([row.result for row in rows], ["included", "orphaned", "included"])
         self.assertEqual(rows[0].evidence, original)
@@ -394,3 +399,136 @@ class SubmissionChainTest(SubmissionFixture, APITransactionTestCase):
         self.assertTrue(rows[2].evidence["previous_orphaned"])
         self.assertNotEqual(rows[2].evidence["receipt"]["hash"], first.evidence["receipt"]["hash"])
         self.assertEqual(self.financial_state(), before)
+
+    def submit_family_with_one_delivery(self, attempts, winner_index):
+        cache.clear()
+        deliver = EthereumClient.broadcast_transaction
+        winner_hash = attempts[winner_index].hash.to_0x_hex()
+
+        def selected_delivery(client, raw):
+            if Web3.keccak(hexstr=raw).to_0x_hex() != winner_hash:
+                raise TimeoutError("Synthetic delivery loss leaves this immutable attempt unresolved")
+            return deliver(client, raw)
+
+        self.w3.manager.request_blocking("evm_setAutomine", [False])
+        try:
+            with patch.object(EthereumClient, "broadcast_transaction", selected_delivery):
+                for attempt in attempts:
+                    response = self.broadcast(attempt)
+                    self.assertEqual(response.status_code, 200, response.content)
+                    self.assertEqual(response.json()["txHash"], attempt.hash.to_0x_hex())
+            with use_operator():
+                before_sync = Holding.objects.get(pk=self.holding.pk).quantity
+                self.assertIsNotNone(sync_holding(self.wallet, self.native))
+                self.assertEqual(Holding.objects.get(pk=self.holding.pk).quantity, before_sync)
+            self.w3.manager.request_blocking("evm_mine", [])
+        finally:
+            self.w3.manager.request_blocking("evm_setAutomine", [True])
+        return self.w3.eth.get_transaction_receipt(winner_hash)
+
+    def assert_mined_family(self, attempts, winner_index, receipt):
+        from wallets.models import WalletSubmission
+
+        winner = attempts[winner_index]
+        expected_status = "confirmed" if receipt.status else "failed"
+        self.assertEqual(self.confirm(winner.hash.to_0x_hex())["status"], expected_status)
+        with use_operator():
+            member = WalletSubmission.objects.get(wallet=self.wallet, tx_hash=winner.hash.to_0x_hex())
+            family = member.family
+            self.assertEqual(family.winner_id, member.pk)
+            self.assertEqual(family.attempts.count(), len(attempts))
+            self.assert_block_metadata(member.transaction, receipt)
+            for row in family.attempts.exclude(pk=member.pk):
+                self.assertEqual(
+                    (row.transaction.status, row.transaction.replaced_by_tx_hash), ("replaced", winner.hash.to_0x_hex())
+                )
+            self.holding.refresh_from_db()
+            self.assertEqual(self.holding.quantity, Decimal(self.w3.eth.get_balance(self.signer.address)).scaleb(-18))
+            self.assertFalse(
+                Transaction.objects.filter(
+                    submission__family=family, balance_reconciliation_token__isnull=False
+                ).exists()
+            )
+        before = self.financial_state()
+        self.assertEqual(self.confirm(winner.hash.to_0x_hex())["status"], "already_processed")
+        self.assertEqual(self.financial_state(), before)
+
+    def test_endpoint_families_settle_original_bump_and_cancel_winners_for_all_envelopes(self):
+        nonce = 0
+        for envelope in (0, 1, 2):
+            for winner_index in (0, 1, 2):
+                with self.subTest(envelope=envelope, winner=winner_index):
+                    fields = {"type": envelope} if envelope else {}
+                    attempts = []
+                    for index in range(3):
+                        fees = (
+                            {"maxFeePerGas": (2 ** (index + 1)) * 10**9, "maxPriorityFeePerGas": (2**index) * 10**9}
+                            if envelope == 2
+                            else {"gasPrice": (2 ** (index + 1)) * 10**9}
+                        )
+                        attempts.append(
+                            self.signed(
+                                nonce=nonce,
+                                gas=90000 if index < 2 else 21000,
+                                to=self.recipient if index < 2 else self.signer.address,
+                                value=10**17 if index < 2 else 0,
+                                **fields,
+                                **fees,
+                            )
+                        )
+                    recipient_before = self.w3.eth.get_balance(self.recipient)
+                    receipt = self.submit_family_with_one_delivery(attempts, winner_index)
+                    self.assertEqual(receipt.status, 1)
+                    self.assert_mined_family(attempts, winner_index, receipt)
+                    self.assertEqual(
+                        self.w3.eth.get_balance(self.recipient) - recipient_before, 10**17 if winner_index < 2 else 0
+                    )
+                    nonce += 1
+
+    def test_endpoint_family_reverted_winner_returns_principal_without_loser_refunds(self):
+        target = Web3.to_checksum_address(TOKEN_ADDRESS)
+        attempts = [self.signed(nonce=0, to=target, gas=90000, gasPrice=price * 10**9) for price in (2, 4)]
+        attempts.append(self.signed(nonce=0, to=self.signer.address, value=0, gasPrice=8 * 10**9))
+        balance = self.w3.eth.get_balance(self.signer.address)
+        receipt = self.submit_family_with_one_delivery(attempts, 1)
+        self.assertEqual(receipt.status, 0)
+        self.assert_mined_family(attempts, 1, receipt)
+        self.assertEqual(
+            balance - self.w3.eth.get_balance(self.signer.address), receipt.gasUsed * receipt.effectiveGasPrice
+        )
+
+    def test_endpoint_token_families_settle_one_token_principal_at_the_winning_block(self):
+        address = Web3.to_checksum_address(TOKEN_ADDRESS)
+        contract = self.w3.eth.contract(address=address, abi=TOKEN_ABI)
+        minted = contract.functions.mint(self.signer.address, 9_000_000).transact({"from": self.w3.eth.accounts[0]})
+        self.assertEqual(self.w3.eth.wait_for_transaction_receipt(minted).status, 1)
+        with use_operator():
+            asset = Asset.objects.create(
+                symbol="FCHAIN", name="Local family token", asset_type="erc20_token", decimals=18, is_verified=True
+            )
+            AssetChainDeployment.objects.create(asset=asset, chain="base", contract_address=address, decimals=6)
+            holding = Holding.objects.create(wallet=self.wallet, asset=asset, quantity=Decimal("9"))
+        data = (
+            bytes.fromhex("a9059cbb") + bytes(12) + bytes.fromhex(self.recipient[2:]) + (1_500_000).to_bytes(32, "big")
+        )
+        for nonce, winner_index in enumerate((0, 1, 2)):
+            with self.subTest(winner=winner_index):
+                attempts = [
+                    self.signed(nonce=nonce, to=address, value=0, data=data, gas=90000, gasPrice=price * 10**9)
+                    for price in (2, 4)
+                ]
+                attempts.append(self.signed(nonce=nonce, to=self.signer.address, value=0, gasPrice=8 * 10**9))
+                before = contract.functions.balanceOf(self.recipient).call()
+                receipt = self.submit_family_with_one_delivery(attempts, winner_index)
+                self.assertEqual(receipt.status, 1)
+                self.assert_mined_family(attempts, winner_index, receipt)
+                self.assertEqual(
+                    contract.functions.balanceOf(self.recipient).call() - before, 1_500_000 if winner_index < 2 else 0
+                )
+                with use_operator():
+                    holding.refresh_from_db()
+                    self.holding.refresh_from_db()
+                    self.assertEqual(
+                        holding.quantity, Decimal(contract.functions.balanceOf(self.signer.address).call()).scaleb(-6)
+                    )
+                    self.assertEqual(holding.balance_projection_id, self.holding.balance_projection_id)

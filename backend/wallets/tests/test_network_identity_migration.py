@@ -8,7 +8,7 @@ from django.test import TransactionTestCase
 from assets.models import Asset
 from shared.tests.schema import migrate_to, restore_every_migration
 from users.models import UserAccount
-from wallets.models import Holding, Wallet
+from wallets.models import Wallet
 
 modules = getattr(settings, "MIGRATION_MODULES", {})
 MIGRATIONS_ENABLED = not ("wallets" in modules and modules["wallets"] is None)
@@ -23,10 +23,11 @@ class WalletNetworkIdentityMigrationTest(TransactionTestCase):
     def test_adding_a_network_preserves_the_original_wallet_and_its_financial_records(self):
         OldWallet = self.before()
         OldTransaction = OldWallet._meta.apps.get_model("wallets", "Transaction")
+        OldHolding = OldWallet._meta.apps.get_model("wallets", "Holding")
         account = UserAccount.objects.create(account_number="WALLET-MIGRATION")
         original = OldWallet.objects.create(user_account_id=account.pk, address="0x" + "a" * 40, chain="ethereum")
         asset = Asset.objects.create(symbol="MIG", name="Migration", asset_type="erc20_token")
-        holding = Holding.objects.create(wallet_id=original.pk, asset=asset, quantity=Decimal("2.5"))
+        holding = OldHolding.objects.create(wallet_id=original.pk, asset_id=asset.pk, quantity=Decimal("2.5"))
         transfer = OldTransaction.objects.create(
             wallet_id=original.pk,
             asset_id=asset.pk,
@@ -47,11 +48,12 @@ class WalletNetworkIdentityMigrationTest(TransactionTestCase):
 
     def test_existing_case_collisions_stop_the_migration_without_merging_or_deleting(self):
         OldWallet = self.before()
+        OldHolding = OldWallet._meta.apps.get_model("wallets", "Holding")
         account = UserAccount.objects.create(account_number="WALLET-COLLISION")
         original = OldWallet.objects.create(user_account_id=account.pk, address="0x" + "ab" * 20, chain="base")
         duplicate = OldWallet.objects.create(user_account_id=account.pk, address="0x" + "AB" * 20, chain="base")
         asset = Asset.objects.create(symbol="COL", name="Collision", asset_type="erc20_token")
-        holding = Holding.objects.create(wallet_id=original.pk, asset=asset, quantity=Decimal("7.5"))
+        holding = OldHolding.objects.create(wallet_id=original.pk, asset_id=asset.pk, quantity=Decimal("7.5"))
         try:
             with self.assertRaisesRegex(RuntimeError, "preserving their financial references"):
                 restore_every_migration()

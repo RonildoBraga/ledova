@@ -7,7 +7,7 @@ from django.db.models import Q
 from django.utils import timezone
 from web3 import Web3
 
-from assets.models import Asset, AssetChainDeployment
+from assets.models import AssetChainDeployment
 from integrations.blockchain import get_blockchain_client
 from integrations.blockchain.receipts import (
     nonnegative_integer,
@@ -21,6 +21,17 @@ from wallets.exceptions import InvalidTransactionException
 from wallets.models import Holding, Transaction, Wallet, WalletSubmission
 from wallets.services import transaction_confirmation
 from wallets.services.chain import token_deployment_decimals
+from wallets.services.family_admission import (
+    admit_exposure,
+    attempt_kind,
+    create_family,
+    family_for_nonce,
+)
+from wallets.services.family_balances import (
+    capture_balance_target,
+    install_projection,
+    read_balance_state,
+)
 from wallets.services.signed_transfers import (
     _recordable,
     expected_chain_id,
@@ -38,12 +49,15 @@ def submit_evm_transfer(wallet, signed_transaction, *, principal_id, token_contr
     tx_hash = Web3.keccak(raw).to_0x_hex()
     with atomic(durable=True):
         locked_wallet = _lock_wallet(wallet.pk, principal_id, decoded)
-        target = _wallet_identity(locked_wallet)
         submission = _existing_submission(locked_wallet, tx_hash, raw)
         if submission is None:
-            _submission_plan(locked_wallet, raw, decoded, tx_hash, token_contract)
+            _, plan, _ = _submission_plan(locked_wallet, raw, decoded, tx_hash, token_contract)
+            asset = transaction_confirmation.resolve_transfer_asset(locked_wallet, plan.token_contract)
+            target = capture_balance_target(locked_wallet, extra_asset_ids=[asset.pk], principal_id=principal_id)
     if submission is None:
-        observation = _mined_nonce(normalize_chain(locked_wallet.chain), decoded)
+        observation = read_balance_state(
+            locked_wallet, target["assets"], client=get_blockchain_client(locked_wallet.chain)
+        )
         with atomic(durable=True):
             try:
                 locked_wallet = _lock_wallet(wallet.pk, principal_id, decoded)
@@ -51,18 +65,19 @@ def submit_evm_transfer(wallet, signed_transaction, *, principal_id, token_contr
                 raise InvalidTransactionException(
                     "This wallet is no longer available to the requesting user."
                 ) from None
-            if _wallet_identity(locked_wallet) != target:
-                raise InvalidTransactionException("The wallet changed during the nonce observation. Retry the request.")
             submission = _existing_submission(locked_wallet, tx_hash, raw)
             if submission is None:
+                if (
+                    capture_balance_target(locked_wallet, extra_asset_ids=[asset.pk], principal_id=principal_id)
+                    != target
+                ):
+                    raise InvalidTransactionException(
+                        "The wallet or its commitments changed during the observation. Retry the request."
+                    )
                 if decoded.nonce < observation["nonce"]:
                     raise InvalidTransactionException("The signed nonce has already been consumed on-chain.")
-                price = decoded.max_fee_per_gas if decoded.envelope_type == 2 else decoded.gas_price
-                if decoded.value + decoded.gas_limit * price > int(observation["balance_wei"]):
-                    raise InvalidTransactionException(
-                        "The observed native balance cannot cover the signed value and maximum gas cost."
-                    )
                 submission = _record_submission(locked_wallet, raw, decoded, tx_hash, token_contract, observation)
+                install_projection(locked_wallet, target, observation)
     attempt_submission(submission.pk)
     tx = Transaction.objects.get(pk=submission.transaction_id)
     quantity = (
@@ -93,10 +108,6 @@ def _lock_wallet(wallet_id, principal_id, decoded):
     return wallet
 
 
-def _wallet_identity(wallet):
-    return wallet.pk, wallet.user_account_id, wallet.address, wallet.chain, wallet.verification_status
-
-
 def _existing_submission(wallet, tx_hash, raw):
     submission = WalletSubmission.objects.filter(wallet=wallet, tx_hash=tx_hash).first()
     if submission is not None and bytes(submission.raw_transaction) != raw:
@@ -104,9 +115,9 @@ def _existing_submission(wallet, tx_hash, raw):
     return submission
 
 
-def _mined_nonce(chain, decoded):
+def _mined_nonce(chain, decoded, *, client=None):
     try:
-        client = get_blockchain_client(chain)
+        client = client or get_blockchain_client(chain)
         if client.assert_expected_chain() != decoded.chain_id:
             raise ValueError("Unexpected chain")
         observed = client.get_mined_nonce(decoded.sender)
@@ -162,17 +173,12 @@ def _signed_fee(decoded):
 def _submission_plan(wallet, raw, decoded, tx_hash, declared_contract):
     if Transaction.objects.filter(wallet=wallet, tx_hash=tx_hash).exists():
         raise InvalidTransactionException("This transaction already has history without a signed submission record.")
-    if WalletSubmission.objects.filter(wallet=wallet, chain_id=decoded.chain_id, nonce=decoded.nonce).exists():
-        raise InvalidTransactionException("Different signed bytes have already been recorded for this wallet nonce.")
+    attempt_kind(family_for_nonce(wallet, decoded), decoded)
     deployment = None
     if decoded.data and decoded.to:
-        deployment = (
-            AssetChainDeployment.objects.select_for_update()
-            .filter(chain__iexact=wallet.chain, contract_address__iexact=decoded.to)
-            .first()
-        )
-        if deployment is not None:
-            Asset.objects.select_for_update().get(pk=deployment.asset_id)
+        deployment = AssetChainDeployment.objects.filter(
+            chain__iexact=wallet.chain, contract_address__iexact=decoded.to
+        ).first()
     plan = plan_signed_transfer(wallet, raw.hex(), declared_contract)
     if plan is None:
         raise InvalidTransactionException("A signed EVM transfer is required.")
@@ -182,14 +188,61 @@ def _submission_plan(wallet, raw, decoded, tx_hash, declared_contract):
 
 def _record_submission(wallet, raw, decoded, tx_hash, declared_contract, observation):
     deployment, plan, fee = _submission_plan(wallet, raw, decoded, tx_hash, declared_contract)
-    recorded = transaction_confirmation.create_pending_transaction(
-        wallet, tx_hash, plan.to_address, plan.amount, transaction_fee=fee, token_contract=plan.token_contract
+    asset = transaction_confirmation.resolve_transfer_asset(wallet, plan.token_contract)
+    decimals = token_deployment_decimals(asset, wallet.chain, plan.token_contract) if plan.token_contract else 18
+    family = family_for_nonce(wallet, decoded)
+    kind = attempt_kind(family, decoded)
+    native_exposure, token_exposure = admit_exposure(wallet, family, kind, decoded, fee, asset, plan, observation)
+    intent = {
+        "mined_nonce_observation": observation,
+        "to_address": plan.to_address,
+        "amount": str(plan.amount),
+        "token_contract": plan.token_contract,
+        "asset_decimals": decimals,
+        "raw_amount": str(int.from_bytes(decoded.data[-32:], "big") if plan.token_contract else decoded.value),
+        "maximum_fee": str(fee),
+        "envelope_type": decoded.envelope_type,
+        "envelope_to": decoded.to,
+        "value": str(decoded.value),
+        "gas_limit": str(decoded.gas_limit),
+        "gas_price": str(decoded.gas_price) if decoded.gas_price is not None else None,
+        "max_fee_per_gas": str(decoded.max_fee_per_gas) if decoded.max_fee_per_gas is not None else None,
+        "max_priority_fee_per_gas": (
+            str(decoded.max_priority_fee_per_gas) if decoded.max_priority_fee_per_gas is not None else None
+        ),
+    }
+    if family is None:
+        family = create_family(
+            wallet=wallet,
+            user_account_id=wallet.user_account_id,
+            chain=normalize_chain(wallet.chain),
+            chain_id=decoded.chain_id,
+            sender_address=decoded.sender.lower(),
+            nonce=decoded.nonce,
+            asset=asset,
+            deployment=deployment if plan.token_contract else None,
+            original_tx_hash=tx_hash,
+            original_intent=intent,
+            native_exposure=native_exposure,
+            token_exposure=token_exposure,
+        )
+    tx = Transaction.objects.create(
+        wallet=wallet,
+        tx_hash=tx_hash,
+        chain=normalize_chain(wallet.chain),
+        from_address=wallet.address,
+        to_address=plan.to_address,
+        asset=asset,
+        amount=plan.amount,
+        transaction_fee_estimated=fee,
+        status="pending",
+        nonce=decoded.nonce,
     )
-    tx = Transaction.objects.get(pk=recorded["transaction_id"])
-    tx.nonce = decoded.nonce
-    tx.save(update_fields=["nonce", "updated_at"])
-    decimals = token_deployment_decimals(tx.asset, wallet.chain, plan.token_contract) if plan.token_contract else 18
-    return _store_submission(
+    transaction_confirmation.TransactionMonitoringService.check_new_transaction(tx)
+    submission = _store_submission(
+        family=family,
+        parent_id=family.selected_id,
+        kind=kind,
         wallet=wallet,
         user_account_id=wallet.user_account_id,
         transaction=tx,
@@ -201,25 +254,14 @@ def _record_submission(wallet, raw, decoded, tx_hash, declared_contract, observa
         nonce=decoded.nonce,
         tx_hash=tx_hash,
         raw_transaction=raw,
-        intent={
-            "mined_nonce_observation": observation,
-            "to_address": plan.to_address,
-            "amount": str(plan.amount),
-            "token_contract": plan.token_contract,
-            "asset_decimals": decimals,
-            "raw_amount": str(int.from_bytes(decoded.data[-32:], "big") if plan.token_contract else decoded.value),
-            "maximum_fee": str(fee),
-            "envelope_type": decoded.envelope_type,
-            "envelope_to": decoded.to,
-            "value": str(decoded.value),
-            "gas_limit": str(decoded.gas_limit),
-            "gas_price": str(decoded.gas_price) if decoded.gas_price is not None else None,
-            "max_fee_per_gas": str(decoded.max_fee_per_gas) if decoded.max_fee_per_gas is not None else None,
-            "max_priority_fee_per_gas": (
-                str(decoded.max_priority_fee_per_gas) if decoded.max_priority_fee_per_gas is not None else None
-            ),
-        },
+        intent=intent,
     )
+    family.selected = submission
+    family.native_exposure = native_exposure
+    family.token_exposure = token_exposure
+    family.generation += 1
+    family.save(update_fields=["selected", "native_exposure", "token_exposure", "generation", "updated_at"])
+    return submission
 
 
 def _store_submission(**fields):
@@ -230,11 +272,15 @@ def _store_submission(**fields):
 
 
 def attempt_submission(submission_id):
-    submission = WalletSubmission.objects.select_related("transaction", "wallet").filter(pk=submission_id).first()
+    submission = (
+        WalletSubmission.objects.select_related("transaction", "wallet", "family").filter(pk=submission_id).first()
+    )
     if submission is None:
         return "not_found"
     if submission.transaction.status != "pending":
         return "already_processed"
+    if submission.family.selected_id != submission.pk or submission.family.winner_id is not None:
+        return "not_selected"
     now = timezone.now()
     WalletSubmission.objects.filter(pk=submission.pk).filter(
         Q(last_attempt_at__isnull=True) | Q(last_attempt_at__lte=now)
@@ -264,6 +310,19 @@ def attempt_submission(submission_id):
             ):
                 return "receipt_available"
             return "receipt_identity_unavailable"
+        state = _mined_nonce(submission.chain, decoded, client=client)
+        if state["nonce"] > submission.nonce:
+            return "nonce_consumed"
+        with atomic():
+            locked_wallet = Wallet.objects.select_for_update().get(pk=submission.wallet_id)
+            family = family_for_nonce(locked_wallet, decoded)
+            if (
+                family is None
+                or family.generation != submission.family.generation
+                or family.selected_id != submission.pk
+                or family.winner_id is not None
+            ):
+                return "not_selected"
         acknowledged_hash = client.broadcast_transaction("0x" + raw.hex())
         if not transaction_hash_matches(acknowledged_hash, submission.tx_hash):
             return "acknowledgement_unavailable"

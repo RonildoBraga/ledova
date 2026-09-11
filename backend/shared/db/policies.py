@@ -94,6 +94,8 @@ POLICIES = {
     "customer_accounts_account": (f"{_member('uuid')} OR {HOLDS_A_SIGNING_WALLET}", _member("uuid")),
     "wallets": (f"{_member('user_account_id')} OR {SIGNS_FOR_A_COMPANY}", _member("user_account_id")),
     "transactions": (_member("user_account_id"), _member("user_account_id")),
+    "wallets_walletsubmissionfamily": (_member("user_account_id"), _member("user_account_id")),
+    "wallets_walletbalanceprojection": (_member("user_account_id"), _member("user_account_id")),
     "wallets_walletsubmission": (_member("user_account_id"), _member("user_account_id")),
     "wallets_bitcoinsubmission": (_member("user_account_id"), _member("user_account_id")),
     "wallets_bitcoinsubmissioninput": (_member("user_account_id"), _member("user_account_id")),

@@ -18,11 +18,12 @@ def recover_wallet_submissions(timestamp: int):
             (WalletSubmission, attempt_submission),
             (BitcoinSubmission, attempt_bitcoin_submission),
         ):
-            rows = (
-                model.objects.filter(transaction__status="pending")
-                .order_by(F("last_attempt_at").asc(nulls_first=True), "created_at", "pk")
-                .values_list("last_attempt_at", "created_at", "pk")[:100]
-            )
+            eligible = model.objects.filter(transaction__status="pending")
+            if model is WalletSubmission:
+                eligible = eligible.filter(family__selected_id=F("pk"), family__winner__isnull=True)
+            rows = eligible.order_by(F("last_attempt_at").asc(nulls_first=True), "created_at", "pk").values_list(
+                "last_attempt_at", "created_at", "pk"
+            )[:100]
             pending.extend((last, created, pk, attempt) for last, created, pk in rows)
         pending.sort(key=lambda row: (row[0] is not None, row[0] or row[1], row[1], str(row[2])))
         outcomes = Counter(attempt(submission_id) for _, _, submission_id, attempt in pending[:100])

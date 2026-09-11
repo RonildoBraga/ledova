@@ -13,8 +13,9 @@ from ledova_backend.procrastinate_app import app
 from shared.constants import BLOCKCHAIN_BITCOIN
 from shared.db import acting_for
 from wallets.constants import TRANSACTION_STATUS_PENDING
-from wallets.models import Transaction, Wallet
+from wallets.models import Transaction, Wallet, WalletSubmission
 from wallets.services import transaction_confirmation
+from wallets.services.chain_observations import observe_wallet_chain
 from wallets.services.history_receipts import record_history_receipt
 from wallets.services.receipt_readers import extract_actual_fee, get_receipt_reader
 from wallets.services.receipt_targets import capture_receipt_target
@@ -37,6 +38,15 @@ def _confirm_pending_transaction(tx_hash: str, wallet_uuid: str) -> Dict[str, An
 
     try:
         tx = Transaction.objects.get(tx_hash=tx_hash, wallet=wallet)
+        family_attempt = WalletSubmission.objects.filter(transaction=tx).first()
+        if family_attempt is not None:
+            if tx.status != TRANSACTION_STATUS_PENDING and tx.balance_reconciliation_token is None:
+                return {"status": "already_processed", "current_status": tx.status}
+            outcome = observe_wallet_chain(tx.pk, reconcile=True)
+            tx.refresh_from_db()
+            if tx.status == TRANSACTION_STATUS_PENDING:
+                raise RuntimeError("A canonical family winner is not yet available.")
+            return {"status": tx.status, "tx_hash": tx_hash, "observation": outcome}
         if tx.status != TRANSACTION_STATUS_PENDING:
             if tx.balance_reconciliation_token is not None:
                 repaired = transaction_confirmation.reconcile_transaction(tx_hash, wallet=wallet)

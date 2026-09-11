@@ -31,5 +31,7 @@ def observe_wallet_chains(timestamp: int):
             )
             candidates.extend(rows)
     candidates.sort(key=lambda row: (row[0] is not None, row[0] or row[1], row[1], str(row[2])))
-    outcomes = Counter(observe_wallet_chain(tx_id) for _, _, tx_id in candidates[:OBSERVATION_BATCH_SIZE])
+    outcomes = Counter(
+        observe_wallet_chain(tx_id, reconcile=True) for _, _, tx_id in candidates[:OBSERVATION_BATCH_SIZE]
+    )
     return {"attempted": sum(outcomes.values()), "outcomes": dict(outcomes)}

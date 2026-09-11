@@ -15,6 +15,10 @@ class Holding(BaseModel):
     balance_version = models.UUIDField(default=uuid4, editable=False)
     sync_version = models.UUIDField(default=uuid4, editable=False)
 
+    balance_projection = models.ForeignKey(
+        "wallets.WalletBalanceProjection", on_delete=models.PROTECT, null=True, related_name="+", editable=False
+    )
+
     objects = HoldingQuerySet.as_manager()
 
     class Meta:

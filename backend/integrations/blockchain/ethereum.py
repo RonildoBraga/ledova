@@ -261,7 +261,7 @@ class EthereumClient(BlockchainClient):
             logger.error(f"Error getting nonce for {address}: {str(e)}")
             raise
 
-    def get_mined_nonce(self, address: str) -> dict:
+    def get_mined_nonce(self, address: str, *, token_contracts=()) -> dict:
         chain_id = self.assert_expected_chain()
         head = self.w3.eth.get_block("latest")
         if not isinstance(head, Mapping):
@@ -276,6 +276,16 @@ class EthereumClient(BlockchainClient):
         balance = nonnegative_integer(
             self.w3.eth.get_balance(Web3.to_checksum_address(address), height), maximum=2**256 - 1
         )
+        token_balances = {}
+        for contract_address in token_contracts:
+            contract = self.w3.eth.contract(address=Web3.to_checksum_address(contract_address), abi=self.ERC20_ABI)
+            token_balance = nonnegative_integer(
+                contract.functions.balanceOf(Web3.to_checksum_address(address)).call(block_identifier=height),
+                maximum=2**256 - 1,
+            )
+            if token_balance is None:
+                raise ValueError("A bounded token balance is unavailable.")
+            token_balances[contract_address.lower()] = str(token_balance)
         after = self.w3.eth.get_block("latest")
         if (
             nonce is None
@@ -292,6 +302,7 @@ class EthereumClient(BlockchainClient):
             "balance_wei": str(balance),
             "block_number": height,
             "block_hash": "0x" + block_hash,
+            **({"token_balances": token_balances} if token_contracts else {}),
         }
 
     def get_transaction_history(

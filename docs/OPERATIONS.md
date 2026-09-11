@@ -1170,14 +1170,17 @@ record-keeping obligation exists.
 The [wallet journals](ARCHITECTURE.md#wallet-transfer-journals-and-chain-evidence)
 make a successful send response durable acceptance, not proof of mining. A
 timeout, provider error or mismatched acknowledgement leaves the locally derived
-hash pending. Uncertain delivery does not authorize releasing its deduction or
-allocating a new nonce.
+hash pending. Uncertain delivery does not release its reservation or turn a
+retry into a new spend. Deliberately separate, affordable requests may use
+distinct nonces.
 
 `recover_wallet_submissions` attempts at most 100 pending EVM and Bitcoin journals
 every five minutes, oldest attempt first. It revalidates saved signed identity
-and network. EVM recovery leaves matching receipts to confirmation; unavailable
-chain or receipt identity does not authorize sending. With no receipt it resends
-only saved bytes. Bitcoin also revalidates inputs and node admission; matching
+and network. EVM recovery considers only each family's selected pending attempt,
+leaves matching receipts to confirmation, and checks the mined nonce before
+sending. A consumed nonce stops delivery even when its winner is still unknown;
+unavailable chain or receipt identity does not authorize sending. With no receipt
+and an unconsumed nonce it resends only saved bytes. Bitcoin also revalidates inputs and node admission; matching
 raw bytes and witness hash in the mempool resolve a lost acknowledgement without
 resending. Queue failure or process exit does not erase accepted intent. Terminal
 transactions are not sent again by this sweep.
@@ -1187,7 +1190,11 @@ including confirmed and failed transactions. Never-observed journals come first,
 then the least recently started; a start within two minutes is deferred. A newer
 claim supersedes an abandoned one, while a late response cannot overwrite newer
 evidence. Preserve inclusion, orphan and reinclusion history when investigating
-chain changes. Missing or inconsistent provider data stays unknown.
+chain changes. Canonical EVM family observations reconcile winners and holdings;
+unknown or inconsistent evidence cannot select a winner. A failed balance read
+retains the reconciliation token until a fresh coherent observation succeeds.
+An explicit orphan observation must reopen an accepted winner before another
+attempt can win; historical evidence cannot be replayed to bypass that sequence.
 
 `WALLET_CHAIN_FINALITY_POLICIES` defaults to an empty mapping. Explicit entries
 use `evm:<chain_id>` or `bitcoin:<genesis_hash>` and either
@@ -1197,25 +1204,31 @@ leave verified inclusion intact with unknown finality; closing head/network
 checks must still pass. No public policy is selected by local fixture settings,
 and recorded finality does not itself settle or refund a wallet.
 
-Apply `wallets/0016_wallet_submission` through `0019_chain_observations` before
+Apply `wallets/0016_wallet_submission` through `0020_submission_families` before
 starting updated API and workers, with old transfer writers stopped before
 admitting sends. Existing transactions remain intact without invented journals.
 `0018_global_submission_identity` refuses conflicting EVM chain/hash or
 sender/nonce history rather than deleting it or choosing an owner. Preserve
 records and resolve ownership/accounting before retrying a blocked migration.
-`0017_bitcoin_submission` requires all input reservations at commit. Request-role
+`0017_bitcoin_submission` requires all input reservations at commit.
+`0020_submission_families` preserves existing attempt bytes, transactions and
+holding values while adding one family per EVM journal. Its immutable projection
+history records every bounded balance observation and reservation calculation;
+no historical family or projection may be discarded to reverse this migration.
+Request-role
 policies protect signed bytes and inputs. Only the operator role writes watches
 and observations; members can read their own evidence.
 
 Protected journal links preserve signed terms, wallet identity and financial
 records. Bitcoin inputs and observation history cannot be rewritten or deleted,
-and populated journal/watch migrations refuse rollback. Do not clear records to
+and populated journal/watch/family migrations refuse rollback. Do not clear records to
 make rollback succeed. Backups contain signed payloads that can be broadcast and
 need the same protection as other signed transactions. These changes do not
 activate operator signers or disabled trading.
 
-`make chain-test` includes local EVM native/ERC20 submissions, settlement,
-lost-acknowledgement and canonical-signature controls on PostgreSQL.
+`make chain-test` includes local EVM native/ERC20 endpoint families, original,
+speed-up and cancellation winners, reverted winners, settlement, lost
+acknowledgements and canonical-signature controls on PostgreSQL.
 `python scripts/test-bitcoin-chain.py` uses an isolated Bitcoin Core 31.1 regtest
 node without peers or external networking. Its Linux x86_64 official archive is
 checksum-pinned; `BITCOIN_TEST_BINARY` can select an installed 31.1 daemon and

@@ -263,7 +263,12 @@ class ChainObservationChecks(ChainObservationFixture):
         with patch("wallets.tasks.chain_observations.timezone.now", return_value=later):
             self.assertEqual(observe_wallet_chains(0), {"attempted": 1, "outcomes": {"recorded": 1}})
         self.assertEqual(len(self.observations()), 2)
-        self.assertEqual(self.financial_state(), before)
+        after = self.financial_state()
+        self.assertEqual(after[1:], before[1:])
+        with use_operator():
+            tx = Transaction.objects.get(pk=self.tx_id)
+            self.assertIsNotNone(tx.balance_reconciliation_token)
+            self.assertEqual(tx.block_hash, BLOCK_HASH)
 
     @skipUnless(POSTGRES, "Database guards require PostgreSQL")
     def test_postgres_keeps_the_watch_identity_and_observations_immutable(self):

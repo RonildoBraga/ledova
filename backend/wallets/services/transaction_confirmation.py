@@ -25,7 +25,13 @@ from wallets.constants import (
     TRANSACTION_STATUSES_THAT_RETURN_THE_OPTIMISTIC_DEBIT,
 )
 from wallets.exceptions import InvalidTransactionException
-from wallets.models import Holding, HoldingSnapshot, Transaction, Wallet
+from wallets.models import (
+    Holding,
+    HoldingSnapshot,
+    Transaction,
+    Wallet,
+    WalletSubmission,
+)
 from wallets.services.holdings import sync_holding
 from wallets.services.receipt_metadata import apply_receipt_metadata
 from wallets.services.receipt_targets import capture_receipt_target
@@ -126,6 +132,9 @@ def confirm_transaction(
     actual_fee: Optional[Decimal] = None,
     expected=None,
 ) -> Dict[str, Any]:
+    if WalletSubmission.objects.filter(wallet=wallet, tx_hash=tx_hash).exists():
+        return _observe_family_transaction(wallet, tx_hash)
+
     def confirm_once(tx):
         if tx.status == TRANSACTION_STATUS_CONFIRMED:
             return {"status": "already_confirmed", "tx_hash": tx_hash}, None
@@ -159,6 +168,9 @@ def fail_transaction(
     actual_fee: Optional[Decimal] = None,
     expected=None,
 ) -> Dict[str, Any]:
+    if WalletSubmission.objects.filter(wallet=wallet, tx_hash=tx_hash).exists():
+        return _observe_family_transaction(wallet, tx_hash)
+
     def fail_once(tx):
         if tx.status != TRANSACTION_STATUS_PENDING:
             return {"status": "not_pending", "tx_hash": tx_hash, "current_status": tx.status}, None
@@ -178,6 +190,9 @@ def fail_transaction(
 
 
 def mark_reorged(tx_hash: str, wallet: Wallet) -> Dict[str, Any]:
+    if WalletSubmission.objects.filter(wallet=wallet, tx_hash=tx_hash).exists():
+        return _observe_family_transaction(wallet, tx_hash)
+
     def reverse_once(tx):
         if tx.status != TRANSACTION_STATUS_CONFIRMED:
             return {"status": "not_confirmed", "tx_hash": tx_hash, "current_status": tx.status}, None
@@ -193,6 +208,9 @@ def mark_reorged(tx_hash: str, wallet: Wallet) -> Dict[str, Any]:
 
 
 def mark_replaced(tx_hash: str, wallet: Wallet, replacement_tx_hash: str) -> Dict[str, Any]:
+    if WalletSubmission.objects.filter(wallet=wallet, tx_hash=tx_hash).exists():
+        return _observe_family_transaction(wallet, tx_hash)
+
     def link_and_leave_the_holding(tx):
         if tx.status != TRANSACTION_STATUS_PENDING:
             return {"status": "not_pending", "tx_hash": tx_hash, "current_status": tx.status}, None
@@ -228,6 +246,12 @@ def _invalidate_balance_reads(tx: Transaction) -> None:
 
 
 def reconcile_transaction(tx_hash: str, *, wallet: Wallet) -> bool:
+    if WalletSubmission.objects.filter(wallet=wallet, tx_hash=tx_hash).exists():
+        _observe_family_transaction(wallet, tx_hash)
+        return not Transaction.objects.filter(
+            wallet=wallet, tx_hash=tx_hash, balance_reconciliation_token__isnull=False
+        ).exists()
+
     tx = Transaction.objects.select_related("asset").filter(tx_hash=tx_hash, wallet=wallet).first()
     if tx is None or tx.balance_reconciliation_token is None:
         return True
@@ -370,3 +394,12 @@ def _outstanding_deduction(tx, asset, amount, sync_version) -> Decimal:
         Holding.objects.select_for_update().filter(wallet=tx.wallet, asset=asset, sync_version=sync_version).first()
     )
     return amount if holding is not None else Decimal("0")
+
+
+def _observe_family_transaction(wallet, tx_hash):
+    from wallets.services.chain_observations import observe_wallet_chain
+
+    tx = Transaction.objects.get(wallet=wallet, tx_hash=tx_hash)
+    outcome = observe_wallet_chain(tx.pk, reconcile=True)
+    tx.refresh_from_db()
+    return {"status": tx.status, "tx_hash": tx_hash, "observation": outcome}

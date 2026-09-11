@@ -16,6 +16,11 @@ class SubmissionQuerySet(models.QuerySet):
 
 
 class WalletSubmission(BaseModel):
+    family = models.ForeignKey(
+        "wallets.WalletSubmissionFamily", on_delete=models.PROTECT, related_name="attempts", editable=False
+    )
+    parent = models.ForeignKey("self", on_delete=models.PROTECT, null=True, related_name="children", editable=False)
+    kind = models.CharField(max_length=16, default="original", editable=False)
     wallet = models.ForeignKey("wallets.Wallet", on_delete=models.PROTECT, related_name="submissions", editable=False)
     user_account = models.ForeignKey("users.UserAccount", on_delete=models.PROTECT, related_name="+", editable=False)
     transaction = models.OneToOneField(
@@ -39,11 +44,20 @@ class WalletSubmission(BaseModel):
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=["wallet", "tx_hash"], name="unique_wallet_submission_hash"),
-            models.UniqueConstraint(fields=["wallet", "chain_id", "nonce"], name="unique_wallet_submission_nonce"),
-            models.UniqueConstraint(fields=["chain_id", "tx_hash"], name="unique_submission_chain_hash"),
             models.UniqueConstraint(
-                fields=["chain_id", "sender_address", "nonce"], name="unique_submission_sender_nonce"
+                fields=["family"], condition=models.Q(kind="original"), name="unique_family_original"
+            ),
+            models.UniqueConstraint(fields=["wallet", "tx_hash"], name="unique_wallet_submission_hash"),
+            models.UniqueConstraint(fields=["chain_id", "tx_hash"], name="unique_submission_chain_hash"),
+            models.CheckConstraint(
+                condition=models.Q(kind__in=["original", "speed_up", "cancellation"]), name="wallet_submission_kind"
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(kind="original", parent__isnull=True)
+                    | models.Q(kind__in=["speed_up", "cancellation"], parent__isnull=False)
+                ),
+                name="wallet_submission_parent",
             ),
             models.CheckConstraint(condition=models.Q(chain_id__gt=0), name="wallet_submission_chain_id"),
             models.CheckConstraint(

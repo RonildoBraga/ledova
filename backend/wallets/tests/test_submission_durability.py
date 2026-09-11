@@ -69,12 +69,13 @@ class SubmissionFixture:
         )
         provider.assert_expected_chain.return_value = settings.BLOCKCHAIN_CHAIN_ID
         provider.get_transaction_receipt.return_value = None
-        provider.get_mined_nonce.side_effect = lambda address: {
+        provider.get_mined_nonce.side_effect = lambda address, token_contracts=(): {
             "chain_id": provider.assert_expected_chain.return_value,
             "nonce": 0,
-            "balance_wei": str(10**32),
+            "balance_wei": str(10 * 10**18),
             "block_number": 100,
             "block_hash": "0x" + "ab" * 32,
+            **({"token_balances": {contract: "10000000" for contract in token_contracts}} if token_contracts else {}),
         }
         provider.broadcast_transaction.return_value = signed.hash.to_0x_hex()
         return provider

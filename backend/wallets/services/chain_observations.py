@@ -152,6 +152,7 @@ def complete_chain_observation(claim, result):
         if watch.observations.filter(generation=claim.generation).exists():
             return "already_recorded"
         observation = WalletChainObservation.objects.create(
+            family_generation=claim.target.family[1] if claim.target.family is not None else None,
             watch=watch,
             user_account_id=watch.user_account_id,
             generation=claim.generation,
@@ -169,10 +170,11 @@ def complete_chain_observation(claim, result):
         return "recorded"
 
 
-def observe_wallet_chain(transaction_id):
+def observe_wallet_chain(transaction_id, *, reconcile=False):
     claim = claim_chain_observation(transaction_id)
     if claim is None:
         return "identity_unavailable"
+    client = None
     try:
         client = get_blockchain_client(claim.chain)
         result = collect_chain_evidence(
@@ -183,6 +185,13 @@ def observe_wallet_chain(transaction_id):
             previous_block=claim.previous_block,
             policy=claim.policy,
         )
+        if (
+            reconcile
+            and claim.target.family is not None
+            and claim.target.family[3] is not None
+            and result["evidence"].get("previous_orphaned") is True
+        ):
+            result = {**result, "result": "orphaned", "finality": "unknown", "reason": "previous_block_replaced"}
         if (
             claim.signed_transaction is not None
             and result["evidence"].get("complete") is True
@@ -200,4 +209,16 @@ def observe_wallet_chain(transaction_id):
             result["evidence"]["nonce_spend"] = nonce
     except Exception:
         result = {"result": "unknown", "finality": "unknown", "reason": "provider_unavailable", "evidence": {}}
-    return complete_chain_observation(claim, result)
+    outcome = complete_chain_observation(claim, result)
+    if reconcile and outcome == "recorded" and claim.signed_transaction is not None:
+        from wallets.services.family_confirmation import reconcile_family_observation
+
+        with use_operator():
+            observation_id = (
+                WalletChainObservation.objects.filter(watch_id=claim.watch_id, generation=claim.generation)
+                .values_list("pk", flat=True)
+                .first()
+            )
+        if observation_id is not None:
+            reconcile_family_observation(observation_id, client=client)
+    return outcome
