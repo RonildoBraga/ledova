@@ -18,8 +18,8 @@ Legislation](https://www.legislation.gov.au/C2004A00818/latest/text), and
 
 ## What bites now, and what does not
 
-**The first four do not reach their stated triggers today**: the platform runs
-on a local chain or a supported
+**None of these bite today**, and for the first four the reason is one fact
+rather than four arguments: the platform runs on a local chain or a supported
 testnet, with synthetic data, and has never held a real security, a real
 investor's money or a real company's register. The chain guards refuse any
 mainnet chain id and mainnet configuration is absent from the repository. A
@@ -37,13 +37,15 @@ before it matters — and they are not the same thing:
 | 4 | Operating without an AFSL | The first offer of a real security to a real investor |
 | 5 | Who "we" is in the licence's Competing Use test | Someone offering a competing service, or Blueberry Money beginning to operate |
 
-Question 5 does not wait on real investors: the repository is already published
-under the licence. A fork alone does not establish a Competing Use; the question
-concerns the use made of the software and the relationship between its
+Question 5 is the exception to the paragraph above: it does not wait on real
+investors, because a competitor could fork the repository today. What it waits
+on is somebody wanting to — and a fork alone is not a Competing Use, since the
+test is about the use made of the software and the relationship between its
 Licensor and operator.
 
 Questions 1 to 3 are ones a careful reader can settle from primary sources, and
-the positions below do that. Question 5 is not settled by this document.
+the positions below do that. Question 5 is not settled by reading either, but
+unlike question 4 its cheapest answer is a document the owner can write.
 **Question 4 is the one where being wrong is an offence rather than a defect**,
 and the position on it is to not reach its trigger.
 
@@ -196,37 +198,44 @@ the Software available**; or (3) offers the same or substantially similar
 functionality as the Software. In each, *we* is the Licensor. The Licensor named
 in [LICENSE](../LICENSE) is an individual. The company expected to operate
 Ledova as hosted infrastructure is Blueberry Money, a separate legal person
-described in the README as a prospective operator. The relationship between
-them and the existence of the relevant service at publication are separate
-questions under limb (2).
+whose service does not exist yet — so limb (2) is doubtful here on two counts at
+once, not one.
 
 **What the documents do today.** `LICENSE` is FSL-1.1-ALv2 with
-`Copyright 2026 Ronildo da Rocha Braga Junior`. The README names Blueberry Money
-as sponsor and prospective first operator, and says sponsorship transfers no
-ownership and no control. The repository contains no separate licence,
-assignment or service agreement between the individual and the company. That
-does not establish whether private agreements exist or determine ownership of
-every contribution. The licence's trademark clause remains unchanged.
+`Copyright 2026 Ronildo da Rocha Braga Junior`, and every human commit in the
+history is his. The README names Blueberry Money as sponsor and prospective
+first operator, and says sponsorship transfers no ownership and no control. The
+repository contains no written licence, assignment or service agreement between
+the individual and the company — which is the repository's silence, not proof
+that no private agreement exists. The trade mark position is separate and
+unaffected: the licence grants no right to the Ledova or Blueberry Money names
+beyond identifying the origin of the software.
 
-**The position recorded here.** The existing licence and named individual
-Licensor remain unchanged. Limbs (1) and (3) provide separate tests from limb
-(2), but this document does not decide whether a particular competing service
-meets any of them. The question is retained for review before relying on that
-interpretation or changing the operating arrangement.
+**The position.** Limbs (1) and (3) do not depend on who offers what, so a rival
+hosted platform is very likely caught by them whatever limb (2) does. The
+licence is therefore left as it stands, with the individual as Licensor.
 
-**What remains unresolved.** The relationship between the individual and the
-operator needs an explicit account. A written agreement could record the
-company's rights and responsibilities; this document does not establish that
-it would make the company's service one the Licensor offers. Limb (2)'s
-publication-date condition is a separate question and cannot simply be omitted
-because an agreement is later written. The terms must be considered for the
-version of the Software concerned.
+**What would make that position unnecessary, and it is not advice.** Limb (2) is
+doubtful only because the relationship between the Licensor and the operator is
+unwritten. A written licence from the individual to Blueberry Money, and a line
+in the README describing the company's service as offered under it, would make
+the operator's service visibly one the Licensor offers using the Software. That
+is the same shape as the gap under question 2 — a document nobody has written —
+and it is the cheapest thing on this page to close. Limb (2) fixes its condition
+at the version's publication date, so a later agreement does not reach back to a
+version published before it.
+
+**Which way to be wrong.** Assigning copyright to Blueberry Money would remove
+the doubt at the source, and it is the option to be slowest about: it is a real
+transfer of an asset, the two-year Apache grant would then flow from the company
+rather than from him, and what happens to the code if that company is wound up
+or sold becomes a live question. Leaving the licence alone risks a limb nobody
+may ever need; assigning it early risks the asset itself.
 
 **Decisions this does not make.** A licence to the company and an assignment of
 copyright are different arrangements. No assignment, new company licence or
-change to the existing future Apache grant is made here. Any such proposal
-needs the owner's decision on its actual terms and its effect on existing
-rights; it should not be inferred from a documentation cleanup.
+change to the existing future Apache grant is made here; each needs the owner's
+decision on its actual terms and its effect on existing rights.
 
 ## Free and low-cost sources
 
