@@ -383,10 +383,18 @@ Provider admission uses the inherited cached `assert_expected_chain` result;
 it is not a fresh endpoint-identity observation on every call. New claims retain
 complete signed arguments and their original domain. A receipt that cannot be
 attributed to that original chain/context leaves the claim unresolved.
-Same/shared-account scoped controls pass, but a private cross-account relay
-currently returns 503 at unchanged `0023` wallet derivation without persisting a
-signature or event. That #5 compatibility dependency must be resolved before
-final integration; no trigger bypass or swap-row RLS completion is implied.
+`tokens/0040` permits a captured-party signature through either currently
+authorized participant while the other order and wallet stay private. It first
+refuses existing swap/parent identity drift without rewriting history, freezes
+the order's owner tuple, and prevents replacing the two referenced order rows.
+Case-only address spelling, economic/status updates, unreferenced order deletion
+and legacy child-first deletion remain available. An unchanged V1 update must
+prove one current captured participant to avoid both-parent derivation; INSERT,
+legacy and the original operator/both-visible path retain their checks.
+This resolves the recorded first-signature 503 without completing swap-row RLS,
+private cross-account matching, or outcome writes requiring both parent objects.
+Such unresolved claims and reservations remain retained for existing operator
+reconciliation; a successful signature response does not establish settlement.
 Trading and outgoing signer activation remain unchanged.
 
 Share-token deployment records the computed transaction hash and its token

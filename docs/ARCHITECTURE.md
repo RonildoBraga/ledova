@@ -988,9 +988,13 @@ runs. Both mechanisms hold at once on purpose:
   scoped reads recover the named swap; new signatures and approvals recheck the
   caller's current verified wallet/account/order binding and captured context.
   Either captured party may supply the signature through an authorized
-  participant. The existing private-counterparty derivation trigger can still
-  refuse that relay under the scoped role; resolving it is a separate #5
-  dependency, and `tokens_swaporder` remains `AWAITING_RLS`.
+  participant. `tokens/0040` freezes the parent order's account/wallet/address
+  identity and prevents replacing either referenced parent. An unchanged V1
+  swap can be updated by a currently bound, verified participant without
+  reading the other private order. INSERT and legacy derivation retain their
+  original checks. Private cross-account matching and outcome writes needing
+  both parents remain separate #5 dependencies; `tokens_swaporder` remains
+  `AWAITING_RLS`.
   New execution claims record every signed argument, both signatures, original
   domain/digest and contract recipient. Receipt attribution retains that
   identity after configuration changes. Provider admission reuses the existing

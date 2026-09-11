@@ -302,7 +302,8 @@ AWAITING_RLS = {
     "tokens_swaporder": (
         "The seller_wallet_id and buyer_wallet_id columns are populated and NOT NULL. Trading still needs "
         "per-command RLS that follows current wallet verification and participant access; the order/swap "
-        "work in #5 and #115 owns that conversion."
+        "work in #5 and #115 owns that conversion. tokens/0040 admits unchanged V1 participant updates "
+        "without the private parent read; it does not scope swap reads or complete matching/outcome visibility."
     ),
 }
 

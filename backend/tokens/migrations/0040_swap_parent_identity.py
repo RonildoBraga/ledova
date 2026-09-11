@@ -107,13 +107,16 @@ def refuse_parent_drift(apps, schema_editor):
 def replace_parent_foreign_keys(schema_editor, restrict):
     with schema_editor.connection.cursor() as cursor:
         cursor.execute(
-            "SELECT c.conname, a.attname, c.confupdtype, c.confdeltype, c.condeferrable, c.condeferred "
+            "SELECT c.conname, a.attname, parent.attname, c.confupdtype, c.confdeltype, "
+            "c.condeferrable, c.condeferred, c.convalidated "
             "FROM pg_constraint c JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1] "
+            "JOIN pg_attribute parent ON parent.attrelid = c.confrelid AND parent.attnum = c.confkey[1] "
             "WHERE c.contype = 'f' AND c.conrelid = 'tokens_swaporder'::regclass "
-            "AND c.confrelid = 'tokens_transferorder'::regclass AND cardinality(c.conkey) = 1"
+            "AND c.confrelid = 'tokens_transferorder'::regclass "
+            "AND cardinality(c.conkey) = 1 AND cardinality(c.confkey) = 1"
         )
         constraints = cursor.fetchall()
-    expected = ("a", "a", True, True) if restrict else ("a", "r", False, False)
+    expected = ("uuid", "a", "a", True, True, True) if restrict else ("uuid", "a", "r", False, False, True)
     if (
         len(constraints) != 2
         or {row[1] for row in constraints} != {"sell_order_id", "buy_order_id"}

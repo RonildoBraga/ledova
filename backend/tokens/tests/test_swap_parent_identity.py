@@ -132,6 +132,51 @@ class SwapParentStorageTest(TestCase):
         self.assertTrue(all(not privileged for _name, privileged in functions))
 
 
+@skipUnless(IS_POSTGRES, "Requires actual PostgreSQL foreign-key metadata")
+class SwapParentForeignKeyMetadataTest(TransactionTestCase):
+    def test_unexpected_reference_or_validation_state_refuses_without_replacing_either_constraint(self):
+        connection = connections[current_alias()]
+        for referenced, validated in (("alternate", True), ("uuid", False), ("uuid", True)):
+            with self.subTest(referenced=referenced, validated=validated), connection.schema_editor() as editor:
+                editor.execute("CREATE TEMP TABLE tokens_transferorder (uuid uuid PRIMARY KEY, alternate uuid UNIQUE)")
+                editor.execute("CREATE TEMP TABLE tokens_swaporder (sell_order_id uuid, buy_order_id uuid)")
+                try:
+                    for column in ("sell_order_id", "buy_order_id"):
+                        validation = "" if validated else " NOT VALID"
+                        editor.execute(
+                            f"ALTER TABLE pg_temp.tokens_swaporder ADD CONSTRAINT {column}_parent "
+                            f"FOREIGN KEY ({column}) REFERENCES pg_temp.tokens_transferorder ({referenced}) "
+                            f"DEFERRABLE INITIALLY DEFERRED{validation}"
+                        )
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
+                            "WHERE conrelid = 'pg_temp.tokens_swaporder'::regclass ORDER BY conname"
+                        )
+                        before = cursor.fetchall()
+                    if referenced != "uuid" or not validated:
+                        with self.assertRaisesMessage(RuntimeError, "Unexpected swap-to-order foreign keys"):
+                            MIGRATION.replace_parent_foreign_keys(editor, True)
+                    else:
+                        MIGRATION.replace_parent_foreign_keys(editor, True)
+                        with connection.cursor() as cursor:
+                            cursor.execute(
+                                "SELECT confdeltype, condeferrable FROM pg_constraint "
+                                "WHERE conrelid = 'pg_temp.tokens_swaporder'::regclass"
+                            )
+                            self.assertEqual(cursor.fetchall(), [("r", False), ("r", False)])
+                        MIGRATION.replace_parent_foreign_keys(editor, False)
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
+                            "WHERE conrelid = 'pg_temp.tokens_swaporder'::regclass ORDER BY conname"
+                        )
+                        self.assertEqual(cursor.fetchall(), before)
+                finally:
+                    editor.execute("DROP TABLE pg_temp.tokens_swaporder")
+                    editor.execute("DROP TABLE pg_temp.tokens_transferorder")
+
+
 @skipUnless(MIGRATIONS_ENABLED, "Requires actual parent-identity migrations")
 @override_settings(ATOMIC_SWAP_ADDRESS=CONTRACT)
 class SwapParentMigrationTest(TransactionTestCase):
@@ -161,15 +206,18 @@ class SwapParentMigrationTest(TransactionTestCase):
         ):
             with self.subTest(reason=reason):
                 orders.filter(pk=self.parent.pk).update(**changes)
-                order_before = orders.filter(pk=self.parent.pk).values().get()
-                swap_before = swaps.filter(pk=self.swap.pk).values().get()
-                with self.assertRaises(RuntimeError) as refused:
-                    migrate_to(AFTER)
-                self.assertIn(reason, str(refused.exception))
-                self.assertIn(str(self.swap.pk), str(refused.exception))
-                self.assertEqual(orders.filter(pk=self.parent.pk).values().get(), order_before)
-                self.assertEqual(swaps.filter(pk=self.swap.pk).values().get(), swap_before)
-                orders.filter(pk=self.parent.pk).update(**{k: self.parent_before[k] for k in changes})
+                try:
+                    order_before = orders.filter(pk=self.parent.pk).values().get()
+                    swap_before = swaps.filter(pk=self.swap.pk).values().get()
+                    with self.assertRaises(RuntimeError) as refused:
+                        migrate_to(AFTER)
+                    self.assertIn(reason, str(refused.exception))
+                    self.assertIn(str(self.swap.pk), str(refused.exception))
+                    self.assertEqual(orders.filter(pk=self.parent.pk).values().get(), order_before)
+                    self.assertEqual(swaps.filter(pk=self.swap.pk).values().get(), swap_before)
+                finally:
+                    migrate_to(BEFORE)
+                    orders.filter(pk=self.parent.pk).update(**{k: self.parent_before[k] for k in changes})
         migrate_to(AFTER)
 
     def test_valid_v1_history_survives_retired_verification_and_membership(self):
@@ -414,7 +462,7 @@ class ScopedSwapParentIdentityTest(RunsOnTheScopedConnection, APITransactionTest
         self.assertIsNone(self.swap.settlement_context["seller"]["payment_asset_uuid"])
         self.assertEqual(self.post_signature("buyer").status_code, 200)
 
-    def test_new_private_parent_insert_remains_refused_by_original_derivation(self):
+    def test_new_private_parent_insert_remains_refused_with_a_valid_snapshot(self):
         with use_operator():
             values = SwapOrder.objects.filter(pk=self.swap.pk).values().get()
             values["uuid"] = uuid4()
