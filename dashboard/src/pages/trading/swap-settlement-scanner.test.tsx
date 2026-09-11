@@ -53,7 +53,7 @@ const wallet: Wallet = {
   derivationPath: fixture.paths[0]!,
   masterFingerprint: '12345678',
   createdAt: captured.swapOrder.createdAt,
-  updatedAt: captured.swapOrder.updatedAt,
+  updatedAt: fixture.get_body.swapOrder.updatedAt,
   nativeBalance: '0',
   nativeMarketValue: '0',
   marketValue: '0',
