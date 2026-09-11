@@ -47,6 +47,7 @@ def terminate_submission(wallet_id, principal_id, signed_raw, phase, sent_path):
         provider.get_mined_nonce.side_effect = lambda address: {
             "chain_id": provider.assert_expected_chain.return_value,
             "nonce": 0,
+            "balance_wei": str(10**32),
             "block_number": 100,
             "block_hash": "0x" + "ab" * 32,
         }

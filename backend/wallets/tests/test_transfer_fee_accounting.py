@@ -39,6 +39,7 @@ class TransferFeeAccountingTest(BroadcastTransferGuardTestCase):
         get_client.return_value.get_mined_nonce.return_value = {
             "chain_id": settings.BLOCKCHAIN_CHAIN_ID,
             "nonce": 0,
+            "balance_wei": str(10**32),
             "block_number": 100,
             "block_hash": "0x" + "ab" * 32,
         }
