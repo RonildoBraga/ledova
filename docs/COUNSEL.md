@@ -24,16 +24,20 @@ information the register held about them and the date they ceased. Can a
 register derived from current on-chain balances satisfy that requirement, or
 does it oblige the platform to keep a stored record of holdings that ended?
 
-**What the code does today.** The register is derived, not stored. It is built
-from current holders — the balance a wallet holds now, joined to the identity
-behind that wallet — and a holder whose balance reaches zero simply stops
-appearing. There is no record of a holding that ended: the read-model knows
-about allotments that happened, not about holdings that stopped. `GET
-/api/v1/tokens/{uuid}/register/export/` writes a CSV shaped for section 169,
-whose twelve columns are Name, Residential address, Wallet address, Holder
-type, Class, Shares held, Percentage of issued supply, Balance source, Identity
-source, Date entered, Whitelist status and Amount paid — and every row in it is
-a current member.
+**What the code does today.** Current members are derived — the balance a wallet
+holds now, joined to the identity behind it — and a holder whose balance reaches
+zero drops out of that list. Former members are **stored**, on the assumption
+that the answer below is the first one. `tokens/services/former_holders.py`
+replays the share class's `Transfer` log to the provider's `finalized` block
+every six hours and writes each cessation to `FormerHolder`: address, block,
+date, shares held at cessation, and the holder's particulars frozen at that
+moment. `FORMER_MEMBER_RETENTION_DAYS` defaults to 2557 days and the service
+refuses to fold or purge below it. `GET
+/api/v1/tokens/{uuid}/register/export/` writes both sections — twelve columns
+for current members (Name, Residential address, Wallet address, Holder type,
+Class, Shares held, Percentage of issued supply, Balance source, Identity
+source, Date entered, Whitelist status, Amount paid), then the former members
+with the read time, block reached and a stale marker past 24 hours.
 
 The register is complete only while allotment is the only way shares move,
 which holds today because the trading write paths are flag-gated and
@@ -43,16 +47,12 @@ register.
 
 **What each answer would change.**
 
-- *A derived current-holders register does not satisfy 169(3).* The platform
-  builds a stored record of former holders per share class, fed from the same
-  `Transfer`-log fold the register reconciliation uses: a holder whose balance
-  reaches zero is written with the date it reached zero, exported under a
-  separate heading, retained seven years. This is being designed now on the
-  assumption the answer is this one, because the shape of the register's data
-  model is being settled and it is cheaper to design for it than to retrofit
-  it.
-- *It does satisfy 169(3), or the obligation does not bite this way.* The
-  designed table is dropped and the register stays derived.
+- *A derived current-holders register does not satisfy 169(3).* Nothing
+  changes: this is what is built, and the seven-year retention floor is already
+  enforced.
+- *It does satisfy 169(3), or the obligation does not bite this way.*
+  `FormerHolder` and its fold are surplus and could be dropped, though keeping
+  them costs little.
 - *It satisfies 169(3) only under conditions* — for example only while every
   movement is an allotment the platform records. Then the conditions become
   the trigger for building the stored record, and the documents record them
@@ -202,10 +202,10 @@ wholesale-only constraint yet.
 
 ## Where these are flagged in the documents
 
-- [ROADMAP.md](ROADMAP.md) — the past-members gap and the section 168 question
-  in Phase 1; the 169(3) retention item in Phase 2; the retention period and
-  the wholesale-only decision under Decisions taken; the four classification
-  categories and the deliberate absence of the fifth.
+- [ROADMAP.md](ROADMAP.md) — the stored former-member record and the section 168
+  question in Phase 1; the retention period and the wholesale-only decision
+  under Decisions taken; the four classification categories and the deliberate
+  absence of the fifth.
 - [OPERATIONS.md](OPERATIONS.md) — the deployment mode and registrant, which
   states who keeps the register and not who is obliged to; the retention
   setting and the account-deletion position.

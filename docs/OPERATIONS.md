@@ -325,8 +325,9 @@ lock graph.
 | `CLASSIFICATION_EVIDENCE_RETENTION_DAYS` | `2557` | No; `0` retains indefinitely and purges nothing |
 | `UNATTACHED_DOCUMENT_RETENTION_DAYS` | `30` | No; lifetime of an unattached payslip from upload; `0` retains indefinitely |
 
-Days an investor classification's evidence file is kept after the claim is
-rejected, revoked or expires. The default is a **placeholder pending counsel,
+Days an investor classification's evidence file is kept, measured from
+`reviewed_at` for a rejected, revoked or withdrawn claim and from `expires_at`
+for a verified one. The default is a **placeholder pending counsel,
 not advice**: 2557 days is seven calendar years including two leap days.
 Australian financial-record and AML/CTF customer-identification obligations are
 the constraints to confirm it against. Set `0` while the period is undecided —
@@ -1300,8 +1301,10 @@ worker being alive; and the sweep then actually deletes the bytes, because
 deletion is a side effect and cannot be derived the way `expires_at` is. No
 status column records the purge: a cleared `evidence_file` is the record, which
 is the same choice `expires_at` makes in not storing an expired status. The
-clock is `reviewed_at` for a rejected or revoked claim and `expires_at` for one
-that expired; a claim with no clock stamped is never swept. `evidence_file_size`
+clock is `RETENTION_CLOCK` in `users/models/investor_classification.py`:
+`reviewed_at` for a rejected, revoked or withdrawn claim and `expires_at` for a
+verified one. A submitted claim has no clock and is never swept.
+`evidence_file_size`
 and `evidence_mime_type` survive, being content-free metadata rather than the
 document. See `CLASSIFICATION_EVIDENCE_RETENTION_DAYS` above; `0` retains
 indefinitely.
@@ -1620,7 +1623,7 @@ and a policy on every tenant table. Four things about running that deployment:
 
 ## Pre-release device checks
 
-Three flows cannot be exercised in CI or a simulator and need real hardware
+Four flows cannot be exercised in CI or a simulator and need real hardware
 before any release. The first needs a Keystone; the rest need a development or
 production build on a device:
 
@@ -1644,8 +1647,8 @@ production build on a device:
   when the prompt is cancelled or the app is backgrounded, so the next sign-in
   is typed once; iOS writes silently.
 
-Push delivery is the third: it needs `extra.eas.projectId` and a real build, as
-above.
+- **Push delivery.** It needs `extra.eas.projectId` in `mobile/app.json` and a
+  real build; Expo Go cannot receive remote push on SDK 54.
 
 ## Legal
 
