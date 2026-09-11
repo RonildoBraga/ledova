@@ -15,6 +15,8 @@ interface UseQRScannerReturn {
   stopScanner: () => void;
 }
 
+const scannerTeardowns = new Map<string, Promise<void>>();
+
 export function useQRScanner({
   scannerId,
   onScanSuccess,
@@ -24,8 +26,7 @@ export function useQRScanner({
 }: UseQRScannerOptions): UseQRScannerReturn {
   const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
-  const hasProcessedRef = useRef(false);
+  const activeRun = useRef<{ stop: () => void } | null>(null);
   const onScanSuccessRef = useRef(onScanSuccess);
 
   useEffect(() => {
@@ -33,17 +34,7 @@ export function useQRScanner({
   }, [onScanSuccess]);
 
   const stopScanner = useCallback(() => {
-    const scanner = html5QrCodeRef.current;
-    if (scanner) {
-      try {
-        const state = scanner.getState();
-        if (state === 2 || state === 3) {
-          scanner.stop().catch(() => {});
-        }
-      } catch {}
-      html5QrCodeRef.current = null;
-    }
-    setIsScanning(false);
+    activeRun.current?.stop();
   }, []);
 
   useEffect(() => {
@@ -52,8 +43,49 @@ export function useQRScanner({
       return;
     }
 
-    hasProcessedRef.current = false;
     setError(null);
+    const previous = scannerTeardowns.get(scannerId) ?? Promise.resolve();
+    let release!: () => void;
+    let fail!: (reason: Error) => void;
+    const stopped = new Promise<void>((resolve, reject) => {
+      release = resolve;
+      fail = reject;
+    });
+    const completed = Promise.all([previous, stopped]).then(() => {});
+    scannerTeardowns.set(scannerId, completed);
+    void completed.then(
+      () => {
+        if (scannerTeardowns.get(scannerId) === completed) scannerTeardowns.delete(scannerId);
+      },
+      () => {},
+    );
+    const run = {
+      closed: false,
+      processed: false,
+      scanner: null as Html5Qrcode | null,
+      starting: null as Promise<unknown> | null,
+      stop: () => {
+        if (run.closed) return;
+        run.closed = true;
+        clearTimeout(initTimer);
+        if (activeRun.current === run) {
+          activeRun.current = null;
+          setIsScanning(false);
+        }
+        void (async () => {
+          try {
+            await run.starting?.catch(() => {});
+            const state = run.scanner?.getState();
+            if (state === 2 || state === 3) await run.scanner!.stop();
+            release();
+          } catch {
+            fail(new Error('The previous camera could not be stopped. Reload before scanning again.'));
+          }
+        })();
+      },
+    };
+    activeRun.current = run;
+    const current = () => !run.closed && activeRun.current === run;
 
     const qrConfig = {
       fps,
@@ -61,41 +93,40 @@ export function useQRScanner({
     };
 
     const onSuccess = (decodedText: string) => {
-      if (hasProcessedRef.current) return;
-      hasProcessedRef.current = true;
-      stopScanner();
-      onScanSuccessRef.current(decodedText);
+      if (!current() || run.processed) return;
+      run.processed = true;
+      const callback = onScanSuccessRef.current;
+      run.stop();
+      callback(decodedText);
     };
 
     const initTimer = setTimeout(() => {
-      const scannerElement = document.getElementById(scannerId);
-      if (!scannerElement) {
-        setError('Scanner element not found');
-        return;
-      }
-
-      const html5QrCode = new Html5Qrcode(scannerId);
-      html5QrCodeRef.current = html5QrCode;
-
-      Html5Qrcode.getCameras()
-        .then((cameras) => {
-          if (cameras && cameras.length > 0) {
-            return html5QrCode.start(cameras[0].id, qrConfig, onSuccess, () => {});
-          }
-          throw new Error('No cameras found');
-        })
-        .then(() => {
-          setIsScanning(true);
-        })
-        .catch((err) => {
+      void (async () => {
+        try {
+          if (!current()) return;
+          if (!document.getElementById(scannerId)) throw new Error('Scanner element not found');
+          const cameras = await Html5Qrcode.getCameras();
+          if (!current()) return;
+          if (!cameras?.length) throw new Error('No cameras found');
+          await previous;
+          if (!current()) return;
+          if (!document.getElementById(scannerId)) throw new Error('Scanner element not found');
+          const scanner = new Html5Qrcode(scannerId);
+          run.scanner = scanner;
+          run.starting = Promise.resolve().then(() => {
+            if (current()) return scanner.start(cameras[0].id, qrConfig, onSuccess, () => {});
+          });
+          await run.starting;
+          if (current()) setIsScanning(true);
+        } catch (err) {
+          if (!current()) return;
           setError(err instanceof Error ? err.message : 'Failed to start camera');
-        });
+          run.stop();
+        }
+      })();
     }, 100);
 
-    return () => {
-      clearTimeout(initTimer);
-      stopScanner();
-    };
+    return run.stop;
   }, [enabled, scannerId, fps, qrboxSize, stopScanner]);
 
   return { isScanning, error, stopScanner };
