@@ -160,7 +160,6 @@ contract AUSG is ERC20, ERC20Pausable, Ownable {
     }
 
     function _update(address from, address to, uint256 value) internal override(ERC20, ERC20Pausable) {
-
         if (to != address(0)) {
             if (!whitelist.isWhitelisted(to)) revert RecipientNotWhitelisted(to);
         }
