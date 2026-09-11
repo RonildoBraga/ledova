@@ -13,6 +13,7 @@ from shared.views.uploads import UploadProtectedView
 
 
 class DocumentViewSet(UploadProtectedView, AuthenticatedModelViewSet):
+    queryset = CompanyDocument.objects.none()
     serializer_class = CompanyDocumentSerializer
     filterset_class = CompanyDocumentFilter
     parser_classes = [MultiPartParser, FormParser, JSONParser]

@@ -157,7 +157,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/Status5a8Enum"
+                "$ref": "#/components/schemas/CompanyStatusEnum"
               }
             ],
             "readOnly": true
@@ -876,7 +876,7 @@
             "type": "array"
           },
           "chain": {
-            "$ref": "#/components/schemas/Chain3edEnum"
+            "$ref": "#/components/schemas/SupportedWalletChainEnum"
           },
           "userAccount": {
             "format": "uuid",
@@ -900,7 +900,7 @@
             "type": "object"
           },
           "chain": {
-            "$ref": "#/components/schemas/Chain3edEnum"
+            "$ref": "#/components/schemas/SupportedWalletChainEnum"
           },
           "errors": {
             "items": {
@@ -1130,7 +1130,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/Status207Enum"
+                "$ref": "#/components/schemas/CapitalRequestStatusEnum"
               }
             ],
             "readOnly": true
@@ -1247,7 +1247,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/Status207Enum"
+                "$ref": "#/components/schemas/CapitalRequestStatusEnum"
               }
             ],
             "readOnly": true
@@ -1366,6 +1366,21 @@
         ],
         "type": "object"
       },
+      "CapitalRequestStatusEnum": {
+        "description": "* `draft` - Draft\n* `submitted` - Submitted\n* `under_review` - Under Review\n* `approved` - Approved\n* `rejected` - Rejected\n* `executing` - Executing\n* `executed` - Executed\n* `failed` - Failed\n* `superseded` - Superseded",
+        "enum": [
+          "draft",
+          "submitted",
+          "under_review",
+          "approved",
+          "rejected",
+          "executing",
+          "executed",
+          "failed",
+          "superseded"
+        ],
+        "type": "string"
+      },
       "CategoryEnum": {
         "description": "* `product_value` - Product value of at least AUD 500,000 (s708(8)(a))\n* `accountant_certificate` - Qualified accountant's certificate (s708(8)(c))\n* `professional_investor` - Professional investor (s708(11) / s761G(7)(d))\n* `associated_person` - Person associated with the issuer (s708(12))",
         "enum": [
@@ -1382,15 +1397,6 @@
           "ca_anz",
           "cpa_australia",
           "ipa"
-        ],
-        "type": "string"
-      },
-      "Chain3edEnum": {
-        "description": "* `base` - base\n* `bitcoin` - bitcoin\n* `ethereum` - ethereum",
-        "enum": [
-          "base",
-          "bitcoin",
-          "ethereum"
         ],
         "type": "string"
       },
@@ -1654,7 +1660,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/Status5a8Enum"
+                "$ref": "#/components/schemas/CompanyStatusEnum"
               }
             ],
             "readOnly": true
@@ -1871,7 +1877,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/Status5a8Enum"
+                "$ref": "#/components/schemas/CompanyStatusEnum"
               }
             ],
             "readOnly": true
@@ -1985,6 +1991,23 @@
         ],
         "type": "object"
       },
+      "CompanyStatusEnum": {
+        "description": "* `draft` - Draft\n* `submitted` - Submitted for Review\n* `review` - Under Review\n* `info_required` - Additional Information Required\n* `approved` - Approved\n* `active` - Active\n* `warning` - Compliance Warning\n* `suspended` - Suspended\n* `delisted` - Delisted\n* `rejected` - Rejected\n* `withdrawn` - Withdrawn",
+        "enum": [
+          "draft",
+          "submitted",
+          "review",
+          "info_required",
+          "approved",
+          "active",
+          "warning",
+          "suspended",
+          "delisted",
+          "rejected",
+          "withdrawn"
+        ],
+        "type": "string"
+      },
       "CompanyStatusUpdate": {
         "properties": {
           "attestOfficeholder": {
@@ -2002,7 +2025,7 @@
             "type": "string"
           },
           "status": {
-            "$ref": "#/components/schemas/Status5a8Enum"
+            "$ref": "#/components/schemas/CompanyStatusEnum"
           }
         },
         "required": [
@@ -2340,7 +2363,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/Status12dEnum"
+                "$ref": "#/components/schemas/ShareTokenStatusEnum"
               }
             ],
             "readOnly": true
@@ -2434,7 +2457,7 @@
           "documentType": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/DocumentTypeF54Enum"
+                "$ref": "#/components/schemas/UserDocumentTypeEnum"
               }
             ],
             "readOnly": true
@@ -2609,16 +2632,6 @@
         ],
         "type": "string"
       },
-      "DocumentTypeF54Enum": {
-        "description": "* `payslip` - Payslip\n* `bank_statement` - Bank Statement\n* `tax_return` - Tax Return\n* `other` - Other",
-        "enum": [
-          "payslip",
-          "bank_statement",
-          "tax_return",
-          "other"
-        ],
-        "type": "string"
-      },
       "DocumentUpload": {
         "properties": {
           "classification": {
@@ -2627,7 +2640,7 @@
             "type": "string"
           },
           "documentType": {
-            "$ref": "#/components/schemas/DocumentTypeF54Enum"
+            "$ref": "#/components/schemas/UserDocumentTypeEnum"
           },
           "file": {
             "format": "uri",
@@ -3356,21 +3369,6 @@
         ],
         "type": "object"
       },
-      "FromStatusEnum": {
-        "description": "* `open` - Open\n* `partially_filled` - Partially Filled\n* `matched` - Matched\n* `pending_signature` - Pending Signature\n* `executing` - Executing\n* `completed` - Completed\n* `cancelled` - Cancelled\n* `expired` - Expired\n* `failed` - Failed",
-        "enum": [
-          "open",
-          "partially_filled",
-          "matched",
-          "pending_signature",
-          "executing",
-          "completed",
-          "cancelled",
-          "expired",
-          "failed"
-        ],
-        "type": "string"
-      },
       "Holding": {
         "properties": {
           "asset": {
@@ -3855,7 +3853,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/StatusE2bEnum"
+                "$ref": "#/components/schemas/SubscriptionStatusEnum"
               }
             ],
             "readOnly": true
@@ -4249,7 +4247,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/Status2bfEnum"
+                "$ref": "#/components/schemas/OfferingStatusEnum"
               }
             ],
             "readOnly": true
@@ -4425,7 +4423,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/Status2bfEnum"
+                "$ref": "#/components/schemas/OfferingStatusEnum"
               }
             ],
             "readOnly": true
@@ -4483,6 +4481,19 @@
           "uuid"
         ],
         "type": "object"
+      },
+      "OfferingStatusEnum": {
+        "description": "* `draft` - Draft\n* `submitted` - Submitted for Review\n* `under_review` - Under Review\n* `approved` - Approved\n* `rejected` - Rejected\n* `closed` - Closed\n* `withdrawn` - Withdrawn",
+        "enum": [
+          "draft",
+          "submitted",
+          "under_review",
+          "approved",
+          "rejected",
+          "closed",
+          "withdrawn"
+        ],
+        "type": "string"
       },
       "OfferingWithdraw": {
         "properties": {
@@ -4700,7 +4711,7 @@
       "OrderActionCancelResult": {
         "properties": {
           "fromStatus": {
-            "$ref": "#/components/schemas/FromStatusEnum"
+            "$ref": "#/components/schemas/TransferOrderStatusEnum"
           },
           "kind": {
             "$ref": "#/components/schemas/OrderActionCancelResultKindEnum"
@@ -4845,7 +4856,7 @@
             "type": "integer"
           },
           "orderType": {
-            "$ref": "#/components/schemas/OrderType920Enum"
+            "$ref": "#/components/schemas/TransferOrderTypeEnum"
           },
           "pricePerShare": {
             "format": "decimal",
@@ -4861,7 +4872,7 @@
             "type": "string"
           },
           "status": {
-            "$ref": "#/components/schemas/Status49fEnum"
+            "$ref": "#/components/schemas/TransferOrderStatusEnum"
           }
         },
         "required": [
@@ -5445,14 +5456,6 @@
           "pending",
           "created",
           "refused"
-        ],
-        "type": "string"
-      },
-      "OrderType920Enum": {
-        "description": "* `buy` - Buy\n* `sell` - Sell",
-        "enum": [
-          "buy",
-          "sell"
         ],
         "type": "string"
       },
@@ -6756,7 +6759,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/Status12dEnum"
+                "$ref": "#/components/schemas/ShareTokenStatusEnum"
               }
             ],
             "readOnly": true
@@ -6995,7 +6998,7 @@
             "nullable": true,
             "oneOf": [
               {
-                "$ref": "#/components/schemas/SumsubVerificationStatusEnum"
+                "$ref": "#/components/schemas/UserVerificationStatusEnum"
               },
               {
                 "$ref": "#/components/schemas/NullEnum"
@@ -7014,7 +7017,7 @@
             "nullable": true,
             "oneOf": [
               {
-                "$ref": "#/components/schemas/VerificationStatusF94Enum"
+                "$ref": "#/components/schemas/UserVerificationStatusEnum"
               },
               {
                 "$ref": "#/components/schemas/NullEnum"
@@ -7045,7 +7048,7 @@
             "type": "integer"
           },
           "chain": {
-            "$ref": "#/components/schemas/Chain3edEnum"
+            "$ref": "#/components/schemas/SupportedWalletChainEnum"
           },
           "createdAt": {
             "format": "date-time",
@@ -7116,7 +7119,7 @@
             "nullable": true,
             "oneOf": [
               {
-                "$ref": "#/components/schemas/SigningPreferenceEnum"
+                "$ref": "#/components/schemas/WalletSigningPreferenceEnum"
               },
               {
                 "$ref": "#/components/schemas/NullEnum"
@@ -7166,7 +7169,7 @@
             "nullable": true,
             "oneOf": [
               {
-                "$ref": "#/components/schemas/WalletTypeEnum"
+                "$ref": "#/components/schemas/WalletSigningPreferenceEnum"
               },
               {
                 "$ref": "#/components/schemas/NullEnum"
@@ -8009,7 +8012,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/Status207Enum"
+                "$ref": "#/components/schemas/CapitalRequestStatusEnum"
               }
             ],
             "readOnly": true
@@ -8347,7 +8350,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/Status12dEnum"
+                "$ref": "#/components/schemas/ShareTokenStatusEnum"
               }
             ],
             "readOnly": true
@@ -8485,7 +8488,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/Status12dEnum"
+                "$ref": "#/components/schemas/ShareTokenStatusEnum"
               }
             ],
             "readOnly": true
@@ -8546,6 +8549,16 @@
         ],
         "type": "object"
       },
+      "ShareTokenStatusEnum": {
+        "description": "* `draft` - Draft\n* `deploying` - Deploying\n* `deployed` - Deployed\n* `paused` - Paused",
+        "enum": [
+          "draft",
+          "deploying",
+          "deployed",
+          "paused"
+        ],
+        "type": "string"
+      },
       "SignedOrderSubmission": {
         "properties": {
           "digest": {
@@ -8566,7 +8579,7 @@
             ]
           },
           "orderType": {
-            "$ref": "#/components/schemas/OrderType920Enum"
+            "$ref": "#/components/schemas/TransferOrderTypeEnum"
           },
           "ownerAccountUuid": {
             "format": "uuid",
@@ -8622,113 +8635,6 @@
         ],
         "type": "object"
       },
-      "SigningPreferenceEnum": {
-        "description": "* `hardware` - Hardware\n* `software` - Software",
-        "enum": [
-          "hardware",
-          "software"
-        ],
-        "type": "string"
-      },
-      "Status12dEnum": {
-        "description": "* `draft` - Draft\n* `deploying` - Deploying\n* `deployed` - Deployed\n* `paused` - Paused",
-        "enum": [
-          "draft",
-          "deploying",
-          "deployed",
-          "paused"
-        ],
-        "type": "string"
-      },
-      "Status207Enum": {
-        "description": "* `draft` - Draft\n* `submitted` - Submitted\n* `under_review` - Under Review\n* `approved` - Approved\n* `rejected` - Rejected\n* `executing` - Executing\n* `executed` - Executed\n* `failed` - Failed\n* `superseded` - Superseded",
-        "enum": [
-          "draft",
-          "submitted",
-          "under_review",
-          "approved",
-          "rejected",
-          "executing",
-          "executed",
-          "failed",
-          "superseded"
-        ],
-        "type": "string"
-      },
-      "Status2bfEnum": {
-        "description": "* `draft` - Draft\n* `submitted` - Submitted for Review\n* `under_review` - Under Review\n* `approved` - Approved\n* `rejected` - Rejected\n* `closed` - Closed\n* `withdrawn` - Withdrawn",
-        "enum": [
-          "draft",
-          "submitted",
-          "under_review",
-          "approved",
-          "rejected",
-          "closed",
-          "withdrawn"
-        ],
-        "type": "string"
-      },
-      "Status49fEnum": {
-        "description": "* `open` - Open\n* `partially_filled` - Partially Filled\n* `matched` - Matched\n* `pending_signature` - Pending Signature\n* `executing` - Executing\n* `completed` - Completed\n* `cancelled` - Cancelled\n* `expired` - Expired\n* `failed` - Failed",
-        "enum": [
-          "open",
-          "partially_filled",
-          "matched",
-          "pending_signature",
-          "executing",
-          "completed",
-          "cancelled",
-          "expired",
-          "failed"
-        ],
-        "type": "string"
-      },
-      "Status57bEnum": {
-        "description": "* `created` - Created\n* `seller_signed` - Seller Signed\n* `buyer_signed` - Buyer Signed\n* `ready` - Ready for Execution\n* `executing` - Executing\n* `completed` - Completed\n* `failed` - Failed\n* `expired` - Expired",
-        "enum": [
-          "created",
-          "seller_signed",
-          "buyer_signed",
-          "ready",
-          "executing",
-          "completed",
-          "failed",
-          "expired"
-        ],
-        "type": "string"
-      },
-      "Status5a8Enum": {
-        "description": "* `draft` - Draft\n* `submitted` - Submitted for Review\n* `review` - Under Review\n* `info_required` - Additional Information Required\n* `approved` - Approved\n* `active` - Active\n* `warning` - Compliance Warning\n* `suspended` - Suspended\n* `delisted` - Delisted\n* `rejected` - Rejected\n* `withdrawn` - Withdrawn",
-        "enum": [
-          "draft",
-          "submitted",
-          "review",
-          "info_required",
-          "approved",
-          "active",
-          "warning",
-          "suspended",
-          "delisted",
-          "rejected",
-          "withdrawn"
-        ],
-        "type": "string"
-      },
-      "StatusE2bEnum": {
-        "description": "* `draft` - Draft\n* `submitted` - Submitted\n* `accepted` - Accepted\n* `awaiting_payment` - Awaiting Payment\n* `paid` - Paid\n* `allotted` - Allotted\n* `rejected` - Rejected\n* `withdrawn` - Withdrawn\n* `refunded` - Refunded",
-        "enum": [
-          "draft",
-          "submitted",
-          "accepted",
-          "awaiting_payment",
-          "paid",
-          "allotted",
-          "rejected",
-          "withdrawn",
-          "refunded"
-        ],
-        "type": "string"
-      },
       "SubmissionOrder": {
         "properties": {
           "canBeModified": {
@@ -8781,7 +8687,7 @@
           "orderType": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/OrderType920Enum"
+                "$ref": "#/components/schemas/TransferOrderTypeEnum"
               }
             ],
             "readOnly": true
@@ -8813,7 +8719,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/Status49fEnum"
+                "$ref": "#/components/schemas/TransferOrderStatusEnum"
               }
             ],
             "readOnly": true
@@ -9059,7 +8965,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/StatusE2bEnum"
+                "$ref": "#/components/schemas/SubscriptionStatusEnum"
               }
             ],
             "readOnly": true
@@ -9196,7 +9102,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/StatusE2bEnum"
+                "$ref": "#/components/schemas/SubscriptionStatusEnum"
               }
             ],
             "readOnly": true
@@ -9246,6 +9152,21 @@
         ],
         "type": "object"
       },
+      "SubscriptionStatusEnum": {
+        "description": "* `draft` - Draft\n* `submitted` - Submitted\n* `accepted` - Accepted\n* `awaiting_payment` - Awaiting Payment\n* `paid` - Paid\n* `allotted` - Allotted\n* `rejected` - Rejected\n* `withdrawn` - Withdrawn\n* `refunded` - Refunded",
+        "enum": [
+          "draft",
+          "submitted",
+          "accepted",
+          "awaiting_payment",
+          "paid",
+          "allotted",
+          "rejected",
+          "withdrawn",
+          "refunded"
+        ],
+        "type": "string"
+      },
       "SubscriptionWithdraw": {
         "properties": {
           "reason": {
@@ -9277,15 +9198,12 @@
         ],
         "type": "object"
       },
-      "SumsubVerificationStatusEnum": {
-        "description": "* `init` - Initialized\n* `pending` - Pending Review\n* `queued` - Queued for Review\n* `completed` - Review Completed\n* `onHold` - On Hold\n* `prechecked` - Pre-checked",
+      "SupportedWalletChainEnum": {
+        "description": "* `base` - base\n* `bitcoin` - bitcoin\n* `ethereum` - ethereum",
         "enum": [
-          "init",
-          "pending",
-          "queued",
-          "completed",
-          "onHold",
-          "prechecked"
+          "base",
+          "bitcoin",
+          "ethereum"
         ],
         "type": "string"
       },
@@ -9388,7 +9306,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/Status57bEnum"
+                "$ref": "#/components/schemas/SwapOrderStatusEnum"
               }
             ],
             "readOnly": true
@@ -9528,7 +9446,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/Status57bEnum"
+                "$ref": "#/components/schemas/SwapOrderStatusEnum"
               }
             ],
             "readOnly": true
@@ -9563,6 +9481,20 @@
           "uuid"
         ],
         "type": "object"
+      },
+      "SwapOrderStatusEnum": {
+        "description": "* `created` - Created\n* `seller_signed` - Seller Signed\n* `buyer_signed` - Buyer Signed\n* `ready` - Ready for Execution\n* `executing` - Executing\n* `completed` - Completed\n* `failed` - Failed\n* `expired` - Expired",
+        "enum": [
+          "created",
+          "seller_signed",
+          "buyer_signed",
+          "ready",
+          "executing",
+          "completed",
+          "failed",
+          "expired"
+        ],
+        "type": "string"
       },
       "ThemeEnum": {
         "description": "* `dark` - Dark\n* `light` - Light",
@@ -9889,7 +9821,7 @@
             ]
           },
           "orderType": {
-            "$ref": "#/components/schemas/OrderType920Enum"
+            "$ref": "#/components/schemas/TransferOrderTypeEnum"
           },
           "ownerAccountUuid": {
             "format": "uuid",
@@ -9994,7 +9926,7 @@
           "orderType": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/OrderType920Enum"
+                "$ref": "#/components/schemas/TransferOrderTypeEnum"
               }
             ],
             "readOnly": true
@@ -10026,7 +9958,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/Status49fEnum"
+                "$ref": "#/components/schemas/TransferOrderStatusEnum"
               }
             ],
             "readOnly": true
@@ -10129,7 +10061,7 @@
           "orderType": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/OrderType920Enum"
+                "$ref": "#/components/schemas/TransferOrderTypeEnum"
               }
             ],
             "readOnly": true
@@ -10155,7 +10087,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/Status49fEnum"
+                "$ref": "#/components/schemas/TransferOrderStatusEnum"
               }
             ],
             "readOnly": true
@@ -10214,6 +10146,29 @@
           "walletAddress"
         ],
         "type": "object"
+      },
+      "TransferOrderStatusEnum": {
+        "description": "* `open` - Open\n* `partially_filled` - Partially Filled\n* `matched` - Matched\n* `pending_signature` - Pending Signature\n* `executing` - Executing\n* `completed` - Completed\n* `cancelled` - Cancelled\n* `expired` - Expired\n* `failed` - Failed",
+        "enum": [
+          "open",
+          "partially_filled",
+          "matched",
+          "pending_signature",
+          "executing",
+          "completed",
+          "cancelled",
+          "expired",
+          "failed"
+        ],
+        "type": "string"
+      },
+      "TransferOrderTypeEnum": {
+        "description": "* `buy` - Buy\n* `sell` - Sell",
+        "enum": [
+          "buy",
+          "sell"
+        ],
+        "type": "string"
       },
       "TransferTokenInfo": {
         "properties": {
@@ -10291,6 +10246,16 @@
           "uuid"
         ],
         "type": "object"
+      },
+      "UserDocumentTypeEnum": {
+        "description": "* `payslip` - Payslip\n* `bank_statement` - Bank Statement\n* `tax_return` - Tax Return\n* `other` - Other",
+        "enum": [
+          "payslip",
+          "bank_statement",
+          "tax_return",
+          "other"
+        ],
+        "type": "string"
       },
       "UserPreferences": {
         "properties": {
@@ -10460,7 +10425,7 @@
             "nullable": true,
             "oneOf": [
               {
-                "$ref": "#/components/schemas/SumsubVerificationStatusEnum"
+                "$ref": "#/components/schemas/UserVerificationStatusEnum"
               },
               {
                 "$ref": "#/components/schemas/NullEnum"
@@ -10479,7 +10444,7 @@
             "nullable": true,
             "oneOf": [
               {
-                "$ref": "#/components/schemas/VerificationStatusF94Enum"
+                "$ref": "#/components/schemas/UserVerificationStatusEnum"
               },
               {
                 "$ref": "#/components/schemas/NullEnum"
@@ -10566,17 +10531,7 @@
         ],
         "type": "object"
       },
-      "ValueSourceEnum": {
-        "description": "* `market` - Market price\n* `nav` - NAV\n* `par` - Par\n* `unpriced` - Unpriced",
-        "enum": [
-          "market",
-          "nav",
-          "par",
-          "unpriced"
-        ],
-        "type": "string"
-      },
-      "VerificationStatusF94Enum": {
+      "UserVerificationStatusEnum": {
         "description": "* `init` - Initialized\n* `pending` - Pending Review\n* `queued` - Queued for Review\n* `completed` - Review Completed\n* `onHold` - On Hold\n* `prechecked` - Pre-checked",
         "enum": [
           "init",
@@ -10585,6 +10540,16 @@
           "completed",
           "onHold",
           "prechecked"
+        ],
+        "type": "string"
+      },
+      "ValueSourceEnum": {
+        "description": "* `market` - Market price\n* `nav` - NAV\n* `par` - Par\n* `unpriced` - Unpriced",
+        "enum": [
+          "market",
+          "nav",
+          "par",
+          "unpriced"
         ],
         "type": "string"
       },
@@ -10602,7 +10567,7 @@
             "type": "integer"
           },
           "chain": {
-            "$ref": "#/components/schemas/Chain3edEnum"
+            "$ref": "#/components/schemas/SupportedWalletChainEnum"
           },
           "createdAt": {
             "format": "date-time",
@@ -10673,7 +10638,7 @@
             "nullable": true,
             "oneOf": [
               {
-                "$ref": "#/components/schemas/SigningPreferenceEnum"
+                "$ref": "#/components/schemas/WalletSigningPreferenceEnum"
               },
               {
                 "$ref": "#/components/schemas/NullEnum"
@@ -10723,7 +10688,7 @@
             "nullable": true,
             "oneOf": [
               {
-                "$ref": "#/components/schemas/WalletTypeEnum"
+                "$ref": "#/components/schemas/WalletSigningPreferenceEnum"
               },
               {
                 "$ref": "#/components/schemas/NullEnum"
@@ -10748,6 +10713,14 @@
           "verifiedAt"
         ],
         "type": "object"
+      },
+      "WalletSigningPreferenceEnum": {
+        "description": "* `hardware` - Hardware\n* `software` - Software",
+        "enum": [
+          "hardware",
+          "software"
+        ],
+        "type": "string"
       },
       "WalletSyncResponse": {
         "properties": {
@@ -10797,14 +10770,6 @@
           "success",
           "skipped",
           "error"
-        ],
-        "type": "string"
-      },
-      "WalletTypeEnum": {
-        "description": "* `hardware` - Hardware\n* `software` - Software",
-        "enum": [
-          "hardware",
-          "software"
         ],
         "type": "string"
       },
@@ -15099,6 +15064,28 @@
             }
           },
           {
+            "in": "query",
+            "name": "company_uuid",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "document_type",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "is_verified",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "description": "Which field to use when ordering the results.",
             "in": "query",
             "name": "ordering",
@@ -15219,6 +15206,8 @@
             "name": "uuid",
             "required": true,
             "schema": {
+              "description": "Unique identifier (primary key)",
+              "format": "uuid",
               "type": "string"
             }
           }
@@ -15259,6 +15248,8 @@
             "name": "uuid",
             "required": true,
             "schema": {
+              "description": "Unique identifier (primary key)",
+              "format": "uuid",
               "type": "string"
             }
           }
@@ -15306,6 +15297,8 @@
             "name": "uuid",
             "required": true,
             "schema": {
+              "description": "Unique identifier (primary key)",
+              "format": "uuid",
               "type": "string"
             }
           }
