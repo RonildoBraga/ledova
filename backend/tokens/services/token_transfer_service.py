@@ -303,7 +303,11 @@ class TokenTransferService:
         min_quantity: int = 0,
     ) -> tuple[TransferOrder, Optional[dict]]:
         try:
-            wallet = Wallet.objects.select_for_update(of=("self",)).select_related("user_account").get(pk=wallet.pk)
+            wallet = (
+                Wallet.objects.select_for_update(of=("self",), no_key=True)
+                .select_related("user_account")
+                .get(pk=wallet.pk)
+            )
         except Wallet.DoesNotExist:
             raise InvalidRecipientAddressException()
 

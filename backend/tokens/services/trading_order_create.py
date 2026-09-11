@@ -83,7 +83,7 @@ def _assert_original_terms(submission, data):
 
 
 def _lock_authorized_wallet(actor, submission):
-    wallet = Wallet.objects.select_for_update(of=("self",)).filter(pk=submission.wallet_id).first()
+    wallet = Wallet.objects.select_for_update(of=("self",), no_key=True).filter(pk=submission.wallet_id).first()
     if wallet is None or wallet.user_account_id != submission.owner_account_id:
         raise NotFound(NOT_FOUND)
     membership = wallet.user_account.user_profiles.through
