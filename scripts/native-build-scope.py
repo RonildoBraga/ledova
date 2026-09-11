@@ -5,14 +5,33 @@ import re
 import subprocess
 from pathlib import Path
 
+NATIVE_INPUT_PREFIXES = ("mobile/", "packages/shared/")
+NATIVE_INPUT_FILES = frozenset(
+    (
+        "package.json",
+        "package-lock.json",
+        "npm-shrinkwrap.json",
+        ".npmrc",
+        "dashboard/package.json",
+        ".gitattributes",
+        ".github/workflows/mobile-native.yml",
+        "scripts/native-build-scope.py",
+        "scripts/tests/test_native_build_scope.py",
+    )
+)
+
 
 def native_scope(event_name, payload, repository):
-    if event_name != "pull_request":
+    if event_name not in ("pull_request", "push"):
         return {"required": True, "reason": "Unconditional native run"}
     try:
-        request = payload["pull_request"]
-        base = request["base"]["sha"]
-        head = request["head"]["sha"]
+        if event_name == "pull_request":
+            request = payload["pull_request"]
+            base = request["base"]["sha"]
+            head = request["head"]["sha"]
+        else:
+            base = payload["before"]
+            head = payload["after"]
         if not all(isinstance(value, str) and re.fullmatch(r"[0-9a-f]{40}", value) for value in (base, head)):
             raise ValueError
         subprocess.run(
@@ -29,17 +48,17 @@ def native_scope(event_name, payload, repository):
             capture_output=True,
             timeout=30,
         ).stdout
-        if not diff or not diff.endswith(b"\0"):
+        if diff and not diff.endswith(b"\0"):
             raise ValueError
-        paths = diff[:-1].decode("utf-8").split("\0")
+        paths = diff[:-1].decode("utf-8").split("\0") if diff else []
         if any(not path or any(part in ("", ".", "..") for part in path.split("/")) for path in paths):
             raise ValueError
     except (KeyError, TypeError, ValueError, OSError, subprocess.SubprocessError):
-        return {"required": True, "reason": "Complete current-base comparison unavailable"}
-    required = any(not path.startswith(("backend/", "docs/")) for path in paths)
+        return {"required": True, "reason": "Complete ancestor comparison unavailable"}
+    required = any(path.startswith(NATIVE_INPUT_PREFIXES) or path in NATIVE_INPUT_FILES for path in paths)
     return {
         "required": required,
-        "reason": "Native or unclassified input changed" if required else "Only backend and documentation changed",
+        "reason": "Mobile or native build input changed" if required else "No mobile or native build inputs changed",
         "changed_files": len(paths),
     }
 
