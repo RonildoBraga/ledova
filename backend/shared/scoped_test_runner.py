@@ -21,6 +21,7 @@ SCOPED_TEST_LABELS = (
     "tokens.tests.test_order_actions.ScopedOrderActionRecoveryTest",
     "tokens.tests.test_order_action_processes.ScopedOrderActionProcessTest",
     "tokens.tests.test_swap_settlement_context.ScopedSwapSettlementRouteTest",
+    "tokens.tests.test_swap_parent_identity.ScopedSwapParentIdentityTest",
     "tokens.tests.test_order_submissions.ScopedOrderSubmissionRecoveryTest",
     "tokens.tests.test_order_submission_processes.ScopedOrderSubmissionProcessTest",
     "wallets.tests.test_confirmation_locking.ScopedConfirmationLockingTest",
