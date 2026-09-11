@@ -354,7 +354,140 @@ test('field validation details remain visible without becoming a stored refusal'
   await f.action.sign(async () => 'synthetic signature');
   expect(f.action.getSnapshot().error).toBe('New quantity must exceed the filled amount.');
   expect(f.values.size).toBe(1);
+  expect(f.action.getSnapshot().canRemoveReminder).toBe(false);
+  await f.action.removeReminder();
+  expect(f.values.size).toBe(1);
   expect(f.settled).not.toHaveBeenCalled();
+});
+
+async function rejectedPreparation(f: ReturnType<typeof setup>) {
+  await f.action.load();
+  f.handler(async (config) => fail(config, { detail: 'The requested change is no longer valid.' }, 400));
+  await f.action.prepare();
+  expect(f.action.getSnapshot()).toMatchObject({ phase: 'error', canRemoveReminder: true });
+  expect(f.values.size).toBe(1);
+}
+
+test.each(['cancel', 'modify'] as const)(
+  'a rejected %s preparation keeps its reminder until explicit removal',
+  async (purpose) => {
+    const f = setup(purpose);
+    await rejectedPreparation(f);
+    const original = f.action.record;
+    const refreshed = actionContext('15', '3');
+    f.handler(async (config) => response(config, refreshed));
+    const before = f.requests.length;
+    await f.action.removeReminder();
+    expect(f.values.size).toBe(0);
+    expect(f.action.record).toBeNull();
+    expect(f.action.getSnapshot()).toMatchObject({
+      phase: 'editing',
+      canRemoveReminder: false,
+      context: refreshed,
+      values: { quantity: '15', minQuantity: '3', pricePerShare: '12.50' },
+      snapshot: null,
+      challenge: null,
+    });
+    expect(f.requests.slice(before).map((config) => [config.method, config.url])).toEqual([
+      ['get', endpoints.ACTION_CONTEXT(orderUuid)],
+    ]);
+    expect(f.settled).not.toHaveBeenCalled();
+    f.handler(async (config) => {
+      const body = JSON.parse(config.data);
+      return response(
+        config,
+        actionSnapshot(purpose, 'pending', refreshed, f.action.getSnapshot().values!, body.action_id),
+      );
+    });
+    await f.action.prepare();
+    expect(f.action.getSnapshot().phase).toBe('ready');
+    expect(f.action.record?.actionId).toBe(otherActionId);
+    expect(f.action.record?.actionId).not.toBe(original?.actionId);
+    expect(f.values.size).toBe(1);
+  },
+);
+
+test.each(['lost response', 'server error', 'conflict', 'another endpoint'])(
+  '%s during preparation does not enable removal of an unresolved reminder',
+  async (failure) => {
+    const f = setup();
+    await f.action.load();
+    f.handler(async (config) => {
+      if (failure === 'lost response') throw new Error('Synthetic lost response');
+      if (failure === 'another endpoint')
+        return fail({ ...config, url: '/api/token/refresh/' }, { detail: 'Synthetic refresh rejection.' }, 400);
+      return fail(config, { detail: 'The result is unavailable.' }, failure === 'conflict' ? 409 : 500);
+    });
+    await f.action.prepare();
+    expect(f.action.getSnapshot()).toMatchObject({ phase: 'error', canRemoveReminder: false });
+    const before = f.requests.length;
+    await f.action.removeReminder();
+    expect(f.values.size).toBe(1);
+    expect(f.requests).toHaveLength(before);
+    expect(f.settled).not.toHaveBeenCalled();
+  },
+);
+
+test('a failed reminder removal remains retryable and cannot start a replacement', async () => {
+  const f = setup();
+  await rejectedPreparation(f);
+  const original = f.action.record;
+  const remove = f.storage.removeItem;
+  f.storage.removeItem = () => {};
+  const before = f.requests.length;
+  await f.action.removeReminder();
+  expect(f.action.getSnapshot()).toMatchObject({ phase: 'error', canRemoveReminder: true });
+  expect(f.action.record).toBe(original);
+  expect(f.values.size).toBe(1);
+  await f.action.prepare();
+  expect(f.requests).toHaveLength(before);
+  f.storage.removeItem = remove;
+  f.handler(async (config) => response(config, f.context));
+  await f.action.removeReminder();
+  expect(f.action.getSnapshot().phase).toBe('editing');
+  expect(f.values.size).toBe(0);
+});
+
+test('failure to reload current order after removal cannot reuse the old context or action', async () => {
+  const f = setup();
+  await rejectedPreparation(f);
+  f.handler(async (config) => fail(config, { detail: 'The order is temporarily unavailable.' }, 503));
+  await f.action.removeReminder();
+  expect(f.values.size).toBe(0);
+  expect(f.action.record).toBeNull();
+  expect(f.action.getSnapshot()).toMatchObject({
+    phase: 'error',
+    context: null,
+    values: null,
+    canRemoveReminder: false,
+  });
+  const before = f.requests.length;
+  await f.action.prepare();
+  expect(f.requests).toHaveLength(before);
+  f.handler(async (config) => response(config, actionContext('20', '4')));
+  await f.action.recover();
+  expect(f.action.getSnapshot()).toMatchObject({ phase: 'editing', values: { quantity: '20', minQuantity: '4' } });
+});
+
+test('a subsequent uncertain recovery revokes the earlier reminder-removal option', async () => {
+  const f = setup();
+  await rejectedPreparation(f);
+  f.handler(async (config) => fail(config, { detail: 'Action not found.' }, 404));
+  await f.action.recover();
+  expect(f.action.getSnapshot()).toMatchObject({ phase: 'error', canRemoveReminder: false });
+  await f.action.removeReminder();
+  expect(f.values.size).toBe(1);
+});
+
+test.each(['close', 'account change'])('%s retires the reminder-removal control', async (retire) => {
+  const f = setup();
+  await rejectedPreparation(f);
+  if (retire === 'close') f.action.close();
+  else f.retire();
+  const before = f.requests.length;
+  await f.action.removeReminder();
+  expect(f.values.size).toBe(1);
+  expect(f.requests).toHaveLength(before);
 });
 
 test('no-change modification remains a recorded result distinct from later current order fields', async () => {

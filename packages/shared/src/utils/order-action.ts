@@ -1,4 +1,5 @@
-import type { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
+import { isAxiosError, type AxiosInstance, type AxiosRequestConfig, type AxiosResponse } from 'axios';
+import { TRADING_ENDPOINTS } from '../constants';
 import type {
   OrderActionChallenge,
   OrderActionContext,
@@ -37,6 +38,7 @@ export interface OrderActionState {
   error: string | null;
   notice: string | null;
   recovered: boolean;
+  canRemoveReminder: boolean;
 }
 
 interface Dependencies {
@@ -60,6 +62,7 @@ export class OrderAction {
     error: null,
     notice: null,
     recovered: false,
+    canRemoveReminder: false,
   };
   private listeners = new Set<() => void>();
   private generation = 0;
@@ -123,6 +126,7 @@ export class OrderAction {
       phase,
       error: null,
       notice: null,
+      canRemoveReminder: false,
       challenge: ['loading', 'preparing'].includes(phase) ? null : this.state.challenge,
     });
     try {
@@ -144,25 +148,54 @@ export class OrderAction {
 
   load = (): Promise<void> => {
     if (this.record) return this.recover();
-    return this.run('loading', async (generation) => {
-      const response = await getOrderActionContext(
-        this.dependencies.apiClient,
-        this.orderUuid,
-        this.owner.ownerAccountUuid,
-        this.config(generation),
-      );
+    return this.run('loading', (generation) => this.loadContext(generation));
+  };
+
+  private async loadContext(generation: number): Promise<void> {
+    const response = await getOrderActionContext(
+      this.dependencies.apiClient,
+      this.orderUuid,
+      this.owner.ownerAccountUuid,
+      this.config(generation),
+    );
+    if (!this.current(generation)) return;
+    validateOrderActionContext(response.data, this.owner.ownerAccountUuid, this.orderUuid);
+    const context = response.data;
+    this.publish({
+      phase: 'editing',
+      context,
+      values: {
+        quantity: context.currentValues.quantity,
+        minQuantity: context.currentValues.minQuantity,
+        pricePerShare: context.currentValues.pricePerShare,
+      },
+    });
+  }
+
+  removeReminder = (): Promise<void> => {
+    if (!this.record || this.state.phase !== 'error' || !this.state.canRemoveReminder) return Promise.resolve();
+    return this.run('preparing', async (generation) => {
+      try {
+        await this.dependencies.store.remove(this.record!);
+      } catch (error) {
+        if (this.current(generation)) this.publish({ canRemoveReminder: true });
+        throw error;
+      }
       if (!this.current(generation)) return;
-      validateOrderActionContext(response.data, this.owner.ownerAccountUuid, this.orderUuid);
-      const context = response.data;
+      this.record = null;
+      this.known = null;
+      this.persistenceAttempted = false;
+      this.requested = false;
       this.publish({
-        phase: 'editing',
-        context,
-        values: {
-          quantity: context.currentValues.quantity,
-          minQuantity: context.currentValues.minQuantity,
-          pricePerShare: context.currentValues.pricePerShare,
-        },
+        context: null,
+        values: null,
+        snapshot: null,
+        challenge: null,
+        recovered: false,
+        notice: 'Saved reminder removed. Review the current order before signing another action.',
       });
+      this.dependencies.onRecordsChanged();
+      await this.loadContext(generation);
     });
   };
 
@@ -204,26 +237,41 @@ export class OrderAction {
       throw error;
     }
   }
-  private message(
+  private async message(
     replacements: OrderActionValues | null,
     generation: number,
   ): Promise<AxiosResponse<OrderActionSnapshot>> {
     const data = { actionId: this.record!.actionId, ownerAccountUuid: this.owner.ownerAccountUuid };
-    return this.observation(
+    const endpoint =
       this.purpose === 'cancel'
-        ? getOrderCancelMessage(this.dependencies.apiClient, this.orderUuid, data, this.config(generation))
-        : getOrderModificationMessage(
-            this.dependencies.apiClient,
-            this.orderUuid,
-            {
-              ...data,
-              newQuantity: replacements!.quantity,
-              newMinQuantity: replacements!.minQuantity,
-              newPricePerShare: replacements!.pricePerShare,
-            },
-            this.config(generation),
-          ),
-    );
+        ? TRADING_ENDPOINTS.ORDERS.CANCEL_MESSAGE(this.orderUuid)
+        : TRADING_ENDPOINTS.ORDERS.MODIFY_MESSAGE(this.orderUuid);
+    try {
+      return await this.observation(
+        this.purpose === 'cancel'
+          ? getOrderCancelMessage(this.dependencies.apiClient, this.orderUuid, data, this.config(generation))
+          : getOrderModificationMessage(
+              this.dependencies.apiClient,
+              this.orderUuid,
+              {
+                ...data,
+                newQuantity: replacements!.quantity,
+                newMinQuantity: replacements!.minQuantity,
+                newPricePerShare: replacements!.pricePerShare,
+              },
+              this.config(generation),
+            ),
+      );
+    } catch (error) {
+      if (
+        this.current(generation) &&
+        isAxiosError(error) &&
+        error.response?.status === 400 &&
+        error.response.config?.url === endpoint
+      )
+        this.publish({ canRemoveReminder: true });
+      throw error;
+    }
   }
   private async accept(
     response: AxiosResponse<OrderActionSnapshot>,

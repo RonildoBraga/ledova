@@ -311,6 +311,51 @@ it('cancels with the scoped action ID and no create submission', async () => {
   expect(requests.some((request) => request.url === endpoints.CREATE)).toBe(false);
 });
 
+it('a rejected preparation can remove its reminder and review a new change after restart', async () => {
+  context = actionContext('10', '1');
+  handler = async (config) => {
+    const reply = await ordinary(config);
+    if (config.url === endpoints.MODIFY_MESSAGE(orderUuid) && JSON.parse(config.data).action_id === actionId) {
+      context.currentValues.filledQuantity = '5';
+      context.currentValues.remainingQuantity = '5';
+      return fail(config, { detail: 'New quantity must exceed the filled amount.' }, 400);
+    }
+    return reply;
+  };
+  const first = await render(<TradingScreen />, { wrapper });
+  await fireEvent.press(first.getByText('Change synthetic order'));
+  await first.findByLabelText('New quantity');
+  await fireEvent.changeText(first.getByLabelText('New quantity'), '4');
+  await fireEvent.press(first.getByText('Review change'));
+  await first.findByText('New quantity must exceed the filled amount.');
+  expect(await orderActionStore.list(owner)).toHaveLength(1);
+  await first.unmount();
+  const view = await render(<TradingScreen />, { wrapper });
+  await fireEvent.press(await view.findByText('Check change 1'));
+  await view.findByText('New quantity must exceed the filled amount.');
+  expect(stored.get(actionId)?.status).toBe('pending');
+  expect(await orderActionStore.list(owner)).toHaveLength(1);
+  await fireEvent.press(view.getByRole('button', { name: 'Remove saved reminder' }));
+  await waitFor(() => expect(view.getByLabelText('New quantity').props.value).toBe('10'));
+  expect(view.getByText('Filled: 5 shares')).toBeTruthy();
+  expect(await orderActionStore.list(owner)).toHaveLength(0);
+  expect(stored.get(actionId)?.intent.modifications?.quantity).toBe('4');
+  expect(stored.get(actionId)?.status).toBe('pending');
+  await fireEvent.changeText(view.getByLabelText('New quantity'), '6');
+  await fireEvent.press(view.getByText('Review change'));
+  await view.findByText('Sign with biometric');
+  expect(messagePosts().map((request) => JSON.parse(request.data).action_id)).toEqual([
+    actionId,
+    actionId,
+    otherActionId,
+  ]);
+  expect(await orderActionStore.list(owner)).toEqual([
+    { version: 1, ...owner, actionId: otherActionId, orderUuid, purpose: 'modify' },
+  ]);
+  expect(executes()).toHaveLength(0);
+  expect(signEthereumTypedData).not.toHaveBeenCalled();
+});
+
 it('recovers a lost response with its original change and separate current order without executing twice', async () => {
   const view = await render(<TradingScreen />, { wrapper });
   await begin(view);

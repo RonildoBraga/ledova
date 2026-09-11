@@ -312,6 +312,51 @@ it('cancels with the scoped action ID and no create submission', async () => {
   expect(requests.some((request) => request.url === endpoints.CREATE)).toBe(false);
 });
 
+it('a rejected preparation can remove its reminder and review a new change after restart', async () => {
+  context = actionContext('10', '1');
+  handler = async (config) => {
+    const reply = await ordinary(config);
+    if (config.url === endpoints.MODIFY_MESSAGE(orderUuid) && JSON.parse(config.data).action_id === actionId) {
+      context.currentValues.filledQuantity = '5';
+      context.currentValues.remainingQuantity = '5';
+      return fail(config, { detail: 'New quantity must exceed the filled amount.' }, 400);
+    }
+    return reply;
+  };
+  const first = render(<TradingPage />, { wrapper });
+  fireEvent.click(screen.getByText('Change synthetic order'));
+  await screen.findByLabelText('New quantity');
+  fireEvent.change(screen.getByLabelText('New quantity'), { target: { value: '4' } });
+  fireEvent.click(screen.getByText('Review change'));
+  await screen.findByText('New quantity must exceed the filled amount.');
+  expect(await orderActionStore.list(owner)).toHaveLength(1);
+  first.unmount();
+  render(<TradingPage />, { wrapper });
+  fireEvent.click(await screen.findByText('Check change 1'));
+  await screen.findByText('New quantity must exceed the filled amount.');
+  expect(stored.get(actionId)?.status).toBe('pending');
+  expect(await orderActionStore.list(owner)).toHaveLength(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Remove saved reminder' }));
+  await waitFor(() => expect((screen.getByLabelText('New quantity') as HTMLInputElement).value).toBe('10'));
+  expect(screen.getByText('Filled: 5 shares')).toBeTruthy();
+  expect(await orderActionStore.list(owner)).toHaveLength(0);
+  expect(stored.get(actionId)?.intent.modifications?.quantity).toBe('4');
+  expect(stored.get(actionId)?.status).toBe('pending');
+  fireEvent.change(screen.getByLabelText('New quantity'), { target: { value: '6' } });
+  fireEvent.click(screen.getByText('Review change'));
+  await screen.findByText('Continue to sign');
+  expect(messagePosts().map((request) => JSON.parse(request.data).action_id)).toEqual([
+    actionId,
+    actionId,
+    otherActionId,
+  ]);
+  expect(await orderActionStore.list(owner)).toEqual([
+    { version: 1, ...owner, actionId: otherActionId, orderUuid, purpose: 'modify' },
+  ]);
+  expect(executes()).toHaveLength(0);
+  expect(signEthereumTypedData).not.toHaveBeenCalled();
+});
+
 it('recovers a lost response with its original change and separate current order without executing twice', async () => {
   render(<TradingPage />, { wrapper });
   await begin();
