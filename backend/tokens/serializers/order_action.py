@@ -177,7 +177,10 @@ class OrderActionSubmissionSerializer(serializers.Serializer):
     @extend_schema_field(
         PolymorphicProxySerializer(
             component_name="OrderActionAppliedResult",
-            serializers=[OrderActionCancelResultSerializer, OrderActionModifyResultSerializer],
+            serializers={
+                "cancel": OrderActionCancelResultSerializer,
+                "modify": OrderActionModifyResultSerializer,
+            },
             resource_type_field_name="kind",
             allow_null=True,
         )

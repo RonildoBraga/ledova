@@ -101,6 +101,18 @@ class OrderActionSchemaTest(ActionFixtures, APITransactionTestCase):
         schema = self.response_schema("/api/v1/trading/orders/{uuid}/cancel/")
         self.assert_keys(schema, result.json())
         applied = self.resolve(schema["properties"]["result"])
+        self.assertEqual(
+            applied["discriminator"],
+            {
+                "propertyName": "kind",
+                "mapping": {
+                    "cancel": "#/components/schemas/OrderActionCancelResult",
+                    "modify": "#/components/schemas/OrderActionModifyResult",
+                },
+            },
+        )
+        selected = {"$ref": applied["discriminator"]["mapping"][result.json()["result"]["kind"]]}
+        self.assert_keys(selected, result.json()["result"])
         variants = [self.resolve(item) for item in applied["oneOf"]]
         cancel = next(item for item in variants if "fromStatus" in item["properties"])
         self.assert_keys(cancel, result.json()["result"])
@@ -119,6 +131,18 @@ class OrderActionSchemaTest(ActionFixtures, APITransactionTestCase):
         self.assertIn({"$ref": "#/components/schemas/OrderActionSubmission"}, error_schema["anyOf"])
         lookup = self.response_schema("/api/v1/trading/orders/actions/{action_id}/", "get")
         self.assert_keys(lookup, self.recover().json())
+
+    def test_modify_result_discriminator_resolves_the_actual_applied_payload(self):
+        signed = self.signed("modify", self.modify_body())
+        response = self.execute("modify", signed)
+        self.assertEqual(response.status_code, 200, response.content)
+        result = response.json()["result"]
+        self.assertEqual(result["kind"], "modify")
+        schema = self.response_schema("/api/v1/trading/orders/{uuid}/modify/")
+        applied = self.resolve(schema["properties"]["result"])
+        selected = {"$ref": applied["discriminator"]["mapping"][result["kind"]]}
+        fields = self.assert_keys(selected, result)
+        self.assertEqual(self.resolve(fields["kind"])["enum"], [result["kind"]])
 
     def test_retired_get_issuance_declares_its_refusal_without_a_success_envelope(self):
         operation = self.document["paths"]["/api/v1/trading/orders/{uuid}/cancel/message/"]["get"]

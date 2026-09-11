@@ -14988,7 +14988,8 @@
                 "discriminator": {
                     "propertyName": "kind",
                     "mapping": {
-                        "null": "#/components/schemas/OrderActionModifyResult"
+                        "cancel": "#/components/schemas/OrderActionCancelResult",
+                        "modify": "#/components/schemas/OrderActionModifyResult"
                     }
                 }
             },
