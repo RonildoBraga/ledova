@@ -336,11 +336,11 @@ lock graph.
 
 Days an investor classification's evidence file is kept, measured from
 `reviewed_at` for a rejected, revoked or withdrawn claim and from `expires_at`
-for a verified one. The default is a **placeholder pending counsel,
-not advice**: 2557 days is seven calendar years including two leap days.
-Australian financial-record and AML/CTF customer-identification obligations are
-the constraints to confirm it against. Set `0` while the period is undecided —
-the retention deadline remains unset and nothing is deleted. Attached payslips
+for a verified one. 2557 days is seven calendar years including two leap days,
+chosen because the Corporations Act's financial-records obligation and the
+AML/CTF customer-identification obligation both land there. **That reading was
+made without advice** — see [LEGAL.md](LEGAL.md), question 3. Set `0` to retain
+indefinitely: the deadline stays unset and nothing is deleted. Attached payslips
 inherit this same claim clock; unattached uploads use their separate, shorter
 lifetime. Neither setting changes an eligibility decision.
 
@@ -349,7 +349,7 @@ way: `retention_cutoff` raises `ImproperlyConfigured` below 2557 days, so the
 floor cannot be configured away and `0` is not a valid value. The purge measures
 from the cessation date, and a later full-history fold cannot recreate what it
 removed. It implements the accepted seven-year assumption for s169(3); the legal
-basis is unadvised, and is question 1 in [COUNSEL.md](COUNSEL.md).
+basis is unadvised, and is question 1 in [LEGAL.md](LEGAL.md).
 
 ### Media storage
 
@@ -1161,8 +1161,7 @@ Deleting an account does **not** purge evidence early. `delete_account` is a
 tombstone that never touches `InvestorClassification`, and that is now a
 deliberate position rather than an oversight: the point of a fixed retention
 period is that it outlives the subject's wishes, which is usually why the
-record-keeping obligation exists. The period itself is the part that needs
-counsel.
+record-keeping obligation exists.
 
 `GET /health/` is answered by middleware before any database access.
 
@@ -1644,6 +1643,9 @@ production build on a device:
 ## Legal
 
 The operator's obligations under securities, AML/CTF, privacy and company-law
-regimes are out of scope for this repository and must be settled with counsel
-before any real issuance.
+regimes are out of scope for this repository and must be settled before any real
+issuance. The four positions the code already depends on are written down in
+[LEGAL.md](LEGAL.md), each with what would show it wrong. None of them has been
+put to anyone qualified, and none is engaged while the platform runs on testnet
+with synthetic data.
 

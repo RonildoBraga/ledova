@@ -283,7 +283,8 @@ decision below). Mainnet deployment configuration is deliberately absent.
   step, and both clients compile its TypeScript themselves.
 - **Classification evidence is kept for a fixed period, then purged.** Shipped
   as a derived read-horizon plus a nightly sweep, with the period as a deploy-time
-  setting. The period's value is still open and needs counsel; the shape is not.
+  setting. The shape is settled; the period is seven years on the reading in
+  [LEGAL.md](LEGAL.md), taken without advice.
 - **No comments and no docstrings in source.** Settled, and now mechanically
   gated by `make check-comments` rather than held by review alone. See the
   coding rules in [GATES.md](GATES.md#the-rules).
@@ -313,13 +314,14 @@ decision below). Mainnet deployment configuration is deliberately absent.
 
 ## Open questions
 
-- **Four questions are with counsel**, stated in [COUNSEL.md](COUNSEL.md):
-  section 169(3) retention of members who ceased in the last seven years
-  against a register derived from current balances; who carries the section 168
-  obligation to keep the register; the evidence-retention period behind
-  `CLASSIFICATION_EVIDENCE_RETENTION_DAYS`; and the excluded category the
-  operator relies on to run the platform without a licence. The answers are
-  recorded as owner decisions and this list points at them when they land.
+- **Four legal positions are taken without advice**, in [LEGAL.md](LEGAL.md):
+  s169(3) retention of former members, who carries the s168 obligation to keep
+  the register, the period behind
+  `CLASSIFICATION_EVIDENCE_RETENTION_DAYS`, and the exception relied on to run
+  without a licence. None is engaged while the platform is testnet-only with
+  synthetic data, and that document carries the trigger for each. The fourth is
+  the one that is not settled by reading, and the position on it is to not reach
+  its trigger.
 - Should modifying an order re-run matching automatically? Creating one
   matches; modifying one no longer reports a candidate match.
 - `NotificationPreferences` is a separate model that would fold into
