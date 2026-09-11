@@ -43,7 +43,7 @@ function buildSumsubHtml(token: string, themeColors: { bg: string; muted: string
   <div id="error" class="status-msg"></div>
   <div id="sumsub-websdk-container"></div>
   <script>
-    var ACCESS_TOKEN = ${JSON.stringify(token)};
+    var ACCESS_TOKEN = ${JSON.stringify(token).replace(/</g, '\\u003c')};
 
     function showError() {
       document.getElementById('loading').style.display = 'none';

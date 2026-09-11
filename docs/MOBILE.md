@@ -290,6 +290,13 @@ SDK failures and native page-load failures use fixed messages instead of raw
 provider or WebView error payloads. Existing backend initialization error messages
 are still shown.
 
+Sumsub access tokens remain opaque strings when embedded in the initial HTML.
+The serialized value escapes less-than characters so HTML parsing cannot end the
+script or enter a script escape state inside a token. Parser controls use the
+mounted WebView's actual HTML and verify that the SDK receives the original token,
+including quotes, closing-script text and Unicode separators. These controls use
+synthetic tokens and do not contact the provider.
+
 Mounted JavaScript controls use the locked WebView wrapper, actual app-lock
 provider and owner hooks with synthetic credentials. They establish mount,
 callback and error-display behavior, not physical camera shutdown or native
