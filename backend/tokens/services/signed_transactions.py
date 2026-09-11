@@ -28,6 +28,7 @@ class DecodedSignedTransaction:
     gas_price: Optional[int]
     max_fee_per_gas: Optional[int]
     max_priority_fee_per_gas: Optional[int]
+    access_list: tuple[tuple[str, tuple[int, ...]], ...] = ()
 
 
 def decode_signed_transaction(raw_transaction: bytes) -> DecodedSignedTransaction:
@@ -63,6 +64,10 @@ def decode_signed_transaction(raw_transaction: bytes) -> DecodedSignedTransactio
         gas_price=int(fields["gasPrice"]) if "gasPrice" in fields else None,
         max_fee_per_gas=int(fields["maxFeePerGas"]) if "maxFeePerGas" in fields else None,
         max_priority_fee_per_gas=int(fields["maxPriorityFeePerGas"]) if "maxPriorityFeePerGas" in fields else None,
+        access_list=tuple(
+            (to_checksum_address(entry["address"]), tuple(entry["storageKeys"]))
+            for entry in fields.get("accessList", ())
+        ),
     )
 
 

@@ -7,11 +7,13 @@ from unittest.mock import patch
 from django.test import override_settings
 from rest_framework.test import APITransactionTestCase
 from web3 import Web3
+from web3.exceptions import Web3RPCError
 
 from assets.models import Asset, AssetChainDeployment
 from integrations.blockchain import BlockchainClientFactory
 from integrations.blockchain.ethereum import EthereumClient
 from shared.db import acting_for, use_operator
+from wallets.exceptions import InvalidTransactionException
 from wallets.models import Holding, Transaction
 from wallets.services.holdings import sync_holding
 from wallets.services.submissions import attempt_submission
@@ -65,6 +67,36 @@ class SubmissionChainTest(SubmissionFixture, APITransactionTestCase):
         self.assertEqual(tx.block_number, receipt.blockNumber)
         self.assertEqual(tx.block_timestamp, datetime.fromtimestamp(block.timestamp, tz=timezone.utc))
         self.assertEqual(tx.transaction_fee, Decimal(receipt.gasUsed * receipt.effectiveGasPrice) / Decimal(10**18))
+
+    def test_intrinsically_invalid_gas_is_refused_before_reserving_funds_and_exact_limits_mine(self):
+        access_list = [
+            {"address": self.recipient, "storageKeys": ["0x" + "00" * 32] * 2},
+            {"address": self.recipient, "storageKeys": ["0x" + "00" * 32] * 2},
+        ]
+        for nonce, fields, minimum in (
+            (0, {}, 21000),
+            (1, {"type": 1, "accessList": access_list}, 33400),
+            (
+                2,
+                {"type": 2, "maxFeePerGas": 2 * 10**9, "maxPriorityFeePerGas": 10**9, "accessList": access_list},
+                33400,
+            ),
+        ):
+            with self.subTest(nonce=nonce):
+                invalid = self.signed(nonce=nonce, value=0, gas=minimum - 1, **fields)
+                before = self.financial_state()
+                with self.assertRaisesRegex(Web3RPCError, "gas|Gas"):
+                    self.w3.eth.send_raw_transaction(invalid.raw_transaction)
+                self.assertEqual(self.w3.eth.get_transaction_count(self.signer.address), nonce)
+                with patch("wallets.services.submissions.get_blockchain_client") as connect:
+                    with self.assertRaisesRegex(InvalidTransactionException, "intrinsic gas"):
+                        self.submit_direct(invalid)
+                    connect.assert_not_called()
+                self.assertEqual(self.financial_state(), before)
+                valid = self.signed(nonce=nonce, value=0, gas=minimum, **fields)
+                result = self.submit_direct(valid)
+                receipt = self.w3.eth.get_transaction_receipt(result["txHash"])
+                self.assertEqual((receipt.status, receipt.gasUsed), (1, minimum))
 
     def test_a_lost_node_acknowledgement_reconciles_the_original_mined_hash(self):
         signed = self.signed(nonce=0, gas=90000)

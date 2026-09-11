@@ -23,6 +23,7 @@ SCOPED_TEST_LABELS = (
     "wallets.tests.test_history_preservation.ScopedHistoryPreservationTest",
     "wallets.tests.test_submission_durability.ScopedSubmissionDurabilityTest",
     "wallets.tests.test_submission_recovery.ScopedSubmissionRecoveryTest",
+    "wallets.tests.test_submission_intrinsic_gas.ScopedSubmissionIntrinsicGasTest",
     "wallets.tests.test_receipt_fencing.ScopedReceiptFencingTest",
     "wallets.tests.test_receipt_metadata.ScopedReceiptMetadataTest",
     "wallets.tests.test_bitcoin_submission.ScopedBitcoinSubmissionTest",

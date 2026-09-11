@@ -1071,6 +1071,16 @@ rows, are refused before broadcast. The submission entry point requires the
 requesting user's wallet membership and an outermost transaction boundary so
 that no caller can roll back the record after sending.
 
+Before reserving a transfer, the wallet validates the signed gas limit against
+the intrinsic gas charge for its supported native or ERC20 payload, including
+every access-list entry and storage key, even repeated entries
+([EIP-2930](https://eips.ethereum.org/EIPS/eip-2930)). The admission minimum also
+includes the calldata floor from
+[EIP-7623](https://eips.ethereum.org/EIPS/eip-7623). This floor is required by the
+wallet even when an older local test node would accept a lower limit. A limit
+below the minimum is refused before a journal, deduction or send RPC. Passing
+this check does not establish that contract execution will succeed.
+
 EVM wallet submissions reserve both `(chain_id, tx_hash)` and
 `(chain_id, sender_address, nonce)` across account wallets. Another wallet cannot
 adopt the recorded spend or create a second deduction by submitting different
