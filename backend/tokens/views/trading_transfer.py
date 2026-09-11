@@ -16,7 +16,7 @@ from tokens.trading_wallet_access import resolve_verified_evm_wallets
 class TradingTransferViewSet(AuthenticatedGenericViewSet):
     throttle_scope = "broadcast"
 
-    @extend_schema(responses=PreparedTokenTransferSerializer)
+    @extend_schema(request=PrepareTransferSerializer, responses=PreparedTokenTransferSerializer)
     @action(detail=False, methods=["post"])
     def prepare(self, request):
         serializer = PrepareTransferSerializer(data=request.data)
@@ -50,7 +50,7 @@ class TradingTransferViewSet(AuthenticatedGenericViewSet):
             }
         )
 
-    @extend_schema(responses=TokenTransferReceiptSerializer)
+    @extend_schema(request=BroadcastTransferSerializer, responses=TokenTransferReceiptSerializer)
     @action(detail=False, methods=["post"])
     def broadcast(self, request):
         serializer = BroadcastTransferSerializer(data=request.data)

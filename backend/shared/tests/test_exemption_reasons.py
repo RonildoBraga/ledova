@@ -8,6 +8,7 @@ from django.test import SimpleTestCase
 from django.urls import get_resolver
 from rest_framework.relations import ManyRelatedField, RelatedField
 
+from shared.api.routes import _methods, _normalise, _walk
 from shared.tests import test_cross_tenant_routes as matrix
 from shared.tests import test_route_coverage as coverage
 from shared.tests.test_route_coverage import EXEMPT
@@ -34,12 +35,12 @@ def reasons_this_module_exercises():
 
 def _callbacks():
     found = {}
-    for raw, callback in coverage._walk(get_resolver().url_patterns):
-        normalised = coverage._normalise(raw)
+    for raw, callback in _walk(get_resolver().url_patterns):
+        normalised = _normalise(raw)
         view = getattr(callback, "cls", None)
         if getattr(view, "__name__", "") == "APIRootView":
             continue
-        for method in coverage._methods(callback):
+        for method in _methods(callback):
             found.setdefault((method, normalised), (callback, raw))
     return found
 
