@@ -21,6 +21,7 @@ from authentication.schema import (
     AUTH_TRANSPORT_PARAMETER,
     AuthRefreshErrorSerializer,
     AuthRefreshRequestSerializer,
+    AuthSignoutRequestSerializer,
     AuthTokenPairSerializer,
 )
 from authentication.serializers.user import (
@@ -162,8 +163,12 @@ class AuthViewSet(SetsThePrincipalOnTheConnection, TokenCookieMixin, ViewSet):
         return self.session_response(request, UserSigninSerializer(instance=user).data, access_token, refresh_token)
 
     @extend_schema(
-        request=AuthRefreshRequestSerializer,
+        request=AuthSignoutRequestSerializer,
         parameters=[AUTH_TRANSPORT_PARAMETER],
+        description=(
+            "Clears authentication cookies. Server-side session revocation requires a live access token. "
+            "Anonymous requests still clear cookies but do not revoke refresh sessions."
+        ),
         responses=inline_serializer(
             name="AuthSignedOut",
             fields={"message": serializers.CharField()},

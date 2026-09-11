@@ -787,6 +787,42 @@
         ],
         "type": "object"
       },
+      "AuthSignoutRequest": {
+        "properties": {
+          "refresh": {
+            "description": "Refresh JWT to revoke when the request authenticates with a live access token. If omitted, authenticated signout revokes the access token's session. Anonymous signout only clears cookies; it does not revoke a supplied refresh token.",
+            "nullable": true,
+            "oneOf": [
+              {
+                "nullable": true,
+                "type": "string"
+              },
+              {
+                "enum": [
+                  0
+                ],
+                "type": "number"
+              },
+              {
+                "enum": [
+                  false
+                ],
+                "type": "boolean"
+              },
+              {
+                "items": {},
+                "maxItems": 0,
+                "type": "array"
+              },
+              {
+                "maxProperties": 0,
+                "type": "object"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
       "AuthTokenPair": {
         "properties": {
           "accessToken": {
@@ -11069,6 +11105,18 @@
         "in": "cookie",
         "name": "access",
         "type": "apiKey"
+      },
+      "csrfCookie": {
+        "description": "CSRF cookie set by /api/auth/verify/ or cookie sign-in. Its token can be sent in the CSRF header.",
+        "in": "cookie",
+        "name": "csrftoken",
+        "type": "apiKey"
+      },
+      "csrfHeader": {
+        "description": "CSRF token matching the CSRF cookie or session secret. Cookie-authenticated unsafe JSON requests require this header. POST form and multipart requests may instead supply csrfmiddlewaretoken in the body. The header alternative works for every unsafe method.",
+        "in": "header",
+        "name": "X-CSRFTOKEN",
+        "type": "apiKey"
       }
     }
   },
@@ -11371,7 +11419,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -11465,7 +11515,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -11513,7 +11565,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -11564,7 +11618,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -11662,7 +11718,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           },
           {}
         ],
@@ -11796,7 +11854,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -11829,7 +11889,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -12003,7 +12065,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -12096,7 +12160,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -12193,7 +12259,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -12250,7 +12318,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -12344,7 +12414,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -12405,7 +12477,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -12577,7 +12651,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -12674,7 +12750,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -12790,7 +12868,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -12915,7 +12995,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -13060,7 +13142,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -13093,7 +13177,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -13188,7 +13274,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -13246,7 +13334,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -13306,7 +13396,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -13366,7 +13458,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -13489,7 +13583,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           },
           {}
         ],
@@ -13548,7 +13644,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           },
           {}
         ],
@@ -13577,7 +13675,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -13587,6 +13687,7 @@
     },
     "/api/signout/": {
       "post": {
+        "description": "Clears authentication cookies. Server-side session revocation requires a live access token. Anonymous requests still clear cookies but do not revoke refresh sessions.",
         "operationId": "api_signout_create",
         "parameters": [
           {
@@ -13602,17 +13703,17 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AuthRefreshRequest"
+                "$ref": "#/components/schemas/AuthSignoutRequest"
               }
             },
             "application/x-www-form-urlencoded": {
               "schema": {
-                "$ref": "#/components/schemas/AuthRefreshRequest"
+                "$ref": "#/components/schemas/AuthSignoutRequest"
               }
             },
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/AuthRefreshRequest"
+                "$ref": "#/components/schemas/AuthSignoutRequest"
               }
             }
           }
@@ -13634,7 +13735,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           },
           {}
         ],
@@ -13683,7 +13786,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           },
           {}
         ],
@@ -13761,7 +13866,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           },
           {}
         ],
@@ -13996,7 +14103,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -14093,7 +14202,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -14150,7 +14261,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -14243,7 +14356,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -14276,7 +14391,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -14371,7 +14488,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -14428,7 +14547,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -14522,7 +14643,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -14570,7 +14693,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -14695,7 +14820,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -14753,7 +14880,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -14809,7 +14938,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -14938,7 +15069,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -15052,7 +15185,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -15092,7 +15227,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -15218,7 +15355,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -15313,7 +15452,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -15371,7 +15512,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -15468,7 +15611,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -15568,7 +15713,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -15668,7 +15815,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -15727,7 +15876,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -15786,7 +15937,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -15968,7 +16121,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -16001,7 +16156,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -16099,7 +16256,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -16234,7 +16393,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -16267,7 +16428,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -16362,7 +16525,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -16420,7 +16585,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -16479,7 +16646,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -16587,7 +16756,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -16681,7 +16852,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -16780,7 +16953,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -16839,7 +17014,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -16969,7 +17146,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -17093,7 +17272,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -17126,7 +17307,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -17221,7 +17404,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -17279,7 +17464,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -17338,7 +17525,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -17482,7 +17671,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -17577,7 +17768,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -17634,7 +17827,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -17693,7 +17888,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -17849,7 +18046,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -17908,7 +18107,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -18007,7 +18208,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -18367,7 +18570,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -18481,7 +18686,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -18835,7 +19042,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -19036,7 +19245,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -19238,7 +19449,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -19400,7 +19613,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -19579,7 +19794,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -19843,7 +20060,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -19891,7 +20110,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -20092,7 +20313,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -20139,7 +20362,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -20253,7 +20478,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -20311,7 +20538,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -20474,7 +20703,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -20522,7 +20753,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -20555,7 +20788,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -20650,7 +20885,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -20708,7 +20945,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -20768,7 +21007,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -20909,7 +21150,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -20949,7 +21192,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -20989,7 +21234,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [
@@ -21049,7 +21296,9 @@
             "bearerAuth": []
           },
           {
-            "cookieAuth": []
+            "cookieAuth": [],
+            "csrfCookie": [],
+            "csrfHeader": []
           }
         ],
         "tags": [

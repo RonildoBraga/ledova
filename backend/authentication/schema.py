@@ -2,14 +2,18 @@ from django.conf import settings
 from drf_spectacular.extensions import OpenApiAuthenticationExtension
 from drf_spectacular.utils import OpenApiParameter, extend_schema_field
 from rest_framework import serializers
+from rest_framework.permissions import SAFE_METHODS
 
 
 class HybridJWTAuthenticationScheme(OpenApiAuthenticationExtension):
     target_class = "authentication.classes.HybridJWTAuthentication"
-    name = ["bearerAuth", "cookieAuth"]
+    name = ["bearerAuth", "cookieAuth", "csrfHeader", "csrfCookie"]
 
     def get_security_requirement(self, auto_schema):
-        return [{name: []} for name in self.name]
+        cookie = {"cookieAuth": []}
+        if auto_schema.method not in SAFE_METHODS:
+            cookie.update(csrfHeader=[], csrfCookie=[])
+        return [{"bearerAuth": []}, cookie]
 
     def get_security_definition(self, auto_schema):
         return [
@@ -26,6 +30,29 @@ class HybridJWTAuthenticationScheme(OpenApiAuthenticationExtension):
                 "description": (
                     "A live session access JWT in the configured cookie. Unsafe cookie-authenticated requests "
                     "must pass Django's CSRF token and origin checks."
+                ),
+            },
+            {
+                "type": "apiKey",
+                "in": "header",
+                "name": settings.CSRF_HEADER_NAME.removeprefix("HTTP_").replace("_", "-"),
+                "description": (
+                    "CSRF token matching the CSRF cookie or session secret. Cookie-authenticated unsafe JSON "
+                    "requests require this header. POST form and multipart requests may instead supply "
+                    "csrfmiddlewaretoken in the body. The header alternative works for every unsafe method."
+                ),
+            },
+            {
+                "type": "apiKey",
+                "in": "cookie",
+                "name": settings.SESSION_COOKIE_NAME if settings.CSRF_USE_SESSIONS else settings.CSRF_COOKIE_NAME,
+                "description": (
+                    "Session cookie identifying stored CSRF state."
+                    if settings.CSRF_USE_SESSIONS
+                    else (
+                        "CSRF cookie set by /api/auth/verify/ or cookie sign-in. "
+                        "Its token can be sent in the CSRF header."
+                    )
                 ),
             },
         ]
@@ -67,6 +94,18 @@ class AuthRefreshRequestSerializer(serializers.Serializer):
             "Refresh JWT. In cookie transport, an omitted or falsy value falls back to the refresh cookie. "
             "Using a refresh cookie without an Authorization header requires CSRF validation. "
             "Bearer transport does not fall back to a refresh cookie."
+        ),
+    )
+
+
+class AuthSignoutRequestSerializer(serializers.Serializer):
+    refresh = AuthRefreshTokenField(
+        required=False,
+        allow_null=True,
+        help_text=(
+            "Refresh JWT to revoke when the request authenticates with a live access token. If omitted, "
+            "authenticated signout revokes the access token's session. Anonymous signout only clears cookies; "
+            "it does not revoke a supplied refresh token."
         ),
     )
 

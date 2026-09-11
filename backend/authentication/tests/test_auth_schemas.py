@@ -8,6 +8,7 @@ from drf_spectacular.drainage import GENERATOR_STATS
 from drf_spectacular.generators import SchemaGenerator
 from jsonschema import Draft4Validator
 from rest_framework.test import APIClient
+from rest_framework_simplejwt.exceptions import TokenError
 
 from authentication.services import TokenService
 from authentication.tests.test_legacy_auth_protocol import LegacyAuthProtocolTestCase
@@ -234,11 +235,79 @@ class AuthSchemaTest(LegacyAuthProtocolTestCase):
         self.assertEqual(schemes["cookieAuth"]["in"], "cookie")
         self.assertEqual(schemes["cookieAuth"]["name"], settings.AUTH_COOKIE["access"])
         self.assertIn("CSRF", schemes["cookieAuth"]["description"])
-        alternatives = [{"bearerAuth": []}, {"cookieAuth": []}]
+        self.assertEqual(schemes["csrfHeader"]["in"], "header")
+        self.assertEqual(schemes["csrfHeader"]["name"].lower(), "x-csrftoken")
+        self.assertEqual(schemes["csrfCookie"]["in"], "cookie")
+        self.assertEqual(schemes["csrfCookie"]["name"], settings.CSRF_COOKIE_NAME)
+        alternatives = [{"bearerAuth": []}, {"cookieAuth": [], "csrfHeader": [], "csrfCookie": []}]
         self.assertCountEqual(self.document["paths"]["/api/change-password/"]["post"]["security"], alternatives)
         self.assertCountEqual(self.document["paths"]["/api/signin/"]["post"]["security"], [*alternatives, {}])
+        self.assertCountEqual(
+            self.document["paths"]["/api/auth/verify/"]["get"]["security"],
+            [{"bearerAuth": []}, {"cookieAuth": []}, {}],
+        )
         self.assertNotIn("could not resolve authenticator", self.diagnostics)
         self.assertNotIn("unable to guess serializer", self.diagnostics)
+
+    @override_settings(CSRF_COOKIE_NAME="schema_csrf_cookie", CSRF_HEADER_NAME="HTTP_X_SCHEMA_CSRF")
+    def test_declared_csrf_cookie_and_header_match_the_configured_live_request(self):
+        GENERATOR_STATS.reset()
+        with redirect_stderr(StringIO()):
+            document = SchemaGenerator().get_schema(request=None, public=True)
+        user = self.create_completed_user()
+        client, csrf = self.cookie_client(user)
+        payload = {
+            "currentPassword": self.password,
+            "newPassword": "replacement-password-456",
+            "newPasswordConfirm": "replacement-password-456",
+        }
+        refused = client.post("/api/change-password/", payload, format="json")
+        self.assertEqual(refused.status_code, 403, refused.content)
+        user.refresh_from_db()
+        self.assertTrue(user.check_password(self.password))
+        accepted = client.post("/api/change-password/", payload, format="json", HTTP_X_SCHEMA_CSRF=csrf)
+        self.assertEqual(accepted.status_code, 200, accepted.content)
+        user.refresh_from_db()
+        self.assertTrue(user.check_password(payload["newPassword"]))
+        schemes = document["components"]["securitySchemes"]
+        self.assertEqual(schemes["csrfCookie"]["name"], "schema_csrf_cookie")
+        self.assertEqual(schemes["csrfHeader"]["name"].lower(), "x-schema-csrf")
+
+    def test_post_forms_keep_their_existing_csrf_body_token_alternative(self):
+        client, csrf = self.cookie_client(self.create_completed_user())
+        response = client.post("/api/signout-all/", {"csrfmiddlewaretoken": csrf}, format="multipart")
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertIn(
+            "csrfmiddlewaretoken", self.document["components"]["securitySchemes"]["csrfHeader"]["description"]
+        )
+
+    def test_anonymous_signout_declares_cookie_clearing_without_refresh_session_revocation(self):
+        _, refresh = TokenService.issue(self.create_completed_user())
+        path = "/api/signout/"
+        response = self.client.post(path, {"refresh": refresh}, format="json")
+        self.assertEqual(response.status_code, 200, response.content)
+        self.response_validator(path, response)
+        for name in (settings.AUTH_COOKIE["access"], settings.AUTH_COOKIE["refresh"]):
+            self.assertEqual(response.cookies[name]["max-age"], 0)
+        _, access, replacement = TokenService.rotate(refresh)
+        self.assertTrue(access)
+        self.assertNotEqual(replacement, refresh)
+        operation = self.document["paths"][path]["post"]
+        self.assertIn("live access token", operation["description"])
+        self.assertNotEqual(
+            operation["requestBody"]["content"]["application/json"]["schema"],
+            self.document["paths"]["/api/token/refresh/"]["post"]["requestBody"]["content"]["application/json"][
+                "schema"
+            ],
+        )
+
+    def test_authenticated_signout_still_revokes_the_supplied_refresh_session(self):
+        access, refresh = TokenService.issue(self.create_completed_user())
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {access}")
+        response = self.client.post("/api/signout/", {"refresh": refresh}, format="json")
+        self.assertEqual(response.status_code, 200, response.content)
+        with self.assertRaises(TokenError):
+            TokenService.rotate(refresh)
 
     def test_cookie_security_uses_the_configured_cookie_name_and_matches_live_authentication(self):
         cookie_settings = {**settings.AUTH_COOKIE, "access": "schema_access_cookie"}
