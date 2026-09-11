@@ -183,7 +183,11 @@ class HistoryPreservationChecks:
             provider.return_value.get_transaction_receipt.return_value = None
             with self.assertRaisesRegex(RuntimeError, "receipt not yet available"):
                 confirm_pending_transaction(data["tx_hash"], str(self.wallet.pk), principal_id=self.tenant.user.pk)
-            provider.return_value.get_transaction_receipt.return_value = {"status": 0, "blockNumber": 75}
+            provider.return_value.get_transaction_receipt.return_value = {
+                "status": 0,
+                "blockNumber": 75,
+                "transactionHash": data["tx_hash"],
+            }
             provider.return_value.get_block_timestamp.return_value = int(timezone.now().timestamp())
             result = confirm_pending_transaction(data["tx_hash"], str(self.wallet.pk), principal_id=self.tenant.user.pk)
         self.assertEqual(result["status"], "failed")
@@ -193,7 +197,12 @@ class HistoryPreservationChecks:
 
     def receipt_client(self, **receipt):
         client = Mock(spec=["get_transaction_receipt", "w3"])
-        client.get_transaction_receipt.return_value = {"status": 1, "blockNumber": 75, **receipt}
+        client.get_transaction_receipt.return_value = {
+            "status": 1,
+            "blockNumber": 75,
+            "transactionHash": self.history()["tx_hash"],
+            **receipt,
+        }
         client.w3.eth.get_block.return_value = {"timestamp": int(timezone.now().timestamp())}
         return client
 
@@ -209,7 +218,7 @@ class HistoryPreservationChecks:
                     block_timestamp=timezone.now() - timezone.timedelta(days=7),
                 )
                 self.import_history(data)
-                client = self.receipt_client(blockNumber=number)
+                client = self.receipt_client(blockNumber=number, transactionHash=data["tx_hash"])
                 client.w3.eth.get_block.side_effect = TimeoutError("Synthetic block lookup outage")
                 self.assertEqual(self.check_receipt(data, client)["status"], "confirmed")
                 with use_operator():
@@ -250,7 +259,7 @@ class HistoryPreservationChecks:
             for status in (0, 1):
                 data = self.history(tx_hash="0x" + f"{status + 200:064x}")
                 self.import_history(data)
-                result = self.check_receipt(data, self.receipt_client(status=status))
+                result = self.check_receipt(data, self.receipt_client(status=status, transactionHash=data["tx_hash"]))
                 self.assertEqual(result["status"], "confirmed" if status else "failed")
             notification.assert_not_called()
             local = self.pending()
@@ -287,7 +296,7 @@ class HistoryPreservationChecks:
                     contract_address="0x" + "cd" * 20,
                     block_timestamp=timezone.now() - timezone.timedelta(days=7),
                 )
-                client = self.receipt_client(status=status)
+                client = self.receipt_client(status=status, transactionHash=data["tx_hash"])
                 before = self.state()[1:]
 
                 def history_arrives(*args, **kwargs):
@@ -393,6 +402,20 @@ class HistoryPreservationChecks:
         self.assertIsNone(tx.block_timestamp)
         self.assertIsNone(tx.block_number)
 
+    def test_history_requires_a_receipt_for_its_own_hash(self):
+        for status in (0, 1):
+            with self.subTest(status=status):
+                data = self.history(tx_hash="0x" + f"{900 + status:064x}")
+                self.import_history(data)
+                before = self.state()
+                client = self.receipt_client(status=status, transactionHash="0x" + "ff" * 32)
+                with self.assertRaisesRegex(RuntimeError, "receipt identity not yet available"):
+                    self.check_receipt(data, client)
+                self.assertEqual(self.state(), before)
+                client.w3.eth.get_block.assert_not_called()
+                client.get_transaction_receipt.return_value["transactionHash"] = data["tx_hash"]
+                self.assertEqual(self.check_receipt(data, client)["status"], "confirmed" if status else "failed")
+
     def test_history_receipt_writer_cannot_change_a_local_transfer_or_a_completed_import(self):
         local = self.pending()
         self.assertFalse(local.imported_from_history)
@@ -403,7 +426,9 @@ class HistoryPreservationChecks:
         self.assertEqual(self.state(), before)
         data = self.history(tx_hash="0x" + "61" * 32)
         self.import_history(data)
-        self.assertEqual(self.check_receipt(data, self.receipt_client())["status"], "confirmed")
+        self.assertEqual(
+            self.check_receipt(data, self.receipt_client(transactionHash=data["tx_hash"]))["status"], "confirmed"
+        )
         before = self.state()
         with acting_for(self.tenant.user.pk):
             stale = record_history_receipt(data["tx_hash"], wallet=self.wallet, succeeded=False, block_number=900)
