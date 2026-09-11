@@ -10,3 +10,4 @@ export { useFinancialProfile } from './useFinancialProfile';
 export { useNotifications } from './useNotifications';
 export { useOrderActions } from './useOrderActions';
 export { useOrderActionSigning } from './useOrderActionSigning';
+export { useSwapSettlements } from './useSwapSettlements';

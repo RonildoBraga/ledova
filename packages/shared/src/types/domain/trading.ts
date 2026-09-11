@@ -1,4 +1,5 @@
 import type { OrderType, OrderStatus, SwapStatus, SwapUserRole } from '../../constants';
+import type { SwapSettlementContext } from './swap-settlement';
 
 export interface ShareToken {
   uuid: string;
@@ -140,6 +141,9 @@ export interface MarketData {
 }
 
 export interface SwapOrder {
+  settlementProtocolVersion?: 0 | 1;
+  settlementContext?: SwapSettlementContext | null;
+  settlementDigest?: string;
   uuid: string;
   status: SwapStatus;
   statusDisplay?: string;
@@ -162,7 +166,7 @@ export interface SwapOrder {
   buyOrderUuid?: string;
   txHash?: string;
   expiresAt: string;
-  completedAt?: string;
+  completedAt?: string | null;
   errorMessage?: string;
   createdAt: string;
   updatedAt?: string;

@@ -1,56 +1,17 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import type { OrderActionPurpose, UserPreferences } from '../types';
+import type { OrderActionPurpose } from '../types';
 import { OrderAction } from '../utils/order-action';
 import type { OrderActionStore, SavedOrderAction } from '../utils/order-action-storage';
-import type { OrderSubmissionOwner } from '../utils/order-submission-storage';
 import type { OrderSubmissionSession } from './useOrderSubmissions';
 import { useApiClient } from './useApiClient';
-import { AUTH_QUERY_KEY } from './useAuth';
-import { USER_PREFERENCES_QUERY_KEY, useUserPreferences } from './useUserPreferences';
+import { useOrderOwner } from './useOrderOwner';
 
 export function useOrderActions(store: OrderActionStore, session?: OrderSubmissionSession) {
   const apiClient = useApiClient();
   const queryClient = useQueryClient();
-  useUserPreferences();
   const [, render] = useReducer((value: number) => value + 1, 0);
-  const boundary = useMemo(() => {
-    let key: string | null = null;
-    let value: OrderSubmissionOwner | null = null;
-    const get = (): OrderSubmissionOwner | null => {
-      const auth = queryClient.getQueryData<{ data: { valid: boolean } }>(AUTH_QUERY_KEY);
-      const preferences = queryClient.getQueryData<{ data: UserPreferences }>(USER_PREFERENCES_QUERY_KEY)?.data;
-      const authorized = queryClient.getQueryState(AUTH_QUERY_KEY)?.status === 'success' && auth?.data.valid;
-      const next =
-        authorized && preferences?.userProfile && preferences.selectedAccount
-          ? `${preferences.userProfile}/${preferences.selectedAccount.uuid}/${session?.getEpoch() ?? 0}`
-          : null;
-      if (key !== next) {
-        key = next;
-        value =
-          next && preferences?.selectedAccount
-            ? { userUuid: preferences.userProfile, ownerAccountUuid: preferences.selectedAccount.uuid }
-            : null;
-      }
-      return value;
-    };
-    return {
-      get,
-      subscribe: (listener: () => void) => {
-        const changed = () => {
-          get();
-          listener();
-        };
-        const unsubscribeQuery = queryClient.getQueryCache().subscribe(changed);
-        const unsubscribeSession = session?.subscribe(changed);
-        return () => {
-          unsubscribeQuery();
-          unsubscribeSession?.();
-        };
-      },
-    };
-  }, [queryClient, session]);
-  const owner = useSyncExternalStore(boundary.subscribe, boundary.get, boundary.get);
+  const { owner, boundary } = useOrderOwner(session);
   const state = useMemo(
     () => ({
       retired: false,

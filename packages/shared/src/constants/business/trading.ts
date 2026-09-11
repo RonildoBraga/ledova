@@ -89,6 +89,7 @@ export const TRADING_ENDPOINTS = {
     SWAP_SIGN: (uuid: string) => `/api/v1/trading/orders/${uuid}/swap/sign/` as const,
     SWAP_APPROVAL_STATUS: (uuid: string) => `/api/v1/trading/orders/${uuid}/swap/approval-status/` as const,
     SWAP_APPROVAL_DATA: (uuid: string) => `/api/v1/trading/orders/${uuid}/swap/approval-data/` as const,
+    SWAP_APPROVAL_BROADCAST: (uuid: string) => `/api/v1/trading/orders/${uuid}/swap/approval-broadcast/` as const,
   },
   WALLETS: {
     BALANCES: '/api/v1/trading/wallets/balances/',
