@@ -8,6 +8,7 @@ import { createHash } from 'node:crypto';
 import { spawn, spawnSync, execFileSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { setTimeout, clearTimeout } from 'node:timers';
+import { createAndroidTestPackages } from './android-test-packages.mjs';
 
 const mobile = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const [platform, output] = process.argv.slice(2);
@@ -25,7 +26,10 @@ if (platform === 'android') assert.match(device, /^emulator-\d+$/);
 const sdk = process.env.ANDROID_HOME;
 const adb = sdk ? path.join(sdk, 'platform-tools', 'adb') : 'adb';
 const adbArgs = ['-P', process.env.ANDROID_ADB_SERVER_PORT || '5037', '-s', device];
-const testPackages = new Set();
+const testPackages = createAndroidTestPackages(
+  (args) => execFileSync(adb, [...adbArgs, ...args], { encoding: 'utf8', timeout: 15000, killSignal: 'SIGKILL' }),
+  (name, result) => fs.writeFileSync(path.join(directory, `${name}-cleanup.log`), result),
+);
 function archiveAndroidArtifact(source, name) {
   const destination = path.join(directory, name);
   fs.copyFileSync(source, destination);
@@ -495,8 +499,9 @@ try {
       'modules/ledova-scanner/android/build/outputs/apk/androidTest/debug/ledova-scanner-debug-androidTest.apk',
     );
     archiveAndroidArtifact(testApk, 'scanner-window-tests.apk');
-    testPackages.add('org.example.ledova.scanner.test');
-    await command(adb, [...adbArgs, 'install', '-r', testApk], 'scanner-window-install');
+    await testPackages.install('org.example.ledova.scanner.test', () =>
+      command(adb, [...adbArgs, 'install', '-r', testApk], 'scanner-window-install'),
+    );
     await command(
       adb,
       [
@@ -514,7 +519,7 @@ try {
     assert.match(result, /OK \([1-9]\d* tests\)/);
     assert.doesNotMatch(result, /FAILURES!!!|INSTRUMENTATION_FAILED|shortMsg=/);
     await command(adb, [...adbArgs, 'uninstall', 'org.example.ledova.scanner.test'], 'scanner-window-uninstall');
-    testPackages.delete('org.example.ledova.scanner.test');
+    testPackages.forget('org.example.ledova.scanner.test');
     await command(
       './gradlew',
       [
@@ -534,8 +539,9 @@ try {
       'android/app/build/outputs/apk/androidTest/release/app-release-androidTest.apk',
     );
     archiveAndroidArtifact(releaseTestApk, 'scanner-release-tests.apk');
-    testPackages.add('org.example.ledova.releaseprobe.test');
-    await command(adb, [...adbArgs, 'install', '-r', releaseTestApk], 'scanner-release-test-install');
+    await testPackages.install('org.example.ledova.releaseprobe.test', () =>
+      command(adb, [...adbArgs, 'install', '-r', releaseTestApk], 'scanner-release-test-install'),
+    );
   }
   let nativeSource;
   if (platform === 'android') {
@@ -639,25 +645,7 @@ try {
 } finally {
   const cleanup = await Promise.allSettled([...activeChildren.keys()].map(stopOwned));
   const cleanupErrors = cleanup.filter((result) => result.status === 'rejected').map((result) => result.reason);
-  for (const name of testPackages) {
-    try {
-      const installed = execFileSync(adb, [...adbArgs, 'shell', 'pm', 'path', name], {
-        encoding: 'utf8',
-        timeout: 15000,
-        killSignal: 'SIGKILL',
-      });
-      const result = installed.trim()
-        ? execFileSync(adb, [...adbArgs, 'uninstall', name], {
-            encoding: 'utf8',
-            timeout: 15000,
-            killSignal: 'SIGKILL',
-          })
-        : 'Package not installed.\n';
-      fs.writeFileSync(path.join(directory, `${name}-cleanup.log`), result);
-    } catch (error) {
-      cleanupErrors.push(error);
-    }
-  }
+  cleanupErrors.push(...testPackages.cleanup());
   for (const [filename, contents] of restored) {
     try {
       if (contents === null) fs.rmSync(filename, { force: true });

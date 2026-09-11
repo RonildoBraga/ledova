@@ -5,10 +5,17 @@ import android.app.Activity
 import android.app.Dialog
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.hardware.camera2.CameraDevice
+import android.hardware.camera2.CameraManager
 import android.view.View
 import android.widget.FrameLayout
 import androidx.camera.core.CameraState
+import androidx.camera.core.CameraSelector
 import androidx.camera.core.UseCase
+import androidx.camera.camera2.interop.Camera2CameraInfo
+import androidx.camera.camera2.interop.ExperimentalCamera2Interop
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.concurrent.futures.CallbackToFutureAdapter
 import androidx.lifecycle.Lifecycle
@@ -24,6 +31,8 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.atomic.AtomicReference
 
 class ScannerTestActivity : Activity() {
   lateinit var container: FrameLayout
@@ -331,5 +340,62 @@ class ScannerWindowTest {
       previous.cameraInfo.cameraState.value?.type == CameraState.Type.CLOSED
     }
     start(2)
+  }
+
+  @androidx.annotation.OptIn(ExperimentalCamera2Interop::class)
+  @Test fun selectedCameraBecomesAvailableAndOpensWithoutReplacingThePendingBinding() {
+    val provider = ProcessCameraProvider.getInstance(activity).get(15, TimeUnit.SECONDS)
+    val info = CameraSelector.DEFAULT_BACK_CAMERA.filter(provider.availableCameraInfos).first()
+    val id = Camera2CameraInfo.from(info).cameraId
+    val manager = activity.getSystemService(CameraManager::class.java)
+    val device = AtomicReference<CameraDevice?>()
+    val opened = CountDownLatch(1)
+    val history = mutableListOf<Boolean>()
+    val callback = object : CameraManager.AvailabilityCallback() {
+      override fun onCameraAvailable(cameraId: String) { if (cameraId == id) history.add(true) }
+      override fun onCameraUnavailable(cameraId: String) { if (cameraId == id) history.add(false) }
+    }
+    try {
+      main {
+        manager.registerAvailabilityCallback(callback, Handler(Looper.getMainLooper()))
+        manager.openCamera(id, object : CameraDevice.StateCallback() {
+          override fun onOpened(camera: CameraDevice) { device.set(camera); opened.countDown() }
+          override fun onDisconnected(camera: CameraDevice) { camera.close() }
+          override fun onError(camera: CameraDevice, error: Int) { camera.close(); opened.countDown() }
+        }, Handler(Looper.getMainLooper()))
+      }
+      assertTrue("selected camera holder did not open", opened.await(15, TimeUnit.SECONDS))
+      assertNotNull(device.get())
+      eventually("selected camera never became unavailable") { history.lastOrNull() == false }
+      attach()
+      main { scanner.request(true, generation, 1) }
+      eventually("scanner did not wait for the selected unavailable camera") {
+        scanner.camera?.cameraInfo?.cameraState?.value?.type == CameraState.Type.PENDING_OPEN
+      }
+      val pending = scanner.camera!!
+      lateinit var pendingSession: Any
+      main { pendingSession = ScannerCameraView::class.java.getDeclaredField("session").apply { isAccessible = true }.get(scanner)!! }
+      val pendingGeneration = generation
+      var unavailableIndex = -1
+      main {
+        assertEquals(id, Camera2CameraInfo.from(pending.cameraInfo).cameraId)
+        unavailableIndex = history.indexOfLast { !it }
+        device.getAndSet(null)!!.close()
+      }
+      eventually("selected camera did not become available and reopen") {
+        history.drop(unavailableIndex + 1).contains(true) && pending.cameraInfo.cameraState.value?.type == CameraState.Type.OPEN
+      }
+      main {
+        assertSame(pending, scanner.camera)
+        assertSame(pendingSession, ScannerCameraView::class.java.getDeclaredField("session").apply { isAccessible = true }.get(scanner))
+        assertEquals(pendingGeneration, generation)
+        assertTrue(scanner.isCurrentScan(pendingGeneration, 1))
+      }
+    } finally {
+      main {
+        device.getAndSet(null)?.close()
+        manager.unregisterAvailabilityCallback(callback)
+      }
+    }
   }
 }
