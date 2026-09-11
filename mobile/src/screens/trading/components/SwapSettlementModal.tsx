@@ -69,7 +69,8 @@ export function SwapSettlementModal({ settlement, wallet, visible = true, onClos
                 Shares: {formatUnits(response.typedData.message.shareAmount, context.shareToken.decimals)}
               </Text>
               <Text style={styles.text}>
-                Payment: {formatUnits(response.typedData.message.paymentAmount, context.paymentAsset.pricingDecimals)}{' '}
+                Payment:{' '}
+                {formatUnits(response.typedData.message.paymentAmount, context.paymentAsset.deploymentDecimals)}{' '}
                 {context.paymentAsset.symbol}
               </Text>
               <Text style={styles.text}>

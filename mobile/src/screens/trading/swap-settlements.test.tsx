@@ -272,6 +272,18 @@ it('reviews exact captured terms and sends one real signature despite duplicate 
   expect(await swapSettlementStore.list(owner)).toHaveLength(0);
 });
 
+it('displays signed payment units at the captured deployment precision when pricing differs', async () => {
+  current.swapOrder.settlementContext.paymentAsset.deploymentDecimals = 6;
+  mockSwaps = [copy(current.swapOrder)];
+  const originalTypedData = copy(current.typedData);
+  const view = await render(<TradingScreen />, { wrapper });
+  await open(view);
+  expect(view.getByText('Payment: 1351079888211.14895 TUSD')).toBeTruthy();
+  expect(view.queryByText('Payment: 13510798882111489.5 TUSD')).toBeNull();
+  expect(current.typedData).toEqual(originalTypedData);
+  expect(posts()).toHaveLength(0);
+});
+
 it.each(['close', 'account', 'wallet', 'device', 'screen', 'unmount', 'session'] as const)(
   'retires a held seed read on %s and never revives after restoration',
   async (change) => {
