@@ -41,6 +41,12 @@ import {
   otherActionId,
 } from '../../../../packages/shared/tests/fixtures/order-actions';
 
+jest.mock('@react-navigation/native', () => ({
+  useFocusEffect: (callback: () => () => void) => {
+    const React = jest.requireActual('react');
+    React.useEffect(callback, [callback]);
+  },
+}));
 jest.mock('uuid', () => ({ v4: () => '70000000-0000-4000-8000-000000000001' }));
 jest.mock('expo-crypto', () => ({ randomUUID: jest.fn() }));
 jest.mock('../../services/secureKeyStorage', () => ({ getSeedPhrase: jest.fn() }));

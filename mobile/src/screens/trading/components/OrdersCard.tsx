@@ -10,7 +10,8 @@ import {
   TrashIcon,
 } from 'phosphor-react-native';
 import type { TransferOrder, SwapOrder, OrderBook as OrderBookType, OrderBookEntry } from '@ledova/shared';
-import { formatCurrency } from '@ledova/shared';
+import { formatCurrency, hasSwapSettlementContext } from '@ledova/shared';
+import { formatUnits } from 'ethers';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
 
 interface OrdersCardProps {
@@ -26,6 +27,18 @@ interface OrdersCardProps {
   isLoadingSwaps: boolean;
   walletAddresses: string[];
   onSignSwap: (swap: SwapOrder) => void;
+}
+
+function displayedSwapShares(swap: SwapOrder): string {
+  if (swap.settlementProtocolVersion === 0) return String(swap.shareAmount);
+  try {
+    if (hasSwapSettlementContext(swap))
+      return formatUnits(
+        swap.settlementContext.typedData.message.shareAmount,
+        swap.settlementContext.shareToken.decimals,
+      );
+  } catch {}
+  return 'Unavailable';
 }
 
 function getTimeAgo(date: Date): string {
@@ -326,8 +339,8 @@ export function OrdersCard({
       const isSeller = normalizedAddresses.includes(s.sellerAddress.toLowerCase());
       const isBuyer = normalizedAddresses.includes(s.buyerAddress.toLowerCase());
       if (!isSeller && !isBuyer) return false;
-      const hasSigned = isSeller ? s.sellerHasSigned : s.buyerHasSigned;
-      return !hasSigned && ['created', 'seller_signed', 'buyer_signed'].includes(s.status);
+      const needsSignature = (isSeller && !s.sellerHasSigned) || (isBuyer && !s.buyerHasSigned);
+      return needsSignature && ['created', 'seller_signed', 'buyer_signed'].includes(s.status);
     });
   }, [swaps, walletAddresses, normalizedAddresses, tokenSymbol]);
 
@@ -456,7 +469,7 @@ export function OrdersCard({
           })}
 
           {pendingSwaps.map((swap) => {
-            const isSeller = normalizedAddresses.includes(swap.sellerAddress.toLowerCase());
+            const isSeller = !swap.sellerHasSigned && normalizedAddresses.includes(swap.sellerAddress.toLowerCase());
             const userRole = isSeller ? 'Seller' : 'Buyer';
             const timeRemaining = formatSwapTimeRemaining(swap.expiresAt);
 
@@ -472,7 +485,7 @@ export function OrdersCard({
                   >
                     <ArrowsLeftRightIcon size={theme.icon.sizes.xs} color={theme.colors.brand.light} weight="bold" />
                   </View>
-                  <Text style={styles.orderDetails}>{swap.shareAmount} shares</Text>
+                  <Text style={styles.orderDetails}>{displayedSwapShares(swap)} shares</Text>
                   <Text
                     style={[
                       styles.roleBadge,
