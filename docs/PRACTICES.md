@@ -75,10 +75,15 @@ rule was not enough.
 
 ## Building
 
-One focused task, implemented, with a pull request. Scope stays at the agreed
-work: an unrelated defect found on the way is filed, not folded in. Delegation,
-review and merge permissions, and decisions reserved for the owner, are stated
-under **Review and merge** in [CONTRIBUTING.md](../CONTRIBUTING.md).
+One focused task, tracked in a GitHub issue and implemented with a linked pull
+request. Reuse an issue whose scope fits or create a concise one before
+implementation, including for owner-requested work. Keep it to the problem or
+context, intended outcome and completion checks. Scope stays at the issue:
+distinct problems found on the way get follow-up issues after checking for
+duplicates. Close an issue only when its work is complete.
+
+Delegation, review and merge permissions, and decisions reserved for the owner,
+are stated under **Review and merge** in [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 The body states what was measured, what could not be reproduced, and what was
 deliberately not done. A body that only says what works is half a report.

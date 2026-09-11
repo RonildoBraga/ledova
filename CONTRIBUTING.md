@@ -28,8 +28,15 @@ before opening your first pull request.
   [open issues](https://github.com/RonildoBraga/ledova/issues); the ones labeled
   [`deferred-hardening`](https://github.com/RonildoBraga/ledova/issues?q=is%3Aopen+label%3Adeferred-hardening) are the known high-risk work, each naming
   where it lives in the code. They need redesigns, not patches.
-- Reuse an existing issue or the owner's direction for agreed work. Open an
-  issue to discuss substantial work that is not already agreed.
+- Every work item, including owner-requested changes, is tracked in a GitHub
+  issue. Reuse an existing issue when its scope fits; otherwise create one before
+  implementation.
+- Keep issues concise: the problem or context, intended outcome, and short
+  completion checks. The assistant may open, update and triage issues without a
+  separate approval step.
+- Link pull requests to their issues and close an issue only when its work is
+  complete. Record distinct problems discovered along the way in follow-up
+  issues, checking for an existing issue first.
 
 ## Development setup
 
@@ -65,7 +72,8 @@ Local compilation and the contract tests need no credentials.
    fails on anything else, so run it before you push. Configuration and
    documentation files keep their comments.
 5. Write a clear pull request description: what changed, why, and how you
-   verified it. Reference the issue it addresses (`Closes #12`).
+   verified it. Link the issue it addresses (`Closes #12` when the PR completes
+   the issue, otherwise `Refs #12`).
 
 ## Review and merge
 
