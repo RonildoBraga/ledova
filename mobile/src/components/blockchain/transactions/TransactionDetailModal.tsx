@@ -18,6 +18,15 @@ interface TransactionDetailModalProps {
   onClose: () => void;
 }
 
+const transactionStatuses = new Map<string, { label: string; tone: 'success' | 'error' | 'warning' | 'info' }>([
+  ['success', { label: '✓ Success', tone: 'success' }],
+  ['confirmed', { label: '✓ Confirmed', tone: 'success' }],
+  ['pending', { label: 'Pending', tone: 'warning' }],
+  ['failed', { label: '✗ Failed', tone: 'error' }],
+  ['replaced', { label: 'Replaced', tone: 'info' }],
+  ['reorged', { label: 'Confirmation reversed', tone: 'warning' }],
+]);
+
 export function TransactionDetailModal({ visible, transaction, onClose }: TransactionDetailModalProps) {
   const theme = useAppTheme();
   const styles = useThemedStyles((theme) => ({
@@ -60,14 +69,9 @@ export function TransactionDetailModal({ visible, transaction, onClose }: Transa
       flex: 1,
       textAlign: 'right',
     },
-    statusSuccess: {
-      color: theme.colors.status.success.text,
-    },
-    statusFailed: {
-      color: theme.colors.status.error.text,
-    },
   }));
   if (!transaction) return null;
+  const status = transactionStatuses.get(transaction.status ?? '') ?? { label: 'Unknown', tone: 'info' as const };
 
   const isIncomingTransaction = (): boolean => {
     const walletAddr = transaction.walletAddress?.toLowerCase() || '';
@@ -142,19 +146,10 @@ export function TransactionDetailModal({ visible, transaction, onClose }: Transa
           </Text>
         </View>
 
-        {transaction.status && (
-          <View style={styles.infoRow}>
-            <Text style={styles.detailLabel}>Status:</Text>
-            <Text
-              style={[
-                styles.detailValue,
-                transaction.status === 'success' ? styles.statusSuccess : styles.statusFailed,
-              ]}
-            >
-              {transaction.status === 'success' ? '✓ Success' : '✗ Failed'}
-            </Text>
-          </View>
-        )}
+        <View style={styles.infoRow}>
+          <Text style={styles.detailLabel}>Status:</Text>
+          <Text style={[styles.detailValue, { color: theme.colors.status[status.tone].text }]}>{status.label}</Text>
+        </View>
 
         {transaction.transactionFee && (
           <View style={styles.infoRow}>

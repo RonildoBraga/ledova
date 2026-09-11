@@ -31,7 +31,9 @@ class ConfirmationUsesSeparateRolesTest(RunsOnTheScopedConnection, TransactionTe
                     wallet=tenant.spare_wallet,
                     chain=tenant.spare_wallet.chain,
                     from_address=tenant.spare_wallet.address,
+                    tx_hash="0x" + f"{tenant.user.pk:064x}",
                 )
+                tenant.transaction.refresh_from_db()
         self.observed = []
         client = SimpleNamespace(get_transaction_receipt=self.receipt, get_native_balance=lambda address: Decimal("1"))
         rpc = patch("wallets.tasks.confirmation.get_blockchain_client", return_value=client)
@@ -50,7 +52,7 @@ class ConfirmationUsesSeparateRolesTest(RunsOnTheScopedConnection, TransactionTe
             cursor.execute("SELECT current_user, current_setting('app.user_id', true)")
             role, principal = cursor.fetchone()
         self.observed.append((alias, role, principal, Wallet.objects.filter(pk=self.other.spare_wallet.pk).exists()))
-        return {"status": 1, "blockNumber": 12}
+        return {"status": 1, "blockNumber": 12, "transactionHash": tx_hash}
 
     def run_task(self, tenant, principal_id):
         return confirm_pending_transaction.func(

@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Mapping
 from datetime import datetime, timedelta
 from datetime import timezone as datetime_timezone
 from decimal import Decimal
@@ -9,11 +10,13 @@ from django.utils import timezone
 from procrastinate import RetryStrategy
 
 from integrations.blockchain import get_blockchain_client
+from integrations.blockchain.receipts import transaction_hash_matches
 from ledova_backend.procrastinate_app import app
 from shared.constants import BLOCKCHAIN_BITCOIN, EVM_BLOCKCHAINS
 from shared.db import acting_for
 from wallets.constants import TRANSACTION_STATUS_PENDING
 from wallets.models import Transaction, Wallet
+from wallets.services.history_receipts import record_history_receipt
 from wallets.services.transaction_confirmation import TransactionConfirmationService
 
 logger = logging.getLogger(__name__)
@@ -79,11 +82,11 @@ def _evm_block_timestamp(client: Any, receipt: Dict[str, Any], block_number: Opt
         return None
     try:
         block = client.w3.eth.get_block(block_number)
+        if not block:
+            return None
+        return datetime.fromtimestamp(block["timestamp"], tz=datetime_timezone.utc)
     except Exception:
-        return timezone.now()
-    if not block:
         return None
-    return datetime.fromtimestamp(block["timestamp"], tz=datetime_timezone.utc)
 
 
 def _bitcoin_block_number(receipt: Dict[str, Any]) -> Optional[int]:
@@ -148,7 +151,7 @@ def _confirm_pending_transaction(tx_hash: str, wallet_uuid: str) -> Dict[str, An
             logger.info(f"Transaction already processed: {tx_hash}")
             return {"status": "already_processed", "current_status": tx.status}
     except Transaction.DoesNotExist:
-        pass
+        return {"status": "not_found", "tx_hash": tx_hash}
 
     client = get_blockchain_client(wallet.chain)
     receipt = client.get_transaction_receipt(tx_hash)
@@ -156,6 +159,10 @@ def _confirm_pending_transaction(tx_hash: str, wallet_uuid: str) -> Dict[str, An
     if receipt is None:
         logger.info(f"Transaction not yet confirmed: {tx_hash}")
         raise RuntimeError(f"receipt not yet available for {tx_hash}")
+
+    hash_field = "tx_hash" if wallet.chain.lower() == BLOCKCHAIN_BITCOIN else "transactionHash"
+    if not isinstance(receipt, Mapping) or not transaction_hash_matches(receipt.get(hash_field), tx_hash):
+        raise RuntimeError(f"receipt identity not yet available for {tx_hash}")
 
     reader = get_receipt_reader(wallet.chain)
     succeeded = reader.succeeded(receipt)
@@ -165,6 +172,16 @@ def _confirm_pending_transaction(tx_hash: str, wallet_uuid: str) -> Dict[str, An
     block_number = reader.block_number(receipt)
     block_timestamp = reader.block_timestamp(client, receipt, block_number)
     actual_fee = _extract_actual_fee(receipt, wallet.chain)
+
+    if tx.imported_from_history:
+        return record_history_receipt(
+            tx_hash,
+            wallet=wallet,
+            succeeded=succeeded,
+            block_number=block_number,
+            block_timestamp=block_timestamp,
+            actual_fee=actual_fee,
+        )
 
     if succeeded:
         result = TransactionConfirmationService.confirm_transaction(
