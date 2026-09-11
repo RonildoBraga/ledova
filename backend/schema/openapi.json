@@ -221,12 +221,18 @@
         "type": "object"
       },
       "ApprovalDataResponse": {
-        "oneOf": [
+        "anyOf": [
           {
             "$ref": "#/components/schemas/SufficientApprovalResponse"
           },
           {
             "$ref": "#/components/schemas/ApprovalTransactionResponse"
+          },
+          {
+            "$ref": "#/components/schemas/SettlementSufficientApproval"
+          },
+          {
+            "$ref": "#/components/schemas/SettlementApprovalTransaction"
           }
         ]
       },
@@ -1287,15 +1293,6 @@
           "base",
           "bitcoin",
           "ethereum"
-        ],
-        "type": "string"
-      },
-      "CodeEnum": {
-        "description": "* `order_cancellation_failed` - order_cancellation_failed\n* `order_modification_failed` - order_modification_failed\n* `order_modification_conflict` - order_modification_conflict",
-        "enum": [
-          "order_cancellation_failed",
-          "order_modification_failed",
-          "order_modification_conflict"
         ],
         "type": "string"
       },
@@ -4883,7 +4880,7 @@
       "OrderActionRefusal": {
         "properties": {
           "code": {
-            "$ref": "#/components/schemas/CodeEnum"
+            "$ref": "#/components/schemas/OrderActionRefusalCodeEnum"
           },
           "detail": {
             "type": "string"
@@ -4898,6 +4895,15 @@
           "httpStatus"
         ],
         "type": "object"
+      },
+      "OrderActionRefusalCodeEnum": {
+        "description": "* `order_cancellation_failed` - order_cancellation_failed\n* `order_modification_failed` - order_modification_failed\n* `order_modification_conflict` - order_modification_conflict",
+        "enum": [
+          "order_cancellation_failed",
+          "order_modification_failed",
+          "order_modification_conflict"
+        ],
+        "type": "string"
       },
       "OrderActionReview": {
         "properties": {
@@ -7549,6 +7555,268 @@
         ],
         "type": "string"
       },
+      "SettlementApprovalBroadcast": {
+        "properties": {
+          "ownerAccountUuid": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "settlementDigest": {
+            "pattern": "^0x[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "signedTransaction": {
+            "maxLength": 32768,
+            "pattern": "^(0x)?[0-9a-fA-F]+$",
+            "type": "string"
+          },
+          "swapUuid": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "walletUuid": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ownerAccountUuid",
+          "settlementDigest",
+          "signedTransaction",
+          "swapUuid",
+          "walletUuid"
+        ],
+        "type": "object"
+      },
+      "SettlementApprovalReceipt": {
+        "properties": {
+          "blockNumber": {
+            "nullable": true,
+            "type": "integer"
+          },
+          "gasUsed": {
+            "nullable": true,
+            "type": "integer"
+          },
+          "orderUuid": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "ownerAccountUuid": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "settlementDigest": {
+            "type": "string"
+          },
+          "swapUuid": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "txHash": {
+            "type": "string"
+          },
+          "userRole": {
+            "$ref": "#/components/schemas/UserRoleEnum"
+          },
+          "walletUuid": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "blockNumber",
+          "gasUsed",
+          "orderUuid",
+          "ownerAccountUuid",
+          "settlementDigest",
+          "swapUuid",
+          "txHash",
+          "userRole",
+          "walletUuid"
+        ],
+        "type": "object"
+      },
+      "SettlementApprovalStatus": {
+        "properties": {
+          "currentAllowance": {
+            "type": "string"
+          },
+          "needsApproval": {
+            "type": "boolean"
+          },
+          "orderUuid": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "ownerAccountUuid": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "requiredAmount": {
+            "type": "string"
+          },
+          "settlementDigest": {
+            "type": "string"
+          },
+          "spender": {
+            "type": "string"
+          },
+          "swapUuid": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "tokenAddress": {
+            "type": "string"
+          },
+          "tokenSymbol": {
+            "type": "string"
+          },
+          "userRole": {
+            "$ref": "#/components/schemas/UserRoleEnum"
+          },
+          "walletUuid": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "currentAllowance",
+          "needsApproval",
+          "orderUuid",
+          "ownerAccountUuid",
+          "requiredAmount",
+          "settlementDigest",
+          "spender",
+          "swapUuid",
+          "tokenAddress",
+          "tokenSymbol",
+          "userRole",
+          "walletUuid"
+        ],
+        "type": "object"
+      },
+      "SettlementApprovalTransaction": {
+        "properties": {
+          "amount": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "needsApproval": {
+            "type": "boolean"
+          },
+          "orderUuid": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "ownerAccountUuid": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "settlementDigest": {
+            "type": "string"
+          },
+          "spender": {
+            "type": "string"
+          },
+          "swapUuid": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "tokenAddress": {
+            "type": "string"
+          },
+          "tokenSymbol": {
+            "type": "string"
+          },
+          "transaction": {
+            "$ref": "#/components/schemas/ApprovalTransaction"
+          },
+          "unlimited": {
+            "type": "boolean"
+          },
+          "userRole": {
+            "$ref": "#/components/schemas/UserRoleEnum"
+          },
+          "walletUuid": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "amount",
+          "description",
+          "needsApproval",
+          "orderUuid",
+          "ownerAccountUuid",
+          "settlementDigest",
+          "spender",
+          "swapUuid",
+          "tokenAddress",
+          "tokenSymbol",
+          "transaction",
+          "unlimited",
+          "userRole",
+          "walletUuid"
+        ],
+        "type": "object"
+      },
+      "SettlementApprovalUncertain": {
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/SettlementApprovalUncertainCodeEnum"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "orderUuid": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "ownerAccountUuid": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "settlementDigest": {
+            "type": "string"
+          },
+          "swapUuid": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "txHash": {
+            "type": "string"
+          },
+          "userRole": {
+            "$ref": "#/components/schemas/UserRoleEnum"
+          },
+          "walletUuid": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "detail",
+          "orderUuid",
+          "ownerAccountUuid",
+          "settlementDigest",
+          "swapUuid",
+          "txHash",
+          "userRole",
+          "walletUuid"
+        ],
+        "type": "object"
+      },
+      "SettlementApprovalUncertainCodeEnum": {
+        "description": "* `swap_approval_unconfirmed` - swap_approval_unconfirmed",
+        "enum": [
+          "swap_approval_unconfirmed"
+        ],
+        "type": "string"
+      },
       "SettlementAsset": {
         "properties": {
           "chainDeployments": {
@@ -7588,6 +7856,95 @@
           "stablecoin"
         ],
         "type": "string"
+      },
+      "SettlementSignature": {
+        "properties": {
+          "ownerAccountUuid": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "settlementDigest": {
+            "pattern": "^0x[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "signature": {
+            "maxLength": 132,
+            "minLength": 130,
+            "type": "string"
+          },
+          "signerAddress": {
+            "pattern": "^0x[0-9a-fA-F]{40}$",
+            "type": "string"
+          },
+          "swapUuid": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "walletUuid": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ownerAccountUuid",
+          "settlementDigest",
+          "signature",
+          "signerAddress",
+          "swapUuid",
+          "walletUuid"
+        ],
+        "type": "object"
+      },
+      "SettlementSufficientApproval": {
+        "properties": {
+          "currentAllowance": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "needsApproval": {
+            "type": "boolean"
+          },
+          "orderUuid": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "ownerAccountUuid": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "requiredAmount": {
+            "type": "string"
+          },
+          "settlementDigest": {
+            "type": "string"
+          },
+          "swapUuid": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "userRole": {
+            "$ref": "#/components/schemas/UserRoleEnum"
+          },
+          "walletUuid": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "currentAllowance",
+          "message",
+          "needsApproval",
+          "orderUuid",
+          "ownerAccountUuid",
+          "requiredAmount",
+          "settlementDigest",
+          "swapUuid",
+          "userRole",
+          "walletUuid"
+        ],
+        "type": "object"
       },
       "ShareIssuanceCreate": {
         "properties": {
@@ -8742,6 +9099,24 @@
         ],
         "type": "object"
       },
+      "SubmitSignature": {
+        "properties": {
+          "signature": {
+            "maxLength": 132,
+            "minLength": 130,
+            "type": "string"
+          },
+          "signerAddress": {
+            "maxLength": 42,
+            "type": "string"
+          }
+        },
+        "required": [
+          "signature",
+          "signerAddress"
+        ],
+        "type": "object"
+      },
       "SubscriptionCreate": {
         "properties": {
           "offering": {
@@ -9135,6 +9510,16 @@
         ],
         "type": "string"
       },
+      "SwapApprovalStatus": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ApprovalStatusResponse"
+          },
+          {
+            "$ref": "#/components/schemas/SettlementApprovalStatus"
+          }
+        ]
+      },
       "SwapOrderDetail": {
         "properties": {
           "buyOrderUuid": {
@@ -9184,7 +9569,7 @@
             "type": "integer"
           },
           "orderHash": {
-            "description": "EIP-712 typed data hash",
+            "description": "V1 SwapOrder struct hash, excluding the domain",
             "readOnly": true,
             "type": "string"
           },
@@ -9213,6 +9598,18 @@
           "sellerHasSigned": {
             "readOnly": true,
             "type": "boolean"
+          },
+          "settlementContext": {
+            "nullable": true,
+            "readOnly": true
+          },
+          "settlementDigest": {
+            "readOnly": true,
+            "type": "string"
+          },
+          "settlementProtocolVersion": {
+            "readOnly": true,
+            "type": "integer"
           },
           "shareAmount": {
             "description": "Number of shares to transfer (no decimals)",
@@ -9278,6 +9675,9 @@
           "sellOrderUuid",
           "sellerAddress",
           "sellerHasSigned",
+          "settlementContext",
+          "settlementDigest",
+          "settlementProtocolVersion",
           "shareAmount",
           "shareTokenAddress",
           "shareTokenName",
@@ -9292,14 +9692,40 @@
       },
       "SwapOrderForSigning": {
         "properties": {
+          "admissionRefusal": {
+            "nullable": true,
+            "type": "string"
+          },
+          "canSign": {
+            "type": "boolean"
+          },
           "hasSigned": {
             "type": "boolean"
+          },
+          "orderUuid": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "ownerAccountUuid": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "settlementDigest": {
+            "type": "string"
           },
           "swapOrder": {
             "$ref": "#/components/schemas/SwapOrderDetail"
           },
+          "swapUuid": {
+            "format": "uuid",
+            "type": "string"
+          },
           "typedData": {},
           "userRole": {
+            "type": "string"
+          },
+          "walletUuid": {
+            "format": "uuid",
             "type": "string"
           }
         },
@@ -9409,6 +9835,16 @@
           "uuid"
         ],
         "type": "object"
+      },
+      "SwapSignatureRequest": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/SubmitSignature"
+          },
+          {
+            "$ref": "#/components/schemas/SettlementSignature"
+          }
+        ]
       },
       "ThemeEnum": {
         "description": "* `dark` - Dark\n* `light` - Light",
@@ -17858,6 +18294,68 @@
         ]
       }
     },
+    "/api/v1/trading/orders/{uuid}/swap/approval-broadcast/": {
+      "post": {
+        "operationId": "api_v1_trading_orders_swap_approval_broadcast_create",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "uuid",
+            "required": true,
+            "schema": {
+              "description": "Unique identifier (primary key)",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettlementApprovalBroadcast"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/SettlementApprovalBroadcast"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/SettlementApprovalBroadcast"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettlementApprovalReceipt"
+                }
+              }
+            },
+            "description": ""
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettlementApprovalUncertain"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "tags": [
+          "api"
+        ]
+      }
+    },
     "/api/v1/trading/orders/{uuid}/swap/approval-data/": {
       "get": {
         "operationId": "api_v1_trading_orders_swap_approval_data_retrieve",
@@ -17910,7 +18408,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApprovalStatusResponse"
+                  "$ref": "#/components/schemas/SwapApprovalStatus"
                 }
               }
             },
@@ -17941,17 +18439,17 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/TransferOrderList"
+                "$ref": "#/components/schemas/SwapSignatureRequest"
               }
             },
             "application/x-www-form-urlencoded": {
               "schema": {
-                "$ref": "#/components/schemas/TransferOrderList"
+                "$ref": "#/components/schemas/SwapSignatureRequest"
               }
             },
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/TransferOrderList"
+                "$ref": "#/components/schemas/SwapSignatureRequest"
               }
             }
           }
