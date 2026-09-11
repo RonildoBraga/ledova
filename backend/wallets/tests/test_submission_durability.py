@@ -64,9 +64,17 @@ class SubmissionFixture:
         return self.signer.sign_transaction(fields)
 
     def provider(self, signed):
-        provider = Mock(spec=["assert_expected_chain", "get_transaction_receipt", "broadcast_transaction"])
+        provider = Mock(
+            spec=["assert_expected_chain", "get_mined_nonce", "get_transaction_receipt", "broadcast_transaction"]
+        )
         provider.assert_expected_chain.return_value = settings.BLOCKCHAIN_CHAIN_ID
         provider.get_transaction_receipt.return_value = None
+        provider.get_mined_nonce.side_effect = lambda address: {
+            "chain_id": provider.assert_expected_chain.return_value,
+            "nonce": 0,
+            "block_number": 100,
+            "block_hash": "0x" + "ab" * 32,
+        }
         provider.broadcast_transaction.return_value = signed.hash.to_0x_hex()
         return provider
 

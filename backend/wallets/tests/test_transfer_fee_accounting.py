@@ -36,6 +36,12 @@ class TransferFeeAccountingTest(BroadcastTransferGuardTestCase):
         self.tx_hash = Web3.keccak(hexstr=signed).to_0x_hex()
         get_client.return_value.assert_expected_chain = Mock(return_value=settings.BLOCKCHAIN_CHAIN_ID)
         get_client.return_value.get_transaction_receipt.return_value = None
+        get_client.return_value.get_mined_nonce.return_value = {
+            "chain_id": settings.BLOCKCHAIN_CHAIN_ID,
+            "nonce": 0,
+            "block_number": 100,
+            "block_hash": "0x" + "ab" * 32,
+        }
         get_client.return_value.broadcast_transaction.return_value = self.tx_hash
 
     def send_token(self, get_client, fee="0.002", declared_fee=None):
