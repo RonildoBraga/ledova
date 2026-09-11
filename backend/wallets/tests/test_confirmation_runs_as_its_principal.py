@@ -100,7 +100,10 @@ class TheTaskRunsAsWhoeverCausedItTest(TestCase):
 
     def test_the_task_itself_completes_under_the_policies_as_that_principal(self):
         transaction = Transaction.objects.filter(wallet=self.tenant.wallet).first()
-        Transaction.objects.filter(pk=transaction.pk).update(status=TRANSACTION_STATUS_PENDING)
+        Transaction.objects.filter(pk=transaction.pk).update(
+            status=TRANSACTION_STATUS_PENDING, tx_hash="0x" + "79" * 32
+        )
+        transaction.refresh_from_db()
 
         with connection.cursor() as cursor:
             cursor.execute(f"SET ROLE {settings.RLS_ROLES['app']}")
@@ -108,7 +111,11 @@ class TheTaskRunsAsWhoeverCausedItTest(TestCase):
         self.addCleanup(self._back_to_the_owner)
 
         with patch("wallets.tasks.confirmation.get_blockchain_client") as client:
-            client.return_value.get_transaction_receipt.return_value = {"status": 1, "blockNumber": 12}
+            client.return_value.get_transaction_receipt.return_value = {
+                "status": 1,
+                "blockNumber": 12,
+                "transactionHash": transaction.tx_hash,
+            }
             client.return_value.get_block.return_value = {"timestamp": 1700000000}
             result = _confirm_pending_transaction(transaction.tx_hash, str(self.tenant.wallet.uuid))
 

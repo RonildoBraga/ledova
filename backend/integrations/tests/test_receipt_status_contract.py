@@ -7,8 +7,10 @@ from web3.providers.base import BaseProvider
 from integrations.base_chain.client import BaseChainClient
 from integrations.blockchain.bitcoin import BitcoinClient
 from integrations.blockchain.ethereum import EthereumClient
+from integrations.blockchain.receipts import transaction_hash_matches
 
 TX_HASH = "0x" + "75" * 32
+BITCOIN_HASH = "76" * 32
 
 
 class ReceiptProvider(BaseProvider):
@@ -25,6 +27,33 @@ class ReceiptProvider(BaseProvider):
 
 
 class ReceiptStatusContractTest(SimpleTestCase):
+    def test_equal_malformed_identifiers_never_count_as_a_matching_transaction_hash(self):
+        for value in (None, True, 1, [], {}, "", "0x", "a" * 63, "a" * 65, "z" * 64, " " + "a" * 63, b"short"):
+            with self.subTest(value=value):
+                self.assertFalse(transaction_hash_matches(value, value))
+        self.assertTrue(transaction_hash_matches(bytes.fromhex(TX_HASH[2:]), TX_HASH))
+
+    def test_bitcoin_requires_the_rpc_txid_and_never_substitutes_the_requested_hash(self):
+        client = BitcoinClient.__new__(BitcoinClient)
+        for identity in (
+            {},
+            {"txid": None},
+            {"txid": True},
+            {"txid": ""},
+            {"txid": "77" * 32},
+            {"txid": "not-a-transaction-id"},
+            {"hash": BITCOIN_HASH},
+        ):
+            with self.subTest(identity=identity):
+                with patch.object(client, "get_transaction", return_value={"confirmations": 3, **identity}):
+                    self.assertIsNone(client.get_transaction_receipt(BITCOIN_HASH))
+        with patch.object(
+            client, "get_transaction", return_value={"confirmations": 3, "txid": BITCOIN_HASH, "hash": "78" * 32}
+        ):
+            receipt = client.get_transaction_receipt(BITCOIN_HASH)
+        self.assertEqual(receipt["tx_hash"], BITCOIN_HASH)
+        self.assertTrue(receipt["confirmed"])
+
     def test_both_evm_adapters_normalize_rpc_hex_status_to_integer_outcomes(self):
         for client_type in (EthereumClient, BaseChainClient):
             for status in (0, 1):
@@ -35,6 +64,7 @@ class ReceiptStatusContractTest(SimpleTestCase):
                         receipt = client.get_transaction_receipt(TX_HASH)
                     self.assertIs(type(receipt["status"]), int)
                     self.assertEqual(receipt["status"], status)
+                    self.assertTrue(transaction_hash_matches(receipt["transactionHash"], TX_HASH))
                     self.assertEqual(provider.calls, [("eth_getTransactionReceipt", [TX_HASH])])
 
     def test_both_evm_adapters_leave_missing_status_missing(self):
@@ -49,8 +79,10 @@ class ReceiptStatusContractTest(SimpleTestCase):
 
     def test_bitcoin_returns_only_a_positive_confirmation_receipt(self):
         client = BitcoinClient.__new__(BitcoinClient)
-        with patch.object(client, "get_transaction", return_value={"confirmations": 3, "height": 812345}):
-            receipt = client.get_transaction_receipt("synthetic-bitcoin-hash")
+        with patch.object(
+            client, "get_transaction", return_value={"confirmations": 3, "height": 812345, "txid": BITCOIN_HASH}
+        ):
+            receipt = client.get_transaction_receipt(BITCOIN_HASH)
         self.assertIs(receipt["confirmed"], True)
         self.assertIs(type(receipt["confirmations"]), int)
         self.assertEqual(receipt["confirmations"], 3)
@@ -58,5 +90,5 @@ class ReceiptStatusContractTest(SimpleTestCase):
         self.assertNotIn("status", receipt)
         for transaction in ({}, {"confirmations": 0}, {"confirmations": -1}):
             with self.subTest(transaction=transaction):
-                with patch.object(client, "get_transaction", return_value=transaction):
-                    self.assertIsNone(client.get_transaction_receipt("synthetic-bitcoin-hash"))
+                with patch.object(client, "get_transaction", return_value={"txid": BITCOIN_HASH, **transaction}):
+                    self.assertIsNone(client.get_transaction_receipt(BITCOIN_HASH))

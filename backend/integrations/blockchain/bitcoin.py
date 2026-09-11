@@ -9,6 +9,7 @@ import requests
 from django.conf import settings
 
 from .base import BlockchainClient
+from .receipts import transaction_hash_matches
 
 logger = logging.getLogger(__name__)
 
@@ -100,10 +101,17 @@ class BitcoinClient(BlockchainClient):
         try:
             tx = self.get_transaction(tx_hash)
             confirmations = tx.get("confirmations", 0)
+            txid = tx.get("txid")
 
-            if confirmations > 0:
+            if (
+                isinstance(txid, str)
+                and transaction_hash_matches(txid, tx_hash)
+                and isinstance(confirmations, int)
+                and not isinstance(confirmations, bool)
+                and confirmations > 0
+            ):
                 return {
-                    "tx_hash": tx_hash,
+                    "tx_hash": txid,
                     "confirmed": True,
                     "confirmations": confirmations,
                     "block_height": tx.get("height"),
