@@ -1,5 +1,13 @@
-import React, { useState, useEffect, useLayoutEffect, useMemo } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
+import React, {
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useContext,
+  useSyncExternalStore,
+  useCallback,
+} from 'react';
+import { View, Text, TouchableOpacity, ActivityIndicator, AppState, type AppStateStatus } from 'react-native';
 import {
   CurrencyCircleDollarIcon,
   CurrencyEthIcon,
@@ -34,6 +42,7 @@ import { apiClient } from '../../../services/apiClient';
 import { useAppTheme, useThemedStyles } from '../../../contexts';
 import { assertSessionEpoch, getSessionEpoch } from '../../../services/sessionScope';
 import { createProviderLifetime } from '../../../hooks/useProviderViewLifecycle';
+import { CameraAccessContext } from '../../../contexts/cameraAccess';
 
 function getAssetIcon(symbol: string, theme: ReturnType<typeof useAppTheme>): React.ReactNode {
   switch (symbol) {
@@ -230,9 +239,22 @@ export function BuyCryptoModal({
   }));
   const [selectedAsset, setSelectedAsset] = useState<BuyableAssetConfig | null>(null);
   const [showWalletStep, setShowWalletStep] = useState(false);
+  const access = useContext(CameraAccessContext);
+  const admission = useSyncExternalStore(access.subscribe, access.getSnapshot, access.getSnapshot);
+  const [appState, setAppState] = useState(() => ({ status: AppState.currentState }));
   const requestScope = useMemo(
-    () => ({ visible, userAccountUuid, selectedAsset, lifetime: createProviderLifetime() }),
-    [visible, userAccountUuid, selectedAsset],
+    () => ({ visible, userAccountUuid, selectedAsset, admission, appState, lifetime: createProviderLifetime() }),
+    [visible, userAccountUuid, selectedAsset, admission, appState],
+  );
+  const isRequestActive = useCallback(
+    (scope: typeof requestScope) =>
+      scope.visible &&
+      scope.lifetime.isActive() &&
+      scope.admission.allowed &&
+      access.getSnapshot() === scope.admission &&
+      scope.appState.status === 'active' &&
+      AppState.currentState === 'active',
+    [access],
   );
 
   const userProfileQuery = useQuery({
@@ -277,6 +299,7 @@ export function BuyCryptoModal({
 
   const widgetMutation = useMutation({
     mutationFn: async (wallet: Wallet) => {
+      if (!isRequestActive(requestScope)) throw new Error('The purchase request is no longer active.');
       const sessionEpoch = getSessionEpoch();
       const response = await getOnRampWidgetUrl(apiClient, {
         walletUuid: wallet.uuid,
@@ -286,8 +309,7 @@ export function BuyCryptoModal({
       return { response, sessionEpoch, scope: requestScope };
     },
     onSuccess: ({ response, sessionEpoch, scope }) => {
-      if (!scope.visible || !scope.lifetime.isActive() || scope !== requestScope || sessionEpoch !== getSessionEpoch())
-        return;
+      if (!isRequestActive(scope) || scope !== requestScope || sessionEpoch !== getSessionEpoch()) return;
       resetAndClose();
       onNavigateToWebView(response.data.url, sessionEpoch);
     },
@@ -297,20 +319,27 @@ export function BuyCryptoModal({
   useLayoutEffect(() => {
     requestScope.lifetime.mount();
     resetWidget();
+    const onAppState = (status: AppStateStatus) => {
+      if (status !== 'active') requestScope.lifetime.retire();
+      setAppState((current) => (current.status === status ? current : { status }));
+    };
+    const subscription = AppState.addEventListener('change', onAppState);
+    if (AppState.currentState !== requestScope.appState.status) onAppState(AppState.currentState);
     return () => {
+      subscription.remove();
       requestScope.lifetime.unmount();
     };
   }, [requestScope, visible, resetWidget]);
 
   useEffect(() => {
-    if (!visible || !selectedAsset || isLoadingWallets) return;
+    if (!isRequestActive(requestScope) || !selectedAsset || isLoadingWallets) return;
 
     if (matchingWallets.length === 1 && widgetMutation.isIdle) {
       widgetMutation.mutate(matchingWallets[0]);
     } else if (matchingWallets.length !== 1) {
       setShowWalletStep(true);
     }
-  }, [visible, selectedAsset, isLoadingWallets, matchingWallets, widgetMutation]);
+  }, [requestScope, isRequestActive, selectedAsset, isLoadingWallets, matchingWallets, widgetMutation]);
 
   const resetAndClose = () => {
     requestScope.lifetime.retire();

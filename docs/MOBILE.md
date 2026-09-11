@@ -298,6 +298,10 @@ capture control, and a form-completion signal is not server verification approva
 The buy-crypto provider uses the same admission and session lifetime. A widget
 URL carries the session epoch captured before its request; a late response after
 logout, cancellation, account change or owner unmount cannot open the provider.
+Widget requests also require active, unlocked admission before they start.
+Backgrounding or losing app-lock admission retires a pending response, including
+quick loss/regain before React renders. Resuming starts a fresh request for the
+current selection; the old response cannot navigate after access returns.
 The native WebView wrapper is removed during app lock, backgrounding or navigation
 blur. A blur revision also rejects queued callbacks across a quick blur/return
 before React commits a new view. Completion and close are each delivered at most
