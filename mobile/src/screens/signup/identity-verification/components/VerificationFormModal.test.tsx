@@ -1,4 +1,5 @@
 import React from 'react';
+import { JSDOM } from 'jsdom';
 import { act, cleanup, fireEvent, render } from '@testing-library/react-native';
 import { AppState, type AppStateStatus } from 'react-native';
 import type { NativeProps } from 'react-native-webview/lib/RNCWebViewNativeComponent';
@@ -506,3 +507,52 @@ it.each(['sdk', 'startup', 'script-load'] as const)(
     expect(JSON.stringify([elements, posted.mock.calls])).not.toContain(secret);
   },
 );
+
+it.each([
+  ['ordinary token', 'synthetic-provider-token'],
+  ['quoted token', 'synthetic-"\\\n\r\t&>'],
+  ['closing script', 'synthetic</script><p id="token-boundary">changed</p><script>'],
+  ['mixed-case closing script', 'synthetic</ScRiPt><script>window.tokenBoundary = true</script><script>'],
+  ['HTML script escape state', 'synthetic<!--<script>'],
+  ['Unicode separators', 'synthetic\u2028token\u2029end'],
+])('passes the opaque %s to the SDK without changing the HTML document', async (_label, opaqueToken) => {
+  await render(form({ accessToken: opaqueToken }));
+  const html = nativeView().newSource?.html;
+  expect(typeof html).toBe('string');
+  const dom = new JSDOM(html);
+  try {
+    const document = dom.window.document;
+    const scripts = document.querySelectorAll('script');
+    expect(scripts).toHaveLength(1);
+    expect(document.getElementById('token-boundary')).toBeNull();
+    const init = jest.fn();
+    const launch = jest.fn();
+    const posted = jest.fn();
+    const sdk = {
+      init: (value: string) => {
+        init(value);
+        return {
+          withConf() {
+            return this;
+          },
+          on() {
+            return this;
+          },
+          build: () => ({ launch }),
+        };
+      },
+    };
+    const execute = new Function('document', 'window', 'snsWebSdk', scripts[0].textContent!);
+    execute(document, { ReactNativeWebView: { postMessage: posted } }, sdk);
+    const loader = document.head.querySelector('script');
+    expect(loader?.src).toBe('https://static.sumsub.com/idensic/static/sns-websdk-builder.js');
+    loader!.dispatchEvent(new dom.window.Event('load'));
+    expect(init).toHaveBeenCalledTimes(1);
+    expect(init).toHaveBeenCalledWith(opaqueToken);
+    expect(launch).toHaveBeenCalledTimes(1);
+    expect(launch).toHaveBeenCalledWith('#sumsub-websdk-container');
+    expect(posted).not.toHaveBeenCalled();
+  } finally {
+    dom.window.close();
+  }
+});
