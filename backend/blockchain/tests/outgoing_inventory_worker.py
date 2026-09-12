@@ -9,6 +9,7 @@ from uuid import UUID
 import django
 
 from blockchain.tests.outgoing_worker import await_file
+from shared.tests.synthetic_store import a_private_store_that_survives_a_kill
 
 
 def run(directory, phase, index):
@@ -19,7 +20,7 @@ def run(directory, phase, index):
     if database:
         settings.DATABASES = {"default": json.loads(database)}
     else:
-        settings.DATABASES["default"]["NAME"] = str(directory / "inventory.sqlite3")
+        a_private_store_that_survives_a_kill(settings, directory / "inventory.sqlite3")
     django.setup()
 
     from django.core.management import call_command

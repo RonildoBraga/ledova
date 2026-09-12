@@ -120,6 +120,10 @@ jobs:
     env:
       SECRET_KEY: ci-only
       STORAGE_BACKEND: local
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: '5432'
+      POSTGRES_DB: ledova
+      POSTGRES_USER: ledova
     services:
       redis:
         image: redis:7-alpine
@@ -159,8 +163,6 @@ jobs:
         run: python manage.py check
       - name: Migration consistency
         run: python manage.py makemigrations --check --dry-run
-      - name: Unit tests (credential-free settings)
-        run: python manage.py test --settings=ledova_backend.settings.test
       - name: Shared sign-in throttle (real Redis, fresh and concurrent processes)
         env:
           THROTTLE_TEST_REDIS_URL: redis://127.0.0.1:6379/0
@@ -200,11 +202,6 @@ jobs:
       - name: Generate API schema and compare registered operation coverage
         id: generate-schema
         shell: bash
-        env:
-          POSTGRES_HOST: 127.0.0.1
-          POSTGRES_PORT: '5432'
-          POSTGRES_DB: ledova
-          POSTGRES_USER: ledova
         run: |
           python manage.py migrate --settings=ledova_backend.settings.test_postgres --noinput
           python manage.py export_api_schema --settings=ledova_backend.settings.test_postgres \
@@ -229,41 +226,17 @@ jobs:
             /tmp/ledova-schema-comparison.json
           retention-days: 7
           if-no-files-found: ignore
-      - name: SQLite migration tests
-        run: >-
-          python manage.py test authentication.tests.test_email_migration
-          --settings=ledova_backend.settings.test_migrations --noinput
-      - name: PostgreSQL full suite
-        env:
-          POSTGRES_HOST: 127.0.0.1
-          POSTGRES_PORT: '5432'
-          POSTGRES_DB: ledova
-          POSTGRES_USER: ledova
-        run: python manage.py test --settings=ledova_backend.settings.test_postgres --parallel 4 --noinput
+      - name: Full suite
+        run: python manage.py test --settings=ledova_backend.settings.test --parallel 4 --noinput
       - name: The whole suite behind the policies (the app role on one connection)
-        env:
-          POSTGRES_HOST: 127.0.0.1
-          POSTGRES_PORT: '5432'
-          POSTGRES_DB: ledova
-          POSTGRES_USER: ledova
         run: >-
           python manage.py test
           --settings=ledova_backend.settings.test_behind_the_policies --parallel 4 --noinput
       - name: Request path on the scoped connection (the half the ordinary settings cannot see)
-        env:
-          POSTGRES_HOST: 127.0.0.1
-          POSTGRES_PORT: '5432'
-          POSTGRES_DB: ledova
-          POSTGRES_USER: ledova
         run: >-
           python manage.py test --settings=ledova_backend.settings.test_scoped
           --require-scoped-coverage --noinput
       - name: Row-level-security roles and catalogue (the half no test can see)
-        env:
-          POSTGRES_HOST: 127.0.0.1
-          POSTGRES_PORT: '5432'
-          POSTGRES_DB: ledova
-          POSTGRES_USER: ledova
         run: |
           python manage.py migrate --noinput
           python manage.py check_rls_roles
@@ -281,17 +254,7 @@ jobs:
         run: make chain-test PYTHON=python
       - name: Real-chain test on PostgreSQL (adds the two-worker capital-increase row-lock case)
         working-directory: .
-        env:
-          POSTGRES_HOST: 127.0.0.1
-          POSTGRES_PORT: '5432'
-          POSTGRES_DB: ledova
-          POSTGRES_USER: ledova
         run: make chain-test PYTHON=python CHAIN_TEST_SETTINGS=ledova_backend.settings.test_postgres
       - name: Bitcoin submission pipeline (isolated regtest and PostgreSQL)
         working-directory: .
-        env:
-          POSTGRES_HOST: 127.0.0.1
-          POSTGRES_PORT: '5432'
-          POSTGRES_DB: ledova
-          POSTGRES_USER: ledova
         run: python scripts/test-bitcoin-chain.py

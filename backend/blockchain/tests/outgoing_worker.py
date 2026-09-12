@@ -8,6 +8,8 @@ from unittest.mock import patch
 
 import django
 
+from shared.tests.synthetic_store import a_private_store_that_survives_a_kill
+
 
 def await_file(path):
     until = time.monotonic() + 20
@@ -25,7 +27,7 @@ def run(directory, phase, index):
     if database:
         settings.DATABASES = {"default": json.loads(database)}
     else:
-        settings.DATABASES["default"]["NAME"] = str(directory / "outgoing.sqlite3")
+        a_private_store_that_survives_a_kill(settings, directory / "outgoing.sqlite3")
     django.setup()
 
     from django.core.management import call_command
