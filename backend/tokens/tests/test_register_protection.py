@@ -7,9 +7,10 @@ from django.test import TestCase
 from django.utils import timezone
 from web3 import Web3
 
-from assets.models import Asset
+from assets.models import Asset, AssetChainDeployment
 from companies.models import Company, CompanyStatus
 from offerings.models import Offering, OfferingExemption
+from shared.tests.settlement import save_swap_with_context
 from tokens.models import (
     CapitalIncreaseRequest,
     IssuanceStatus,
@@ -153,8 +154,10 @@ class RegisterSpineProtectionTest(TestCase):
             quantity=10,
             price_per_share=Decimal("1.50"),
         )
-        TransferOrder.objects.filter(pk__in=[sell.pk, buy.pk]).update(token=other)
-        swap = SwapOrder.objects.create(
+        AssetChainDeployment.objects.create(
+            asset=sell.payment_asset, chain="base", contract_address="0x" + "87" * 20, decimals=2
+        )
+        swap = save_swap_with_context(
             sell_order=sell,
             buy_order=buy,
             share_token=self.token,
@@ -168,6 +171,7 @@ class RegisterSpineProtectionTest(TestCase):
             expires_at=timezone.now() + timedelta(days=1),
         )
 
+        TransferOrder.objects.filter(pk__in=[sell.pk, buy.pk]).update(token=other)
         self._protected(self.token)
 
         self.assertTrue(SwapOrder.objects.filter(pk=swap.pk).exists())

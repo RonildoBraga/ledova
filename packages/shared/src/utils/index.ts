@@ -67,3 +67,25 @@ export type {
 } from './order-submission-storage';
 export { OrderSubmission } from './order-submission';
 export type { OrderSubmissionState, OrderSubmissionPhase } from './order-submission';
+export { createOrderActionStore } from './order-action-storage';
+export type { SavedOrderAction, OrderActionStore } from './order-action-storage';
+export { OrderAction } from './order-action';
+export type { OrderActionState, OrderActionPhase } from './order-action';
+export { createSwapSettlementStore } from './swap-settlement-storage';
+export type { SavedSwapSettlement, SwapSettlementStore } from './swap-settlement-storage';
+export { SwapSettlement } from './swap-settlement';
+export type { SwapSettlementState, SwapSettlementPhase, SwapSettlementDependencies } from './swap-settlement';
+export {
+  selectSwapSettlementLookup,
+  hasSwapSettlementContext,
+  validateSwapSettlementLookup,
+  validateSwapSettlementResponse,
+  validateSettlementSwapOrder,
+  validateSwapSettlementApprovalStatus,
+  validateSwapSettlementApprovalData,
+  validateSwapSettlementApprovalResult,
+  validateSwapSettlementSignedApproval,
+  swapSettlementIdentity,
+  swapSettlementRole,
+  swapSettlementAdmitted,
+} from './swap-settlement-validation';

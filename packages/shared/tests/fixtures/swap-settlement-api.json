@@ -1,0 +1,413 @@
+{
+  "source_head": "3a5571a4d8e4a2e23e693de96413619ca4c9a243",
+  "synthetic_only": true,
+  "mnemonic": "test test test test test test test test test test test junk",
+  "paths": [
+    "m/44'/60'/0'/0/0",
+    "m/44'/60'/0'/0/1"
+  ],
+  "addresses": [
+    "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+    "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+  ],
+  "get_body": {
+    "swapOrder": {
+      "uuid": "71f8a4e9-9034-402c-95b3-7c00ad04abb0",
+      "status": "created",
+      "statusDisplay": "Created",
+      "shareTokenSymbol": "DEP",
+      "shareTokenName": "context-route shares",
+      "shareTokenAddress": "0xC000000000000000000000000000000000000001",
+      "paymentTokenSymbol": "TUSD",
+      "paymentTokenAddress": "0x5555555555555555555555555555555555555555",
+      "sellerAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "buyerAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "shareAmount": 9007199254740993,
+      "paymentAmount": 1351079888211148950,
+      "nonce": 6729682787356956633,
+      "orderHash": "52382c28ec82728861c8527fbd1b662b03efbffa480006802169beb3b388e2f6",
+      "settlementProtocolVersion": 1,
+      "settlementContext": {
+        "protocolVersion": 1,
+        "swapUuid": "71f8a4e9-9034-402c-95b3-7c00ad04abb0",
+        "seller": {
+          "orderUuid": "b8d4832f-718f-4349-9544-5a613672aef4",
+          "ownerAccountUuid": "18ff3de3-b053-4607-a3e9-a72c210e0062",
+          "walletUuid": "9e770e43-4938-4c59-8db8-fe29a397a14b",
+          "paymentAssetUuid": "b53a839e-8d46-4caa-be27-bc09b1ceea2d",
+          "address": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+        },
+        "buyer": {
+          "orderUuid": "5960836a-d28a-4f5d-9c29-cfd6cfa3d6ba",
+          "ownerAccountUuid": "18ff3de3-b053-4607-a3e9-a72c210e0062",
+          "walletUuid": "c249da71-b172-4b1b-99ad-8212b7e1c7da",
+          "paymentAssetUuid": "b53a839e-8d46-4caa-be27-bc09b1ceea2d",
+          "address": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+        },
+        "shareToken": {
+          "uuid": "30ca2374-1201-459b-93b0-6eb8c1a90492",
+          "address": "0xC000000000000000000000000000000000000001",
+          "chain": "base",
+          "name": "context-route shares",
+          "symbol": "DEP",
+          "decimals": 0
+        },
+        "paymentAsset": {
+          "uuid": "b53a839e-8d46-4caa-be27-bc09b1ceea2d",
+          "name": "Tenant dollar",
+          "symbol": "TUSD",
+          "pricingDecimals": 2,
+          "deploymentUuid": "8648b283-a45a-49c5-8647-8c12ae3f485a",
+          "deploymentChain": "base",
+          "deploymentAddress": "0x5555555555555555555555555555555555555555",
+          "deploymentDecimals": 2
+        },
+        "pricePerShare": "1.50",
+        "typedData": {
+          "types": {
+            "EIP712Domain": [
+              {
+                "name": "name",
+                "type": "string"
+              },
+              {
+                "name": "version",
+                "type": "string"
+              },
+              {
+                "name": "chainId",
+                "type": "uint256"
+              },
+              {
+                "name": "verifyingContract",
+                "type": "address"
+              }
+            ],
+            "SwapOrder": [
+              {
+                "name": "seller",
+                "type": "address"
+              },
+              {
+                "name": "buyer",
+                "type": "address"
+              },
+              {
+                "name": "shareToken",
+                "type": "address"
+              },
+              {
+                "name": "paymentToken",
+                "type": "address"
+              },
+              {
+                "name": "shareAmount",
+                "type": "uint256"
+              },
+              {
+                "name": "paymentAmount",
+                "type": "uint256"
+              },
+              {
+                "name": "nonce",
+                "type": "uint256"
+              },
+              {
+                "name": "deadline",
+                "type": "uint256"
+              }
+            ]
+          },
+          "primaryType": "SwapOrder",
+          "domain": {
+            "name": "LedovaAtomicSwap",
+            "version": "1",
+            "chainId": "84532",
+            "verifyingContract": "0x9D9d9d9d9D9D9D9D9D9d9D9D9d9D9D9d9D9D9D9d"
+          },
+          "message": {
+            "seller": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+            "buyer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+            "shareToken": "0xC000000000000000000000000000000000000001",
+            "paymentToken": "0x5555555555555555555555555555555555555555",
+            "shareAmount": "9007199254740993",
+            "paymentAmount": "1351079888211148950",
+            "nonce": "6729682787356956633",
+            "deadline": "1789084134"
+          }
+        },
+        "digest": "0x285fb13a8771cd720a17b5994eb8433aa9fb532ec66da7be71e9fcf928455a91",
+        "orderHash": "52382c28ec82728861c8527fbd1b662b03efbffa480006802169beb3b388e2f6"
+      },
+      "settlementDigest": "0x285fb13a8771cd720a17b5994eb8433aa9fb532ec66da7be71e9fcf928455a91",
+      "sellerHasSigned": false,
+      "buyerHasSigned": false,
+      "isExpired": false,
+      "isReady": false,
+      "sellOrderUuid": "b8d4832f-718f-4349-9544-5a613672aef4",
+      "buyOrderUuid": "5960836a-d28a-4f5d-9c29-cfd6cfa3d6ba",
+      "txHash": "",
+      "expiresAt": "2026-09-10T23:48:54.263081Z",
+      "completedAt": null,
+      "errorMessage": "",
+      "createdAt": "2026-09-10T23:33:54.265226Z",
+      "updatedAt": "2026-09-10T23:33:54.265236Z"
+    },
+    "typedData": {
+      "types": {
+        "EIP712Domain": [
+          {
+            "name": "name",
+            "type": "string"
+          },
+          {
+            "name": "version",
+            "type": "string"
+          },
+          {
+            "name": "chainId",
+            "type": "uint256"
+          },
+          {
+            "name": "verifyingContract",
+            "type": "address"
+          }
+        ],
+        "SwapOrder": [
+          {
+            "name": "seller",
+            "type": "address"
+          },
+          {
+            "name": "buyer",
+            "type": "address"
+          },
+          {
+            "name": "shareToken",
+            "type": "address"
+          },
+          {
+            "name": "paymentToken",
+            "type": "address"
+          },
+          {
+            "name": "shareAmount",
+            "type": "uint256"
+          },
+          {
+            "name": "paymentAmount",
+            "type": "uint256"
+          },
+          {
+            "name": "nonce",
+            "type": "uint256"
+          },
+          {
+            "name": "deadline",
+            "type": "uint256"
+          }
+        ]
+      },
+      "primaryType": "SwapOrder",
+      "domain": {
+        "name": "LedovaAtomicSwap",
+        "version": "1",
+        "chainId": "84532",
+        "verifyingContract": "0x9D9d9d9d9D9D9D9D9D9d9D9D9d9D9D9d9D9D9D9d"
+      },
+      "message": {
+        "seller": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "buyer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+        "shareToken": "0xC000000000000000000000000000000000000001",
+        "paymentToken": "0x5555555555555555555555555555555555555555",
+        "shareAmount": "9007199254740993",
+        "paymentAmount": "1351079888211148950",
+        "nonce": "6729682787356956633",
+        "deadline": "1789084134"
+      }
+    },
+    "userRole": "seller",
+    "hasSigned": false,
+    "swapUuid": "71f8a4e9-9034-402c-95b3-7c00ad04abb0",
+    "orderUuid": "b8d4832f-718f-4349-9544-5a613672aef4",
+    "ownerAccountUuid": "18ff3de3-b053-4607-a3e9-a72c210e0062",
+    "walletUuid": "9e770e43-4938-4c59-8db8-fe29a397a14b",
+    "settlementDigest": "0x285fb13a8771cd720a17b5994eb8433aa9fb532ec66da7be71e9fcf928455a91",
+    "canSign": true,
+    "admissionRefusal": null
+  },
+  "seller_post_body": {
+    "uuid": "71f8a4e9-9034-402c-95b3-7c00ad04abb0",
+    "status": "seller_signed",
+    "statusDisplay": "Seller Signed",
+    "shareTokenSymbol": "DEP",
+    "shareTokenName": "context-route shares",
+    "shareTokenAddress": "0xC000000000000000000000000000000000000001",
+    "paymentTokenSymbol": "TUSD",
+    "paymentTokenAddress": "0x5555555555555555555555555555555555555555",
+    "sellerAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+    "buyerAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+    "shareAmount": 9007199254740993,
+    "paymentAmount": 1351079888211148950,
+    "nonce": 6729682787356956633,
+    "orderHash": "52382c28ec82728861c8527fbd1b662b03efbffa480006802169beb3b388e2f6",
+    "settlementProtocolVersion": 1,
+    "settlementContext": {
+      "protocolVersion": 1,
+      "swapUuid": "71f8a4e9-9034-402c-95b3-7c00ad04abb0",
+      "seller": {
+        "orderUuid": "b8d4832f-718f-4349-9544-5a613672aef4",
+        "ownerAccountUuid": "18ff3de3-b053-4607-a3e9-a72c210e0062",
+        "walletUuid": "9e770e43-4938-4c59-8db8-fe29a397a14b",
+        "paymentAssetUuid": "b53a839e-8d46-4caa-be27-bc09b1ceea2d",
+        "address": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+      },
+      "buyer": {
+        "orderUuid": "5960836a-d28a-4f5d-9c29-cfd6cfa3d6ba",
+        "ownerAccountUuid": "18ff3de3-b053-4607-a3e9-a72c210e0062",
+        "walletUuid": "c249da71-b172-4b1b-99ad-8212b7e1c7da",
+        "paymentAssetUuid": "b53a839e-8d46-4caa-be27-bc09b1ceea2d",
+        "address": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+      },
+      "shareToken": {
+        "uuid": "30ca2374-1201-459b-93b0-6eb8c1a90492",
+        "address": "0xC000000000000000000000000000000000000001",
+        "chain": "base",
+        "name": "context-route shares",
+        "symbol": "DEP",
+        "decimals": 0
+      },
+      "paymentAsset": {
+        "uuid": "b53a839e-8d46-4caa-be27-bc09b1ceea2d",
+        "name": "Tenant dollar",
+        "symbol": "TUSD",
+        "pricingDecimals": 2,
+        "deploymentUuid": "8648b283-a45a-49c5-8647-8c12ae3f485a",
+        "deploymentChain": "base",
+        "deploymentAddress": "0x5555555555555555555555555555555555555555",
+        "deploymentDecimals": 2
+      },
+      "pricePerShare": "1.50",
+      "typedData": {
+        "types": {
+          "EIP712Domain": [
+            {
+              "name": "name",
+              "type": "string"
+            },
+            {
+              "name": "version",
+              "type": "string"
+            },
+            {
+              "name": "chainId",
+              "type": "uint256"
+            },
+            {
+              "name": "verifyingContract",
+              "type": "address"
+            }
+          ],
+          "SwapOrder": [
+            {
+              "name": "seller",
+              "type": "address"
+            },
+            {
+              "name": "buyer",
+              "type": "address"
+            },
+            {
+              "name": "shareToken",
+              "type": "address"
+            },
+            {
+              "name": "paymentToken",
+              "type": "address"
+            },
+            {
+              "name": "shareAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "paymentAmount",
+              "type": "uint256"
+            },
+            {
+              "name": "nonce",
+              "type": "uint256"
+            },
+            {
+              "name": "deadline",
+              "type": "uint256"
+            }
+          ]
+        },
+        "primaryType": "SwapOrder",
+        "domain": {
+          "name": "LedovaAtomicSwap",
+          "version": "1",
+          "chainId": "84532",
+          "verifyingContract": "0x9D9d9d9d9D9D9D9D9D9d9D9D9d9D9D9d9D9D9D9d"
+        },
+        "message": {
+          "seller": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+          "buyer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+          "shareToken": "0xC000000000000000000000000000000000000001",
+          "paymentToken": "0x5555555555555555555555555555555555555555",
+          "shareAmount": "9007199254740993",
+          "paymentAmount": "1351079888211148950",
+          "nonce": "6729682787356956633",
+          "deadline": "1789084134"
+        }
+      },
+      "digest": "0x285fb13a8771cd720a17b5994eb8433aa9fb532ec66da7be71e9fcf928455a91",
+      "orderHash": "52382c28ec82728861c8527fbd1b662b03efbffa480006802169beb3b388e2f6"
+    },
+    "settlementDigest": "0x285fb13a8771cd720a17b5994eb8433aa9fb532ec66da7be71e9fcf928455a91",
+    "sellerHasSigned": true,
+    "buyerHasSigned": false,
+    "isExpired": false,
+    "isReady": false,
+    "sellOrderUuid": "b8d4832f-718f-4349-9544-5a613672aef4",
+    "buyOrderUuid": "5960836a-d28a-4f5d-9c29-cfd6cfa3d6ba",
+    "txHash": "",
+    "expiresAt": "2026-09-10T23:48:54.263081Z",
+    "completedAt": null,
+    "errorMessage": "",
+    "createdAt": "2026-09-10T23:33:54.265226Z",
+    "updatedAt": "2026-09-10T23:33:54.299512Z"
+  },
+  "signatures": [
+    "0x89bb5e4f7cec329f7d31b4addf3562153261a67718f3acfa5a08ee614bffe8201f422688e6bc6c1c581a4d7d767affb1c1a6ea2568677e1edf56dcbe6c1afabb1c",
+    "0x3d938501eb6dcb888e2c7b2d411898a7a372ab1b2e3cf9c623f8bb96c36026aa5189aa8f042bc485c3b96ba6b9e1cb47b607f205b37a141533c4192993b486241c"
+  ],
+  "claim": {
+    "to_address": "0x9D9d9d9d9D9D9D9D9D9d9D9D9d9D9D9d9D9D9D9d",
+    "function_name": "executeSwap",
+    "function_args": {
+      "seller": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "buyer": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "shareToken": "0xC000000000000000000000000000000000000001",
+      "paymentToken": "0x5555555555555555555555555555555555555555",
+      "shareAmount": "9007199254740993",
+      "paymentAmount": "1351079888211148950",
+      "nonce": "6729682787356956633",
+      "deadline": "1789084134",
+      "sellerSignature": "0x89bb5e4f7cec329f7d31b4addf3562153261a67718f3acfa5a08ee614bffe8201f422688e6bc6c1c581a4d7d767affb1c1a6ea2568677e1edf56dcbe6c1afabb1c",
+      "buyerSignature": "0x3d938501eb6dcb888e2c7b2d411898a7a372ab1b2e3cf9c623f8bb96c36026aa5189aa8f042bc485c3b96ba6b9e1cb47b607f205b37a141533c4192993b486241c",
+      "settlement": {
+        "protocol_version": 1,
+        "swap_uuid": "71f8a4e9-9034-402c-95b3-7c00ad04abb0",
+        "digest": "0x285fb13a8771cd720a17b5994eb8433aa9fb532ec66da7be71e9fcf928455a91",
+        "domain": {
+          "name": "LedovaAtomicSwap",
+          "version": "1",
+          "chainId": "84532",
+          "verifyingContract": "0x9D9d9d9d9D9D9D9D9D9d9D9D9d9D9D9d9D9D9D9d"
+        }
+      }
+    }
+  },
+  "chain_id": 84532
+}

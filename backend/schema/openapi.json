@@ -7257,6 +7257,55 @@
                 }
             }
         },
+        "/api/v1/trading/orders/{uuid}/action-context/": {
+            "get": {
+                "operationId": "api_v1_trading_orders_action_context_retrieve",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "owner_account_uuid",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "uuid",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier (primary key)"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "api"
+                ],
+                "security": [
+                    {
+                        "bearerAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OrderActionContext"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/trading/orders/{uuid}/cancel/": {
             "post": {
                 "operationId": "api_v1_trading_orders_cancel_create",
@@ -7279,20 +7328,21 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/TransferOrderDetail"
+                                "$ref": "#/components/schemas/OrderActionExecuteRequest"
                             }
                         },
                         "application/x-www-form-urlencoded": {
                             "schema": {
-                                "$ref": "#/components/schemas/TransferOrderDetail"
+                                "$ref": "#/components/schemas/OrderActionExecuteRequest"
                             }
                         },
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/TransferOrderDetail"
+                                "$ref": "#/components/schemas/OrderActionExecuteRequest"
                             }
                         }
-                    }
+                    },
+                    "required": true
                 },
                 "security": [
                     {
@@ -7309,11 +7359,113 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/TransferOrderDetail"
+                                    "$ref": "#/components/schemas/OrderActionSubmission"
                                 }
                             }
                         },
                         "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "anyOf": [
+                                        {
+                                            "$ref": "#/components/schemas/OrderActionSubmission"
+                                        },
+                                        {
+                                            "type": "object",
+                                            "additionalProperties": {}
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        "description": "Recorded action refusal or ordinary pending request/challenge error."
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Authentication required."
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Signature refused."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Unknown or currently inaccessible action/order."
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "anyOf": [
+                                        {
+                                            "$ref": "#/components/schemas/OrderActionSubmission"
+                                        },
+                                        {
+                                            "type": "object",
+                                            "additionalProperties": {}
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        "description": "Recorded modification refusal or ordinary unresolved intent/context conflict."
+                    },
+                    "429": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Request throttle exceeded."
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Unknown outcome; retain the action identity."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Service unavailable; recover before retrying."
                     }
                 }
             }
@@ -7345,15 +7497,178 @@
                     }
                 ],
                 "responses": {
-                    "200": {
+                    "400": {
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/CancelOrderMessageResponse"
+                                    "type": "object",
+                                    "additionalProperties": {}
                                 }
                             }
                         },
                         "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "api_v1_trading_orders_cancel_message_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "uuid",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier (primary key)"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "api"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/OrderActionIdentity"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/OrderActionIdentity"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/OrderActionIdentity"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    },
+                    {
+                        "cookieAuth": [],
+                        "csrfHeader": [],
+                        "csrfCookie": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OrderActionSubmission"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "anyOf": [
+                                        {
+                                            "$ref": "#/components/schemas/OrderActionSubmission"
+                                        },
+                                        {
+                                            "type": "object",
+                                            "additionalProperties": {}
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        "description": "Recorded action refusal or ordinary pending request/challenge error."
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Authentication required."
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Signature refused."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Unknown or currently inaccessible action/order."
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "anyOf": [
+                                        {
+                                            "$ref": "#/components/schemas/OrderActionSubmission"
+                                        },
+                                        {
+                                            "type": "object",
+                                            "additionalProperties": {}
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        "description": "Recorded modification refusal or ordinary unresolved intent/context conflict."
+                    },
+                    "429": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Request throttle exceeded."
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Unknown outcome; retain the action identity."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Service unavailable; recover before retrying."
                     }
                 }
             }
@@ -7420,20 +7735,21 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/TransferOrderList"
+                                "$ref": "#/components/schemas/OrderActionExecuteRequest"
                             }
                         },
                         "application/x-www-form-urlencoded": {
                             "schema": {
-                                "$ref": "#/components/schemas/TransferOrderList"
+                                "$ref": "#/components/schemas/OrderActionExecuteRequest"
                             }
                         },
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/TransferOrderList"
+                                "$ref": "#/components/schemas/OrderActionExecuteRequest"
                             }
                         }
-                    }
+                    },
+                    "required": true
                 },
                 "security": [
                     {
@@ -7450,11 +7766,113 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/TransferOrderModified"
+                                    "$ref": "#/components/schemas/OrderActionSubmission"
                                 }
                             }
                         },
                         "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "anyOf": [
+                                        {
+                                            "$ref": "#/components/schemas/OrderActionSubmission"
+                                        },
+                                        {
+                                            "type": "object",
+                                            "additionalProperties": {}
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        "description": "Recorded action refusal or ordinary pending request/challenge error."
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Authentication required."
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Signature refused."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Unknown or currently inaccessible action/order."
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "anyOf": [
+                                        {
+                                            "$ref": "#/components/schemas/OrderActionSubmission"
+                                        },
+                                        {
+                                            "type": "object",
+                                            "additionalProperties": {}
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        "description": "Recorded modification refusal or ordinary unresolved intent/context conflict."
+                    },
+                    "429": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Request throttle exceeded."
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Unknown outcome; retain the action identity."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Service unavailable; recover before retrying."
                     }
                 }
             }
@@ -7481,20 +7899,21 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/TransferOrderList"
+                                "$ref": "#/components/schemas/OrderActionModifyRequest"
                             }
                         },
                         "application/x-www-form-urlencoded": {
                             "schema": {
-                                "$ref": "#/components/schemas/TransferOrderList"
+                                "$ref": "#/components/schemas/OrderActionModifyRequest"
                             }
                         },
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/TransferOrderList"
+                                "$ref": "#/components/schemas/OrderActionModifyRequest"
                             }
                         }
-                    }
+                    },
+                    "required": true
                 },
                 "security": [
                     {
@@ -7511,11 +7930,113 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/OrderModificationMessageResponse"
+                                    "$ref": "#/components/schemas/OrderActionSubmission"
                                 }
                             }
                         },
                         "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "anyOf": [
+                                        {
+                                            "$ref": "#/components/schemas/OrderActionSubmission"
+                                        },
+                                        {
+                                            "type": "object",
+                                            "additionalProperties": {}
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        "description": "Recorded action refusal or ordinary pending request/challenge error."
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Authentication required."
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Signature refused."
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Unknown or currently inaccessible action/order."
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "anyOf": [
+                                        {
+                                            "$ref": "#/components/schemas/OrderActionSubmission"
+                                        },
+                                        {
+                                            "type": "object",
+                                            "additionalProperties": {}
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        "description": "Recorded modification refusal or ordinary unresolved intent/context conflict."
+                    },
+                    "429": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Request throttle exceeded."
+                    },
+                    "500": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Unknown outcome; retain the action identity."
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": "Service unavailable; recover before retrying."
                     }
                 }
             }
@@ -7552,6 +8073,78 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/SwapOrderForSigning"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/trading/orders/{uuid}/swap/approval-broadcast/": {
+            "post": {
+                "operationId": "api_v1_trading_orders_swap_approval_broadcast_create",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "uuid",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid",
+                            "description": "Unique identifier (primary key)"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "api"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SettlementApprovalBroadcast"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SettlementApprovalBroadcast"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SettlementApprovalBroadcast"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    },
+                    {
+                        "cookieAuth": [],
+                        "csrfHeader": [],
+                        "csrfCookie": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SettlementApprovalReceipt"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "503": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/SettlementApprovalUncertain"
                                 }
                             }
                         },
@@ -7631,7 +8224,7 @@
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/ApprovalStatusResponse"
+                                    "$ref": "#/components/schemas/SwapApprovalStatus"
                                 }
                             }
                         },
@@ -7662,17 +8255,17 @@
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/TransferOrderList"
+                                "$ref": "#/components/schemas/SwapSignatureRequest"
                             }
                         },
                         "application/x-www-form-urlencoded": {
                             "schema": {
-                                "$ref": "#/components/schemas/TransferOrderList"
+                                "$ref": "#/components/schemas/SwapSignatureRequest"
                             }
                         },
                         "multipart/form-data": {
                             "schema": {
-                                "$ref": "#/components/schemas/TransferOrderList"
+                                "$ref": "#/components/schemas/SwapSignatureRequest"
                             }
                         }
                     }
@@ -7693,6 +8286,54 @@
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/SwapOrderDetail"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/trading/orders/actions/{action_id}/": {
+            "get": {
+                "operationId": "api_v1_trading_orders_actions_retrieve",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "action_id",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "owner_account_uuid",
+                        "schema": {
+                            "type": "string",
+                            "format": "uuid"
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "api"
+                ],
+                "security": [
+                    {
+                        "bearerAuth": []
+                    },
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/OrderActionSubmission"
                                 }
                             }
                         },
@@ -9867,12 +10508,18 @@
                 }
             },
             "ApprovalDataResponse": {
-                "oneOf": [
+                "anyOf": [
                     {
                         "$ref": "#/components/schemas/SufficientApprovalResponse"
                     },
                     {
                         "$ref": "#/components/schemas/ApprovalTransactionResponse"
+                    },
+                    {
+                        "$ref": "#/components/schemas/SettlementSufficientApproval"
+                    },
+                    {
+                        "$ref": "#/components/schemas/SettlementApprovalTransaction"
                     }
                 ]
             },
@@ -10644,57 +11291,6 @@
                 ],
                 "type": "string",
                 "description": "* `pending` - pending\n* `confirmed` - confirmed\n* `failed` - failed\n* `reorged` - reorged\n* `replaced` - replaced"
-            },
-            "CancelOrderMessageResponse": {
-                "type": "object",
-                "properties": {
-                    "orderUuid": {
-                        "type": "string",
-                        "format": "uuid"
-                    },
-                    "digest": {
-                        "type": "string"
-                    },
-                    "domain": {
-                        "type": "object",
-                        "additionalProperties": {}
-                    },
-                    "types": {
-                        "type": "object",
-                        "additionalProperties": {}
-                    },
-                    "message": {
-                        "type": "object",
-                        "additionalProperties": {}
-                    },
-                    "expiresAt": {
-                        "type": "string",
-                        "format": "date-time"
-                    },
-                    "purpose": {
-                        "$ref": "#/components/schemas/CancelOrderMessageResponsePurposeEnum"
-                    },
-                    "walletAddress": {
-                        "type": "string"
-                    }
-                },
-                "required": [
-                    "digest",
-                    "domain",
-                    "expiresAt",
-                    "message",
-                    "orderUuid",
-                    "purpose",
-                    "types",
-                    "walletAddress"
-                ]
-            },
-            "CancelOrderMessageResponsePurposeEnum": {
-                "enum": [
-                    "order_cancel"
-                ],
-                "type": "string",
-                "description": "* `order_cancel` - order_cancel"
             },
             "CapitalIncreaseCreate": {
                 "type": "object",
@@ -11814,33 +12410,6 @@
                     "name"
                 ]
             },
-            "CurrentOrderValues": {
-                "type": "object",
-                "properties": {
-                    "quantity": {
-                        "type": "integer"
-                    },
-                    "minQuantity": {
-                        "type": "integer"
-                    },
-                    "pricePerShare": {
-                        "type": "string"
-                    },
-                    "filledQuantity": {
-                        "type": "integer"
-                    },
-                    "remainingQuantity": {
-                        "type": "integer"
-                    }
-                },
-                "required": [
-                    "filledQuantity",
-                    "minQuantity",
-                    "pricePerShare",
-                    "quantity",
-                    "remainingQuantity"
-                ]
-            },
             "DeletedAccountResponse": {
                 "type": "object",
                 "properties": {
@@ -12950,6 +13519,15 @@
                     "walletUuid"
                 ]
             },
+            "FieldEnum": {
+                "enum": [
+                    "quantity",
+                    "min_quantity",
+                    "price_per_share"
+                ],
+                "type": "string",
+                "description": "* `quantity` - quantity\n* `min_quantity` - min_quantity\n* `price_per_share` - price_per_share"
+            },
             "FinancialProfile": {
                 "type": "object",
                 "properties": {
@@ -13169,6 +13747,14 @@
                     "walletAddress",
                     "walletUuid"
                 ]
+            },
+            "HttpStatusEnum": {
+                "enum": [
+                    400,
+                    409
+                ],
+                "type": "integer",
+                "description": "* `400` - 400\n* `409` - 409"
             },
             "IdentitySourceEnum": {
                 "enum": [
@@ -14390,6 +14976,540 @@
                     }
                 }
             },
+            "OrderActionAppliedResult": {
+                "oneOf": [
+                    {
+                        "$ref": "#/components/schemas/OrderActionCancelResult"
+                    },
+                    {
+                        "$ref": "#/components/schemas/OrderActionModifyResult"
+                    }
+                ],
+                "discriminator": {
+                    "propertyName": "kind",
+                    "mapping": {
+                        "null": "#/components/schemas/OrderActionModifyResult"
+                    }
+                }
+            },
+            "OrderActionCancelResult": {
+                "type": "object",
+                "properties": {
+                    "kind": {
+                        "$ref": "#/components/schemas/OrderActionCancelResultKindEnum"
+                    },
+                    "fromStatus": {
+                        "$ref": "#/components/schemas/TransferOrderStatusEnum"
+                    },
+                    "toStatus": {
+                        "$ref": "#/components/schemas/ToStatusEnum"
+                    }
+                },
+                "required": [
+                    "fromStatus",
+                    "kind",
+                    "toStatus"
+                ]
+            },
+            "OrderActionCancelResultKindEnum": {
+                "enum": [
+                    "cancel"
+                ],
+                "type": "string",
+                "description": "* `cancel` - cancel"
+            },
+            "OrderActionChallenge": {
+                "type": "object",
+                "properties": {
+                    "purpose": {
+                        "$ref": "#/components/schemas/OrderActionChallengePurposeEnum"
+                    },
+                    "digest": {
+                        "type": "string"
+                    },
+                    "domain": {
+                        "$ref": "#/components/schemas/OrderActionDomain"
+                    },
+                    "types": {},
+                    "message": {},
+                    "expiresAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                },
+                "required": [
+                    "digest",
+                    "domain",
+                    "expiresAt",
+                    "message",
+                    "purpose",
+                    "types"
+                ]
+            },
+            "OrderActionChallengePurposeEnum": {
+                "enum": [
+                    "order_cancel",
+                    "order_modify"
+                ],
+                "type": "string",
+                "description": "* `order_cancel` - order_cancel\n* `order_modify` - order_modify"
+            },
+            "OrderActionChange": {
+                "type": "object",
+                "properties": {
+                    "field": {
+                        "$ref": "#/components/schemas/FieldEnum"
+                    },
+                    "old": {
+                        "type": "string"
+                    },
+                    "new": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "field",
+                    "new",
+                    "old"
+                ]
+            },
+            "OrderActionContext": {
+                "type": "object",
+                "properties": {
+                    "protocolVersion": {
+                        "type": "integer"
+                    },
+                    "ownerAccountUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "orderUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "walletUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "tokenUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "walletAddress": {
+                        "type": "string"
+                    },
+                    "domain": {
+                        "$ref": "#/components/schemas/OrderActionDomain"
+                    },
+                    "token": {
+                        "$ref": "#/components/schemas/OrderActionToken"
+                    },
+                    "currentValues": {
+                        "$ref": "#/components/schemas/OrderActionCurrentValues"
+                    }
+                },
+                "required": [
+                    "currentValues",
+                    "domain",
+                    "orderUuid",
+                    "ownerAccountUuid",
+                    "protocolVersion",
+                    "token",
+                    "tokenUuid",
+                    "walletAddress",
+                    "walletUuid"
+                ]
+            },
+            "OrderActionCurrentValues": {
+                "type": "object",
+                "properties": {
+                    "quantity": {
+                        "type": "string",
+                        "pattern": "^[1-9][0-9]*$"
+                    },
+                    "minQuantity": {
+                        "type": "string",
+                        "pattern": "^(0|[1-9][0-9]*)$"
+                    },
+                    "pricePerShare": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,16}(?:\\.\\d{0,2})?$"
+                    },
+                    "orderType": {
+                        "$ref": "#/components/schemas/TransferOrderTypeEnum"
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/TransferOrderStatusEnum"
+                    },
+                    "modificationCount": {
+                        "type": "integer"
+                    },
+                    "filledQuantity": {
+                        "type": "string",
+                        "pattern": "^(0|[1-9][0-9]*)$"
+                    },
+                    "remainingQuantity": {
+                        "type": "string",
+                        "pattern": "^(0|[1-9][0-9]*)$"
+                    },
+                    "canCancel": {
+                        "type": "boolean"
+                    },
+                    "canModify": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "canCancel",
+                    "canModify",
+                    "filledQuantity",
+                    "minQuantity",
+                    "modificationCount",
+                    "orderType",
+                    "pricePerShare",
+                    "quantity",
+                    "remainingQuantity",
+                    "status"
+                ]
+            },
+            "OrderActionDomain": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "version": {
+                        "type": "string"
+                    },
+                    "chainId": {
+                        "type": "integer"
+                    },
+                    "verifyingContract": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "chainId",
+                    "name",
+                    "verifyingContract",
+                    "version"
+                ]
+            },
+            "OrderActionExecuteRequest": {
+                "type": "object",
+                "properties": {
+                    "actionId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "ownerAccountUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "digest": {
+                        "type": "string"
+                    },
+                    "signature": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "actionId",
+                    "ownerAccountUuid"
+                ]
+            },
+            "OrderActionIdentity": {
+                "type": "object",
+                "properties": {
+                    "actionId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "ownerAccountUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    }
+                },
+                "required": [
+                    "actionId",
+                    "ownerAccountUuid"
+                ]
+            },
+            "OrderActionIntent": {
+                "type": "object",
+                "properties": {
+                    "domain": {
+                        "$ref": "#/components/schemas/OrderActionDomain"
+                    },
+                    "modifications": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/OrderActionValues"
+                            }
+                        ],
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "domain",
+                    "modifications"
+                ]
+            },
+            "OrderActionModifyRequest": {
+                "type": "object",
+                "properties": {
+                    "actionId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "ownerAccountUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "newQuantity": {
+                        "type": "string",
+                        "maxLength": 19,
+                        "pattern": "^[1-9][0-9]*$"
+                    },
+                    "newMinQuantity": {
+                        "type": "string",
+                        "maxLength": 19,
+                        "pattern": "^(0|[1-9][0-9]*)$"
+                    },
+                    "newPricePerShare": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,16}(?:\\.\\d{0,2})?$"
+                    }
+                },
+                "required": [
+                    "actionId",
+                    "newMinQuantity",
+                    "newPricePerShare",
+                    "newQuantity",
+                    "ownerAccountUuid"
+                ]
+            },
+            "OrderActionModifyResult": {
+                "type": "object",
+                "properties": {
+                    "kind": {
+                        "$ref": "#/components/schemas/OrderActionModifyResultKindEnum"
+                    },
+                    "modificationCount": {
+                        "type": "integer"
+                    },
+                    "changes": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/OrderActionChange"
+                        }
+                    }
+                },
+                "required": [
+                    "changes",
+                    "kind",
+                    "modificationCount"
+                ]
+            },
+            "OrderActionModifyResultKindEnum": {
+                "enum": [
+                    "modify"
+                ],
+                "type": "string",
+                "description": "* `modify` - modify"
+            },
+            "OrderActionRefusal": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "$ref": "#/components/schemas/OrderActionRefusalCodeEnum"
+                    },
+                    "detail": {
+                        "type": "string"
+                    },
+                    "httpStatus": {
+                        "$ref": "#/components/schemas/HttpStatusEnum"
+                    }
+                },
+                "required": [
+                    "code",
+                    "detail",
+                    "httpStatus"
+                ]
+            },
+            "OrderActionRefusalCodeEnum": {
+                "enum": [
+                    "order_cancellation_failed",
+                    "order_modification_failed",
+                    "order_modification_conflict"
+                ],
+                "type": "string",
+                "description": "* `order_cancellation_failed` - order_cancellation_failed\n* `order_modification_failed` - order_modification_failed\n* `order_modification_conflict` - order_modification_conflict"
+            },
+            "OrderActionReview": {
+                "type": "object",
+                "properties": {
+                    "token": {
+                        "$ref": "#/components/schemas/OrderActionToken"
+                    },
+                    "currentValues": {
+                        "$ref": "#/components/schemas/OrderActionCurrentValues"
+                    }
+                },
+                "required": [
+                    "currentValues",
+                    "token"
+                ]
+            },
+            "OrderActionSubmission": {
+                "type": "object",
+                "properties": {
+                    "protocolVersion": {
+                        "type": "integer"
+                    },
+                    "actionId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "ownerAccountUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "orderUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "walletUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "tokenUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "walletAddress": {
+                        "type": "string"
+                    },
+                    "purpose": {
+                        "$ref": "#/components/schemas/OrderActionSubmissionPurposeEnum"
+                    },
+                    "status": {
+                        "$ref": "#/components/schemas/OrderActionSubmissionStatusEnum"
+                    },
+                    "intent": {
+                        "$ref": "#/components/schemas/OrderActionIntent"
+                    },
+                    "review": {
+                        "$ref": "#/components/schemas/OrderActionReview"
+                    },
+                    "order": {
+                        "$ref": "#/components/schemas/SubmissionOrder"
+                    },
+                    "result": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/OrderActionAppliedResult"
+                            }
+                        ],
+                        "nullable": true,
+                        "readOnly": true
+                    },
+                    "refusal": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/OrderActionRefusal"
+                            }
+                        ],
+                        "nullable": true
+                    },
+                    "challenge": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/OrderActionChallenge"
+                            }
+                        ],
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "actionId",
+                    "challenge",
+                    "intent",
+                    "order",
+                    "orderUuid",
+                    "ownerAccountUuid",
+                    "protocolVersion",
+                    "purpose",
+                    "refusal",
+                    "result",
+                    "review",
+                    "status",
+                    "tokenUuid",
+                    "walletAddress",
+                    "walletUuid"
+                ]
+            },
+            "OrderActionSubmissionPurposeEnum": {
+                "enum": [
+                    "cancel",
+                    "modify"
+                ],
+                "type": "string",
+                "description": "* `cancel` - Cancel\n* `modify` - Modify"
+            },
+            "OrderActionSubmissionStatusEnum": {
+                "enum": [
+                    "pending",
+                    "applied",
+                    "refused"
+                ],
+                "type": "string",
+                "description": "* `pending` - Pending\n* `applied` - Applied\n* `refused` - Refused"
+            },
+            "OrderActionToken": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string"
+                    },
+                    "symbol": {
+                        "type": "string"
+                    },
+                    "contractAddress": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "contractAddress",
+                    "name",
+                    "symbol"
+                ]
+            },
+            "OrderActionValues": {
+                "type": "object",
+                "properties": {
+                    "quantity": {
+                        "type": "string",
+                        "pattern": "^[1-9][0-9]*$"
+                    },
+                    "minQuantity": {
+                        "type": "string",
+                        "pattern": "^(0|[1-9][0-9]*)$"
+                    },
+                    "pricePerShare": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,16}(?:\\.\\d{0,2})?$"
+                    }
+                },
+                "required": [
+                    "minQuantity",
+                    "pricePerShare",
+                    "quantity"
+                ]
+            },
             "OrderBook": {
                 "type": "object",
                 "properties": {
@@ -14476,80 +15596,6 @@
                 ],
                 "type": "string",
                 "description": "* `order_create` - order_create"
-            },
-            "OrderModificationMessageResponse": {
-                "type": "object",
-                "properties": {
-                    "orderUuid": {
-                        "type": "string",
-                        "format": "uuid"
-                    },
-                    "digest": {
-                        "type": "string"
-                    },
-                    "domain": {
-                        "type": "object",
-                        "additionalProperties": {}
-                    },
-                    "types": {
-                        "type": "object",
-                        "additionalProperties": {}
-                    },
-                    "message": {
-                        "type": "object",
-                        "additionalProperties": {}
-                    },
-                    "expiresAt": {
-                        "type": "string",
-                        "format": "date-time"
-                    },
-                    "purpose": {
-                        "$ref": "#/components/schemas/OrderModificationMessageResponsePurposeEnum"
-                    },
-                    "currentValues": {
-                        "$ref": "#/components/schemas/CurrentOrderValues"
-                    },
-                    "newValues": {
-                        "$ref": "#/components/schemas/OrderModificationValues"
-                    }
-                },
-                "required": [
-                    "currentValues",
-                    "digest",
-                    "domain",
-                    "expiresAt",
-                    "message",
-                    "newValues",
-                    "orderUuid",
-                    "purpose",
-                    "types"
-                ]
-            },
-            "OrderModificationMessageResponsePurposeEnum": {
-                "enum": [
-                    "order_modify"
-                ],
-                "type": "string",
-                "description": "* `order_modify` - order_modify"
-            },
-            "OrderModificationValues": {
-                "type": "object",
-                "properties": {
-                    "quantity": {
-                        "type": "integer"
-                    },
-                    "minQuantity": {
-                        "type": "integer"
-                    },
-                    "pricePerShare": {
-                        "type": "string"
-                    }
-                },
-                "required": [
-                    "minQuantity",
-                    "pricePerShare",
-                    "quantity"
-                ]
             },
             "OrderSubmission": {
                 "type": "object",
@@ -16953,6 +17999,268 @@
                 "type": "string",
                 "description": "* `investor` - Investor\n* `company` - Company\n* `both` - Both"
             },
+            "SettlementApprovalBroadcast": {
+                "type": "object",
+                "properties": {
+                    "swapUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "ownerAccountUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "walletUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "settlementDigest": {
+                        "type": "string",
+                        "pattern": "^0x[0-9a-f]{64}$"
+                    },
+                    "signedTransaction": {
+                        "type": "string",
+                        "maxLength": 32768,
+                        "pattern": "^(0x)?[0-9a-fA-F]+$"
+                    }
+                },
+                "required": [
+                    "ownerAccountUuid",
+                    "settlementDigest",
+                    "signedTransaction",
+                    "swapUuid",
+                    "walletUuid"
+                ]
+            },
+            "SettlementApprovalReceipt": {
+                "type": "object",
+                "properties": {
+                    "swapUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "orderUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "ownerAccountUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "walletUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "settlementDigest": {
+                        "type": "string"
+                    },
+                    "userRole": {
+                        "$ref": "#/components/schemas/UserRoleEnum"
+                    },
+                    "txHash": {
+                        "type": "string"
+                    },
+                    "blockNumber": {
+                        "type": "integer",
+                        "nullable": true
+                    },
+                    "gasUsed": {
+                        "type": "integer",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "blockNumber",
+                    "gasUsed",
+                    "orderUuid",
+                    "ownerAccountUuid",
+                    "settlementDigest",
+                    "swapUuid",
+                    "txHash",
+                    "userRole",
+                    "walletUuid"
+                ]
+            },
+            "SettlementApprovalStatus": {
+                "type": "object",
+                "properties": {
+                    "swapUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "orderUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "ownerAccountUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "walletUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "settlementDigest": {
+                        "type": "string"
+                    },
+                    "userRole": {
+                        "$ref": "#/components/schemas/UserRoleEnum"
+                    },
+                    "tokenAddress": {
+                        "type": "string"
+                    },
+                    "tokenSymbol": {
+                        "type": "string"
+                    },
+                    "requiredAmount": {
+                        "type": "string"
+                    },
+                    "currentAllowance": {
+                        "type": "string"
+                    },
+                    "needsApproval": {
+                        "type": "boolean"
+                    },
+                    "spender": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "currentAllowance",
+                    "needsApproval",
+                    "orderUuid",
+                    "ownerAccountUuid",
+                    "requiredAmount",
+                    "settlementDigest",
+                    "spender",
+                    "swapUuid",
+                    "tokenAddress",
+                    "tokenSymbol",
+                    "userRole",
+                    "walletUuid"
+                ]
+            },
+            "SettlementApprovalTransaction": {
+                "type": "object",
+                "properties": {
+                    "swapUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "orderUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "ownerAccountUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "walletUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "settlementDigest": {
+                        "type": "string"
+                    },
+                    "userRole": {
+                        "$ref": "#/components/schemas/UserRoleEnum"
+                    },
+                    "needsApproval": {
+                        "type": "boolean"
+                    },
+                    "transaction": {
+                        "$ref": "#/components/schemas/ApprovalTransaction"
+                    },
+                    "description": {
+                        "type": "string"
+                    },
+                    "tokenAddress": {
+                        "type": "string"
+                    },
+                    "tokenSymbol": {
+                        "type": "string"
+                    },
+                    "spender": {
+                        "type": "string"
+                    },
+                    "amount": {
+                        "type": "string"
+                    },
+                    "unlimited": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "amount",
+                    "description",
+                    "needsApproval",
+                    "orderUuid",
+                    "ownerAccountUuid",
+                    "settlementDigest",
+                    "spender",
+                    "swapUuid",
+                    "tokenAddress",
+                    "tokenSymbol",
+                    "transaction",
+                    "unlimited",
+                    "userRole",
+                    "walletUuid"
+                ]
+            },
+            "SettlementApprovalUncertain": {
+                "type": "object",
+                "properties": {
+                    "swapUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "orderUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "ownerAccountUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "walletUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "settlementDigest": {
+                        "type": "string"
+                    },
+                    "userRole": {
+                        "$ref": "#/components/schemas/UserRoleEnum"
+                    },
+                    "txHash": {
+                        "type": "string"
+                    },
+                    "code": {
+                        "$ref": "#/components/schemas/SettlementApprovalUncertainCodeEnum"
+                    },
+                    "detail": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "code",
+                    "detail",
+                    "orderUuid",
+                    "ownerAccountUuid",
+                    "settlementDigest",
+                    "swapUuid",
+                    "txHash",
+                    "userRole",
+                    "walletUuid"
+                ]
+            },
+            "SettlementApprovalUncertainCodeEnum": {
+                "enum": [
+                    "swap_approval_unconfirmed"
+                ],
+                "type": "string",
+                "description": "* `swap_approval_unconfirmed` - swap_approval_unconfirmed"
+            },
             "SettlementAsset": {
                 "type": "object",
                 "properties": {
@@ -16992,6 +18300,95 @@
                 ],
                 "type": "string",
                 "description": "* `bank_transfer` - Bank transfer\n* `stablecoin` - Stablecoin"
+            },
+            "SettlementSignature": {
+                "type": "object",
+                "properties": {
+                    "swapUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "ownerAccountUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "walletUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "settlementDigest": {
+                        "type": "string",
+                        "pattern": "^0x[0-9a-f]{64}$"
+                    },
+                    "signature": {
+                        "type": "string",
+                        "maxLength": 132,
+                        "minLength": 130
+                    },
+                    "signerAddress": {
+                        "type": "string",
+                        "pattern": "^0x[0-9a-fA-F]{40}$"
+                    }
+                },
+                "required": [
+                    "ownerAccountUuid",
+                    "settlementDigest",
+                    "signature",
+                    "signerAddress",
+                    "swapUuid",
+                    "walletUuid"
+                ]
+            },
+            "SettlementSufficientApproval": {
+                "type": "object",
+                "properties": {
+                    "swapUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "orderUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "ownerAccountUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "walletUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "settlementDigest": {
+                        "type": "string"
+                    },
+                    "userRole": {
+                        "$ref": "#/components/schemas/UserRoleEnum"
+                    },
+                    "needsApproval": {
+                        "type": "boolean"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "currentAllowance": {
+                        "type": "string"
+                    },
+                    "requiredAmount": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "currentAllowance",
+                    "message",
+                    "needsApproval",
+                    "orderUuid",
+                    "ownerAccountUuid",
+                    "requiredAmount",
+                    "settlementDigest",
+                    "swapUuid",
+                    "userRole",
+                    "walletUuid"
+                ]
             },
             "ShareIssuanceCreate": {
                 "type": "object",
@@ -18049,6 +19446,24 @@
                     "walletAddress"
                 ]
             },
+            "SubmitSignature": {
+                "type": "object",
+                "properties": {
+                    "signature": {
+                        "type": "string",
+                        "maxLength": 132,
+                        "minLength": 130
+                    },
+                    "signerAddress": {
+                        "type": "string",
+                        "maxLength": 42
+                    }
+                },
+                "required": [
+                    "signature",
+                    "signerAddress"
+                ]
+            },
             "SubscriptionCreate": {
                 "type": "object",
                 "properties": {
@@ -18454,6 +19869,16 @@
                 "type": "string",
                 "description": "* `base` - base\n* `bitcoin` - bitcoin\n* `ethereum` - ethereum"
             },
+            "SwapApprovalStatus": {
+                "oneOf": [
+                    {
+                        "$ref": "#/components/schemas/ApprovalStatusResponse"
+                    },
+                    {
+                        "$ref": "#/components/schemas/SettlementApprovalStatus"
+                    }
+                ]
+            },
             "SwapOrderDetail": {
                 "type": "object",
                 "properties": {
@@ -18521,7 +19946,19 @@
                     "orderHash": {
                         "type": "string",
                         "readOnly": true,
-                        "description": "EIP-712 typed data hash"
+                        "description": "V1 SwapOrder struct hash, excluding the domain"
+                    },
+                    "settlementProtocolVersion": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "settlementContext": {
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "settlementDigest": {
+                        "type": "string",
+                        "readOnly": true
                     },
                     "sellerHasSigned": {
                         "type": "boolean",
@@ -18598,6 +20035,9 @@
                     "sellOrderUuid",
                     "sellerAddress",
                     "sellerHasSigned",
+                    "settlementContext",
+                    "settlementDigest",
+                    "settlementProtocolVersion",
                     "shareAmount",
                     "shareTokenAddress",
                     "shareTokenName",
@@ -18621,6 +20061,32 @@
                     },
                     "hasSigned": {
                         "type": "boolean"
+                    },
+                    "canSign": {
+                        "type": "boolean"
+                    },
+                    "admissionRefusal": {
+                        "type": "string",
+                        "nullable": true
+                    },
+                    "orderUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "ownerAccountUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "walletUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "swapUuid": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "settlementDigest": {
+                        "type": "string"
                     }
                 },
                 "required": [
@@ -18743,6 +20209,16 @@
                 "type": "string",
                 "description": "* `created` - Created\n* `seller_signed` - Seller Signed\n* `buyer_signed` - Buyer Signed\n* `ready` - Ready for Execution\n* `executing` - Executing\n* `completed` - Completed\n* `failed` - Failed\n* `expired` - Expired"
             },
+            "SwapSignatureRequest": {
+                "anyOf": [
+                    {
+                        "$ref": "#/components/schemas/SubmitSignature"
+                    },
+                    {
+                        "$ref": "#/components/schemas/SettlementSignature"
+                    }
+                ]
+            },
             "ThemeEnum": {
                 "enum": [
                     "dark",
@@ -18750,6 +20226,13 @@
                 ],
                 "type": "string",
                 "description": "* `dark` - Dark\n* `light` - Light"
+            },
+            "ToStatusEnum": {
+                "enum": [
+                    "cancelled"
+                ],
+                "type": "string",
+                "description": "* `cancelled` - cancelled"
             },
             "TokenDeploymentStarted": {
                 "type": "object",
@@ -19385,23 +20868,6 @@
                     "totalValue",
                     "uuid",
                     "walletAddress"
-                ]
-            },
-            "TransferOrderModified": {
-                "type": "object",
-                "properties": {
-                    "order": {
-                        "$ref": "#/components/schemas/TransferOrderDetail"
-                    },
-                    "modificationCount": {
-                        "type": "integer"
-                    },
-                    "changes": {}
-                },
-                "required": [
-                    "changes",
-                    "modificationCount",
-                    "order"
                 ]
             },
             "TransferOrderStatusEnum": {

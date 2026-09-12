@@ -1,0 +1,374 @@
+{
+  "syntheticOnly": true,
+  "noExternalProviderOrBroadcast": true,
+  "signer": {
+    "mnemonic": "test test test test test test test test test test test junk",
+    "derivationPath": "m/44'/60'/0'/0/0",
+    "address": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+  },
+  "fixtures": [
+    {
+      "purpose": "cancel",
+      "context": {
+        "protocolVersion": 1,
+        "ownerAccountUuid": "c51da79f-2b22-46f7-ab88-940a499ea14f",
+        "orderUuid": "db2a511a-ffe0-431f-b26d-562b1c32ea31",
+        "walletUuid": "bbe2f0fb-d484-40a4-9421-07014f73cd75",
+        "tokenUuid": "857f892e-824e-439f-b6d5-d02d511d5c27",
+        "walletAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "domain": {
+          "name": "Ledova Trading",
+          "version": "1",
+          "chainId": 84532,
+          "verifyingContract": "0xC000000000000000000000000000000000000001"
+        },
+        "token": {
+          "name": "order-action shares",
+          "symbol": "DEP",
+          "contractAddress": "0xc000000000000000000000000000000000000001"
+        },
+        "currentValues": {
+          "orderType": "buy",
+          "quantity": "10",
+          "minQuantity": "0",
+          "pricePerShare": "2.50",
+          "filledQuantity": "0",
+          "remainingQuantity": "10",
+          "status": "open",
+          "modificationCount": 0,
+          "canCancel": true,
+          "canModify": true
+        }
+      },
+      "request": {
+        "action_id": "a40f408c-637d-439c-aeb2-4758d7b7a0f6",
+        "owner_account_uuid": "c51da79f-2b22-46f7-ab88-940a499ea14f"
+      },
+      "snapshot": {
+        "protocolVersion": 1,
+        "actionId": "a40f408c-637d-439c-aeb2-4758d7b7a0f6",
+        "ownerAccountUuid": "c51da79f-2b22-46f7-ab88-940a499ea14f",
+        "orderUuid": "db2a511a-ffe0-431f-b26d-562b1c32ea31",
+        "walletUuid": "bbe2f0fb-d484-40a4-9421-07014f73cd75",
+        "tokenUuid": "857f892e-824e-439f-b6d5-d02d511d5c27",
+        "walletAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "purpose": "cancel",
+        "status": "pending",
+        "intent": {
+          "domain": {
+            "name": "Ledova Trading",
+            "version": "1",
+            "chainId": 84532,
+            "verifyingContract": "0xC000000000000000000000000000000000000001"
+          },
+          "modifications": null
+        },
+        "review": {
+          "token": {
+            "name": "order-action shares",
+            "symbol": "DEP",
+            "contractAddress": "0xC000000000000000000000000000000000000001"
+          },
+          "currentValues": {
+            "orderType": "buy",
+            "quantity": "10",
+            "minQuantity": "0",
+            "pricePerShare": "2.50",
+            "filledQuantity": "0",
+            "remainingQuantity": "10",
+            "status": "open",
+            "modificationCount": 0,
+            "canCancel": true,
+            "canModify": true
+          }
+        },
+        "order": {
+          "uuid": "db2a511a-ffe0-431f-b26d-562b1c32ea31",
+          "token": "857f892e-824e-439f-b6d5-d02d511d5c27",
+          "tokenSymbol": "DEP",
+          "tokenName": "order-action shares",
+          "tokenContractAddress": "0xc000000000000000000000000000000000000001",
+          "orderType": "buy",
+          "orderTypeDisplay": "Buy",
+          "status": "open",
+          "statusDisplay": "Open",
+          "walletAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+          "quantity": 10,
+          "minQuantity": 0,
+          "filledQuantity": 0,
+          "remainingQuantity": 10,
+          "pricePerShare": "2.50",
+          "totalValue": "25.00",
+          "remainingValue": "25.00",
+          "matchedOrderUuid": null,
+          "txHash": "",
+          "completedAt": null,
+          "errorMessage": "",
+          "modificationCount": 0,
+          "lastModifiedAt": null,
+          "canBeModified": true,
+          "createdAt": "2026-09-10T16:35:44.868962Z",
+          "updatedAt": "2026-09-10T16:35:44.868970Z"
+        },
+        "result": null,
+        "refusal": null,
+        "challenge": {
+          "purpose": "order_cancel",
+          "digest": "0x5042f4e98bce8fa1542d9f396231b83e9756d149e078c6b961f8cc8cbdd5e80b",
+          "domain": {
+            "name": "Ledova Trading",
+            "version": "1",
+            "chainId": 84532,
+            "verifyingContract": "0xC000000000000000000000000000000000000001"
+          },
+          "types": {
+            "OrderCancelV1": [
+              {
+                "name": "actionId",
+                "type": "string"
+              },
+              {
+                "name": "protocolVersion",
+                "type": "uint256"
+              },
+              {
+                "name": "ownerAccountUuid",
+                "type": "string"
+              },
+              {
+                "name": "walletUuid",
+                "type": "string"
+              },
+              {
+                "name": "tokenUuid",
+                "type": "string"
+              },
+              {
+                "name": "orderUuid",
+                "type": "string"
+              },
+              {
+                "name": "wallet",
+                "type": "address"
+              },
+              {
+                "name": "nonce",
+                "type": "uint256"
+              },
+              {
+                "name": "deadline",
+                "type": "uint256"
+              }
+            ]
+          },
+          "message": {
+            "actionId": "a40f408c-637d-439c-aeb2-4758d7b7a0f6",
+            "protocolVersion": "1",
+            "ownerAccountUuid": "c51da79f-2b22-46f7-ab88-940a499ea14f",
+            "walletUuid": "bbe2f0fb-d484-40a4-9421-07014f73cd75",
+            "tokenUuid": "857f892e-824e-439f-b6d5-d02d511d5c27",
+            "orderUuid": "db2a511a-ffe0-431f-b26d-562b1c32ea31",
+            "wallet": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+            "nonce": "3455300351873628654",
+            "deadline": "1789058444"
+          },
+          "expiresAt": "2026-09-10T16:40:44.888576+00:00"
+        }
+      },
+      "signature": "0x8a1ba55b2b528aab856d87841fcf18df0f52f58dee0c58b0efc6aa49a0e51fa717148ab5e23b5e6859822e574faf8ee3f01aa0d53f31c5b1c9b7fcfbddb908ed1c"
+    },
+    {
+      "purpose": "modify",
+      "context": {
+        "protocolVersion": 1,
+        "ownerAccountUuid": "c51da79f-2b22-46f7-ab88-940a499ea14f",
+        "orderUuid": "db2a511a-ffe0-431f-b26d-562b1c32ea31",
+        "walletUuid": "bbe2f0fb-d484-40a4-9421-07014f73cd75",
+        "tokenUuid": "857f892e-824e-439f-b6d5-d02d511d5c27",
+        "walletAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "domain": {
+          "name": "Ledova Trading",
+          "version": "1",
+          "chainId": 84532,
+          "verifyingContract": "0xC000000000000000000000000000000000000001"
+        },
+        "token": {
+          "name": "order-action shares",
+          "symbol": "DEP",
+          "contractAddress": "0xc000000000000000000000000000000000000001"
+        },
+        "currentValues": {
+          "orderType": "buy",
+          "quantity": "9007199254740993",
+          "minQuantity": "9007199254740992",
+          "pricePerShare": "2.50",
+          "filledQuantity": "0",
+          "remainingQuantity": "9007199254740993",
+          "status": "open",
+          "modificationCount": 0,
+          "canCancel": true,
+          "canModify": true
+        }
+      },
+      "request": {
+        "action_id": "1aac696b-ded5-4fd5-afc6-64ad4ce2195c",
+        "owner_account_uuid": "c51da79f-2b22-46f7-ab88-940a499ea14f",
+        "new_quantity": "9007199254740993",
+        "new_min_quantity": "9007199254740992",
+        "new_price_per_share": "2.51"
+      },
+      "snapshot": {
+        "protocolVersion": 1,
+        "actionId": "1aac696b-ded5-4fd5-afc6-64ad4ce2195c",
+        "ownerAccountUuid": "c51da79f-2b22-46f7-ab88-940a499ea14f",
+        "orderUuid": "db2a511a-ffe0-431f-b26d-562b1c32ea31",
+        "walletUuid": "bbe2f0fb-d484-40a4-9421-07014f73cd75",
+        "tokenUuid": "857f892e-824e-439f-b6d5-d02d511d5c27",
+        "walletAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "purpose": "modify",
+        "status": "pending",
+        "intent": {
+          "domain": {
+            "name": "Ledova Trading",
+            "version": "1",
+            "chainId": 84532,
+            "verifyingContract": "0xC000000000000000000000000000000000000001"
+          },
+          "modifications": {
+            "quantity": "9007199254740993",
+            "minQuantity": "9007199254740992",
+            "pricePerShare": "2.51"
+          }
+        },
+        "review": {
+          "token": {
+            "name": "order-action shares",
+            "symbol": "DEP",
+            "contractAddress": "0xC000000000000000000000000000000000000001"
+          },
+          "currentValues": {
+            "orderType": "buy",
+            "quantity": "9007199254740993",
+            "minQuantity": "9007199254740992",
+            "pricePerShare": "2.50",
+            "filledQuantity": "0",
+            "remainingQuantity": "9007199254740993",
+            "status": "open",
+            "modificationCount": 0,
+            "canCancel": true,
+            "canModify": true
+          }
+        },
+        "order": {
+          "uuid": "db2a511a-ffe0-431f-b26d-562b1c32ea31",
+          "token": "857f892e-824e-439f-b6d5-d02d511d5c27",
+          "tokenSymbol": "DEP",
+          "tokenName": "order-action shares",
+          "tokenContractAddress": "0xc000000000000000000000000000000000000001",
+          "orderType": "buy",
+          "orderTypeDisplay": "Buy",
+          "status": "open",
+          "statusDisplay": "Open",
+          "walletAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+          "quantity": 9007199254740993,
+          "minQuantity": 9007199254740992,
+          "filledQuantity": 0,
+          "remainingQuantity": 9007199254740993,
+          "pricePerShare": "2.50",
+          "totalValue": "22517998136852482.50",
+          "remainingValue": "22517998136852482.50",
+          "matchedOrderUuid": null,
+          "txHash": "",
+          "completedAt": null,
+          "errorMessage": "",
+          "modificationCount": 0,
+          "lastModifiedAt": null,
+          "canBeModified": true,
+          "createdAt": "2026-09-10T16:35:44.868962Z",
+          "updatedAt": "2026-09-10T16:35:44.868970Z"
+        },
+        "result": null,
+        "refusal": null,
+        "challenge": {
+          "purpose": "order_modify",
+          "digest": "0x359c367fadf5dd5ad775b306ffbd0e180077f394c5d894b015ce78cb30a4c077",
+          "domain": {
+            "name": "Ledova Trading",
+            "version": "1",
+            "chainId": 84532,
+            "verifyingContract": "0xC000000000000000000000000000000000000001"
+          },
+          "types": {
+            "OrderModifyV1": [
+              {
+                "name": "actionId",
+                "type": "string"
+              },
+              {
+                "name": "protocolVersion",
+                "type": "uint256"
+              },
+              {
+                "name": "ownerAccountUuid",
+                "type": "string"
+              },
+              {
+                "name": "walletUuid",
+                "type": "string"
+              },
+              {
+                "name": "tokenUuid",
+                "type": "string"
+              },
+              {
+                "name": "orderUuid",
+                "type": "string"
+              },
+              {
+                "name": "newQuantity",
+                "type": "uint256"
+              },
+              {
+                "name": "newMinQuantity",
+                "type": "uint256"
+              },
+              {
+                "name": "newPricePerShare",
+                "type": "string"
+              },
+              {
+                "name": "wallet",
+                "type": "address"
+              },
+              {
+                "name": "nonce",
+                "type": "uint256"
+              },
+              {
+                "name": "deadline",
+                "type": "uint256"
+              }
+            ]
+          },
+          "message": {
+            "actionId": "1aac696b-ded5-4fd5-afc6-64ad4ce2195c",
+            "protocolVersion": "1",
+            "ownerAccountUuid": "c51da79f-2b22-46f7-ab88-940a499ea14f",
+            "walletUuid": "bbe2f0fb-d484-40a4-9421-07014f73cd75",
+            "tokenUuid": "857f892e-824e-439f-b6d5-d02d511d5c27",
+            "orderUuid": "db2a511a-ffe0-431f-b26d-562b1c32ea31",
+            "newQuantity": "9007199254740993",
+            "newMinQuantity": "9007199254740992",
+            "newPricePerShare": "2.51",
+            "wallet": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+            "nonce": "5473364447460531873",
+            "deadline": "1789058444"
+          },
+          "expiresAt": "2026-09-10T16:40:44.908410+00:00"
+        }
+      },
+      "signature": "0x8b18ce6d711af7964c0b2ba0026680ea325fc253e8239250f0236959b5ead34468aec8178448bd50544a1f4e7d2df959990a5467dcc81e4a5dc90069fa59478d1c"
+    }
+  ],
+  "sourceFixtureSha256": "efb1df078b2e9becb0b83bde3c429bf14f57e39d402a0b5855a529fefa973184"
+}

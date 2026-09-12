@@ -62,12 +62,12 @@ class SwapSignaturesUseTheFreshStateTest(TestCase):
         self.service.submit_signature(self.swap, self.seller_signature, SELLER.address)
         self.assertEqual(persisted_outcome(self.swap), before)
 
-    def test_terms_changed_during_verification_are_not_signed(self, _publish):
+    def test_a_stale_in_memory_snapshot_during_verification_is_not_signed(self, _publish):
         verify = self.service.verify_signature
 
         def change(*args):
             valid = verify(*args)
-            SwapOrder.objects.filter(pk=self.swap.pk).update(share_amount=self.swap.share_amount + 1)
+            args[0].share_amount += 1
             return valid
 
         self.service.verify_signature = change
@@ -185,23 +185,24 @@ class ReceiptUpdatesBelongToOneCurrentClaimTest(TestCase):
             self.assertEqual(persisted_outcome(self.swap), before)
 
     def test_an_expired_send_and_generic_monitor_failure_remain_reserved_without_a_receipt(self, _publish):
-        SwapOrder.objects.filter(pk=self.swap.pk).update(expires_at=timezone.now() - timedelta(days=1))
         BlockchainTransaction.objects.filter(pk=self.transaction.pk).update(
             status=TransactionStatus.FAILED, error_message="Transaction timed out after 24 hours"
         )
         self.swap.refresh_from_db()
         self.service.chain_client.receipt_even_if_reverted.return_value = None
         before = persisted_outcome(self.swap)
-        self.assertIsNone(self.service.resolve_executing_swap(self.swap))
+        with patch("django.utils.timezone.now", return_value=self.swap.expires_at + timedelta(days=1)):
+            self.assertIsNone(self.service.resolve_executing_swap(self.swap))
         self.assertEqual(persisted_outcome(self.swap), before)
 
-    def test_a_used_nonce_without_a_recorded_hash_does_not_complete_legacy_history(self, _publish):
-        SwapOrder.objects.filter(pk=self.swap.pk).update(tx_hash="", expires_at=timezone.now() - timedelta(days=1))
+    def test_a_used_nonce_without_a_recorded_hash_does_not_complete_the_claim(self, _publish):
+        SwapOrder.objects.filter(pk=self.swap.pk).update(tx_hash="")
         self.swap.refresh_from_db()
         self.service.is_nonce_used = Mock(return_value=True)
         before = persisted_outcome(self.swap)
-        self.assertFalse(self.service.chain_says_this_swap_executed(self.swap))
-        self.assertIsNone(self.service.resolve_executing_swap(self.swap))
+        with patch("django.utils.timezone.now", return_value=self.swap.expires_at + timedelta(days=1)):
+            self.assertFalse(self.service.chain_says_this_swap_executed(self.swap))
+            self.assertIsNone(self.service.resolve_executing_swap(self.swap))
         self.assertEqual(persisted_outcome(self.swap), before)
         self.service.chain_client.receipt_even_if_reverted.assert_not_called()
 
@@ -226,7 +227,8 @@ class ExecutionAdmissionUsesTheCurrentRowTest(TransactionTestCase):
         self.assertEqual(BlockchainTransaction.objects.filter(related_uuid=self.swap.pk).count(), 1)
 
     def test_ready_after_its_signed_deadline_cannot_claim(self):
-        SwapOrder.objects.filter(pk=self.swap.pk).update(expires_at=timezone.now() - timedelta(seconds=1))
-        with self.assertRaises(SwapExpiredException):
+        with patch(
+            "django.utils.timezone.now", return_value=self.swap.expires_at + timedelta(seconds=1)
+        ), self.assertRaises(SwapExpiredException):
             self.service.execute_swap(self.swap)
         self.assertFalse(BlockchainTransaction.objects.filter(related_uuid=self.swap.pk).exists())

@@ -71,8 +71,11 @@ class SwapOrder(DerivesWalletsFromOrders, BaseModel):
     order_hash = models.CharField(
         max_length=66,
         unique=True,
-        help_text="EIP-712 typed data hash",
+        help_text="V1 SwapOrder struct hash, excluding the domain",
     )
+    settlement_protocol_version = models.PositiveSmallIntegerField(default=1, db_default=1, editable=False)
+    settlement_context = models.JSONField(null=True, blank=True, editable=False)
+    settlement_digest = models.CharField(max_length=66, blank=True, default="", editable=False)
 
     seller_signature = models.TextField(
         blank=True,
@@ -116,6 +119,17 @@ class SwapOrder(DerivesWalletsFromOrders, BaseModel):
             models.CheckConstraint(condition=models.Q(payment_amount__gt=0), name="swap_order_positive_payment"),
             models.CheckConstraint(
                 condition=models.Q(status__in=SwapOrderStatus.values), name="swap_order_known_status"
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(settlement_protocol_version=0, settlement_context__isnull=True, settlement_digest="")
+                    | models.Q(
+                        settlement_protocol_version=1,
+                        settlement_context__isnull=False,
+                        settlement_digest__regex=r"^0x[0-9a-f]{64}$",
+                    )
+                ),
+                name="swap_order_settlement_context_present",
             ),
         ]
         indexes = [

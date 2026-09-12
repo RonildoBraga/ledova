@@ -7,6 +7,7 @@ from eth_account.messages import encode_typed_data
 from web3 import Web3
 
 from blockchain.models import BlockchainTransaction, TransactionStatus, TransactionType
+from shared.tests.settlement import save_swap_with_context
 from shared.tests.tenants import make_tenant
 from tokens.models import (
     SwapOrder,
@@ -16,6 +17,10 @@ from tokens.models import (
     TransferOrderType,
 )
 from tokens.services import AtomicSwapService
+from tokens.services.settlement_context import (
+    recorded_settlement_context,
+    settlement_execution_arguments,
+)
 from wallets.models import Wallet
 
 CONTRACT = "0x" + "9d" * 20
@@ -30,6 +35,8 @@ REVERTED = {"status": 0, "blockNumber": 8, "blockHash": "0x" + "fa" * 32, "gasUs
 def swap_service():
     service = object.__new__(AtomicSwapService)
     service.chain_client = Mock(chain_id=settings.BLOCKCHAIN_CHAIN_ID)
+    service.chain_client.assert_expected_chain = Mock(return_value=settings.BLOCKCHAIN_CHAIN_ID)
+    service.chain_client.w3.eth.chain_id = settings.BLOCKCHAIN_CHAIN_ID
     service.chain_client.to_checksum_address.side_effect = Web3.to_checksum_address
     service.whitelist_service = Mock()
     return service
@@ -66,9 +73,8 @@ def make_swap(label, *, ready=False):
         nonce=secrets.randbits(63),
         order_hash="0x" + secrets.token_hex(32),
     )
-    swap.save()
+    save_swap_with_context(swap)
     service = swap_service()
-    swap.order_hash = service._compute_order_hash(swap)
     if ready:
         signable = encode_typed_data(full_message=service.get_typed_data(swap))
         swap.seller_signature = SELLER.sign_message(signable).signature.hex()
@@ -84,8 +90,9 @@ def transaction_for(swap, tx_hash=TX_HASH, status=TransactionStatus.SUBMITTED):
         status=status,
         tx_hash=tx_hash,
         from_address=SELLER.address,
-        to_address=CONTRACT,
+        to_address=recorded_settlement_context(swap)["typed_data"]["domain"]["verifyingContract"],
         function_name="executeSwap",
+        function_args=settlement_execution_arguments(swap),
         related_model="tokens.SwapOrder",
         related_uuid=swap.pk,
     )

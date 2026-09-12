@@ -19,8 +19,10 @@ from shared.db import atomic
 from shared.tests.tenants import make_tenant
 from tokens.models import SwapOrder, SwapOrderStatus, TransferOrder, TransferOrderType
 from tokens.services.trading_locks import lock_orders
-from tokens.services.trading_order_cancel import cancel_signed_order
-from tokens.services.trading_order_service import TradingOrderService
+from tokens.tests.order_action_fixtures import (
+    cancel_for_order,
+    cancel_message_for_order,
+)
 from tokens.tests.swap_state_fixtures import (
     BUYER,
     CONFIRMED,
@@ -104,7 +106,7 @@ class SwapWorkersUseOneCurrentClaimTest(TransactionTestCase):
         self.swap = make_swap("process-swap", ready=True)
         for path in (
             "tokens.services.atomic_swap_service.publish_trading_event",
-            "tokens.services.trading_order_cancel.publish_trading_event",
+            "tokens.events.publish_trading_event",
         ):
             publisher = patch(path)
             publisher.start()
@@ -256,13 +258,13 @@ class SwapWorkersUseOneCurrentClaimTest(TransactionTestCase):
                 swap_service()._record_receipt(self.swap, self.swap.transaction, TX_HASH, first_receipt)
                 if first_receipt == REVERTED:
                     order = TransferOrder.objects.get(pk=self.swap.sell_order_id)
-                    issued = TradingOrderService.get_order_cancel_message(order)
+                    issued = cancel_message_for_order(order.owner_account.user_profiles.first().user, order)
                     signature = SELLER.sign_message(
                         encode_typed_data(
                             domain_data=issued["domain"], message_types=issued["types"], message_data=issued["message"]
                         )
-                    ).signature.hex()
-                    cancel_signed_order(order, issued["digest"], signature)
+                    ).signature.to_0x_hex()
+                    cancel_for_order(order.owner_account.user_profiles.first().user, order, issued["digest"], signature)
                 before = persisted_outcome(self.swap)
                 child.send("apply")
                 self.assertIsNone(child.done()["result"])
@@ -282,9 +284,8 @@ class SwapWorkersUseOneCurrentClaimTest(TransactionTestCase):
         self.assertEqual(persisted_outcome(self.swap), before)
 
     def test_order_locks_use_primary_key_order_while_selection_keeps_best_price(self):
-        tenant = make_tenant("match-locks")
+        tenant = make_tenant("match-locks", with_swap=False)
         template = TransferOrder.objects.filter(pk=tenant.order.pk).values().get()
-        tenant.swap.delete()
         tenant.order.cancel()
         wallet = Wallet.objects.create(user_account=tenant.account, address=BUYER.address, chain="base")
         incoming = TransferOrder.objects.create(

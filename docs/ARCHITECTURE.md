@@ -1026,20 +1026,59 @@ principal, and a policy on every tenant table, while `visible_to_user` still run
   undo, turning a spent challenge back into a replayable one. With no connection
   reuse there is no stale principal to leak, so the `RESET` in the middleware's
   `finally` is hygiene rather than the load-bearing part.
-- **Order modification spends survive business refusals.** A valid challenge is
-  checked in a short transaction before any advisory balance RPC. The order lock
-  and a second challenge check follow the RPC, so a concurrent fill, cancellation,
-  expiry or spend is seen before writing. `validate_modifications` receives the
-  advisory balance; it does not call the chain. `act_under_row_lock` commits a
-  business refusal's spend before raising it. A provider failure before this
-  block leaves the signature retryable. The scoped transaction tests exercise
-  this with real signatures and no surrounding test transaction.
+- **Cancel and modify actions have their own durable identity.** A read-only
+  action-context request returns canonical decimal strings for the current
+  quantities and price, and allocates no journal or challenge. A deliberate
+  action receives a fresh account-scoped UUID that retries keep, even when a
+  second action chooses equal terms. `tokens/0038` records the order, account,
+  wallet, token, purpose, domain and full replacement values immutably, and
+  `OrderCancelV1` and `OrderModifyV1` bind them in the signature. The journal
+  participates in account RLS, and PostgreSQL guards its identity, challenge
+  linkage and terminal outcome.
+- **Provider reads stay outside action transactions.** Registration commits a
+  pending intent before issuance preflight. Execution authenticates and checks
+  the pending challenge in a short transaction, then performs any advisory
+  balance RPC. A final durable transaction rechecks authorization, domain,
+  challenge and current business state, and commits the spend, the order
+  changes, the modification log and the outcome together. Only the existing
+  cancellation and modification business refusals at that decision record a
+  refusal; issuance checks do not. Failing before the durable commit leaves the
+  action pending and unspent, and a lost response after it recovers the recorded
+  outcome. Enclosing transactions and disabled autocommit are refused.
+- **Recovery returns history alongside current state.** An authorized terminal
+  action is read before pending-only credentials or current deployment are
+  checked, through the owned plain order and, where the token is now hidden,
+  recorded display metadata rather than access to the token. The original result
+  stays immutable while the order it names can change, and a terminal replay
+  mutates nothing and publishes nothing. Events use the existing after-commit
+  mechanism; there is no outbox or exactly-once delivery guarantee.
 - **Issued trading intent is immutable.** `tokens/0035` adds database bounds for
   order/swap amounts and their existing status/type values. Partial settlement
   may still leave an OPEN order with nonzero fills, and a minimum fill may exceed
   its remaining quantity. A PostgreSQL trigger freezes each signing challenge's
   issued envelope and prevents resetting or replacing its first consumption.
   The existing purge of expired, unspent challenges remains allowed.
+- **New swaps retain their original settlement context.** Matching captures the
+  V1 domain, addresses, exact integer strings, deadline, scales, display and
+  order/account/wallet/asset/deployment identities without provider I/O. The full
+  EIP-712 digest is separate from the unchanged domain-free `order_hash`.
+  `tokens/0039` preserves existing rows as legacy and protects new contexts and
+  their identity fields against replacement or deletion on PostgreSQL. Exact
+  scoped reads recover the named swap; new signatures and approvals recheck the
+  caller's current verified wallet/account/order binding and captured context.
+  Either captured party may supply the signature through an authorized
+  participant. `tokens/0040` freezes the parent order's account/wallet/address
+  identity and prevents replacing either referenced parent. An unchanged V1
+  swap can be updated by a currently bound, verified participant without
+  reading the other private order. INSERT and legacy derivation retain their
+  original checks. Private cross-account matching and outcome writes needing
+  both parents remain separate #5 dependencies; `tokens_swaporder` remains
+  `AWAITING_RLS`.
+  New execution claims record every signed argument, both signatures, original
+  domain/digest and contract recipient. Receipt attribution retains that
+  identity after configuration changes. Provider admission reuses the existing
+  cached chain check; it does not establish a fresh RPC observation at every
+  boundary. Legacy signatures are neither reconstructed nor invalidated.
 - **One current swap execution is claimed before preparation.** A fresh READY
   row receives a transaction UUID and becomes EXECUTING in a durable transaction
   before balance checks, building, signing or sending. Competing callers cannot

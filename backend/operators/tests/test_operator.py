@@ -259,7 +259,7 @@ class OperatorApiTest(APITestCase):
     url = "/api/operator/"
 
     def setUp(self):
-        self.investor = make_tenant("rails-investor")
+        self.investor = make_tenant("rails-investor", with_swap=False)
         make_eligible(self.investor)
         self.user = self.investor.user
         self.outsider = User.objects.create_user(email="outsider@example.test", password="pw-12345678")

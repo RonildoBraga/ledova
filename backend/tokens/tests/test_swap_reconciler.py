@@ -7,12 +7,13 @@ from django.test import TestCase, TransactionTestCase, override_settings
 from django.utils import timezone
 from web3 import Web3
 
+from shared.tests.settlement import save_swap_with_context
 from shared.tests.tenants import make_tenant
 from tokens.models import SwapOrder, TransferOrder
 from tokens.models.choices import SwapOrderStatus, TransferOrderStatus
 from tokens.services import AtomicSwapService
 from tokens.tasks.swap_reconciler import STALE_EXECUTION_AGE, resolve_executing_swaps
-from tokens.tests.swap_state_fixtures import CONFIRMED, attach_claim
+from tokens.tests.swap_state_fixtures import CONFIRMED, attach_claim, swap_service
 
 CONTRACT = "0x" + "9d" * 20
 LEADING_ZERO_HASH = "0a" + "bc" * 31
@@ -39,14 +40,10 @@ class AnExecutingSwapIsAskedOfTheChainTest(TestCase):
         swap.refresh_from_db()
 
     def expire(self):
-        SwapOrder.objects.filter(pk=self.swap.pk).update(expires_at=timezone.now() - timedelta(minutes=1))
-        self.swap.refresh_from_db()
+        self.enterContext(patch("django.utils.timezone.now", return_value=self.swap.expires_at + timedelta(minutes=1)))
 
     def service(self, nonce_used):
-        with patch("tokens.services.atomic_swap_service.get_base_chain_client"), patch(
-            "tokens.services.atomic_swap_service.WhitelistService"
-        ):
-            service = AtomicSwapService()
+        service = swap_service()
         service.is_nonce_used = Mock(return_value=nonce_used)
         return service
 
@@ -54,12 +51,12 @@ class AnExecutingSwapIsAskedOfTheChainTest(TestCase):
         self.swap.refresh_from_db()
         return self.swap.status
 
-    def test_a_used_nonce_without_a_recorded_transaction_does_not_complete_legacy_history(self, _publish):
+    def test_a_used_nonce_without_a_recorded_transaction_does_not_complete_history(self, _publish):
         self.assertIsNone(self.service(True).resolve_executing_swap(self.swap))
 
         self.assertEqual(self.status(), SwapOrderStatus.EXECUTING)
 
-    def test_an_unused_nonce_and_elapsed_deadline_do_not_release_legacy_reservations(self, _publish):
+    def test_an_unused_nonce_and_elapsed_deadline_do_not_release_reservations(self, _publish):
         self.expire()
 
         self.assertIsNone(self.service(False).resolve_executing_swap(self.swap))
@@ -159,10 +156,7 @@ class TheChainIsAskedOutsideEveryTransactionTest(TransactionTestCase):
         attach_claim(self.swap)
 
     def test_the_receipt_read_does_not_happen_inside_an_open_transaction(self, _publish):
-        with patch("tokens.services.atomic_swap_service.get_base_chain_client"), patch(
-            "tokens.services.atomic_swap_service.WhitelistService"
-        ):
-            service = AtomicSwapService()
+        service = swap_service()
         seen = []
         service.chain_client.receipt_even_if_reverted = Mock(
             side_effect=lambda *_: seen.append(transaction.get_connection().in_atomic_block) or CONFIRMED
@@ -181,7 +175,7 @@ class TwoSwapsCannotShareANonceTest(TestCase):
         first = tenant.swap
 
         with self.assertRaises(IntegrityError):
-            SwapOrder.objects.create(
+            save_swap_with_context(
                 sell_order=first.sell_order,
                 buy_order=first.buy_order,
                 share_token=first.share_token,
@@ -192,7 +186,7 @@ class TwoSwapsCannotShareANonceTest(TestCase):
                 payment_amount=first.payment_amount,
                 nonce=first.nonce,
                 order_hash="0x" + "ab" * 32,
-                expires_at=first.expires_at,
+                expires_at=first.expires_at + timedelta(seconds=1),
                 status=SwapOrderStatus.CREATED,
             )
 
@@ -200,7 +194,7 @@ class TwoSwapsCannotShareANonceTest(TestCase):
         tenant = make_tenant("nonces-ok")
         first = tenant.swap
 
-        second = SwapOrder.objects.create(
+        second = save_swap_with_context(
             sell_order=first.sell_order,
             buy_order=first.buy_order,
             share_token=first.share_token,
@@ -229,10 +223,7 @@ class TheReceiptMustNameThisOrderTest(TestCase):
 
     @staticmethod
     def hashing_service():
-        with patch("tokens.services.atomic_swap_service.get_base_chain_client"), patch(
-            "tokens.services.atomic_swap_service.WhitelistService"
-        ):
-            service = AtomicSwapService()
+        service = swap_service()
         service.chain_client.chain_id = 84532
         service.chain_client.to_checksum_address.side_effect = Web3.to_checksum_address
         return service
