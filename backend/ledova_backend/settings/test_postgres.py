@@ -13,5 +13,3 @@ except NameError:
 
 
 DATABASES["default"]["CONN_MAX_AGE"] = 0
-
-RLS_ROLE_PER_REQUEST = True
