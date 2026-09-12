@@ -71,7 +71,13 @@ PRINCIPAL_BEARING = {
     "the operator. The design covers it; the sentence exists so the next conversion with a longer delay "
     "knows the gap is proportional to it.",
     "wallets.tasks.sync.sync_wallet": "Reads and writes the holdings of exactly one wallet.",
-    "documents.tasks.extract.extract_document": "Reads one uploader's document and writes an extraction against it.",
+    "documents.tasks.extract.extract_document": "Reads one uploader's document and writes an "
+    "extraction against it. Converted: the principal is a required argument with no default, the "
+    "upload passes its uploader and the staff rerun passes None, because a re-extraction is the "
+    "operator's action and reaches documents no single customer owns. The whole body runs inside "
+    "that context, which is what puts ExtractionService's three retention rechecks - the initial "
+    "locked check, the bytes read and the save - on the alias the enqueue chose, around an "
+    "external call no transaction can be held across.",
     "users.tasks.notifications.send_push_notification": "Sends to one user's device tokens. Converted: "
     "the required user_id was already the recipient principal, so the enqueue payload is unchanged and "
     "the whole body - lookup, preferences, inbox insert, device read and invalid-device deactivation - "
@@ -124,14 +130,7 @@ CONVERSIONS = {
         "share-token read prerequisite is already resolved, as recorded in READS_MUST_SURVIVE_THE_POLICIES; "
         "it is not a reason to wait for tokens/0024.",
     ),
-    "documents.tasks.extract.extract_document": TaskConversion(
-        status="pending",
-        waiting_reason="create_document and DocumentExtractionAdmin.rerun_extraction enqueue only "
-        "document_uuid. Conversion must carry the uploader's principal for uploads and an explicit "
-        "operator choice for staff reruns, then keep the initial document lookup and ExtractionService's "
-        "locked content-retention rechecks on the chosen alias. The documents policy already scopes "
-        "reads and writes by uploaded_by_id; the extraction table is reached through that document.",
-    ),
+    "documents.tasks.extract.extract_document": TaskConversion(status="converted", converted_pr=525),
     "users.tasks.notifications.send_push_notification": TaskConversion(status="converted", converted_pr=523),
     "users.tasks.notifications.send_transaction_notification": TaskConversion(status="converted", converted_pr=523),
 }
