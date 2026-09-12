@@ -1,12 +1,21 @@
+import json
+
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import OperationalError, connections
 
 from shared.db import APP_ALIAS, MIGRATE_ALIAS, OPERATOR_ALIAS, PRINCIPAL_SETTING
+from shared.db.policy_sql import reachable_by_the_app_role
 
 BYPASSRLS = "SELECT rolbypassrls FROM pg_roles WHERE rolname = current_user"
 OWNED = "SELECT count(*) FROM pg_tables WHERE schemaname = 'public' AND tableowner = current_user"
 UNSET = f"SELECT current_setting('{PRINCIPAL_SETTING}', true) IS NULL"
+REACHED = """
+SELECT coalesce(json_agg(c.relname ORDER BY c.relname), '[]')::text
+FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = 'public' AND c.relkind = 'r'
+  AND has_table_privilege(current_user, c.oid, 'SELECT')
+"""
 
 
 CANNOT_AUTHENTICATE = (
@@ -101,12 +110,29 @@ class Command(BaseCommand):
                 "is surviving between requests and one caller can read another's rows"
             )
 
+        reached = set(json.loads(_ask(APP_ALIAS, REACHED)))
+        catalogued = set(reachable_by_the_app_role())
+        beyond = sorted(reached - catalogued)
+        short = sorted(catalogued - reached)
+        if beyond:
+            findings.append(
+                f"{users[APP_ALIAS]} can read {', '.join(beyond)}, which the catalogue does not list as "
+                "reachable. A table nobody classified must not be readable by the scoped role."
+            )
+        if short:
+            findings.append(
+                f"{users[APP_ALIAS]} cannot read {', '.join(short)}, which the catalogue says it reaches. "
+                "The grant migration ran before those tables existed, or a later migration created them "
+                "under the default privileges that now deny it."
+            )
+
         if findings:
             raise CommandError(
                 "The row-level-security roles are not what the policies assume:\n  " + "\n  ".join(findings)
             )
 
         self.stdout.write(
-            f"{users[APP_ALIAS]} is scoped and owns nothing, {users[OPERATOR_ALIAS]} bypasses, "
-            f"{users[MIGRATE_ALIAS]} owns the tables, and a fresh connection carries no principal."
+            f"{users[APP_ALIAS]} is scoped, owns nothing and reaches exactly the {len(reached)} tables "
+            f"the catalogue lists, {users[OPERATOR_ALIAS]} bypasses, {users[MIGRATE_ALIAS]} owns the "
+            "tables, and a fresh connection carries no principal."
         )

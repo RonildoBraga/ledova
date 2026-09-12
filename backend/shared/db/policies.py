@@ -380,4 +380,18 @@ NOT_TENANCY = {
     "and revealing nothing that reading both of those tables would not.",
 }
 
+REACHED_DESPITE_OPERATOR_ONLY = {
+    "tokens_shareissuance": "tokens/views/share_token.py:152 lists issuances on a customer route, scoped by "
+    "a subquery on ShareToken.visible_to_user. Reached through a scoped parent, which is the NOT_TENANCY "
+    "shape rather than the operator-only one.",
+    "tokens_yieldtoken": "assets/serializers/asset.py:62 reads it for every asset a customer lists, to answer "
+    "nav_per_token and last_nav_update. It is filtered by symbol and not by any principal.",
+    "tokens_ordermodificationlog": "tokens/services/order_modification_service.py:238 writes it on the "
+    "customer's own modify path, one row per changed field of an order the caller already reached.",
+    "compliance_customerriskassessment": "users/services/accounts.py:17 and users/services/setup.py:19 call "
+    "RiskAssessmentService.create_pending_assessment when an account is created, which is a customer route.",
+    "compliance_monitoringrule": "reached from the same account-creation path while scoring the new "
+    "assessment, on the connection that served the request.",
+}
+
 UNSCOPED = {**FRAMEWORK, **OPERATOR_ONLY, **NOT_TENANCY, **AWAITING_RLS}
