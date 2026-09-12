@@ -13,7 +13,7 @@ from web3 import Web3
 from blockchain.models import BlockchainTransaction, TransactionStatus, TransactionType
 from integrations.base_chain import get_base_chain_client
 from operators.settlement import require_deployment
-from shared.db import atomic
+from shared.db import atomic, use_operator
 from shared.utils.blockchain import decode_exception_to_message
 from tokens.events import publish_trading_event
 from tokens.exceptions import (
@@ -760,14 +760,15 @@ class AtomicSwapService:
 
 def sign_and_execute_swap(service, swap_order, signature: str, signer_address: str, admission=None):
     options = {"admission": admission} if admission else {}
-    signed = service.submit_signature(
-        swap_order=swap_order, signature=signature, signer_address=signer_address, **options
-    )
+    with use_operator():
+        signed = service.submit_signature(
+            swap_order=swap_order, signature=signature, signer_address=signer_address, **options
+        )
 
-    if signed.is_ready:
-        logger.info(f"Both signatures present, executing swap {signed.uuid}")
-        service.execute_swap(signed, **options)
-        signed.refresh_from_db()
+        if signed.is_ready:
+            logger.info(f"Both signatures present, executing swap {signed.uuid}")
+            service.execute_swap(signed, **options)
+            signed.refresh_from_db()
 
     return signed
 

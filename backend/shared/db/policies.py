@@ -149,7 +149,7 @@ POLICIES = {
         f"{_member('owner_account_id')} AND {OWNERSHIP_BOUND}",
     ),
     "tokens_ordersubmission": (_member("owner_account_id"), _member("owner_account_id")),
-    "tokens_swaporder": (A_PARTY_TO_THE_SWAP, A_PARTY_TO_THE_SWAP),
+    "tokens_swaporder": (A_PARTY_TO_THE_SWAP, "false"),
     "compliance_customerriskassessment": (_member("user_account_id"), _member("user_account_id")),
     "holdings": (THROUGH_ITS_WALLET, THROUGH_ITS_WALLET),
     "holding_snapshots": (THROUGH_ITS_HOLDING, THROUGH_ITS_HOLDING),
@@ -338,9 +338,17 @@ PUBLIC_TERM = {
 
 INSERTABLE = {
     "customer_accounts_account": f"{_member('uuid')} OR {DIRECTS_THE_ACCOUNT}",
+    "tokens_swaporder": A_PARTY_TO_THE_SWAP,
 }
 
 INSERT_ONLY_REASONS = {
+    "tokens_swaporder": (
+        "A party may bring a swap into existence and may never change one. Creation happens inside "
+        "create_order_and_match, which is atomic over the orders, the reservations and the swap "
+        "together, so it cannot move to another connection without the swap surviving a rollback that "
+        "takes the rest. Every transition afterwards - executing, failed, completed, the hashes - is "
+        "the relayer's work and runs as the operator, so no counterparty can move a swap it is in."
+    ),
     "customer_accounts_account": (
         "You may create an account you direct, and write to accounts you are a member of. A new user's "
         "first account cannot satisfy the member term at insert: ensure_defaults creates the row and adds "
@@ -427,12 +435,6 @@ REACHED_DESPITE_OPERATOR_ONLY = {
     "nav_per_token and last_nav_update. It is filtered by symbol and not by any principal.",
     "compliance_monitoringrule": "reached from the same account-creation path while scoring the new "
     "assessment, on the connection that served the request.",
-    "blockchain_blockchaintransaction": "tokens/services/atomic_swap_service.py:411 writes the relayer's "
-    "broadcast record inside _claim_execution, which tokens/views/trading_order.py:228 reaches when the "
-    "second party signs. The write shares a transaction with the SwapOrder row lock, so it cannot move to "
-    "the operator connection without splitting that transaction in two. Granting it lets the app role read "
-    "every relayer record, which is wider than this path needs; the narrower fix is to enqueue the "
-    "broadcast for a worker, which already runs as the operator.",
 }
 
 UNSCOPED = {**FRAMEWORK, **OPERATOR_ONLY, **NOT_TENANCY, **AWAITING_RLS}
