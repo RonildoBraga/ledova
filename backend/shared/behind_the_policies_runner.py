@@ -7,22 +7,6 @@ def ids(module, case, *tests):
     return tuple(f"{module}.{case}.{test}" for test in tests)
 
 
-STAFF_READS_THAT_STAY_ON_THE_APP_CONNECTION = (
-    *ids(
-        "whitelist.tests.test_entry_scoping",
-        "WhitelistEntryScopingTest",
-        "test_staff_by_address_succeeds",
-        "test_staff_can_list_retrieve_and_export_global_operator_rows",
-        "test_staff_can_sync",
-        "test_staff_can_use_all_operator_custom_actions",
-    ),
-    *ids(
-        "whitelist.tests.test_export_and_lookup",
-        "WhitelistExportEscapingTest",
-        "test_an_ordinary_address_is_written_unchanged",
-    ),
-)
-
 LISTINGS_THAT_COME_BACK_EMPTY_FOR_THEIR_OWN_OWNER = (
     *ids(
         "offerings.tests.test_issuer_subscriptions",
@@ -96,7 +80,6 @@ MARKET_AND_BALANCE_FIELDS_THAT_GO_QUIET = (
 )
 
 NOT_YET_BEHIND_THE_POLICIES = (
-    *STAFF_READS_THAT_STAY_ON_THE_APP_CONNECTION,
     *LISTINGS_THAT_COME_BACK_EMPTY_FOR_THEIR_OWN_OWNER,
     *REGISTER_READS_OF_HOLDERS_THE_READER_DOES_NOT_OWN,
     *A_SECOND_MODEL_THE_VIEW_READS_OUTSIDE_THE_PRINCIPALS_SCOPE,
