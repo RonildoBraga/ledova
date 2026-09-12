@@ -140,8 +140,11 @@ class TheTriggerDerivesAndRefusesTest(TransactionTestCase):
         )
         self.assertIn("owner_id", installed["tokens_formerholder_read"][1])
         self.assertNotIn("on_the_market", (installed["tokens_formerholder_read"][1] or "").lower())
-        self.assertEqual(installed["tokens_formerholder_insert"][2], "false")
-        self.assertEqual(installed["tokens_formerholder_delete"][1], "false")
+        for policy, index in (("tokens_formerholder_insert", 2), ("tokens_formerholder_delete", 1)):
+            with self.subTest(policy=policy):
+                expression = installed[policy][index]
+                self.assertIn("IS NOT NULL", expression)
+                self.assertTrue(expression.endswith("AND false)"), expression)
 
     def test_row_level_security_is_on_and_forced_for_the_table(self):
         with connection.cursor() as cursor:

@@ -61,13 +61,20 @@ class RegistryHistoryIsOperatorOnlyTest(TestCase):
                 cursor.execute("RESET ROLE")
                 cursor.execute("SELECT set_config(%s, NULL, false)", [PRINCIPAL_SETTING])
 
-    def test_history_is_hidden_from_owners_investors_and_missing_principals(self):
+    def test_history_is_hidden_from_the_owner_and_from_an_investor(self):
         self.assertEqual(list(CompanyRegistryCheck.objects.all()), [self.check])
-        for user in (self.owner, self.other, None):
+        for user in (self.owner, self.other):
             with self.subTest(user=user), self.as_app(user):
                 self.assertTrue(Company.objects.filter(pk=self.company.pk).exists())
                 self.assertFalse(CompanyRegistryCheck.objects.exists())
                 self.assertFalse(CompanyRegistryCheck.objects.select_for_update().exists())
+        self.assertEqual(list(CompanyRegistryCheck.objects.all()), [self.check])
+
+    def test_a_connection_with_no_principal_reaches_neither_the_history_nor_the_company(self):
+        self.assertEqual(list(CompanyRegistryCheck.objects.all()), [self.check])
+        with self.as_app(None):
+            self.assertFalse(CompanyRegistryCheck.objects.exists())
+            self.assertFalse(Company.objects.filter(pk=self.company.pk).exists())
         self.assertEqual(list(CompanyRegistryCheck.objects.all()), [self.check])
 
     def test_an_owner_cannot_insert_update_or_delete_registry_evidence(self):

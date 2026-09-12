@@ -14,6 +14,8 @@ REASON = "row-level security exists only in PostgreSQL, and on SQLite this would
 
 POLICIED = "users_userpreferences"
 ASK = f"SELECT count(*) FROM {POLICIED}"
+WIDENED = "SELECT count(*) FROM companies_company"
+LISTED = "UPDATE companies_company SET status = 'active', is_open_to_investors = true"
 DEFINED = f"SELECT current_setting('{PRINCIPAL_SETTING}', true) IS NOT NULL"
 
 
@@ -76,5 +78,20 @@ class AConnectionThatNeverSetAPrincipalSeesNothingRatherThanFailingTest(Transact
                 cursor.execute("SELECT set_config(%s, %s, false)", [PRINCIPAL_SETTING, "7"])
                 cursor.execute("SELECT set_config(%s, NULL, false)", [PRINCIPAL_SETTING])
                 cursor.execute(ASK)
+
+                self.assertEqual(cursor.fetchone()[0], 0)
+
+    def test_a_widened_policy_admits_nobody_when_no_principal_was_named(self):
+        make_tenant("widenedpolicy")
+
+        with self.a_session_that_has_never_set_the_principal() as fresh:
+            with fresh.cursor() as cursor:
+                cursor.execute(LISTED)
+                fresh.commit()
+                cursor.execute(WIDENED)
+                self.assertGreater(cursor.fetchone()[0], 0, "no public row to admit, so a zero below proves nothing")
+
+                cursor.execute(f"SET ROLE {settings.RLS_ROLES['app']}")
+                cursor.execute(WIDENED)
 
                 self.assertEqual(cursor.fetchone()[0], 0)

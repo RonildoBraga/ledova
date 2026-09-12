@@ -1091,13 +1091,30 @@ runs. Both mechanisms hold at once on purpose:
   claim leaves unresolved history. This does not supply durable signed-byte
   recovery, request idempotency, aggregate reservations, a complete cross-row
   state machine or trading RLS; those remain in #5 and #6.
-- **The strict read is deliberate.** Policies call
-  `current_setting('app.user_id')::bigint` with no `missing_ok`, so an unset
-  connection raises `unrecognized configuration parameter` and a cleared one
-  raises `invalid input syntax for type bigint: ""`. Both are loud. The
-  alternative fails closed *and silent*, and an empty result set is
-  indistinguishable from "you own nothing", which is exactly the ambiguity this
-  mechanism exists to remove.
+- **The read is lenient, and a conjunct carries what the strict one was for.**
+  Policies once called `current_setting('app.user_id')::bigint` with no
+  `missing_ok`, so an unset connection raised and a cleared one raised. That was
+  loud, and it was also an outage: `b3f7c54f` (#355, #359) replaced it with
+  `NULLIF(current_setting('app.user_id', true), '')::bigint`, and migration
+  `shared/0005` reinstalled every policy around it. A connection with no
+  principal now reads nothing instead of failing to read.
+
+  Nothing *is* the right answer, but the lenient read alone does not give it on
+  every table. A policy with a public widening term is a disjunction, and
+  `owner_id = NULL` is NULL while `status = 'active' AND is_open_to_investors`
+  is plainly true, so `NULL OR TRUE` admitted every listed company to a
+  connection that had named nobody. The three tables with a public branch —
+  companies, market tokens, open offerings — and the two reached through a
+  signing wallet were all readable that way.
+
+  Every policy is therefore installed as `app.user_id IS NOT NULL AND (…)`, on
+  all four commands rather than only on the read. "No principal" now means "no
+  rows" everywhere, which is the guarantee the strict read was after, obtained
+  without the failure that made it untenable. The ambiguity the strict read was
+  defending against — an empty result being indistinguishable from "you own
+  nothing" — is answered where it can be answered loudly instead: a serving
+  process refuses to boot on the wrong alias, and `check_rls_roles` refuses a
+  connection that carries a principal it should not.
 - **Two helpers where one would do, today.** `app_visible_company_ids()` and
   `app_manageable_company_ids()` have identical bodies and are called by `USING`
   and `WITH CHECK` respectively. Five of the seven company-derived tables are

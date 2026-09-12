@@ -7,6 +7,7 @@ class MissingOwnerColumns(NamedTuple):
 
 
 PRINCIPAL = "NULLIF(current_setting('app.user_id', true), '')::bigint"
+ADMITTED = f"{PRINCIPAL} IS NOT NULL"
 
 MEMBER_ACCOUNTS = "app_member_account_ids"
 VISIBLE_COMPANIES = "app_visible_company_ids"
