@@ -33,7 +33,7 @@ from users.tasks.notifications import (
     send_transaction_notification,
 )
 from wallets.models import Transaction, Wallet
-from wallets.services.transaction_confirmation import TransactionConfirmationService
+from wallets.services.transaction_confirmation import _notify_wallet_users
 
 User = get_user_model()
 
@@ -251,7 +251,7 @@ class NotificationTasksUseRecipientRolesTest(RunsOnTheScopedConnection, Transact
                 pk=self.recipient.transaction.pk
             )
             self.assertFalse(UserProfile.objects.filter(pk=colleague.profile.pk).exists())
-            TransactionConfirmationService._notify_wallet_users(transaction, "confirmed")
+            _notify_wallet_users(transaction, "confirmed")
         jobs = {key: row for key, row in self.queued_rows().items() if key not in before}
         self.addCleanup(self.delete_jobs, list(jobs))
         self.assertEqual(len(jobs), 2)
