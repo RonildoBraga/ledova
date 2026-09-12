@@ -5,6 +5,11 @@ from users.services.eligibility import eligible_investor_companies
 
 
 class DirectoryTokenViewSet(AuthenticatedReadOnlyViewSet):
+    unscoped_by_the_base_because = (
+        "the directory is scoped by investor eligibility, not by ownership: in_directory() against the "
+        "companies eligible_investor_companies returns for this principal. Catalogued as "
+        "ShareToken.in_directory in shared/db/policies.py."
+    )
 
     serializer_class = DirectoryTokenListSerializer
     ordering = ["name"]

@@ -1,0 +1,63 @@
+{
+  "source": "Synthetic Bitcoin Core 31.1 regtest, not broadcast",
+  "sender": "bcrt1quscjdtrcwqnuueglwwt77s8s8d9vsn7q9nda3d",
+  "recipient": "bcrt1q65zlqmjs8md6gfermcf09sngd7aw0c3jcw5cde",
+  "raw_transaction": "02000000000101727235d1ca5519b858f57e135d5120642862d24347102a197af7a080b14357810000000000fdffffff0200c2eb0b00000000160014d505f06e503edba42723de12f2c2686fbae7e232f0081a1e01000000160014e43126ac787027ce651f7397ef40f03b4ac84fc002473044022070e34f7bcca7708678af0e40156686d7ced771af824a294db3f31cece19116d9022005d8c01d9495ebee47f6cdbb164ee8c430be7ab5b2c50081df301382c9bb8644012102df6786eec6d20280e5c152e9f3726b4c1e4bba29b5112eda897cd321faa14c0f00000000",
+  "txid": "6933583e01858d4c174c9c44b9b6fd20ea036790112e597a4fbcc44ad579b9b6",
+  "wtxid": "925bab4ded4b2d229da8fa0c54cdf84418b3a264c3353096e93f591f77efaecd",
+  "input": {
+    "txid": "815743b180a0f77a192a104743d262286420515d137ef558b81955cad1357272",
+    "vout": 0,
+    "script": "0014e43126ac787027ce651f7397ef40f03b4ac84fc0",
+    "satoshis": 5000000000
+  },
+  "outputs": [
+    {
+      "satoshis": 200000000,
+      "script": "0014d505f06e503edba42723de12f2c2686fbae7e232"
+    },
+    {
+      "satoshis": 4799990000,
+      "script": "0014e43126ac787027ce651f7397ef40f03b4ac84fc0"
+    }
+  ],
+  "amount_satoshis": 200000000,
+  "fee_satoshis": 10000,
+  "preflight": {
+    "txid": "6933583e01858d4c174c9c44b9b6fd20ea036790112e597a4fbcc44ad579b9b6",
+    "wtxid": "925bab4ded4b2d229da8fa0c54cdf84418b3a264c3353096e93f591f77efaecd",
+    "allowed": true,
+    "vsize": 141,
+    "fees": {
+      "base": "0.00010000",
+      "effective-feerate": "0.00070921",
+      "effective-includes": [
+        "925bab4ded4b2d229da8fa0c54cdf84418b3a264c3353096e93f591f77efaecd"
+      ]
+    }
+  },
+  "legacy_decoder_vector": {
+    "raw": "01000000012222222222222222222222222222222222222222222222222222222222222222000000000151ffffffff010100000000000000015100000000",
+    "txid": "5d4df3a023b4cd68cab57f112ece08e9d13ab5b69f855b19ea898569c3e3f83a",
+    "wtxid": "5d4df3a023b4cd68cab57f112ece08e9d13ab5b69f855b19ea898569c3e3f83a",
+    "source": "Bitcoin Core decoderawtransaction; structural vector, not a valid spend"
+  },
+  "conflicting_transfer": {
+    "raw_transaction": "02000000000101727235d1ca5519b858f57e135d5120642862d24347102a197af7a080b14357810000000000fdffffff0200a3e11100000000160014d505f06e503edba42723de12f2c2686fbae7e232f027241801000000160014e43126ac787027ce651f7397ef40f03b4ac84fc002473044022001633ea17beff993f1c7ae6a4c327f3c122a173b6d4ecb831362b2a707acf73902206f00b503e516716b350ed5feb279d985691e113e7be12dbd1b45d2cac2a19497012102df6786eec6d20280e5c152e9f3726b4c1e4bba29b5112eda897cd321faa14c0f00000000",
+    "txid": "e67d506e55234cc9fc6f381da7aaa0b7a96f1fc84a3262b364bf7439d7db1d43",
+    "wtxid": "4c53d2dbf4e2729748f3a455dcfaf3a90d6859a3a2b3886b0dfc5c473f3276fb",
+    "preflight": {
+      "txid": "e67d506e55234cc9fc6f381da7aaa0b7a96f1fc84a3262b364bf7439d7db1d43",
+      "wtxid": "4c53d2dbf4e2729748f3a455dcfaf3a90d6859a3a2b3886b0dfc5c473f3276fb",
+      "allowed": true,
+      "vsize": 141,
+      "fees": {
+        "base": "0.0001",
+        "effective-feerate": 0.00070921,
+        "effective-includes": [
+          "4c53d2dbf4e2729748f3a455dcfaf3a90d6859a3a2b3886b0dfc5c473f3276fb"
+        ]
+      }
+    }
+  }
+}

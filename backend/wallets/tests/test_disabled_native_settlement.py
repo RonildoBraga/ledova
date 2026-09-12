@@ -7,7 +7,7 @@ from assets.models import Asset, AssetChainDeployment
 from assets.services.identity import native_asset_for_chain
 from users.models import UserAccount
 from wallets.models import Holding, Transaction, Wallet
-from wallets.services.transaction_confirmation import TransactionConfirmationService
+from wallets.services import transaction_confirmation
 
 
 class DisabledNativeSettlementTest(TestCase):
@@ -20,7 +20,7 @@ class DisabledNativeSettlementTest(TestCase):
         AssetChainDeployment.objects.create(asset=self.token, chain="base", contract_address=self.contract, decimals=6)
         for target in (
             "wallets.services.transaction_confirmation.TransactionMonitoringService",
-            "wallets.services.transaction_confirmation.TransactionConfirmationService._notify_wallet_users",
+            "wallets.services.transaction_confirmation._notify_wallet_users",
         ):
             mocked = patch(target)
             mocked.start()
@@ -44,7 +44,7 @@ class DisabledNativeSettlementTest(TestCase):
                     Holding.objects.create(wallet=self.wallet, asset=self.native, quantity=5)
                     Holding.objects.create(wallet=self.wallet, asset=self.token, quantity=100)
                     tx_hash = f"0x{event}-{index}-{token}"
-                    TransactionConfirmationService.create_pending_transaction(
+                    transaction_confirmation.create_pending_transaction(
                         wallet=self.wallet,
                         tx_hash=tx_hash,
                         to_address="0x" + "b" * 40,
@@ -53,7 +53,7 @@ class DisabledNativeSettlementTest(TestCase):
                         token_contract=self.contract if token else None,
                     )
                     if event == "reorged":
-                        TransactionConfirmationService.confirm_transaction(tx_hash, wallet=self.wallet)
+                        transaction_confirmation.confirm_transaction(tx_hash, wallet=self.wallet)
                     if configuration == "asset_disabled":
                         Asset.objects.filter(pk=self.native.pk).update(is_active=False)
                     elif configuration == "missing":
@@ -66,9 +66,9 @@ class DisabledNativeSettlementTest(TestCase):
                         }[configuration]
                         AssetChainDeployment.objects.filter(pk=deployment.pk).update(**fields)
                     action = {
-                        "confirmed": TransactionConfirmationService.confirm_transaction,
-                        "failed": TransactionConfirmationService.fail_transaction,
-                        "reorged": TransactionConfirmationService.mark_reorged,
+                        "confirmed": transaction_confirmation.confirm_transaction,
+                        "failed": transaction_confirmation.fail_transaction,
+                        "reorged": transaction_confirmation.mark_reorged,
                     }[event]
                     for _ in range(2):
                         action(tx_hash, wallet=self.wallet)

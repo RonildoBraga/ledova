@@ -16,8 +16,8 @@ from shared.db.aliases import configured
 from shared.tests.scoped import RunsOnTheScopedConnection
 from shared.tests.tenants import make_tenant
 from wallets.models import Holding, HoldingSnapshot, Transaction, Wallet
+from wallets.services import transaction_confirmation
 from wallets.services.holdings import sync_holding
-from wallets.services.transaction_confirmation import TransactionConfirmationService
 from wallets.tasks.confirmation import (
     check_all_pending_transactions,
     cleanup_stale_pending_transactions,
@@ -61,7 +61,7 @@ class ConfirmationChecks:
 
     def pending(self, tx_hash="0x" + "53" * 32):
         with acting_for(self.tenant.user.pk):
-            TransactionConfirmationService.create_pending_transaction(
+            transaction_confirmation.create_pending_transaction(
                 self.wallet,
                 tx_hash,
                 "0x" + "54" * 20,
@@ -92,8 +92,8 @@ class ConfirmationChecks:
         tx = self.pending()
         with acting_for(self.tenant.user.pk):
             stale = Transaction.objects.get(pk=tx.pk)
-            TransactionConfirmationService._revert_optimistic_holding(tx)
-            TransactionConfirmationService._revert_optimistic_holding(stale)
+            transaction_confirmation._revert_optimistic_holding(tx)
+            transaction_confirmation._revert_optimistic_holding(stale)
         self.assertEqual(self.quantities(), (Decimal("100"), Decimal("5")))
         with use_operator():
             tx.refresh_from_db()
@@ -106,7 +106,7 @@ class ConfirmationChecks:
             sync_holding(self.wallet, self.asset)
             sync_holding(self.wallet, self.native)
             self.balance_observations.clear()
-            result = TransactionConfirmationService.fail_transaction(tx.tx_hash, wallet=self.wallet)
+            result = transaction_confirmation.fail_transaction(tx.tx_hash, wallet=self.wallet)
         self.assertEqual(result["status"], "failed")
         self.assertEqual(self.quantities(), (Decimal("100"), Decimal("5")))
         self.assertEqual(self.balance_observations, [(configured(APP_ALIAS), False)] * 2)
@@ -117,7 +117,7 @@ class ConfirmationChecks:
         self.token_balance = Decimal("98.5")
         self.native_balance = Decimal("4.999")
         with acting_for(self.tenant.user.pk):
-            result = TransactionConfirmationService.confirm_transaction(
+            result = transaction_confirmation.confirm_transaction(
                 tx.tx_hash, actual_fee=Decimal("0.001"), wallet=self.wallet
             )
         self.assertEqual(result["status"], "confirmed")
@@ -167,7 +167,7 @@ class ConfirmationChecks:
     @skipUnless(connections[configured(APP_ALIAS)].vendor == "postgresql", "Concurrent row locks need PostgreSQL")
     def test_duplicate_failure_jobs_return_the_debit_and_notify_once(self):
         tx = self.pending()
-        results = self.duplicate_jobs(TransactionConfirmationService.fail_transaction, tx)
+        results = self.duplicate_jobs(transaction_confirmation.fail_transaction, tx)
         self.assertEqual(sorted(result["status"] for result in results), ["failed", "not_pending"])
         self.assertEqual(self.quantities(), (Decimal("100"), Decimal("5")))
         self.notification.assert_called_once()
@@ -175,7 +175,7 @@ class ConfirmationChecks:
     @skipUnless(connections[configured(APP_ALIAS)].vendor == "postgresql", "Concurrent row locks need PostgreSQL")
     def test_duplicate_confirmation_jobs_commit_and_notify_once(self):
         tx = self.pending()
-        results = self.duplicate_jobs(TransactionConfirmationService.confirm_transaction, tx)
+        results = self.duplicate_jobs(transaction_confirmation.confirm_transaction, tx)
         self.assertEqual(sorted(result["status"] for result in results), ["already_confirmed", "confirmed"])
         self.notification.assert_called_once()
 
@@ -195,7 +195,7 @@ class ConfirmationChecks:
                 amount=tx.amount,
             )
         with acting_for(self.tenant.user.pk):
-            result = TransactionConfirmationService.confirm_transaction(tx.tx_hash, wallet=self.wallet)
+            result = transaction_confirmation.confirm_transaction(tx.tx_hash, wallet=self.wallet)
         self.assertEqual(result["status"], "confirmed")
         with use_operator():
             theirs.refresh_from_db()
@@ -206,7 +206,7 @@ class ConfirmationChecks:
     def test_failure_still_restores_an_outstanding_debit_when_the_provider_is_unavailable(self):
         tx = self.pending()
         with acting_for(self.tenant.user.pk):
-            result = TransactionConfirmationService.fail_transaction(tx.tx_hash, wallet=self.wallet)
+            result = transaction_confirmation.fail_transaction(tx.tx_hash, wallet=self.wallet)
         self.assertEqual(result["status"], "failed")
         self.assertEqual(self.quantities(), (Decimal("100"), Decimal("5")))
         self.assertEqual(self.balance_observations, [(configured(APP_ALIAS), False)] * 2)
@@ -218,7 +218,7 @@ class ConfirmationChecks:
             sync_holding(self.wallet, self.asset)
             sync_holding(self.wallet, self.native)
             self.chain_available = False
-            result = TransactionConfirmationService.fail_transaction(tx.tx_hash, wallet=self.wallet)
+            result = transaction_confirmation.fail_transaction(tx.tx_hash, wallet=self.wallet)
         self.assertEqual(result["status"], "failed")
         self.assertEqual(self.quantities(), (Decimal("100"), Decimal("5")))
 
@@ -228,7 +228,7 @@ class ConfirmationChecks:
         with acting_for(self.tenant.user.pk):
             sync_holding(self.wallet, self.asset)
             self.chain_available = False
-            TransactionConfirmationService.fail_transaction(tx.tx_hash, wallet=self.wallet)
+            transaction_confirmation.fail_transaction(tx.tx_hash, wallet=self.wallet)
         self.assertEqual(self.quantities(), (Decimal("100"), Decimal("5")))
 
     def test_two_pending_debits_in_the_same_generation_can_each_be_returned_once(self):
@@ -236,9 +236,9 @@ class ConfirmationChecks:
         second = self.pending("0x" + "56" * 32)
         self.assertEqual(self.quantities(), (Decimal("97"), Decimal("4.996")))
         with acting_for(self.tenant.user.pk):
-            TransactionConfirmationService.fail_transaction(first.tx_hash, wallet=self.wallet)
-            TransactionConfirmationService.fail_transaction(second.tx_hash, wallet=self.wallet)
-            TransactionConfirmationService.fail_transaction(first.tx_hash, wallet=self.wallet)
+            transaction_confirmation.fail_transaction(first.tx_hash, wallet=self.wallet)
+            transaction_confirmation.fail_transaction(second.tx_hash, wallet=self.wallet)
+            transaction_confirmation.fail_transaction(first.tx_hash, wallet=self.wallet)
         self.assertEqual(self.quantities(), (Decimal("100"), Decimal("5")))
 
     def test_a_balance_read_cannot_overwrite_a_debit_made_while_the_provider_was_answering(self):
@@ -272,7 +272,7 @@ class ConfirmationChecks:
             Transaction.objects.filter(pk=tx.pk).update(
                 deducted_amount_sync_version=None, deducted_fee_sync_version=None
             )
-            result = TransactionConfirmationService.fail_transaction(tx.tx_hash, wallet=self.wallet)
+            result = transaction_confirmation.fail_transaction(tx.tx_hash, wallet=self.wallet)
             tx.refresh_from_db()
             self.assertEqual((tx.deducted_amount, tx.deducted_fee), (Decimal("0"), Decimal("0")))
         self.assertEqual(result["status"], "failed")
@@ -289,11 +289,11 @@ class ConfirmationChecks:
         self.token_balance = Decimal("98.5")
         self.native_balance = Decimal("4.999")
         with acting_for(self.tenant.user.pk):
-            with patch.object(
-                TransactionConfirmationService, boundary, side_effect=RuntimeError("Synthetic interruption")
-            ):
+            with patch.object(transaction_confirmation, boundary, side_effect=RuntimeError("Synthetic interruption")):
                 with self.assertRaises(RuntimeError):
-                    TransactionConfirmationService.confirm_transaction(tx.tx_hash, wallet=self.wallet, block_number=77)
+                    transaction_confirmation.confirm_transaction(
+                        tx.tx_hash, wallet=self.wallet, block_number=77, block_timestamp=timezone.now()
+                    )
             tx.refresh_from_db()
             self.assertEqual(tx.status, "confirmed")
             self.assertIsNotNone(tx.balance_reconciliation_token)
@@ -319,7 +319,7 @@ class ConfirmationChecks:
     def test_the_sweep_requeues_a_confirmed_transaction_with_unfinished_balance_work(self):
         tx = self.pending()
         with acting_for(self.tenant.user.pk):
-            TransactionConfirmationService.confirm_transaction(tx.tx_hash, wallet=self.wallet)
+            transaction_confirmation.confirm_transaction(tx.tx_hash, wallet=self.wallet)
             Transaction.objects.filter(pk=tx.pk).update(created_at=timezone.now() - timedelta(minutes=3))
         with use_operator(), patch("wallets.tasks.confirmation.confirm_pending_transaction.defer") as queued:
             check_all_pending_transactions(0)
@@ -399,13 +399,13 @@ class ConfirmationChecks:
             tx = self.pending("0x" + f"{index:064x}")
             with acting_for(self.tenant.user.pk):
                 if status in ("confirmed", "reorged"):
-                    TransactionConfirmationService.confirm_transaction(tx.tx_hash, wallet=self.wallet)
+                    transaction_confirmation.confirm_transaction(tx.tx_hash, wallet=self.wallet)
                 if status == "failed":
-                    TransactionConfirmationService.fail_transaction(tx.tx_hash, wallet=self.wallet)
+                    transaction_confirmation.fail_transaction(tx.tx_hash, wallet=self.wallet)
                 elif status == "replaced":
-                    TransactionConfirmationService.mark_replaced(tx.tx_hash, self.wallet, "0x" + "57" * 32)
+                    transaction_confirmation.mark_replaced(tx.tx_hash, self.wallet, "0x" + "57" * 32)
                 elif status == "reorged":
-                    TransactionConfirmationService.mark_reorged(tx.tx_hash, self.wallet)
+                    transaction_confirmation.mark_reorged(tx.tx_hash, self.wallet)
                 Transaction.objects.filter(pk=tx.pk).update(created_at=timezone.now() - timedelta(hours=48))
 
         with use_operator():
@@ -617,11 +617,11 @@ class ConfirmationChecks:
         self.token_balance = Decimal("98.5")
         self.native_balance = Decimal("4.999")
         with acting_for(self.tenant.user.pk):
-            TransactionConfirmationService.confirm_transaction(tx.tx_hash, wallet=self.wallet)
+            transaction_confirmation.confirm_transaction(tx.tx_hash, wallet=self.wallet)
             self.token_balance = Decimal("100")
             self.native_balance = Decimal("5")
-            result = TransactionConfirmationService.mark_reorged(tx.tx_hash, self.wallet)
-            TransactionConfirmationService.mark_reorged(tx.tx_hash, self.wallet)
+            result = transaction_confirmation.mark_reorged(tx.tx_hash, self.wallet)
+            transaction_confirmation.mark_reorged(tx.tx_hash, self.wallet)
             tx.refresh_from_db()
             self.assertIsNone(tx.balance_reconciliation_token)
             self.assertEqual((tx.deducted_amount, tx.deducted_fee), (Decimal("0"), Decimal("0")))
@@ -635,9 +635,9 @@ class ConfirmationChecks:
         self.token_balance = Decimal("98.5")
         self.native_balance = Decimal("4.999")
         with acting_for(self.tenant.user.pk):
-            TransactionConfirmationService.confirm_transaction(tx.tx_hash, wallet=self.wallet)
+            transaction_confirmation.confirm_transaction(tx.tx_hash, wallet=self.wallet)
             self.chain_available = False
-            TransactionConfirmationService.mark_reorged(tx.tx_hash, self.wallet)
+            transaction_confirmation.mark_reorged(tx.tx_hash, self.wallet)
             tx.refresh_from_db()
             self.assertIsNotNone(tx.balance_reconciliation_token)
             self.assertEqual(tx.deducted_amount, Decimal("1.5"))
@@ -659,7 +659,7 @@ class ConfirmationChecks:
         self.chain_available = True
         self.token_balance = Decimal("98.5")
         self.native_balance = Decimal("4.999")
-        verify = TransactionConfirmationService._verify_holding_balance
+        verify = transaction_confirmation._verify_holding_balance
         first = True
 
         def reorg_during_repair(wallet, asset):
@@ -669,15 +669,13 @@ class ConfirmationChecks:
                 first = False
                 self.token_balance = Decimal("100")
                 self.native_balance = Decimal("5")
-                TransactionConfirmationService.mark_reorged(tx.tx_hash, self.wallet)
+                transaction_confirmation.mark_reorged(tx.tx_hash, self.wallet)
             return result
 
         with acting_for(self.tenant.user.pk):
-            with patch.object(
-                TransactionConfirmationService, "_verify_holding_balance", side_effect=reorg_during_repair
-            ):
-                with patch.object(TransactionConfirmationService, "_update_snapshot_on_confirmation") as snapshot:
-                    TransactionConfirmationService.confirm_transaction(tx.tx_hash, wallet=self.wallet, block_number=77)
+            with patch.object(transaction_confirmation, "_verify_holding_balance", side_effect=reorg_during_repair):
+                with patch.object(transaction_confirmation, "_update_snapshot_on_confirmation") as snapshot:
+                    transaction_confirmation.confirm_transaction(tx.tx_hash, wallet=self.wallet, block_number=77)
             snapshot.assert_not_called()
             tx.refresh_from_db()
             self.assertEqual(tx.status, "reorged")

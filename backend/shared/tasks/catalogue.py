@@ -39,6 +39,10 @@ SYSTEM_WIDE = {
     "users.tasks.retention.purge_classification_evidence": "Applies the retention clock across every account.",
     "documents.tasks.retention.purge_document_evidence": "Purges expired supporting and unattached payslips "
     "across all uploaders on the operator connection, without a requesting user.",
+    "wallets.tasks.chain_observations.observe_wallet_chains": "Polls the chain for every submission whose "
+    "watch is due, across all accounts. The chain answers about a transaction, not about whose it is.",
+    "wallets.tasks.submissions.recover_wallet_submissions": "Retries every submission left pending across all "
+    "accounts on a clock; the owner is not present and each retry re-reads its own row.",
     "wallets.tasks.sync.sync_all_wallets": "Fans out over every wallet; the per-wallet task it defers is the "
     "one that acts for somebody.",
     "wallets.tasks.confirmation.check_all_pending_transactions": "Requeues pending transactions and unfinished "
