@@ -11,8 +11,8 @@ from assets.services.sync import AssetSyncService
 from users.models import FavouriteAsset, UserAccount, UserProfile
 from wallets.exceptions import InvalidTransactionException
 from wallets.models import Holding, Transaction, Wallet
+from wallets.services import transaction_confirmation
 from wallets.services.sync import sync_wallet
-from wallets.services.transaction_confirmation import TransactionConfirmationService
 
 User = get_user_model()
 REAL_USDC = "0x" + "a0b8" + "6" * 36
@@ -275,7 +275,7 @@ class UnknownTokenQuarantineTest(APITestCase):
         for contract in (FAKE_USDC, UNKNOWN):
             with self.subTest(contract=contract):
                 with self.assertRaises(InvalidTransactionException):
-                    TransactionConfirmationService.create_pending_transaction(
+                    transaction_confirmation.create_pending_transaction(
                         wallet=self.wallet,
                         tx_hash="0xpending",
                         to_address="0x" + "f" * 40,

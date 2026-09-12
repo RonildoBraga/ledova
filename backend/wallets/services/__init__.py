@@ -2,11 +2,12 @@ from wallets.services.balance import BalanceService
 from wallets.services.fiat_onramp import generate_transak_widget_url
 from wallets.services.sync import sync_wallet
 from wallets.services.transfers import (
-    TransferService,
     broadcast_bitcoin_transaction,
     broadcast_ethereum_transaction,
+    broadcast_transfer,
     prepare_bitcoin_transaction,
     prepare_ethereum_transaction,
+    prepare_transfer,
 )
 from wallets.services.verification import (
     complete_wallet_verification,
@@ -32,6 +33,7 @@ __all__ = [
     "verify_ethereum_signature",
     "verify_wallet_signature",
     "sync_wallet",
-    "TransferService",
+    "broadcast_transfer",
+    "prepare_transfer",
     "BalanceService",
 ]

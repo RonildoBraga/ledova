@@ -17,8 +17,8 @@ from compliance.services.transaction_monitoring import TransactionMonitoringServ
 from users.models import UserAccount, UserProfile
 from users.services.setup import ensure_defaults
 from wallets.models import Transaction, Wallet
+from wallets.services import transaction_confirmation
 from wallets.services.sync import sync_wallet
-from wallets.services.transaction_confirmation import TransactionConfirmationService
 
 User = get_user_model()
 
@@ -76,7 +76,7 @@ class TransactionMonitoringOnCreateTest(TestCase):
 
     def test_monitoring_failure_does_not_roll_back_a_pending_transfer(self):
         with patch(CHECK, side_effect=RuntimeError("screening down")) as check:
-            result = TransactionConfirmationService.create_pending_transaction(
+            result = transaction_confirmation.create_pending_transaction(
                 wallet=self.wallet, tx_hash="0xpending", to_address="0x" + "e" * 40, amount=Decimal("0.5")
             )
 

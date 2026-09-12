@@ -59,7 +59,7 @@ def expected_chain_id(chain: str) -> int:
 def plan_signed_transfer(
     wallet, signed_transaction: str, declared_token_contract: Optional[str] = None
 ) -> Optional[SignedTransferPlan]:
-    from wallets.services.transaction_confirmation import TransactionConfirmationService
+    from wallets.services import transaction_confirmation
 
     chain = normalize_chain(wallet.chain)
 
@@ -67,7 +67,7 @@ def plan_signed_transfer(
         raise UnsupportedChainException(wallet.chain.upper())
 
     if declared_token_contract:
-        TransactionConfirmationService.resolve_transfer_asset(wallet, declared_token_contract)
+        transaction_confirmation.resolve_transfer_asset(wallet, declared_token_contract)
 
     if chain not in EVM_BLOCKCHAINS:
         return None
@@ -77,10 +77,8 @@ def plan_signed_transfer(
 
 def _evm_plan(wallet, signed_transaction: str) -> SignedTransferPlan:
     from tokens.models import ShareToken
-    from wallets.services.transaction_confirmation import (
-        NOT_TRANSFERABLE,
-        TransactionConfirmationService,
-    )
+    from wallets.services import transaction_confirmation
+    from wallets.services.transaction_confirmation import NOT_TRANSFERABLE
 
     decoded = _decode(signed_transaction)
     expected = expected_chain_id(wallet.chain)
@@ -114,7 +112,7 @@ def _evm_plan(wallet, signed_transaction: str) -> SignedTransferPlan:
         raise InvalidTransactionException(ERC20_CARRIES_VALUE)
 
     recipient, raw_amount = _erc20_transfer_arguments(decoded.data)
-    asset = TransactionConfirmationService.resolve_transfer_asset(wallet, decoded.to)
+    asset = transaction_confirmation.resolve_transfer_asset(wallet, decoded.to)
 
     return SignedTransferPlan(
         to_address=recipient,

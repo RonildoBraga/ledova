@@ -14,7 +14,7 @@ from wallets.constants import (
     TRANSACTION_STATUSES_THAT_RETURN_THE_OPTIMISTIC_DEBIT,
 )
 from wallets.models import Holding, Transaction, Wallet
-from wallets.services.transaction_confirmation import TransactionConfirmationService
+from wallets.services import transaction_confirmation
 
 TASK = "wallets.services.transaction_confirmation.send_transaction_notification"
 ORIGINAL = "0x" + "11" * 32
@@ -57,7 +57,7 @@ class AReplacedTransactionKeepsTheHoldingItSpentTest(TestCase):
     def test_a_replaced_transaction_never_returns_the_debit_the_replacement_settles(self):
         tx = self.a_transaction()
 
-        result = TransactionConfirmationService.mark_replaced(ORIGINAL, self.wallet, REPLACEMENT)
+        result = transaction_confirmation.mark_replaced(ORIGINAL, self.wallet, REPLACEMENT)
 
         tx.refresh_from_db()
         self.assertEqual(result["status"], TRANSACTION_STATUS_REPLACED)
@@ -66,9 +66,9 @@ class AReplacedTransactionKeepsTheHoldingItSpentTest(TestCase):
 
     def test_replacing_twice_changes_nothing_and_says_why(self):
         self.a_transaction()
-        TransactionConfirmationService.mark_replaced(ORIGINAL, self.wallet, REPLACEMENT)
+        transaction_confirmation.mark_replaced(ORIGINAL, self.wallet, REPLACEMENT)
 
-        again = TransactionConfirmationService.mark_replaced(ORIGINAL, self.wallet, "0x" + "33" * 32)
+        again = transaction_confirmation.mark_replaced(ORIGINAL, self.wallet, "0x" + "33" * 32)
 
         self.assertEqual(again["status"], "not_pending")
         self.assertEqual(again["current_status"], TRANSACTION_STATUS_REPLACED)
@@ -78,9 +78,9 @@ class AReplacedTransactionKeepsTheHoldingItSpentTest(TestCase):
     def test_a_reorged_transaction_returns_the_debit_exactly_once(self):
         self.a_transaction(status=TRANSACTION_STATUS_CONFIRMED)
 
-        first = TransactionConfirmationService.mark_reorged(ORIGINAL, self.wallet)
+        first = transaction_confirmation.mark_reorged(ORIGINAL, self.wallet)
         after_first = self.held()
-        second = TransactionConfirmationService.mark_reorged(ORIGINAL, self.wallet)
+        second = transaction_confirmation.mark_reorged(ORIGINAL, self.wallet)
 
         self.assertEqual(first["status"], TRANSACTION_STATUS_REORGED)
         self.assertEqual(after_first, HELD + SENT)
@@ -91,7 +91,7 @@ class AReplacedTransactionKeepsTheHoldingItSpentTest(TestCase):
     def test_a_transaction_that_never_confirmed_cannot_be_reorged_out(self):
         self.a_transaction()
 
-        result = TransactionConfirmationService.mark_reorged(ORIGINAL, self.wallet)
+        result = transaction_confirmation.mark_reorged(ORIGINAL, self.wallet)
 
         self.assertEqual((result["status"], result["current_status"]), ("not_confirmed", TRANSACTION_STATUS_PENDING))
         self.assertEqual(self.held(), HELD)
@@ -99,7 +99,7 @@ class AReplacedTransactionKeepsTheHoldingItSpentTest(TestCase):
     def test_a_failed_transaction_is_not_reorged_over(self):
         self.a_transaction(status=TRANSACTION_STATUS_FAILED)
 
-        result = TransactionConfirmationService.mark_reorged(ORIGINAL, self.wallet)
+        result = transaction_confirmation.mark_reorged(ORIGINAL, self.wallet)
 
         self.assertEqual(result["current_status"], TRANSACTION_STATUS_FAILED)
 
@@ -111,8 +111,8 @@ class AReplacedTransactionKeepsTheHoldingItSpentTest(TestCase):
         mine = self.a_transaction()
         theirs = self.a_transaction(wallet=other)
 
-        TransactionConfirmationService.mark_replaced(ORIGINAL, self.wallet, REPLACEMENT)
-        TransactionConfirmationService.mark_replaced(ORIGINAL, other, theirs_replacement)
+        transaction_confirmation.mark_replaced(ORIGINAL, self.wallet, REPLACEMENT)
+        transaction_confirmation.mark_replaced(ORIGINAL, other, theirs_replacement)
 
         mine.refresh_from_db()
         theirs.refresh_from_db()
@@ -122,7 +122,7 @@ class AReplacedTransactionKeepsTheHoldingItSpentTest(TestCase):
     def test_a_hash_this_wallet_never_sent_is_not_found_rather_than_an_exception(self):
         self.a_transaction()
 
-        result = TransactionConfirmationService.mark_replaced("0x" + "99" * 32, self.wallet, REPLACEMENT)
+        result = transaction_confirmation.mark_replaced("0x" + "99" * 32, self.wallet, REPLACEMENT)
 
         self.assertEqual(result["status"], "not_found")
 
@@ -139,8 +139,8 @@ class TheTupleIsTheOnlyPlaceTheRuleIsWrittenTest(TestCase):
 
     def setUp(self):
         patch(TASK).start()
-        patch.object(TransactionConfirmationService, "_verify_holding_balance").start()
-        patch.object(TransactionConfirmationService, "_update_snapshot_on_confirmation").start()
+        patch.object(transaction_confirmation, "_verify_holding_balance").start()
+        patch.object(transaction_confirmation, "_update_snapshot_on_confirmation").start()
         self.addCleanup(patch.stopall)
         self.tenant = make_tenant("ledger")
         self.wallet = self.tenant.wallet
@@ -177,25 +177,25 @@ class TheTupleIsTheOnlyPlaceTheRuleIsWrittenTest(TestCase):
             (
                 TRANSACTION_STATUS_FAILED,
                 "0xf",
-                lambda h: TransactionConfirmationService.fail_transaction(h, wallet=self.wallet),
+                lambda h: transaction_confirmation.fail_transaction(h, wallet=self.wallet),
                 False,
             ),
             (
                 TRANSACTION_STATUS_REORGED,
                 "0xr",
-                lambda h: TransactionConfirmationService.mark_reorged(h, self.wallet),
+                lambda h: transaction_confirmation.mark_reorged(h, self.wallet),
                 True,
             ),
             (
                 TRANSACTION_STATUS_REPLACED,
                 "0xp",
-                lambda h: TransactionConfirmationService.mark_replaced(h, self.wallet, REPLACEMENT),
+                lambda h: transaction_confirmation.mark_replaced(h, self.wallet, REPLACEMENT),
                 False,
             ),
             (
                 TRANSACTION_STATUS_CONFIRMED,
                 "0xc",
-                lambda h: TransactionConfirmationService.confirm_transaction(h, block_number=7, wallet=self.wallet),
+                lambda h: transaction_confirmation.confirm_transaction(h, block_number=7, wallet=self.wallet),
                 False,
             ),
         )

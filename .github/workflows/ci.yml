@@ -278,3 +278,11 @@ jobs:
           POSTGRES_DB: ledova
           POSTGRES_USER: ledova
         run: make chain-test PYTHON=python CHAIN_TEST_SETTINGS=ledova_backend.settings.test_postgres
+      - name: Bitcoin submission pipeline (isolated regtest and PostgreSQL)
+        working-directory: .
+        env:
+          POSTGRES_HOST: 127.0.0.1
+          POSTGRES_PORT: '5432'
+          POSTGRES_DB: ledova
+          POSTGRES_USER: ledova
+        run: python scripts/test-bitcoin-chain.py
