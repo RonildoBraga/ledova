@@ -1,6 +1,7 @@
 from django.conf import settings
 
 from shared.db.policies import (
+    ADMITTED,
     AWAITING_RLS,
     FRAMEWORK,
     HELPERS,
@@ -73,13 +74,16 @@ def install_tables(schema_editor, tables):
             cursor.execute(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY")
             for suffix in SUFFIXES:
                 cursor.execute(f"DROP POLICY IF EXISTS {table}_{suffix} ON {table}")
-            cursor.execute(f"CREATE POLICY {table}_read ON {table} FOR SELECT USING ({readable})")
+            cursor.execute(f"CREATE POLICY {table}_read ON {table} FOR SELECT USING ({ADMITTED} AND ({readable}))")
             insertable = INSERTABLE.get(table, writable)
-            cursor.execute(f"CREATE POLICY {table}_insert ON {table} FOR INSERT WITH CHECK ({insertable})")
             cursor.execute(
-                f"CREATE POLICY {table}_update ON {table} FOR UPDATE USING ({readable}) WITH CHECK ({writable})"
+                f"CREATE POLICY {table}_insert ON {table} FOR INSERT WITH CHECK ({ADMITTED} AND ({insertable}))"
             )
-            cursor.execute(f"CREATE POLICY {table}_delete ON {table} FOR DELETE USING ({writable})")
+            cursor.execute(
+                f"CREATE POLICY {table}_update ON {table} FOR UPDATE USING ({ADMITTED} AND ({readable})) "
+                f"WITH CHECK ({ADMITTED} AND ({writable}))"
+            )
+            cursor.execute(f"CREATE POLICY {table}_delete ON {table} FOR DELETE USING ({ADMITTED} AND ({writable}))")
 
 
 def remove(schema_editor):
