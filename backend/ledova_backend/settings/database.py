@@ -43,3 +43,5 @@ RLS_ROLES = {
     "operator": DATABASES["operator"]["USER"],
     "migrate": DATABASES["default"]["USER"],
 }
+
+RLS_ROLE_PER_REQUEST = False

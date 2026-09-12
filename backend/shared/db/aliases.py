@@ -39,8 +39,16 @@ def _using(alias: str):
             _state.alias = previous
 
 
+@contextmanager
+def _as_the_operator(alias: str):
+    from .principal import the_owner_for_a_moment
+
+    with _using(alias), the_owner_for_a_moment():
+        yield
+
+
 def use_operator():
-    return _using(configured(OPERATOR_ALIAS))
+    return _as_the_operator(configured(OPERATOR_ALIAS))
 
 
 def use_app():
@@ -48,11 +56,14 @@ def use_app():
 
 
 def use_migrate():
-    return _using(configured(MIGRATE_ALIAS))
+    return _as_the_operator(configured(MIGRATE_ALIAS))
 
 
 def select_operator() -> None:
+    from .principal import give_the_role_back
+
     _state.alias = configured(OPERATOR_ALIAS)
+    give_the_role_back()
 
 
 def clear_alias() -> None:
