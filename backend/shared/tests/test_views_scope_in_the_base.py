@@ -1,8 +1,11 @@
+from importlib import import_module
 from types import SimpleNamespace
 
+from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.test import SimpleTestCase
 
+from shared.db.policies import BYPASSES_VISIBLE_TO_USER
 from shared.views.scope import ScopesToThePrincipal
 from users.models import Notification, UserAccount
 
@@ -57,11 +60,50 @@ class ScopingRefusalsHappenAtImportTest(SimpleTestCase):
                 scoped_model = UserAccount
                 manage_actions = frozenset({"create"})
 
-    def test_a_view_that_names_no_model_and_no_hook_is_left_alone(self):
-        class Untouched(ScopesToThePrincipal):
-            pass
+    def test_a_view_that_names_no_model_at_all_is_refused(self):
+        with self.assertRaisesMessage(ImproperlyConfigured, "names no scoped_model"):
 
-        self.assertIsNone(Untouched.scoped_model)
+            class Untouched(ScopesToThePrincipal):
+                pass
+
+    def test_a_reason_too_short_to_say_anything_does_not_buy_the_exemption(self):
+        with self.assertRaisesMessage(ImproperlyConfigured, "names no scoped_model"):
+
+            class Terse(ScopesToThePrincipal):
+                unscoped_by_the_base_because = "reasons"
+
+    def test_a_view_that_says_what_scopes_it_instead_is_admitted(self):
+        class Explained(ScopesToThePrincipal):
+            unscoped_by_the_base_because = "it serves no queryset: every action is detail=False and reads the chain."
+
+        self.assertIsNone(Explained.scoped_model)
+
+    def test_the_exemption_does_not_descend_to_a_subclass(self):
+        class Explained(ScopesToThePrincipal):
+            unscoped_by_the_base_because = "it serves no queryset: every action is detail=False and reads the chain."
+
+        with self.assertRaisesMessage(ImproperlyConfigured, "names no scoped_model"):
+
+            class Heir(Explained):
+                pass
+
+    def test_a_view_cannot_both_name_a_model_and_claim_the_exemption(self):
+        with self.assertRaisesMessage(ImproperlyConfigured, "the claim is false"):
+
+            class Contradictory(ScopesToThePrincipal):
+                scoped_model = Notification
+                unscoped_by_the_base_because = (
+                    "it serves no queryset: every action is detail=False and reads the chain."
+                )
+
+    def test_an_abstract_base_is_exempt_but_its_concrete_subclass_is_not(self):
+        class Base(ScopesToThePrincipal):
+            abstract = True
+
+        with self.assertRaisesMessage(ImproperlyConfigured, "names no scoped_model"):
+
+            class Concrete(Base):
+                pass
 
 
 class RecordingManager:
@@ -145,3 +187,57 @@ class TheBaseChoosesThePredicateTest(SimpleTestCase):
         self.assertEqual(view.get_queryset(), "narrowed every row")
 
         self.assertEqual(seen, ["the read scope", "every row"])
+
+
+def every_view_under(base):
+    for view in base.__subclasses__():
+        yield from every_view_under(view)
+        if not view.__dict__.get("abstract"):
+            yield view
+
+
+class TheExemptionsAreTheOnesOnRecordTest(SimpleTestCase):
+
+    EXEMPT = {
+        "DirectoryTokenViewSet": "ShareToken.in_directory",
+        "TradingTokenViewSet": "ShareToken.deployed_with_contract",
+        "TradingTransferViewSet": None,
+        "TradingWalletViewSet": None,
+    }
+
+    def views(self):
+        import_module(settings.ROOT_URLCONF)
+        return [
+            view for view in every_view_under(ScopesToThePrincipal) if not view.__module__.startswith("shared.tests")
+        ]
+
+    def test_the_views_that_take_the_exemption_are_the_ones_on_record(self):
+        taken = {view.__name__ for view in self.views() if view.scoped_model is None}
+
+        self.assertEqual(taken, set(self.EXEMPT))
+
+    def test_every_other_view_names_a_model_whose_manager_can_scope_it(self):
+        scoped = [view for view in self.views() if view.scoped_model is not None]
+
+        self.assertGreater(len(scoped), len(self.EXEMPT))
+        self.assertEqual(
+            [view.__name__ for view in scoped if not hasattr(view.scoped_model._default_manager, "visible_to_user")],
+            [],
+        )
+
+    def test_a_view_scoped_by_something_other_than_a_queryset_names_where_that_is_recorded(self):
+        by_name = {view.__name__: view for view in self.views()}
+
+        self.assertEqual(
+            [
+                name
+                for name, key in self.EXEMPT.items()
+                if key is not None and key not in by_name[name].unscoped_by_the_base_because
+            ],
+            [],
+        )
+
+    def test_the_keys_those_reasons_cite_are_real_entries_in_the_catalogue(self):
+        self.assertEqual(
+            [key for key in self.EXEMPT.values() if key is not None and key not in BYPASSES_VISIBLE_TO_USER], []
+        )

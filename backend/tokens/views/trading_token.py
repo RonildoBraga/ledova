@@ -14,6 +14,11 @@ from tokens.services.market_data_service import list_market_tokens
 
 
 class TradingTokenViewSet(AuthenticatedReadOnlyViewSet):
+    unscoped_by_the_base_because = (
+        "the market is scoped by tradeability, not by ownership: list_market_tokens narrows to the "
+        "deployed tokens this principal may trade. Catalogued as ShareToken.deployed_with_contract in "
+        "shared/db/policies.py."
+    )
 
     serializer_class = ShareTokenListSerializer
     ordering = ["name"]

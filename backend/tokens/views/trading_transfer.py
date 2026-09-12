@@ -14,6 +14,10 @@ from tokens.trading_wallet_access import resolve_verified_evm_wallets
 
 
 class TradingTransferViewSet(AuthenticatedGenericViewSet):
+    unscoped_by_the_base_because = (
+        "it serves no queryset: both actions are detail=False and reach the chain, and the wallets they "
+        "act on come from resolve_verified_evm_wallets, which scopes to the principal."
+    )
     throttle_scope = "broadcast"
 
     @extend_schema(request=PrepareTransferSerializer, responses=PreparedTokenTransferSerializer)

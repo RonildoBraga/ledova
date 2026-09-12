@@ -13,6 +13,10 @@ from tokens.trading_wallet_access import resolve_verified_evm_wallets
 
 
 class TradingWalletViewSet(AuthenticatedGenericViewSet):
+    unscoped_by_the_base_because = (
+        "it serves no queryset: balances is detail=False and reads the chain, and the wallet it reads "
+        "comes from resolve_verified_evm_wallets, which scopes to the principal."
+    )
 
     @extend_schema(
         parameters=[OpenApiParameter("wallet_address", OpenApiTypes.STR, OpenApiParameter.QUERY, required=True)],
