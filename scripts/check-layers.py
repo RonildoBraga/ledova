@@ -42,7 +42,7 @@ SCOPING_CALLS = frozenset(
     }
 )
 
-LOCKING_HOOK = "get_queryset"
+LOCKING_HOOKS = frozenset({"get_queryset", "narrow"})
 DRF_WRITE_HOOKS = frozenset({"update", "partial_update", "create", "destroy"})
 
 OWN_MANAGER_RECEIVERS = frozenset({"cls", "self"})
@@ -59,7 +59,7 @@ SIGNAL_IMPORT = "django-signals"
 RULES = {
     VIEW_ORM: "views reach the ORM only through visible_to_user or manageable_by_user",
     VIEW_TRANSACTION: "a transaction the view opens around its own logic is a workflow; move it to a service",
-    VIEW_LOCK: "select_for_update outside get_queryset means the view is orchestrating; move it to a service",
+    VIEW_LOCK: "select_for_update outside get_queryset or narrow means the view is orchestrating; move it to a service",
     VIEW_LOGGER: "log in services and tasks, not in views",
     MODEL_QUERY: "a model queries its own manager only; another model's manager belongs in a queryset or a service",
     TASK_TRANSACTION: "a task loads a row and calls one service; the service owns the transaction",
@@ -296,7 +296,7 @@ def view_findings(tree: ast.AST):
         for node in ast.walk(scope):
             if not isinstance(node, ast.Attribute) or node.attr != "select_for_update":
                 continue
-            if scope.name != LOCKING_HOOK or not guarded_by_action(node, parents):
+            if scope.name not in LOCKING_HOOKS or not guarded_by_action(node, parents):
                 found.append((node.lineno, VIEW_LOCK))
 
     for node in ast.walk(tree):

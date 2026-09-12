@@ -17,8 +17,7 @@ class NotificationPreferencesViewSet(AuthenticatedModelViewSet):
     ordering = ["-created_at"]
     ordering_fields = ["created_at"]
 
-    def get_queryset(self):
-        return NotificationPreferences.objects.visible_to_user(self.request.user)
+    scoped_model = NotificationPreferences
 
     def list(self, request):
         user_profile = get_object_or_404(UserProfile, user=request.user)

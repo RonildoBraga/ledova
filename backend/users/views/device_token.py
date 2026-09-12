@@ -19,8 +19,10 @@ class DeviceTokenViewSet(AuthenticatedModelViewSet):
     ordering = ["-created_at"]
     ordering_fields = ["created_at"]
 
-    def get_queryset(self):
-        return DeviceToken.objects.visible_to_user(self.request.user).filter(is_active=True)
+    scoped_model = DeviceToken
+
+    def narrow(self, queryset):
+        return queryset.filter(is_active=True)
 
     @extend_schema(responses=DeviceTokenSerializer)
     @action(detail=False, methods=["post"], url_path="register")

@@ -12,8 +12,7 @@ class UserPreferencesViewSet(AuthenticatedModelViewSet):
     ordering = ["-created_at"]
     ordering_fields = ["created_at"]
 
-    def get_queryset(self):
-        return UserPreferences.objects.visible_to_user(self.request.user)
+    scoped_model = UserPreferences
 
     def list(self, request):
         preferences = self.get_queryset().first()
