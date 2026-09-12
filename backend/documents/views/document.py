@@ -18,10 +18,12 @@ from documents.services.document import (
 )
 from shared.views import stream_stored_file
 from shared.views.principal import SetsThePrincipalOnTheConnection
+from shared.views.scope import ScopesToThePrincipal
 from shared.views.uploads import UploadProtectedView
 
 
 class DocumentViewSet(
+    ScopesToThePrincipal,
     UploadProtectedView,
     SetsThePrincipalOnTheConnection,
     mixins.CreateModelMixin,
@@ -35,13 +37,10 @@ class DocumentViewSet(
     lookup_field = "uuid"
     serializer_class = DocumentSerializer
 
-    def get_queryset(self):
-        return (
-            Document.objects.visible_to_user(self.request.user)
-            .with_available_content()
-            .select_related("classification")
-            .prefetch_related("extractions")
-        )
+    scoped_model = Document
+
+    def narrow(self, queryset):
+        return queryset.with_available_content().select_related("classification").prefetch_related("extractions")
 
     def get_serializer_class(self):
         if self.action == "create":

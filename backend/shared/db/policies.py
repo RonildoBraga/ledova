@@ -163,6 +163,15 @@ DERIVED_FROM_A_MUTABLE_ATTRIBUTE = {
 }
 
 BYPASSES_VISIBLE_TO_USER = {
+    "ScopesToThePrincipal on an administrative action": (
+        "shared/views/scope.py, the get_queryset every AuthenticatedViewSet inherits",
+        "every row of the scoped model, and only for an action the view names in "
+        "administrative_actions, which is the set get_permissions turns into IsAdminUser. Keyed to "
+        "that set rather than to operator_actions, which only chooses a connection and which the "
+        "coverage gate permits to be the wider of the two",
+        "shared/tests/test_views_scope_in_the_base.py - the branch tests record which predicate the "
+        "base called, and an operator_actions wider than administrative_actions is refused at import",
+    ),
     "ShareIssuanceRequest on subscription reads and withdrawal": (
         "offerings/querysets/subscription.py with_relations and offerings/services/subscription.py _linked_request",
         "tokens_shareissuancerequest: the request linked to a subscription of this principal's member account. "

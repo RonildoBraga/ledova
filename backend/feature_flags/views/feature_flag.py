@@ -8,5 +8,4 @@ class FeatureFlagViewSet(AuthenticatedReadOnlyViewSet):
     ordering = ["name"]
     ordering_fields = ["name", "created_at"]
 
-    def get_queryset(self):
-        return FeatureFlag.objects.visible_to_user(self.request.user)
+    scoped_model = FeatureFlag

@@ -11,12 +11,10 @@ class FavouriteAssetViewSet(AuthenticatedModelViewSet):
     ordering = ["-created_at"]
     ordering_fields = ["created_at"]
 
-    def get_queryset(self):
-        return (
-            FavouriteAsset.objects.visible_to_user(self.request.user)
-            .filter(asset__is_verified=True)
-            .with_optimized_data()
-        )
+    scoped_model = FavouriteAsset
+
+    def narrow(self, queryset):
+        return queryset.filter(asset__is_verified=True).with_optimized_data()
 
     def perform_create(self, serializer):
         serializer.save()

@@ -40,6 +40,9 @@ class CompanyViewSet(AuthenticatedModelViewSet):
     ordering = ["-created_at"]
     ordering_fields = ["created_at", "name", "status"]
 
+    scoped_model = Company
+    manage_actions = manageable_actions
+
     def get_serializer_class(self):
         if self.action == "create":
             return CompanyRegistrationSerializer
@@ -63,15 +66,6 @@ class CompanyViewSet(AuthenticatedModelViewSet):
         if self.action in self.administrative_actions:
             return [IsAdminUser()]
         return super().get_permissions()
-
-    def get_queryset(self):
-        user = self.request.user
-
-        if self.action in self.administrative_actions:
-            return Company.objects.all()
-        if self.action in self.manageable_actions:
-            return Company.objects.manageable_by_user(user)
-        return Company.objects.visible_to_user(user)
 
     @extend_schema(
         responses=inline_serializer(

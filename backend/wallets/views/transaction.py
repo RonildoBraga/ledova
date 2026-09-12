@@ -10,6 +10,7 @@ class TransactionViewSet(AuthenticatedReadOnlyViewSet):
     ordering = ["-block_timestamp"]
     ordering_fields = ["block_timestamp", "chain"]
 
-    def get_queryset(self):
-        user = self.request.user
-        return Transaction.objects.visible_to_user(user).filter(asset__is_verified=True).with_optimized_data()
+    scoped_model = Transaction
+
+    def narrow(self, queryset):
+        return queryset.filter(asset__is_verified=True).with_optimized_data()

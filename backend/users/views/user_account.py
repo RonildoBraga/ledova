@@ -12,8 +12,9 @@ class UserAccountViewSet(AuthenticatedModelViewSet):
     ordering = ["-activation_date"]
     ordering_fields = ["activation_date", "created_at"]
 
-    def get_queryset(self):
-        queryset = UserAccount.objects.visible_to_user(self.request.user)
+    scoped_model = UserAccount
+
+    def narrow(self, queryset):
         if getattr(self, "action", None) in {"update", "partial_update"}:
             return queryset.select_for_update()
         return queryset

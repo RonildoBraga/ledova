@@ -42,7 +42,7 @@ SCOPING_CALLS = frozenset(
     }
 )
 
-LOCKING_HOOK = "get_queryset"
+LOCKING_HOOKS = frozenset({"get_queryset", "narrow"})
 DRF_WRITE_HOOKS = frozenset({"update", "partial_update", "create", "destroy"})
 
 OWN_MANAGER_RECEIVERS = frozenset({"cls", "self"})
@@ -59,7 +59,7 @@ SIGNAL_IMPORT = "django-signals"
 RULES = {
     VIEW_ORM: "views reach the ORM only through visible_to_user or manageable_by_user",
     VIEW_TRANSACTION: "a transaction the view opens around its own logic is a workflow; move it to a service",
-    VIEW_LOCK: "select_for_update outside get_queryset means the view is orchestrating; move it to a service",
+    VIEW_LOCK: "select_for_update outside get_queryset or narrow means the view is orchestrating; move it to a service",
     VIEW_LOGGER: "log in services and tasks, not in views",
     MODEL_QUERY: "a model queries its own manager only; another model's manager belongs in a queryset or a service",
     TASK_TRANSACTION: "a task loads a row and calls one service; the service owns the transaction",
@@ -71,18 +71,20 @@ RULES = {
 # carries a count, because an exception that excused a whole file would reintroduce
 # exactly the hole this gate was hardened to close.
 ALLOWED: dict[str, tuple[int, str]] = {
+    "backend/shared/views/scope.py:raw-orm-in-view": (
+        1,
+        "ScopesToThePrincipal reaches the manager on behalf of every viewset, which is the point of it: "
+        "one file makes the scoping call so 25 views no longer each write their own. __init_subclass__ "
+        "reads _default_manager to refuse, at import, a view whose model cannot answer the predicate it "
+        "relies on. The rule this file would otherwise break is the rule it exists to enforce, and it is "
+        "the only entry here because it is the only place a view layer file may name a manager.",
+    ),
     "backend/shared/apps.py:django-signals": (
         1,
         "The post_delete receiver that deletes a private file when its row is gone. A cascade delete "
         "never reaches a service, so an explicit call in each delete path cannot cover it: deleting a "
         "Company takes its CompanyDocument rows and deleting a user takes their Document rows, and the "
         "files would outlive both. Stated in docs/ARCHITECTURE.md; the receiver is shared/storage.py.",
-    ),
-    "backend/companies/views/company.py:raw-orm-in-view": (
-        1,
-        "CompanyViewSet.get_queryset returns Company.objects.all() for the administrative actions, so "
-        "an operator reaches every company. Stated in docs/ARCHITECTURE.md and pinned by STAFF_UNSCOPED "
-        "in backend/shared/tests/test_route_coverage.py.",
     ),
 }
 
@@ -158,9 +160,12 @@ def parents_of(tree: ast.AST) -> dict:
     return parents
 
 
+MANAGER_NAMES = frozenset({"objects", "_default_manager"})
+
+
 def manager_accesses(tree: ast.AST):
     for node in ast.walk(tree):
-        if isinstance(node, ast.Attribute) and node.attr == "objects":
+        if isinstance(node, ast.Attribute) and node.attr in MANAGER_NAMES:
             yield node
 
 
@@ -296,7 +301,7 @@ def view_findings(tree: ast.AST):
         for node in ast.walk(scope):
             if not isinstance(node, ast.Attribute) or node.attr != "select_for_update":
                 continue
-            if scope.name != LOCKING_HOOK or not guarded_by_action(node, parents):
+            if scope.name not in LOCKING_HOOKS or not guarded_by_action(node, parents):
                 found.append((node.lineno, VIEW_LOCK))
 
     for node in ast.walk(tree):

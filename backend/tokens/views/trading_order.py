@@ -65,9 +65,10 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
     ordering_fields = ["created_at", "status", "order_type"]
     throttle_scope = "order_write"
 
-    def get_queryset(self):
+    scoped_model = TransferOrder
 
-        return TransferOrder.objects.with_relations().visible_to_user(self.request.user)
+    def narrow(self, queryset):
+        return queryset.with_relations()
 
     def get_serializer_class(self):
         if self.action == "create_order":

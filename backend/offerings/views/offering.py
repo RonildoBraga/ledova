@@ -27,6 +27,12 @@ class OfferingViewSet(AuthenticatedModelViewSet):
     ordering = ["-created_at"]
     ordering_fields = ["created_at", "status", "opens_at"]
 
+    scoped_model = Offering
+    manage_actions = MANAGE_ACTIONS
+
+    def narrow(self, queryset):
+        return queryset.with_relations()
+
     def get_serializer_class(self):
         if self.action in ["create", "update", "partial_update"]:
             return OfferingWriteSerializer
@@ -35,12 +41,6 @@ class OfferingViewSet(AuthenticatedModelViewSet):
         if self.action == "withdraw":
             return OfferingWithdrawSerializer
         return OfferingDetailSerializer
-
-    def get_queryset(self):
-        queryset = Offering.objects.with_relations()
-        if self.action in MANAGE_ACTIONS:
-            return queryset.manageable_by_user(self.request.user)
-        return queryset.visible_to_user(self.request.user)
 
     def perform_destroy(self, instance):
         if not instance.can_be_deleted:

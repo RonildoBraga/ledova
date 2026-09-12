@@ -11,8 +11,9 @@ class FinancialProfileViewSet(AuthenticatedModelViewSet):
     ordering = ["created_at"]
     ordering_fields = ["created_at"]
 
-    def get_queryset(self):
-        queryset = FinancialProfile.objects.visible_to_user(self.request.user)
+    scoped_model = FinancialProfile
+
+    def narrow(self, queryset):
         if getattr(self, "action", None) in {"update", "partial_update"}:
             return queryset.select_for_update()
         return queryset
