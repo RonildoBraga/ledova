@@ -38,7 +38,7 @@ def create_document(uploaded_by, validated_data) -> Document:
             if validated_data.get("classification"):
                 document = attach_document(document, uploaded_by, validated_data["classification"])
                 retained_copy = (document.file.storage, document.file.name)
-            extract_document.defer(document_uuid=str(document.uuid))
+            extract_document.defer(document_uuid=str(document.uuid), principal_id=uploaded_by.pk)
     except Exception:
         if retained_copy:
             retained_copy[0].delete(retained_copy[1])

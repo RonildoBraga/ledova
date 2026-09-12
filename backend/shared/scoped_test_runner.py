@@ -28,6 +28,7 @@ SCOPED_TEST_LABELS = (
     "companies.tests.test_registry_policy.ReviewedCompanyDeletionOnScopedConnectionTest",
     "blockchain.tests.test_monitor_scoped.ScopedMonitorObservationsTest",
     "users.tests.test_notification_tasks_scoped.NotificationTasksUseRecipientRolesTest",
+    "documents.tests.test_extraction_under_scoped_roles.ScopedDocumentExtractionTest",
 )
 
 

@@ -184,7 +184,7 @@ class DocumentCustomerRouteTest(StubUploadDependencies, APITestCase):
                 self.assertEqual(document.mime_type, "application/pdf")
                 self.assertTrue(document.file.storage.exists(document.file.name))
                 self.assertFalse(document.extractions.exists())
-                defer_task.assert_called_once_with(document_uuid=str(document.uuid))
+                defer_task.assert_called_once_with(document_uuid=str(document.uuid), principal_id=actor.pk)
 
             defer_task.reset_mock()
 

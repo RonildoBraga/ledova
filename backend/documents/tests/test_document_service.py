@@ -59,7 +59,7 @@ class CreateDocumentServiceTest(TestCase):
         self.assertEqual(document.original_filename, "payslip.pdf")
         self.assertEqual(document.mime_type, "application/pdf")
         self.assertEqual(document.note, "")
-        defer.assert_called_once_with(document_uuid=str(document.uuid))
+        defer.assert_called_once_with(document_uuid=str(document.uuid), principal_id=self.user.pk)
 
     @patch("documents.services.document.extract_document.defer")
     def test_it_keeps_an_optional_note(self, defer):
