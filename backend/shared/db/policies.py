@@ -398,6 +398,12 @@ REACHED_DESPITE_OPERATOR_ONLY = {
     "RiskAssessmentService.create_pending_assessment when an account is created, which is a customer route.",
     "compliance_monitoringrule": "reached from the same account-creation path while scoring the new "
     "assessment, on the connection that served the request.",
+    "blockchain_blockchaintransaction": "tokens/services/atomic_swap_service.py:411 writes the relayer's "
+    "broadcast record inside _claim_execution, which tokens/views/trading_order.py:228 reaches when the "
+    "second party signs. The write shares a transaction with the SwapOrder row lock, so it cannot move to "
+    "the operator connection without splitting that transaction in two. Granting it lets the app role read "
+    "every relayer record, which is wider than this path needs; the narrower fix is to enqueue the "
+    "broadcast for a worker, which already runs as the operator.",
 }
 
 UNSCOPED = {**FRAMEWORK, **OPERATOR_ONLY, **NOT_TENANCY, **AWAITING_RLS}
