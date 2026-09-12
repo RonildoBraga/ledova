@@ -13,7 +13,7 @@ class Migration(migrations.Migration):
         ("shared", "0007_review_request_policies"),
         ("users", "0021_trigger_types_from_the_column"),
         ("tokens", "0037_order_submissions"),
-        ("wallets", "0015_transaction_imported_from_history"),
+        ("wallets", "0019_chain_observations"),
         ("companies", "0008_company_registry_verification"),
         ("offerings", "0006_trigger_follows_and_refuses"),
         ("documents", "0003_documentread_document_attached_at_and_more"),

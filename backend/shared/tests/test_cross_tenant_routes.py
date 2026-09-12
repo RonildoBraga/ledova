@@ -521,7 +521,7 @@ class CrossTenantRouteMatrixTest(StubUploadDependencies, APITransactionTestCase)
         self._patch("rest_framework.throttling.SimpleRateThrottle.allow_request", return_value=True)
         self.services = []
         self._service("wallets.views.wallet.sync_wallet", return_value={"status": "success"})
-        wallet_transfer = self._service("wallets.views.wallet.TransferService")
+        wallet_transfer = self._service("wallets.views.wallet.transfers")
         wallet_transfer.prepare_transfer.return_value = {"transaction": {}}
         wallet_transfer.broadcast_transfer.return_value = {"success": True}
         self._service("wallets.services.balance.get_blockchain_client").return_value.get_native_balance.return_value = (

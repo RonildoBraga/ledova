@@ -79,8 +79,13 @@ class ReceiptStatusContractTest(SimpleTestCase):
 
     def test_bitcoin_returns_only_a_positive_confirmation_receipt(self):
         client = BitcoinClient.__new__(BitcoinClient)
-        with patch.object(
-            client, "get_transaction", return_value={"confirmations": 3, "height": 812345, "txid": BITCOIN_HASH}
+        with (
+            patch.object(
+                client,
+                "get_transaction",
+                return_value={"confirmations": 3, "blockhash": "79" * 32, "txid": BITCOIN_HASH},
+            ),
+            patch.object(client, "_rpc_call", return_value={"hash": "79" * 32, "height": 812345}),
         ):
             receipt = client.get_transaction_receipt(BITCOIN_HASH)
         self.assertIs(receipt["confirmed"], True)
