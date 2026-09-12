@@ -52,7 +52,8 @@ class DocumentCreateAtomicityTest(StubUploadDependencies, APITransactionTestCase
 
         self.assertEqual(response.status_code, 202)
         self.assertEqual(Document.objects.count(), 1)
-        defer.assert_called_once_with(document_uuid=str(Document.objects.get().uuid))
+        stored = Document.objects.get()
+        defer.assert_called_once_with(document_uuid=str(stored.uuid), principal_id=stored.uploaded_by_id)
 
     def test_the_task_is_deferred_from_inside_the_transaction_that_writes_the_row(self):
         seen = {}

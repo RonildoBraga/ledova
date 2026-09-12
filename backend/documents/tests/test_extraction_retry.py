@@ -54,7 +54,7 @@ class ExtractionFailureReachesTheWorkerTest(TestCase):
         self.addCleanup(render.stop)
 
     def run_the_task(self):
-        return extract_document(document_uuid=str(self.document.uuid))
+        return extract_document(document_uuid=str(self.document.uuid), principal_id=self.document.uploaded_by_id)
 
     def client_raising(self, error):
         client = patch("documents.services.extraction.LlmExtractClient")
@@ -106,7 +106,7 @@ class ExtractionFailureReachesTheWorkerTest(TestCase):
         self.assertIn("Unsupported document_type", DocumentExtraction.objects.get(document=self.document).error)
 
     def test_a_missing_document_returns_rather_than_retrying(self):
-        answer = extract_document(document_uuid="00000000-0000-0000-0000-000000000000")
+        answer = extract_document(document_uuid="00000000-0000-0000-0000-000000000000", principal_id=self.user.pk)
 
         self.assertEqual(answer, {"status": "error", "error": "document_not_found"})
 
@@ -141,9 +141,9 @@ class TheRetryStrategyGrantsTheAttemptsTest(TestCase):
 @skipUnless(connection.vendor == "postgresql", "PostgreSQL worker queue")
 class ExtractionWorkerRetryTest(TransactionTestCase):
     def setUp(self):
-        user = User.objects.create_user(email="worker-extraction@example.test", password="pw-12345678")
+        self.user = User.objects.create_user(email="worker-extraction@example.test", password="pw-12345678")
         self.document = Document.objects.create(
-            uploaded_by=user,
+            uploaded_by=self.user,
             document_type=DocumentType.PAYSLIP,
             original_filename="synthetic-payslip.pdf",
             mime_type="application/pdf",
@@ -156,7 +156,9 @@ class ExtractionWorkerRetryTest(TransactionTestCase):
             cursor.execute("SELECT id FROM procrastinate_jobs")
             existing = {row[0] for row in cursor.fetchall()}
         queue = f"doc-{self.document.uuid.hex}"
-        job_id = extract_document.configure(queue=queue).defer(document_uuid=str(self.document.uuid))
+        job_id = extract_document.configure(queue=queue).defer(
+            document_uuid=str(self.document.uuid), principal_id=self.document.uploaded_by_id
+        )
         self.addCleanup(self.remove_worker_job, job_id)
         with (
             patch.object(ExtractionService, "render_first_page", return_value=PAGE),
@@ -240,7 +242,7 @@ class RerunningAFailedExtractionTest(TestCase):
             with patch.object(instance, "message_user"):
                 instance.rerun_extraction(None, DocumentExtraction.objects.all())
 
-        defer.assert_called_once_with(document_uuid=str(self.document.uuid))
+        defer.assert_called_once_with(document_uuid=str(self.document.uuid), principal_id=None)
 
     def test_two_failed_attempts_on_one_document_queue_it_once(self):
         self.an_extraction(ExtractionStatus.FAILED)
@@ -251,7 +253,7 @@ class RerunningAFailedExtractionTest(TestCase):
             with patch.object(instance, "message_user"):
                 instance.rerun_extraction(None, DocumentExtraction.objects.all())
 
-        defer.assert_called_once_with(document_uuid=str(self.document.uuid))
+        defer.assert_called_once_with(document_uuid=str(self.document.uuid), principal_id=None)
 
     def test_a_succeeded_attempt_is_refused_rather_than_re_extracted(self):
         self.an_extraction(ExtractionStatus.SUCCEEDED)

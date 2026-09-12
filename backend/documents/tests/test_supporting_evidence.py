@@ -132,7 +132,7 @@ class SupportingPayslipApiTest(EvidenceCase, APITestCase):
         self.assertEqual(response.status_code, 202, response.content)
         self.assertEqual(response.json()["classification"], str(self.claim.pk))
         self.assertIsNone(response.json()["latestExtraction"])
-        defer.assert_called_once_with(document_uuid=response.json()["uuid"])
+        defer.assert_called_once_with(document_uuid=response.json()["uuid"], principal_id=self.owner.user.pk)
 
     def test_neither_a_foreign_document_nor_a_foreign_claim_can_be_attached(self):
         self.client.force_authenticate(self.other.user)
@@ -357,7 +357,12 @@ class SupportingPayslipAdminTest(EvidenceCase, TestCase):
         ):
             self.assertEqual(self.client.get(reverse(name, args=[pk])).status_code, 403)
         with patch("documents.services.extraction.LlmExtractClient") as llm:
-            self.assertEqual(extract_document(document_uuid=str(self.document.pk))["status"], "skipped")
+            self.assertEqual(
+                extract_document(document_uuid=str(self.document.pk), principal_id=self.document.uploaded_by_id)[
+                    "status"
+                ],
+                "skipped",
+            )
             llm.assert_not_called()
         self.assertEqual(DocumentExtraction.objects.count(), 1)
 

@@ -58,5 +58,5 @@ class DocumentExtractionAdmin(AuditsDocumentReads, admin.ModelAdmin):
 
         documents = sorted({str(uuid) for uuid in failed.values_list("document__uuid", flat=True)})
         for document_uuid in documents:
-            extract_document.defer(document_uuid=document_uuid)
+            extract_document.defer(document_uuid=document_uuid, principal_id=None)
         self.message_user(request, f"Queued {len(documents)} document(s) for re-extraction.")
