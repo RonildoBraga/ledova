@@ -4,6 +4,7 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
 
+from shared.tests.under_the_policies import what_the_policies_admit_to
 from users.models import DeviceToken, Notification, NotificationPreferences, UserProfile
 from users.services import IdentityVerificationService
 
@@ -57,7 +58,7 @@ class NotificationScopingTest(APITestCase):
         self.assertEqual(marked.status_code, 200)
         self.assertEqual(marked.json(), {"marked": 1})
         self.assertEqual(self.client.get(f"{NOTIFICATIONS}unread-count/").json(), {"unreadCount": 0})
-        self.assertEqual(Notification.objects.visible_to_user(self.bob).not_archived().unread().count(), 1)
+        self.assertEqual(what_the_policies_admit_to(self.bob, Notification).not_archived().unread().count(), 1)
 
         own.refresh_from_db()
         self.assertTrue(own.is_read)
@@ -92,9 +93,9 @@ class NotificationScopingTest(APITestCase):
         self.assertEqual(NotificationPreferences.objects.count(), 2)
 
     def test_device_token_manager_is_owner_scoped(self):
-        self.assertEqual(set(DeviceToken.objects.visible_to_user(self.alice)), {self.alice_token})
-        self.assertEqual(set(NotificationPreferences.objects.visible_to_user(self.bob)), {self.bob_preferences})
-        self.assertFalse(NotificationPreferences.objects.visible_to_user(self.alice).exists())
+        self.assertEqual(set(what_the_policies_admit_to(self.alice, DeviceToken)), {self.alice_token})
+        self.assertEqual(set(what_the_policies_admit_to(self.bob, NotificationPreferences)), {self.bob_preferences})
+        self.assertFalse(what_the_policies_admit_to(self.alice, NotificationPreferences).exists())
 
     def test_identity_verification_uses_only_the_requesters_profile(self):
         self.client.force_authenticate(self.alice)

@@ -3,6 +3,7 @@ from django.contrib.auth.models import AnonymousUser
 from rest_framework.test import APITestCase
 
 from companies.models import Company, CompanyStatus, CompanyType
+from shared.tests.under_the_policies import what_the_policies_admit_to
 from tokens.models import (
     CapitalIncreaseRequest,
     RequestStatus,
@@ -72,8 +73,8 @@ class CapitalIncreaseIsolationTest(APITestCase):
 
         for user in (None, AnonymousUser()):
             with self.subTest(user=user):
-                self.assertFalse(CapitalIncreaseRequest.objects.visible_to_user(user).exists())
-                self.assertFalse(CapitalIncreaseRequest.objects.manageable_by_user(user).exists())
+                self.assertFalse(what_the_policies_admit_to(user, CapitalIncreaseRequest).exists())
+                self.assertFalse(what_the_policies_admit_to(user, CapitalIncreaseRequest).exists())
 
         for index, actor in enumerate(actors):
             company = self._make_company(actor, f"Queryset Owner {index}")
@@ -81,10 +82,10 @@ class CapitalIncreaseIsolationTest(APITestCase):
             request = self._make_request(token, f"OWNER-{index}")
 
             with self.subTest(actor=actor.email):
-                self.assertEqual(set(CapitalIncreaseRequest.objects.visible_to_user(actor)), {request})
-                self.assertEqual(set(CapitalIncreaseRequest.objects.manageable_by_user(actor)), {request})
-                self.assertNotIn(foreign_request, CapitalIncreaseRequest.objects.visible_to_user(actor))
-                self.assertNotIn(foreign_request, CapitalIncreaseRequest.objects.manageable_by_user(actor))
+                self.assertEqual(set(what_the_policies_admit_to(actor, CapitalIncreaseRequest)), {request})
+                self.assertEqual(set(what_the_policies_admit_to(actor, CapitalIncreaseRequest)), {request})
+                self.assertNotIn(foreign_request, what_the_policies_admit_to(actor, CapitalIncreaseRequest))
+                self.assertNotIn(foreign_request, what_the_policies_admit_to(actor, CapitalIncreaseRequest))
 
     def test_create_binds_the_named_token_and_submit_records_the_submitter(self):
         owner = self._make_user("owner")

@@ -5,6 +5,7 @@ from django.contrib.auth.models import AnonymousUser
 from rest_framework.test import APITestCase
 
 from companies.models import Company, CompanyDocument
+from shared.tests.under_the_policies import what_the_policies_admit_to
 from tokens.models import (
     CapitalIncreaseRequest,
     IssuanceStatus,
@@ -71,43 +72,39 @@ class CompanyLiveAuthorizationTest(APITestCase):
         )
 
     def test_owner_is_live_authority_for_company_and_all_derived_resources(self):
-        self.assertNotIn(self.company, Company.objects.visible_to_user(self.bob))
-        self.assertNotIn(self.company, Company.objects.manageable_by_user(self.bob))
+        self.assertNotIn(self.company, what_the_policies_admit_to(self.bob, Company))
+        self.assertNotIn(self.company, what_the_policies_admit_to(self.bob, Company))
 
         Company.objects.filter(pk=self.company.pk).update(owner=self.bob)
         self.company.refresh_from_db()
 
         former_owner_querysets = (
-            Company.objects.visible_to_user(self.alice),
-            Company.objects.manageable_by_user(self.alice),
-            CompanyDocument.objects.visible_to_user(self.alice),
-            CompanyDocument.objects.manageable_by_user(self.alice),
-            ShareToken.objects.visible_to_user(self.alice),
-            ShareToken.objects.manageable_by_user(self.alice),
-            CapitalIncreaseRequest.objects.visible_to_user(self.alice),
-            CapitalIncreaseRequest.objects.manageable_by_user(self.alice),
-            ShareIssuanceRequest.objects.visible_to_user(self.alice),
-            ShareIssuanceRequest.objects.manageable_by_user(self.alice),
+            what_the_policies_admit_to(self.alice, Company),
+            what_the_policies_admit_to(self.alice, Company),
+            what_the_policies_admit_to(self.alice, CompanyDocument),
+            what_the_policies_admit_to(self.alice, CompanyDocument),
+            what_the_policies_admit_to(self.alice, ShareToken),
+            what_the_policies_admit_to(self.alice, ShareToken),
+            what_the_policies_admit_to(self.alice, CapitalIncreaseRequest),
+            what_the_policies_admit_to(self.alice, CapitalIncreaseRequest),
+            what_the_policies_admit_to(self.alice, ShareIssuanceRequest),
+            what_the_policies_admit_to(self.alice, ShareIssuanceRequest),
         )
-        for queryset in former_owner_querysets:
-            with self.subTest(model=queryset.model._meta.label):
-                self.assertFalse(queryset.exists())
+        self.assertEqual([q.model._meta.label for q in former_owner_querysets if q.exists()], [])
 
         current_owner_querysets = (
-            Company.objects.visible_to_user(self.bob),
-            Company.objects.manageable_by_user(self.bob),
-            CompanyDocument.objects.visible_to_user(self.bob),
-            CompanyDocument.objects.manageable_by_user(self.bob),
-            ShareToken.objects.visible_to_user(self.bob),
-            ShareToken.objects.manageable_by_user(self.bob),
-            CapitalIncreaseRequest.objects.visible_to_user(self.bob),
-            CapitalIncreaseRequest.objects.manageable_by_user(self.bob),
-            ShareIssuanceRequest.objects.visible_to_user(self.bob),
-            ShareIssuanceRequest.objects.manageable_by_user(self.bob),
+            what_the_policies_admit_to(self.bob, Company),
+            what_the_policies_admit_to(self.bob, Company),
+            what_the_policies_admit_to(self.bob, CompanyDocument),
+            what_the_policies_admit_to(self.bob, CompanyDocument),
+            what_the_policies_admit_to(self.bob, ShareToken),
+            what_the_policies_admit_to(self.bob, ShareToken),
+            what_the_policies_admit_to(self.bob, CapitalIncreaseRequest),
+            what_the_policies_admit_to(self.bob, CapitalIncreaseRequest),
+            what_the_policies_admit_to(self.bob, ShareIssuanceRequest),
+            what_the_policies_admit_to(self.bob, ShareIssuanceRequest),
         )
-        for queryset in current_owner_querysets:
-            with self.subTest(model=queryset.model._meta.label):
-                self.assertTrue(queryset.exists())
+        self.assertEqual([q.model._meta.label for q in current_owner_querysets if not q.exists()], [])
 
         for user, expected in ((self.alice, set()), (self.bob, {self.company.uuid})):
             serializer = ShareTokenCreateSerializer(context={"request": SimpleNamespace(user=user)})
@@ -116,10 +113,10 @@ class CompanyLiveAuthorizationTest(APITestCase):
     def test_querysets_fail_closed_and_follow_company_ownership_for_privileged_users(self):
         for user in (None, AnonymousUser()):
             with self.subTest(user=user):
-                self.assertFalse(Company.objects.visible_to_user(user).exists())
-                self.assertFalse(Company.objects.manageable_by_user(user).exists())
-                self.assertFalse(CompanyDocument.objects.visible_to_user(user).exists())
-                self.assertFalse(CompanyDocument.objects.manageable_by_user(user).exists())
+                self.assertFalse(what_the_policies_admit_to(user, Company).exists())
+                self.assertFalse(what_the_policies_admit_to(user, Company).exists())
+                self.assertFalse(what_the_policies_admit_to(user, CompanyDocument).exists())
+                self.assertFalse(what_the_policies_admit_to(user, CompanyDocument).exists())
 
         for index, privileged_user in enumerate((self.staff, self.superuser), start=4):
             company = Company.objects.create(
@@ -139,10 +136,10 @@ class CompanyLiveAuthorizationTest(APITestCase):
             )
 
             with self.subTest(user=privileged_user.email):
-                self.assertEqual(set(Company.objects.visible_to_user(privileged_user)), {company})
-                self.assertEqual(set(Company.objects.manageable_by_user(privileged_user)), {company})
-                self.assertEqual(set(CompanyDocument.objects.visible_to_user(privileged_user)), {document})
-                self.assertEqual(set(CompanyDocument.objects.manageable_by_user(privileged_user)), {document})
+                self.assertEqual(set(what_the_policies_admit_to(privileged_user, Company)), {company})
+                self.assertEqual(set(what_the_policies_admit_to(privileged_user, Company)), {company})
+                self.assertEqual(set(what_the_policies_admit_to(privileged_user, CompanyDocument)), {document})
+                self.assertEqual(set(what_the_policies_admit_to(privileged_user, CompanyDocument)), {document})
 
     def test_company_stats_are_exactly_self_scoped_for_regular_and_privileged_owners(self):
         foreign_company = Company.objects.create(

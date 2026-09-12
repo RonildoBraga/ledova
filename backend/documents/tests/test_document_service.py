@@ -8,6 +8,7 @@ from django.test import TestCase, override_settings
 
 from documents.models import Document, DocumentType
 from documents.services.document import create_document
+from shared.tests.under_the_policies import what_the_policies_admit_to
 
 User = get_user_model()
 
@@ -26,14 +27,14 @@ class DocumentVisibilityTest(TestCase):
         )
 
     def test_the_uploader_sees_their_own_document(self):
-        self.assertEqual(list(Document.objects.visible_to_user(self.owner)), [self.document])
+        self.assertEqual(list(what_the_policies_admit_to(self.owner, Document)), [self.document])
 
     def test_another_user_sees_nothing(self):
-        self.assertFalse(Document.objects.visible_to_user(self.stranger).exists())
+        self.assertFalse(what_the_policies_admit_to(self.stranger, Document).exists())
 
     def test_an_anonymous_or_missing_caller_sees_nothing(self):
-        self.assertFalse(Document.objects.visible_to_user(AnonymousUser()).exists())
-        self.assertFalse(Document.objects.visible_to_user(None).exists())
+        self.assertFalse(what_the_policies_admit_to(AnonymousUser(), Document).exists())
+        self.assertFalse(what_the_policies_admit_to(None, Document).exists())
 
 
 class CreateDocumentServiceTest(TestCase):

@@ -187,7 +187,8 @@ class SwapSettlementExecutionTest(APITransactionTestCase):
         self.assertEqual(transaction.function_args["settlement"]["digest"], swap.settlement_digest)
         self.assertEqual(transaction.to_address, context["typed_data"]["domain"]["verifyingContract"])
         service._record_sent(claimed, transaction, TX_HASH)
-        claimed.refresh_from_db()
+        with use_operator():
+            claimed.refresh_from_db()
         contract = service.chain_client.load_contract.return_value
         contract.events.SwapExecuted.return_value.process_receipt.return_value = [
             {"args": {"orderHash": swap.settlement_digest}}
@@ -198,7 +199,8 @@ class SwapSettlementExecutionTest(APITransactionTestCase):
         service.chain_client.load_contract.assert_called_with(
             "AtomicSwap", context["typed_data"]["domain"]["verifyingContract"]
         )
-        claimed.refresh_from_db()
+        with use_operator():
+            claimed.refresh_from_db()
         self.assertEqual(claimed.status, SwapOrderStatus.COMPLETED)
 
     def test_drift_before_claim_prevents_claim_and_drift_after_prepare_keeps_reservation(self):
@@ -218,7 +220,8 @@ class SwapSettlementExecutionTest(APITransactionTestCase):
         ):
             with self.assertRaises(SettlementContextChanged):
                 service.execute_swap(swap)
-        swap.refresh_from_db()
+        with use_operator():
+            swap.refresh_from_db()
         self.assertEqual(swap.status, SwapOrderStatus.EXECUTING)
         self.assertEqual(swap.transaction.status, TransactionStatus.PENDING)
         self.assertEqual(swap.sell_order.filled_quantity, 30)
@@ -288,7 +291,8 @@ class SwapSettlementRouteTest(APITransactionTestCase):
             url, {**buyer_identity, "signature": signature, "signer_address": SELLER.address}, format="json"
         )
         self.assertEqual(response.status_code, 200, response.content)
-        self.swap.refresh_from_db()
+        with use_operator():
+            self.swap.refresh_from_db()
         self.assertEqual(self.swap.seller_signature, signature)
         self.assertFalse(self.swap.buyer_signature)
 
@@ -307,7 +311,8 @@ class SwapSettlementRouteTest(APITransactionTestCase):
         )
         self.assertEqual(response.status_code, 400, response.content)
         self.assertIn("signerAddress", response.json())
-        self.swap.refresh_from_db()
+        with use_operator():
+            self.swap.refresh_from_db()
         self.assertFalse(self.swap.seller_signature)
         for address in (SELLER.address, "0x" + SELLER.address[2:].upper(), SELLER.address.lower()):
             with self.subTest(address=address):
@@ -317,7 +322,8 @@ class SwapSettlementRouteTest(APITransactionTestCase):
                     format="json",
                 )
                 self.assertEqual(accepted.status_code, 200, accepted.content)
-        self.swap.refresh_from_db()
+        with use_operator():
+            self.swap.refresh_from_db()
         self.assertEqual(self.swap.seller_signature, signature)
 
     def test_wallet_retirement_during_signature_check_prevents_persistence(self):
@@ -340,7 +346,8 @@ class SwapSettlementRouteTest(APITransactionTestCase):
                 format="json",
             )
         self.assertEqual(response.status_code, 404, response.content)
-        self.swap.refresh_from_db()
+        with use_operator():
+            self.swap.refresh_from_db()
         self.assertFalse(self.swap.seller_signature)
 
     def test_configuration_drift_during_signature_check_does_not_store_the_valid_signature(self):
@@ -361,7 +368,8 @@ class SwapSettlementRouteTest(APITransactionTestCase):
                 format="json",
             )
         self.assertEqual(response.status_code, 409, response.content)
-        self.swap.refresh_from_db()
+        with use_operator():
+            self.swap.refresh_from_db()
         self.assertFalse(self.swap.seller_signature)
         recovered = self.client.get(self.url + "/", self.identity)
         self.assertEqual(recovered.status_code, 200, recovered.content)
@@ -458,7 +466,8 @@ class SwapSettlementRouteTest(APITransactionTestCase):
         self.assertTrue(list(validator.iter_errors({})))
         response = self.client.post(self.url + "/sign/", scoped, format="json")
         self.assertEqual(response.status_code, 200, response.content)
-        self.swap.refresh_from_db()
+        with use_operator():
+            self.swap.refresh_from_db()
         self.assertEqual(self.swap.seller_signature, signature)
 
     def approval_transaction(self):
@@ -548,7 +557,8 @@ class SwapSettlementRouteTest(APITransactionTestCase):
                 self.assertNotIn("diagnostic", response.content.decode())
                 self.assertNotIn("blockNumber", response.json())
                 provider.send_raw_transaction.assert_called_once_with(bytes.fromhex(raw))
-        self.swap.refresh_from_db()
+        with use_operator():
+            self.swap.refresh_from_db()
         self.assertFalse(self.swap.tx_hash)
         self.assertIsNone(self.swap.transaction_id)
 

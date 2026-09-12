@@ -60,6 +60,13 @@ DIRECTS_THE_ACCOUNT = f"director_id IN (SELECT uuid FROM users_userprofile WHERE
 LEAF_TABLES = ("companies_company", "users_userprofile", "customer_accounts_account_user_profiles")
 
 
+def _owned_through_the_profile(table):
+    return (
+        f"EXISTS (SELECT 1 FROM users_userprofile owning "
+        f"WHERE owning.uuid = {table}.user_profile_id AND owning.user_id = {PRINCIPAL})"
+    )
+
+
 def _member(column):
     return f"{column} IN (SELECT {MEMBER_ACCOUNTS}())"
 
@@ -107,6 +114,11 @@ THROUGH_ITS_TOKEN = (
 A_PARTY_TO_THE_SWAP = (
     "EXISTS (SELECT 1 FROM wallets party "
     "WHERE party.uuid IN (tokens_swaporder.seller_wallet_id, tokens_swaporder.buyer_wallet_id) "
+    f"AND party.user_account_id IN (SELECT {MEMBER_ACCOUNTS}()))"
+)
+A_VERIFIED_PARTY_TO_THE_SWAP = (
+    "EXISTS (SELECT 1 FROM wallets party "
+    "WHERE party.uuid IN (tokens_swaporder.seller_wallet_id, tokens_swaporder.buyer_wallet_id) "
     f"AND party.user_account_id IN (SELECT {MEMBER_ACCOUNTS}()) "
     f"AND party.verification_status = '{WALLET_VERIFICATION_STATUS_VERIFIED}' "
     f"AND party.chain IN ('{BLOCKCHAIN_ETHEREUM}', '{BLOCKCHAIN_BASE}'))"
@@ -126,9 +138,18 @@ POLICIES = {
     "documents": (f"uploaded_by_id = {PRINCIPAL}", f"uploaded_by_id = {PRINCIPAL}"),
     "users_device_token": (f"user_id = {PRINCIPAL}", f"user_id = {PRINCIPAL}"),
     "notifications": (f"user_id = {PRINCIPAL}", f"user_id = {PRINCIPAL}"),
-    "users_financialprofile": (f"user_id = {PRINCIPAL}", f"user_id = {PRINCIPAL}"),
-    "users_notification_preferences": (f"user_id = {PRINCIPAL}", f"user_id = {PRINCIPAL}"),
-    "users_userpreferences": (f"user_id = {PRINCIPAL}", f"user_id = {PRINCIPAL}"),
+    "users_financialprofile": (
+        _owned_through_the_profile("users_financialprofile"),
+        _owned_through_the_profile("users_financialprofile"),
+    ),
+    "users_notification_preferences": (
+        _owned_through_the_profile("users_notification_preferences"),
+        _owned_through_the_profile("users_notification_preferences"),
+    ),
+    "users_userpreferences": (
+        _owned_through_the_profile("users_userpreferences"),
+        _owned_through_the_profile("users_userpreferences"),
+    ),
     "customer_accounts_account": (f"{_member('uuid')} OR {HOLDS_A_SIGNING_WALLET}", _member("uuid")),
     "wallets": (f"{_member('user_account_id')} OR {SIGNS_FOR_A_COMPANY}", _member("user_account_id")),
     "transactions": (_member("user_account_id"), _member("user_account_id")),
@@ -167,7 +188,7 @@ POLICIES = {
         _company("company_id", MANAGEABLE_COMPANIES),
     ),
     "tokens_sharetoken": (
-        f"owner_id = {PRINCIPAL} OR ({ON_THE_MARKET})",
+        f'{_company("company_id", VISIBLE_COMPANIES)} OR ({ON_THE_MARKET})',
         _company("company_id", MANAGEABLE_COMPANIES),
     ),
     "tokens_capitalincreaserequest": (
@@ -338,12 +359,16 @@ PUBLIC_TERM = {
 
 INSERTABLE = {
     "customer_accounts_account": f"{_member('uuid')} OR {DIRECTS_THE_ACCOUNT}",
-    "tokens_swaporder": A_PARTY_TO_THE_SWAP,
+    "tokens_swaporder": A_VERIFIED_PARTY_TO_THE_SWAP,
 }
 
 INSERT_ONLY_REASONS = {
     "tokens_swaporder": (
-        "A party may bring a swap into existence and may never change one. Creation happens inside "
+        "A party may bring a swap into existence with a verified wallet, and may never change one. "
+        "The read term asks only for membership, deliberately: verification in the read term would "
+        "hide a swap whose wallet has drifted, and a hidden row cannot be updated, so tokens/0040's "
+        "parent-identity triggers would stop firing and a refusal that should raise would silently "
+        "match nothing instead. Creation happens inside "
         "create_order_and_match, which is atomic over the orders, the reservations and the swap "
         "together, so it cannot move to another connection without the swap surviving a rollback that "
         "takes the rest. Every transition afterwards - executing, failed, completed, the hashes - is "

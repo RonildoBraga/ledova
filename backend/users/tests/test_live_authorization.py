@@ -7,6 +7,7 @@ from django.test.utils import CaptureQueriesContext
 from rest_framework.test import APITestCase
 
 from assets.models import Asset
+from shared.tests.under_the_policies import what_the_policies_admit_to
 from users.models import (
     DeviceToken,
     FavouriteAsset,
@@ -79,19 +80,19 @@ class UserLiveAuthorizationTest(APITestCase):
 
     def test_live_scopes_follow_current_relationships(self):
         cases = (
-            (UserProfile.objects.visible_to_user(self.alice), self.alice_profile, self.bob_profile),
+            (what_the_policies_admit_to(self.alice, UserProfile), self.alice_profile, self.bob_profile),
             (
-                FinancialProfile.objects.visible_to_user(self.alice),
+                what_the_policies_admit_to(self.alice, FinancialProfile),
                 self.alice_financial,
                 self.bob_financial,
             ),
             (
-                UserPreferences.objects.visible_to_user(self.alice),
+                what_the_policies_admit_to(self.alice, UserPreferences),
                 self.alice_preferences,
                 self.bob_preferences,
             ),
             (
-                FavouriteAsset.objects.visible_to_user(self.alice),
+                what_the_policies_admit_to(self.alice, FavouriteAsset),
                 self.alice_favourite,
                 self.bob_favourite,
             ),
@@ -110,15 +111,15 @@ class UserLiveAuthorizationTest(APITestCase):
         self.alice_profile.user = replacement_owner
         self.alice_profile.save(update_fields=["user"])
 
-        self.assertNotIn(self.alice_profile, UserProfile.objects.visible_to_user(self.alice))
-        self.assertNotIn(self.alice_financial, FinancialProfile.objects.visible_to_user(self.alice))
-        self.assertIn(self.alice_profile, UserProfile.objects.visible_to_user(replacement_owner))
-        self.assertIn(self.alice_financial, FinancialProfile.objects.visible_to_user(replacement_owner))
+        self.assertNotIn(self.alice_profile, what_the_policies_admit_to(self.alice, UserProfile))
+        self.assertNotIn(self.alice_financial, what_the_policies_admit_to(self.alice, FinancialProfile))
+        self.assertIn(self.alice_profile, what_the_policies_admit_to(replacement_owner, UserProfile))
+        self.assertIn(self.alice_financial, what_the_policies_admit_to(replacement_owner, FinancialProfile))
 
     def test_account_membership_immediately_controls_favourite_access(self):
         self.alice_account.user_profiles.remove(self.alice_profile)
 
-        self.assertNotIn(self.alice_favourite, FavouriteAsset.objects.visible_to_user(self.alice))
+        self.assertNotIn(self.alice_favourite, what_the_policies_admit_to(self.alice, FavouriteAsset))
         self.client.force_authenticate(self.alice)
         own_url = f"/api/favourite-assets/{self.alice_favourite.uuid}/"
         self.assertEqual(self.client.get(own_url).status_code, 404)
@@ -127,7 +128,7 @@ class UserLiveAuthorizationTest(APITestCase):
 
         self.bob_account.user_profiles.add(self.alice_profile)
 
-        self.assertIn(self.bob_favourite, FavouriteAsset.objects.visible_to_user(self.alice))
+        self.assertIn(self.bob_favourite, what_the_policies_admit_to(self.alice, FavouriteAsset))
         bob_url = f"/api/favourite-assets/{self.bob_favourite.uuid}/"
         self.assertEqual(self.client.get(bob_url).status_code, 200)
         self.assertEqual(self.client.delete(bob_url).status_code, 204)
@@ -283,7 +284,11 @@ class UserLiveAuthorizationTest(APITestCase):
             NotificationPreferences.objects,
             DeviceToken.objects,
         )
-        for manager in managers:
-            with self.subTest(model=manager.model._meta.label, user="anonymous"):
-                self.assertFalse(manager.visible_to_user(anonymous).exists())
-                self.assertFalse(manager.visible_to_user(None).exists())
+        seen = [
+            manager.model._meta.label
+            for manager in managers
+            for caller in (anonymous, None)
+            if what_the_policies_admit_to(caller, manager.model).exists()
+        ]
+
+        self.assertEqual(seen, [])
