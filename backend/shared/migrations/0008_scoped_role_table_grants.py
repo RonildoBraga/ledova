@@ -12,7 +12,7 @@ class Migration(migrations.Migration):
     dependencies = [
         ("shared", "0007_review_request_policies"),
         ("users", "0021_trigger_types_from_the_column"),
-        ("tokens", "0037_order_submissions"),
+        ("tokens", "0040_swap_parent_identity"),
         ("wallets", "0015_transaction_imported_from_history"),
         ("companies", "0008_company_registry_verification"),
         ("offerings", "0006_trigger_follows_and_refuses"),
