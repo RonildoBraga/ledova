@@ -107,7 +107,7 @@ THROUGH_THE_ORDER_IT_MODIFIED = (
 THROUGH_ITS_TOKEN = (
     "EXISTS (SELECT 1 FROM tokens_sharetoken issued "
     "WHERE issued.uuid = tokens_shareissuance.token_id "
-    f"AND (issued.owner_id = {PRINCIPAL} OR {on_the_market('issued.')}))"
+    f"AND ({_company('issued.company_id', VISIBLE_COMPANIES)} OR {on_the_market('issued.')}))"
 )
 
 
