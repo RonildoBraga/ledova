@@ -106,8 +106,9 @@ production calls it yet.
 Most apps are laid out as `models/ querysets/ serializers/ services/ views/
 tasks/ admin/`, taking only the layers they need: `operators/` is flat modules,
 `integrations/` only `admin.py` (the rest is one subpackage per provider), and
-`blockchain/`, `compliance/`, `feature_flags/` and `shared/` are partial. Delete
-before abstracting; add a layer only when a second caller needs the same logic.
+`blockchain/`, `compliance/`, `feature_flags/` and `shared/` are partial. Prefer
+fewer layers and fewer lines: delete before abstracting, and add a layer only
+when a second caller needs the same logic.
 
 `offerings/` is the reference app: roughly six times as much service as view.
 Where a rule and a file disagree, the rule wins and the file is the backlog.
@@ -191,11 +192,13 @@ exists to prevent, and `crypto-polyfill.js` is that shape, pulled in for its
 side effects rather than imported from the entry. The same preference makes an
 empty `testMatch` refuse to run rather than treat every file as a test.
 
-A second pass scans `packages/*/src` under a different rule: every non-relative
-specifier there must have a `metro.config.js` `extraNodeModules` alias resolving
+A second pass scans `packages/*/src` under a different rule: a non-relative
+specifier there needs a `metro.config.js` `extraNodeModules` alias resolving
 inside `mobile/node_modules`, because Metro walking up from a file in
 `packages/` reaches neither `mobile/node_modules` nor the repository root, so
 the alias is the only thing that resolves anything there — not just builtins.
+The check short-circuits on a Node builtin, so one with no alias passes this
+pass silently and is caught by the entry-chain pass instead.
 
 The workspace-wide self-import rule lives in `scripts/check-self-imports.mjs`,
 run by `make check-self-imports`, `make check` and its own CI step: each
@@ -228,7 +231,7 @@ The case that produced it: `@noble/hashes` 2 removed the `./sha256`, `./sha512`,
 `./ripemd160` and `./hmac` subpaths that `bip32.ts`, `seedDerivation.ts`,
 `localSigner.ts` and `secureKeyStorage.ts` import. Dependabot proposed it, all
 four checks passed, and only the root's copy of 1.8.0 made the type-check
-succeed.
+succeed. A green type-check is not evidence that mobile resolves.
 
 Every client import is `from '@ledova/shared'`. `packages/shared/src/services`
 holds the API call functions both clients share; each takes the caller's axios
@@ -437,7 +440,8 @@ reconstruct overwritten reviewer notes or infer missing execution events.
    throughout this admin. The bank rail has no such key: settlement there is
    operator-attested, so a statement line already recorded against another
    subscription is a **warning** naming the other references, not a refusal.
-   Every money action in the admin writes a `LogEntry`, so a restated
+   Acceptance, confirmation, refund, rejection, retry, bulk allotment and scale
+   back each write a `LogEntry`, so a restated
    `amount_received` leaves the earlier figure in the object's history though
    the column holds only the latest; restating downwards warns as well.
 5. Reject and withdraw are refused while money is recorded and unrefunded, and
@@ -827,9 +831,10 @@ direct owner column.
   **`NOT NULL`**, and indexed by Django's own foreign-key index. `related_name`
   is `"+"`, because the column exists for a policy to read, not to traverse.
   **What matters is how many times the backfill writes each row**, not how many
-  statements it runs — `tokens/0023`'s bulk `UPDATE` plus a loop over the rows it
-  left is several statements over disjoint rows, one write each — which is what
-  the settle bullet turns on.
+  statements it runs. `tokens/0023`'s bulk `UPDATE` plus a loop over the rows it
+  left is several statements over disjoint rows, one write each, and is not the
+  case the settle bullet turns on; writing `tokens_swaporder` twice, once per
+  owner column, is.
 - **`on_delete` mirrors the strictest `on_delete` on the path it derives from**,
   because a shortcut must not make an owner deletable when the path it replaces
   refuses. Django enforces `on_delete` in the collector, not in DDL, so nothing
@@ -902,7 +907,8 @@ direct owner column.
   across three lanes, and the correction then dropped a permission the same way,
   the same afternoon, by asking only what the old branch refused. A trigger
   branch is where that gap is least visible, because the cases it stops refusing
-  raise nothing.
+  raise nothing, and the cases it starts refusing appear in no test that was
+  written for them.
 - **The trigger's local variable takes its type from the column it reads**,
   `parent.{column}%TYPE`, rather than naming a type. Four R0 parents are `uuid`
   and the user is a `BigAutoField`, because `CustomUser` extends
@@ -1338,6 +1344,10 @@ strand bytes the target mode can neither read nor purge.
     once attached, `documents/<document uuid>/<random uuid><ext>` while
     unattached — neither branch carries an owner uuid; the owner is reached
     through the row.
+
+  Never put a primary key, an email address or the caller's original filename in
+  a stored key. The three paths above are what that rule produced; a fourth is
+  held to the rule, not to them.
 - **A file is owned by its row, and a file with no row is deleted.** Django has
   not removed a file on row delete since 1.3, so an ordinary `DELETE` answering
   204 left the bytes behind; retention is row-driven — `purge_expired_evidence`
