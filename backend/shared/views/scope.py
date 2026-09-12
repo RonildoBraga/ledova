@@ -1,8 +1,19 @@
 from django.core.exceptions import ImproperlyConfigured
 
+REASON_ENOUGH = 40
+
 NO_MODEL = (
+    "{view} names no scoped_model, so the base does not scope it and every request it serves would "
+    "reach the ORM on its own terms. Name the model the base should scope. If the view is scoped some "
+    "other way, or answers without a queryset at all, say which in unscoped_by_the_base_because."
+)
+HOOK_WITHOUT_A_MODEL = (
     "{view} sets manage_actions or narrow() but names no scoped_model, so the base cannot tell "
     "which manager to scope. Set scoped_model, or drop the hook."
+)
+REASON_AND_A_MODEL = (
+    "{view} names a scoped_model and also claims unscoped_by_the_base_because. The base scopes it; "
+    "the claim is false. Drop one."
 )
 BOTH = (
     "{view} names a scoped_model and also defines {hook}. The base owns the scoping call; put the "
@@ -28,14 +39,22 @@ class ScopesToThePrincipal:
 
     scoped_model = None
     manage_actions: frozenset = frozenset()
+    unscoped_by_the_base_because = ""
+    abstract = False
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
+        if cls.__dict__.get("abstract"):
+            return
         model = cls.scoped_model
         if model is None:
             if cls.__dict__.get("manage_actions") or "narrow" in cls.__dict__:
+                raise ImproperlyConfigured(HOOK_WITHOUT_A_MODEL.format(view=cls.__name__))
+            if len(cls.__dict__.get("unscoped_by_the_base_because", "")) < REASON_ENOUGH:
                 raise ImproperlyConfigured(NO_MODEL.format(view=cls.__name__))
             return
+        if cls.__dict__.get("unscoped_by_the_base_because"):
+            raise ImproperlyConfigured(REASON_AND_A_MODEL.format(view=cls.__name__))
         for hook in ("get_queryset", "get_object"):
             if hook in cls.__dict__:
                 raise ImproperlyConfigured(BOTH.format(view=cls.__name__, hook=hook))
