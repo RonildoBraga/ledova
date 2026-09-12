@@ -26,9 +26,9 @@ from wallets.serializers.actions import (
 )
 from wallets.services import (
     BalanceService,
-    TransferService,
     complete_wallet_verification,
     start_wallet_verification,
+    transfers,
 )
 from wallets.services.registration import register_wallet
 from wallets.services.sync import sync_wallet
@@ -128,7 +128,7 @@ class WalletViewSet(AuthenticatedModelViewSet):
     def prepare_transfer(self, request, uuid=None):
         wallet = self.get_object()
 
-        transaction_data = TransferService.prepare_transfer(
+        transaction_data = transfers.prepare_transfer(
             wallet=wallet,
             to_address=request.data.get("to_address"),
             amount_eth=request.data.get("amount_eth"),
@@ -147,9 +147,7 @@ class WalletViewSet(AuthenticatedModelViewSet):
         serializer = BroadcastTransferSerializer(data=request.data, context={"wallet": wallet})
         serializer.is_valid(raise_exception=True)
 
-        result = TransferService.broadcast_transfer(
-            wallet=wallet, principal_id=request.user.pk, **serializer.validated_data
-        )
+        result = transfers.broadcast_transfer(wallet=wallet, principal_id=request.user.pk, **serializer.validated_data)
 
         return Response(result, status=status.HTTP_200_OK)
 
