@@ -1,8 +1,17 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { CheckCircleIcon } from '@phosphor-icons/react';
+import { useQueryClient } from '@tanstack/react-query';
 import type { TransferOrder, CreateOrderRequest, Wallet, SwapOrder } from '@ledova/shared';
-import { DESIGN_TOKENS, useOrderSubmissions } from '@ledova/shared';
+import {
+  DESIGN_TOKENS,
+  hasSwapSettlementContext,
+  selectSwapSettlementLookup,
+  useOrderSubmissions,
+  useOrderActions,
+  useSwapSettlements,
+} from '@ledova/shared';
 import { orderSubmissionStore } from '@services/orderSubmissions';
+import { settlementWalletKey, swapSettlementCrypto, swapSettlementStore } from '@services/swapSettlements';
 import { Modal } from '@components/Modal';
 import {
   useShareTokens,
@@ -13,8 +22,10 @@ import {
 } from './useTrading';
 import { useSwapOrdersMulti } from './hooks/useAtomicSwaps';
 import { SwapSigningFlow } from './components/SwapSigningFlow';
+import { SwapSettlementFlow } from './components/SwapSettlementFlow';
 import { OrderSigningFlow } from './components/OrderSigningFlow';
-import { OrderModificationModal } from './components/OrderModificationModal';
+import { OrderActionFlow } from './components/OrderActionFlow';
+import { orderActionStore } from '@services/orderActions';
 import { MarketOverview } from './components/MarketOverview';
 import { OrdersPanel } from './components/OrdersPanel';
 import { PlaceOrderPanel } from './components/PlaceOrderPanel';
@@ -78,7 +89,18 @@ function OrderSuccessModal({
 }
 
 export function TradingPage() {
+  const queryClient = useQueryClient();
   const submissions = useOrderSubmissions(orderSubmissionStore);
+  const actions = useOrderActions(orderActionStore);
+  const settlements = useSwapSettlements(swapSettlementStore, swapSettlementCrypto);
+  const closeSettlement = useRef(settlements.close);
+  closeSettlement.current = settlements.close;
+  const settlementWalletGuard = useRef<{
+    walletUuid: string;
+    ownerAccountUuid: string;
+    key: string;
+    retired: boolean;
+  } | null>(null);
   const signingGeneration = useRef(0);
   const currentSigningGeneration = signingGeneration.current;
   const { data: tokens, isLoading } = useShareTokens();
@@ -92,18 +114,43 @@ export function TradingPage() {
 
   const [selectedSwap, setSelectedSwap] = useState<SwapOrder | null>(null);
   const [isSwapSigningOpen, setIsSwapSigningOpen] = useState(false);
-
-  const [pendingCancelOrderUuid, setPendingCancelOrderUuid] = useState<string | null>(null);
-  const [pendingCancelOrderSymbol, setPendingCancelOrderSymbol] = useState<string | null>(null);
-  const [orderSigningWallet, setOrderSigningWallet] = useState<Wallet | null>(null);
-  const [isOrderSigningOpen, setIsOrderSigningOpen] = useState(false);
-
-  const [orderToModify, setOrderToModify] = useState<TransferOrder | null>(null);
-  const [isModificationModalOpen, setIsModificationModalOpen] = useState(false);
+  const [swapSelectionError, setSwapSelectionError] = useState<string | null>(null);
 
   useTradingEvents(selectedTokenUuid);
 
-  const { wallets, walletAddresses } = useUserTradingWallets();
+  const { wallets, actionWallets, walletAddresses } = useUserTradingWallets();
+  const latestWallets = useRef(wallets);
+  latestWallets.current = wallets;
+  useEffect(() => {
+    if (settlements.active && !settlements.active.isCurrent()) settlements.close();
+  }, [settlements.active, settlements.close, wallets]);
+  useEffect(
+    () =>
+      queryClient.getQueryCache().subscribe((event) => {
+        const guard = settlementWalletGuard.current;
+        const key = event.query.queryKey;
+        if (
+          !guard ||
+          guard.retired ||
+          !['updated', 'removed'].includes(event.type) ||
+          key.length !== 3 ||
+          key[0] !== 'wallets' ||
+          key[1] !== guard.ownerAccountUuid ||
+          key[2] !== 'trading'
+        )
+          return;
+        const data = event.query.state.data as { data?: { results?: Wallet[] } } | undefined;
+        const rows = event.type === 'removed' ? null : data?.data?.results;
+        const observed = Array.isArray(rows)
+          ? (rows.find((candidate) => candidate.uuid === guard.walletUuid) ?? null)
+          : null;
+        if (settlementWalletKey(observed) !== guard.key) {
+          guard.retired = true;
+          closeSettlement.current();
+        }
+      }),
+    [queryClient],
+  );
   const {
     isWhitelisted,
     getStatus: getWhitelistStatusFor,
@@ -130,39 +177,91 @@ export function TradingPage() {
   const { data: orderBookData, isLoading: isLoadingOrderBook } = useOrderBook(selectedTokenUuid || undefined);
 
   const handleCreateOrder = (data: CreateOrderRequest): Promise<boolean> => {
+    closeSwapSigning();
+    actions.close();
     const signingWallet = wallets.find((w) => w.uuid === data.walletUuid);
     return submissions.begin(data, signingWallet ?? null);
   };
 
   const handleCancelOrder = (uuid: string) => {
     signingGeneration.current++;
+    closeSwapSigning();
     submissions.close();
-    const order = userOrders.find((o) => o.uuid === uuid);
-    if (order) {
-      const signingWallet = wallets.find((w) => w.address.toLowerCase() === order.walletAddress.toLowerCase());
-      setOrderSigningWallet(signingWallet || wallets[0] || null);
-      setPendingCancelOrderSymbol(order.tokenSymbol);
-    } else {
-      setOrderSigningWallet(wallets[0] || null);
-      setPendingCancelOrderSymbol(null);
-    }
-    setPendingCancelOrderUuid(uuid);
-    setIsOrderSigningOpen(true);
+    actions.open(uuid, 'cancel');
   };
 
   const handleEditOrder = (order: TransferOrder) => {
-    setOrderToModify(order);
-    setIsModificationModalOpen(true);
+    signingGeneration.current++;
+    closeSwapSigning();
+    submissions.close();
+    actions.open(order.uuid, 'modify');
+  };
+
+  const closeSwapSigning = () => {
+    if (settlementWalletGuard.current) settlementWalletGuard.current.retired = true;
+    settlementWalletGuard.current = null;
+    settlements.close();
+    setSelectedSwap(null);
+    setIsSwapSigningOpen(false);
+    setSwapSelectionError(null);
+  };
+
+  const walletCurrent = (walletUuid: string) => {
+    const selected = latestWallets.current.find((candidate) => candidate.uuid === walletUuid) ?? null;
+    const key = settlementWalletKey(selected);
+    const guard = { walletUuid, ownerAccountUuid: settlements.owner?.ownerAccountUuid ?? '', key, retired: false };
+    settlementWalletGuard.current = guard;
+    return () =>
+      !guard.retired &&
+      settlementWalletGuard.current === guard &&
+      key === settlementWalletKey(latestWallets.current.find((candidate) => candidate.uuid === walletUuid) ?? null);
   };
 
   const handleSignSwap = (swap: SwapOrder) => {
-    setSelectedSwap(swap);
-    setIsSwapSigningOpen(true);
+    signingGeneration.current++;
+    submissions.close();
+    actions.close();
+    closeSwapSigning();
+    if (swap.settlementProtocolVersion === 0) {
+      setSelectedSwap(swap);
+      setIsSwapSigningOpen(true);
+      return;
+    }
+    if (!hasSwapSettlementContext(swap) || !settlements.owner) {
+      setSwapSelectionError('The saved trade details are incomplete. Refresh the trade before signing.');
+      return;
+    }
+    try {
+      const choices = (['seller', 'buyer'] as const).flatMap((role) => {
+        const party = swap.settlementContext[role];
+        const wallet = wallets.find(
+          (candidate) =>
+            candidate.uuid === party.walletUuid &&
+            candidate.userAccount === settlements.owner!.ownerAccountUuid &&
+            candidate.userAccount === party.ownerAccountUuid &&
+            candidate.address.toLowerCase() === party.address.toLowerCase(),
+        );
+        return wallet
+          ? [{ wallet, party, signed: role === 'seller' ? swap.sellerHasSigned : swap.buyerHasSigned }]
+          : [];
+      });
+      const choice = choices.find((candidate) => !candidate.signed) ?? choices[0];
+      if (!choice) {
+        setSwapSelectionError('This trade has no matching verified wallet in the current account.');
+        return;
+      }
+      const selection = selectSwapSettlementLookup(swap, settlements.owner, choice.wallet, choice.party.orderUuid);
+      settlements.open(selection, walletCurrent(choice.wallet.uuid));
+    } catch {
+      setSwapSelectionError('The trade details did not match the selected account and wallet.');
+    }
   };
 
   const getSwapSigningWalletAddress = (swap: SwapOrder | null): string | undefined => {
     if (!swap) return undefined;
     return (
+      (!swap.sellerHasSigned && walletAddresses.find((a) => a.toLowerCase() === swap.sellerAddress.toLowerCase())) ||
+      (!swap.buyerHasSigned && walletAddresses.find((a) => a.toLowerCase() === swap.buyerAddress.toLowerCase())) ||
       walletAddresses.find((a) => a.toLowerCase() === swap.sellerAddress.toLowerCase()) ||
       walletAddresses.find((a) => a.toLowerCase() === swap.buyerAddress.toLowerCase())
     );
@@ -174,18 +273,9 @@ export function TradingPage() {
     return wallets.find((w) => w.address.toLowerCase() === address.toLowerCase()) || null;
   };
 
-  const getModificationWallet = (order: TransferOrder | null): Wallet | null => {
-    if (!order) return null;
-    return wallets.find((w) => w.address.toLowerCase() === order.walletAddress.toLowerCase()) || null;
-  };
-
   const handleCloseOrderSigningFlow = () => {
     signingGeneration.current++;
     submissions.close();
-    setIsOrderSigningOpen(false);
-    setPendingCancelOrderUuid(null);
-    setPendingCancelOrderSymbol(null);
-    setOrderSigningWallet(null);
   };
 
   const handleOrderSigningSuccess = (order: TransferOrder, recovered = false) => {
@@ -222,8 +312,8 @@ export function TradingPage() {
                 className="block text-brand-light"
                 onClick={() => {
                   signingGeneration.current++;
-                  setPendingCancelOrderUuid(null);
-                  setIsOrderSigningOpen(false);
+                  closeSwapSigning();
+                  actions.close();
                   submissions.recover(record);
                 }}
               >
@@ -239,6 +329,66 @@ export function TradingPage() {
               className="text-sm text-brand-light"
             >
               Refresh saved orders
+            </button>
+          </section>
+
+          <section
+            className="space-y-2 rounded-lg bg-surface-tertiary p-4"
+            aria-label="Saved cancellations and changes"
+          >
+            <h2 className="font-semibold">Saved cancellations and changes</h2>
+            {actions.error && <p role="alert">{actions.error}</p>}
+            {actions.pending.map((record, index) => (
+              <button
+                key={record.actionId}
+                className="block text-brand-light"
+                onClick={() => {
+                  signingGeneration.current++;
+                  closeSwapSigning();
+                  submissions.close();
+                  actions.recover(record);
+                }}
+              >
+                Check {record.purpose === 'cancel' ? 'cancellation' : 'change'} {index + 1}
+              </button>
+            ))}
+            <button
+              className="text-sm text-brand-light"
+              disabled={actions.isLoading}
+              onClick={() => void actions.refresh()}
+            >
+              Refresh saved actions
+            </button>
+          </section>
+
+          <section className="space-y-2 rounded-lg bg-surface-tertiary p-4" aria-label="Saved trade signatures">
+            <h2 className="font-semibold">Saved trade signatures and approvals</h2>
+            <p className="text-sm text-text-muted">
+              Check the original trade after a lost connection or interrupted signing.
+            </p>
+            {swapSelectionError && <p role="alert">{swapSelectionError}</p>}
+            {settlements.error && <p role="alert">{settlements.error}</p>}
+            {settlements.pending.map((record, index) => (
+              <button
+                key={`${record.orderUuid}/${record.swapUuid}/${record.walletUuid}/${record.settlementDigest}/${record.kind}/${record.kind === 'approval' ? record.txHash : record.signerAddress}`}
+                className="block text-brand-light"
+                onClick={() => {
+                  signingGeneration.current++;
+                  submissions.close();
+                  actions.close();
+                  closeSwapSigning();
+                  settlements.recover(record, walletCurrent(record.walletUuid));
+                }}
+              >
+                Check saved {record.kind === 'approval' ? 'approval' : 'trade signature'} {index + 1}
+              </button>
+            ))}
+            <button
+              className="text-sm text-brand-light"
+              disabled={settlements.isLoading}
+              onClick={() => void settlements.refresh()}
+            >
+              Refresh saved trades
             </button>
           </section>
 
@@ -284,47 +434,40 @@ export function TradingPage() {
         onClose={() => setSuccessModalOpen(false)}
       />
 
-      <SwapSigningFlow
-        isOpen={isSwapSigningOpen}
-        onClose={() => {
-          setIsSwapSigningOpen(false);
-          setSelectedSwap(null);
-        }}
-        swap={selectedSwap}
-        walletAddress={getSwapSigningWalletAddress(selectedSwap) || ''}
-        wallet={getSwapSigningWallet(selectedSwap)}
-        orderUuid={selectedSwap?.sellOrderUuid || selectedSwap?.buyOrderUuid}
-      />
+      {isSwapSigningOpen && selectedSwap && (
+        <SwapSigningFlow
+          isOpen
+          onClose={closeSwapSigning}
+          swap={selectedSwap}
+          walletAddress={getSwapSigningWalletAddress(selectedSwap) || ''}
+          wallet={getSwapSigningWallet(selectedSwap)}
+          orderUuid={
+            getSwapSigningWalletAddress(selectedSwap)?.toLowerCase() === selectedSwap.sellerAddress.toLowerCase()
+              ? selectedSwap.sellOrderUuid
+              : selectedSwap.buyOrderUuid
+          }
+        />
+      )}
+      {settlements.active && (
+        <SwapSettlementFlow settlement={settlements.active} wallets={wallets} onClose={closeSwapSigning} />
+      )}
 
       <OrderSigningFlow
-        isOpen={!!submissions.active || isOrderSigningOpen}
+        isOpen={!!submissions.active}
         onClose={handleCloseOrderSigningFlow}
-        mode={pendingCancelOrderUuid ? 'cancel' : 'create'}
         submission={submissions.active}
         tokens={tokens ?? []}
-        orderUuid={pendingCancelOrderUuid || undefined}
-        orderSymbol={pendingCancelOrderSymbol || undefined}
-        wallet={
-          submissions.active
-            ? (wallets.find((wallet) => wallet.uuid === submissions.active?.record.walletUuid) ?? null)
-            : orderSigningWallet
-        }
+        wallet={wallets.find((wallet) => wallet.uuid === submissions.active?.record.walletUuid) ?? null}
         onSuccess={handleOrderSigningSuccess}
       />
-
-      <OrderModificationModal
-        isOpen={isModificationModalOpen}
-        onClose={() => {
-          setIsModificationModalOpen(false);
-          setOrderToModify(null);
-        }}
-        order={orderToModify}
-        wallet={getModificationWallet(orderToModify)}
-        onSuccess={() => {
-          setIsModificationModalOpen(false);
-          setOrderToModify(null);
-        }}
-      />
+      {actions.active && (
+        <OrderActionFlow
+          key={actions.active.record?.actionId ?? `${actions.active.orderUuid}/${actions.active.purpose}`}
+          action={actions.active}
+          wallets={actionWallets}
+          onClose={actions.close}
+        />
+      )}
     </main>
   );
 }

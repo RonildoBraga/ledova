@@ -82,6 +82,10 @@ class SchemaDiagnosticsTest(TestCase):
             {"$ref": "#/components/schemas/TransferOrderStatusEnum"},
             schemas["TransferOrderDetail"]["properties"]["status"]["allOf"],
         )
+        self.assertEqual(
+            schemas["OrderActionCancelResult"]["properties"]["fromStatus"]["$ref"],
+            "#/components/schemas/TransferOrderStatusEnum",
+        )
         for field in ("signingPreference", "walletType"):
             self.assertIn(
                 {"$ref": "#/components/schemas/WalletSigningPreferenceEnum"},

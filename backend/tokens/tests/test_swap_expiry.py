@@ -9,9 +9,16 @@ from eth_account.messages import encode_typed_data
 
 from ledova_backend.procrastinate_app import app
 from shared.db import atomic
+from shared.tests.tenants import make_tenant
 from tokens.events import publish_trading_event
 from tokens.exceptions import SwapNotReadyException
-from tokens.models import SwapOrder, SwapOrderStatus, TransferOrder, TransferOrderStatus
+from tokens.models import (
+    SwapOrder,
+    SwapOrderStatus,
+    TransferOrder,
+    TransferOrderStatus,
+    TransferOrderType,
+)
 from tokens.services.swap_expiry import expire_unclaimed_swap, expire_unclaimed_swaps
 from tokens.services.token_transfer_service import TokenTransferService
 from tokens.tasks.swap_expiry import expire_unclaimed_matches
@@ -26,6 +33,7 @@ from tokens.tests.swap_state_fixtures import (
     transaction_for,
 )
 from tokens.views.trading_events import _format_public_trading_event
+from wallets.models import Wallet
 
 
 class ExpiryFixtures:
@@ -40,15 +48,28 @@ class ExpiryFixtures:
 
     def matched_swap(self, *, already_filled=20, signed=""):
         self.counter += 1
-        template = make_swap(f"expiry-{self.counter}")
-        SwapOrder.objects.filter(pk=template.pk).delete()
-        TransferOrder.objects.filter(pk__in=[template.sell_order_id, template.buy_order_id]).update(
-            status=TransferOrderStatus.OPEN, filled_quantity=already_filled
-        )
+        tenant = make_tenant(f"expiry-{self.counter}", with_swap=False)
+        orders = []
+        for key, order_type in ((SELLER, TransferOrderType.SELL), (BUYER, TransferOrderType.BUY)):
+            wallet = Wallet.objects.create(user_account=tenant.account, address=key.address, chain="base")
+            orders.append(
+                TransferOrder.objects.create(
+                    token=tenant.deployed_token,
+                    payment_asset=tenant.refs.stablecoin,
+                    wallet=wallet,
+                    owner_account=tenant.account,
+                    wallet_address=wallet.address,
+                    order_type=order_type,
+                    quantity=40,
+                    filled_quantity=already_filled,
+                    price_per_share="1.50",
+                    status=TransferOrderStatus.OPEN,
+                )
+            )
         with patch("tokens.services.AtomicSwapService", return_value=self.service):
-            swap = object.__new__(TokenTransferService).match_orders(
-                template.buy_order, template.sell_order, match_quantity=10
-            )["swap_order"]
+            swap = object.__new__(TokenTransferService).match_orders(orders[1], orders[0], match_quantity=10)[
+                "swap_order"
+            ]
         for party, signer in (("seller", SELLER), ("buyer", BUYER)):
             if party in signed or signed == "both":
                 signature = signer.sign_message(

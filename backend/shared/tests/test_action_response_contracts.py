@@ -2,12 +2,13 @@ from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import Mock, patch
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.test import override_settings
 from django.urls import resolve, reverse
 from django.utils import timezone
 from drf_spectacular.generators import SchemaGenerator
-from rest_framework.test import APITestCase
+from rest_framework.test import APITransactionTestCase
 
 from feature_flags.models import FeatureFlag
 from offerings.models import Subscription
@@ -16,8 +17,9 @@ from offerings.tests.factories import (
     eligible_subscriber,
     open_offering,
 )
+from shared.tests.schema import migrate_to, restore_every_migration
 from shared.tests.tenants import make_eligible, make_tenant, open_to_investors
-from tokens.models import ShareIssuance, SwapOrder, TransferOrder
+from tokens.models import ShareIssuance, SwapOrder
 from tokens.services.atomic_swap_service import AtomicSwapService
 from tokens.services.token_transfer_service import TokenTransferService
 from tokens.tests.test_signed_transactions import SIGNER, sign_legacy
@@ -26,7 +28,7 @@ from wallets.models import Wallet
 
 
 @override_settings(ATOMIC_SWAP_ADDRESS="0x" + "8" * 40)
-class ActionResponseContractTest(APITestCase):
+class ActionResponseContractTest(APITransactionTestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
@@ -92,83 +94,6 @@ class ActionResponseContractTest(APITestCase):
             self.assert_fields(items, row, item_fields)
         return items
 
-    def unpaired_order(self):
-        return TransferOrder.objects.create(
-            token=self.owner.deployed_token,
-            payment_asset=self.owner.refs.stablecoin,
-            order_type="buy",
-            wallet=self.owner.wallet,
-            owner_account=self.owner.account,
-            wallet_address=self.owner.wallet.address,
-            quantity=10,
-            min_quantity=0,
-            price_per_share=Decimal("1.50"),
-        )
-
-    def test_cancel_challenge_declares_the_actual_stored_typed_data(self):
-        order = self.unpaired_order()
-        response = self.client.get(f"/api/v1/trading/orders/{order.uuid}/cancel/message/")
-        self.assertEqual(response.status_code, 200)
-        body = response.json()
-        self.assertEqual(body["orderUuid"], str(order.uuid))
-        self.assertEqual(body["walletAddress"], order.wallet_address)
-        self.assertEqual(body["purpose"], "order_cancel")
-        self.assertEqual(body["message"]["orderUuid"], str(order.uuid))
-        schema = self.assert_fields(
-            self.response_schema("/api/v1/trading/orders/{uuid}/cancel/message/"),
-            body,
-            {
-                "orderUuid": "string",
-                "walletAddress": "string",
-                "purpose": "string",
-                "digest": "string",
-                "domain": "object",
-                "types": "object",
-                "message": "object",
-                "expiresAt": "string",
-            },
-        )
-        self.assertEqual(set(schema["required"]), set(body))
-
-    def test_modification_challenge_keeps_numeric_values_and_decimal_text(self):
-        order = self.unpaired_order()
-        response = self.client.post(
-            f"/api/v1/trading/orders/{order.uuid}/modify/message/",
-            {"newQuantity": 12, "newMinQuantity": 1, "newPricePerShare": "2.00"},
-            format="json",
-        )
-        self.assertEqual(response.status_code, 200)
-        body = response.json()
-        self.assertEqual(
-            body["currentValues"],
-            {"quantity": 10, "minQuantity": 0, "pricePerShare": "1.50", "filledQuantity": 0, "remainingQuantity": 10},
-        )
-        self.assertEqual(body["newValues"], {"quantity": 12, "minQuantity": 1, "pricePerShare": "2.00"})
-        self.assertEqual(body["message"]["newQuantity"], "12")
-        schema = self.assert_fields(
-            self.response_schema("/api/v1/trading/orders/{uuid}/modify/message/", "post"),
-            body,
-            {
-                "orderUuid": "string",
-                "purpose": "string",
-                "digest": "string",
-                "domain": "object",
-                "types": "object",
-                "message": "object",
-                "expiresAt": "string",
-                "currentValues": "object",
-                "newValues": "object",
-            },
-        )
-        fields = {"quantity": "integer", "minQuantity": "integer", "pricePerShare": "string"}
-        self.assert_fields(schema["properties"]["newValues"], body["newValues"], fields)
-        self.assert_fields(
-            schema["properties"]["currentValues"],
-            body["currentValues"],
-            {**fields, "filledQuantity": "integer", "remainingQuantity": "integer"},
-        )
-        self.assertEqual(set(schema["required"]), set(body))
-
     def allowance_service(self, sufficient):
         configure_operator(self.owner.refs.stablecoin)
         service = object.__new__(AtomicSwapService)
@@ -184,6 +109,16 @@ class ActionResponseContractTest(APITestCase):
         return service
 
     def approval_request(self, action, sufficient=False):
+        modules = getattr(settings, "MIGRATION_MODULES", {})
+        if "tokens" in modules and modules["tokens"] is None:
+            self.skipTest("Legacy approval response requires actual settlement migrations")
+        self.addCleanup(restore_every_migration)
+        try:
+            migrate_to([("tokens", "0038_order_action_submissions")])
+        finally:
+            restore_every_migration()
+        self.owner.swap.refresh_from_db()
+        self.assertEqual(self.owner.swap.settlement_protocol_version, 0)
         service = self.allowance_service(sufficient)
         with patch("tokens.views.trading_order.AtomicSwapService", return_value=service):
             response = self.client.get(
@@ -199,7 +134,11 @@ class ActionResponseContractTest(APITestCase):
         self.assertEqual((body["requiredAmount"], body["currentAllowance"]), (10, 0))
         self.assertIs(body["needsApproval"], True)
         schema = self.assert_fields(
-            self.response_schema("/api/v1/trading/orders/{uuid}/swap/approval-status/"),
+            next(
+                self.resolved(item)
+                for item in self.response_schema("/api/v1/trading/orders/{uuid}/swap/approval-status/")["oneOf"]
+                if "settlementDigest" not in self.resolved(item)["properties"]
+            ),
             body,
             {
                 "swapUuid": "string",
@@ -216,8 +155,10 @@ class ActionResponseContractTest(APITestCase):
 
     def approval_variants(self):
         schema = self.response_schema("/api/v1/trading/orders/{uuid}/swap/approval-data/")
-        self.assertEqual(len(schema.get("oneOf", ())), 2)
-        variants = [self.resolved(item) for item in schema["oneOf"]]
+        self.assertEqual(len(schema.get("anyOf", ())), 4)
+        variants = [self.resolved(item) for item in schema["anyOf"]]
+        variants = [item for item in variants if "settlementDigest" not in item["properties"]]
+        self.assertEqual(len(variants), 2)
         return {"transaction" in item["properties"]: item for item in variants}
 
     def test_approval_no_transaction_variant_keeps_actual_allowance_values(self):

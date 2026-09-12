@@ -8,6 +8,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from shared.db import atomic
+from shared.tests.settlement import save_swap_with_context
 from shared.tests.tenants import make_tenant
 from tokens.models import (
     SigningChallenge,
@@ -21,6 +22,7 @@ from tokens.services.signing_challenge import (
     purge_expired_challenges,
     spend,
 )
+from tokens.tests.signing_challenge_fixtures import action_fields, pending_action
 
 
 class TradingAmountsAndStatesAreDatabaseRulesTest(TestCase):
@@ -58,6 +60,9 @@ class TradingAmountsAndStatesAreDatabaseRulesTest(TestCase):
             TransferOrder.objects.bulk_create([TransferOrder(**values)])
 
     def test_valid_partial_history_and_all_existing_status_values_survive(self):
+        values = SwapOrder.objects.filter(pk=self.tenant.swap.pk).values().get()
+        values.update(uuid=uuid4(), nonce=0)
+        self.tenant.swap = save_swap_with_context(SwapOrder(**values))
         for status in TransferOrderStatus.values:
             TransferOrder.objects.filter(pk=self.order.pk).update(
                 quantity=10, filled_quantity=8, min_quantity=9, price_per_share=Decimal("0.01"), status=status
@@ -65,7 +70,7 @@ class TradingAmountsAndStatesAreDatabaseRulesTest(TestCase):
             self.order.refresh_from_db()
             self.assertEqual((self.order.filled_quantity, self.order.min_quantity), (8, 9))
         for status in SwapOrderStatus.values:
-            SwapOrder.objects.filter(pk=self.tenant.swap.pk).update(status=status, nonce=0)
+            SwapOrder.objects.filter(pk=self.tenant.swap.pk).update(status=status)
             self.tenant.swap.refresh_from_db()
             self.assertEqual((self.tenant.swap.status, self.tenant.swap.nonce), (status, 0))
 
@@ -91,11 +96,14 @@ class ChallengeSpendingHasTwoConsistentFieldsTest(TestCase):
 
     def setUp(self):
         self.tenant = make_tenant("challenge-bounds")
+        action = pending_action(self.tenant, order=self.tenant.swap.sell_order)
         self.challenge = issue_challenge(
             SigningChallengePurpose.ORDER_CANCEL,
             self.tenant.wallet.address,
-            {"orderUuid": str(self.tenant.swap.sell_order_id)},
+            action_fields(action),
+            verifying_contract=action.verifying_contract,
             order=self.tenant.swap.sell_order,
+            action=action,
         )
 
     def test_neither_half_of_a_spend_can_be_written_alone(self):

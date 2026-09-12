@@ -3,6 +3,7 @@ from contextlib import contextmanager
 from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import patch
+from uuid import uuid4
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import transaction
@@ -23,8 +24,11 @@ from feature_flags.models import FeatureFlag
 from integrations.abr.client import RegistryObservation
 from offerings.models import Offering, OfferingStatus, Subscription
 from operators.models import Operator
-from shared.db import atomic, current_alias
+from shared.db import atomic, current_alias, use_operator
+from shared.tests.scoped import RunsOnTheScopedConnection
+from shared.tests.settlement import SYNTHETIC_SETTLEMENT_CONTRACT
 from shared.tests.tenants import (
+    an_acn,
     make_eligible,
     make_tenant,
     open_to_investors,
@@ -34,14 +38,13 @@ from shared.tests.tenants import (
 )
 from shared.tests.upload_fixtures import StubUploadDependencies, pdf_bytes
 from tokens.models import (
-    CapitalIncreaseRequest,
-    ShareIssuance,
     ShareIssuanceRequest,
     ShareToken,
     ShareTokenStatus,
     SwapOrder,
     TransferOrder,
 )
+from tokens.tests.order_action_fixtures import ActionFixtures
 from tokens.tests.order_submission_fixtures import pending_submission
 from users.models.investor_classification import InvestorClassification
 
@@ -98,15 +101,15 @@ def _clear_subscriptions(tenant):
     Subscription.objects.filter(user_account=tenant.account).delete()
 
 
-def _clear_the_register(tenant):
-    _clear_subscriptions(tenant)
-    SwapOrder.objects.filter(share_token__company=tenant.company).delete()
-    TransferOrder.objects.filter(token__company=tenant.company).delete()
-    Offering.objects.filter(token__company=tenant.company).delete()
-    CapitalIncreaseRequest.objects.filter(token__company=tenant.company).delete()
-    ShareIssuanceRequest.objects.filter(token__company=tenant.company).delete()
-    ShareIssuance.objects.filter(token__company=tenant.company).delete()
-    ShareToken.objects.filter(company=tenant.company).delete()
+def _company_without_a_register(tenant):
+    company = Company.objects.create(
+        owner=tenant.user,
+        name=f"{tenant.label} empty registration",
+        acn=an_acn(70000000 + tenant.user.pk),
+        company_type=tenant.company.company_type,
+        operator_wallet=tenant.wallet,
+    )
+    return {"company": str(company.pk)}
 
 
 def _open_the_offering_to_the_actor(tenant):
@@ -238,7 +241,7 @@ ROUTES = (
     Route("get", "/api/v1/companies/{company}/"),
     Route("put", "/api/v1/companies/{company}/", {"name": "Renamed", "acn": "{acn}"}),
     Route("patch", "/api/v1/companies/{company}/", {"name": "Renamed"}),
-    Route("delete", "/api/v1/companies/{company}/", prepare=_clear_the_register),
+    Route("delete", "/api/v1/companies/{company}/", prepare=_company_without_a_register),
     Route("post", "/api/v1/companies/{company}/submit/", {"confirm": True}, prepare=_upload_listing_documents),
     Route("post", "/api/v1/companies/{company}/resubmit/", {"response": "Done"}, prepare=_request_company_info),
     Route("post", "/api/v1/companies/{company}/withdraw/", {}),
@@ -395,19 +398,45 @@ ROUTES = (
         prepare=_a_pending_order_submission,
     ),
     Route("get", "/api/v1/trading/orders/{order}/"),
-    Route("post", "/api/v1/trading/orders/{order}/cancel/", {"digest": DIGEST, "signature": SIGNATURE}),
-    Route("get", "/api/v1/trading/orders/{order}/cancel/message/"),
-    Route("post", "/api/v1/trading/orders/{order}/modify/", {"digest": DIGEST, "signature": SIGNATURE}),
-    Route("post", "/api/v1/trading/orders/{order}/modify/message/", {"newQuantity": 5}),
     Route("get", "/api/v1/trading/orders/{order}/modifications/"),
-    Route("get", "/api/v1/trading/orders/{order}/swap/?wallet_address={own_wallet_address}"),
+    Route(
+        "get",
+        "/api/v1/trading/orders/{order}/swap/?swap_uuid={swap}"
+        "&owner_account_uuid={own_account}&wallet_uuid={own_wallet}",
+    ),
     Route(
         "post",
         "/api/v1/trading/orders/{order}/swap/sign/",
-        {"signature": SIGNATURE, "signerAddress": "{own_wallet_address}"},
+        {
+            "signature": SIGNATURE,
+            "signerAddress": "{own_wallet_address}",
+            "swapUuid": "{swap}",
+            "ownerAccountUuid": "{own_account}",
+            "walletUuid": "{own_wallet}",
+            "settlementDigest": "{own_settlement_digest}",
+        },
     ),
-    Route("get", "/api/v1/trading/orders/{order}/swap/approval-status/?wallet_address={own_wallet_address}"),
-    Route("get", "/api/v1/trading/orders/{order}/swap/approval-data/?wallet_address={own_wallet_address}"),
+    Route(
+        "get",
+        "/api/v1/trading/orders/{order}/swap/approval-status/?swap_uuid={swap}"
+        "&owner_account_uuid={own_account}&wallet_uuid={own_wallet}&settlement_digest={own_settlement_digest}",
+    ),
+    Route(
+        "get",
+        "/api/v1/trading/orders/{order}/swap/approval-data/?swap_uuid={swap}"
+        "&owner_account_uuid={own_account}&wallet_uuid={own_wallet}&settlement_digest={own_settlement_digest}",
+    ),
+    Route(
+        "post",
+        "/api/v1/trading/orders/{order}/swap/approval-broadcast/",
+        {
+            "swapUuid": "{swap}",
+            "ownerAccountUuid": "{own_account}",
+            "walletUuid": "{own_wallet}",
+            "settlementDigest": "{own_settlement_digest}",
+            "signedTransaction": "0xab",
+        },
+    ),
     Route("get", "/api/v1/documents/{document}/"),
     Route("get", "/api/v1/documents/{document}/file/"),
     Route("post", "/api/v1/documents/{document}/attach/", {"classification": "{own_investor_classification}"}),
@@ -542,21 +571,18 @@ class CrossTenantRouteMatrixTest(StubUploadDependencies, APITransactionTestCase)
         register_chain.transfer_participants.return_value = set()
         register_chain.get_token_balance.return_value = 0
         register_chain.share_supply.return_value = (0, 0)
-        trading_orders = self._service("tokens.views.trading_order.TradingOrderService")
-        trading_orders.get_order_cancel_message.return_value = {}
         self._service("tokens.views.trading_order.execute_order_submission")
         self._service("tokens.views.trading_order.issue_order_submission")
         self._service("tokens.views.trading_order.submission_snapshot").return_value = {}
         trading_transfers = self._service("tokens.views.trading_transfer.TokenTransferService")
         trading_transfers.contract_address.return_value = "0x" + "6" * 40
         trading_transfers.return_value.prepare_transfer.return_value = {}
-        self._service("tokens.views.trading_order.cancel_signed_order").side_effect = lambda order, **kwargs: order
-        modifications = self._service("tokens.views.trading_order.OrderModificationService").return_value
-        modifications.generate_modification_message.return_value = {}
-        modifications.apply_modification.side_effect = lambda order, **kwargs: (order, {})
-        modifications.get_modification_history.return_value = {}
+        self._service("tokens.views.trading_order.get_modification_history").return_value = {}
         swaps = self._service("tokens.views.trading_order.AtomicSwapService").return_value
-        swaps.contract_address = "0x" + "8" * 40
+        swaps.contract_address = SYNTHETIC_SETTLEMENT_CONTRACT
+        swaps.settlement_contract.return_value = SYNTHETIC_SETTLEMENT_CONTRACT
+        swaps.broadcast_settlement_approval.return_value = ("0x" + "ab" * 32, {"blockNumber": 1, "gasUsed": 21000})
+        self.enterContext(override_settings(ATOMIC_SWAP_ADDRESS=SYNTHETIC_SETTLEMENT_CONTRACT))
         swaps.find_swap_order_by_transfer_order.side_effect = SwapOrder.objects.for_transfer_order
         swaps.submit_signature.side_effect = lambda swap_order, **kwargs: swap_order
         swaps.get_typed_data.return_value = {}
@@ -639,10 +665,13 @@ class CrossTenantRouteMatrixTest(StubUploadDependencies, APITransactionTestCase)
                 with self.subTest(actor=actor.label, route=f"{route.method} {route.path}"):
 
                     with self.undone_before_the_next_case():
+                        context = dict(own)
                         if route.prepare:
                             with self.as_whoever_may_write_the_fixture(route, own, actor, actor):
-                                route.prepare(actor)
-                        response = self.send(route, actor, own)
+                                prepared = route.prepare(actor)
+                                if isinstance(prepared, dict):
+                                    context.update(prepared)
+                        response = self.send(route, actor, context)
                     self.assertIn(response.status_code, (200, 201, 202, 204), _body(response))
 
     def test_operator_routes_are_staff_only_and_reach_every_tenant(self):
@@ -793,3 +822,102 @@ class CrossTenantRouteMatrixTest(StubUploadDependencies, APITransactionTestCase)
                                 self.assertEqual(CompanyRegistryCheck.objects.count(), before)
                 self.client.logout()
             self.assertEqual(provider.call_count, len(REGISTRY_ADMIN_ROUTES) - 1)
+
+
+ACTION_ROUTES = (
+    Route("get", "/api/v1/trading/orders/{order}/action-context/?owner_account_uuid={account}"),
+    Route("get", "/api/v1/trading/orders/actions/{action}/?owner_account_uuid={account}"),
+    Route("post", "/api/v1/trading/orders/{order}/cancel/message/"),
+    Route("post", "/api/v1/trading/orders/{order}/modify/message/"),
+    Route("post", "/api/v1/trading/orders/{order}/cancel/"),
+    Route("post", "/api/v1/trading/orders/{order}/modify/"),
+    Route("get", "/api/v1/trading/orders/{order}/cancel/message/", foreign=400),
+)
+
+
+class OrderActionRouteChecks(ActionFixtures):
+    def setUp(self):
+        super().setUp()
+        self.cancel_order = self.order
+        self.cancel_signed = self.signed()
+        with use_operator():
+            self.order = TransferOrder.objects.create(
+                token=self.order.token,
+                payment_asset=self.order.payment_asset,
+                wallet=self.wallet,
+                owner_account=self.tenant.account,
+                wallet_address=self.wallet.address,
+                order_type="buy",
+                quantity=10,
+                price_per_share=Decimal("2.50"),
+            )
+            self.other = make_tenant("action-matrix-other")
+        self.action_id = uuid4()
+        self.modify_signed = self.signed("modify", self.modify_body())
+
+    def request_route(self, route, missing=False):
+        modify = "/modify" in route.path
+        signed = self.modify_signed if modify else self.cancel_signed
+        order = self.order if modify else self.cancel_order
+        context = {
+            "order": str(uuid4() if missing else order.pk),
+            "account": str(self.tenant.account.pk),
+            "action": str(uuid4() if missing else signed["action_id"]),
+        }
+        body = {**signed, "action_id": context["action"]}
+        if modify and "/message/" in route.path:
+            body = {**self.modify_body(), **body}
+        return getattr(self.client, route.method)(
+            route.path.format_map(context), body if route.method == "post" else None, format="json"
+        )
+
+    def test_owned_action_routes_reach_the_real_service_and_preserve_legacy_refusal(self):
+        for route in ACTION_ROUTES:
+            with self.subTest(method=route.method, path=route.path):
+                response = self.request_route(route)
+                expected = 400 if route.foreign == 400 else 200
+                self.assertEqual(response.status_code, expected, response.content)
+                if expected == 400:
+                    self.assertEqual(response.json()["code"], "action_refresh_required")
+        self.assertEqual([event for event, _ in self.events], ["order_cancelled", "order_modified"])
+
+    def test_foreign_and_missing_actions_stay_hidden_for_regular_staff_and_superusers(self):
+        for staff, superuser in ((False, False), (True, False), (True, True)):
+            with use_operator():
+                self.other.user.is_staff = staff
+                self.other.user.is_superuser = superuser
+                self.other.user.save(update_fields=["is_staff", "is_superuser"])
+            self.client.force_authenticate(self.other.user)
+            for route in ACTION_ROUTES:
+                with self.subTest(staff=staff, superuser=superuser, path=route.path, method=route.method):
+                    foreign = self.request_route(route)
+                    missing = self.request_route(route, missing=True)
+                    self.assertEqual(foreign.status_code, route.foreign, foreign.content)
+                    self.assertEqual(missing.status_code, route.foreign, missing.content)
+                    self.assertEqual(foreign.json(), missing.json())
+        self.assert_pending(self.cancel_signed)
+        self.assert_pending(self.modify_signed)
+        self.client.force_authenticate(self.tenant.user)
+        for signed, purpose, order in (
+            (self.cancel_signed, "cancel", self.cancel_order),
+            (self.modify_signed, "modify", self.order),
+        ):
+            self.assertEqual(self.execute(purpose, signed, order).status_code, 200)
+
+    def test_all_action_routes_refuse_anonymous_and_recover_after_authentication(self):
+        self.client.force_authenticate(None)
+        for route in ACTION_ROUTES:
+            with self.subTest(method=route.method, path=route.path):
+                response = self.request_route(route)
+                self.assertEqual(response.status_code, 401, response.content)
+        self.client.force_authenticate(self.tenant.user)
+        self.assertEqual(self.context().status_code, 200)
+        self.assertEqual(self.recover().status_code, 200)
+
+
+class OrderActionRouteMatrixTest(OrderActionRouteChecks, APITransactionTestCase):
+    pass
+
+
+class ScopedOrderActionRouteMatrixTest(RunsOnTheScopedConnection, OrderActionRouteChecks, APITransactionTestCase):
+    pass

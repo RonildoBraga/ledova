@@ -47,6 +47,8 @@ export {
   getUserOrders,
   getOrderCreateMessage,
   getOrderCancelMessage,
+  getOrderActionContext,
+  getOrderAction,
   createOrder,
   getOrderSubmission,
   cancelOrder,
@@ -117,3 +119,10 @@ export {
   withdrawSubscription,
 } from './subscriptions';
 export { getExchangeRate } from './exchangeRates';
+export {
+  getSwapSettlementContext,
+  submitSwapSettlementSignature,
+  getSwapSettlementApprovalStatus,
+  getSwapSettlementApprovalData,
+  broadcastSwapSettlementApproval,
+} from './swap-settlement';

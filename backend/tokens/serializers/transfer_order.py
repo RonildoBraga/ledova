@@ -222,30 +222,3 @@ class BroadcastTransferSerializer(serializers.Serializer):
             raise serializers.ValidationError("Transaction target is not a known Ledova contract")
 
         return value
-
-
-class OrderModificationRequestSerializer(serializers.Serializer):
-
-    new_quantity = serializers.IntegerField(required=False, min_value=1)
-    new_min_quantity = serializers.IntegerField(required=False, min_value=0)
-    new_price_per_share = serializers.DecimalField(
-        required=False, max_digits=18, decimal_places=2, min_value=Decimal("0.01")
-    )
-
-    def validate(self, data):
-        if not data:
-            raise serializers.ValidationError("At least one modification field must be provided")
-        return data
-
-
-class OrderModificationExecuteSerializer(serializers.Serializer):
-
-    digest = serializers.CharField()
-    signature = serializers.CharField()
-
-    def validate_signature(self, value):
-        if not value.startswith("0x"):
-            raise serializers.ValidationError("Signature must start with 0x")
-        if len(value) != 132:
-            raise serializers.ValidationError("Invalid signature length")
-        return value

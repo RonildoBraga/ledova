@@ -1,5 +1,6 @@
 from unittest.mock import Mock, patch
 
+from django.conf import settings
 from django.db import transaction
 from django.test import TransactionTestCase, override_settings
 
@@ -40,6 +41,7 @@ class SwapExecutionRecordsItsOutcomeTest(TransactionTestCase):
     @staticmethod
     def chain_client():
         client = Mock()
+        client.assert_expected_chain = Mock(return_value=settings.BLOCKCHAIN_CHAIN_ID)
         client.to_checksum_address.side_effect = lambda address: address
         client.build_transaction.return_value = {}
         client.sign_transaction.return_value = b"signed"

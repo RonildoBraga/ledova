@@ -5,6 +5,7 @@ from datetime import timezone as dt_timezone
 from typing import Optional
 
 from django.conf import settings
+from django.db import connections
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 from web3 import Web3
@@ -25,6 +26,7 @@ from integrations.base_chain.exceptions import (
 from operators.settlement import settlement_deployments
 from shared.constants import BLOCKCHAIN_BASE
 from shared.db import atomic
+from shared.db.aliases import current_alias
 from tokens.exceptions import (
     CompanyNotReadyException,
     ContractLoadException,
@@ -329,6 +331,16 @@ class ShareTokenService:
         logger.info(f"ShareToken {token.symbol} created at {contract_address} by resumed {tx_hash}")
         return contract_address
 
+    @staticmethod
+    def _record_signed_deployment(token: ShareToken, tx_record: BlockchainTransaction, tx_hash: str) -> None:
+        connection = connections[current_alias()]
+        if not connection.get_autocommit() and not connection.in_atomic_block:
+            raise RuntimeError("Deployment signing requires autocommit before broadcast.")
+        with atomic(durable=True):
+            tx_record.mark_submitted(tx_hash)
+            if not token.bind_deployment_transaction(tx_hash, tx_record):
+                raise InvalidTokenStateException("Another deployment transaction already owns this token.")
+
     def _create_share_token(self, token: ShareToken, identifier: str) -> str:
         issuer_wallet = primary_wallet_for(token.company)
         if issuer_wallet is None:
@@ -359,20 +371,26 @@ class ShareTokenService:
             create_fn = self.factory_contract.functions.createShareToken(
                 token.name, token.symbol, identifier, authorized_shares, signer_address
             )
-            tx_hash, _ = self.chain_client.send_transaction(create_fn, self.signer_key, wait_for_receipt=False)
+            tx_hash, _ = self.chain_client.send_transaction(
+                create_fn,
+                self.signer_key,
+                wait_for_receipt=False,
+                on_signed=lambda signed_hash, raw: self._record_signed_deployment(token, tx_record, signed_hash),
+            )
+            if tx_hash != tx_record.tx_hash:
+                raise TokenDeploymentFailedException("The provider returned a different deployment transaction hash.")
         except Exception as exc:
-            logger.error(f"createShareToken({identifier}) not sent: {exc}")
             if tx_record:
+                tx_record.refresh_from_db()
+                if tx_record.tx_hash:
+                    tx_record.mark_outcome_unknown("The deployment broadcast could not be confirmed.")
+                    logger.warning(f"createShareToken({identifier}) {tx_record.tx_hash} broadcast is unconfirmed")
+                    raise TokenDeploymentFailedException("Token deployment is unconfirmed.") from exc
                 tx_record.mark_failed(str(exc))
+            logger.error(f"createShareToken({identifier}) not sent: {exc}")
             self._abandon_unless_sent(token)
             raise TokenDeploymentFailedException("Token deployment failed.") from exc
 
-        tx_record.mark_submitted(tx_hash)
-        if not token.bind_deployment_transaction(tx_hash, tx_record):
-            logger.warning(
-                f"createShareToken({identifier}) {tx_hash} sent while {token.deployment_tx_hash} was already "
-                f"recorded by another worker; the one that confirms is kept"
-            )
         logger.info(f"createShareToken({identifier}) sent: {tx_hash}")
 
         try:
@@ -384,9 +402,6 @@ class ShareTokenService:
             raise TokenDeploymentFailedException("Token deployment is unconfirmed.") from exc
 
         self._confirm_record(tx_record, receipt)
-        if token.deployment_tx_hash != tx_hash:
-            logger.warning(f"{token.symbol} was created by {tx_hash}, not by the recorded {token.deployment_tx_hash}")
-            token.mark_deploying(tx_hash=tx_hash, transaction=tx_record)
         logger.info(f"ShareToken {token.symbol} created at {contract_address}")
         return contract_address
 
