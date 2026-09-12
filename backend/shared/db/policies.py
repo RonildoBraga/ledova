@@ -112,6 +112,7 @@ POLICIES = {
         f"{_member('owner_account_id')} AND {OWNERSHIP_BOUND}",
     ),
     "tokens_ordersubmission": (_member("owner_account_id"), _member("owner_account_id")),
+    "tokens_orderactionsubmission": (_member("owner_account_id"), _member("owner_account_id")),
     "companies_companydocument": (
         _company("company_id", VISIBLE_COMPANIES),
         _company("company_id", MANAGEABLE_COMPANIES),
@@ -215,12 +216,6 @@ BYPASSES_VISIBLE_TO_USER = {
         "to companies that are open or listed, so the narrowing is invisible to them",
         "shared/tests/test_cross_tenant_routes_under_rls.py - the directory and market rows",
     ),
-    "TransferOrder.all in the cancel path": (
-        "tokens/services/trading_order_cancel.py:15",
-        "tokens_transferorder: member account and the ownership_bound predicate; the service is reached "
-        "only from a view that already resolved the order under the principal",
-        "shared/tests/test_cross_tenant_routes_under_rls.py - the cancel rows",
-    ),
     "Company.all on the administrative actions": (
         "companies/views/company.py:70",
         "no policy term: those actions run on the operator connection by operator_actions, because a staff "
@@ -322,7 +317,8 @@ AWAITING_RLS = {
     "tokens_swaporder": (
         "The seller_wallet_id and buyer_wallet_id columns are populated and NOT NULL. Trading still needs "
         "per-command RLS that follows current wallet verification and participant access; the order/swap "
-        "work in #5 and #115 owns that conversion."
+        "work in #5 and #115 owns that conversion. tokens/0040 admits unchanged V1 participant updates "
+        "without the private parent read; it does not scope swap reads or complete matching/outcome visibility."
     ),
 }
 
@@ -407,6 +403,12 @@ REACHED_DESPITE_OPERATOR_ONLY = {
     "RiskAssessmentService.create_pending_assessment when an account is created, which is a customer route.",
     "compliance_monitoringrule": "reached from the same account-creation path while scoring the new "
     "assessment, on the connection that served the request.",
+    "blockchain_blockchaintransaction": "tokens/services/atomic_swap_service.py:411 writes the relayer's "
+    "broadcast record inside _claim_execution, which tokens/views/trading_order.py:228 reaches when the "
+    "second party signs. The write shares a transaction with the SwapOrder row lock, so it cannot move to "
+    "the operator connection without splitting that transaction in two. Granting it lets the app role read "
+    "every relayer record, which is wider than this path needs; the narrower fix is to enqueue the "
+    "broadcast for a worker, which already runs as the operator.",
 }
 
 UNSCOPED = {**FRAMEWORK, **OPERATOR_ONLY, **NOT_TENANCY, **AWAITING_RLS}

@@ -5,6 +5,11 @@ import type {
   TransferOrder,
   OrderSubmissionRequest,
   OrderSubmissionSnapshot,
+  OrderActionContext,
+  OrderActionSnapshot,
+  OrderActionRequest,
+  OrderActionModificationRequest,
+  OrderActionExecuteRequest,
   OrderBook,
   GetOrdersParams,
   WhitelistStatus,
@@ -12,16 +17,10 @@ import type {
   SwapDataResponse,
   SubmitSignatureRequest,
   GetSwapDataParams,
-  CancelOrderMessageResponse,
   SignedCreateOrderRequest,
-  SignedCancelOrderRequest,
   WalletTokenBalancesResponse,
   MarketData,
   PaginatedResponse,
-  OrderModificationRequest,
-  OrderModificationMessageResponse,
-  SignedOrderModificationRequest,
-  OrderModificationResponse,
   ApprovalStatusResponse,
   ApprovalDataResponse,
 } from '../types';
@@ -79,8 +78,42 @@ export const getOrderSubmission = (
     params: { owner_account_uuid: ownerAccountUuid },
   });
 
-export const getOrderCancelMessage = (apiClient: AxiosInstance, uuid: string) =>
-  apiClient.get<CancelOrderMessageResponse>(TRADING_ENDPOINTS.ORDERS.CANCEL_MESSAGE(uuid));
+export const getOrderActionContext = (
+  apiClient: AxiosInstance,
+  uuid: string,
+  ownerAccountUuid: string,
+  config?: AxiosRequestConfig,
+) =>
+  apiClient.get<OrderActionContext>(TRADING_ENDPOINTS.ORDERS.ACTION_CONTEXT(uuid), {
+    ...config,
+    params: { owner_account_uuid: ownerAccountUuid },
+  });
+
+export const getOrderAction = (
+  apiClient: AxiosInstance,
+  actionId: string,
+  ownerAccountUuid: string,
+  config?: AxiosRequestConfig,
+) =>
+  apiClient.get<OrderActionSnapshot>(TRADING_ENDPOINTS.ORDERS.ACTION(actionId), {
+    ...config,
+    params: { owner_account_uuid: ownerAccountUuid },
+  });
+
+export const getOrderCancelMessage = (
+  apiClient: AxiosInstance,
+  uuid: string,
+  data: OrderActionRequest,
+  config?: AxiosRequestConfig,
+) =>
+  apiClient.post<OrderActionSnapshot>(
+    TRADING_ENDPOINTS.ORDERS.CANCEL_MESSAGE(uuid),
+    {
+      action_id: data.actionId,
+      owner_account_uuid: data.ownerAccountUuid,
+    },
+    config,
+  );
 
 export const createOrder = (apiClient: AxiosInstance, data: SignedCreateOrderRequest, config?: AxiosRequestConfig) =>
   apiClient.post<OrderSubmissionSnapshot>(
@@ -93,11 +126,22 @@ export const createOrder = (apiClient: AxiosInstance, data: SignedCreateOrderReq
     config,
   );
 
-export const cancelOrder = (apiClient: AxiosInstance, uuid: string, data: SignedCancelOrderRequest) =>
-  apiClient.post<TransferOrder>(TRADING_ENDPOINTS.ORDERS.CANCEL(uuid), {
-    digest: data.digest,
-    signature: data.signature,
-  });
+export const cancelOrder = (
+  apiClient: AxiosInstance,
+  uuid: string,
+  data: OrderActionExecuteRequest,
+  config?: AxiosRequestConfig,
+) =>
+  apiClient.post<OrderActionSnapshot>(
+    TRADING_ENDPOINTS.ORDERS.CANCEL(uuid),
+    {
+      action_id: data.actionId,
+      owner_account_uuid: data.ownerAccountUuid,
+      digest: data.digest,
+      signature: data.signature,
+    },
+    config,
+  );
 
 export const getWalletBalances = (apiClient: AxiosInstance, walletAddress: string) =>
   apiClient.get<WalletTokenBalancesResponse>(TRADING_ENDPOINTS.WALLETS.BALANCES, {
@@ -136,19 +180,37 @@ export const getOrderSwapApprovalData = (apiClient: AxiosInstance, orderUuid: st
 export const getOrderModificationMessage = (
   apiClient: AxiosInstance,
   orderUuid: string,
-  data: OrderModificationRequest,
+  data: OrderActionModificationRequest,
+  config?: AxiosRequestConfig,
 ) =>
-  apiClient.post<OrderModificationMessageResponse>(TRADING_ENDPOINTS.ORDERS.MODIFY_MESSAGE(orderUuid), {
-    new_quantity: data.newQuantity,
-    new_min_quantity: data.newMinQuantity,
-    new_price_per_share: data.newPricePerShare,
-  });
+  apiClient.post<OrderActionSnapshot>(
+    TRADING_ENDPOINTS.ORDERS.MODIFY_MESSAGE(orderUuid),
+    {
+      action_id: data.actionId,
+      owner_account_uuid: data.ownerAccountUuid,
+      new_quantity: data.newQuantity,
+      new_min_quantity: data.newMinQuantity,
+      new_price_per_share: data.newPricePerShare,
+    },
+    config,
+  );
 
-export const modifyOrder = (apiClient: AxiosInstance, orderUuid: string, data: SignedOrderModificationRequest) =>
-  apiClient.post<OrderModificationResponse>(TRADING_ENDPOINTS.ORDERS.MODIFY(orderUuid), {
-    digest: data.digest,
-    signature: data.signature,
-  });
+export const modifyOrder = (
+  apiClient: AxiosInstance,
+  orderUuid: string,
+  data: OrderActionExecuteRequest,
+  config?: AxiosRequestConfig,
+) =>
+  apiClient.post<OrderActionSnapshot>(
+    TRADING_ENDPOINTS.ORDERS.MODIFY(orderUuid),
+    {
+      action_id: data.actionId,
+      owner_account_uuid: data.ownerAccountUuid,
+      digest: data.digest,
+      signature: data.signature,
+    },
+    config,
+  );
 
 export function parseTradingError(error: unknown): string {
   if (!error) return 'An unknown error occurred';

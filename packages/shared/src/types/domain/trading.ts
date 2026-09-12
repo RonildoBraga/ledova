@@ -1,4 +1,5 @@
 import type { OrderType, OrderStatus, SwapStatus, SwapUserRole } from '../../constants';
+import type { SwapSettlementContext } from './swap-settlement';
 
 export interface ShareToken {
   uuid: string;
@@ -37,7 +38,7 @@ export interface TransferOrder {
   remainingQuantity?: number;
 
   modificationCount?: number;
-  lastModifiedAt?: string;
+  lastModifiedAt?: string | null;
   originalQuantity?: number;
   originalPrice?: string;
 }
@@ -140,6 +141,9 @@ export interface MarketData {
 }
 
 export interface SwapOrder {
+  settlementProtocolVersion?: 0 | 1;
+  settlementContext?: SwapSettlementContext | null;
+  settlementDigest?: string;
   uuid: string;
   status: SwapStatus;
   statusDisplay?: string;
@@ -162,7 +166,7 @@ export interface SwapOrder {
   buyOrderUuid?: string;
   txHash?: string;
   expiresAt: string;
-  completedAt?: string;
+  completedAt?: string | null;
   errorMessage?: string;
   createdAt: string;
   updatedAt?: string;
@@ -234,14 +238,6 @@ export interface SigningChallengeTypedData {
   message: Record<string, string | number>;
 }
 
-export interface CancelOrderMessageResponse extends SigningChallengeTypedData {
-  purpose: 'order_cancel';
-  orderUuid: string;
-  walletAddress: string;
-  digest: string;
-  expiresAt: string;
-}
-
 export interface CreateOrderMessageResponse extends SigningChallengeTypedData {
   purpose: 'order_create';
   tokenUuid: string;
@@ -253,57 +249,6 @@ export interface CreateOrderMessageResponse extends SigningChallengeTypedData {
 export interface SignedCreateOrderRequest extends OrderSubmissionRequest {
   digest: string;
   signature: string;
-}
-
-export interface SignedCancelOrderRequest {
-  digest: string;
-  signature: string;
-}
-
-export interface OrderModificationRequest {
-  newQuantity?: number;
-  newMinQuantity?: number;
-  newPricePerShare?: string;
-}
-
-export interface OrderModificationCurrentValues {
-  quantity: number;
-  minQuantity: number;
-  pricePerShare: string;
-  filledQuantity: number;
-  remainingQuantity: number;
-}
-
-export interface OrderModificationNewValues {
-  quantity: number;
-  minQuantity: number;
-  pricePerShare: string;
-}
-
-export interface OrderModificationMessageResponse extends SigningChallengeTypedData {
-  purpose: 'order_modify';
-  orderUuid: string;
-  digest: string;
-  expiresAt: string;
-  currentValues: OrderModificationCurrentValues;
-  newValues: OrderModificationNewValues;
-}
-
-export interface SignedOrderModificationRequest {
-  digest: string;
-  signature: string;
-}
-
-export interface OrderModificationChange {
-  field: string;
-  old: string;
-  new: string;
-}
-
-export interface OrderModificationResponse {
-  order: TransferOrder;
-  modificationCount: number;
-  changes: OrderModificationChange[];
 }
 
 export interface ShareTokenTransferTokenInfo {

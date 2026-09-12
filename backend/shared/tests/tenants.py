@@ -30,7 +30,6 @@ from tokens.models import (
     CapitalIncreaseRequest,
     ShareToken,
     ShareTokenStatus,
-    SwapOrder,
     TransferOrder,
 )
 from tokens.models.choices import TransferOrderType
@@ -123,7 +122,7 @@ def an_acn(number: int) -> str:
     return base + str(acn_check_digit(base))
 
 
-def make_tenant(label, *, staff=False, superuser=False):
+def make_tenant(label, *, staff=False, superuser=False, with_swap=True):
     number = next(_sequence)
     refs = reference_data()
     email = f"{label}@tenants.example.test"
@@ -237,17 +236,23 @@ def make_tenant(label, *, staff=False, superuser=False):
     }
     order = TransferOrder.objects.create(order_type=TransferOrderType.SELL, **order_fields)
     counter_order = TransferOrder.objects.create(order_type=TransferOrderType.BUY, **order_fields)
-    swap = SwapOrder.objects.create(
-        sell_order=order,
-        buy_order=counter_order,
-        share_token=deployed_token,
-        payment_asset=refs.stablecoin,
-        seller_address=wallet.address,
-        buyer_address=wallet.address,
-        share_amount=10,
-        payment_amount=1500,
-        nonce=number,
-        order_hash="0x" + f"{number:064x}",
+    from shared.tests.settlement import save_swap_with_context
+
+    swap = (
+        save_swap_with_context(
+            sell_order=order,
+            buy_order=counter_order,
+            share_token=deployed_token,
+            payment_asset=refs.stablecoin,
+            seller_address=wallet.address,
+            buyer_address=wallet.address,
+            share_amount=10,
+            payment_amount=1500,
+            nonce=number,
+            order_hash="0x" + f"{number:064x}",
+        )
+        if with_swap
+        else None
     )
     offering = Offering.objects.create(
         token=deployed_token,
@@ -350,6 +355,7 @@ def route_context(tenant):
         series_point=f"{tenant.portfolio.uuid}:{tenant.holding_snapshot.snapshot_date.isoformat()}",
         wallet_address=tenant.wallet.address,
         signed_transfer=tenant.signed_transfer,
+        settlement_digest=tenant.swap.settlement_digest,
         push_token=tenant.device_token.push_token,
         acn=tenant.company.acn,
         asset=str(tenant.refs.asset.uuid),

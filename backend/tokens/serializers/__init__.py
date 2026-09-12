@@ -23,8 +23,6 @@ from .swap_order import (
 )
 from .transfer_order import (
     BroadcastTransferSerializer,
-    OrderModificationExecuteSerializer,
-    OrderModificationRequestSerializer,
     PrepareTransferSerializer,
     TransferOrderCreateSerializer,
     TransferOrderDetailSerializer,
@@ -38,8 +36,6 @@ __all__ = [
     "CapitalIncreaseDetailSerializer",
     "CapitalIncreaseListSerializer",
     "CapitalIncreaseUpdateSerializer",
-    "OrderModificationExecuteSerializer",
-    "OrderModificationRequestSerializer",
     "PrepareTransferSerializer",
     "ShareIssuanceCreateSerializer",
     "ShareIssuanceListSerializer",

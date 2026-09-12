@@ -27,6 +27,11 @@ from tokens.serializers.swap_order import (
     SwapOrderListSerializer,
 )
 from tokens.services.signing_challenge import consume_challenge, issue_challenge
+from tokens.tests.signing_challenge_fixtures import (
+    action_fields,
+    historical_cancel_values,
+    pending_action,
+)
 
 POSTGRES_ONLY = "The trigger is PostgreSQL; SQLite has no derive-and-refuse"
 MIGRATION_ROUND_TRIP_ONLY = "Deferred constraint checks are PostgreSQL; SQLite queues nothing to settle"
@@ -170,6 +175,11 @@ class TheTriggerRefusesWhatTheServiceDidNotSupplyTest(TransactionTestCase):
     def test_a_swap_cannot_name_a_wallet_its_order_does_not(self):
         other = make_tenant("stranger").wallet
         swap = self.tenant.swap
+        self.addCleanup(restore_every_migration)
+        migrate_to([("tokens", "0038_order_action_submissions")])
+        restore_every_migration()
+        swap.refresh_from_db()
+        self.assertEqual(swap.settlement_protocol_version, 0)
 
         with self.assertRaises(Exception) as refusal:
             with transaction.atomic():
@@ -233,14 +243,7 @@ class AChallengeWithNoOwnerIsNotOfferedForConsumptionTest(TransactionTestCase):
     def setUp(self):
         super().setUp()
         self.tenant = make_tenant("ownerless")
-        self.challenge = orphan(
-            issue_challenge(
-                SigningChallengePurpose.ORDER_CANCEL,
-                self.tenant.wallet.address,
-                {"orderUuid": str(self.tenant.order.pk)},
-                wallet=self.tenant.wallet,
-            )
-        )
+        self.challenge = orphan(SigningChallenge.objects.create(**historical_cancel_values(self.tenant.order)))
 
     def consume(self):
         with transaction.atomic():
@@ -285,11 +288,14 @@ class AChallengeCannotBeIssuedWithoutTheWalletItIsForTest(TestCase):
         self.assertFalse(SigningChallenge.objects.exists())
 
     def test_an_order_supplies_the_wallet_without_one_being_passed(self):
+        action = pending_action(self.tenant)
         challenge = issue_challenge(
             SigningChallengePurpose.ORDER_CANCEL,
             self.tenant.order.wallet.address,
-            {"orderUuid": str(self.tenant.order.uuid)},
+            action_fields(action),
+            verifying_contract=action.verifying_contract,
             order=self.tenant.order,
+            action=action,
         )
 
         self.assertEqual(challenge.wallet_id, self.tenant.order.wallet_id)

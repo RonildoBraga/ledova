@@ -1,5 +1,5 @@
 from datetime import timedelta
-from unittest.mock import Mock, call, patch
+from unittest.mock import ANY, Mock, call, patch
 
 from django.test import TestCase, override_settings
 from django.utils import timezone
@@ -44,6 +44,7 @@ class DeployTokenTest(TestCase):
         self.addCleanup(self.client_patch.stop)
         self.chain.get_address_from_private_key.return_value = SIGNER
         self.chain.send_transaction.return_value = ("0xcreate", None)
+        self.chain.send_transaction.side_effect = self._send
         self.chain.wait_for_receipt.return_value = RECEIPT
         self.chain.get_transaction_receipt.return_value = None
         self.chain.load_contract.return_value.functions.authorizedShares.return_value.call.return_value = 1000
@@ -52,6 +53,12 @@ class DeployTokenTest(TestCase):
         self.tenant = make_tenant("owner")
         self.token = self.tenant.token
         self.token.mark_deploying()
+
+    def _send(self, *args, on_signed=None, **kwargs):
+        result = self.chain.send_transaction.return_value
+        if on_signed is not None:
+            on_signed(result[0], b"synthetic deployment")
+        return result
 
     def _service(self, contract):
         service = ShareTokenService()
@@ -91,7 +98,7 @@ class DeployTokenTest(TestCase):
             self.token.name, "DRF", f"{self.tenant.company.acn}:DRF", 1000, SIGNER
         )
         self.chain.send_transaction.assert_called_once_with(
-            contract.functions.createShareToken.return_value, "0xkey", wait_for_receipt=False
+            contract.functions.createShareToken.return_value, "0xkey", wait_for_receipt=False, on_signed=ANY
         )
         self.chain.wait_for_receipt.assert_called_once_with("0xcreate")
         self.token.refresh_from_db()
@@ -270,7 +277,7 @@ class DeployTokenTest(TestCase):
         self.assertEqual(self.token.deployment_transaction, other)
         self.assertEqual(BlockchainTransaction.objects.exclude(pk=other.pk).get().status, TransactionStatus.FAILED)
 
-    def test_two_creates_sent_in_one_window_keep_the_hash_of_the_one_that_confirms(self):
+    def test_another_workers_pre_broadcast_binding_is_kept(self):
         other = BlockchainTransaction.objects.create(
             tx_type=TransactionType.SHARE_TOKEN_DEPLOY,
             status=TransactionStatus.PENDING,
@@ -282,37 +289,24 @@ class DeployTokenTest(TestCase):
             related_uuid=self.token.uuid,
         )
 
-        hashes = iter(["0xcreate", "0xsecond"])
-
         def other_worker_writes_first(*args, **kwargs):
             ShareToken.objects.filter(pk=self.token.pk).update(
                 deployment_tx_hash="0xother", deployment_transaction=other
             )
-            return (next(hashes), None)
+            kwargs["on_signed"]("0xcreate", b"synthetic deployment")
+            return ("0xcreate", None)
 
         self.chain.send_transaction.side_effect = other_worker_writes_first
-        self.chain.wait_for_receipt.side_effect = RuntimeError("Transaction failed: 0xcreate (status=0)")
-        with self.assertRaisesMessage(TokenDeploymentFailedException, "Token deployment is unconfirmed."):
+        with self.assertRaisesMessage(TokenDeploymentFailedException, "Token deployment failed."):
             self._service(factory()).deploy_token(self.token)
 
         self.token.refresh_from_db()
         self.assertEqual((self.token.status, self.token.deployment_tx_hash), (ShareTokenStatus.DEPLOYING, "0xother"))
         self.assertEqual(self.token.deployment_transaction, other)
-        self.assertEqual(BlockchainTransaction.objects.get(tx_hash="0xcreate").status, TransactionStatus.FAILED)
-
-        ShareToken.objects.filter(pk=self.token.pk).update(deployment_tx_hash=None, deployment_transaction=None)
-        self.token.refresh_from_db()
-        self.chain.wait_for_receipt.side_effect = None
-        self.chain.wait_for_receipt.return_value = RECEIPT
-        result = self._service(factory()).deploy_token(self.token)
-
-        self.assertEqual(result["contract_address"], CREATED)
-        self.token.refresh_from_db()
-        self.assertEqual((self.token.status, self.token.deployment_tx_hash), (ShareTokenStatus.DEPLOYED, "0xsecond"))
-        self.assertEqual(
-            (self.token.deployment_transaction.tx_hash, self.token.deployment_transaction.status),
-            ("0xsecond", TransactionStatus.CONFIRMED),
-        )
+        refused = BlockchainTransaction.objects.exclude(pk=other.pk).get()
+        self.assertEqual(refused.status, TransactionStatus.FAILED)
+        self.assertFalse(refused.tx_hash)
+        self.chain.wait_for_receipt.assert_not_called()
 
     def test_task_guards_and_delegates(self):
         self.assertEqual(

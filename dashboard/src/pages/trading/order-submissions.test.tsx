@@ -4,14 +4,24 @@ import type { PropsWithChildren, ReactNode } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import axios, { AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios';
-import { ApiClientProvider, AUTH_QUERY_KEY, USER_PREFERENCES_QUERY_KEY, TRADING_ENDPOINTS } from '@ledova/shared';
+import {
+  ApiClientProvider,
+  AUTH_QUERY_KEY,
+  USER_PREFERENCES_QUERY_KEY,
+  TRADING_ENDPOINTS,
+  OrderSubmission,
+  createOrderSubmissionStore,
+} from '@ledova/shared';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { TradingPage } from './index';
+import { OrderSigningFlow } from './components/OrderSigningFlow';
 import { deriveAddress, signEthereumTypedData } from '@utils/softwareWallet/localSigner';
 import { orderSubmissionStore } from '@services/orderSubmissions';
 import {
   accountUuid,
   deferred,
+  draft,
+  memoryStorage,
   largeMinQuantity,
   largeQuantity,
   largeSnapshotJson,
@@ -69,7 +79,6 @@ vi.mock('@utils/softwareWallet/localSigner', () => ({ deriveAddress: vi.fn(), si
 vi.mock('./components/MarketOverview', () => ({ MarketOverview: () => null }));
 vi.mock('./components/OrdersPanel', () => ({ OrdersPanel: () => null }));
 vi.mock('./components/SwapSigningFlow', () => ({ SwapSigningFlow: () => null }));
-vi.mock('./components/OrderModificationModal', () => ({ OrderModificationModal: () => null }));
 vi.mock('./hooks/useTradingEvents', () => ({ useTradingEvents: () => {} }));
 vi.mock('./hooks/useAtomicSwaps', () => ({ useSwapOrdersMulti: () => ({ data: [], isLoading: false }) }));
 vi.mock('./useTrading', async () => {
@@ -332,4 +341,72 @@ it('displays and retries exact recovered quantities above the safe integer range
     expect(call[4]).toMatchObject({ quantity: largeQuantity, minQuantity: largeMinQuantity });
   expect(crypto.randomUUID).toHaveBeenCalledTimes(1);
   expect(await orderSubmissionStore.list(owner)).toHaveLength(0);
+});
+
+async function readySubmissionPair() {
+  const ids = [submissionId, secondId];
+  const store = createOrderSubmissionStore(memoryStorage().storage, () => ids.shift()!);
+  handler = async (config) => {
+    const id = JSON.parse(config.data).submission_id;
+    const created = config.url === endpoints.CREATE;
+    const data = snapshot(id, created ? 'created' : 'pending');
+    if (data.order)
+      data.order.uuid =
+        id === submissionId ? '60000000-0000-4000-8000-000000000001' : '60000000-0000-4000-8000-000000000002';
+    return response(config, data, created ? 201 : 200);
+  };
+  const prepare = async () => {
+    const record = await store.create(owner, wallet.uuid);
+    const submission = new OrderSubmission(record, {
+      apiClient: api,
+      store,
+      isCurrent: () => true,
+      onSettled: () => {},
+      onRecordsChanged: () => {},
+    });
+    await submission.start(draft);
+    expect(submission.getSnapshot().phase).toBe('ready');
+    return submission;
+  };
+  return { first: await prepare(), second: await prepare(), store };
+}
+
+it('clears the S1 seed when the open wrapper switches directly between saved submissions', async () => {
+  const { first, second, store } = await readySubmissionPair();
+  const onClose = vi.fn();
+  const view = render(<OrderSigningFlow isOpen submission={first} wallet={wallet} onClose={onClose} />);
+  fireEvent.click(screen.getByText('Continue to sign'));
+  fireEvent.change(screen.getByLabelText('Synthetic seed'), { target: { value: 'synthetic seed for first order' } });
+  expect((screen.getByLabelText('Synthetic seed') as HTMLInputElement).value).toBe('synthetic seed for first order');
+  first.close();
+  view.rerender(<OrderSigningFlow isOpen submission={second} wallet={wallet} onClose={onClose} />);
+  fireEvent.click(screen.getByText('Continue to sign'));
+  expect((screen.getByLabelText('Synthetic seed') as HTMLInputElement).value).toBe('');
+  expect((screen.getByText('Sign order') as HTMLButtonElement).disabled).toBe(true);
+  expect(onClose).not.toHaveBeenCalled();
+  expect(orderPosts()).toHaveLength(0);
+  expect(await store.list(owner)).toHaveLength(2);
+});
+
+it('delivers each S1 success once when the open wrapper switches directly between saved submissions', async () => {
+  const { first, second, store } = await readySubmissionPair();
+  const onClose = vi.fn();
+  const onSuccess = vi.fn();
+  const props = { isOpen: true, wallet, onClose, onSuccess };
+  const view = render(<OrderSigningFlow {...props} submission={first} />);
+  sign();
+  await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1));
+  first.close();
+  view.rerender(<OrderSigningFlow {...props} submission={second} />);
+  sign();
+  await waitFor(() => expect(screen.getByText('Order created')).toBeTruthy());
+  expect(orderPosts().map((request) => JSON.parse(request.data).submission_id)).toEqual([submissionId, secondId]);
+  expect(onSuccess.mock.calls.map(([order]) => order.uuid)).toEqual([
+    '60000000-0000-4000-8000-000000000001',
+    '60000000-0000-4000-8000-000000000002',
+  ]);
+  view.rerender(<OrderSigningFlow {...props} submission={second} />);
+  expect(onSuccess).toHaveBeenCalledTimes(2);
+  expect(onClose).not.toHaveBeenCalled();
+  expect(await store.list(owner)).toHaveLength(0);
 });

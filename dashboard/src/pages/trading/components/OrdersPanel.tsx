@@ -11,7 +11,8 @@ import {
   SpinnerGapIcon,
 } from '@phosphor-icons/react';
 import type { TransferOrder, SwapOrder, OrderBook as OrderBookType, OrderBookEntry } from '@ledova/shared';
-import { formatCurrency, DESIGN_TOKENS } from '@ledova/shared';
+import { formatCurrency, DESIGN_TOKENS, hasSwapSettlementContext } from '@ledova/shared';
+import { exactSettlementAmount } from '@services/swapSettlements';
 
 const ICON_XS = DESIGN_TOKENS.icon.sizes.xs;
 const ICON_SM = DESIGN_TOKENS.icon.sizes.sm;
@@ -161,8 +162,8 @@ export function OrdersPanel({
       const isSeller = normalizedAddresses.includes(s.sellerAddress.toLowerCase());
       const isBuyer = normalizedAddresses.includes(s.buyerAddress.toLowerCase());
       if (!isSeller && !isBuyer) return false;
-      const hasSigned = isSeller ? s.sellerHasSigned : s.buyerHasSigned;
-      return !hasSigned && ['created', 'seller_signed', 'buyer_signed'].includes(s.status);
+      const unsigned = (isSeller && !s.sellerHasSigned) || (isBuyer && !s.buyerHasSigned);
+      return unsigned && ['created', 'seller_signed', 'buyer_signed'].includes(s.status);
     });
   }, [swaps, walletAddresses, normalizedAddresses]);
 
@@ -286,10 +287,18 @@ export function OrdersPanel({
           })}
 
           {pendingSwaps.map((swap) => {
-            const isSeller = normalizedAddresses.includes(swap.sellerAddress.toLowerCase());
+            const isSeller = normalizedAddresses.includes(swap.sellerAddress.toLowerCase()) && !swap.sellerHasSigned;
             const userRole = isSeller ? 'Seller' : 'Buyer';
             const timeRemaining = formatSwapTimeRemaining(swap.expiresAt);
-            const paymentDisplay = (swap.paymentAmount / 100).toFixed(2);
+            let capturedDisplay: string | null = null;
+            if (hasSwapSettlementContext(swap)) {
+              try {
+                const context = swap.settlementContext;
+                capturedDisplay = `${exactSettlementAmount(context.typedData.message.shareAmount, context.shareToken.decimals)} ${context.shareToken.symbol} · ${exactSettlementAmount(context.typedData.message.paymentAmount, context.paymentAsset.deploymentDecimals)} ${context.paymentAsset.symbol}`;
+              } catch {
+                capturedDisplay = null;
+              }
+            }
 
             return (
               <div
@@ -303,7 +312,9 @@ export function OrdersPanel({
                   <span className="text-sm font-medium text-text-primary">{swap.shareTokenSymbol}</span>
                   <span className="text-xs text-text-muted">•</span>
                   <span className="text-sm text-text-primary">
-                    {swap.shareAmount}@${paymentDisplay}
+                    {swap.settlementProtocolVersion === 0
+                      ? `${swap.shareAmount}@$${(swap.paymentAmount / 100).toFixed(2)}`
+                      : (capturedDisplay ?? 'Trade details need refreshing')}
                   </span>
                   <span
                     className={`text-xs font-medium px-1.5 py-0.5 rounded ${isSeller ? 'bg-error-light/10 text-error-light' : 'bg-success-light/10 text-success-light'}`}

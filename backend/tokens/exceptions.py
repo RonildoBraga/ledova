@@ -2,6 +2,27 @@ from rest_framework import status
 from rest_framework.exceptions import APIException
 
 
+class OrderActionConflictException(APIException):
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "This action identifies different original order instructions."
+    default_code = "action_intent_conflict"
+    expose_code = True
+
+
+class OrderActionContextException(APIException):
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "The order's signing context is unavailable or has changed. Recover this action before retrying."
+    default_code = "action_context_conflict"
+    expose_code = True
+
+
+class OrderActionRefreshRequiredException(APIException):
+    status_code = status.HTTP_400_BAD_REQUEST
+    default_detail = "Request a new challenge bound to an order action."
+    default_code = "action_refresh_required"
+    expose_code = True
+
+
 class OrderSubmissionConflictException(APIException):
     status_code = status.HTTP_409_CONFLICT
     default_detail = "This submission identifies different original order terms."
