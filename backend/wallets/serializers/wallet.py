@@ -87,7 +87,7 @@ class WalletSerializer(serializers.ModelSerializer):
 
         request = self.context.get("request")
         if request is not None and request.user.is_authenticated:
-            fields["user_account"].queryset = UserAccount.objects.visible_to_user(request.user)
+            fields["user_account"].queryset = UserAccount.objects.accounts_the_user_is_a_member_of(request.user)
         else:
             fields["user_account"].queryset = UserAccount.objects.none()
         return fields

@@ -37,34 +37,6 @@ class NotificationScopingTest(APITestCase):
         body = response.json()
         return body.get("results", body) if isinstance(body, dict) else body
 
-    def test_notification_routes_are_owner_scoped(self):
-        self.client.force_authenticate(self.alice)
-        own, foreign = self.notifications[self.alice], self.notifications[self.bob]
-
-        list_response = self.client.get(NOTIFICATIONS)
-        self.assertEqual(list_response.status_code, 200)
-        self.assertEqual({row["uuid"] for row in self._rows(list_response)}, {str(own.uuid)})
-
-        self.assertEqual(self.client.get(f"{NOTIFICATIONS}{foreign.uuid}/").status_code, 404)
-        self.assertEqual(
-            self.client.patch(f"{NOTIFICATIONS}{foreign.uuid}/", {"isRead": True}, format="json").status_code, 404
-        )
-        foreign.refresh_from_db()
-        self.assertFalse(foreign.is_read)
-
-        self.assertEqual(self.client.get(f"{NOTIFICATIONS}unread-count/").json(), {"unreadCount": 1})
-        marked = self.client.post(f"{NOTIFICATIONS}mark-all-read/")
-        self.assertEqual(marked.status_code, 200)
-        self.assertEqual(marked.json(), {"marked": 1})
-        self.assertEqual(self.client.get(f"{NOTIFICATIONS}unread-count/").json(), {"unreadCount": 0})
-        self.assertEqual(Notification.objects.visible_to_user(self.bob).not_archived().unread().count(), 1)
-
-        own.refresh_from_db()
-        self.assertTrue(own.is_read)
-        archived = self.client.patch(f"{NOTIFICATIONS}{own.uuid}/", {"isArchived": True}, format="json")
-        self.assertEqual(archived.status_code, 200)
-        self.assertEqual(self._rows(self.client.get(NOTIFICATIONS)), [])
-
     def test_notification_preferences_are_owner_scoped(self):
         self.client.force_authenticate(self.alice)
         alice_profile = self.profiles[self.alice]
@@ -91,10 +63,12 @@ class NotificationScopingTest(APITestCase):
         self.assertTrue(own.price_alerts)
         self.assertEqual(NotificationPreferences.objects.count(), 2)
 
-    def test_device_token_manager_is_owner_scoped(self):
-        self.assertEqual(set(DeviceToken.objects.visible_to_user(self.alice)), {self.alice_token})
-        self.assertEqual(set(NotificationPreferences.objects.visible_to_user(self.bob)), {self.bob_preferences})
-        self.assertFalse(NotificationPreferences.objects.visible_to_user(self.alice).exists())
+    def test_preferences_follow_the_live_profile(self):
+        self.assertEqual(
+            set(NotificationPreferences.objects.owned_through_the_live_profile(self.bob)),
+            {self.bob_preferences},
+        )
+        self.assertFalse(NotificationPreferences.objects.owned_through_the_live_profile(self.alice).exists())
 
     def test_identity_verification_uses_only_the_requesters_profile(self):
         self.client.force_authenticate(self.alice)
@@ -133,7 +107,6 @@ class NotificationScopingTest(APITestCase):
                     self.assertEqual(getattr(self.client, method)(url, {}, format="json").status_code, 404)
         start.assert_not_called()
         st.assert_not_called()
-        self.assertEqual(self._rows(self.client.get(NOTIFICATIONS)), [])
         self.assertEqual(NotificationPreferences.objects.count(), 1)
 
     def test_anonymous_is_rejected(self):

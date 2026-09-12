@@ -9,5 +9,5 @@ def register_device_token(user, push_token, device_type):
 
 
 def unregister_device_token(user, push_token):
-    deleted, _ = DeviceToken.objects.visible_to_user(user).filter(push_token=push_token).delete()
+    deleted, _ = DeviceToken.objects.for_the_current_principal().filter(push_token=push_token).delete()
     return deleted

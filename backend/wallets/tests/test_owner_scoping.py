@@ -92,7 +92,7 @@ class LiveMembershipScopingTest(TestCase):
 
         self.assertNotIn(
             self.account.uuid,
-            UserAccount.objects.visible_to_user(self.alice).values_list("uuid", flat=True),
+            UserAccount.objects.accounts_the_user_is_a_member_of(self.alice).values_list("uuid", flat=True),
         )
         self.assertNotIn(
             self.wallet.uuid,
@@ -111,7 +111,7 @@ class LiveMembershipScopingTest(TestCase):
 
         self.assertIn(
             preexisting_account.uuid,
-            UserAccount.objects.visible_to_user(self.alice).values_list("uuid", flat=True),
+            UserAccount.objects.accounts_the_user_is_a_member_of(self.alice).values_list("uuid", flat=True),
         )
         self.assertIn(
             preexisting_wallet.uuid,
@@ -142,11 +142,15 @@ class LiveMembershipScopingTest(TestCase):
             with self.subTest(user=privileged_user.email):
                 self.assertNotIn(
                     self.account.uuid,
-                    UserAccount.objects.visible_to_user(privileged_user).values_list("uuid", flat=True),
+                    UserAccount.objects.accounts_the_user_is_a_member_of(privileged_user).values_list(
+                        "uuid", flat=True
+                    ),
                 )
                 self.assertIn(
                     own_account.uuid,
-                    UserAccount.objects.visible_to_user(privileged_user).values_list("uuid", flat=True),
+                    UserAccount.objects.accounts_the_user_is_a_member_of(privileged_user).values_list(
+                        "uuid", flat=True
+                    ),
                 )
                 serializer = self._serializer_for(privileged_user)
                 account_ids = set(serializer.fields["user_account"].queryset.values_list("uuid", flat=True))

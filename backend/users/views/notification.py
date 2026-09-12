@@ -21,7 +21,7 @@ class NotificationViewSet(AuthenticatedReadOnlyViewSet):
     ordering_fields = ["created_at"]
 
     def get_queryset(self):
-        return Notification.objects.visible_to_user(self.request.user).not_archived().with_optimized_data()
+        return Notification.objects.for_the_current_principal().not_archived().with_optimized_data()
 
     def partial_update(self, request, **kwargs):
         notification = self.get_object()

@@ -27,12 +27,10 @@ class InvestorClassificationViewSet(UploadProtectedView, AuthenticatedModelViewS
         return self.action in ("create", "destroy")
 
     def get_queryset(self):
-        scope = (
-            InvestorClassification.objects.manageable_by_user
-            if self._writing()
-            else InvestorClassification.objects.visible_to_user
-        )
-        return scope(self.request.user).select_related("user_account", "company")
+        reachable = InvestorClassification.objects.for_the_current_principal()
+        if self._writing():
+            reachable = reachable.submitted()
+        return reachable.select_related("user_account", "company")
 
     def destroy(self, request, *args, **kwargs):
         self.get_object().withdraw()

@@ -12,7 +12,7 @@ class FinancialProfileViewSet(AuthenticatedModelViewSet):
     ordering_fields = ["created_at"]
 
     def get_queryset(self):
-        queryset = FinancialProfile.objects.visible_to_user(self.request.user)
+        queryset = FinancialProfile.objects.owned_through_the_live_profile(self.request.user)
         if getattr(self, "action", None) in {"update", "partial_update"}:
             return queryset.select_for_update()
         return queryset

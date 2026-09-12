@@ -84,10 +84,10 @@ and the file is the backlog.
 | Layer | Owns | Never contains | Reference |
 | --- | --- | --- | --- |
 | `models/` | Fields, `TextChoices`, constraints, `__str__`, properties over own fields, single-row transitions (guard, set fields, `save(update_fields=...)`, at most about ten lines, raising the app's `APIException` on a bad state) | Queries on other models, multi-step workflows, external I/O | `offerings/models/offering.py` |
-| `querysets/` | Every reusable query: `visible_to_user`, `manageable_by_user`, status filters, `select_related` bundles, annotations, aggregates; wired with `objects = XQuerySet.as_manager()` | Saves, side effects, calls into services | `offerings/querysets/offering.py` |
+| `querysets/` | Every reusable query: `visible_to_user`/`for_the_current_principal`, `manageable_by_user`, status filters, `select_related` bundles, annotations, aggregates; wired with `objects = XQuerySet.as_manager()` | Saves, side effects, calls into services | `offerings/querysets/offering.py` |
 | `services/` | Orchestration across models, external I/O (chain, KYC, email), `transaction.atomic` and `select_for_update`; the one place a multi-model workflow lives. Plain module-level `verb_noun` functions, named after the noun | HTTP objects, serializers, `Response` | `offerings/services/subscription.py` |
 | `serializers/` | JSON shape and input validation; writable FKs scoped in `get_fields()` with `visible_to_user` | Business rules, locking, queries beyond FK scoping | `offerings/serializers/subscription.py` |
-| `views/` | Permissions, `get_queryset()` returning `Model.objects.visible_to_user(user)...`, serializer choice, one service call, `Response` | Raw `.objects.filter`, try/except that re-wraps an `APIException`, log lines that restate the request | `offerings/views/subscription.py` |
+| `views/` | Permissions, `get_queryset()` returning `Model.objects.visible_to_user(user)...` or `Model.objects.for_the_current_principal()...`, serializer choice, one service call, `Response` | Raw `.objects.filter`, try/except that re-wraps an `APIException`, log lines that restate the request | `offerings/views/subscription.py` |
 | `tasks/` | `@app.task` / `@app.periodic`: load the row by uuid, call one service, return a dict | Orchestration, state machines | `users/tasks/retention.py` |
 | `admin/` | Registration, list/search/filter, operator actions that call the same model transition or service the API calls | A second implementation of a workflow, HTML badge builders | `users/admin/investor_classification.py` |
 
@@ -1250,10 +1250,46 @@ the migration is checkable.
 
 
 
-- Every customer-facing queryset has `visible_to_user(user)` (and
-  `manageable_by_user` for writes) that returns `none()` for an anonymous or
-  `None` user, and every viewset calls it from `get_queryset`, with one explicit
-  exception: the two cross-tenant share-class listings,
+- Every customer-facing queryset narrows through a **named scoping call**, and
+  every viewset makes that call from `get_queryset`. There are two kinds, and
+  which one a model gets is a measured question rather than a style choice.
+  Where the queryset still carries tenancy, it is `visible_to_user(user)` (and
+  `manageable_by_user` for writes), returning `none()` for an anonymous or
+  `None` user. Where the policy has been **proved sufficient** — the row set the
+  policy returns under a principal is identical to the one the filter returned —
+  the filter comes out and the call becomes
+  `for_the_current_principal()` from `shared.db.CarriedByThePolicy`. That method
+  applies no filter, because the policy already has; what it does is refuse to
+  evaluate on the operator connection, which has no principal and is not
+  narrowed. So a customer view served on the wrong connection fails loudly
+  instead of returning every tenant's rows. The name stays in the view because
+  the view still has to say what it is relying on, and because the layer gate
+  reads these names to tell a scoped view from an unscoped one.
+
+  **A backfilled owner column is not the same fact as a live relationship, and
+  this is the trap the overlap window exists to catch.** R0 gave
+  `FinancialProfile`, `UserPreferences` and `NotificationPreferences` a direct
+  `user_id` derived from `user_profile.user`, so a policy could read it without
+  a join. Nothing maintains it: `0020_r0_owner_columns` backfilled it once, and
+  no signal, save override or service updates it since. Reassigning a profile to
+  a different user therefore moves `UserProfile` and leaves those three pointing
+  at the previous owner. The old querysets joined `user_profile__user` live and
+  were never wrong about this; the policy is. So those three keep a filter,
+  `owned_through_the_live_profile`, and the divergence is pinned by a control
+  rather than left as folklore. Measuring the row sets in a steady state said
+  the policy was sufficient for all eight — it is the *reassignment* that
+  separates them, which is why a static comparison is not the proof.
+
+  `UserAccount` is the worked example of why this is measured per model rather
+  than assumed. Its policy deliberately admits more than its private listing
+  should: `member(uuid) OR HOLDS_A_SIGNING_WALLET`, so that a viewer who may see
+  a company can also see the account holding that company's operator wallet. Its
+  filter therefore stays, renamed `accounts_the_user_is_a_member_of` to say what
+  it does, because a method called `visible_to_user` sitting beside eight that
+  were deleted as redundant is an invitation to delete the ninth.
+
+  One explicit exception to the whole rule: the two cross-tenant share-class
+  listings,
   `DirectoryTokenViewSet` (`offerings/views/directory.py`) and
   `TradingTokenViewSet` (`tokens/views/trading_token.py`). Neither is
   owner-scoped and neither ever was, but neither is unscoped either. Both are

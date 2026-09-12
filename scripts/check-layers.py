@@ -34,6 +34,9 @@ SCOPING_CALLS = frozenset(
     {
         "visible_to_user",
         "manageable_by_user",
+        "for_the_current_principal",
+        "accounts_the_user_is_a_member_of",
+        "owned_through_the_live_profile",
         "none",
         "get_object",
         "get_queryset",
@@ -57,7 +60,7 @@ ADMIN_BARE_VIEW = "bare-admin-view"
 SIGNAL_IMPORT = "django-signals"
 
 RULES = {
-    VIEW_ORM: "views reach the ORM only through visible_to_user or manageable_by_user",
+    VIEW_ORM: "views reach the ORM only through a named scoping call: for_the_current_principal where the policy carries it, or visible_to_user/manageable_by_user where the queryset does",
     VIEW_TRANSACTION: "a transaction the view opens around its own logic is a workflow; move it to a service",
     VIEW_LOCK: "select_for_update outside get_queryset means the view is orchestrating; move it to a service",
     VIEW_LOGGER: "log in services and tasks, not in views",

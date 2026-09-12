@@ -81,7 +81,7 @@ def account_eligibility(account, company=None, amount_aud=None) -> InvestorEligi
 
 
 def investor_eligibility(user, company=None) -> InvestorEligibility:
-    accounts = list(UserAccount.objects.visible_to_user(user).investing().order_by("created_at"))
+    accounts = list(UserAccount.objects.accounts_the_user_is_a_member_of(user).investing().order_by("created_at"))
     if not accounts:
         return InvestorEligibility(is_eligible=False, account=None, classification=None, reasons=(NO_INVESTOR_ACCOUNT,))
 
@@ -94,7 +94,7 @@ def investor_eligibility(user, company=None) -> InvestorEligibility:
 
 
 def _associated_company_ids(user):
-    accounts = UserAccount.objects.visible_to_user(user).investing()
+    accounts = UserAccount.objects.accounts_the_user_is_a_member_of(user).investing()
     return (
         InvestorClassification.objects.filter(user_account__in=accounts)
         .live()

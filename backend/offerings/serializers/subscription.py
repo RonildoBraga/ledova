@@ -147,7 +147,7 @@ class SubscriptionCreateSerializer(serializers.ModelSerializer):
         fields["offering"].queryset = Offering.objects.open_now().filter(
             token__company__in=eligible_investor_companies(user)
         )
-        fields["user_account"].queryset = UserAccount.objects.visible_to_user(user).investing()
+        fields["user_account"].queryset = UserAccount.objects.accounts_the_user_is_a_member_of(user).investing()
         fields["wallet"].queryset = Wallet.objects.visible_to_user(user).verified_evm().filter(chain=BLOCKCHAIN_BASE)
         return fields
 

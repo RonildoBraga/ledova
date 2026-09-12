@@ -11,6 +11,7 @@ from .aliases import (
     use_operator,
 )
 from .principal import PRINCIPAL_SETTING, principal_of, reset_principal, set_principal
+from .querysets import CarriedByThePolicy
 from .tasks import acting_for
 from .transactions import atomic, on_commit
 
@@ -18,6 +19,7 @@ __all__ = [
     "APP_ALIAS",
     "acting_for",
     "atomic",
+    "CarriedByThePolicy",
     "MIGRATE_ALIAS",
     "OPERATOR_ALIAS",
     "PRINCIPAL_SETTING",

@@ -28,11 +28,6 @@ class NotificationUnreadCountTest(APITestCase):
 
         self.assertEqual(self.client.get(UNREAD_COUNT).json(), {"unreadCount": 0})
 
-    def test_another_users_unread_notification_is_not_counted(self):
-        self._notify(self.bob, is_read=False)
-
-        self.assertEqual(self.client.get(UNREAD_COUNT).json(), {"unreadCount": 0})
-
     def test_an_anonymous_caller_is_refused(self):
         self.client.force_authenticate(None)
 

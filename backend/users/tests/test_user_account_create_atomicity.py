@@ -42,7 +42,7 @@ class UserAccountCreateIsAllOrNothingTest(APITransactionTestCase):
         ):
             self._create()
 
-        self.assertFalse(UserAccount.objects.visible_to_user(self.user).exists())
+        self.assertFalse(UserAccount.objects.accounts_the_user_is_a_member_of(self.user).exists())
         self.assertEqual(UserAccount.objects.count(), 0)
 
     def test_the_successful_path_still_commits_the_account_and_its_link(self):

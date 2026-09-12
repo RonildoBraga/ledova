@@ -13,7 +13,7 @@ class UserPreferencesViewSet(AuthenticatedModelViewSet):
     ordering_fields = ["created_at"]
 
     def get_queryset(self):
-        return UserPreferences.objects.visible_to_user(self.request.user)
+        return UserPreferences.objects.owned_through_the_live_profile(self.request.user)
 
     def list(self, request):
         preferences = self.get_queryset().first()

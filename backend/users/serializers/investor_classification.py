@@ -79,7 +79,7 @@ class InvestorClassificationSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         user = getattr(request, "user", None)
         if user is not None and user.is_authenticated:
-            fields["user_account"].queryset = UserAccount.objects.visible_to_user(user)
+            fields["user_account"].queryset = UserAccount.objects.accounts_the_user_is_a_member_of(user)
             fields["company"].queryset = Company.objects.active()
         return fields
 

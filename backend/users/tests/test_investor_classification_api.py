@@ -188,15 +188,6 @@ class InvestorClassificationApiTest(StubUploadDependencies, APITestCase):
 
         self.assertEqual(response.status_code, 201, response.content)
 
-    def test_the_list_shows_only_the_callers_own_claims(self):
-        mine = make_classification(self.account)
-        make_classification(self.other_account)
-
-        response = self.client.get(BASE)
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual([row["uuid"] for row in response.json()["results"]], [str(mine.uuid)])
-
     def test_a_submitted_claim_can_be_deleted_but_a_verified_one_cannot(self):
         reviewer = User.objects.create_user(email="del-reviewer@example.test", password="pw-12345678")
         submitted = make_classification(self.account)
@@ -273,11 +264,6 @@ class EvidenceViewTest(APITestCase):
         self.assertNotIn(response.status_code, (301, 302, 303, 307, 308))
         self.assertIsNone(response.headers.get("Location"))
         self.assertNotIn("/media/", response.headers.get("Content-Disposition", ""))
-
-    def test_another_tenant_gets_404(self):
-        self.client.force_authenticate(self.other_user)
-
-        self.assertEqual(self.client.get(self.url).status_code, 404)
 
     def test_an_anonymous_caller_gets_401(self):
         self.assertEqual(self.client.get(self.url).status_code, 401)

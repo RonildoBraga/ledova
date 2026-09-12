@@ -13,7 +13,9 @@ class PortfolioSerializer(serializers.ModelSerializer):
         fields = super().get_fields()
 
         request = self.context.get("request")
-        fields["user_account"].queryset = UserAccount.objects.visible_to_user(getattr(request, "user", None))
+        fields["user_account"].queryset = UserAccount.objects.accounts_the_user_is_a_member_of(
+            getattr(request, "user", None)
+        )
         return fields
 
     def get_wallet_uuids(self, obj) -> list[str]:

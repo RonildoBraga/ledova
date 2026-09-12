@@ -16,7 +16,7 @@ class BalanceService:
 
     @staticmethod
     def batch_check_balances(user, *, user_account, addresses, chain):
-        if not UserAccount.objects.visible_to_user(user).filter(pk=user_account).exists():
+        if not UserAccount.objects.accounts_the_user_is_a_member_of(user).filter(pk=user_account).exists():
             raise NotFound("Account not found.")
         if chain not in SUPPORTED_CHAINS:
             raise InvalidTransactionException("Select a supported wallet network.")

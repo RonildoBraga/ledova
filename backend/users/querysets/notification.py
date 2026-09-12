@@ -1,13 +1,9 @@
-from django.db.models import QuerySet
 from django.utils import timezone
 
+from shared.db import CarriedByThePolicy
 
-class NotificationQuerySet(QuerySet):
 
-    def visible_to_user(self, user):
-        if user is None or not user.is_authenticated:
-            return self.none()
-        return self.filter(user=user)
+class NotificationQuerySet(CarriedByThePolicy):
 
     def unread(self):
         return self.filter(is_read=False)

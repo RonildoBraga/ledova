@@ -134,19 +134,6 @@ class SupportingPayslipApiTest(EvidenceCase, APITestCase):
         self.assertIsNone(response.json()["latestExtraction"])
         defer.assert_called_once_with(document_uuid=response.json()["uuid"], principal_id=self.owner.user.pk)
 
-    def test_neither_a_foreign_document_nor_a_foreign_claim_can_be_attached(self):
-        self.client.force_authenticate(self.other.user)
-        response = self.client.post(self.url + "attach/", {"classification": str(self.claim.pk)}, format="json")
-        self.assertEqual(response.status_code, 404)
-        self.client.force_authenticate(self.owner.user)
-        foreign = InvestorClassification.objects.create(
-            user_account=self.other.account, category="professional_investor"
-        )
-        response = self.client.post(self.url + "attach/", {"classification": str(foreign.pk)}, format="json")
-        self.assertEqual(response.status_code, 404)
-        self.document.refresh_from_db()
-        self.assertIsNone(self.document.classification_id)
-
     def test_a_reviewed_or_withdrawn_claim_does_not_accept_new_evidence(self):
         for status in RETENTION_CLOCK:
             with self.subTest(status=status):

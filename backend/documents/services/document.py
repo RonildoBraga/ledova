@@ -53,7 +53,7 @@ def attach_document(document, user, classification_uuid):
     try:
         with atomic():
             claim = get_object_or_404(
-                InvestorClassification.objects.visible_to_user(user).select_for_update(), pk=classification_uuid
+                InvestorClassification.objects.for_the_current_principal().select_for_update(), pk=classification_uuid
             )
             document = get_object_or_404(Document.objects.visible_to_user(user).select_for_update(), pk=document.pk)
             if document.classification_id == claim.pk:

@@ -8,8 +8,8 @@ from integrations.kyc.constants import (
     REVIEW_YELLOW,
     VERIFICATION_STATUS_CHOICES,
 )
+from shared.db import CarriedByThePolicy
 from shared.models import BaseModel, Country
-from users.querysets.user_profile import UserProfileQuerySet
 
 
 class UserProfile(BaseModel):
@@ -69,7 +69,7 @@ class UserProfile(BaseModel):
         null=True,
     )
 
-    objects = UserProfileQuerySet.as_manager()
+    objects = CarriedByThePolicy.as_manager()
 
     class Meta:
         ordering = ["-created_at"]

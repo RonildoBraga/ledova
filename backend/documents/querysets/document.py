@@ -13,7 +13,7 @@ class DocumentQuerySet(models.QuerySet):
             return self.none()
         return self.filter(uploaded_by=user).filter(
             models.Q(classification__isnull=True)
-            | models.Q(classification__in=InvestorClassification.objects.visible_to_user(user))
+            | models.Q(classification__in=InvestorClassification.objects.for_the_current_principal())
         )
 
     def retention_due(self, moment):

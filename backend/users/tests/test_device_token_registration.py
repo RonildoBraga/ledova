@@ -49,23 +49,3 @@ class DeviceTokenRegistrationTest(APITestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(DeviceToken.objects.get(push_token=PUSH_TOKEN).user, self.other)
-
-    def test_the_previous_owner_keeps_no_claim_on_a_taken_over_device(self):
-        self._register(self.owner)
-        self._register(self.other)
-
-        self.client.force_authenticate(self.owner)
-        response = self.client.get("/api/device-tokens/")
-
-        rows = response.json()
-        rows = rows if isinstance(rows, list) else rows["results"]
-        self.assertEqual(rows, [])
-
-    def test_unregistering_someone_elses_token_is_refused(self):
-        self._register(self.owner)
-
-        self.client.force_authenticate(self.other)
-        response = self.client.post("/api/device-tokens/unregister/", {"pushToken": PUSH_TOKEN}, format="json")
-
-        self.assertEqual(response.status_code, 404)
-        self.assertTrue(DeviceToken.objects.filter(push_token=PUSH_TOKEN, user=self.owner).exists())

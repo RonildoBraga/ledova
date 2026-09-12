@@ -31,7 +31,9 @@ def may_review_documents(user):
     if Company.objects.filter(owner=user).exists():
         return False
     return (
-        not UserAccount.objects.visible_to_user(user).filter(role__in=[AccountRole.COMPANY, AccountRole.BOTH]).exists()
+        not UserAccount.objects.accounts_the_user_is_a_member_of(user)
+        .filter(role__in=[AccountRole.COMPANY, AccountRole.BOTH])
+        .exists()
     )
 
 

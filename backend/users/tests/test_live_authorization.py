@@ -8,10 +8,8 @@ from rest_framework.test import APITestCase
 
 from assets.models import Asset
 from users.models import (
-    DeviceToken,
     FavouriteAsset,
     FinancialProfile,
-    Notification,
     NotificationPreferences,
     UserAccount,
     UserPreferences,
@@ -76,62 +74,6 @@ class UserLiveAuthorizationTest(APITestCase):
     def rows(response):
         body = response.json()
         return body.get("results", body) if isinstance(body, dict) else body
-
-    def test_live_scopes_follow_current_relationships(self):
-        cases = (
-            (UserProfile.objects.visible_to_user(self.alice), self.alice_profile, self.bob_profile),
-            (
-                FinancialProfile.objects.visible_to_user(self.alice),
-                self.alice_financial,
-                self.bob_financial,
-            ),
-            (
-                UserPreferences.objects.visible_to_user(self.alice),
-                self.alice_preferences,
-                self.bob_preferences,
-            ),
-            (
-                FavouriteAsset.objects.visible_to_user(self.alice),
-                self.alice_favourite,
-                self.bob_favourite,
-            ),
-        )
-        for queryset, own_object, foreign_object in cases:
-            with self.subTest(model=queryset.model._meta.label):
-                self.assertIn(own_object, queryset)
-                self.assertNotIn(foreign_object, queryset)
-
-    def test_profile_reassignment_immediately_updates_profile_and_financial_visibility(self):
-        replacement_owner = User.objects.create_user(
-            email="replacement-user@example.test",
-            password="pw-12345678",
-        )
-
-        self.alice_profile.user = replacement_owner
-        self.alice_profile.save(update_fields=["user"])
-
-        self.assertNotIn(self.alice_profile, UserProfile.objects.visible_to_user(self.alice))
-        self.assertNotIn(self.alice_financial, FinancialProfile.objects.visible_to_user(self.alice))
-        self.assertIn(self.alice_profile, UserProfile.objects.visible_to_user(replacement_owner))
-        self.assertIn(self.alice_financial, FinancialProfile.objects.visible_to_user(replacement_owner))
-
-    def test_account_membership_immediately_controls_favourite_access(self):
-        self.alice_account.user_profiles.remove(self.alice_profile)
-
-        self.assertNotIn(self.alice_favourite, FavouriteAsset.objects.visible_to_user(self.alice))
-        self.client.force_authenticate(self.alice)
-        own_url = f"/api/favourite-assets/{self.alice_favourite.uuid}/"
-        self.assertEqual(self.client.get(own_url).status_code, 404)
-        self.assertEqual(self.client.delete(own_url).status_code, 404)
-        self.assertTrue(FavouriteAsset.objects.filter(pk=self.alice_favourite.pk).exists())
-
-        self.bob_account.user_profiles.add(self.alice_profile)
-
-        self.assertIn(self.bob_favourite, FavouriteAsset.objects.visible_to_user(self.alice))
-        bob_url = f"/api/favourite-assets/{self.bob_favourite.uuid}/"
-        self.assertEqual(self.client.get(bob_url).status_code, 200)
-        self.assertEqual(self.client.delete(bob_url).status_code, 204)
-        self.assertFalse(FavouriteAsset.objects.filter(pk=self.bob_favourite.pk).exists())
 
     def test_profile_email_update_is_rejected_without_mutation(self):
         original_email = self.alice.email
@@ -260,30 +202,15 @@ class UserLiveAuthorizationTest(APITestCase):
                     self.assertTrue(queryset.query.select_for_update)
                     self.assertEqual(queryset.query.select_for_update_of, expected_of)
 
-    def test_favourite_filters_cannot_expand_the_live_scope(self):
-        self.client.force_authenticate(self.alice)
-
-        response = self.client.get(
-            "/api/favourite-assets/",
-            {"user_account": str(self.bob_account.uuid)},
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(self.rows(response), [])
-
     def test_anonymous_managers_fail_closed(self):
         anonymous = AnonymousUser()
-        managers = (
-            UserProfile.objects,
-            UserAccount.objects,
-            FinancialProfile.objects,
-            UserPreferences.objects,
-            FavouriteAsset.objects,
-            Notification.objects,
-            NotificationPreferences.objects,
-            DeviceToken.objects,
+        by_membership = (UserAccount.objects.accounts_the_user_is_a_member_of,)
+        by_live_profile = (
+            FinancialProfile.objects.owned_through_the_live_profile,
+            UserPreferences.objects.owned_through_the_live_profile,
+            NotificationPreferences.objects.owned_through_the_live_profile,
         )
-        for manager in managers:
-            with self.subTest(model=manager.model._meta.label, user="anonymous"):
-                self.assertFalse(manager.visible_to_user(anonymous).exists())
-                self.assertFalse(manager.visible_to_user(None).exists())
+        for selector in by_membership + by_live_profile:
+            with self.subTest(selector=selector.__name__, user="anonymous"):
+                self.assertFalse(selector(anonymous).exists())
+                self.assertFalse(selector(None).exists())

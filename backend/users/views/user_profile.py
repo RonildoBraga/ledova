@@ -20,7 +20,7 @@ class UserProfileViewSet(AuthenticatedModelViewSet):
     ordering_fields = ["created_at", "full_name"]
 
     def get_queryset(self):
-        queryset = UserProfile.objects.visible_to_user(self.request.user).select_related("citizenship_country")
+        queryset = UserProfile.objects.for_the_current_principal().select_related("citizenship_country")
         if getattr(self, "action", None) in {"update", "partial_update"}:
             return queryset.select_for_update(of=("self",))
         return queryset

@@ -33,7 +33,7 @@ class PortfolioViewSet(AuthenticatedModelViewSet):
         user_account = serializer.validated_data.get("user_account")
         if user_account is None:
 
-            accounts = UserAccount.objects.visible_to_user(self.request.user)
+            accounts = UserAccount.objects.accounts_the_user_is_a_member_of(self.request.user)
             preferences = getattr(self.request.user.userprofile, "preferences", None)
             selected_id = getattr(preferences, "selected_account_id", None)
             user_account = accounts.filter(pk=selected_id).first() if selected_id else None
