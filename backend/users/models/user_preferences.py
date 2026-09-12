@@ -1,21 +1,11 @@
-from django.conf import settings
 from django.db import models
 
 from shared.models.base import BaseModel
-from users.models.owner_column import DerivesOwnerFromProfile
 from users.querysets.user_preferences import UserPreferencesQuerySet
 
 
-class UserPreferences(DerivesOwnerFromProfile, BaseModel):
+class UserPreferences(BaseModel):
     user_profile = models.OneToOneField("users.UserProfile", on_delete=models.CASCADE, related_name="preferences")
-
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="+",
-        db_index=True,
-        help_text="Owner, derived from user_profile.user and held directly so a row-level security policy can read it",
-    )
 
     selected_account = models.ForeignKey(
         "users.UserAccount",

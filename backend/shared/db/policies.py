@@ -1,5 +1,8 @@
 from typing import NamedTuple
 
+from shared.constants import BLOCKCHAIN_BASE, BLOCKCHAIN_ETHEREUM
+from wallets.constants import WALLET_VERIFICATION_STATUS_VERIFIED
+
 
 class MissingOwnerColumns(NamedTuple):
     columns: tuple[str, ...]
@@ -57,6 +60,13 @@ DIRECTS_THE_ACCOUNT = f"director_id IN (SELECT uuid FROM users_userprofile WHERE
 LEAF_TABLES = ("companies_company", "users_userprofile", "customer_accounts_account_user_profiles")
 
 
+def _owned_through_the_profile(table):
+    return (
+        f"EXISTS (SELECT 1 FROM users_userprofile owning "
+        f"WHERE owning.uuid = {table}.user_profile_id AND owning.user_id = {PRINCIPAL})"
+    )
+
+
 def _member(column):
     return f"{column} IN (SELECT {MEMBER_ACCOUNTS}())"
 
@@ -76,6 +86,45 @@ OWNERSHIP_BOUND = (
     "AND lower(held.address) = lower(tokens_transferorder.wallet_address))"
 )
 
+THROUGH_ITS_WALLET = (
+    "EXISTS (SELECT 1 FROM wallets held WHERE held.uuid = holdings.wallet_id "
+    f"AND held.user_account_id IN (SELECT {MEMBER_ACCOUNTS}()))"
+)
+THROUGH_ITS_HOLDING = (
+    "EXISTS (SELECT 1 FROM holdings counted JOIN wallets held ON held.uuid = counted.wallet_id "
+    "WHERE counted.uuid = holding_snapshots.holding_id "
+    f"AND held.user_account_id IN (SELECT {MEMBER_ACCOUNTS}()))"
+)
+THROUGH_ITS_DOCUMENT = (
+    "EXISTS (SELECT 1 FROM documents carrying WHERE carrying.uuid = document_extractions.document_id "
+    f"AND carrying.uploaded_by_id = {PRINCIPAL})"
+)
+THROUGH_THE_ORDER_IT_MODIFIED = (
+    "EXISTS (SELECT 1 FROM tokens_transferorder modified "
+    "WHERE modified.uuid = tokens_ordermodificationlog.order_id "
+    f"AND modified.owner_account_id IN (SELECT {MEMBER_ACCOUNTS}()))"
+)
+THROUGH_ITS_TOKEN = (
+    "EXISTS (SELECT 1 FROM tokens_sharetoken issued "
+    "WHERE issued.uuid = tokens_shareissuance.token_id "
+    f"AND ({_company('issued.company_id', VISIBLE_COMPANIES)} OR {on_the_market('issued.')}))"
+)
+
+
+A_PARTY_TO_THE_SWAP = (
+    "EXISTS (SELECT 1 FROM wallets party "
+    "WHERE party.uuid IN (tokens_swaporder.seller_wallet_id, tokens_swaporder.buyer_wallet_id) "
+    f"AND party.user_account_id IN (SELECT {MEMBER_ACCOUNTS}()))"
+)
+A_VERIFIED_PARTY_TO_THE_SWAP = (
+    "EXISTS (SELECT 1 FROM wallets party "
+    "WHERE party.uuid IN (tokens_swaporder.seller_wallet_id, tokens_swaporder.buyer_wallet_id) "
+    f"AND party.user_account_id IN (SELECT {MEMBER_ACCOUNTS}()) "
+    f"AND party.verification_status = '{WALLET_VERIFICATION_STATUS_VERIFIED}' "
+    f"AND party.chain IN ('{BLOCKCHAIN_ETHEREUM}', '{BLOCKCHAIN_BASE}'))"
+)
+
+
 POLICIES = {
     "companies_company": (
         f"owner_id = {PRINCIPAL} OR ({OPEN_TO_INVESTORS}) OR {HAS_A_TOKEN_ON_THE_MARKET}",
@@ -89,9 +138,18 @@ POLICIES = {
     "documents": (f"uploaded_by_id = {PRINCIPAL}", f"uploaded_by_id = {PRINCIPAL}"),
     "users_device_token": (f"user_id = {PRINCIPAL}", f"user_id = {PRINCIPAL}"),
     "notifications": (f"user_id = {PRINCIPAL}", f"user_id = {PRINCIPAL}"),
-    "users_financialprofile": (f"user_id = {PRINCIPAL}", f"user_id = {PRINCIPAL}"),
-    "users_notification_preferences": (f"user_id = {PRINCIPAL}", f"user_id = {PRINCIPAL}"),
-    "users_userpreferences": (f"user_id = {PRINCIPAL}", f"user_id = {PRINCIPAL}"),
+    "users_financialprofile": (
+        _owned_through_the_profile("users_financialprofile"),
+        _owned_through_the_profile("users_financialprofile"),
+    ),
+    "users_notification_preferences": (
+        _owned_through_the_profile("users_notification_preferences"),
+        _owned_through_the_profile("users_notification_preferences"),
+    ),
+    "users_userpreferences": (
+        _owned_through_the_profile("users_userpreferences"),
+        _owned_through_the_profile("users_userpreferences"),
+    ),
     "customer_accounts_account": (f"{_member('uuid')} OR {HOLDS_A_SIGNING_WALLET}", _member("uuid")),
     "wallets": (f"{_member('user_account_id')} OR {SIGNS_FOR_A_COMPANY}", _member("user_account_id")),
     "transactions": (_member("user_account_id"), _member("user_account_id")),
@@ -112,6 +170,13 @@ POLICIES = {
         f"{_member('owner_account_id')} AND {OWNERSHIP_BOUND}",
     ),
     "tokens_ordersubmission": (_member("owner_account_id"), _member("owner_account_id")),
+    "tokens_swaporder": (A_PARTY_TO_THE_SWAP, "false"),
+    "compliance_customerriskassessment": (_member("user_account_id"), _member("user_account_id")),
+    "holdings": (THROUGH_ITS_WALLET, THROUGH_ITS_WALLET),
+    "holding_snapshots": (THROUGH_ITS_HOLDING, THROUGH_ITS_HOLDING),
+    "document_extractions": (THROUGH_ITS_DOCUMENT, THROUGH_ITS_DOCUMENT),
+    "tokens_ordermodificationlog": (THROUGH_THE_ORDER_IT_MODIFIED, THROUGH_THE_ORDER_IT_MODIFIED),
+    "tokens_shareissuance": (THROUGH_ITS_TOKEN, "false"),
     "tokens_orderactionsubmission": (_member("owner_account_id"), _member("owner_account_id")),
     "companies_companydocument": (
         _company("company_id", VISIBLE_COMPANIES),
@@ -123,7 +188,7 @@ POLICIES = {
         _company("company_id", MANAGEABLE_COMPANIES),
     ),
     "tokens_sharetoken": (
-        f"owner_id = {PRINCIPAL} OR ({ON_THE_MARKET})",
+        f'{_company("company_id", VISIBLE_COMPANIES)} OR ({ON_THE_MARKET})',
         _company("company_id", MANAGEABLE_COMPANIES),
     ),
     "tokens_capitalincreaserequest": (
@@ -294,9 +359,21 @@ PUBLIC_TERM = {
 
 INSERTABLE = {
     "customer_accounts_account": f"{_member('uuid')} OR {DIRECTS_THE_ACCOUNT}",
+    "tokens_swaporder": A_VERIFIED_PARTY_TO_THE_SWAP,
 }
 
 INSERT_ONLY_REASONS = {
+    "tokens_swaporder": (
+        "A party may bring a swap into existence with a verified wallet, and may never change one. "
+        "The read term asks only for membership, deliberately: verification in the read term would "
+        "hide a swap whose wallet has drifted, and a hidden row cannot be updated, so tokens/0040's "
+        "parent-identity triggers would stop firing and a refusal that should raise would silently "
+        "match nothing instead. Creation happens inside "
+        "create_order_and_match, which is atomic over the orders, the reservations and the swap "
+        "together, so it cannot move to another connection without the swap surviving a rollback that "
+        "takes the rest. Every transition afterwards - executing, failed, completed, the hashes - is "
+        "the relayer's work and runs as the operator, so no counterparty can move a swap it is in."
+    ),
     "customer_accounts_account": (
         "You may create an account you direct, and write to accounts you are a member of. A new user's "
         "first account cannot satisfy the member term at insert: ensure_defaults creates the row and adds "
@@ -313,14 +390,7 @@ INSERT_ONLY_REASONS = {
 
 AWAITING_R0: dict[str, MissingOwnerColumns] = {}
 
-AWAITING_RLS = {
-    "tokens_swaporder": (
-        "The seller_wallet_id and buyer_wallet_id columns are populated and NOT NULL. Trading still needs "
-        "per-command RLS that follows current wallet verification and participant access; the order/swap "
-        "work in #5 and #115 owns that conversion. tokens/0040 admits unchanged V1 participant updates "
-        "without the private parent read; it does not scope swap reads or complete matching/outcome visibility."
-    ),
-}
+AWAITING_RLS = {}
 
 FRAMEWORK = {
     "auth_group": "Django's own permission grouping.",
@@ -349,7 +419,6 @@ OPERATOR_ONLY = {
     "compliance_compliancealert": "Raised and worked by compliance staff on the operator connection. It "
     "carries user_account_id but no queryset scopes it, so a policy would be a new rule rather than a "
     "translation of one.",
-    "compliance_customerriskassessment": "Same surface, same connection, same reason.",
     "compliance_transactionscreening": "Same surface, same connection, same reason.",
     "compliance_alertproceduretemplate": "Operator-authored procedure text, the same for every tenant.",
     "compliance_alertprocedurestep": "A step of that operator-authored text, reached through its template.",
@@ -359,8 +428,6 @@ OPERATOR_ONLY = {
     "keyed by transaction hash rather than by any tenant.",
     "tokens_mintrequest": "Written on the relayer path by workers, reached through its token.",
     "tokens_navupdate": "Issuer-published NAV history, reached through its token.",
-    "tokens_ordermodificationlog": "An audit row reached through the order it modified.",
-    "tokens_shareissuance": "The executed half of an issuance request, reached through it.",
     "tokens_yieldtoken": "Token configuration reached through its share token.",
 }
 
@@ -373,12 +440,9 @@ NOT_TENANCY = {
     "policy on it would hide exactly the rows consumable() already refuses - no-policy and policy agree on "
     "every row, which is a reason to leave it rather than an absence of one. If the column ever becomes "
     "NOT NULL, or if a queryset starts reading challenges the service does not, that agreement ends.",
-    "holdings": "Reached only through its wallet, which is scoped, and carries no tenant column of its own.",
     "asset_chain_deployments": "Part of the asset catalogue.",
     "asset_snapshots": "Price history for the catalogue, identical for every tenant.",
     "assets_exchangerate": "Published rates, identical for every tenant.",
-    "holding_snapshots": "Portfolio history reached through its holding, which is reached through a wallet.",
-    "document_extractions": "Reached through its document, which is scoped by uploaded_by.",
     "shared_country": "A reference list of countries, identical for every tenant.",
     "operators_operator": "A singleton naming the operator of this deployment.",
     "operators_operator_supported_settlement_assets": "Which assets that singleton settles in.",
@@ -392,23 +456,10 @@ NOT_TENANCY = {
 }
 
 REACHED_DESPITE_OPERATOR_ONLY = {
-    "tokens_shareissuance": "tokens/views/share_token.py:152 lists issuances on a customer route, scoped by "
-    "a subquery on ShareToken.visible_to_user. Reached through a scoped parent, which is the NOT_TENANCY "
-    "shape rather than the operator-only one.",
     "tokens_yieldtoken": "assets/serializers/asset.py:62 reads it for every asset a customer lists, to answer "
     "nav_per_token and last_nav_update. It is filtered by symbol and not by any principal.",
-    "tokens_ordermodificationlog": "tokens/services/order_modification_service.py:238 writes it on the "
-    "customer's own modify path, one row per changed field of an order the caller already reached.",
-    "compliance_customerriskassessment": "users/services/accounts.py:17 and users/services/setup.py:19 call "
-    "RiskAssessmentService.create_pending_assessment when an account is created, which is a customer route.",
     "compliance_monitoringrule": "reached from the same account-creation path while scoring the new "
     "assessment, on the connection that served the request.",
-    "blockchain_blockchaintransaction": "tokens/services/atomic_swap_service.py:411 writes the relayer's "
-    "broadcast record inside _claim_execution, which tokens/views/trading_order.py:228 reaches when the "
-    "second party signs. The write shares a transaction with the SwapOrder row lock, so it cannot move to "
-    "the operator connection without splitting that transaction in two. Granting it lets the app role read "
-    "every relayer record, which is wider than this path needs; the narrower fix is to enqueue the "
-    "broadcast for a worker, which already runs as the operator.",
 }
 
 UNSCOPED = {**FRAMEWORK, **OPERATOR_ONLY, **NOT_TENANCY, **AWAITING_RLS}

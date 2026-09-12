@@ -9,6 +9,10 @@ from assets.models import Asset, AssetChainDeployment
 from companies.models import Company
 from feature_flags.models import FeatureFlag
 from shared.tests.settlement import save_swap_with_context
+from shared.tests.under_the_policies import (
+    only_what_the_policies_admit_to,
+    what_the_policies_admit_to,
+)
 from tokens.models import ShareToken, SwapOrder, TransferOrder
 from tokens.models.choices import (
     ShareTokenStatus,
@@ -96,7 +100,8 @@ class SwapQuerysetIsScopedToTheCallerTest(APITestCase):
         )
 
     def _visible(self, user):
-        return set(SwapOrder.objects.visible_to_user(user).values_list("uuid", flat=True))
+        with only_what_the_policies_admit_to(user):
+            return set(SwapOrder.objects.values_list("uuid", flat=True))
 
     def test_the_caller_sees_a_swap_their_own_wallet_is_party_to(self):
         self.assertIn(self.owner_swap.uuid, self._visible(self.owner))
@@ -108,11 +113,16 @@ class SwapQuerysetIsScopedToTheCallerTest(APITestCase):
         self.assertTrue(SwapOrder.objects.exists())
         self.assertEqual(self._visible(None), set())
 
-    def test_an_unverified_wallet_stops_carrying_visibility(self):
+    def test_an_unverified_wallet_still_shows_its_swap_but_stops_the_listing(self):
         self.owner_wallet.verification_status = "PENDING"
         self.owner_wallet.save(update_fields=["verification_status"])
 
-        self.assertNotIn(self.owner_swap.uuid, self._visible(self.owner))
+        self.assertIn(self.owner_swap.uuid, self._visible(self.owner))
+
+        self.client.force_authenticate(self.owner)
+        response = self.client.get("/api/v1/trading/swaps/", {"wallet_address": self.owner_wallet.address})
+
+        self.assertEqual(response.status_code, 404)
 
     def test_the_listing_returns_only_the_callers_swap(self):
         self.client.force_authenticate(self.owner)
@@ -132,7 +142,7 @@ class SwapQuerysetIsScopedToTheCallerTest(APITestCase):
         second_swap = self._swap(second_wallet, self.counterparty_wallet, "c")
         self.client.force_authenticate(self.owner)
 
-        visible = SwapOrder.objects.visible_to_user(self.owner).values_list("uuid", flat=True)
+        visible = what_the_policies_admit_to(self.owner, SwapOrder).values_list("uuid", flat=True)
         self.assertIn(second_swap.uuid, visible)
 
         response = self.client.get("/api/v1/trading/swaps/", {"wallet_address": self.owner_wallet.address})

@@ -85,6 +85,7 @@ __pycache__/
 # this repository works to are in docs/, so that one description serves whoever
 # is doing the work rather than one description per tool.
 .claude/
+.codex/
 
 # Local working dir for ad-hoc GCP url-map edits (not source of truth)
 .gcp-url-map-change/

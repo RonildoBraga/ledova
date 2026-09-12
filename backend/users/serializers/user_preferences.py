@@ -34,7 +34,7 @@ class UserPreferencesSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserPreferences
-        exclude = ("created_at", "updated_at", "user")
+        exclude = ("created_at", "updated_at")
 
     def get_fields(self):
         fields = super().get_fields()

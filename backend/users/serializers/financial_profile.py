@@ -8,4 +8,4 @@ class FinancialProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = FinancialProfile
-        exclude = ("created_at", "updated_at", "user")
+        exclude = ("created_at", "updated_at")

@@ -23,11 +23,12 @@ NO_PREDICATE = (
     "{view} scopes {model}, whose manager has no {predicate}. A view cannot be scoped to a principal "
     "through a manager that offers no way to do it."
 )
-WIDER_THAN_ADMIN = (
-    "{view} routes {actions} to the operator connection without naming them administrative. An "
-    "unscoped read is keyed to administrative_actions because that is the set get_permissions turns "
-    "into IsAdminUser; operator_actions only chooses a connection, and the coverage gate lets it be "
-    "the wider of the two."
+UNEXPLAINED_OPERATOR_ACTION = (
+    "{view} routes {actions} to the operator connection and neither names them administrative nor "
+    "says why they need it. An action on that connection is not scoped by any policy, so it must "
+    "either be administrative - the set get_permissions turns into IsAdminUser - or state its reason "
+    "in operator_actions_because. A statutory register an issuer is entitled to read is the second "
+    "case: it needs the connection and must not need IsAdminUser."
 )
 NO_MANAGE_PREDICATE = (
     "{view} lists manage_actions for {model}, whose manager has no manageable_by_user. Writes would "
@@ -40,6 +41,7 @@ class ScopesToThePrincipal:
     scoped_model = None
     manage_actions: frozenset = frozenset()
     unscoped_by_the_base_because = ""
+    operator_actions_because = ""
     abstract = False
 
     def __init_subclass__(cls, **kwargs):
@@ -66,8 +68,8 @@ class ScopesToThePrincipal:
         if cls.manage_actions and not hasattr(manager, "manageable_by_user"):
             raise ImproperlyConfigured(NO_MANAGE_PREDICATE.format(view=cls.__name__, model=model.__name__))
         wider = frozenset(getattr(cls, "operator_actions", ())) - frozenset(getattr(cls, "administrative_actions", ()))
-        if wider:
-            raise ImproperlyConfigured(WIDER_THAN_ADMIN.format(view=cls.__name__, actions=sorted(wider)))
+        if wider and len(cls.__dict__.get("operator_actions_because", "")) < REASON_ENOUGH:
+            raise ImproperlyConfigured(UNEXPLAINED_OPERATOR_ACTION.format(view=cls.__name__, actions=sorted(wider)))
 
     def get_queryset(self):
         manager = self.scoped_model._default_manager

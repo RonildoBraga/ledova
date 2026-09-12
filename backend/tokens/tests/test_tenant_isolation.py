@@ -9,6 +9,7 @@ from web3 import Web3
 
 from companies.models import Company
 from feature_flags.models import FeatureFlag
+from shared.tests.under_the_policies import what_the_policies_admit_to
 from tokens.exceptions import InvalidRecipientAddressException
 from tokens.models import ShareToken, TransferOrder
 from tokens.models.choices import (
@@ -83,7 +84,7 @@ class TenantOrderIsolationTest(APITestCase):
         self.bob_order = self._make_order(self.bob_wallet)
 
     def test_queryset_scoping_excludes_other_tenant(self):
-        visible = TransferOrder.objects.visible_to_user(self.bob)
+        visible = what_the_policies_admit_to(self.bob, TransferOrder)
         uuids = set(visible.values_list("uuid", flat=True))
         self.assertIn(self.bob_order.uuid, uuids)
         self.assertNotIn(self.alice_order.uuid, uuids)
@@ -96,7 +97,7 @@ class TenantOrderIsolationTest(APITestCase):
             verification_status="VERIFIED",
         )
 
-        visible = TransferOrder.objects.visible_to_user(self.bob)
+        visible = what_the_policies_admit_to(self.bob, TransferOrder)
         self.assertNotIn(self.alice_order.uuid, visible.values_list("uuid", flat=True))
 
     def test_mismatched_account_and_wallet_fail_closed_for_both_tenants(self):
@@ -113,17 +114,17 @@ class TenantOrderIsolationTest(APITestCase):
 
         self.assertNotIn(
             mismatched.uuid,
-            TransferOrder.objects.visible_to_user(self.alice).values_list("uuid", flat=True),
+            what_the_policies_admit_to(self.alice, TransferOrder).values_list("uuid", flat=True),
         )
         self.assertNotIn(
             mismatched.uuid,
-            TransferOrder.objects.visible_to_user(self.bob).values_list("uuid", flat=True),
+            what_the_policies_admit_to(self.bob, TransferOrder).values_list("uuid", flat=True),
         )
 
     def test_querysets_fail_closed_and_scope_privileged_users(self):
         for user in (None, AnonymousUser()):
             with self.subTest(user=user):
-                self.assertFalse(TransferOrder.objects.visible_to_user(user).exists())
+                self.assertFalse(what_the_policies_admit_to(user, TransferOrder).exists())
 
         mismatched = TransferOrder.objects.create(
             token=self.alice_order.token,
@@ -144,8 +145,8 @@ class TenantOrderIsolationTest(APITestCase):
             order = self._make_order(wallet, company_owner=actor)
 
             with self.subTest(actor=actor.email):
-                self.assertEqual(set(TransferOrder.objects.visible_to_user(actor)), {order})
-                self.assertNotIn(mismatched, TransferOrder.objects.visible_to_user(actor))
+                self.assertEqual(set(what_the_policies_admit_to(actor, TransferOrder)), {order})
+                self.assertNotIn(mismatched, what_the_policies_admit_to(actor, TransferOrder))
 
 
 class TransferOrderOwnershipBindingTest(APITestCase):

@@ -79,10 +79,10 @@ class ThePolicyScopesWhatTheQuerysetScopedTest(TestCase):
         self.assertIn(self.two.wallet.uuid, {wallet.uuid for wallet in Wallet.objects.all()})
         self.assertIn(self.two.account, UserAccount.objects.all())
 
-    def test_a_profile_owned_table_is_scoped_by_the_column_r0_added(self):
+    def test_a_profile_owned_table_is_scoped_through_the_profile_that_owns_it(self):
         self.as_the_app_role_for(self.one.user)
 
-        self.assertEqual({row.user_id for row in UserPreferences.objects.all()}, {self.one.user.pk})
+        self.assertEqual({row.user_profile.user_id for row in UserPreferences.objects.all()}, {self.one.user.pk})
 
     def test_a_company_derived_table_is_scoped_through_the_helper(self):
         self.as_the_app_role_for(self.one.user)

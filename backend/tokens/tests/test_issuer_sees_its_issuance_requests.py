@@ -8,6 +8,7 @@ from rest_framework.test import APITestCase
 from offerings.models import Subscription
 from shared.db.principal import PRINCIPAL_SETTING
 from shared.tests.tenants import make_tenant, open_to_investors
+from shared.tests.under_the_policies import what_the_policies_admit_to
 from tokens.models import RequestStatus, ShareIssuanceRequest
 
 BASE = "/api/v1/tokens/issuance-requests/"
@@ -112,7 +113,7 @@ class AnIssuerCanSeeTheRequestItMadeTest(APITestCase):
         self.assertIn(self.client.get(BASE).status_code, (401, 403))
 
     def test_the_visibility_reads_the_owner_column_rather_than_joining_to_the_token(self):
-        sql = str(ShareIssuanceRequest.objects.visible_to_user(self.tenant.user).query)
+        sql = str(what_the_policies_admit_to(self.tenant.user, ShareIssuanceRequest).query)
 
         self.assertIn("company_id", sql)
         self.assertNotIn("tokens_sharetoken", sql)

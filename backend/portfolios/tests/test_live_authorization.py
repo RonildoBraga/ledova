@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
 
 from portfolios.models import Portfolio
+from shared.tests.under_the_policies import what_the_policies_admit_to
 from users.models import UserAccount, UserPreferences, UserProfile
 from wallets.models import Wallet
 
@@ -41,7 +42,7 @@ class PortfolioLiveAuthorizationTest(PortfolioFixtureMixin, APITestCase):
     def test_membership_removal_revokes_full_tree(self):
         self.alice_account.user_profiles.remove(self.alice_profile)
 
-        self.assertNotIn(self.alice_portfolio, Portfolio.objects.visible_to_user(self.alice))
+        self.assertNotIn(self.alice_portfolio, what_the_policies_admit_to(self.alice, Portfolio))
 
         self.client.force_authenticate(self.alice)
         self.assertEqual(
@@ -62,7 +63,7 @@ class PortfolioLiveAuthorizationTest(PortfolioFixtureMixin, APITestCase):
     def test_reverse_membership_addition_reveals_preexisting_tree(self):
         self.alice_profile.user_accounts.add(self.bob_account)
 
-        self.assertIn(self.bob_portfolio, Portfolio.objects.visible_to_user(self.alice))
+        self.assertIn(self.bob_portfolio, what_the_policies_admit_to(self.alice, Portfolio))
 
 
 class PortfolioEndpointIsolationTest(PortfolioFixtureMixin, APITestCase):

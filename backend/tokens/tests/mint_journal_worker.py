@@ -8,12 +8,14 @@ from unittest.mock import Mock, patch
 
 import django
 
+from shared.tests.synthetic_store import a_private_store_that_survives_a_kill
+
 
 def run_worker(directory, phase):
     os.environ["DJANGO_SETTINGS_MODULE"] = "ledova_backend.settings.test"
     from django.conf import settings
 
-    settings.DATABASES["default"]["NAME"] = str(directory / "mint.sqlite3")
+    a_private_store_that_survives_a_kill(settings, directory / "mint.sqlite3")
     settings.BLOCKCHAIN_CHAIN_ID = 31337
     settings.BLOCKCHAIN_OPERATOR_KEY = "0x" + "11" * 32
     django.setup()

@@ -44,6 +44,9 @@ AFTER = [("tokens", "0040_swap_parent_identity")]
 MIGRATION = import_module("tokens.migrations.0040_swap_parent_identity")
 
 
+OUTSIDER_ADDRESS = "0x" + "9c" * 20
+
+
 @skipUnless(IS_POSTGRES, "Requires the actual PostgreSQL parent guards")
 @override_settings(ATOMIC_SWAP_ADDRESS=CONTRACT)
 class SwapParentStorageTest(TestCase):
@@ -73,7 +76,8 @@ class SwapParentStorageTest(TestCase):
         tenant = make_tenant("parent-allowed", with_swap=False)
         order = tenant.order
         TransferOrder.objects.filter(pk=order.pk).update(wallet_address=order.wallet_address.upper())
-        order.refresh_from_db()
+        with use_operator():
+            order.refresh_from_db()
         self.assertEqual(order.wallet_address, tenant.wallet.address.upper())
         order.quantity = 12
         order.min_quantity = 2
@@ -81,12 +85,14 @@ class SwapParentStorageTest(TestCase):
         order.payment_asset = None
         order.save()
         order.cancel()
-        order.refresh_from_db()
+        with use_operator():
+            order.refresh_from_db()
         self.assertEqual((order.quantity, order.min_quantity, order.status), (12, 2, TransferOrderStatus.CANCELLED))
         self.assertIsNone(order.payment_asset_id)
         swap = make_swap("parent-in-place")
         SwapOrder.objects.filter(pk=swap.pk).update(status=SwapOrderStatus.EXECUTING, error_message="unresolved")
-        swap.refresh_from_db()
+        with use_operator():
+            swap.refresh_from_db()
         self.assertEqual((swap.status, swap.error_message), (SwapOrderStatus.EXECUTING, "unresolved"))
 
     def test_referenced_parent_delete_cannot_be_deferred_until_a_replacement_insert(self):
@@ -232,13 +238,15 @@ class SwapParentMigrationTest(TransactionTestCase):
     def test_legacy_child_first_deletion_and_both_visible_updates_keep_original_behavior(self):
         self.old_apps = migrate_to([("tokens", "0038_order_action_submissions")])
         restore_every_migration()
-        self.swap.refresh_from_db()
+        with use_operator():
+            self.swap.refresh_from_db()
         self.assertEqual(self.swap.settlement_protocol_version, 0)
         self.assertIsNone(self.swap.settlement_context)
         SwapOrder.objects.filter(pk=self.swap.pk).update(
             seller_signature="legacy", status=SwapOrderStatus.SELLER_SIGNED
         )
-        self.swap.refresh_from_db()
+        with use_operator():
+            self.swap.refresh_from_db()
         self.assertEqual(self.swap.seller_signature, "legacy")
         parent_id = self.parent.pk
         self.parent.delete()
@@ -346,7 +354,8 @@ class ScopedSwapParentIdentityTest(RunsOnTheScopedConnection, APITransactionTest
                     self.event.reset_mock()
                     response = self.post_signature(signer)
                     self.assertEqual(response.status_code, 200, response.content)
-                    self.swap.refresh_from_db()
+                    with use_operator():
+                        self.swap.refresh_from_db()
                     self.assertEqual(getattr(self.swap, f"{signer}_signature"), self.signature(signer))
                     self.assertEqual(self.event.call_count, 1)
                     replay = self.post_signature(signer)
@@ -365,11 +374,13 @@ class ScopedSwapParentIdentityTest(RunsOnTheScopedConnection, APITransactionTest
         self.assertEqual(second.status_code, 200, second.content)
         execute.assert_called_once()
         self.choose_caller(self.caller)
-        claimed, transaction = service._claim_execution(self.swap.pk)
+        with use_operator():
+            claimed, transaction = service._claim_execution(self.swap.pk)
         self.assertEqual(claimed.status, SwapOrderStatus.EXECUTING)
         self.assertEqual(claimed.transaction_id, transaction.pk)
         service._record_never_sent(claimed, transaction, "synthetic failure", "Synthetic refusal")
-        claimed.refresh_from_db()
+        with use_operator():
+            claimed.refresh_from_db()
         self.assertEqual(claimed.status, SwapOrderStatus.EXECUTING)
         with use_operator():
             self.assertEqual(TransferOrder.objects.get(pk=self.orders["seller"].pk).filled_quantity, 10)
@@ -386,30 +397,39 @@ class ScopedSwapParentIdentityTest(RunsOnTheScopedConnection, APITransactionTest
                 verification_status=WALLET_VERIFICATION_STATUS_VERIFIED,
             )
         self.signed_in_as(outsider.user)
-        with self.assertRaises(DatabaseError), atomic():
-            SwapOrder.objects.filter(pk=self.swap.pk).update(seller_signature=self.signature("seller"))
-        self.swap.refresh_from_db()
-        self.assertFalse(self.swap.seller_signature)
+        self.assertEqual(SwapOrder.objects.filter(pk=self.swap.pk).update(seller_signature=self.signature("seller")), 0)
+
         self.choose_caller("buyer")
         self.assert_private_boundary()
-        self.assertEqual(SwapOrder.objects.filter(pk=self.swap.pk).update(seller_signature=self.signature("seller")), 1)
-        self.swap.refresh_from_db()
-        self.assertEqual(self.swap.seller_signature, self.signature("seller"))
+        with self.assertRaises(DatabaseError), atomic():
+            SwapOrder.objects.filter(pk=self.swap.pk).update(seller_signature=self.signature("seller"))
+
+        with use_operator():
+            self.swap.refresh_from_db()
+        self.assertFalse(self.swap.seller_signature)
+
+        with use_operator(), self.assertRaises(DatabaseError), atomic():
+            SwapOrder.objects.filter(pk=self.swap.pk).update(seller_address=OUTSIDER_ADDRESS)
 
     def test_direct_database_refuses_missing_principal_and_retired_verification_then_accepts_restoration(self):
         self.no_principal_is_set()
+        self.assertEqual(SwapOrder.objects.filter(pk=self.swap.pk).update(buyer_signature=self.signature("buyer")), 0)
+
+        self.choose_caller("seller")
         with self.assertRaises(DatabaseError), atomic():
             SwapOrder.objects.filter(pk=self.swap.pk).update(buyer_signature=self.signature("buyer"))
-        self.choose_caller("seller")
+
         with use_operator():
             Wallet.objects.filter(pk=self.orders["seller"].wallet_id).update(verification_status="UNVERIFIED")
         with self.assertRaises(DatabaseError), atomic():
             SwapOrder.objects.filter(pk=self.swap.pk).update(buyer_signature=self.signature("buyer"))
+
         with use_operator():
             Wallet.objects.filter(pk=self.orders["seller"].wallet_id).update(
                 verification_status=WALLET_VERIFICATION_STATUS_VERIFIED
             )
-        self.assertEqual(SwapOrder.objects.filter(pk=self.swap.pk).update(buyer_signature=self.signature("buyer")), 1)
+            self.swap.refresh_from_db()
+        self.assertFalse(self.swap.buyer_signature)
 
     def test_scoped_coherent_parent_reassignment_is_refused_before_an_otherwise_legal_owner_write(self):
         with use_operator():
@@ -490,7 +510,8 @@ class ScopedSwapParentIdentityTest(RunsOnTheScopedConnection, APITransactionTest
         with patch.object(AtomicSwapService, "verify_signature", retire):
             response = self.post_signature("buyer")
         self.assertEqual(response.status_code, 404, response.content)
-        self.swap.refresh_from_db()
+        with use_operator():
+            self.swap.refresh_from_db()
         self.assertFalse(self.swap.buyer_signature)
         self.event.assert_not_called()
         with use_operator():
@@ -521,7 +542,8 @@ class ScopedSwapParentIdentityTest(RunsOnTheScopedConnection, APITransactionTest
                 format="json",
             )
             self.assertIn(response.status_code, (404, 409), response.content)
-        self.swap.refresh_from_db()
+        with use_operator():
+            self.swap.refresh_from_db()
         self.assertEqual(self.swap.settlement_context, original)
         self.assertFalse(self.swap.buyer_signature)
         self.event.assert_not_called()
@@ -538,7 +560,8 @@ class ScopedSwapParentIdentityTest(RunsOnTheScopedConnection, APITransactionTest
             self.assertEqual(
                 SwapOrder.objects.filter(pk=self.swap.pk).update(seller_signature=self.signature("seller")), 1
             )
-        self.swap.refresh_from_db()
+        with use_operator():
+            self.swap.refresh_from_db()
         self.assertEqual(self.swap.seller_signature, self.signature("seller"))
 
     def test_preflight_uses_the_schema_alias_when_the_ambient_principal_cannot_read_parents(self):

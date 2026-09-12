@@ -3,6 +3,7 @@ from django.contrib.auth.models import AnonymousUser
 from rest_framework.test import APITestCase
 
 from companies.models import Company, CompanyStatus, CompanyType
+from shared.tests.under_the_policies import what_the_policies_admit_to
 from tokens.models import (
     ShareIssuanceRequest,
     ShareToken,
@@ -73,10 +74,10 @@ class ShareTokenIsolationTest(APITestCase):
 
         for user in (None, AnonymousUser()):
             with self.subTest(user=user):
-                self.assertFalse(ShareToken.objects.visible_to_user(user).exists())
-                self.assertFalse(ShareToken.objects.manageable_by_user(user).exists())
-                self.assertFalse(ShareIssuanceRequest.objects.visible_to_user(user).exists())
-                self.assertFalse(ShareIssuanceRequest.objects.manageable_by_user(user).exists())
+                self.assertFalse(what_the_policies_admit_to(user, ShareToken).exists())
+                self.assertFalse(what_the_policies_admit_to(user, ShareToken).exists())
+                self.assertFalse(what_the_policies_admit_to(user, ShareIssuanceRequest).exists())
+                self.assertFalse(what_the_policies_admit_to(user, ShareIssuanceRequest).exists())
 
         for index, actor in enumerate(actors):
             company = self._make_company(actor, f"Queryset Owner {index}")
@@ -84,12 +85,12 @@ class ShareTokenIsolationTest(APITestCase):
             request = self._make_issuance_request(token, actor, "0x" + f"{index + 2:x}" * 40)
 
             with self.subTest(actor=actor.email):
-                self.assertEqual(set(ShareToken.objects.visible_to_user(actor)), {token})
-                self.assertEqual(set(ShareToken.objects.manageable_by_user(actor)), {token})
-                self.assertEqual(set(ShareIssuanceRequest.objects.visible_to_user(actor)), {request})
-                self.assertEqual(set(ShareIssuanceRequest.objects.manageable_by_user(actor)), {request})
-                self.assertNotIn(foreign_token, ShareToken.objects.visible_to_user(actor))
-                self.assertNotIn(foreign_request, ShareIssuanceRequest.objects.visible_to_user(actor))
+                self.assertEqual(set(what_the_policies_admit_to(actor, ShareToken)), {token})
+                self.assertEqual(set(what_the_policies_admit_to(actor, ShareToken)), {token})
+                self.assertEqual(set(what_the_policies_admit_to(actor, ShareIssuanceRequest)), {request})
+                self.assertEqual(set(what_the_policies_admit_to(actor, ShareIssuanceRequest)), {request})
+                self.assertNotIn(foreign_token, what_the_policies_admit_to(actor, ShareToken))
+                self.assertNotIn(foreign_request, what_the_policies_admit_to(actor, ShareIssuanceRequest))
 
     def test_unaffiliated_privileged_users_cannot_create_tokens(self):
         foreign_user = self._make_user("crud-foreign")

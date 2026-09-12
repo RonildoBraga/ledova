@@ -158,13 +158,34 @@ class TheBaseChoosesThePredicateTest(SimpleTestCase):
         self.assertEqual(view.get_queryset(), "every row")
         self.assertEqual(manager.calls, ["all"])
 
-    def test_an_action_named_operator_but_not_administrative_is_refused_at_import(self):
-        with self.assertRaisesMessage(ImproperlyConfigured, "without naming them administrative"):
+    def test_an_operator_action_that_is_neither_administrative_nor_explained_is_refused(self):
+        with self.assertRaisesMessage(ImproperlyConfigured, "says why they need it"):
 
             class Wider(ScopesToThePrincipal):
                 scoped_model = Notification
                 operator_actions = frozenset({"a_market_read"})
                 administrative_actions = frozenset()
+
+    def test_an_operator_action_may_say_why_it_needs_the_connection_instead(self):
+        class Explained(ScopesToThePrincipal):
+            scoped_model = Notification
+            operator_actions = frozenset({"a_statutory_register"})
+            administrative_actions = frozenset()
+            operator_actions_because = (
+                "a members' register carries the investors' own names and addresses, which no policy "
+                "admits to the issuer reading it, and the issuer is entitled to it without being staff."
+            )
+
+        self.assertEqual(Explained.operator_actions, frozenset({"a_statutory_register"}))
+
+    def test_a_reason_too_short_to_say_anything_does_not_buy_the_connection(self):
+        with self.assertRaisesMessage(ImproperlyConfigured, "says why they need it"):
+
+            class Terse(ScopesToThePrincipal):
+                scoped_model = Notification
+                operator_actions = frozenset({"a_market_read"})
+                administrative_actions = frozenset()
+                operator_actions_because = "reasons"
 
     def test_narrow_receives_exactly_what_the_branch_produced(self):
         seen = []
