@@ -73,9 +73,11 @@ class UserPreferencesSerializer(serializers.ModelSerializer):
         else:
             representation["selected_account"] = None
 
-        if instance.selected_portfolio and instance.selected_portfolio.user_account_id in live_account_ids:
-            representation["selected_portfolio"] = SelectedPortfolioSerializer(instance.selected_portfolio).data
-        else:
-            representation["selected_portfolio"] = None
+        still_visible = Portfolio.objects.filter(
+            pk=instance.selected_portfolio_id, user_account__in=live_account_ids
+        ).first()
+        representation["selected_portfolio"] = (
+            SelectedPortfolioSerializer(still_visible).data if still_visible else None
+        )
 
         return representation

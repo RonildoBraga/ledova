@@ -5,7 +5,12 @@ from companies.models import Company, CompanyStatus
 from companies.serializers.document import CompanyDocumentSerializer
 from companies.services.company import register_company
 from companies.services.editing import update_company
-from companies.validators import checked_abn, checked_acn, with_matching_identifiers
+from companies.validators import (
+    an_acn_no_other_company_holds,
+    checked_abn,
+    checked_acn,
+    with_matching_identifiers,
+)
 from wallets.models import Wallet
 
 
@@ -152,7 +157,7 @@ class CompanyRegistrationSerializer(serializers.ModelSerializer):
         ]
 
     def validate_acn(self, value):
-        return checked_acn(value)
+        return an_acn_no_other_company_holds(value)
 
     def validate_abn(self, value):
         return checked_abn(value)

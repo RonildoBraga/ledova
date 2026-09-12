@@ -1005,6 +1005,21 @@ principal, and a policy on every tenant table, while `visible_to_user` still run
   closed. They carry `RunsOnTheOperatorConnection`, and the admin is recognised
   from the URLconf's `app_name` rather than from the path, because a path prefix
   grants the privileged connection *before* resolution.
+- **The suite runs behind the policies on one connection, not two.** Under
+  `TestCase` Django holds one open transaction per alias, so fixtures on the
+  operator alias and a body on the app alias deadlock the moment they collide on
+  a unique index — the second insert waits on a transaction that cannot commit
+  until the test ends. `RLS_ROLE_PER_REQUEST` takes the scoped role with
+  `SET ROLE` on the ambient connection in `process_view` and gives it back in
+  the middleware's `finally`, so a request runs under the policies while the
+  fixtures around it stay the owner's. `use_operator` and `use_migrate` drop the
+  role for their body, because in a single-connection process changing alias is
+  not by itself a change of role. Production leaves the setting off: there the
+  role is the connection's login user. It found two live refusals on the first
+  app it ran — a device-token takeover that raised `IntegrityError` because the
+  row it meant to move was invisible, and a preferences read that returned 404
+  because it dereferenced a foreign key the policy hides.
+
 - **`SET` at session level, `CONN_MAX_AGE = 0` on the app alias.**
   `ATOMIC_REQUESTS` is refused by Django with async views — and three places here
   deliberately commit and then raise, which `ATOMIC_REQUESTS` would silently

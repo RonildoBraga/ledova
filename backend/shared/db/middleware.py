@@ -1,5 +1,5 @@
 from .aliases import clear_alias, select_operator
-from .principal import reset_principal
+from .principal import give_the_role_back, reset_principal, take_the_app_role
 
 OPERATOR_MARKER = "runs_on_the_operator_connection"
 
@@ -25,9 +25,12 @@ class DatabaseIdentityMiddleware:
             return self.get_response(request)
         finally:
             reset_principal()
+            give_the_role_back()
             clear_alias()
 
     def process_view(self, request, view_func, view_args, view_kwargs):
         if view_runs_on_the_operator_connection(view_func, request.resolver_match):
             select_operator()
+            return None
+        take_the_app_role()
         return None

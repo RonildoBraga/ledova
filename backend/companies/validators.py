@@ -9,6 +9,7 @@ ABN_MODULUS = 89
 
 ACN_MALFORMED = "An ACN is exactly 9 digits."
 ACN_CHECK_FAILED = "This is not a valid ACN: its last digit does not check out against the other eight."
+ACN_ALREADY_REGISTERED = "This ACN is already registered."
 ABN_MALFORMED = "An ABN is exactly 11 digits."
 ABN_CHECK_FAILED = "This is not a valid ABN: it does not satisfy the ABN check."
 ABN_DOES_NOT_CARRY_ACN = (
@@ -63,6 +64,17 @@ def checked_acn(value):
         raise DRFValidationError(ACN_MALFORMED)
     if not acn_is_valid(acn):
         raise DRFValidationError(ACN_CHECK_FAILED)
+    return acn
+
+
+def an_acn_no_other_company_holds(value):
+    from companies.models import Company
+    from shared.db import use_operator
+
+    acn = checked_acn(value)
+    with use_operator():
+        if Company.objects.filter(acn=acn).exists():
+            raise DRFValidationError(ACN_ALREADY_REGISTERED)
     return acn
 
 
