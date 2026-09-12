@@ -12,6 +12,12 @@ NO_PREDICATE = (
     "{view} scopes {model}, whose manager has no {predicate}. A view cannot be scoped to a principal "
     "through a manager that offers no way to do it."
 )
+WIDER_THAN_ADMIN = (
+    "{view} routes {actions} to the operator connection without naming them administrative. An "
+    "unscoped read is keyed to administrative_actions because that is the set get_permissions turns "
+    "into IsAdminUser; operator_actions only chooses a connection, and the coverage gate lets it be "
+    "the wider of the two."
+)
 NO_MANAGE_PREDICATE = (
     "{view} lists manage_actions for {model}, whose manager has no manageable_by_user. Writes would "
     "silently take the read scope, which is wider."
@@ -40,11 +46,14 @@ class ScopesToThePrincipal:
             )
         if cls.manage_actions and not hasattr(manager, "manageable_by_user"):
             raise ImproperlyConfigured(NO_MANAGE_PREDICATE.format(view=cls.__name__, model=model.__name__))
+        wider = frozenset(getattr(cls, "operator_actions", ())) - frozenset(getattr(cls, "administrative_actions", ()))
+        if wider:
+            raise ImproperlyConfigured(WIDER_THAN_ADMIN.format(view=cls.__name__, actions=sorted(wider)))
 
     def get_queryset(self):
         manager = self.scoped_model._default_manager
         action = getattr(self, "action", None)
-        if action in self.operator_actions:
+        if action in frozenset(getattr(self, "administrative_actions", ())):
             return self.narrow(manager.all())
         user = self.request.user
         if action in self.manage_actions:

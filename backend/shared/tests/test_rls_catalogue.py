@@ -153,8 +153,8 @@ class EveryTenantTableIsScopedByAPolicyTest(TransactionTestCase):
         named = " ".join(site for site, _, _ in BYPASSES_VISIBLE_TO_USER.values())
         return [path for path in views if path not in named]
 
-    def test_no_view_reaches_the_orm_raw_since_the_base_took_the_scoping_call(self):
-        self.assertEqual(views_the_gate_counts(), [])
+    def test_the_only_view_reaching_the_orm_raw_is_the_base_that_scopes_for_the_others(self):
+        self.assertEqual(views_the_gate_counts(), ["shared/views/scope.py"])
 
     def test_the_audit_covers_every_view_the_layer_gate_counts_as_reaching_the_orm(self):
         self.assertEqual(self.unaudited(views_the_gate_counts()), [])

@@ -71,6 +71,14 @@ RULES = {
 # carries a count, because an exception that excused a whole file would reintroduce
 # exactly the hole this gate was hardened to close.
 ALLOWED: dict[str, tuple[int, str]] = {
+    "backend/shared/views/scope.py:raw-orm-in-view": (
+        1,
+        "ScopesToThePrincipal reaches the manager on behalf of every viewset, which is the point of it: "
+        "one file makes the scoping call so 25 views no longer each write their own. __init_subclass__ "
+        "reads _default_manager to refuse, at import, a view whose model cannot answer the predicate it "
+        "relies on. The rule this file would otherwise break is the rule it exists to enforce, and it is "
+        "the only entry here because it is the only place a view layer file may name a manager.",
+    ),
     "backend/shared/apps.py:django-signals": (
         1,
         "The post_delete receiver that deletes a private file when its row is gone. A cascade delete "
@@ -152,9 +160,12 @@ def parents_of(tree: ast.AST) -> dict:
     return parents
 
 
+MANAGER_NAMES = frozenset({"objects", "_default_manager"})
+
+
 def manager_accesses(tree: ast.AST):
     for node in ast.walk(tree):
-        if isinstance(node, ast.Attribute) and node.attr == "objects":
+        if isinstance(node, ast.Attribute) and node.attr in MANAGER_NAMES:
             yield node
 
 
