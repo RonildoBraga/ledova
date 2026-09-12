@@ -117,13 +117,13 @@ company checks are unfinished.
   reader, through `eligible_for_any_company(user)`, and the whitelist admin's
   read-only column and add-form warning remain the fourth.
 - A current-members register that is the authoritative record rather than
-  derived. The trigger condition is in
-  [ARCHITECTURE.md](ARCHITECTURE.md#the-register-of-members): the moment a share
-  can move by anything other than allotment, a transferee who never received one
-  is invisible to it. The `Transfer` fold Phase 1 built for former members is the
-  half of this that exists; current holders still come from allotments
-  reconciled against `balanceOf`. A durable queryable record of every register
-  export waits on the same work — today it is one application log line.
+  derived. The trigger condition named here — that a transferee who never
+  received an allotment would be invisible — was closed by #301: the holder set
+  now unions completed issuances with every `Transfer` participant from the
+  deployment block, so a transfer-only holder is on the register. What remains
+  is that the register is still *derived* at read time from the chain rather
+  than held as a record, and that a durable queryable record of every register
+  export does not exist — today it is one application log line.
 - Company model validation includes ACN and ABN field validators and their
   consistency check in `Company.clean()`. These hooks do not make every ORM
   write run validation. Director authority, ownership immutability and
@@ -253,10 +253,11 @@ decision below). Mainnet deployment configuration is deliberately absent.
   What also holds the line is on chain:
   `ShareToken._update` reverts unless the recipient is in the whitelist
   registry, so a share can never leave the whitelisted set and the Phase 1
-  register — a read-model over `ShareIssuance` reconciled against on-chain
-  balances — stays reconstructible. The register is only *complete* while
-  allotment is the sole way shares move, which is why the trading write routes
-  remain flag-gated. Relaxing either is the trigger for a Phase 2 log indexer.
+  register — a read-model over completed issuances and the `Transfer` log,
+  reconciled against on-chain balances — stays reconstructible. Since #301 it no
+  longer depends on allotment being the only way shares move; the trading write
+  routes remain flag-gated for the hardening in #4 to #7, not for the register.
+  A chain the fold cannot read is the trigger for a Phase 2 log indexer.
 - **Two deployment modes, one row.** `deployment_mode` is recorded
   configuration on the operator row
   ([docs/OPERATIONS.md](OPERATIONS.md#operator-configuration)); it does not
