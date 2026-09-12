@@ -20,6 +20,19 @@ is the part that cannot be: how to establish that a change does what it claims.
 Every rule here was bought by a specific failure, and [TRAPS.md](TRAPS.md) holds
 the individual cases under **Test traps** and **Measurement traps**.
 
+**Delete what a change makes redundant, in that change.** Not deprecated, not
+left in case, not carried forward behind a comment: removed, and named in the
+body. A dead thing reads as load-bearing to the next person, and the cost is not
+its weight. Four `NOT NULL` owner columns existed so a policy could avoid a
+join, and the trigger maintaining them refused the value ever changing; once the
+policies followed the relationship instead, the columns were written on every
+save, read by nothing, and the immutability guard was still the reason a
+reassigned profile left its former owner with database access. The removal is
+also what finds the quiet dependants — that one produced stale serializer
+exclusions, migration-reversal failures on populated tables, and six hundred
+lines of tests for behaviour that no longer existed, all of them real and none
+of them visible beforehand.
+
 **Red-prove the claim, and if it will not go red, say why in the body.** Revert
 the fix, watch a *named* test fail, restore it, watch it pass, and put both
 directions in the body. Where a meaningful failure genuinely cannot be

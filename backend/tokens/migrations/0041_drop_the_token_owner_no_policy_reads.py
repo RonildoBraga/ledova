@@ -1,5 +1,8 @@
 from django.db import migrations
 
+ADD_BACK_NULLABLE = "ALTER TABLE tokens_sharetoken ADD COLUMN IF NOT EXISTS owner_id bigint NULL"
+DROP = "ALTER TABLE tokens_sharetoken DROP COLUMN IF EXISTS owner_id"
+
 
 def drop_the_derivation(apps, schema_editor):
     if schema_editor.connection.vendor != "postgresql":
@@ -18,5 +21,8 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.RunPython(drop_the_derivation, migrations.RunPython.noop),
-        migrations.RemoveField(model_name="sharetoken", name="owner"),
+        migrations.SeparateDatabaseAndState(
+            database_operations=[migrations.RunSQL(DROP, ADD_BACK_NULLABLE)],
+            state_operations=[migrations.RemoveField(model_name="sharetoken", name="owner")],
+        ),
     ]

@@ -1,7 +1,6 @@
 from django.db.models import F, Q, QuerySet
 
 from tokens.models.choices import SwapOrderStatus
-from wallets.models import Wallet
 
 
 class SwapOrderQuerySet(QuerySet):
@@ -23,11 +22,15 @@ class SwapOrderQuerySet(QuerySet):
         )
         return self.filter(sell_order_owned | buy_order_owned)
 
+    def for_party_wallets(self, wallet_ids):
+        if not wallet_ids:
+            return self.none()
+        return self.filter(Q(seller_wallet_id__in=wallet_ids) | Q(buyer_wallet_id__in=wallet_ids))
+
     def visible_to_user(self, user):
         if user is None or not user.is_authenticated:
             return self.none()
-        wallet_ids = list(Wallet.objects.visible_to_user(user).verified_evm().values_list("uuid", flat=True))
-        return self.for_wallet_ids(wallet_ids)
+        return self
 
     def awaiting_signature(self):
         return self.filter(
@@ -42,7 +45,7 @@ class SwapOrderQuerySet(QuerySet):
         return self.exclude(status__in=[SwapOrderStatus.COMPLETED, SwapOrderStatus.FAILED, SwapOrderStatus.EXPIRED])
 
     def with_related(self):
-        return self.select_related("share_token", "payment_asset", "sell_order", "buy_order")
+        return self.select_related("share_token", "payment_asset")
 
     def last_completed_for_token(self, token):
         return self.filter(share_token=token, status="completed").order_by("-completed_at").first()

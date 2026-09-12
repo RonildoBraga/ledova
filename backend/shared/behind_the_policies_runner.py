@@ -13,18 +13,6 @@ LISTINGS_THAT_COME_BACK_EMPTY_FOR_THEIR_OWN_OWNER = (
         "IssuerSubscriptionReadTest",
         "test_the_issuer_keeps_other_investors_on_newest_first_pages",
     ),
-    *ids(
-        "tokens.tests.test_swap_isolation",
-        "SwapQuerysetIsScopedToTheCallerTest",
-        "test_a_second_owned_wallet_does_not_widen_the_listing_for_the_first",
-        "test_the_listing_returns_only_the_callers_swap",
-    ),
-    *ids(
-        "tokens.tests.test_trading_read_isolation",
-        "TradingReadIsolationTest",
-        "test_pending_swaps_accepts_an_owned_case_variant",
-        "test_pending_swaps_are_paginated_and_newest_first",
-    ),
 )
 
 A_SECOND_MODEL_THE_VIEW_READS_OUTSIDE_THE_PRINCIPALS_SCOPE = (

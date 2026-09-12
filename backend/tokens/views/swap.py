@@ -25,7 +25,7 @@ class SwapOrderViewSet(AuthenticatedListViewSet):
 
         authorized_wallets = resolve_verified_evm_wallets(request.user, [wallet_address])
 
-        swap_orders = self.filter_queryset(self.get_queryset().for_wallet_ids(authorized_wallets.wallet_ids))
+        swap_orders = self.filter_queryset(self.get_queryset().for_party_wallets(authorized_wallets.wallet_ids))
 
         page = self.paginate_queryset(swap_orders)
         if page is not None:
