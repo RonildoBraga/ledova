@@ -993,6 +993,29 @@ runs. Both mechanisms hold at once on purpose:
   runs the migrations. Folding migration into the operator role would make the
   operator the table owner, and `FORCE ROW LEVEL SECURITY` would then scope the
   one role whose purpose is being unscoped.
+- **The app role is granted the tables the catalogue lists, and nothing else.**
+  A policy only protects a table it is installed on, so a blanket
+  `GRANT ... ON ALL TABLES` makes every unclassified table readable by the
+  scoped role with no boundary underneath it at all. `grant_reachable_tables`
+  derives the grant from the catalogue instead — `POLICIES`, `FRAMEWORK`,
+  `NOT_TENANCY` and `AWAITING_RLS` — and revokes the default privilege, so a
+  table nobody has classified answers `permission denied` rather than
+  answering. That closed eleven tables, `documents_documentread` and
+  `compliance_compliancealert` among them, whose own catalogue entries assert
+  an access control the database was not enforcing. `check_rls_roles` fails if
+  the live grant and the catalogue disagree in either direction, which catches
+  a hand-issued `GRANT` and a table created after the grant migration; it
+  cannot catch a change to the catalogue itself, because the grant is derived
+  from it and the two agree by construction.
+- **Five tables are listed reachable against their own classification, and the
+  list is the finding.** `REACHED_DESPITE_OPERATOR_ONLY` names the tables the
+  catalogue calls operator-only that customer-path code demonstrably reads on
+  the scoped connection, each with the file and line that reaches it — a share
+  issuance listed through its scoped parent, the yield token behind every
+  asset's NAV field, an order's own modification log, and the two compliance
+  rows written when an account is created. Granting them changes nothing about
+  today's behaviour; the point is that the discrepancy is now written down
+  where the grant is derived rather than hidden inside a blanket one.
 - **The principal is set where DRF resolves the user, not in middleware.**
   `HybridJWTAuthentication` runs in `APIView.initial()`, after every Django
   middleware, and a bearer request carries no session — so in middleware
