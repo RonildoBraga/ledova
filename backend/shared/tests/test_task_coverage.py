@@ -1,7 +1,9 @@
+import ast
 import json
 import subprocess
 import sys
 from inspect import signature
+from pathlib import Path
 
 from django.conf import settings
 from django.test import SimpleTestCase
@@ -73,6 +75,19 @@ class EveryTaskSaysWhoItActsForTest(SimpleTestCase):
         self.assertLessEqual(self.declared, set(app.tasks))
 
 
+def entered_acting_for():
+    entered = {}
+    for path in sorted(Path(settings.BASE_DIR).glob("*/tasks/*.py")):
+        module = ".".join(path.relative_to(settings.BASE_DIR).with_suffix("").parts)
+        for node in ast.walk(ast.parse(path.read_text())):
+            if not isinstance(node, ast.FunctionDef):
+                continue
+            if not any("app.task" in ast.unparse(decorator) for decorator in node.decorator_list):
+                continue
+            entered[f"{module}.{node.name}"] = "acting_for" in ast.unparse(node)
+    return entered
+
+
 class EveryPrincipalBearingTaskAccountsForItsConversionTest(SimpleTestCase):
 
     def assert_accounted(self, conversions):
@@ -86,6 +101,29 @@ class EveryPrincipalBearingTaskAccountsForItsConversionTest(SimpleTestCase):
             else:
                 self.assertIsNone(conversion.converted_pr, f"{name} is waiting, not converted by a PR")
                 self.assertTrue(conversion.waiting_reason.strip(), f"{name} needs the current reason it is waiting")
+
+    @staticmethod
+    def contradicted_by_the_code(conversions):
+        entered = entered_acting_for()
+        return sorted(
+            name
+            for name, conversion in conversions.items()
+            if entered.get(name) is not (conversion.status == "converted")
+        )
+
+    def test_the_recorded_status_matches_what_the_task_actually_does(self):
+        self.assertEqual(self.contradicted_by_the_code(CONVERSIONS), [])
+
+    def test_a_status_the_code_contradicts_is_reported(self):
+        name = next(task for task, conversion in CONVERSIONS.items() if conversion.status == "converted")
+        claimed = {name: CONVERSIONS[name]._replace(status="pending", converted_pr=None, waiting_reason="claimed")}
+
+        self.assertEqual(self.contradicted_by_the_code(claimed), [name])
+
+    def test_a_conversion_that_names_no_registered_task_is_reported(self):
+        absent = {"shared.tasks.a_task_that_was_deleted": TaskConversion(status="converted", converted_pr=1)}
+
+        self.assertEqual(self.contradicted_by_the_code(absent), ["shared.tasks.a_task_that_was_deleted"])
 
     def test_every_principal_bearing_task_has_complete_conversion_accounting(self):
         self.assert_accounted(CONVERSIONS)
