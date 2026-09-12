@@ -25,6 +25,9 @@ class CapitalIncreaseViewSet(AuthenticatedModelViewSet):
     ordering = ["-created_at"]
     ordering_fields = ["created_at", "status", "additional_shares"]
 
+    scoped_model = CapitalIncreaseRequest
+    manage_actions = MANAGE_ACTIONS
+
     def get_serializer_class(self):
         if self.action == "create":
             return CapitalIncreaseCreateSerializer
@@ -34,11 +37,8 @@ class CapitalIncreaseViewSet(AuthenticatedModelViewSet):
             return CapitalIncreaseListSerializer
         return CapitalIncreaseDetailSerializer
 
-    def get_queryset(self):
-        queryset = CapitalIncreaseRequest.objects.with_relations()
-        if self.action in MANAGE_ACTIONS:
-            return queryset.manageable_by_user(self.request.user)
-        return queryset.visible_to_user(self.request.user)
+    def narrow(self, queryset):
+        return queryset.with_relations()
 
     def filter_queryset(self, queryset):
         if self.action == "list":

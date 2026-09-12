@@ -78,12 +78,6 @@ ALLOWED: dict[str, tuple[int, str]] = {
         "Company takes its CompanyDocument rows and deleting a user takes their Document rows, and the "
         "files would outlive both. Stated in docs/ARCHITECTURE.md; the receiver is shared/storage.py.",
     ),
-    "backend/companies/views/company.py:raw-orm-in-view": (
-        1,
-        "CompanyViewSet.get_queryset returns Company.objects.all() for the administrative actions, so "
-        "an operator reaches every company. Stated in docs/ARCHITECTURE.md and pinned by STAFF_UNSCOPED "
-        "in backend/shared/tests/test_route_coverage.py.",
-    ),
 }
 
 LEGACY: dict[str, int] = {}

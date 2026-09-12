@@ -9,6 +9,7 @@ from rest_framework.response import Response
 
 from shared.utils import csv_cell
 from shared.views.principal import SetsThePrincipalOnTheConnection
+from shared.views.scope import ScopesToThePrincipal
 from whitelist.exceptions import (
     BatchEntriesRequiredException,
     BatchSizeLimitExceededException,
@@ -27,6 +28,7 @@ from whitelist.services import WhitelistService, unique_wallet_uuid_for
 
 
 class WhitelistEntryViewSet(
+    ScopesToThePrincipal,
     SetsThePrincipalOnTheConnection,
     mixins.ListModelMixin,
     mixins.RetrieveModelMixin,
@@ -39,8 +41,7 @@ class WhitelistEntryViewSet(
     ordering_fields = ["created_at", "status"]
     lookup_field = "uuid"
 
-    def get_queryset(self):
-        return WhitelistEntry.objects.visible_to_user(self.request.user)
+    scoped_model = WhitelistEntry
 
     @action(detail=False, methods=["get"], url_path="entry/(?P<address>[^/.]+)")
     def by_address(self, request, address=None):

@@ -148,18 +148,21 @@ class EveryTenantTableIsScopedByAPolicyTest(TransactionTestCase):
                 self.assertGreater(len(term), 40, f"{name} must name the term that admits its rows")
                 self.assertGreater(len(proof), 40, f"{name} must name the fixture row that proves it")
 
-    def test_the_derived_list_is_not_empty_so_the_assertion_discriminates(self):
-        views = views_the_gate_counts()
+    @staticmethod
+    def unaudited(views):
+        named = " ".join(site for site, _, _ in BYPASSES_VISIBLE_TO_USER.values())
+        return [path for path in views if path not in named]
 
-        self.assertTrue(views)
-        self.assertIn("companies/views/company.py", views)
+    def test_no_view_reaches_the_orm_raw_since_the_base_took_the_scoping_call(self):
+        self.assertEqual(views_the_gate_counts(), [])
 
     def test_the_audit_covers_every_view_the_layer_gate_counts_as_reaching_the_orm(self):
-        named = " ".join(site for site, _, _ in BYPASSES_VISIBLE_TO_USER.values())
+        self.assertEqual(self.unaudited(views_the_gate_counts()), [])
 
-        for path in views_the_gate_counts():
-            with self.subTest(view=path):
-                self.assertIn(path, named, f"{path} reaches the ORM in a view and the audit does not say why")
+    def test_the_audit_reports_a_view_it_does_not_name(self):
+        unnamed = "wallets/views/one_the_audit_has_never_heard_of.py"
+
+        self.assertEqual(self.unaudited([unnamed]), [unnamed])
 
     def test_the_two_services_that_read_past_the_scope_are_named(self):
         named = " ".join(site for site, _, _ in BYPASSES_VISIBLE_TO_USER.values())

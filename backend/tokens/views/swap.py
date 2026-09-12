@@ -13,8 +13,10 @@ class SwapOrderViewSet(AuthenticatedListViewSet):
     ordering = ["-created_at"]
     ordering_fields = ["created_at", "status"]
 
-    def get_queryset(self):
-        return SwapOrder.objects.visible_to_user(self.request.user).awaiting_signature().with_related()
+    scoped_model = SwapOrder
+
+    def narrow(self, queryset):
+        return queryset.awaiting_signature().with_related()
 
     def list(self, request, *args, **kwargs):
         wallet_address = request.query_params.get("wallet_address")

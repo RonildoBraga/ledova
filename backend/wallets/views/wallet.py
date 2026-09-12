@@ -40,14 +40,14 @@ class WalletViewSet(AuthenticatedModelViewSet):
     ordering = ["-created_at"]
     ordering_fields = ["created_at", "chain", "verification_status", "signing_preference"]
 
+    scoped_model = Wallet
+
     def get_throttles(self):
         self.throttle_scope = "broadcast" if self.action == "broadcast_transfer" else None
         return super().get_throttles()
 
-    def get_queryset(self):
-        queryset = Wallet.objects.visible_to_user(self.request.user)
+    def narrow(self, queryset):
         if self.action in ("update", "partial_update"):
-
             return queryset.select_for_update(of=("self",))
         return queryset.with_market_value()
 

@@ -40,6 +40,9 @@ class ShareTokenViewSet(AuthenticatedModelViewSet):
     ordering = ["-created_at"]
     ordering_fields = ["created_at", "name", "symbol", "status", "token_type"]
 
+    scoped_model = ShareToken
+    manage_actions = MANAGE_ACTIONS
+
     def get_serializer_class(self):
         if self.action == "create":
             return ShareTokenCreateSerializer
@@ -47,11 +50,8 @@ class ShareTokenViewSet(AuthenticatedModelViewSet):
             return ShareTokenListSerializer
         return ShareTokenDetailSerializer
 
-    def get_queryset(self):
-        user = self.request.user
-        if self.action in MANAGE_ACTIONS:
-            return ShareToken.objects.manageable_by_user(user).with_company()
-        queryset = ShareToken.objects.visible_to_user(user).with_company()
+    def narrow(self, queryset):
+        queryset = queryset.with_company()
         if self.action == "list":
             queryset = queryset.with_market_summary()
         return queryset

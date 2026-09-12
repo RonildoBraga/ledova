@@ -3,8 +3,8 @@ from types import SimpleNamespace
 from django.core.exceptions import ImproperlyConfigured
 from django.test import SimpleTestCase
 
-from shared.views.scope import ScopesToThePrincipal
 from companies.models import Company
+from shared.views.scope import ScopesToThePrincipal
 from users.models import Notification, UserAccount
 
 

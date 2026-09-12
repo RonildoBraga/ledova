@@ -21,8 +21,11 @@ class DocumentViewSet(UploadProtectedView, AuthenticatedModelViewSet):
     ordering = ["-created_at"]
     ordering_fields = ["created_at"]
 
+    scoped_model = CompanyDocument
+    manage_actions = frozenset({"create", "destroy"})
+
     def _writing(self):
-        return self.action in ("create", "destroy")
+        return self.action in self.manage_actions
 
     def _company(self):
         scope = Company.objects.manageable_by_user if self._writing() else Company.objects.visible_to_user
@@ -31,12 +34,8 @@ class DocumentViewSet(UploadProtectedView, AuthenticatedModelViewSet):
             raise NotFound("Company not found or permission denied")
         return company
 
-    def get_queryset(self):
-        user = self.request.user
-        scope = (
-            CompanyDocument.objects.manageable_by_user if self._writing() else CompanyDocument.objects.visible_to_user
-        )
-        return scope(user).filter(company=self._company()).select_related("company")
+    def narrow(self, queryset):
+        return queryset.filter(company=self._company()).select_related("company")
 
     @extend_schema(responses={(200, "*/*"): OpenApiTypes.BINARY})
     @action(detail=True, methods=["get"])

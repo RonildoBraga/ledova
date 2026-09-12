@@ -10,5 +10,7 @@ class ShareIssuanceRequestViewSet(AuthenticatedReadOnlyViewSet):
     ordering = ["-created_at", "-uuid"]
     ordering_fields = ["created_at", "status", "amount"]
 
-    def get_queryset(self):
-        return ShareIssuanceRequest.objects.with_relations().visible_to_user(self.request.user)
+    scoped_model = ShareIssuanceRequest
+
+    def narrow(self, queryset):
+        return queryset.with_relations()

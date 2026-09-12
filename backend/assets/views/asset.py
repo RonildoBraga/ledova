@@ -22,9 +22,11 @@ class AssetViewSet(AuthenticatedReadOnlyViewSet):
     ordering = ["symbol"]
     ordering_fields = ["symbol", "name", "current_price", "asset_type"]
 
-    def get_queryset(self):
+    scoped_model = Asset
+
+    def narrow(self, queryset):
         chain = self.request.query_params.get("chain")
-        queryset = Asset.objects.visible_to_user(self.request.user).verified().excluding_securities()
+        queryset = queryset.verified().excluding_securities()
         if chain:
             queryset = queryset.filter_by_chain(chain)
         else:

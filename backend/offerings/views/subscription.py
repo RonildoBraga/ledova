@@ -24,6 +24,11 @@ class SubscriptionViewSet(
     ordering = ["-created_at"]
     ordering_fields = ["created_at", "status", "quantity"]
 
+    scoped_model = Subscription
+
+    def narrow(self, queryset):
+        return queryset.with_relations()
+
     def get_serializer_class(self):
         if self.action == "create":
             return SubscriptionCreateSerializer
@@ -32,9 +37,6 @@ class SubscriptionViewSet(
         if self.action == "withdraw":
             return SubscriptionWithdrawSerializer
         return SubscriptionDetailSerializer
-
-    def get_queryset(self):
-        return Subscription.objects.with_relations().visible_to_user(self.request.user)
 
     def _detail(self, subscription):
         return Response(SubscriptionDetailSerializer(subscription, context=self.get_serializer_context()).data)

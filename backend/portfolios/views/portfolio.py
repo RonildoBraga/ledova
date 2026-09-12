@@ -25,9 +25,10 @@ class PortfolioViewSet(AuthenticatedModelViewSet):
     ordering = ["-created_at"]
     ordering_fields = ["created_at", "name"]
 
-    def get_queryset(self):
-        qs = Portfolio.objects.visible_to_user(self.request.user).active()
-        return qs
+    scoped_model = Portfolio
+
+    def narrow(self, queryset):
+        return queryset.active()
 
     def perform_create(self, serializer):
         user_account = serializer.validated_data.get("user_account")
