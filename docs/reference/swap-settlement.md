@@ -9,9 +9,10 @@ Coordinate backend, shared package, dashboard and mobile before deploying this
 protocol: this backend phase alone does not complete the client recovery flow.
 New-context swap requests require the exact swap, order, account and verified
 wallet identity; signing and approval requests also require the recorded full
-settlement digest. Unqualified requests return `swap_context_refresh_required`
-for new-context rows. Legacy V0 signing and approval requests, including requests
-with exact identity, return HTTP 409 `legacy_swap_held`. Their missing recorded
+settlement digest. Initial authorized context lookup may omit that digest;
+the response returns the original value for subsequent requests. Missing identity
+fields return HTTP 400 validation errors. Exact-identity legacy V0 signing and
+approval requests return HTTP 409 `legacy_swap_held`. Their missing recorded
 domain cannot be reconstructed from current configuration. Exact
 lookup preserves the original review display and decimal-string typed values
 after expiry or configuration drift; it does not authorize a new signature or
@@ -50,8 +51,9 @@ HTTP 503, the original scoped identity and computed hash. Retain that identity
 and check the original outcome; this is not confirmation, a new journal or
 permission to rebroadcast. A matching receipt remains attributed to its original
 context if the deadline or configuration changes during the wait. The general
-transfer service is unchanged. Local signature-request and approval-data schema
-envelopes use `anyOf` because valid scoped objects extend their legacy forms.
+transfer service is unchanged. Signing and approval schemas describe only the
+exact settlement contract. Approval data has two mutually exclusive outcomes:
+sufficient allowance, or an approval transaction with the original identity.
 
 Provider admission uses the inherited cached `assert_expected_chain` result;
 it is not a fresh endpoint-identity observation on every call. New claims retain
@@ -100,8 +102,8 @@ V0 cannot create signing data, accept signatures, prepare approvals or claim an
 execution. Delayed execution callbacks and the dedicated recovery and expiry
 sweeps leave its history and reservations unchanged for operator attribution.
 No operator attribution or re-enabling endpoint is introduced. Legacy request
-and response schema alternatives remain during the client cutover; they do not
-grant permission to act on V0.
+discovery and response schema alternatives have been removed after the client
+cutover. The existing swap list still returns eligible V0 history.
 
 The generic transaction monitor excludes every atomic-swap transaction, every
 `tokens.SwapOrder` business reference and every transaction linked by a swap,

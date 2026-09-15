@@ -26,7 +26,7 @@ export type WalletTokenBalancesResponse = ApiResponse<'api_v1_trading_wallets_ba
 
 export type MarketData = ApiResponse<'api_v1_trading_tokens_market_data_retrieve'>;
 
-export type SwapOrder = ApiSchema<'SwapOrderList'> | ApiSchema<'SwapOrderDetail'>;
+export type SwapOrder = ApiSchema<'SwapOrderList'> | ApiSchema<'SettlementSwapOrder'>;
 
 export type EIP712Domain = ApiSchema<'SigningDomain'>;
 

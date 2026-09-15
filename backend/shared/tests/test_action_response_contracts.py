@@ -148,11 +148,7 @@ class ActionResponseContractTest(APITransactionTestCase):
         self.assertEqual((body["requiredAmount"], body["currentAllowance"]), ("10", "0"))
         self.assertIs(body["needsApproval"], True)
         schema = self.assert_fields(
-            next(
-                self.resolved(item)
-                for item in self.response_schema("/api/v1/trading/orders/{uuid}/swap/approval-status/")["oneOf"]
-                if "settlementDigest" in self.resolved(item)["properties"]
-            ),
+            self.response_schema("/api/v1/trading/orders/{uuid}/swap/approval-status/"),
             body,
             {
                 **{name: "string" for name in self.approval_identity()},
@@ -168,10 +164,10 @@ class ActionResponseContractTest(APITransactionTestCase):
 
     def approval_variants(self):
         schema = self.response_schema("/api/v1/trading/orders/{uuid}/swap/approval-data/")
-        self.assertEqual(len(schema.get("anyOf", ())), 4)
-        variants = [self.resolved(item) for item in schema["anyOf"]]
-        variants = [item for item in variants if "settlementDigest" in item["properties"]]
-        self.assertEqual(len(variants), 2)
+        self.assertEqual(len(schema.get("oneOf", ())), 2)
+        variants = [self.resolved(item) for item in schema["oneOf"]]
+        for variant in variants:
+            self.assertIn("settlementDigest", variant["required"])
         return {"transaction" in item["properties"]: item for item in variants}
 
     def test_approval_no_transaction_variant_keeps_actual_allowance_values(self):

@@ -1,42 +1,54 @@
-from drf_spectacular.extensions import OpenApiSerializerExtension
 from drf_spectacular.utils import PolymorphicProxySerializer, inline_serializer
 from rest_framework import serializers
 
 from tokens.serializers.signing import (
-    LegacySwapTypedDataSerializer,
     SettlementContextField,
     SettlementTypedDataSerializer,
 )
-from tokens.serializers.swap_order import (
-    SettlementSignatureSerializer,
-    SubmitSignatureSerializer,
-    SwapOrderDetailSerializer,
-)
+from tokens.serializers.swap_order import SwapOrderDetailSerializer
 from wallets.serializers.actions import PreparedEvmTransactionSerializer
 
 
-class ApprovalStatusResponseSerializer(serializers.Serializer):
+class SettlementResponseIdentitySerializer(serializers.Serializer):
     swap_uuid = serializers.UUIDField()
+    order_uuid = serializers.UUIDField()
+    owner_account_uuid = serializers.UUIDField()
+    wallet_uuid = serializers.UUIDField()
+    settlement_digest = serializers.CharField()
     user_role = serializers.ChoiceField(choices=("buyer", "seller"))
+
+
+class SettlementSwapOrderSerializer(SwapOrderDetailSerializer):
+    settlement_protocol_version = serializers.ChoiceField(choices=[1], read_only=True)
+    settlement_context = SettlementContextField(read_only=True)
+
+
+class SettlementSwapOrderForSigningSerializer(SettlementResponseIdentitySerializer):
+    swap_order = SettlementSwapOrderSerializer()
+    typed_data = SettlementTypedDataSerializer()
+    has_signed = serializers.BooleanField()
+    can_sign = serializers.BooleanField()
+    admission_refusal = serializers.CharField(allow_null=True)
+
+
+class SettlementApprovalStatusSerializer(SettlementResponseIdentitySerializer):
     token_address = serializers.CharField()
     token_symbol = serializers.CharField()
-    required_amount = serializers.IntegerField()
-    current_allowance = serializers.IntegerField()
+    required_amount = serializers.CharField()
+    current_allowance = serializers.CharField()
     needs_approval = serializers.BooleanField()
     spender = serializers.CharField()
 
 
-class SufficientApprovalResponseSerializer(serializers.Serializer):
+class SettlementSufficientApprovalSerializer(SettlementResponseIdentitySerializer):
     needs_approval = serializers.ChoiceField(choices=[False])
     message = serializers.CharField()
-    current_allowance = serializers.IntegerField()
-    required_amount = serializers.IntegerField()
+    current_allowance = serializers.CharField()
+    required_amount = serializers.CharField()
 
 
-class ApprovalTransactionResponseSerializer(serializers.Serializer):
+class SettlementApprovalTransactionSerializer(SettlementResponseIdentitySerializer):
     needs_approval = serializers.ChoiceField(choices=[True])
-    swap_uuid = serializers.UUIDField()
-    user_role = serializers.ChoiceField(choices=("buyer", "seller"))
     transaction = inline_serializer(
         name="ApprovalTransaction",
         fields={
@@ -58,61 +70,6 @@ class ApprovalTransactionResponseSerializer(serializers.Serializer):
     unlimited = serializers.ChoiceField(choices=[True])
 
 
-class SettlementResponseIdentitySerializer(serializers.Serializer):
-    swap_uuid = serializers.UUIDField()
-    order_uuid = serializers.UUIDField()
-    owner_account_uuid = serializers.UUIDField()
-    wallet_uuid = serializers.UUIDField()
-    settlement_digest = serializers.CharField()
-    user_role = serializers.ChoiceField(choices=("buyer", "seller"))
-
-
-class SettlementSwapOrderSerializer(SwapOrderDetailSerializer):
-    settlement_protocol_version = serializers.ChoiceField(choices=[1], read_only=True)
-    settlement_context = SettlementContextField(read_only=True)
-
-
-class LegacySwapOrderForSigningSerializer(serializers.Serializer):
-    swap_order = SwapOrderDetailSerializer()
-    typed_data = LegacySwapTypedDataSerializer()
-    user_role = serializers.ChoiceField(choices=("buyer", "seller"))
-    has_signed = serializers.BooleanField()
-
-
-class SettlementSwapOrderForSigningSerializer(
-    SettlementResponseIdentitySerializer, LegacySwapOrderForSigningSerializer
-):
-    swap_order = SettlementSwapOrderSerializer()
-    typed_data = SettlementTypedDataSerializer()
-    can_sign = serializers.BooleanField()
-    admission_refusal = serializers.CharField(allow_null=True)
-
-
-SwapOrderForSigningSerializer = PolymorphicProxySerializer(
-    component_name="SwapOrderForSigning",
-    serializers=[LegacySwapOrderForSigningSerializer, SettlementSwapOrderForSigningSerializer],
-    resource_type_field_name=None,
-)
-
-
-class SettlementApprovalStatusSerializer(SettlementResponseIdentitySerializer, ApprovalStatusResponseSerializer):
-    required_amount = serializers.CharField()
-    current_allowance = serializers.CharField()
-
-
-class SettlementSufficientApprovalSerializer(
-    SettlementResponseIdentitySerializer, SufficientApprovalResponseSerializer
-):
-    current_allowance = serializers.CharField()
-    required_amount = serializers.CharField()
-
-
-class SettlementApprovalTransactionSerializer(
-    SettlementResponseIdentitySerializer, ApprovalTransactionResponseSerializer
-):
-    pass
-
-
 class SettlementApprovalReceiptSerializer(SettlementResponseIdentitySerializer):
     tx_hash = serializers.CharField()
     block_number = serializers.IntegerField(allow_null=True)
@@ -125,44 +82,11 @@ class SettlementApprovalUncertainSerializer(SettlementResponseIdentitySerializer
     detail = serializers.CharField()
 
 
-class ApprovalDataResponseSerializer(serializers.Serializer):
-    pass
-
-
-class ApprovalDataResponseSchema(OpenApiSerializerExtension):
-    target_class = ApprovalDataResponseSerializer
-
-    def map_serializer(self, auto_schema, direction):
-        return {
-            "anyOf": [
-                auto_schema.resolve_serializer(serializer(), direction).ref
-                for serializer in (
-                    SufficientApprovalResponseSerializer,
-                    ApprovalTransactionResponseSerializer,
-                    SettlementSufficientApprovalSerializer,
-                    SettlementApprovalTransactionSerializer,
-                )
-            ]
-        }
-
-
-class SwapSignatureRequestSerializer(serializers.Serializer):
-    pass
-
-
-class SwapSignatureRequestSchema(OpenApiSerializerExtension):
-    target_class = SwapSignatureRequestSerializer
-
-    def map_serializer(self, auto_schema, direction):
-        return {
-            "anyOf": [
-                auto_schema.resolve_serializer(serializer(), direction).ref
-                for serializer in (
-                    SubmitSignatureSerializer,
-                    SettlementSignatureSerializer,
-                )
-            ]
-        }
+ApprovalDataResponseSerializer = PolymorphicProxySerializer(
+    component_name="ApprovalDataResponse",
+    serializers=[SettlementSufficientApprovalSerializer, SettlementApprovalTransactionSerializer],
+    resource_type_field_name=None,
+)
 
 
 class MarketLastTradeSerializer(serializers.Serializer):

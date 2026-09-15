@@ -40,7 +40,6 @@ from shared.tests.upload_fixtures import StubUploadDependencies, pdf_bytes
 from tokens.models import (
     PauseChange,
     ShareIssuanceRequest,
-    SwapOrder,
     TransferOrder,
 )
 from tokens.tests.order_action_fixtures import ActionFixtures
@@ -549,7 +548,6 @@ class CrossTenantRouteMatrixTest(StubUploadDependencies, APITransactionTestCase)
         swaps.settlement_contract.return_value = SYNTHETIC_SETTLEMENT_CONTRACT
         swaps.broadcast_settlement_approval.return_value = ("0x" + "ab" * 32, {"blockNumber": 1, "gasUsed": 21000})
         self.enterContext(override_settings(ATOMIC_SWAP_ADDRESS=SYNTHETIC_SETTLEMENT_CONTRACT))
-        swaps.find_swap_order_by_transfer_order.side_effect = SwapOrder.objects.for_transfer_order
         swaps.sign_and_execute_swap.side_effect = lambda swap_order, **kwargs: swap_order
         swaps.get_typed_data.return_value = {}
         swaps.check_swap_allowances.return_value = {"seller": ALLOWANCE, "buyer": ALLOWANCE}

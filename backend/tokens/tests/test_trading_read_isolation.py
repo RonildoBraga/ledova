@@ -40,8 +40,7 @@ class TradingReadIsolationTest(APITransactionTestCase):
     legacy_cases = {
         "test_malformed_address_snapshots_do_not_grant_swap_visibility",
         "test_order_swap_reads_reject_malformed_order_snapshot_before_service",
-        "test_order_swap_reads_reject_malformed_swap_snapshot_before_service",
-        "test_a_malformed_newest_swap_is_not_replaced_by_an_older_valid_match",
+        "test_legacy_list_retains_both_valid_and_malformed_address_history",
     }
 
     def _make_tenant(self, email, address):
@@ -109,13 +108,11 @@ class TradingReadIsolationTest(APITransactionTestCase):
 
     def swap_query(self, swap=None):
         swap = swap or self.swap
-        if not swap.settlement_protocol_version:
-            return {"wallet_address": self.bob_case_variant}
         return {
             "swap_uuid": str(swap.pk),
             "owner_account_uuid": str(self.bob_account.pk),
             "wallet_uuid": str(self.bob_wallet.pk),
-            "settlement_digest": swap.settlement_digest,
+            "settlement_digest": swap.settlement_digest or "0x" + "00" * 32,
         }
 
     def setUp(self):
@@ -363,7 +360,7 @@ class TradingReadIsolationTest(APITransactionTestCase):
             with self.subTest(path=path):
                 response = self.client.get(
                     f"/api/v1/trading/orders/{self.bob_order.uuid}/{path}",
-                    {"wallet_address": other_wallet.address},
+                    {**self.swap_query(), "wallet_uuid": str(other_wallet.pk)},
                 )
                 self.assertEqual(response.status_code, 404)
 
@@ -384,40 +381,25 @@ class TradingReadIsolationTest(APITransactionTestCase):
 
         self.assertEqual(service_module.mock_calls, [])
 
-    @patch("tokens.views.trading_order.atomic_swap_service")
-    def test_order_swap_reads_reject_malformed_swap_snapshot_before_service(self, service_module):
-        self.swap.buyer_address = self.alice_wallet.address
-        self.swap.save(update_fields=["buyer_address"])
-        self._restore_legacy_swaps()
-        self.client.force_authenticate(self.bob)
-
-        for path in ("swap/", "swap/approval-status/", "swap/approval-data/"):
-            with self.subTest(path=path):
-                response = self.client.get(
-                    f"/api/v1/trading/orders/{self.bob_order.uuid}/{path}",
-                    self.swap_query(),
-                )
-                self.assertEqual(response.status_code, 404)
-
+        self.client.force_authenticate(self.alice)
+        held = self.client.get(
+            f"/api/v1/trading/orders/{self.alice_order.pk}/swap/",
+            {
+                **self.swap_query(),
+                "owner_account_uuid": str(self.alice_account.pk),
+                "wallet_uuid": str(self.alice_wallet.pk),
+            },
+        )
+        self.assertEqual(held.status_code, 409, held.content)
+        self.assertEqual(held.json()["code"], "legacy_swap_held")
         self.assertEqual(service_module.mock_calls, [])
 
-    @patch("tokens.views.trading_order.atomic_swap_service")
-    def test_a_malformed_newest_swap_is_not_replaced_by_an_older_valid_match(self, service_module):
+    def test_legacy_list_retains_both_valid_and_malformed_address_history(self):
         latest = self._make_swap(self.alice_order, self.bob_order, "7")
         latest.buyer_address = self.alice_wallet.address
         latest.save(update_fields=["buyer_address"])
         self._restore_legacy_swaps()
         self.client.force_authenticate(self.bob)
-
-        for path in ("swap/", "swap/approval-status/", "swap/approval-data/"):
-            with self.subTest(path=path):
-                response = self.client.get(
-                    f"/api/v1/trading/orders/{self.bob_order.uuid}/{path}",
-                    self.swap_query(),
-                )
-                self.assertEqual(response.status_code, 404)
-                self.assertEqual(response.json()["detail"], "Order not found.")
-        self.assertEqual(service_module.mock_calls, [])
 
         response = self.client.get(
             "/api/v1/trading/swaps/",
@@ -425,7 +407,6 @@ class TradingReadIsolationTest(APITransactionTestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual([row["uuid"] for row in response.data["results"]], [str(latest.uuid), str(self.swap.uuid)])
-        self.assertEqual(service_module.mock_calls, [])
 
     @patch("tokens.views.trading_order.atomic_swap_service")
     def test_order_approval_status_uses_exact_order_role(self, service_module):

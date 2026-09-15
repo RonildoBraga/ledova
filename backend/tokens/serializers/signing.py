@@ -63,21 +63,17 @@ class SwapSigningTypesField(serializers.JSONField):
     pass
 
 
-class LegacySwapTypedDataSerializer(serializers.Serializer):
-    types = SwapSigningTypesField()
-    primary_type = serializers.ChoiceField(choices=["SwapOrder"])
-    domain = SigningDomainSerializer()
-    message = SwapMessageSerializer()
-
-
 class SettlementDomainSerializer(SigningDomainSerializer):
     name = serializers.ChoiceField(choices=["LedovaAtomicSwap"])
     version = serializers.ChoiceField(choices=["1"])
     chain_id = serializers.CharField(source="chainId")
 
 
-class SettlementTypedDataSerializer(LegacySwapTypedDataSerializer):
+class SettlementTypedDataSerializer(serializers.Serializer):
+    types = SwapSigningTypesField()
+    primary_type = serializers.ChoiceField(choices=["SwapOrder"])
     domain = SettlementDomainSerializer()
+    message = SwapMessageSerializer()
 
 
 class SettlementPartySerializer(serializers.Serializer):

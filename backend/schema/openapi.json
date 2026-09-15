@@ -275,13 +275,7 @@
         "type": "object"
       },
       "ApprovalDataResponse": {
-        "anyOf": [
-          {
-            "$ref": "#/components/schemas/SufficientApprovalResponse"
-          },
-          {
-            "$ref": "#/components/schemas/ApprovalTransactionResponse"
-          },
+        "oneOf": [
           {
             "$ref": "#/components/schemas/SettlementSufficientApproval"
           },
@@ -296,46 +290,6 @@
           true
         ],
         "type": "boolean"
-      },
-      "ApprovalStatusResponse": {
-        "properties": {
-          "currentAllowance": {
-            "type": "integer"
-          },
-          "needsApproval": {
-            "type": "boolean"
-          },
-          "requiredAmount": {
-            "type": "integer"
-          },
-          "spender": {
-            "type": "string"
-          },
-          "swapUuid": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "tokenAddress": {
-            "type": "string"
-          },
-          "tokenSymbol": {
-            "type": "string"
-          },
-          "userRole": {
-            "$ref": "#/components/schemas/UserRoleEnum"
-          }
-        },
-        "required": [
-          "currentAllowance",
-          "needsApproval",
-          "requiredAmount",
-          "spender",
-          "swapUuid",
-          "tokenAddress",
-          "tokenSymbol",
-          "userRole"
-        ],
-        "type": "object"
       },
       "ApprovalSufficientEnum": {
         "description": "* `False` - False",
@@ -380,54 +334,6 @@
           "nonce",
           "to",
           "value"
-        ],
-        "type": "object"
-      },
-      "ApprovalTransactionResponse": {
-        "properties": {
-          "amount": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "needsApproval": {
-            "$ref": "#/components/schemas/ApprovalRequiredEnum"
-          },
-          "spender": {
-            "type": "string"
-          },
-          "swapUuid": {
-            "format": "uuid",
-            "type": "string"
-          },
-          "tokenAddress": {
-            "type": "string"
-          },
-          "tokenSymbol": {
-            "type": "string"
-          },
-          "transaction": {
-            "$ref": "#/components/schemas/ApprovalTransaction"
-          },
-          "unlimited": {
-            "$ref": "#/components/schemas/ApprovalRequiredEnum"
-          },
-          "userRole": {
-            "$ref": "#/components/schemas/UserRoleEnum"
-          }
-        },
-        "required": [
-          "amount",
-          "description",
-          "needsApproval",
-          "spender",
-          "swapUuid",
-          "tokenAddress",
-          "tokenSymbol",
-          "transaction",
-          "unlimited",
-          "userRole"
         ],
         "type": "object"
       },
@@ -4277,52 +4183,6 @@
           "kycaid"
         ],
         "type": "string"
-      },
-      "LegacySwapOrderForSigning": {
-        "properties": {
-          "hasSigned": {
-            "type": "boolean"
-          },
-          "swapOrder": {
-            "$ref": "#/components/schemas/SwapOrderDetail"
-          },
-          "typedData": {
-            "$ref": "#/components/schemas/LegacySwapTypedData"
-          },
-          "userRole": {
-            "$ref": "#/components/schemas/UserRoleEnum"
-          }
-        },
-        "required": [
-          "hasSigned",
-          "swapOrder",
-          "typedData",
-          "userRole"
-        ],
-        "type": "object"
-      },
-      "LegacySwapTypedData": {
-        "properties": {
-          "domain": {
-            "$ref": "#/components/schemas/SigningDomain"
-          },
-          "message": {
-            "$ref": "#/components/schemas/SwapMessage"
-          },
-          "primaryType": {
-            "$ref": "#/components/schemas/PrimaryTypeEnum"
-          },
-          "types": {
-            "$ref": "#/components/schemas/SwapSigningTypes"
-          }
-        },
-        "required": [
-          "domain",
-          "message",
-          "primaryType",
-          "types"
-        ],
-        "type": "object"
       },
       "MarkAllReadResponse": {
         "properties": {
@@ -9827,25 +9687,6 @@
         ],
         "type": "object"
       },
-      "SubmitSignatureRequest": {
-        "properties": {
-          "signature": {
-            "maxLength": 132,
-            "minLength": 130,
-            "type": "string"
-          },
-          "signerAddress": {
-            "maxLength": 42,
-            "minLength": 1,
-            "type": "string"
-          }
-        },
-        "required": [
-          "signature",
-          "signerAddress"
-        ],
-        "type": "object"
-      },
       "SubscriptionCreateRequest": {
         "properties": {
           "offering": {
@@ -10216,29 +10057,6 @@
         },
         "type": "object"
       },
-      "SufficientApprovalResponse": {
-        "properties": {
-          "currentAllowance": {
-            "type": "integer"
-          },
-          "message": {
-            "type": "string"
-          },
-          "needsApproval": {
-            "$ref": "#/components/schemas/ApprovalSufficientEnum"
-          },
-          "requiredAmount": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "currentAllowance",
-          "message",
-          "needsApproval",
-          "requiredAmount"
-        ],
-        "type": "object"
-      },
       "SupportedWalletChainEnum": {
         "description": "* `base` - base\n* `bitcoin` - bitcoin\n* `ethereum` - ethereum",
         "enum": [
@@ -10247,16 +10065,6 @@
           "ethereum"
         ],
         "type": "string"
-      },
-      "SwapApprovalStatus": {
-        "oneOf": [
-          {
-            "$ref": "#/components/schemas/ApprovalStatusResponse"
-          },
-          {
-            "$ref": "#/components/schemas/SettlementApprovalStatus"
-          }
-        ]
       },
       "SwapMessage": {
         "properties": {
@@ -10296,191 +10104,6 @@
           "shareToken"
         ],
         "type": "object"
-      },
-      "SwapOrderDetail": {
-        "properties": {
-          "buyOrderUuid": {
-            "format": "uuid",
-            "readOnly": true,
-            "type": "string"
-          },
-          "buyerAddress": {
-            "readOnly": true,
-            "type": "string"
-          },
-          "buyerHasSigned": {
-            "readOnly": true,
-            "type": "boolean"
-          },
-          "completedAt": {
-            "format": "date-time",
-            "nullable": true,
-            "readOnly": true,
-            "type": "string"
-          },
-          "createdAt": {
-            "format": "date-time",
-            "readOnly": true,
-            "type": "string"
-          },
-          "errorMessage": {
-            "readOnly": true,
-            "type": "string"
-          },
-          "expiresAt": {
-            "format": "date-time",
-            "readOnly": true,
-            "type": "string"
-          },
-          "isExpired": {
-            "readOnly": true,
-            "type": "boolean"
-          },
-          "isReady": {
-            "readOnly": true,
-            "type": "boolean"
-          },
-          "nonce": {
-            "description": "Unique nonce for replay protection",
-            "readOnly": true,
-            "type": "integer"
-          },
-          "orderHash": {
-            "description": "V1 SwapOrder struct hash, excluding the domain",
-            "readOnly": true,
-            "type": "string"
-          },
-          "paymentAmount": {
-            "description": "Payment amount in stablecoin smallest units (e.g., cents for 2 decimals)",
-            "readOnly": true,
-            "type": "integer"
-          },
-          "paymentTokenAddress": {
-            "readOnly": true,
-            "type": "string"
-          },
-          "paymentTokenSymbol": {
-            "readOnly": true,
-            "type": "string"
-          },
-          "sellOrderUuid": {
-            "format": "uuid",
-            "readOnly": true,
-            "type": "string"
-          },
-          "sellerAddress": {
-            "readOnly": true,
-            "type": "string"
-          },
-          "sellerHasSigned": {
-            "readOnly": true,
-            "type": "boolean"
-          },
-          "settlementContext": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/SettlementContext"
-              }
-            ],
-            "nullable": true,
-            "readOnly": true
-          },
-          "settlementDigest": {
-            "readOnly": true,
-            "type": "string"
-          },
-          "settlementProtocolVersion": {
-            "readOnly": true,
-            "type": "integer"
-          },
-          "shareAmount": {
-            "description": "Number of shares to transfer (no decimals)",
-            "readOnly": true,
-            "type": "integer"
-          },
-          "shareTokenAddress": {
-            "readOnly": true,
-            "type": "string"
-          },
-          "shareTokenName": {
-            "readOnly": true,
-            "type": "string"
-          },
-          "shareTokenSymbol": {
-            "readOnly": true,
-            "type": "string"
-          },
-          "status": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/SwapOrderStatusEnum"
-              }
-            ],
-            "readOnly": true
-          },
-          "statusDisplay": {
-            "readOnly": true,
-            "type": "string"
-          },
-          "txHash": {
-            "description": "Transaction hash when executed on-chain (legacy field)",
-            "readOnly": true,
-            "type": "string"
-          },
-          "updatedAt": {
-            "format": "date-time",
-            "readOnly": true,
-            "type": "string"
-          },
-          "uuid": {
-            "description": "Unique identifier (primary key)",
-            "format": "uuid",
-            "readOnly": true,
-            "type": "string"
-          }
-        },
-        "required": [
-          "buyOrderUuid",
-          "buyerAddress",
-          "buyerHasSigned",
-          "completedAt",
-          "createdAt",
-          "errorMessage",
-          "expiresAt",
-          "isExpired",
-          "isReady",
-          "nonce",
-          "orderHash",
-          "paymentAmount",
-          "paymentTokenAddress",
-          "paymentTokenSymbol",
-          "sellOrderUuid",
-          "sellerAddress",
-          "sellerHasSigned",
-          "settlementContext",
-          "settlementDigest",
-          "settlementProtocolVersion",
-          "shareAmount",
-          "shareTokenAddress",
-          "shareTokenName",
-          "shareTokenSymbol",
-          "status",
-          "statusDisplay",
-          "txHash",
-          "updatedAt",
-          "uuid"
-        ],
-        "type": "object"
-      },
-      "SwapOrderForSigning": {
-        "oneOf": [
-          {
-            "$ref": "#/components/schemas/LegacySwapOrderForSigning"
-          },
-          {
-            "$ref": "#/components/schemas/SettlementSwapOrderForSigning"
-          }
-        ]
       },
       "SwapOrderList": {
         "properties": {
@@ -10599,16 +10222,6 @@
           "expired"
         ],
         "type": "string"
-      },
-      "SwapSignatureRequestRequest": {
-        "anyOf": [
-          {
-            "$ref": "#/components/schemas/SubmitSignatureRequest"
-          },
-          {
-            "$ref": "#/components/schemas/SettlementSignatureRequest"
-          }
-        ]
       },
       "SwapSigningTypes": {
         "properties": {
@@ -20901,16 +20514,16 @@
         "operationId": "api_v1_trading_orders_swap_retrieve",
         "parameters": [
           {
-            "description": "Required together with the other settlement identity UUIDs for current swaps.",
+            "description": "The recorded settlement party identity.",
             "in": "query",
             "name": "owner_account_uuid",
+            "required": true,
             "schema": {
               "format": "uuid",
               "type": "string"
             }
           },
           {
-            "description": "Recorded settlement digest. Required for approval status and approval data; optional for lookup.",
             "in": "query",
             "name": "settlement_digest",
             "schema": {
@@ -20918,9 +20531,10 @@
             }
           },
           {
-            "description": "Required together with the other settlement identity UUIDs for current swaps.",
+            "description": "The recorded settlement party identity.",
             "in": "query",
             "name": "swap_uuid",
+            "required": true,
             "schema": {
               "format": "uuid",
               "type": "string"
@@ -20937,17 +20551,10 @@
             }
           },
           {
-            "description": "Verified wallet address for a legacy swap. Use the exact settlement identity for current swaps.",
-            "in": "query",
-            "name": "wallet_address",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Required together with the other settlement identity UUIDs for current swaps.",
+            "description": "The recorded settlement party identity.",
             "in": "query",
             "name": "wallet_uuid",
+            "required": true,
             "schema": {
               "format": "uuid",
               "type": "string"
@@ -20959,7 +20566,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SwapOrderForSigning"
+                  "$ref": "#/components/schemas/SettlementSwapOrderForSigning"
                 }
               }
             },
@@ -21056,26 +20663,28 @@
         "operationId": "api_v1_trading_orders_swap_approval_data_retrieve",
         "parameters": [
           {
-            "description": "Required together with the other settlement identity UUIDs for current swaps.",
+            "description": "The recorded settlement party identity.",
             "in": "query",
             "name": "owner_account_uuid",
+            "required": true,
             "schema": {
               "format": "uuid",
               "type": "string"
             }
           },
           {
-            "description": "Recorded settlement digest. Required for approval status and approval data; optional for lookup.",
             "in": "query",
             "name": "settlement_digest",
+            "required": true,
             "schema": {
               "type": "string"
             }
           },
           {
-            "description": "Required together with the other settlement identity UUIDs for current swaps.",
+            "description": "The recorded settlement party identity.",
             "in": "query",
             "name": "swap_uuid",
+            "required": true,
             "schema": {
               "format": "uuid",
               "type": "string"
@@ -21092,17 +20701,10 @@
             }
           },
           {
-            "description": "Verified wallet address for a legacy swap. Use the exact settlement identity for current swaps.",
-            "in": "query",
-            "name": "wallet_address",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Required together with the other settlement identity UUIDs for current swaps.",
+            "description": "The recorded settlement party identity.",
             "in": "query",
             "name": "wallet_uuid",
+            "required": true,
             "schema": {
               "format": "uuid",
               "type": "string"
@@ -21139,26 +20741,28 @@
         "operationId": "api_v1_trading_orders_swap_approval_status_retrieve",
         "parameters": [
           {
-            "description": "Required together with the other settlement identity UUIDs for current swaps.",
+            "description": "The recorded settlement party identity.",
             "in": "query",
             "name": "owner_account_uuid",
+            "required": true,
             "schema": {
               "format": "uuid",
               "type": "string"
             }
           },
           {
-            "description": "Recorded settlement digest. Required for approval status and approval data; optional for lookup.",
             "in": "query",
             "name": "settlement_digest",
+            "required": true,
             "schema": {
               "type": "string"
             }
           },
           {
-            "description": "Required together with the other settlement identity UUIDs for current swaps.",
+            "description": "The recorded settlement party identity.",
             "in": "query",
             "name": "swap_uuid",
+            "required": true,
             "schema": {
               "format": "uuid",
               "type": "string"
@@ -21175,17 +20779,10 @@
             }
           },
           {
-            "description": "Verified wallet address for a legacy swap. Use the exact settlement identity for current swaps.",
-            "in": "query",
-            "name": "wallet_address",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "Required together with the other settlement identity UUIDs for current swaps.",
+            "description": "The recorded settlement party identity.",
             "in": "query",
             "name": "wallet_uuid",
+            "required": true,
             "schema": {
               "format": "uuid",
               "type": "string"
@@ -21197,7 +20794,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SwapApprovalStatus"
+                  "$ref": "#/components/schemas/SettlementApprovalStatus"
                 }
               }
             },
@@ -21236,27 +20833,28 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SwapSignatureRequestRequest"
+                "$ref": "#/components/schemas/SettlementSignatureRequest"
               }
             },
             "application/x-www-form-urlencoded": {
               "schema": {
-                "$ref": "#/components/schemas/SwapSignatureRequestRequest"
+                "$ref": "#/components/schemas/SettlementSignatureRequest"
               }
             },
             "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/SwapSignatureRequestRequest"
+                "$ref": "#/components/schemas/SettlementSignatureRequest"
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SwapOrderDetail"
+                  "$ref": "#/components/schemas/SettlementSwapOrder"
                 }
               }
             },

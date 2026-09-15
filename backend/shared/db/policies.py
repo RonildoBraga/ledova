@@ -321,13 +321,6 @@ READS_WIDER_THAN_OWNERSHIP = {
         "shared/tests/test_cross_tenant_routes_under_rls.py - the asset rows of the route matrix, which "
         "reach the action through the same get_object()",
     ),
-    "ShareIssuance.with_token, SwapOrder.for_transfer_order": (
-        "tokens/views/share_token.py:149, tokens/views/trading_order.py:232",
-        "no policy term today: both tables are classified out of POLICIES, and each is reached only through "
-        "a parent the view already resolved under the principal",
-        "the classification's own reason, which is all that stands behind it - R13 cannot watch a table "
-        "with no policy",
-    ),
 }
 
 R13_WATCHES_BOTH_ENDS = (

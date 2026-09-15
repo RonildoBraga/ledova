@@ -2266,21 +2266,9 @@ export interface ApiComponents {
       reason?: string;
     };
     ApprovalDataResponse:
-      | ApiComponents['schemas']['SufficientApprovalResponse']
-      | ApiComponents['schemas']['ApprovalTransactionResponse']
       | ApiComponents['schemas']['SettlementSufficientApproval']
       | ApiComponents['schemas']['SettlementApprovalTransaction'];
     ApprovalRequiredEnum: true;
-    ApprovalStatusResponse: {
-      currentAllowance: number;
-      needsApproval: boolean;
-      requiredAmount: number;
-      spender: string;
-      swapUuid: string;
-      tokenAddress: string;
-      tokenSymbol: string;
-      userRole: ApiComponents['schemas']['UserRoleEnum'];
-    };
     ApprovalSufficientEnum: false;
     ApprovalTransaction: {
       chainId: string;
@@ -2291,18 +2279,6 @@ export interface ApiComponents {
       nonce: string;
       to: string;
       value: string;
-    };
-    ApprovalTransactionResponse: {
-      amount: string;
-      description: string;
-      needsApproval: ApiComponents['schemas']['ApprovalRequiredEnum'];
-      spender: string;
-      swapUuid: string;
-      tokenAddress: string;
-      tokenSymbol: string;
-      transaction: ApiComponents['schemas']['ApprovalTransaction'];
-      unlimited: ApiComponents['schemas']['ApprovalRequiredEnum'];
-      userRole: ApiComponents['schemas']['UserRoleEnum'];
     };
     Asset: {
       assetType: ApiComponents['schemas']['AssetTypeEnum'];
@@ -3066,18 +3042,6 @@ export interface ApiComponents {
       walletAddress: string;
     };
     KycProviderEnum: 'sumsub' | 'kycaid';
-    LegacySwapOrderForSigning: {
-      hasSigned: boolean;
-      swapOrder: ApiComponents['schemas']['SwapOrderDetail'];
-      typedData: ApiComponents['schemas']['LegacySwapTypedData'];
-      userRole: ApiComponents['schemas']['UserRoleEnum'];
-    };
-    LegacySwapTypedData: {
-      domain: ApiComponents['schemas']['SigningDomain'];
-      message: ApiComponents['schemas']['SwapMessage'];
-      primaryType: ApiComponents['schemas']['PrimaryTypeEnum'];
-      types: ApiComponents['schemas']['SwapSigningTypes'];
-    };
     MarkAllReadResponse: {
       marked: number;
     };
@@ -4211,10 +4175,6 @@ export interface ApiComponents {
       uuid: string;
       walletAddress: string;
     };
-    SubmitSignatureRequest: {
-      signature: string;
-      signerAddress: string;
-    };
     SubscriptionCreateRequest: {
       offering: string;
       quantity: number;
@@ -4286,15 +4246,7 @@ export interface ApiComponents {
     SubscriptionWithdrawRequest: {
       reason?: string;
     };
-    SufficientApprovalResponse: {
-      currentAllowance: number;
-      message: string;
-      needsApproval: ApiComponents['schemas']['ApprovalSufficientEnum'];
-      requiredAmount: number;
-    };
     SupportedWalletChainEnum: 'base' | 'bitcoin' | 'ethereum';
-    SwapApprovalStatus:
-      ApiComponents['schemas']['ApprovalStatusResponse'] | ApiComponents['schemas']['SettlementApprovalStatus'];
     SwapMessage: {
       buyer: string;
       deadline: string;
@@ -4305,39 +4257,6 @@ export interface ApiComponents {
       shareAmount: string;
       shareToken: string;
     };
-    SwapOrderDetail: {
-      buyerAddress: string;
-      buyerHasSigned: boolean;
-      buyOrderUuid: string;
-      completedAt: string | null;
-      createdAt: string;
-      errorMessage: string;
-      expiresAt: string;
-      isExpired: boolean;
-      isReady: boolean;
-      nonce: number;
-      orderHash: string;
-      paymentAmount: number;
-      paymentTokenAddress: string;
-      paymentTokenSymbol: string;
-      sellerAddress: string;
-      sellerHasSigned: boolean;
-      sellOrderUuid: string;
-      settlementContext: ApiComponents['schemas']['SettlementContext'] | null;
-      settlementDigest: string;
-      settlementProtocolVersion: number;
-      shareAmount: number;
-      shareTokenAddress: string;
-      shareTokenName: string;
-      shareTokenSymbol: string;
-      status: ApiComponents['schemas']['SwapOrderStatusEnum'];
-      statusDisplay: string;
-      txHash: string;
-      updatedAt: string;
-      uuid: string;
-    };
-    SwapOrderForSigning:
-      ApiComponents['schemas']['LegacySwapOrderForSigning'] | ApiComponents['schemas']['SettlementSwapOrderForSigning'];
     SwapOrderList: {
       buyerAddress: string;
       buyerHasSigned: boolean;
@@ -4359,8 +4278,6 @@ export interface ApiComponents {
     };
     SwapOrderStatusEnum:
       'created' | 'seller_signed' | 'buyer_signed' | 'ready' | 'executing' | 'completed' | 'failed' | 'expired';
-    SwapSignatureRequestRequest:
-      ApiComponents['schemas']['SubmitSignatureRequest'] | ApiComponents['schemas']['SettlementSignatureRequest'];
     SwapSigningTypes: {
       EIP712Domain: ApiComponents['schemas']['SigningType'][];
       SwapOrder: ApiComponents['schemas']['SigningType'][];
@@ -8626,12 +8543,11 @@ export interface ApiOperations {
   };
   api_v1_trading_orders_swap_retrieve: {
     parameters: {
-      query?: {
-        owner_account_uuid?: string;
+      query: {
+        owner_account_uuid: string;
         settlement_digest?: string;
-        swap_uuid?: string;
-        wallet_address?: string;
-        wallet_uuid?: string;
+        swap_uuid: string;
+        wallet_uuid: string;
       };
       header?: never;
       path: {
@@ -8646,7 +8562,7 @@ export interface ApiOperations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': ApiComponents['schemas']['SwapOrderForSigning'];
+          'application/json': ApiComponents['schemas']['SettlementSwapOrderForSigning'];
         };
       };
     };
@@ -8688,12 +8604,11 @@ export interface ApiOperations {
   };
   api_v1_trading_orders_swap_approval_data_retrieve: {
     parameters: {
-      query?: {
-        owner_account_uuid?: string;
-        settlement_digest?: string;
-        swap_uuid?: string;
-        wallet_address?: string;
-        wallet_uuid?: string;
+      query: {
+        owner_account_uuid: string;
+        settlement_digest: string;
+        swap_uuid: string;
+        wallet_uuid: string;
       };
       header?: never;
       path: {
@@ -8715,12 +8630,11 @@ export interface ApiOperations {
   };
   api_v1_trading_orders_swap_approval_status_retrieve: {
     parameters: {
-      query?: {
-        owner_account_uuid?: string;
-        settlement_digest?: string;
-        swap_uuid?: string;
-        wallet_address?: string;
-        wallet_uuid?: string;
+      query: {
+        owner_account_uuid: string;
+        settlement_digest: string;
+        swap_uuid: string;
+        wallet_uuid: string;
       };
       header?: never;
       path: {
@@ -8735,7 +8649,7 @@ export interface ApiOperations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': ApiComponents['schemas']['SwapApprovalStatus'];
+          'application/json': ApiComponents['schemas']['SettlementApprovalStatus'];
         };
       };
     };
@@ -8749,11 +8663,11 @@ export interface ApiOperations {
       };
       cookie?: never;
     };
-    requestBody?: {
+    requestBody: {
       content: {
-        'application/json': ApiComponents['schemas']['SwapSignatureRequestRequest'];
-        'application/x-www-form-urlencoded': ApiComponents['schemas']['SwapSignatureRequestRequest'];
-        'multipart/form-data': ApiComponents['schemas']['SwapSignatureRequestRequest'];
+        'application/json': ApiComponents['schemas']['SettlementSignatureRequest'];
+        'application/x-www-form-urlencoded': ApiComponents['schemas']['SettlementSignatureRequest'];
+        'multipart/form-data': ApiComponents['schemas']['SettlementSignatureRequest'];
       };
     };
     responses: {
@@ -8762,7 +8676,7 @@ export interface ApiOperations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': ApiComponents['schemas']['SwapOrderDetail'];
+          'application/json': ApiComponents['schemas']['SettlementSwapOrder'];
         };
       };
     };

@@ -75,13 +75,15 @@ class LegacySwapHoldTest(APITransactionTestCase):
             for suffix in ("/", "/approval-status/", "/approval-data/"):
                 with self.subTest(action=suffix):
                     response = self.client.get(self.url + suffix, {"wallet_address": SELLER.address})
-                    self.assertEqual(response.status_code, 409, response.content)
-                    self.assertEqual(response.json()["code"], "legacy_swap_held")
+                    self.assertEqual(response.status_code, 400, response.content)
+                    self.assertTrue({"swapUuid", "ownerAccountUuid", "walletUuid"} <= response.json().keys())
             response = self.client.post(
                 self.url + "/sign/", {"signature": self.signature, "signer_address": SELLER.address}, format="json"
             )
-            self.assertEqual(response.status_code, 409, response.content)
-            self.assertEqual(response.json()["code"], "legacy_swap_held")
+            self.assertEqual(response.status_code, 400, response.content)
+            self.assertTrue(
+                {"swapUuid", "ownerAccountUuid", "walletUuid", "settlementDigest"} <= response.json().keys()
+            )
         provider.assert_not_called()
         with use_operator():
             self.assertEqual(persisted_outcome(self.swap), self.before)

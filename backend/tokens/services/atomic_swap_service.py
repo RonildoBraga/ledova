@@ -651,10 +651,6 @@ def resolve_executing_swap(swap_order: SwapOrder) -> Optional[str]:
     return _record_receipt(swap_order, transaction, swap_order.tx_hash, receipt)
 
 
-def find_swap_order_by_transfer_order(transfer_order: TransferOrder) -> Optional[SwapOrder]:
-    return SwapOrder.objects.for_transfer_order(transfer_order)
-
-
 def sign_and_execute_swap(swap_order, signature: str, signer_address: str, admission=None):
     with use_operator():
         signed = submit_signature(

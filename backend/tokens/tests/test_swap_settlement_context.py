@@ -15,6 +15,7 @@ from blockchain.models import TransactionStatus
 from feature_flags.models import FeatureFlag
 from shared.db import current_alias, set_principal, use_operator
 from shared.tests.scoped import RunsOnTheScopedConnection
+from shared.tests.settlement import save_swap_with_context
 from shared.tests.tenants import make_tenant
 from tokens.exceptions import SettlementContextChanged, SwapSignatureException
 from tokens.models import ShareToken, SwapOrderStatus, TransferOrder
@@ -36,6 +37,15 @@ from tokens.tests.swap_state_fixtures import (
 )
 from wallets.constants import WALLET_VERIFICATION_STATUS_VERIFIED
 from wallets.models import Wallet
+
+
+def json_schema_with_nullability(value):
+    if isinstance(value, list):
+        return [json_schema_with_nullability(item) for item in value]
+    if not isinstance(value, dict):
+        return value
+    schema = {key: json_schema_with_nullability(item) for key, item in value.items() if key != "nullable"}
+    return {"anyOf": [schema, {"type": "null"}]} if value.get("nullable") else schema
 
 
 @override_settings(ATOMIC_SWAP_ADDRESS=CONTRACT)
@@ -250,23 +260,23 @@ class SwapSettlementRouteTest(APITransactionTestCase):
         }
         self.url = f"/api/v1/trading/orders/{self.seller_order.pk}/swap"
 
-    def test_signing_schema_preserves_recorded_context_and_legacy_chain_id_types(self):
+    def test_signing_schema_requires_recorded_context_and_decimal_string_chain_id(self):
         document = SchemaGenerator().get_schema(request=None, public=True)
         response = self.client.get(self.url + "/", self.identity)
         self.assertEqual(response.status_code, 200, response.content)
         body = response.json()
         components = document["components"]["schemas"]
+        self.assertNotIn("LegacySwapOrderForSigning", components)
+        response_schema = document["paths"]["/api/v1/trading/orders/{uuid}/swap/"]["get"]["responses"]["200"][
+            "content"
+        ]["application/json"]["schema"]
+        self.assertEqual(response_schema, {"$ref": "#/components/schemas/SettlementSwapOrderForSigning"})
         typed_data = Draft7Validator(
-            {
-                "oneOf": [
-                    components[name]["properties"]["typedData"]
-                    for name in ("LegacySwapOrderForSigning", "SettlementSwapOrderForSigning")
-                ]
-            },
+            components["SettlementSwapOrderForSigning"]["properties"]["typedData"],
             resolver=RefResolver.from_schema(document),
         )
         context = Draft7Validator(
-            components["SwapOrderDetail"]["properties"]["settlementContext"],
+            components["SettlementSwapOrder"]["properties"]["settlementContext"],
             resolver=RefResolver.from_schema(document),
         )
         self.assertEqual(list(typed_data.iter_errors(body["typedData"])), [])
@@ -275,7 +285,7 @@ class SwapSettlementRouteTest(APITransactionTestCase):
         legacy_data["domain"]["chainId"] = int(legacy_data["domain"]["chainId"])
         self.assertIsInstance(legacy_data["domain"]["chainId"], int)
         self.assertIsInstance(body["typedData"]["domain"]["chainId"], str)
-        self.assertEqual(list(typed_data.iter_errors(legacy_data)), [])
+        self.assertFalse(typed_data.is_valid(legacy_data))
         for source in (body["typedData"], legacy_data):
             invalid = deepcopy(source)
             invalid["message"]["shareAmount"] = 9007199254740993
@@ -314,6 +324,130 @@ class SwapSettlementRouteTest(APITransactionTestCase):
         self.assertEqual(wrong.status_code, 404)
         correct = self.client.get(self.url + "/", self.identity)
         self.assertEqual(correct.status_code, 200, correct.content)
+
+    def request_swap_action(self, action, identity):
+        url = self.url + "/" + (action + "/" if action else "")
+        if action == "sign":
+            signature = SELLER.sign_message(
+                encode_typed_data(full_message=atomic_swap_service.get_typed_data(self.swap))
+            ).signature.hex()
+            return self.client.post(
+                url, {**identity, "signature": "0x" + signature, "signer_address": SELLER.address}, format="json"
+            )
+        if action == "approval-broadcast":
+            raw = SELLER.sign_transaction(self.approval_transaction()).raw_transaction.hex()
+            return self.client.post(url, {**identity, "signed_transaction": raw}, format="json")
+        return self.client.get(url, identity)
+
+    def test_missing_identity_fields_refuse_before_effects_with_a_valid_signing_control(self):
+        with use_operator():
+            before = persisted_outcome(self.swap)
+        fields = {"swap_uuid": "swapUuid", "owner_account_uuid": "ownerAccountUuid", "wallet_uuid": "walletUuid"}
+        with patch("tokens.services.atomic_swap_service.get_base_chain_client") as provider, patch(
+            "tokens.services.atomic_swap_service.publish_trading_event"
+        ) as event:
+            provider.side_effect = AssertionError("Incomplete identity must not reach a provider")
+            for action in ("", "approval-status", "approval-data", "sign", "approval-broadcast"):
+                for missing in (*[(field,) for field in fields], tuple(self.identity)):
+                    identity = {name: value for name, value in self.identity.items() if name not in missing}
+                    with self.subTest(action=action, missing=missing):
+                        refused = self.request_swap_action(action, {"wallet_address": SELLER.address, **identity})
+                        self.assertEqual(refused.status_code, 400, refused.content)
+                        for field in missing:
+                            if field in fields:
+                                self.assertIn(fields[field], refused.json())
+            provider.assert_not_called()
+            event.assert_not_called()
+            with use_operator():
+                self.assertEqual(persisted_outcome(self.swap), before)
+            accepted = self.request_swap_action("sign", self.identity)
+            self.assertEqual(accepted.status_code, 200, accepted.content)
+            event.assert_called_once()
+            provider.assert_not_called()
+        with use_operator():
+            self.swap.refresh_from_db()
+        self.assertTrue(self.swap.seller_signature)
+        self.assertFalse(self.swap.buyer_signature)
+
+    def test_missing_or_malformed_action_digest_refuses_before_effects(self):
+        with use_operator():
+            before = persisted_outcome(self.swap)
+        with patch("tokens.services.atomic_swap_service.get_base_chain_client") as provider, patch(
+            "tokens.services.atomic_swap_service.publish_trading_event"
+        ) as event:
+            provider.side_effect = AssertionError("Invalid digest must not reach a provider")
+            for action in ("approval-status", "approval-data", "sign", "approval-broadcast"):
+                for digest in (None, "", "not-a-digest", "0x" + "F" * 64):
+                    identity = {name: value for name, value in self.identity.items() if name != "settlement_digest"}
+                    if digest is not None:
+                        identity["settlement_digest"] = digest
+                    with self.subTest(action=action, digest=digest):
+                        refused = self.request_swap_action(action, identity)
+                        self.assertEqual(refused.status_code, 400, refused.content)
+                        self.assertIn("settlementDigest", refused.json())
+                refused = self.request_swap_action(action, {**self.identity, "settlement_digest": "0x" + "00" * 32})
+                self.assertEqual(refused.status_code, 409, refused.content)
+            event.assert_not_called()
+            with use_operator():
+                self.assertEqual(persisted_outcome(self.swap), before)
+            positive = self.request_swap_action("", self.identity)
+            self.assertEqual(positive.status_code, 200, positive.content)
+            provider.assert_not_called()
+
+    def test_each_private_participant_can_fetch_original_context_without_a_digest(self):
+        with use_operator():
+            buyer = make_tenant("context-private-buyer", with_swap=False)
+            wallet = Wallet.objects.create(
+                user_account=buyer.account,
+                address=BUYER.address,
+                chain="base",
+                verification_status=WALLET_VERIFICATION_STATUS_VERIFIED,
+            )
+            order = TransferOrder.objects.create(
+                token=self.swap.share_token,
+                payment_asset=self.swap.payment_asset,
+                wallet=wallet,
+                owner_account=buyer.account,
+                wallet_address=wallet.address,
+                order_type="buy",
+                quantity=10,
+                price_per_share="1.50",
+            )
+            swap = save_swap_with_context(
+                sell_order=self.seller_order,
+                buy_order=order,
+                share_token=self.swap.share_token,
+                payment_asset=self.swap.payment_asset,
+                seller_address=SELLER.address,
+                buyer_address=BUYER.address,
+                share_amount=10,
+                payment_amount=1500,
+                nonce=self.swap.nonce + 1,
+            )
+        self.assertNotEqual(self.user.pk, buyer.user.pk)
+        parties = (("seller", self.user, self.seller_order), ("buyer", buyer.user, order))
+        with patch("tokens.services.atomic_swap_service.get_base_chain_client") as provider:
+            provider.side_effect = AssertionError("Saved context lookup must not reach a provider")
+            for role, user, recorded_order in parties:
+                with self.subTest(role=role):
+                    self.client.force_authenticate(user)
+                    identity = {
+                        "swap_uuid": str(swap.pk),
+                        "owner_account_uuid": str(recorded_order.owner_account_id),
+                        "wallet_uuid": str(recorded_order.wallet_id),
+                    }
+                    url = f"/api/v1/trading/orders/{recorded_order.pk}/swap/"
+                    response = self.client.get(url, identity)
+                    self.assertEqual(response.status_code, 200, response.content)
+                    body = response.json()
+                    self.assertEqual(body["settlementDigest"], swap.settlement_digest)
+                    self.assertEqual(body["swapUuid"], str(swap.pk))
+                    self.assertEqual(body["orderUuid"], str(recorded_order.pk))
+                    self.assertEqual(body["walletUuid"], str(recorded_order.wallet_id))
+                    self.assertEqual(body["ownerAccountUuid"], str(recorded_order.owner_account_id))
+                    self.assertEqual(body["userRole"], role)
+                    self.assertEqual(body["typedData"]["message"]["paymentAmount"], "1500")
+            provider.assert_not_called()
 
     def test_counterparty_signature_relay_preserves_caller_wallet_scope(self):
         signature = (
@@ -477,7 +611,7 @@ class SwapSettlementRouteTest(APITransactionTestCase):
                 )
                 self.assertEqual([error.message for error in errors], [])
 
-    def test_legacy_and_scoped_signatures_validate_their_generated_request_contract(self):
+    def test_signatures_require_exact_identity_and_digest_in_the_generated_request_contract(self):
         document = SchemaGenerator().get_schema(request=None, public=True)
         schema = document["paths"]["/api/v1/trading/orders/{uuid}/swap/sign/"]["post"]["requestBody"]["content"][
             "application/json"
@@ -497,12 +631,26 @@ class SwapSettlementRouteTest(APITransactionTestCase):
             "settlementDigest": self.swap.settlement_digest,
         }
         validator = Draft7Validator(schema, resolver=RefResolver.from_schema(document))
-        for body in (legacy, scoped):
-            with self.subTest(scoped="settlementDigest" in body):
-                self.assertEqual([error.message for error in validator.iter_errors(body)], [])
+        self.assertEqual([error.message for error in validator.iter_errors(scoped)], [])
+        self.assertFalse(validator.is_valid(legacy))
+        for field in scoped:
+            with self.subTest(missing=field):
+                self.assertFalse(validator.is_valid({name: value for name, value in scoped.items() if name != field}))
         self.assertTrue(list(validator.iter_errors({})))
         response = self.client.post(self.url + "/sign/", scoped, format="json")
         self.assertEqual(response.status_code, 200, response.content)
+        response_schema = document["paths"]["/api/v1/trading/orders/{uuid}/swap/sign/"]["post"]["responses"]["200"][
+            "content"
+        ]["application/json"]["schema"]
+        self.assertEqual(response_schema, {"$ref": "#/components/schemas/SettlementSwapOrder"})
+        response_validator = Draft7Validator(
+            response_schema, resolver=RefResolver.from_schema(json_schema_with_nullability(document))
+        )
+        self.assertEqual(
+            [(list(error.path), error.message) for error in response_validator.iter_errors(response.json())], []
+        )
+        legacy_response = {**response.json(), "settlementProtocolVersion": 0, "settlementContext": None}
+        self.assertFalse(response_validator.is_valid(legacy_response))
         with use_operator():
             self.swap.refresh_from_db()
         self.assertEqual(self.swap.seller_signature, signature)

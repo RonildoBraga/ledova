@@ -4,22 +4,19 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
     OpenApiParameter,
     OpenApiResponse,
-    PolymorphicProxySerializer,
     extend_schema,
 )
 from rest_framework import status
 from rest_framework.decorators import action
-from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.exceptions import NotFound
 from rest_framework.response import Response
 
 from shared.utils import get_client_ip
 from shared.views import AuthenticatedReadOnlyViewSet
 from tokens.exceptions import (
-    LegacySwapHeld,
     OrderActionRefreshRequiredException,
     SettlementApprovalUncertain,
     SettlementContextChanged,
-    SettlementContextRequired,
     SwapExpiredException,
     SwapNotReadyException,
 )
@@ -51,16 +48,14 @@ from tokens.serializers.swap_order import (
     SettlementIdentitySerializer,
     SettlementSignatureSerializer,
     SettlementWriteIdentitySerializer,
-    SwapOrderDetailSerializer,
 )
 from tokens.serializers.trading_responses import (
     ApprovalDataResponseSerializer,
-    ApprovalStatusResponseSerializer,
     SettlementApprovalReceiptSerializer,
     SettlementApprovalStatusSerializer,
     SettlementApprovalUncertainSerializer,
-    SwapOrderForSigningSerializer,
-    SwapSignatureRequestSerializer,
+    SettlementSwapOrderForSigningSerializer,
+    SettlementSwapOrderSerializer,
 )
 from tokens.services import (
     atomic_swap_service,
@@ -75,37 +70,30 @@ from tokens.services.order_modification_service import get_modification_history
 from tokens.services.trading_order_access import (
     require_pending_settlement,
     resolve_exact_swap_context,
-    resolve_order_swap_context,
 )
 from tokens.services.trading_order_create import (
     execute_order_submission,
     issue_order_submission,
     recover_order_submission,
 )
-from tokens.trading_wallet_access import resolve_verified_evm_wallets
 
+SWAP_IDENTITY_PARAMETERS = [
+    OpenApiParameter(
+        name,
+        OpenApiTypes.UUID,
+        OpenApiParameter.QUERY,
+        required=True,
+        description="The recorded settlement party identity.",
+    )
+    for name in ("swap_uuid", "owner_account_uuid", "wallet_uuid")
+]
 SWAP_LOOKUP_PARAMETERS = [
-    OpenApiParameter(
-        "wallet_address",
-        OpenApiTypes.STR,
-        OpenApiParameter.QUERY,
-        description="Verified wallet address for a legacy swap. Use the exact settlement identity for current swaps.",
-    ),
-    *[
-        OpenApiParameter(
-            name,
-            OpenApiTypes.UUID,
-            OpenApiParameter.QUERY,
-            description="Required together with the other settlement identity UUIDs for current swaps.",
-        )
-        for name in ("swap_uuid", "owner_account_uuid", "wallet_uuid")
-    ],
-    OpenApiParameter(
-        "settlement_digest",
-        OpenApiTypes.STR,
-        OpenApiParameter.QUERY,
-        description="Recorded settlement digest. Required for approval status and approval data; optional for lookup.",
-    ),
+    *SWAP_IDENTITY_PARAMETERS,
+    OpenApiParameter("settlement_digest", OpenApiTypes.STR, OpenApiParameter.QUERY),
+]
+SWAP_APPROVAL_PARAMETERS = [
+    *SWAP_IDENTITY_PARAMETERS,
+    OpenApiParameter("settlement_digest", OpenApiTypes.STR, OpenApiParameter.QUERY, required=True),
 ]
 
 
@@ -270,7 +258,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
         result = recover_order_submission(request.user, serializer.validated_data["owner_account_uuid"], key)
         return Response(submission_snapshot(result.submission))
 
-    @extend_schema(parameters=SWAP_LOOKUP_PARAMETERS, responses=SwapOrderForSigningSerializer)
+    @extend_schema(parameters=SWAP_LOOKUP_PARAMETERS, responses=SettlementSwapOrderForSigningSerializer)
     @action(detail=True, methods=["get"], url_path="swap")
     def swap(self, request, uuid=None):
         swap_order, user_role, has_signed = self._get_authorized_swap_context(request)
@@ -278,7 +266,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
         typed_data = atomic_swap_service.get_typed_data(swap_order)
 
         result = {
-            "swap_order": SwapOrderDetailSerializer(swap_order).data,
+            "swap_order": SettlementSwapOrderSerializer(swap_order).data,
             "typed_data": typed_data,
             "user_role": user_role,
             "has_signed": has_signed,
@@ -293,40 +281,26 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
         return Response(result)
 
     @extend_schema(
-        request=SwapSignatureRequestSerializer,
-        responses=SwapOrderDetailSerializer,
+        request=SettlementSignatureSerializer,
+        responses=SettlementSwapOrderSerializer,
     )
     @action(detail=True, methods=["post"], url_path="swap/sign")
     def swap_sign(self, request, uuid=None):
-        identity = self._settlement_identity(request, write=True)
-        if identity is not None:
-            swap_order, _role, _signed = self._get_authorized_swap_context(request)
-            serializer = SettlementSignatureSerializer(data=request.data)
-            serializer.is_valid(raise_exception=True)
-            updated = atomic_swap_service.sign_and_execute_swap(
-                swap_order=swap_order,
-                signature=serializer.validated_data["signature"],
-                signer_address=serializer.validated_data["signer_address"],
-                admission=self._settlement_admission(request, identity),
-            )
-            return Response(SwapOrderDetailSerializer(updated).data)
-        transfer_order = self.get_object()
-
-        swap_order = atomic_swap_service.find_swap_order_by_transfer_order(transfer_order)
-        if not swap_order:
-            raise NotFound("No swap order found for this transfer order.")
-        if swap_order.settlement_protocol_version:
-            raise SettlementContextRequired()
-
-        raise LegacySwapHeld()
+        serializer = SettlementSignatureSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        identity = serializer.validated_data
+        swap_order, _role, _signed = resolve_exact_swap_context(request.user, uuid, identity)
+        updated = atomic_swap_service.sign_and_execute_swap(
+            swap_order=swap_order,
+            signature=identity["signature"],
+            signer_address=identity["signer_address"],
+            admission=self._settlement_admission(request, identity),
+        )
+        return Response(SettlementSwapOrderSerializer(updated).data)
 
     @extend_schema(
-        parameters=SWAP_LOOKUP_PARAMETERS,
-        responses=PolymorphicProxySerializer(
-            component_name="SwapApprovalStatus",
-            serializers=[ApprovalStatusResponseSerializer, SettlementApprovalStatusSerializer],
-            resource_type_field_name=None,
-        ),
+        parameters=SWAP_APPROVAL_PARAMETERS,
+        responses=SettlementApprovalStatusSerializer,
     )
     @action(detail=True, methods=["get"], url_path="swap/approval-status")
     def swap_approval_status(self, request, uuid=None):
@@ -349,7 +323,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
         result["current_allowance"] = str(result["current_allowance"])
         return Response(result)
 
-    @extend_schema(parameters=SWAP_LOOKUP_PARAMETERS, responses=ApprovalDataResponseSerializer)
+    @extend_schema(parameters=SWAP_APPROVAL_PARAMETERS, responses=ApprovalDataResponseSerializer)
     @action(detail=True, methods=["get"], url_path="swap/approval-data")
     def swap_approval_data(self, request, uuid=None):
         swap_order, user_role, _has_signed = self._get_authorized_swap_context(request)
@@ -421,8 +395,6 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
 
     def _settlement_identity(self, request, write=False):
         data = request.query_params if request.method == "GET" else request.data
-        if not any(key in data for key in ("swap_uuid", "owner_account_uuid", "wallet_uuid", "settlement_digest")):
-            return None
         serializer = (SettlementWriteIdentitySerializer if write else SettlementIdentitySerializer)(data=data)
         serializer.is_valid(raise_exception=True)
         return serializer.validated_data
@@ -445,21 +417,7 @@ class TradingOrderViewSet(AuthenticatedReadOnlyViewSet):
 
     def _get_authorized_swap_context(self, request):
         identity = self._settlement_identity(request, write=self.action != "swap")
-        if identity is not None:
-            swap, role, signed = resolve_exact_swap_context(request.user, self.kwargs["uuid"], identity)
-            return swap, role, signed
-        wallet_address = request.query_params.get("wallet_address")
-        if not wallet_address:
-            raise ValidationError({"wallet_address": "This query parameter is required."})
-
-        authorized_wallets = resolve_verified_evm_wallets(request.user, [wallet_address])
-        transfer_order = self.get_object()
-
-        swap_order, _role, _signed = resolve_order_swap_context(transfer_order, authorized_wallets)
-        if swap_order.settlement_protocol_version:
-            raise SettlementContextRequired()
-
-        raise LegacySwapHeld()
+        return resolve_exact_swap_context(request.user, self.kwargs["uuid"], identity)
 
     @extend_schema(request=OrderActionModifyRequestSerializer, responses=ORDER_ACTION_RESPONSES)
     @action(detail=True, methods=["post"], url_path="modify/message")

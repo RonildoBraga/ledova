@@ -366,13 +366,6 @@ class LegacySwapHeld(APIException):
     expose_code = True
 
 
-class SettlementContextRequired(APIException):
-    status_code = 400
-    default_detail = "Refresh this swap and submit its exact settlement context."
-    default_code = "swap_context_refresh_required"
-    expose_code = True
-
-
 class SettlementApprovalUncertain(Exception):
     def __init__(self, tx_hash):
         super().__init__("Approval outcome remains unconfirmed.")

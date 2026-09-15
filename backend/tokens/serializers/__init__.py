@@ -17,7 +17,6 @@ from .share_token import (
     ShareTokenListSerializer,
 )
 from .swap_order import (
-    SubmitSignatureSerializer,
     SwapOrderDetailSerializer,
     SwapOrderListSerializer,
 )
@@ -44,7 +43,6 @@ __all__ = [
     "ShareRegisterHolderSerializer",
     "ShareTokenDetailSerializer",
     "ShareTokenListSerializer",
-    "SubmitSignatureSerializer",
     "SwapOrderDetailSerializer",
     "SwapOrderListSerializer",
     "TransferOrderCreateSerializer",

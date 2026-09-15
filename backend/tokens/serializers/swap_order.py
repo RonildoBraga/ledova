@@ -121,10 +121,20 @@ class SwapOrderDetailSerializer(RecordedSwapDisplay, serializers.ModelSerializer
         read_only_fields = fields
 
 
-class SubmitSignatureSerializer(serializers.Serializer):
+class SettlementIdentitySerializer(serializers.Serializer):
+    swap_uuid = serializers.UUIDField()
+    owner_account_uuid = serializers.UUIDField()
+    wallet_uuid = serializers.UUIDField()
+    settlement_digest = serializers.RegexField(r"^0x[0-9a-f]{64}$", required=False)
 
+
+class SettlementWriteIdentitySerializer(SettlementIdentitySerializer):
+    settlement_digest = serializers.RegexField(r"^0x[0-9a-f]{64}$")
+
+
+class SettlementSignatureSerializer(SettlementWriteIdentitySerializer):
     signature = serializers.CharField(min_length=130, max_length=132)
-    signer_address = serializers.CharField(max_length=42)
+    signer_address = serializers.RegexField(r"^0x[0-9a-fA-F]{40}$")
 
     def validate_signature(self, value):
         if not value.startswith("0x"):
@@ -137,26 +147,6 @@ class SubmitSignatureSerializer(serializers.Serializer):
         except ValueError:
             raise serializers.ValidationError("Invalid hexadecimal signature")
         return value
-
-    def validate_signer_address(self, value):
-        if not value.startswith("0x") or len(value) != 42:
-            raise serializers.ValidationError("Invalid Ethereum address format")
-        return value
-
-
-class SettlementIdentitySerializer(serializers.Serializer):
-    swap_uuid = serializers.UUIDField()
-    owner_account_uuid = serializers.UUIDField()
-    wallet_uuid = serializers.UUIDField()
-    settlement_digest = serializers.RegexField(r"^0x[0-9a-f]{64}$", required=False)
-
-
-class SettlementWriteIdentitySerializer(SettlementIdentitySerializer):
-    settlement_digest = serializers.RegexField(r"^0x[0-9a-f]{64}$")
-
-
-class SettlementSignatureSerializer(SettlementWriteIdentitySerializer, SubmitSignatureSerializer):
-    signer_address = serializers.RegexField(r"^0x[0-9a-fA-F]{40}$")
 
 
 class SettlementApprovalBroadcastSerializer(SettlementWriteIdentitySerializer):
